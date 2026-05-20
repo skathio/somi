@@ -35,7 +35,7 @@ See [`install/profiles/`](../install/profiles/) for the exact component list per
 
 ```bash
 # 1. Clone SOMI somewhere stable
-git clone https://github.com/your-org/somi-ai.git /opt/somi-ai
+git clone https://github.com/skathio/somi-ai.git /opt/somi-ai
 
 # 2. From your project root:
 /opt/somi-ai/scripts/install.sh \
@@ -50,7 +50,7 @@ under `.claude/plugins/somi-ai/hooks/`. Open the project in Claude Code (or relo
 ## User install
 
 ```bash
-git clone https://github.com/your-org/somi-ai.git ~/.somi-ai
+git clone https://github.com/skathio/somi-ai.git ~/.somi-ai
 ~/.somi-ai/scripts/install.sh --scope user --profile standard
 ```
 
@@ -61,7 +61,7 @@ Result: same layout under `~/.claude/`. Every project you open inherits SOMI. Pr
 
 ```text
 # Inside Claude Code:
-/plugin marketplace add https://github.com/your-org/somi-ai
+/plugin marketplace add https://github.com/skathio/somi-ai
 /plugin install somi-ai@somi-ai
 ```
 

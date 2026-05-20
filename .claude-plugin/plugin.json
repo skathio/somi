@@ -15,10 +15,10 @@
   ],
   "author": {
     "name": "somi-ai contributors",
-    "url": "https://github.com/your-org/somi-ai"
+    "url": "https://github.com/skathio/somi-ai"
   },
-  "homepage": "https://github.com/your-org/somi-ai",
-  "repository": "https://github.com/your-org/somi-ai",
+  "homepage": "https://github.com/skathio/somi-ai",
+  "repository": "https://github.com/skathio/somi-ai",
   "license": "MIT",
   "components": {
     "agents": "./agents",

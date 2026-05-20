@@ -33,7 +33,7 @@ SOMI is shaped that way. The SOMI repo *is* a plugin and *is* its own marketplac
 
 ```text
 # 1. Add SOMI as a marketplace source.
-/plugin marketplace add https://github.com/your-org/somi-ai
+/plugin marketplace add https://github.com/skathio/somi-ai
 
 # 2. Install the somi-ai plugin from that marketplace.
 /plugin install somi-ai@somi-ai
@@ -50,29 +50,29 @@ marketplace repo:
 ```
 your-marketplace/
 └── .claude-plugin/
-    └── marketplace.json
+  └── marketplace.json
 ```
 
 Where `marketplace.json` lists SOMI (or your fork) as a plugin:
 
 ```json
 {
-  "name": "your-org-claude-tools",
-  "description": "Internal Claude Code plugins for your-org.",
-  "owner": { "name": "your-org", "url": "https://your-org.example.com" },
+  "name": "skathio-claude-tools",
+  "description": "Internal Claude Code plugins for skathio.",
+  "owner": { "name": "skathio", "url": "https://github.com/skathio" },
   "plugins": [
     {
       "name": "somi-ai",
-      "source": "github:your-org/somi-ai",
+      "source": "github:skathio/somi-ai",
       "version": "0.1.0",
       "description": "Plan / code / review workflow system.",
       "tags": ["workflow", "review", "security"]
     },
     {
-      "name": "your-org-conventions",
-      "source": "./plugins/your-org-conventions",
+      "name": "skathio-conventions",
+      "source": "./plugins/skathio-conventions",
       "version": "1.0.0",
-      "description": "your-org specific Claude conventions (HTTP errors, logging vocabulary, repo layout)."
+      "description": "skathio specific Claude conventions (HTTP errors, logging vocabulary, repo layout)."
     }
   ]
 }
@@ -81,9 +81,9 @@ Where `marketplace.json` lists SOMI (or your fork) as a plugin:
 Teams then run:
 
 ```text
-/plugin marketplace add https://github.com/your-org/your-marketplace
-/plugin install somi-ai@your-org-claude-tools
-/plugin install your-org-conventions@your-org-claude-tools
+/plugin marketplace add https://github.com/skathio/your-marketplace
+/plugin install somi-ai@skathio-claude-tools
+/plugin install skathio-conventions@skathio-claude-tools
 ```
 
 The two plugins compose at runtime — agents from one and skills from the other become available
@@ -133,7 +133,7 @@ hooks should be visible in `/hooks` or equivalent debug output (depending on the
 
 ## Building your own plugin on top
 
-The pattern for an org-specific plugin (e.g., `your-org-conventions`):
+The pattern for an org-specific plugin (e.g., `skathio-conventions`):
 
 1. New repo with the plugin shape (`.claude-plugin/plugin.json` + agents/commands/skills/hooks).
 2. Compose with SOMI — your skills can link to SOMI skills, your agents can call SOMI agents.

@@ -97,7 +97,7 @@ For breaking changes in a MAJOR release, include a migration note in `CHANGELOG.
 Teams can pin to a specific tag:
 
 ```bash
-git clone --branch v0.1.0 https://github.com/your-org/somi-ai.git /opt/somi-ai
+git clone --branch v0.1.0 https://github.com/skathio/somi-ai.git /opt/somi-ai
 ```
 
 `update.sh` will check out the latest tag by default; pin in your fork or your team's vendoring

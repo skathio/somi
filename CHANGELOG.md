@@ -24,5 +24,5 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 - Worked examples and a sample consuming project.
 - Documentation set: install, usage, workflows, agents, hooks, skills, rules, commands, extending, versioning, governance, plugin, architecture.
 
-[Unreleased]: https://github.com/your-org/somi-ai/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/your-org/somi-ai/releases/tag/v0.1.0
+[Unreleased]: https://github.com/skathio/somi-ai/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/skathio/somi-ai/releases/tag/v0.1.0
