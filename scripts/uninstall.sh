@@ -67,7 +67,7 @@ fi
 # Remove SOMI-managed directories.
 for d in rules agents commands skills templates; do
   if [[ -d "$INSTALL_DIR/$d" ]]; then
-    rm -rf "$INSTALL_DIR/$d"
+    rm -rf "${INSTALL_DIR:?}/$d"
     log::ok "- $INSTALL_DIR/$d"
   fi
 done

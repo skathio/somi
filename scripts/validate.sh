@@ -111,7 +111,8 @@ done
 
 # 7. Hooks: every .sh starts with bash shebang, is executable, and `bash -n` parses cleanly.
 log::info "Validating hooks …"
-for f in $(find "$SOMI_SOURCE_ROOT/hooks" -name '*.sh' -type f); do
+find "$SOMI_SOURCE_ROOT/hooks" -name '*.sh' -type f -print0 |
+while IFS= read -r -d '' f; do
   if ! head -n 1 "$f" | grep -qE '^#!/usr/bin/env bash'; then
     fail "$f missing #!/usr/bin/env bash shebang"
   fi

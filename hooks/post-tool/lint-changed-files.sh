@@ -41,7 +41,17 @@ case "$PATH_INPUT" in
     fi
     ;;
   *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs)
-    if [[ -f "$PROJECT_ROOT/.eslintrc"* ]] || [[ -f "$PROJECT_ROOT/eslint.config.js" ]] || [[ -f "$PROJECT_ROOT/eslint.config.mjs" ]]; then
+    has_eslint_config=false
+    shopt -s nullglob
+    for file in "$PROJECT_ROOT"/.eslintrc*; do
+      if [[ -f "$file" ]]; then
+        has_eslint_config=true
+        break
+      fi
+    done
+    shopt -u nullglob
+
+    if [[ "$has_eslint_config" = true ]] || [[ -f "$PROJECT_ROOT/eslint.config.js" ]] || [[ -f "$PROJECT_ROOT/eslint.config.mjs" ]]; then
       LINT_OUTPUT="$(cd "$PROJECT_ROOT" && run_if_present npx --no-install eslint --no-color "$PATH_INPUT")"
     fi
     ;;
