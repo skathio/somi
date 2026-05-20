@@ -1,0 +1,2 @@
+# somi-ai
+ai
