@@ -1,0 +1,26 @@
+{
+  "name": "standard",
+  "description": "Recommended for most teams. Three core workflows + key support agents + skills + hooks + templates.",
+  "components": [
+    "rules",
+    "claudemd",
+    "agents/planner.md",
+    "agents/coder.md",
+    "agents/reviewer.md",
+    "agents/security-reviewer.md",
+    "agents/test-strategist.md",
+    "commands/plan.md",
+    "commands/code.md",
+    "commands/review.md",
+    "commands/ship.md",
+    "commands/plan-review.md",
+    "commands/security-review.md",
+    "skills/owasp-defense/",
+    "skills/solid-principles/",
+    "skills/clean-code/",
+    "skills/test-strategy/",
+    "hooks",
+    "settings",
+    "templates"
+  ]
+}

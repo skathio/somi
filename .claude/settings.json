@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "somi-ai reference settings. The installer copies / merges this into the consuming project's .claude/settings.json. Hook paths use ${CLAUDE_PROJECT_DIR} so they work both vendored and via the plugin marketplace.",
+  "env": {
+    "SOMI_ROOT": "${CLAUDE_PROJECT_DIR}/.claude/plugins/somi-ai",
+    "SOMI_AUDIT_LOG": "${CLAUDE_PROJECT_DIR}/.claude/audit.log"
+  },
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Grep(**)",
+      "Glob(**)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote:*)",
+      "Bash(ls:*)",
+      "Bash(pwd)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(rg:*)",
+      "Bash(jq:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.production)",
+      "Read(./*.pem)",
+      "Read(./*.key)",
+      "Read(./id_rsa*)",
+      "Read(./id_ed25519*)",
+      "Bash(curl * | sh)",
+      "Bash(curl * | bash)",
+      "Bash(wget * | sh)",
+      "Bash(wget * | bash)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(rm -rf $HOME:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SOMI_ROOT}/hooks/pre-tool/block-dangerous-bash.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SOMI_ROOT}/hooks/pre-tool/block-secret-writes.sh"
+          },
+          {
+            "type": "command",
+            "command": "${SOMI_ROOT}/hooks/pre-tool/guard-protected-paths.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SOMI_ROOT}/hooks/post-tool/lint-changed-files.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SOMI_ROOT}/hooks/post-tool/audit-log.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SOMI_ROOT}/hooks/user-prompt-submit/inject-workflow-context.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SOMI_ROOT}/hooks/stop/enforce-handoff.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

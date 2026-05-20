@@ -1,0 +1,23 @@
+# Local install / runtime artifacts
+.claude/settings.local.json
+.claude/audit.log
+.somi-state/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Tool outputs
+node_modules/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.coverage
+dist/
+build/

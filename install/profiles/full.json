@@ -1,0 +1,14 @@
+{
+  "name": "full",
+  "description": "Everything in the repo. All agents, all skills, all commands, all hooks, all templates. Recommended for teams that want the kitchen sink and will trim later.",
+  "components": [
+    "rules",
+    "claudemd",
+    "agents",
+    "commands",
+    "skills",
+    "hooks",
+    "settings",
+    "templates"
+  ]
+}

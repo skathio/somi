@@ -1,0 +1,18 @@
+{
+  "name": "somi-ai",
+  "description": "Self-hosted marketplace for the somi-ai plugin. Add this repo to Claude Code to install somi-ai.",
+  "owner": {
+    "name": "somi-ai",
+    "url": "https://github.com/your-org/somi-ai"
+  },
+  "plugins": [
+    {
+      "name": "somi-ai",
+      "source": ".",
+      "description": "Plan / code / review workflow system with SOLID, OWASP, and clean-code guardrails.",
+      "version": "0.1.0",
+      "tags": ["workflow", "agents", "review", "security"],
+      "homepage": "https://github.com/your-org/somi-ai"
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Repository validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends jq shellcheck
+
+      - name: Validate JSON files
+        run: |
+          set -euo pipefail
+          for f in \
+            .claude-plugin/plugin.json \
+            .claude-plugin/marketplace.json \
+            .claude/settings.json \
+            install/manifest.json \
+            install/profiles/*.json \
+            examples/sample-consumer/.claude/settings.json; do
+            echo "  jq: $f"
+            jq empty "$f"
+          done
+
+      - name: ShellCheck all bash scripts
+        run: |
+          set -euo pipefail
+          find hooks scripts -name '*.sh' -type f -print0 \
+            | xargs -0 shellcheck --severity=warning
+
+      - name: Bash syntax check
+        run: |
+          set -euo pipefail
+          find hooks scripts -name '*.sh' -type f -print0 \
+            | xargs -0 -I{} bash -n {}
+
+      - name: Run validate.sh
+        run: ./scripts/validate.sh
+
+      - name: Dry-run install (project scope, standard profile)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/somi-dryrun
+          ./scripts/install.sh \
+            --scope project \
+            --profile standard \
+            --target /tmp/somi-dryrun
+          test -f /tmp/somi-dryrun/CLAUDE.md
+          test -d /tmp/somi-dryrun/.claude/agents
+          test -d /tmp/somi-dryrun/.claude/commands
+          test -x /tmp/somi-dryrun/.claude/plugins/somi-ai/hooks/pre-tool/block-dangerous-bash.sh
+          test -f /tmp/somi-dryrun/.claude/.somi/install.json
+
+      - name: Dry-run install (minimal profile)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/somi-minimal
+          ./scripts/install.sh \
+            --scope project \
+            --profile minimal \
+            --target /tmp/somi-minimal
+          test -f /tmp/somi-minimal/CLAUDE.md
+          test -f /tmp/somi-minimal/.claude/agents/planner.md
+          test -f /tmp/somi-minimal/.claude/agents/coder.md
+          test -f /tmp/somi-minimal/.claude/agents/reviewer.md
+
+      - name: Confirm uninstall is clean
+        run: |
+          set -euo pipefail
+          ./scripts/uninstall.sh --target /tmp/somi-dryrun --force
+          test ! -d /tmp/somi-dryrun/.claude/agents
+          test ! -d /tmp/somi-dryrun/.claude/plugins/somi-ai
+          # CLAUDE.md is preserved by design
+          test -f /tmp/somi-dryrun/CLAUDE.md

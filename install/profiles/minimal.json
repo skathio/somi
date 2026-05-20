@@ -1,0 +1,15 @@
+{
+  "name": "minimal",
+  "description": "Just the three core workflows + global rules. No skills, no support agents, no templates. Smallest possible footprint.",
+  "components": [
+    "rules",
+    "claudemd",
+    "agents/planner.md",
+    "agents/coder.md",
+    "agents/reviewer.md",
+    "commands/plan.md",
+    "commands/code.md",
+    "commands/review.md",
+    "settings"
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "$comment": "Canonical install manifest. The installer reads `profiles/<name>.json` and composes the component list from this manifest.",
+  "version": "0.1.0",
+  "components": {
+    "rules": {
+      "source": "rules/",
+      "kind": "directory",
+      "target_subpath": "rules/",
+      "required": true
+    },
+    "claudemd": {
+      "source": "rules/CLAUDE.md",
+      "kind": "file",
+      "target_subpath": "CLAUDE.md",
+      "required": true,
+      "_comment": "Composed CLAUDE.md goes at project root (or ~/.claude/CLAUDE.md for user scope)."
+    },
+    "agents": {
+      "source": "agents/",
+      "kind": "directory",
+      "target_subpath": "agents/",
+      "required": true
+    },
+    "commands": {
+      "source": "commands/",
+      "kind": "directory",
+      "target_subpath": "commands/",
+      "required": true
+    },
+    "skills": {
+      "source": "skills/",
+      "kind": "directory",
+      "target_subpath": "skills/",
+      "required": false
+    },
+    "hooks": {
+      "source": "hooks/",
+      "kind": "directory",
+      "target_subpath": "plugins/somi-ai/hooks/",
+      "required": true,
+      "executable": true
+    },
+    "settings": {
+      "source": ".claude/settings.json",
+      "kind": "file",
+      "target_subpath": "settings.json",
+      "required": true,
+      "merge_strategy": "json-merge"
+    },
+    "templates": {
+      "source": "templates/",
+      "kind": "directory",
+      "target_subpath": "templates/",
+      "required": false
+    }
+  }
+}

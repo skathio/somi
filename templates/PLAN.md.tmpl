@@ -1,0 +1,138 @@
+# Plan — <FEATURE / CHANGE NAME>
+
+> Owner: <name> • Status: `draft` | `under-review` | `approved` | `in-progress` | `done`
+> Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD>
+
+## 1. Problem statement
+
+<Restate the problem in your own words. If this restatement doesn't match what the requester meant,
+the plan is wrong before it starts.>
+
+## 2. Goals / Non-goals
+
+**Goals** (what success looks like):
+
+- <goal 1>
+- <goal 2>
+
+**Non-goals** (what we are explicitly NOT doing in this plan):
+
+- <non-goal 1>
+- <non-goal 2>
+
+## 3. Assumptions
+
+Each assumption is something that must be true for this plan to work. Mark which need human confirmation.
+
+- [ ] **<assumption 1>** — <why we believe it; what would invalidate it>
+- [ ] **<assumption 2>** — needs confirmation
+
+## 4. Unknowns / Decisions needed
+
+- **<decision 1>**: <options + recommendation; who decides>
+- **<decision 2>**: <pending>
+
+## 5. Architecture sketch
+
+<Components, boundaries, data flow. Prefer a short description + ASCII diagram over abstract prose.>
+
+```
+[Client] -> [WebhookHandler] -> [RateLimiter] -> [Queue] -> [Worker]
+                                       |
+                                       v
+                                  [AuditLog]
+```
+
+## 6. Tradeoffs considered
+
+| Option | Pros | Cons | Verdict |
+|--------|------|------|---------|
+| A: <chosen> | … | … | **Chosen** because … |
+| B: <alt> | … | … | Rejected because … |
+| C: <alt> | … | … | Rejected because … |
+
+## 7. Phases
+
+Sequential by default. Mark `[parallel]` when phases can overlap.
+
+### Phase 1 — <name>
+- **Goal**: <one sentence>
+- **Exit criteria**: <how do we know phase 1 is done>
+- **Iterations**: see §8
+
+### Phase 2 — <name>
+…
+
+## 8. Iteration slices (per phase)
+
+Each iteration = one PR-sized increment. Order matters unless marked parallel.
+
+### Phase 1 / Iteration 1 — <title>
+- **Scope**: <what's in>
+- **Files (approx)**: `path/to/foo` (new), `path/to/bar` (modified)
+- **Acceptance**: <criteria; usually a test passes + behavior X visible>
+- **Tests added/changed**: <unit/integration/e2e + brief>
+- **Observability**: <logs/metrics/traces added>
+- **Rollback**: <how to undo if it goes wrong>
+
+### Phase 1 / Iteration 2 — <title>
+…
+
+## 9. Test strategy
+
+- **Risk-driven coverage**: <what we will and won't test, and why>
+- **Levels**: unit / integration / e2e split for this work
+- **Mocks**: what we own / what we don't / what gets a fake
+- **Determinism**: time, randomness, ordering
+
+## 10. Security considerations
+
+- **Trust boundaries crossed**: <list>
+- **Sinks involved**: <SQL, shell, template, HTTP, file, deserializer>
+- **OWASP categories engaged**: <A01–A10 subset relevant to this change>
+- **Mitigations baked into the plan**: <list, with the iteration where each lands>
+- **`security-reviewer` trigger**: <which iteration explicitly invokes the agent>
+
+## 11. Observability plan
+
+- **Logs**: <new events; required fields>
+- **Metrics**: <new counters/gauges/histograms; cardinality discipline>
+- **Traces**: <new spans; propagation>
+- **Alerts**: <new alerts + runbook location>
+- **Dashboards**: <existing dashboards to update>
+
+## 12. Rollout & rollback
+
+- **Feature flag**: <yes/no; name; default; ramp plan>
+- **Deployment**: <canary? blue/green? straight?>
+- **Migrations**: <expand/contract phases if relevant>
+- **Rollback**: <flag flip / revert / restore from snapshot>
+- **Success metric**: <the specific metric we watch post-deploy to call it green>
+
+## 13. Risks
+
+Each risk: likelihood × impact + concrete mitigation.
+
+| Risk | Likelihood | Impact | Mitigation | Owner |
+|------|-----------|--------|------------|-------|
+| <risk 1> | M | H | <mitigation> | <name> |
+| <risk 2> | L | M | <mitigation> | <name> |
+
+## 14. Definition of Done
+
+The change is done when **all** of these are true:
+
+- [ ] All iterations land with passing tests.
+- [ ] Code review passes (no Blocker / Major findings unresolved).
+- [ ] Security considerations from §10 are addressed in code, not deferred.
+- [ ] Observability from §11 is in place.
+- [ ] Rollout from §12 executed; success metric green for <window>.
+- [ ] Docs updated where behavior/interfaces changed.
+- [ ] Follow-ups filed for anything intentionally deferred.
+
+## 15. Open questions
+
+Things the human must answer before phase 1 starts:
+
+- [ ] <question 1>
+- [ ] <question 2>

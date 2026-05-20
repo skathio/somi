@@ -1,0 +1,78 @@
+# Review — <change name / PR # / commit range>
+
+> Reviewer: `reviewer` agent (somi-ai) • Date: <YYYY-MM-DD>
+> Target: <PR / diff range / file>
+
+## Summary
+
+<One paragraph: what this change does, what the overall posture of the review is.>
+
+## Verdict
+
+`approve` | `approve-with-comments` | `request-changes` | `reject`
+
+**Counts**: <X> Blockers, <Y> Majors, <Z> Minors, <W> Nits.
+
+## Findings
+
+Format per finding:
+
+- **[Severity / Confidence]** — title
+- **Where**: `path/to/file.ext:line-range`
+- **What's wrong**: <one or two sentences>
+- **Why it matters**: <consequence>
+- **Suggested fix**: <concrete, not a homily>
+
+---
+
+### Blockers
+
+#### [Blocker / High] <title>
+- **Where**: `path/to/file.ext:42-58`
+- **What's wrong**: …
+- **Why it matters**: …
+- **Suggested fix**: …
+
+### Majors
+
+#### [Major / High] <title>
+- **Where**: …
+- **What's wrong**: …
+- **Why it matters**: …
+- **Suggested fix**: …
+
+### Minors
+
+#### [Minor / Medium] <title>
+- **Where**: …
+- **What's wrong**: …
+- **Why it matters**: …
+- **Suggested fix**: …
+
+### Nits
+
+#### [Nit / Low] <title>
+- **Where**: …
+- **Suggestion**: …
+
+---
+
+## What looks good
+
+<Non-obvious good choices in the change. Build trust; show you actually read it.>
+
+- <good choice 1>
+- <good choice 2>
+
+## Questions for the author
+
+- <question 1>
+- <question 2>
+
+## Related artifacts
+
+- Plan: [`PLAN.md`](./PLAN.md)
+- Iteration: [`ITERATION.md`](./ITERATION.md)
+- Tests run: <yes/no, summary>
+- Security-reviewer consulted: <yes/no, why>
+- Architecture-reviewer consulted: <yes/no, why>
