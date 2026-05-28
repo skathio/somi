@@ -1,7 +1,6 @@
 ---
 name: security-reviewer
 description: Specialized security reviewer. Use whenever a change touches authentication, authorization, cryptography, secrets, input validation, deserialization, file uploads, third-party data ingestion, template rendering, or anything user-controlled reaches a sensitive sink. Applies OWASP Top 10 lens with concrete attack-path reasoning. Escalates Blocker findings even if the rest of the change is clean.
-tools: Read, Grep, Glob, Bash
 model: opus
 ---
 

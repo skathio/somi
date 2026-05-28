@@ -145,15 +145,21 @@ copilot plugin update
 
 ### Available commands
 
-| Command                    | Agent(s) used                          |
-|----------------------------|----------------------------------------|
-| `@somi-ai /plan`           | `planner`                              |
-| `@somi-ai /code`           | `coder`                                |
-| `@somi-ai /review`         | `reviewer`                             |
-| `@somi-ai /ship`           | `planner` + `coder` + `reviewer`       |
-| `@somi-ai /plan-review`    | `reviewer`                             |
-| `@somi-ai /security-review`| `security-reviewer`                    |
-| `@somi-ai /refactor`       | `refactorer`                           |
+| Command                          | Agent(s) used                                                                            |
+|----------------------------------|------------------------------------------------------------------------------------------|
+| `@somi-ai /plan`                 | `planner`                                                                                |
+| `@somi-ai /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
+| `@somi-ai /code`                 | `coder`                                                                                  |
+| `@somi-ai /code-loop`            | `coder` + `reviewer` (bounded)                                                           |
+| `@somi-ai /review`               | `reviewer` (+ `security-reviewer` / `architecture-reviewer` / `test-strategist` auto-invoked) |
+| `@somi-ai /ship`                 | `planner` + (per iteration) `/code-loop`                                                 |
+| `@somi-ai /ship-loop`            | `/plan-loop` + (per iteration) `/code-loop`                                              |
+| `@somi-ai /security-review`      | `security-reviewer`                                                                      |
+| `@somi-ai /architecture-review`  | `architecture-reviewer` (+ `security-reviewer` when relevant)                            |
+| `@somi-ai /test-strategy`        | `test-strategist`                                                                        |
+| `@somi-ai /refactor`             | `refactorer`                                                                             |
+
+> Plan-level review uses `@somi-ai /review plan <slug>` — there is no separate `/plan-review`.
 
 ### Plugin lifecycle
 

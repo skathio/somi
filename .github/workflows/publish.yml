@@ -1,0 +1,34 @@
+# Publish caller: delegates to skathio/hashira-ops npm-package-publish reusable workflow.
+# Runs semantic-release inside the `production` Environment gate on every push to main.
+# See https://github.com/skathio/hashira-ops/blob/main/docs/flows/npm.md for full adoption guide.
+#
+# Setup required before first publish:
+#   1. Create a GitHub Environment named 'production' with >=1 required reviewer (§7).
+#   2. Either configure npm OIDC trusted publishing (recommended, §6) OR set NPM_TOKEN secret.
+
+name: publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Deny-all baseline; the reusable workflow grants minimum per job.
+permissions: {}
+
+jobs:
+  publish:
+    uses: skathio/hashira-ops/.github/workflows/npm-package-publish.yml@v1
+    # Per-job grants must mirror the matrix in docs/flows/npm.md §5.
+    permissions:
+      id-token: write     # OIDC trusted-publishing token exchange
+      contents: write     # tag push + CHANGELOG commit by @semantic-release/git
+      pull-requests: write # release-note PR comment by @semantic-release/github
+    with:
+      node_version: '20'
+      target: 'https://registry.npmjs.org'
+      environment_name: 'production'
+      library_ref: 'v1'
+    secrets:
+      # Omit NPM_TOKEN if OIDC trusted-publishing is configured (recommended).
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

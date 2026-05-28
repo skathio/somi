@@ -5,6 +5,11 @@ description: Use when deciding what to test, at what level, and how. Distinguish
 
 # Test strategy
 
+The principles are in [`rules/40-engineering-practices.md`](../../rules/40-engineering-practices.md)
+(Testing section) — that's the always-on floor. This skill adds **operational depth**: decision
+tables, level-selection trees, mock policy with reasons, determinism patterns. Don't restate the
+rule's bullets here; if you find a line that's word-for-word the rule, replace it with a pointer.
+
 The supporting agent is [`test-strategist`](../../agents/test-strategist.md). Load this skill when you
 are *writing* tests for a change you're already coding. Invoke the agent when the test shape itself is
 a problem.
@@ -49,7 +54,8 @@ e2e tests for golden paths. Inverted pyramids (lots of e2e, few unit) are slow, 
 
 ## Mocking policy
 
-The cardinal rule: **don't mock what you don't own.**
+The cardinal rule lives in [`rules/40-engineering-practices.md`](../../rules/40-engineering-practices.md):
+**don't mock what you don't own.** Operational expansion:
 
 - **Don't mock** third-party SDKs, databases, HTTP clients you didn't write. Mocking these tests your
   understanding of their API, which is exactly the part you don't control.

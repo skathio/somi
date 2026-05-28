@@ -43,6 +43,14 @@ You can think of it as:
 - **Skills**: "what we know about this specific domain."
 - **Agents**: "how we think through this specific shape of problem."
 
+### Rules vs. skills — no duplication
+
+Skills are **operational depth on top of rules**, not a restatement. Each SoMi AI skill links to
+its corresponding rule(s) at the top and adds only what the rule doesn't already say (examples,
+decision tables, before/after pairs, anti-patterns). When you edit a skill, ask: "is this line
+already in the rule?" — if yes, replace it with a pointer instead of mirroring it. Keeping both
+files in lockstep by hand is drift bait; pointers don't drift.
+
 ## Skill file shape
 
 ```markdown

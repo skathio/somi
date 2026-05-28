@@ -2,7 +2,7 @@
 description: Targeted security review of the current changes (or a specified diff). Walks trust boundaries to sinks, applies OWASP Top 10 lens, produces severity-graded findings with explicit attack paths. Output lands under .somi/reviews/<slug>/ when scoped to a work item.
 argument-hint: <slug> | <diff range> | <PR #> | <file path>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: opus
+model: sonnet
 ---
 
 # /security-review — Targeted security review

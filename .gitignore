@@ -1,6 +1,7 @@
 # Local install / runtime artifacts
 .claude/settings.local.json
 .claude/audit.log
+.claude/somi-state/
 .somi-state/
 
 # OS noise
@@ -19,5 +20,6 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .coverage
+coverage/
 dist/
 build/

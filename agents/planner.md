@@ -1,7 +1,6 @@
 ---
 name: planner
 description: Staff-engineer-grade planning agent. Use BEFORE writing non-trivial code, when scoping a feature, decomposing an ambiguous request, or when the user asks "how should we approach X". Produces the .somi/plans/<slug>/ artifact set (context, spec, decisions, phases, progress, diary) with inline user verification on architectural choices. Always invoke for changes that cross modules, touch security/auth, or require migrations.
-tools: Read, Grep, Glob, WebFetch, Write, Edit, Bash
 model: opus
 ---
 

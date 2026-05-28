@@ -5,11 +5,12 @@ description: Use when designing a new module, naming a class, deciding what a fu
 
 # SOLID — design questions
 
+The principles are in [`rules/10-solid.md`](../../rules/10-solid.md) — that's the always-on floor.
+This skill adds **operational depth**: before/after example pairs, decision rules, anti-patterns.
+Don't restate the rule's prose here; link to it when the principle itself is the answer.
+
 When you load this skill you are evaluating a design, not reciting principles. Each letter is a question
 to ask of the code you're about to write or review.
-
-See [`rules/10-solid.md`](../../rules/10-solid.md) for the canonical short version. This skill expands
-with example pairs and decision rules.
 
 ## S — "What's the one reason this changes?"
 
@@ -119,10 +120,12 @@ just extra indirection.
 
 ## Meta-rules
 
-- **YAGNI beats SOLID** when the variation is hypothetical.
-- **Three is the magic number** before you abstract.
-- **Composition over inheritance** in 80% of cases; inheritance for true is-a relationships only.
-- **Refactor under green** when you spot a violation in code you're touching anyway and the fix is small.
+See [`rules/10-solid.md`](../../rules/10-solid.md) §Meta-rules for the canonical statements
+(YAGNI > SOLID for hypothetical variation; three-is-the-magic-number; refactor-under-green).
+Operational additions specific to this skill:
+
+- **Composition over inheritance** in ~80% of cases; reserve inheritance for true is-a relationships
+  whose contract genuinely holds across subtypes (re-read the L section before reaching for `extends`).
 
 ## When SOLID is *not* the right lens
 

@@ -153,14 +153,15 @@ necessary context (the plan, the diff, the relevant repo paths) at the start of 
 The same `agents/`, `commands/`, `skills/`, `hooks/` directories are shared by all three
 distribution paths:
 
-- **Claude Code plugin** (marketplace or npm): the plugin runtime loads these directories directly.
-  `${SOMI_ROOT}` resolves to the plugin root.
+- **Claude Code plugin** (marketplace): the plugin runtime loads these directories directly.
+  Hook paths in [`hooks/hooks.json`](../hooks/hooks.json) use `${CLAUDE_PLUGIN_ROOT}`, which the
+  harness resolves to the plugin install root.
+- **Claude Code vendored** (`.claude/plugins/somi-ai/`): the project's own `.claude/settings.json`
+  merges the hooks block from [`.claude/settings.json`](../.claude/settings.json) in this repo,
+  using `${SOMI_VENDOR_ROOT}` to point at the hook scripts.
 - **GitHub Copilot extension** (Copilot marketplace): the same directories are referenced from
   `.copilot-extension/extension.json`. Both manifests point at identical source files — no
   content is duplicated.
-
-Hook paths in `settings.json` always use `${SOMI_ROOT}/hooks/...` so they resolve correctly
-regardless of where the plugin runtime places the plugin root.
 
 ## Audit story
 

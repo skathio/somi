@@ -1,15 +1,19 @@
 # Phase <N> — <title>
 
-> Work item: [`../spec.md`](../spec.md) • Progress: [`../progress.md`](../progress.md)
-> Status: `not-started` | `in-progress` | `done` | `blocked` | `superseded`
+> Work item: [`../spec.md`](../spec.md) • Progress (status of record): [`../progress.md`](../progress.md)
 > Phase order: <N> of <total>  •  Parallel with: <other phase numbers or "none">
 
 A phase is one coherent, reviewable, low-risk increment of the work item. It contains one or more
 **iterations** (each ~1 PR). Iterations within a phase are sequential by default unless explicitly
 parallelizable.
 
-If a constraint or blocker forces this phase's shape to change, update this file in place and
-append a diary entry naming what changed and why. Don't delete the old shape silently.
+> **Single source of truth for status:** [`../progress.md`](../progress.md). This file describes
+> what each iteration *is* — scope, files, acceptance — not what state it's in. Phase status and
+> per-iteration status live in `progress.md`'s tables; mirroring them here only invites drift.
+
+If a constraint or blocker forces this phase's shape to change, update this file in place (scope,
+acceptance, file lists) and append a diary entry naming what changed and why. Don't delete the
+old shape silently.
 
 ## Goal
 
@@ -17,7 +21,8 @@ append a diary entry naming what changed and why. Don't delete the old shape sil
 
 ## Exit criteria
 
-<How do we know the phase is done? Observable and testable.>
+<How do we know the phase is done? Observable and testable. Mirrored into `progress.md`'s
+phase-row "Notes" column when worth surfacing.>
 
 - [ ] <criterion 1>
 - [ ] <criterion 2>
@@ -32,7 +37,8 @@ append a diary entry naming what changed and why. Don't delete the old shape sil
 - **Tests added/changed**: <unit / integration / e2e — brief>
 - **Observability**: <logs / metrics / traces added or changed>
 - **Rollback**: <how to undo if it goes wrong>
-- **Status**: `not-started` | `in-progress` | `done` | `blocked`
+
+(Status lives in `../progress.md`; do not duplicate here.)
 
 ### Iteration <N>.2 — <title>
 
@@ -42,7 +48,8 @@ append a diary entry naming what changed and why. Don't delete the old shape sil
 - **Tests added/changed**: …
 - **Observability**: …
 - **Rollback**: …
-- **Status**: …
+
+(Status lives in `../progress.md`.)
 
 ## Dependencies (within this work item)
 

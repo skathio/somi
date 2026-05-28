@@ -5,8 +5,11 @@ description: Use when naming things, structuring functions, deciding whether to 
 
 # Clean code — pragmatic rules
 
-The full ruleset is in [`rules/20-clean-code.md`](../../rules/20-clean-code.md). This skill expands with
-examples and decision rules for the cases that come up most often.
+The principles are in [`rules/20-clean-code.md`](../../rules/20-clean-code.md) — that's the
+always-on floor. This skill adds **operational depth**: decision tables (parameter counts,
+function length), before/after example pairs (early returns, boolean naming), and
+when-not-to-apply guidance. When a section restates the rule verbatim, replace with a pointer
+and only keep the operational expansion.
 
 ## Naming
 
@@ -101,27 +104,29 @@ non-obvious**:
 
 ## Errors
 
-- **Fail loud at boundaries**, trust inside.
-- **Don't catch what you can't handle.** Bare `except` / empty catch = bug factory.
-- **Preserve cause.** Wrap, don't replace: `raise ProcessingError("step 3") from e`.
-- **Don't make errors quiet.** A swallowed error eventually becomes a 3am page.
-- **Exceptions for the exceptional.** Validation failure / not-found / conflict often belong in the
-  return type, not in exceptions.
+Canonical rules: [`rules/20-clean-code.md`](../../rules/20-clean-code.md) §Errors. Operational
+expansion specific to this skill:
+
+- **Preserve cause idiomatically.** `raise ProcessingError("step 3") from e` (Python),
+  `fmt.Errorf("step 3: %w", err)` (Go), `throw new ProcessingError("step 3", { cause: e })`
+  (JS). Don't `throw new Error(e.message)` — the stack and chain are lost.
+- **Boundary-decided error logging.** Don't log-and-rethrow at every layer; one log at the
+  layer that decides the response. Many duplicates for one event is dashboard noise.
 
 ## Structure
 
-- **Layering goes one direction.** Domain doesn't know about HTTP. UI doesn't know about SQL.
-- **Cohesion over file count.** Things that change together belong together.
-- **No `utils.py` / `helpers.ts` / `common.go`** — grow-bag modules are SRP graveyards. Name the actual
-  concept.
-- **Dead code is debt.** Delete it.
+Canonical rules: [`rules/20-clean-code.md`](../../rules/20-clean-code.md) §Structure. Operational
+addition specific to this skill:
+
+- **No `utils.py` / `helpers.ts` / `common.go`** grab-bag modules. They become SRP graveyards.
+  When you reach for one, the actual concept already wants a name — give it one.
 
 ## Diff hygiene
 
-- **One concern per commit/PR.** Bug fix, refactor, formatting — separate.
-- **No drive-by reformats** of code you didn't otherwise touch.
-- **No `console.log` / `print` / `dbg!`** in the final diff (unless it's the actual fix).
-- **No "WIP" leftovers** — `TODO` without owner+condition, commented-out code, scratch files.
+See [`rules/20-clean-code.md`](../../rules/20-clean-code.md) §Diff hygiene for the canonical
+list. Operational note: hooks (`hooks/pre-tool/guard-protected-paths.sh`) enforce some of these
+mechanically (e.g., no lockfile hand-edits, no writes inside `.git/`). When a hook fires, the
+rule is being enforced — don't work around the hook.
 
 ## When clean-code rules are *not* the right move
 

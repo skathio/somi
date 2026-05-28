@@ -1,0 +1,31 @@
+# CI caller: delegates to skathio/hashira-ops npm-package-ci reusable workflow.
+# Runs lint (commitlint non-blocking) + test (validate script) + scan-suite + coverage-report.
+# See https://github.com/skathio/hashira-ops/blob/main/docs/flows/npm.md for full adoption guide.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Deny-all baseline; the reusable workflow grants minimum per job.
+permissions: {}
+
+jobs:
+  ci:
+    uses: skathio/hashira-ops/.github/workflows/npm-package-ci.yml@v1
+    # Per-job grants must mirror the matrix in docs/flows/npm.md §5.
+    # Reusable workflows can only narrow the caller's grants, not broaden them.
+    permissions:
+      contents: read
+      pull-requests: write    # commitlint sticky comment + coverage-report PR comment
+      security-events: write  # CodeQL when enabled via scan_disable
+    with:
+      node_version: '20'
+      test_command: 'npm test'
+      coverage_path: 'coverage/lcov.info'
+      # codeql and actionlint disabled by default; osv + gitleaks + dependency-review run.
+      scan_disable: 'codeql,actionlint'
+      library_ref: 'v1'

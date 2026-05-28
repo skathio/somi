@@ -2,25 +2,19 @@
 # Shared helpers for somi-ai hooks.
 #
 # Hooks receive a JSON payload on stdin describing the tool invocation, and may
-# emit a JSON response on stdout to control the harness:
+# emit a JSON response on stdout to control the harness. Output schema is
+# event-specific (see https://code.claude.com/docs/en/hooks):
 #
-#   {"decision": "block", "reason": "..."}   - deny the tool call
-#   {"decision": "allow"}                    - explicitly allow (rare)
-#   <empty stdout>                           - pass-through (default)
+#   PreToolUse        — { hookSpecificOutput: { hookEventName, permissionDecision, permissionDecisionReason } }
+#   PostToolUse       — { hookSpecificOutput: { hookEventName, additionalContext } }  or  { decision, reason }
+#   UserPromptSubmit  — { hookSpecificOutput: { hookEventName, additionalContext } }  or  { decision, reason }
+#   Stop              — { decision: "block", reason }   (no additionalContext channel)
 #
-# Exit code 0 = pass-through (unless stdout contains a decision).
-# Exit code non-zero = treated as a runtime error (will surface to the user).
-#
-# These helpers rely on jq. The validate.sh script confirms jq is installed.
+# Helpers below emit the right shape per event. Use them — do not hand-emit
+# legacy `{decision:"block"}` or bare `{additionalContext}` shapes; the harness
+# silently drops the wrong shape for the wrong event.
 
 set -euo pipefail
-
-# SOMI_ROOT is the install root. The settings.json wires it via ${CLAUDE_PROJECT_DIR}
-# or an explicit env. Fall back to the directory containing this file's parent.
-SOMI_ROOT="${SOMI_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-
-# Path to the audit log. Project-local by default. Configurable via SOMI_AUDIT_LOG.
-SOMI_AUDIT_LOG="${SOMI_AUDIT_LOG:-${CLAUDE_PROJECT_DIR:-$PWD}/.claude/audit.log}"
 
 # Read the full JSON payload from stdin once. Subsequent jq calls use this.
 somi::read_payload() {
@@ -34,20 +28,9 @@ somi::field() {
   printf '%s' "${SOMI_PAYLOAD:-}" | jq -r "${path} // empty" 2>/dev/null || true
 }
 
-# Emit a "block" decision and exit cleanly. Hook framework treats stdout as the
-# control channel; the reason is shown to the model.
-somi::block() {
-  local reason="$1"
-  jq -nc --arg r "$reason" '{decision:"block", reason:$r}'
-  somi::audit "BLOCK" "$reason"
-  exit 0
-}
-
-# Emit an "allow" decision (rare — used only when a hook needs to short-circuit
-# a chain in favor of a tool call).
-somi::allow() {
-  jq -nc '{decision:"allow"}'
-  exit 0
+# Path to the audit log. Project-local by default. Configurable via SOMI_AUDIT_LOG.
+somi::audit_log_path() {
+  printf '%s' "${SOMI_AUDIT_LOG:-${CLAUDE_PROJECT_DIR:-$PWD}/.claude/audit.log}"
 }
 
 # Append a structured line to the audit log.
@@ -55,14 +38,46 @@ somi::audit() {
   local kind="$1"
   local detail="$2"
   local tool
+  local log
   tool="$(somi::field '.tool_name')"
-  mkdir -p "$(dirname "$SOMI_AUDIT_LOG")"
+  log="$(somi::audit_log_path)"
+  mkdir -p "$(dirname "$log")"
   printf '%s\t%s\t%s\t%s\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     "$kind" \
     "${tool:-unknown}" \
     "$detail" \
-    >> "$SOMI_AUDIT_LOG"
+    >> "$log"
+}
+
+# Deny a PreToolUse tool call. Use this for block-* hooks.
+# Emits the modern hookSpecificOutput.permissionDecision schema.
+somi::deny_pretool() {
+  local reason="$1"
+  jq -nc --arg r "$reason" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: $r
+    }
+  }'
+  somi::audit "DENY" "$reason"
+  exit 0
+}
+
+# Emit additionalContext for events that support it (PreToolUse, PostToolUse,
+# UserPromptSubmit). The harness shows this to the model on its next turn.
+# First arg is the event name; second is the context string.
+# Stop does NOT support additionalContext — do not call this from a Stop hook.
+somi::context() {
+  local event="$1"
+  local context="$2"
+  jq -nc --arg e "$event" --arg c "$context" '{
+    hookSpecificOutput: {
+      hookEventName: $e,
+      additionalContext: $c
+    }
+  }'
 }
 
 # Test whether a command string matches any extended-regex pattern.
@@ -76,4 +91,19 @@ somi::matches_any() {
     fi
   done
   return 1
+}
+
+# Case-insensitive variant. Uses nocasematch in a subshell to avoid leaking shell state.
+somi::matches_any_nocase() {
+  local cmd="$1"; shift
+  local pattern
+  (
+    shopt -s nocasematch
+    for pattern in "$@"; do
+      if [[ "$cmd" =~ $pattern ]]; then
+        exit 0
+      fi
+    done
+    exit 1
+  )
 }

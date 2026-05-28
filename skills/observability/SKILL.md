@@ -5,6 +5,11 @@ description: Use when adding logs, metrics, or traces — or when reviewing whet
 
 # Observability
 
+The principles are in [`rules/40-engineering-practices.md`](../../rules/40-engineering-practices.md)
+§Observability — that's the always-on floor (structured logs, three signals, correlation,
+cardinality, alert philosophy). This skill adds **operational depth**: log-level decision table,
+RED/USE frames, the metric-cardinality blast radius, per-change checklist.
+
 The 3am test: a paged on-call engineer must be able to figure out what happened from logs/metrics/traces
 alone, without re-deploying with extra `printf`s. If they can't, observability is missing.
 

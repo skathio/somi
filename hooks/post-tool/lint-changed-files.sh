@@ -71,8 +71,10 @@ case "$PATH_INPUT" in
 esac
 
 if [[ -n "$LINT_OUTPUT" ]]; then
-  # Emit as a stderr-style additional context message; harness shows it to the model.
-  jq -nc --arg msg "$LINT_OUTPUT" '{additionalContext: ("Lint output for the file just changed:\n" + $msg)}'
+  # PostToolUse additionalContext must live under hookSpecificOutput per the
+  # Claude Code hook schema. The bare {additionalContext} form is silently dropped.
+  somi::context "PostToolUse" "Lint output for the file just changed:
+$LINT_OUTPUT"
 fi
 
 exit 0

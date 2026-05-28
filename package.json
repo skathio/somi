@@ -1,6 +1,9 @@
 {
   "name": "@skathio/somi-ai",
   "version": "0.1.0",
+  "scripts": {
+    "test": "bash scripts/validate.sh"
+  },
   "description": "SoMi AI — multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
     "workflow",

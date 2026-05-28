@@ -30,13 +30,17 @@
   },
   "rules": "./rules/CLAUDE.md",
   "commands": [
-    { "name": "plan",            "description": "Generate a structured engineering plan (phases, risks, DoD, test strategy)" },
-    { "name": "code",            "description": "Implement against an approved plan with senior-engineer judgment" },
-    { "name": "review",          "description": "Strict code or plan review with severity-graded findings" },
-    { "name": "ship",            "description": "Full plan → code → review pipeline against a problem statement" },
-    { "name": "plan-review",     "description": "Review a plan before coding begins" },
-    { "name": "security-review", "description": "Security-focused review: auth, crypto, input validation, injection risks" },
-    { "name": "refactor",        "description": "Untangle complex code before patching antipatterns" }
+    { "name": "plan",                "description": "Generate a structured engineering plan (phases, risks, DoD, test strategy)" },
+    { "name": "plan-loop",           "description": "Bounded plan → review → revise loop. Stops on approve, cap, divergence, or user stop." },
+    { "name": "code",                "description": "Implement against an approved plan with senior-engineer judgment" },
+    { "name": "code-loop",           "description": "Bounded code → review → fix loop on a single iteration. Stops on approve, cap, diff cap, circuit breaker, or user stop." },
+    { "name": "review",              "description": "Strict code or plan review with severity-graded findings (use `plan <slug>` for plan-level review)" },
+    { "name": "ship",                "description": "Full plan → code → review pipeline against a problem statement. Code iterations run under /code-loop's caps." },
+    { "name": "ship-loop",           "description": "Bounded composition of /plan-loop → [hard human gate] → /code-loop per iteration." },
+    { "name": "security-review",     "description": "Security-focused review: auth, crypto, input validation, injection risks" },
+    { "name": "architecture-review", "description": "Architectural review: boundaries, contracts, dependency direction, reversibility" },
+    { "name": "test-strategy",       "description": "Test-strategy review: risk-driven coverage, level selection, mock policy, determinism" },
+    { "name": "refactor",            "description": "Untangle complex code before patching antipatterns" }
   ],
   "compatibility": {
     "copilot": ">=1.0.0"

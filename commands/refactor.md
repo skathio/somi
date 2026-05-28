@@ -2,7 +2,7 @@
 description: Surgical, behavior-preserving refactor of a named smell. Tests stay green; no feature work mixed in. Use when the next change requires untangling first.
 argument-hint: <smell description and target files>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
-model: opus
+model: sonnet
 ---
 
 # /refactor — Surgical refactor

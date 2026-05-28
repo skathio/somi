@@ -1,7 +1,6 @@
 ---
 name: architecture-reviewer
 description: Reviews architectural decisions, ADRs, new modules/services, dependency direction changes, and contract changes. Use before introducing a new service, splitting/merging modules, or changing a published interface. Optimizes for long-term maintainability, clear boundaries, and reversibility of decisions.
-tools: Read, Grep, Glob
 model: opus
 ---
 

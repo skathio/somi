@@ -18,6 +18,7 @@ somi::read_payload
 CMD="$(somi::field '.tool_input.command')"
 [[ -z "$CMD" ]] && exit 0
 
+# Case-sensitive patterns (filesystem paths, exact tools, exact flags).
 DANGEROUS_PATTERNS=(
   # filesystem nukes
   'rm[[:space:]]+-rf?[[:space:]]+/([[:space:]]|$)'
@@ -38,8 +39,9 @@ DANGEROUS_PATTERNS=(
   'wget[[:space:]]+[^|]*\|[[:space:]]*python[0-9]*'
 
   # destructive git ops on protected branches
-  'git[[:space:]]+push[[:space:]]+(-{1,2}force|-f)[[:space:]]+.*[[:space:]]+(main|master|trunk|release)([[:space:]]|$)'
-  'git[[:space:]]+push[[:space:]]+--force-with-lease=?.*[[:space:]]+(main|master|trunk|release)([[:space:]]|$)'
+  # Covers --force, -f, --force-with-lease (with or without =value), and refspec form (origin HEAD:main).
+  'git[[:space:]]+push[[:space:]]+(-{1,2}force|-f)([[:space:]=]|$).*[[:space:]:](main|master|trunk|release)([[:space:]]|$)'
+  'git[[:space:]]+push[[:space:]]+--force-with-lease([[:space:]=][^[:space:]]*)?[[:space:]].*[[:space:]:](main|master|trunk|release)([[:space:]]|$)'
   'git[[:space:]]+branch[[:space:]]+-D[[:space:]]+(main|master|trunk)'
   'git[[:space:]]+reset[[:space:]]+--hard[[:space:]]+(origin/)?(main|master|trunk)'
   'git[[:space:]]+clean[[:space:]]+-[fdx]+[[:space:]]'
@@ -51,18 +53,31 @@ DANGEROUS_PATTERNS=(
   # skipping safety checks (only block when used in commit/push context)
   'git[[:space:]]+commit[[:space:]]+.*--no-verify'
   'git[[:space:]]+push[[:space:]]+.*--no-verify'
+)
 
-  # database nukes
+# Case-insensitive patterns (SQL keywords arrive in lowercase from ORM logs, mixed case from REPLs).
+DANGEROUS_PATTERNS_NOCASE=(
   'DROP[[:space:]]+DATABASE'
   'DROP[[:space:]]+SCHEMA[[:space:]]+(public|prod|production)'
+  'DROP[[:space:]]+TABLE[[:space:]]+[a-zA-Z_]+'
   'TRUNCATE[[:space:]]+(TABLE[[:space:]]+)?[a-zA-Z_]+'
+  'DELETE[[:space:]]+FROM[[:space:]]+[a-zA-Z_]+[[:space:]]*;'
 )
 
 for pattern in "${DANGEROUS_PATTERNS[@]}"; do
   if [[ "$CMD" =~ $pattern ]]; then
-    somi::block "somi-ai refused this command: it matches a dangerous-shell pattern (\`${BASH_REMATCH[0]}\`).
+    somi::deny_pretool "somi-ai refused this command: it matches a dangerous-shell pattern (\`${BASH_REMATCH[0]}\`).
 If this is genuinely intended, stop and ask the human to run it themselves — never work around this hook silently."
   fi
 done
+
+shopt -s nocasematch
+for pattern in "${DANGEROUS_PATTERNS_NOCASE[@]}"; do
+  if [[ "$CMD" =~ $pattern ]]; then
+    somi::deny_pretool "somi-ai refused this command: it matches a destructive-SQL pattern (\`${BASH_REMATCH[0]}\`).
+If this is genuinely intended, stop and ask the human to run it themselves — never work around this hook silently."
+  fi
+done
+shopt -u nocasematch
 
 exit 0

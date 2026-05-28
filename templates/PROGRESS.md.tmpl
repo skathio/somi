@@ -3,8 +3,13 @@
 > Spec: [`spec.md`](./spec.md) • Phases: [`phases/`](./phases/) • Diary: [`diary.md`](./diary.md)
 > Last updated: <YYYY-MM-DD HH:MM>
 
-The single source of truth for the **state** of this work item. Read this first to know where we
-are. Updated by `/code` and `/review` as they progress; can be edited by humans too.
+The **single source of truth for the state** of this work item. Read this first to know where we
+are. Updated by `/code`, `/code-loop`, `/review`, `/plan-loop`, `/ship`, and `/ship-loop` as they
+progress; can be edited by humans too.
+
+> Status fields appear **only here** — the phase files in `phases/` describe what each iteration
+> *is*, not what state it's in. If you find yourself duplicating a status into `phases/`, stop
+> and fix that file's template instead.
 
 ## Status
 
@@ -21,6 +26,23 @@ are. Updated by `/code` and `/review` as they progress; can be edited by humans 
 | 1 | [<title>](./phases/01-…md)    | done            | 3/3                     |                                  |
 | 2 | [<title>](./phases/02-…md)    | in-progress     | 1/2                     | Iteration 2.2 blocked on D3      |
 | 3 | [<title>](./phases/03-…md)    | not-started     | 0/2                     | Awaits phase 2 complete          |
+
+## Iteration progress
+
+Per-iteration status lives here (not in `phases/<NN>-*.md`). Iteration descriptions are over there;
+state is here.
+
+| Iteration | Title                            | Status        | Reviewed | Last activity              |
+|-----------|----------------------------------|---------------|----------|----------------------------|
+| 1.1       | <title from phases/01>           | done          | approve  | <YYYY-MM-DD>               |
+| 1.2       | <title>                          | done          | approve  | <YYYY-MM-DD>               |
+| 1.3       | <title>                          | done          | approve  | <YYYY-MM-DD>               |
+| 2.1       | <title>                          | done          | request-changes → fixed | <YYYY-MM-DD>  |
+| 2.2       | <title>                          | blocked       | —        | <YYYY-MM-DD>               |
+| 3.1       | <title>                          | not-started   | —        | —                          |
+
+`Status`: `not-started` | `in-progress` | `done` | `blocked` | `superseded`.
+`Reviewed`: latest `/review` verdict or `—`.
 
 ## Currently in flight
 

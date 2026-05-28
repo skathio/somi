@@ -46,7 +46,6 @@ multi-piece change:
 ---
 name: <name>
 description: When to invoke this agent (concrete trigger conditions, not topic). The model uses this to decide whether to call it.
-tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 model: opus
 ---
 
@@ -59,9 +58,9 @@ quality bar, output shape, failure modes to avoid, escalation rules, examples.>
 Rules of thumb:
 
 - **`description`** is the single most important field. Get it right.
-- **`tools`** should be the minimum needed. Read-only agents (`reviewer`, `architecture-reviewer`)
-  should not have `Edit`/`Write`.
 - **`model`** defaults to `opus` for judgment-heavy work; `sonnet` for high-volume mechanical work.
+- Omit `tools:` — leave it unrestricted so the agent works across Claude Code and GitHub Copilot.
+  If the underlying runtime enforces restrictions, it does so at its own layer.
 
 ## Adding a skill
 
@@ -110,15 +109,31 @@ Keep commands thin; agents do the heavy lifting.
    source "$SCRIPT_DIR/../lib/common.sh"
    somi::read_payload
 
-   # Your guard logic here.
-   # somi::block "reason" to deny.
-   # jq -nc --arg c "..." '{additionalContext: $c}' to surface info back.
+   # Pick the right helper for the event:
+   #
+   #   PreToolUse        → somi::deny_pretool "reason"
+   #                       (emits hookSpecificOutput.permissionDecision="deny")
+   #
+   #   PostToolUse       → somi::context "PostToolUse" "..."
+   #                       (emits hookSpecificOutput.additionalContext)
+   #
+   #   UserPromptSubmit  → somi::context "UserPromptSubmit" "..."
+   #
+   #   Stop              → has no additionalContext channel. Use {decision:"block",reason}
+   #                       only when you genuinely want to refuse the stop (rare). Otherwise
+   #                       move your nudge to PostToolUse or UserPromptSubmit.
+   #
+   # Audit everything you decide via somi::audit (the helpers already do this for denials).
 
    exit 0
    ```
 
 2. `chmod +x` it.
-3. Wire it in `.claude/settings.json`:
+3. Wire it in **two** places so both install paths work:
+   - **Plugin install**: add to [`hooks/hooks.json`](../hooks/hooks.json) using `${CLAUDE_PLUGIN_ROOT}`.
+   - **Vendored install reference**: add to [`.claude/settings.json`](../.claude/settings.json) using `${SOMI_VENDOR_ROOT}`.
+
+   Plugin example:
 
    ```json
    {
@@ -127,7 +142,7 @@ Keep commands thin; agents do the heavy lifting.
          {
            "matcher": "Bash",
            "hooks": [
-             {"type": "command", "command": "${SOMI_ROOT}/hooks/pre-tool/your-script.sh"}
+             {"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/your-script.sh"}
            ]
          }
        ]
@@ -135,7 +150,7 @@ Keep commands thin; agents do the heavy lifting.
    }
    ```
 
-4. Open a PR — CI validates the hook script syntax and wiring.
+4. Open a PR — CI validates the hook script syntax and JSON wiring.
 
 Hooks should encode **non-negotiables** — things you want to be deterministic, not subject to model
 judgment. For judgment-heavy work, write an agent or skill instead.

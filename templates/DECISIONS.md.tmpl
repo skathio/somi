@@ -7,6 +7,10 @@ The ADR-style log of architectural and design decisions for this work item. Each
 either **verified with the user** (when it shaped the spec or architecture) or **made by the
 agent** (small implementation choices). Decisions verified with the user are marked.
 
+> **Single source of truth for work-item decisions.** `spec.md` §5 holds one-liner pointers
+> back here (do not duplicate the full deliberation there). For project-wide standalone ADRs
+> outside a work item (e.g., under `docs/adr/`), use [`ADR.md.tmpl`](./ADR.md.tmpl) instead.
+
 **When a decision changes mid-workflow**: do **not** edit the original entry. Add a **new entry**
 that supersedes it, mark the old one `superseded by D<N>`, and update the one-liner in `spec.md`.
 Append a diary entry naming the change.
