@@ -1,6 +1,6 @@
-# Publish caller: delegates to skathio/hashira-ops npm-package-publish reusable workflow.
+# Publish caller: delegates to skathio/hashira npm-package-publish reusable workflow.
 # Runs semantic-release inside the `production` Environment gate on every push to main.
-# See https://github.com/skathio/hashira-ops/blob/main/docs/flows/npm.md for full adoption guide.
+# See https://github.com/skathio/hashira/blob/main/docs/flows/npm.md for full adoption guide.
 #
 # Setup required before first publish:
 #   1. Create a GitHub Environment named 'production' with >=1 required reviewer (§7).
@@ -18,7 +18,7 @@ permissions: {}
 
 jobs:
   publish:
-    uses: skathio/hashira-ops/.github/workflows/npm-package-publish.yml@v1
+    uses: skathio/hashira/.github/workflows/npm-package-publish.yml@v1
     # Per-job grants must mirror the matrix in docs/flows/npm.md §5.
     permissions:
       id-token: write     # OIDC trusted-publishing token exchange
