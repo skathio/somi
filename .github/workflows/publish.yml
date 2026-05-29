@@ -54,3 +54,4 @@ jobs:
       - uses: skathio/hashira/.github/actions/npm-oidc-publish@v1
         with:
           node_version: '20'
+          version: ${{ needs.publish.outputs.version }}
