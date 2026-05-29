@@ -5,6 +5,9 @@
 # Setup required before first publish:
 #   1. Create a GitHub Environment named 'production' with >=1 required reviewer (§7).
 #   2. Either configure npm OIDC trusted publishing (recommended, §6) OR set NPM_TOKEN secret.
+#   For OIDC: configure the trusted publisher on npmjs.com with workflow filename 'publish.yml'
+#   and environment 'production'. The npm-publish job below runs in this file's context so
+#   workflow_ref matches.
 
 name: publish
 
@@ -13,7 +16,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Deny-all baseline; the reusable workflow grants minimum per job.
+# Deny-all baseline; jobs grant minimum.
 permissions: {}
 
 jobs:
@@ -33,3 +36,21 @@ jobs:
     secrets:
       # Omit NPM_TOKEN if OIDC trusted-publishing is configured (recommended).
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  npm-publish:
+    # Runs npm publish via OIDC trusted publishing. Must be a job in THIS file so
+    # the OIDC token's workflow_ref = 'publish.yml', matching the npm trusted
+    # publisher configuration. The hashira npm-oidc-publish composite action handles
+    # the token exchange and publish; no logic lives here.
+    needs: publish
+    if: ${{ needs.publish.outputs.released == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write  # required to obtain the OIDC JWT for npm trusted publishing
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: skathio/hashira/.github/actions/npm-oidc-publish@v1
+        with:
+          node_version: '20'
