@@ -1,6 +1,7 @@
-# CI caller: delegates to skathio/hashira npm-package-ci reusable workflow.
-# Runs lint (commitlint non-blocking) + test (validate script) + scan-suite + coverage-report.
-# See https://github.com/skathio/hashira/blob/main/docs/flows/npm.md for full adoption guide.
+# CI workflow — runs validation on every PR and push to main.
+# Direct implementation: hashira-ops npm-package-ci has two external-consumer
+# bugs (scan-suite D14 nested path, commitlint non-blocking exit) that can't
+# be patched from the consumer side. Revisit once hashira fixes them.
 
 name: ci
 
@@ -10,24 +11,22 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Deny-all baseline; the reusable workflow grants minimum per job.
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
-  ci:
-    uses: skathio/hashira/.github/workflows/npm-package-ci.yml@v1
-    # Per-job grants must mirror the matrix in docs/flows/npm.md §5.
-    # Reusable workflows can only narrow the caller's grants, not broaden them.
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write    # commitlint sticky comment + coverage-report PR comment
-      security-events: write  # CodeQL when enabled via scan_disable
-    with:
-      node_version: '20'
-      test_command: 'npm test'
-      coverage_path: 'coverage/lcov.info'
-      # All scans disabled: scan-suite uses nested local `uses:` paths that resolve
-      # against the consumer's workspace root, not the .hashira/ checkout path (D14
-      # limitation in hashira). Re-enable once hashira fixes nested path resolution.
-      scan_disable: 'codeql,actionlint,osv,gitleaks,dependency-review'
-      library_ref: 'v1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends jq shellcheck
+
+      - name: Run validation
+        run: bash scripts/validate.sh
