@@ -21,9 +21,10 @@ jobs:
     uses: skathio/hashira/.github/workflows/npm-package-publish.yml@v1
     # Per-job grants must mirror the matrix in docs/flows/npm.md §5.
     permissions:
-      id-token: write     # OIDC trusted-publishing token exchange
-      contents: write     # tag push + CHANGELOG commit by @semantic-release/git
+      id-token: write      # OIDC trusted-publishing token exchange
+      contents: write      # tag push + CHANGELOG commit by @semantic-release/git
       pull-requests: write # release-note PR comment by @semantic-release/github
+      issues: write        # @semantic-release/github creates/closes release issues
     with:
       node_version: '20'
       target: 'https://registry.npmjs.org'
