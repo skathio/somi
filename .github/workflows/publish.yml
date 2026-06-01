@@ -1,57 +1,89 @@
-# Publish caller: delegates to skathio/hashira npm-package-publish reusable workflow.
-# Runs semantic-release inside the `production` Environment gate on every push to main.
-# See https://github.com/skathio/hashira/blob/main/docs/flows/npm.md for full adoption guide.
+# Publish workflow — single file, CI gates publish, one production approval.
 #
-# Setup required before first publish:
-#   1. Create a GitHub Environment named 'production' with >=1 required reviewer (§7).
-#   2. Either configure npm OIDC trusted publishing (recommended, §6) OR set NPM_TOKEN secret.
-#   For OIDC: configure the trusted publisher on npmjs.com with workflow filename 'publish.yml'
-#   and environment 'production'. The npm-publish job below runs in this file's context so
-#   workflow_ref matches.
+# Adopts skathio/hashira's `npm-release` composite action (work item
+# npm-publish-redesign). The action runs semantic-release end-to-end (analyze →
+# version → tag → npm publish via native OIDC → GitHub Release) in THIS job, so
+# the OIDC token's `workflow_ref` = this file (publish.yml), matching the npm
+# trusted-publisher config (org skathio / repo somi-ai / workflow publish.yml /
+# environment production).
+#
+# Shape (D4): one file, two jobs.
+#   - ci      : runs on every PR + push to main + manual dispatch. Validates the
+#               repo (scripts/validate.sh) AND that the package is publishable
+#               (`npm publish --dry-run`). This is the gate.
+#   - publish : needs ci; runs ONLY on push to main / manual dispatch; gated by
+#               the `production` Environment (one approval). Calls npm-release.
+#
+# This replaces the previous two-file shape (separate ci.yml + a publish.yml
+# that called the reusable workflow + a hand-rolled second OIDC job). That shape
+# ran CI and publish as two INDEPENDENT actions on a merge (CI gated nothing)
+# and required TWO production approvals (one per publishing job). ci.yml is
+# deleted; this file is the whole story.
+#
+# npm trusted publishing is OIDC-only here: NO NPM_TOKEN secret is set. The
+# `production` Environment must have >=1 required reviewer for the gate to pause.
 
 name: publish
 
 on:
+  pull_request:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Deny-all baseline; jobs grant minimum.
+# Deny-all baseline; each job grants the minimum it needs.
 permissions: {}
 
 jobs:
-  publish:
-    uses: skathio/hashira/.github/workflows/npm-package-publish.yml@v1
-    # Per-job grants must mirror the matrix in docs/flows/npm.md §5.
-    permissions:
-      id-token: write      # OIDC trusted-publishing token exchange
-      contents: write      # tag push + CHANGELOG commit by @semantic-release/git
-      pull-requests: write # release-note PR comment by @semantic-release/github
-      issues: write        # @semantic-release/github creates/closes release issues
-    with:
-      node_version: '20'
-      target: 'https://registry.npmjs.org'
-      environment_name: 'production'
-      library_ref: 'v1'
-    secrets:
-      # Omit NPM_TOKEN if OIDC trusted-publishing is configured (recommended).
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  npm-publish:
-    # Runs npm publish via OIDC trusted publishing. Must be a job in THIS file so
-    # the OIDC token's workflow_ref = 'publish.yml', matching the npm trusted
-    # publisher configuration. The hashira npm-oidc-publish composite action handles
-    # the token exchange and publish; no logic lives here.
-    needs: publish
-    if: ${{ needs.publish.outputs.released == 'true' }}
+  ci:
+    name: ci
     runs-on: ubuntu-latest
-    environment: production
     permissions:
-      id-token: write  # required to obtain the OIDC JWT for npm trusted publishing
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: skathio/hashira/.github/actions/npm-oidc-publish@v1
+
+      - name: Install validation tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends jq shellcheck
+
+      - name: Run validation
+        run: bash scripts/validate.sh
+
+      # Publishability gate (R7): assert the package can be packed/published
+      # before the publish job is ever allowed to run. `npm publish --dry-run`
+      # exercises pack + the `files`/.npmignore selection + publishConfig
+      # without contacting the registry's publish endpoint, so it needs no auth.
+      - name: Assert package is publishable (dry-run)
+        run: npm publish --dry-run
+
+  publish:
+    name: publish
+    needs: ci
+    # Only publish on a push to main or a manual dispatch — never on PRs.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    # Single production gate → exactly one approval per release.
+    environment: production
+    permissions:
+      id-token: write      # npm OIDC trusted-publishing token exchange
+      contents: write      # semantic-release pushes the version tag
+      issues: write        # @semantic-release/github failure issue
+      pull-requests: write # @semantic-release/github release-note comment
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          node_version: '20'
-          version: ${{ needs.publish.outputs.version }}
+          fetch-depth: 0          # semantic-release walks full history for versioning
+          persist-credentials: true  # REQUIRED: semantic-release core pushes the
+                                  # version tag via these git credentials. Without
+                                  # them the publish succeeds but the tag push fails,
+                                  # leaving the next run unable to compute a release.
+
+      - uses: skathio/hashira/.github/actions/npm-release@v1
+        with:
+          node_version: '24'
+          # target defaults to https://registry.npmjs.org (official registry → OIDC).
+          # No NPM_TOKEN: OIDC trusted publishing handles auth.
