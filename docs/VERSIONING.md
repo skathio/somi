@@ -1,7 +1,12 @@
 # Versioning
 
-SoMi AI follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). The `VERSION` file at
-the repo root is the source of truth. Git tags are `v<VERSION>` (e.g., `v0.1.0`).
+SoMi AI follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Releases are
+**automated from [Conventional Commits](https://www.conventionalcommits.org/)** (see Release process
+below). The **published git tags (`v<VERSION>`) and the npm registry are the source of truth** for
+the released version — the in-repo `VERSION` / `package.json` are not committed back on each release,
+so they may lag behind what's published; check the
+[npm page](https://www.npmjs.com/package/@skathio/somi-ai) or
+[Releases](https://github.com/skathio/somi-ai/releases).
 
 ## What counts as which kind of change
 
@@ -55,15 +60,25 @@ After `1.0.0`, the policy above applies strictly.
 
 ## Release process
 
-1. **Land changes** on `main` with a clear `CHANGELOG.md` entry under `[Unreleased]`.
-2. **Pick the version bump** per the rules above.
-3. **Move `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`** and start a fresh `[Unreleased]` section.
-4. **Update `VERSION`** to `X.Y.Z`.
-5. **Update `.claude-plugin/plugin.json`** and `.claude-plugin/marketplace.json` versions to match.
-6. **Commit**: `chore: release v<X.Y.Z>`.
-7. **Tag**: `git tag -a v<X.Y.Z> -m "v<X.Y.Z>"` then `git push --tags`.
-8. **Validate** — CI runs automatically on the tag (frontmatter, TS compile, hook scripts).
-9. **Publish a GitHub release** with the relevant `CHANGELOG.md` section as the body.
+Releases are **automated** by the `publish.yml` workflow (which adopts the hashira `npm-release`
+action). You do **not** hand-edit `VERSION`, tag, or publish manually.
+
+1. **Land changes** on `main` via PR, using [Conventional Commits](https://www.conventionalcommits.org/)
+   (`feat:` → MINOR, `fix:`/`perf:` → PATCH, `feat!:` or a `BREAKING CHANGE:` footer → MAJOR).
+   Commit types that aren't release-worthy (`chore:`, `docs:`, `ci:`, `refactor:`, `test:`) don't
+   trigger a release on their own.
+2. **On merge to `main`** (or a manual `workflow_dispatch`), after the `ci` gate passes and the
+   `production` Environment is approved, semantic-release:
+   - derives the next version from the commits since the last tag,
+   - publishes to npm with a signed **provenance attestation** via OIDC trusted publishing (no
+     long-lived token),
+   - pushes the `v<X.Y.Z>` git tag, and
+   - creates the matching **GitHub Release** with generated notes.
+3. If there are no release-worthy commits since the last tag, the run is a no-op (nothing is
+   published) — this is expected.
+
+> The committed `VERSION` / `package.json` are not bumped back into the repo (tag-driven, no
+> commit-back). Treat the git tags + npm as authoritative.
 
 ## Deprecation policy
 

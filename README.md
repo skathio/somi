@@ -1,8 +1,12 @@
-# SoMi AI  `v0.1.0`
+# SoMi AI
 
 > An opinionated, reusable multi-agent engineering workflow system for Claude Code and GitHub Copilot.
 
-This is the **initial release** of SoMi AI — see [CHANGELOG.md](CHANGELOG.md) for the full feature set.
+[![npm](https://img.shields.io/npm/v/@skathio/somi-ai?logo=npm)](https://www.npmjs.com/package/@skathio/somi-ai)
+
+The latest published version is on [npm](https://www.npmjs.com/package/@skathio/somi-ai) and in the
+[GitHub Releases](https://github.com/skathio/somi-ai/releases); see [CHANGELOG.md](CHANGELOG.md) for
+release notes.
 
 SoMi AI gives engineering teams a shared, version-controlled "operating system" for working with Claude:
 three first-class workflows — **plan → code → review** — backed by specialised subagents, deterministic guardrail hooks,
@@ -148,10 +152,17 @@ For the all-in-one pipeline: `/ship <problem statement>`.
 
 ## Versioning
 
-SoMi AI follows [Semantic Versioning](https://semver.org/). The `VERSION` file is the source of truth.
-See [docs/VERSIONING.md](docs/VERSIONING.md) for the breaking-change policy and migration guide template.
+SoMi AI follows [Semantic Versioning](https://semver.org/). Releases are **automated from
+[Conventional Commits](https://www.conventionalcommits.org/)**: merging to `main` runs the publish
+workflow, which derives the next version, publishes to npm (with a signed provenance attestation via
+OIDC trusted publishing), pushes the `v<version>` git tag, and creates the matching GitHub Release.
 
-Current version: **0.1.0** — initial release.
+The **published git tags and the npm registry are the source of truth** for the released version —
+the in-repo `VERSION` / `package.json` are not committed back on each release, so don't rely on them
+for "what's published." Check the [npm page](https://www.npmjs.com/package/@skathio/somi-ai) or
+[Releases](https://github.com/skathio/somi-ai/releases) instead.
+
+See [docs/VERSIONING.md](docs/VERSIONING.md) for the breaking-change policy and migration guide template.
 
 ---
 
