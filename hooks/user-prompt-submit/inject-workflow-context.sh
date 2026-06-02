@@ -36,7 +36,11 @@ compute_signature() {
   if [[ -d "$PROJECT_ROOT/.somi/reviews" ]]; then
     reviews_state="$(find "$PROJECT_ROOT/.somi/reviews" -maxdepth 3 -name '*.md' -printf '%T@ %p\n' 2>/dev/null | sort | sha256sum | cut -d' ' -f1)"
   fi
-  printf '%s:%s' "$plans_state" "$reviews_state"
+  local rd_state=""
+  if [[ -d "$PROJECT_ROOT/.somi/rd" ]]; then
+    rd_state="$(find "$PROJECT_ROOT/.somi/rd" -maxdepth 2 -name 'README.md' -printf '%T@ %p\n' 2>/dev/null | sort | sha256sum | cut -d' ' -f1)"
+  fi
+  printf '%s:%s:%s' "$plans_state" "$reviews_state" "$rd_state"
 }
 
 CURRENT_SIG="$(compute_signature)"
@@ -62,6 +66,27 @@ if [[ -d "$PROJECT_ROOT/.somi/plans" ]]; then
     PLAN_HINT=$'\n- Active work item: `.somi/plans/'"${in_progress[0]}"$'/`. Follow its `spec.md` and active iteration in `phases/`; update `progress.md` / `diary.md` as work proceeds.'
   elif (( ${#in_progress[@]} > 1 )); then
     PLAN_HINT=$'\n- Multiple in-progress work items in `.somi/plans/`: '"$(IFS=,; echo "${in_progress[*]}")"$'. Confirm with the user which one applies before coding.'
+  fi
+fi
+
+# Active discovery state pulled from .somi/rd/<slug>/README.md (if present).
+RD_HINT=""
+if [[ -d "$PROJECT_ROOT/.somi/rd" ]]; then
+  rd_active=()
+  rd_ready=()
+  while IFS= read -r rd_readme; do
+    [[ -z "$rd_readme" ]] && continue
+    slug="$(basename "$(dirname "$rd_readme")")"
+    if grep -qiE 'status:[[:space:]]*`?(researching|drafting|awaiting-verification)`?' "$rd_readme" 2>/dev/null; then
+      rd_active+=("$slug")
+    elif grep -qiE 'status:[[:space:]]*`?ready-for-planning`?' "$rd_readme" 2>/dev/null; then
+      rd_ready+=("$slug")
+    fi
+  done < <(find "$PROJECT_ROOT/.somi/rd" -maxdepth 2 -name 'README.md' 2>/dev/null)
+  if (( ${#rd_active[@]} >= 1 )); then
+    RD_HINT=$'\n- Active discovery in `.somi/rd/`: '"$(IFS=,; echo "${rd_active[*]}")"$'. This is requirements-engineering work (`/discover`): research the competition, author the R&D doc set, verify crossroads, before handing to `/plan`.'
+  elif (( ${#rd_ready[@]} == 1 )); then
+    RD_HINT=$'\n- R&D foundation ready in `.somi/rd/'"${rd_ready[0]}"$'/`. `/plan '"${rd_ready[0]}"$'` will consume its SRS/FRD as the requirements source and SDD/TDD as architectural direction.'
   fi
 fi
 
@@ -93,7 +118,7 @@ if [[ "$EMIT_REMINDER" == "yes" ]]; then
 - Follow rules/CLAUDE.md priorities: security > correctness > maintainability > performance > convenience.
 - Plan before coding non-trivial work. Code from the plan, not around it.
 - Surface tradeoffs and shortcuts in plain text; never silently compromise.
-- Hooks may deny dangerous bash, secret writes, protected paths, and unsanctioned dep installs — do not work around them.${PLAN_HINT}")
+- Hooks may deny dangerous bash, secret writes, protected paths, and unsanctioned dep installs — do not work around them.${PLAN_HINT}${RD_HINT}")
 fi
 
 if (( ${#NUDGES[@]} > 0 )); then

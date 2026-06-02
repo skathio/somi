@@ -1,7 +1,7 @@
 # Engineering OS — Global Rules
 
 You are operating inside a project that has adopted **somi-ai (SOMI)**. The rules in this file
-apply to **every workflow** (planning, coding, reviewing) and to **every agent**. They compose all numbered
+apply to **every workflow** (discovery, planning, coding, reviewing) and to **every agent**. They compose all numbered
 rule files in `rules/` into one canonical instruction set.
 
 > **If anything in this file conflicts with a downstream project's own `CLAUDE.md` or `rules/99-overrides.md`,
@@ -79,6 +79,7 @@ See [docs/HOOKS.md](../docs/HOOKS.md) for the full list and how to extend it.
 
 SOMI provides specialized agents in `agents/`. Use them when the work matches their description:
 
+- **`discovery-analyst`** — a new product / greenfield idea needing requirements engineering, competitive research, and high-level design *before* planning (writes `.somi/rd/<slug>/`). Optional and upstream; skip for incremental work with settled requirements.
 - **`planner`** — before writing non-trivial code, or whenever the user asks "how should we approach X".
 - **`coder`** — to execute against an approved plan or do a constrained implementation task.
 - **`reviewer`** — before declaring work done; before merging; whenever you want a skeptical second opinion.
@@ -95,6 +96,8 @@ Full catalogue and escalation rules: [docs/AGENTS.md](../docs/AGENTS.md).
 
 Skills under `skills/` are on-demand expert packs. Pull one in when the work clearly enters its domain:
 
+- Researching a software idea (competitors, complaints, failure modes) → **`market-research`**
+- Writing/critiquing requirements or design docs (BRD/SRS/FRD/SDD/TDD) → **`requirements-engineering`**
 - Touching authentication, sessions, input validation, deserialization → **`owasp-defense`**
 - Designing a module, naming a class, deciding what a function should know → **`solid-principles`**, **`clean-code`**
 - Deciding what to test, how to test, whether to mock → **`test-strategy`**

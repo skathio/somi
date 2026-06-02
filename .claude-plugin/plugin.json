@@ -1,6 +1,6 @@
 {
   "name": "somi-ai",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "displayName": "SoMi AI",
   "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [

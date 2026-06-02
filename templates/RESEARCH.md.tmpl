@@ -1,0 +1,96 @@
+# Research report — <initiative name>
+
+> Index: [`README.md`](./README.md) • Business frame: [`brd.md`](./brd.md)
+> Research current as of: <YYYY-MM-DD>
+
+The competitive and user-complaint research that grounds this initiative's requirements. **Every
+non-obvious claim is cited.** Distinguish signal (the same point across many independent sources)
+from noise (a single voice). Where there's no evidence, say so — do not fabricate.
+
+> Every finding here should land downstream as a **requirement, a non-goal, or a risk** (see the
+> conversion table at the end). A finding that changes no document didn't matter.
+
+## 1. The job to be done
+
+<What job do users hire a product in this space to do? Frame around the outcome, not the feature
+list — this reveals substitutes (spreadsheets, manual processes, adjacent-category tools) the
+feature comparison misses.>
+
+- **Primary job**: <"When I __, I want to __, so I can __">
+- **Who has this job**: <persona(s)>
+- **Today's substitutes**: <what they use now, including non-software>
+
+## 2. Competitive landscape
+
+| Competitor | Category | Claimed value | Pricing shape | Strength | Weakness (cited) |
+|------------|----------|---------------|---------------|----------|------------------|
+| <name>     | direct   | <…>           | <…>           | <…>      | <… — `<url>`>    |
+| <name>     | indirect | <…>           | <…>           | <…>      | <… — `<url>`>    |
+
+<A short paragraph per major competitor where the table isn't enough — what they're racing to fix
+(changelog/roadmap evidence), where their docs reveal complexity, where the money/pain is.>
+
+## 3. Recurring complaints (the must-avoid list)
+
+The same pain cited by many independent users. Each is a candidate requirement or non-goal.
+
+- **C1 — <complaint>** — _Signal: cited across <N>+ independent sources_ (`<url1>`, `<url2>`,
+  `<url3>`). Implication: <FR/NFR/non-goal this drives>.
+- **C2 — <complaint>** — _Signal: <strength>_ (`<url>`). Implication: <…>.
+- **C3 — <complaint>** — _Noise: single source, included for awareness_ (`<url>`).
+
+## 4. Churn / abandonment reasons
+
+What made users *leave* incumbents. Designing away from these often beats any new feature.
+
+- **<reason>** — <evidence, cited>. → <how we design away from it>.
+- **<reason>** — <evidence>. → <…>.
+
+## 5. Unmet demand (differentiator candidates)
+
+Features repeatedly requested and never delivered.
+
+- **<request>** — <evidence of demand, cited>. → candidate <Should/Could> requirement, or explicit
+  "Won't, because <reason>".
+
+## 6. Non-functional reality (reliability / performance / security / UX)
+
+The non-functional reasons trust erodes in this space — these become NFRs with numbers.
+
+- **<dimension>** — <what goes wrong for incumbents, cited>. → NFR target: <number + condition>.
+
+## 7. Opportunities (gaps left open)
+
+- **O1** — <gap competitors leave open, grounded in §3–§6>.
+- **O2** — <…>.
+
+## 8. Risks (from the research)
+
+| Risk | Evidence | Likelihood | Impact | Mitigation |
+|------|----------|-----------|--------|------------|
+| <e.g. reusing a library with the same known limit inherits the complaint> | <cite> | M | H | <verify against the NFR before planning commits> |
+| <e.g. the gap is open because the job is genuinely hard / low-value> | <cite> | <…> | <…> | <…> |
+
+## 9. Assumptions to validate (no evidence found)
+
+Claims we could not verify. Building on these without validation is a risk.
+
+- **A1** — <assumption> — _no evidence found; validate by <how>_.
+
+## 10. Sources
+
+<Numbered list of the sources cited above, with access date. Keep it honest — these are checkable.>
+
+1. <url> — <what it is> — accessed <YYYY-MM-DD>
+2. <url> — <…>
+
+---
+
+### Findings → downstream (conversion check)
+
+| Finding | Lands as | Where |
+|---------|----------|-------|
+| C1      | NFR-<n>  | `srs.md` |
+| Churn reason <x> | Non-goal | `brd.md §Non-goals` |
+| O1      | FR-<n> (Should) | `srs.md` |
+| Risk <x> | Risk + mitigation | `sdd.md` / `tdd.md` |

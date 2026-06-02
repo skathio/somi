@@ -1,0 +1,68 @@
+# Business Requirements Document (BRD) — <initiative name>
+
+> Index: [`README.md`](./README.md) • Requirements: [`srs.md`](./srs.md)
+> Research: [`research-report.md`](./research-report.md) • Decisions: [`decisions.md`](./decisions.md)
+> Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD>
+
+The **business frame**: why this is worth building, for whom, and what success looks like. Every
+later requirement must serve a goal stated here. This is the *why*; the *what* lives in
+[`srs.md`](./srs.md), the *how* in the planner's output.
+
+## 1. Problem statement
+
+<One or two paragraphs: the agent's restatement of the idea as a business problem. Who is hurting,
+how, and why now. The verbatim idea lives in [`README.md`](./README.md) (fenced as data); this is the
+restatement — don't duplicate the verbatim here.>
+
+## 2. Stakeholders
+
+| Stakeholder | Interest in this initiative | Success looks like (for them) |
+|-------------|-----------------------------|-------------------------------|
+| <e.g. end user / clinic admin> | <…> | <…> |
+| <e.g. buyer / budget owner>    | <…> | <…> |
+| <e.g. operator / support>      | <…> | <…> |
+
+## 3. Business goals
+
+Each goal gets a stable ID (`BR-*`) so requirements can trace to it. Goals are outcomes, not
+features.
+
+- **BR-1** — <outcome the business wants, measurable where possible>
+- **BR-2** — <…>
+
+## 4. Success metrics
+
+How we'll know the initiative worked — concrete, with targets and a measurement window.
+
+- **<metric>** — target <value> within <window>; measured via <source>.
+- **<metric>** — <…>.
+
+## 5. Scope
+
+**In scope (v1):**
+- <capability area 1>
+- <capability area 2>
+
+**Out of scope / Non-goals (explicit):**
+- <non-goal 1 — and why; link to the research finding or decision that drew the boundary>
+- <non-goal 2>
+
+> Non-goals are first-class. The research (`research-report.md`) and MoSCoW "Won't" tags in
+> `srs.md` should agree with this list.
+
+## 6. Constraints & assumptions
+
+- **Constraints**: <budget, timeline, regulatory, platform, team — anything that bounds the
+  solution>.
+- **Assumptions**: <what we're taking as true; cross-reference `research-report.md §9` for those
+  needing validation>.
+
+## 7. Business risks
+
+| Risk | Impact | Likelihood | Mitigation / owner |
+|------|--------|-----------|--------------------|
+| <market / adoption / commercial risk> | <…> | <…> | <…> |
+
+## 8. Open questions (business)
+
+- [ ] <question whose answer changes scope or goals — route to verification if it shapes the work>

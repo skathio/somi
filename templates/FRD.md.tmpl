@@ -1,0 +1,64 @@
+# Functional Requirements Document (FRD) — <initiative name>
+
+> Index: [`README.md`](./README.md) • Requirements: [`srs.md`](./srs.md)
+> Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD>
+
+The **detailed functional behavior** behind the SRS requirements that need elaboration. This
+*deepens* the SRS; it does not introduce new requirements (those belong in `srs.md`). Each section
+references the SRS ID it elaborates.
+
+> **Omit this document** (note the omission in `README.md`) if the SRS already captures the
+> functional detail — common for small tools. Don't pad it to look complete.
+
+## How to read this
+
+Each feature is specified as: a short description, the **primary (happy) flow**, **alternate
+flows**, **exception/failure flows**, and **field/validation rules**. Steps are observable — a tester
+should be able to execute them.
+
+---
+
+## F1 — <feature name> (elaborates FR-<n>)
+
+**Description**: <one or two sentences — what this feature does and for whom>
+
+**Preconditions**: <state that must hold before the flow starts>
+
+**Primary flow**:
+1. <actor> does <action>.
+2. System <responds / validates / persists>.
+3. … → <observable end state>.
+
+**Alternate flows**:
+- **A1** — <when X instead of Y>: <steps / outcome>.
+
+**Exception flows** (the sad paths — never skip these):
+- **E1 — <bad input>**: <what the system does, what the user sees, exit/error state>.
+- **E2 — <dependency unavailable>**: <degradation / retry / surfaced error>.
+- **E3 — <limit / quota hit>**: <behavior>.
+
+**Field / validation rules**:
+
+| Field | Rule | On violation |
+|-------|------|--------------|
+| <field> | <type, range, required?, format> | <message / behavior> |
+
+**Acceptance** (Given/When/Then):
+- **Given** <…>, **when** <…>, **then** <observable result>.
+
+---
+
+## F2 — <feature name> (elaborates FR-<n>)
+
+(Same structure as F1.)
+
+---
+
+## State transitions (if the feature is stateful)
+
+<Where an entity moves through states, specify the allowed transitions and what triggers each.
+A simple table or list is enough; the planner turns this into the detailed model.>
+
+| From | Event | To | Guard / side effect |
+|------|-------|----|--------------------|
+| <state> | <event> | <state> | <condition / effect> |

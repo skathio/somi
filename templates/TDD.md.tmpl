@@ -1,0 +1,77 @@
+# Technical Design Document (TDD) — <initiative name>
+
+> Index: [`README.md`](./README.md) • Design: [`sdd.md`](./sdd.md) • Requirements: [`srs.md`](./srs.md)
+> Decisions: [`decisions.md`](./decisions.md)
+> Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD>
+
+The **technical direction and constraints** — high-level. Technology *families*, non-functional
+engineering targets, and the posture (security, compliance, operability) that the planner must
+build within. Each choice is tied to an SRS requirement and a reason.
+
+> **Boundary, again.** This names the technology *family* and the *limits* (e.g., "a relational
+> store with ACID guarantees", "p95 < 200 ms"). The [`planner`](../../../agents/planner.md) picks the
+> *concrete* library/version within those limits and designs the implementation. Don't pin exact
+> dependency versions or write code here.
+
+## 1. Technology direction
+
+| Area | Direction (family, not exact pick) | Why (traces to) | Constraint for the planner |
+|------|------------------------------------|------------------|----------------------------|
+| Language / runtime | <e.g. a memory-safe backend language> | NFR-2, team skills | <…> |
+| Storage | <e.g. relational, ACID> | FR-5 (consistency), NFR-2 | <e.g. must support 1M-row import — NFR-4> |
+| Compute / hosting | <e.g. containerized, single region v1> | BR constraints | <…> |
+| Async / messaging | <e.g. needed? sync v1, queue later> | NFR-1 | <…> |
+
+> A dependency added later is a decision (the [`gate-dep-install`](../../../docs/HOOKS.md) hook gates
+> it at coding time). This document sets the *direction*; the planner records the concrete pick in
+> `decisions.md` when it commits.
+
+## 2. Non-functional engineering targets
+
+The measurable targets the implementation must hit, lifted from `srs.md §4` and made concrete for
+engineering.
+
+| Target | Value + condition | Source |
+|--------|-------------------|--------|
+| Latency | <p95 < 200 ms at 500 rps on the reference instance> | NFR-1 |
+| Throughput / scale | <e.g. 10k concurrent sessions; 1M-row import> | NFR-4 |
+| Availability | <e.g. 99.9% monthly> | NFR-2 |
+| Resource budget | <e.g. fits in <N> GB / <$N> per month at target load> | BR constraint |
+
+## 3. Security & privacy posture
+
+- **AuthN/AuthZ direction**: <own vs. delegate; session model> (full entry in `decisions.md`)
+- **Data protection**: <encryption at rest/in transit; secret handling — ties to NFR-3>
+- **Trust boundaries**: <pointer to `sdd.md §4`; the controls there are the engineering requirements>
+- **Compliance**: <regulatory regime, if any (HIPAA/GDPR/PCI…) and what it forces — consider a
+  dedicated compliance doc, noted in `README.md`>
+
+> Ground this with [`owasp-defense`](../../../skills/owasp-defense/SKILL.md) and
+> [`threat-modeling`](../../../skills/threat-modeling/SKILL.md).
+
+## 4. Operability & observability direction
+
+- **Signals that matter**: <the golden signals for *this* product — not a generic list>
+- **Deployment shape**: <how it ships and rolls back — direction>
+- **Failure modes to instrument**: <the ones the research/FRD say will hurt>
+
+Detailed metric names, log fields, and dashboards are the planner's output — see
+[`observability`](../../../skills/observability/SKILL.md).
+
+## 5. Technical risks & constraints
+
+| Risk / constraint | Why it matters | Mitigation / what the planner must verify |
+|-------------------|----------------|-------------------------------------------|
+| <e.g. candidate library shares a known competitor limit> | inherits complaint C1 | verify against NFR-4 before committing |
+| <e.g. single-region v1> | availability ceiling | accepted for v1; multi-region is a non-goal |
+
+## 6. Build-vs-integrate calls
+
+For each major capability where "build it" vs "use a service/library" is a real choice (verified in
+`decisions.md`):
+
+- **<capability>** — <build / integrate> — <reason tied to a requirement and the research>.
+
+## 7. Open technical questions for the planner
+
+- [ ] <technical decision deferred to planning, with the constraint it must satisfy>

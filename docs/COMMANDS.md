@@ -8,6 +8,7 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 
 | Command                                                  | Workflow            | Agent(s) invoked                                                                          | Output                                                                       |
 |----------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev) | `discovery-analyst`                                                                       | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README) |
 | [`/plan`](../commands/plan.md)                           | Planning            | `planner`                                                                                 | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
 | [`/plan-loop`](../commands/plan-loop.md)                 | Bounded planning    | `planner` + `reviewer`                                                                    | `.somi/plans/<slug>/` + plan reviews under `.somi/reviews/<slug>/`           |
 | [`/code`](../commands/code.md)                           | Coding              | `coder`                                                                                   | diff + tests; updates `progress.md` + `diary.md`                             |
@@ -75,6 +76,13 @@ reasoning happens. Review commands (`/review`, `/security-review`, `/architectur
 `/test-strategy`) still need `Write` and `Edit` to produce the review file and to append diary
 entries — they're not pure read-only at the command level even though the underlying review agents
 are read-only.
+
+> **One deliberate exception: `/discover` runs `opus` at the command layer too.** The discovery
+> orchestration is judgment-heavy (framing the idea, deciding the document set, shaping research
+> crossroads) and its output is the cornerstone of a new project, so the workflow runs on the most
+> capable model end-to-end rather than splitting `sonnet` orchestrator / `opus` agent. This is the
+> only command that opts out of the `sonnet`-orchestrator default; it's intentional, not an
+> oversight.
 
 ## How `$ARGUMENTS` works
 

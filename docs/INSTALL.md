@@ -17,9 +17,9 @@ The marketplace path is the recommended way to install SoMi AI into Claude Code.
 /plugin install somi-ai@somi-ai
 ```
 
-Once installed, `/plan`, `/code`, `/code-loop`, `/review`, `/ship`, `/ship-loop`, `/plan-loop`,
-`/security-review`, `/architecture-review`, `/test-strategy`, and `/refactor` will appear in
-Claude Code's `/` autocomplete.
+Once installed, `/discover`, `/plan`, `/code`, `/code-loop`, `/review`, `/ship`, `/ship-loop`,
+`/plan-loop`, `/security-review`, `/architecture-review`, `/test-strategy`, and `/refactor` will
+appear in Claude Code's `/` autocomplete.
 
 ### How hooks load on plugin install
 
@@ -132,9 +132,9 @@ For the dep-install gate (`SOMI_ALLOW_DEP_INSTALL=1` opt-in): see [HOOKS.md](./H
 
 ## Verifying the install
 
-**Claude Code (plugin)**: type `/` — you should see `/plan`, `/code`, `/code-loop`, `/review`,
-`/ship`, `/ship-loop`, `/plan-loop` in autocomplete. Try `/plan list a trivial change` to confirm
-the planner agent loads. Then run `/plugin info somi-ai` to confirm hooks are registered.
+**Claude Code (plugin)**: type `/` — you should see `/discover`, `/plan`, `/code`, `/code-loop`,
+`/review`, `/ship`, `/ship-loop`, `/plan-loop` in autocomplete. Try `/plan list a trivial change` to
+confirm the planner agent loads. Then run `/plugin info somi-ai` to confirm hooks are registered.
 
 **Claude Code (vendored)**: confirm `.claude/settings.json` in your project includes the SoMi AI
 hooks block (paths under `${SOMI_VENDOR_ROOT}/hooks/…`). The auto-generated `.claude/audit.log`
