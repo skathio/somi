@@ -113,7 +113,7 @@ The two plugins compose at runtime.
 
 After `/plugin install somi-ai@...`:
 
-- `/plan`, `/code`, `/review` should appear in `/` autocomplete.
+- `/discover`, `/plan`, `/code`, `/review` should appear in `/` autocomplete.
 - `/agents` should list the SoMi AI agents.
 - Try `/plan list a trivial change` — Claude should produce a plan.
 
@@ -147,6 +147,7 @@ copilot plugin update
 
 | Command                          | Agent(s) used                                                                            |
 |----------------------------------|------------------------------------------------------------------------------------------|
+| `@somi-ai /discover`             | `discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
 | `@somi-ai /plan`                 | `planner`                                                                                |
 | `@somi-ai /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
 | `@somi-ai /code`                 | `coder`                                                                                  |

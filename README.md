@@ -9,8 +9,10 @@ The latest published version is on [npm](https://www.npmjs.com/package/@skathio/
 release notes.
 
 SoMi AI gives engineering teams a shared, version-controlled "operating system" for working with Claude:
-three first-class workflows — **plan → code → review** — backed by specialised subagents, deterministic guardrail hooks,
-composable skills, and a global ruleset that enforces SOLID, clean code, and OWASP defenses.
+three first-class build workflows — **plan → code → review** — plus an upstream **discovery** workflow
+that turns a raw product idea into a research-grounded requirements & design foundation. All backed by
+specialised subagents, deterministic guardrail hooks, composable skills, and a global ruleset that
+enforces SOLID, clean code, and OWASP defenses.
 
 It is designed to be:
 
@@ -21,16 +23,19 @@ It is designed to be:
 
 ---
 
-## The three workflows
+## The workflows
 
-| Command       | Workflow  | Agent       | Purpose                                                                                  |
-|---------------|-----------|-------------|------------------------------------------------------------------------------------------|
-| `/plan`       | Planning  | `planner`   | Staff-engineer-grade plan: phases, risks, slices, DoD, test & rollout strategy           |
-| `/code`       | Coding    | `coder`     | Execute against an approved plan with senior-level design judgment                       |
-| `/review`     | Reviewing | `reviewer`  | Strict, skeptical review of code / plans / architecture with severity-graded findings    |
-| `/ship`       | Pipeline  | all three   | Full plan → code → review pipeline against a single problem statement                    |
+| Command       | Workflow            | Agent               | Purpose                                                                                  |
+|---------------|---------------------|---------------------|------------------------------------------------------------------------------------------|
+| `/discover`   | Discovery (pre-dev) | `discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) for a new product |
+| `/plan`       | Planning            | `planner`           | Staff-engineer-grade plan: phases, risks, slices, DoD, test & rollout strategy           |
+| `/code`       | Coding              | `coder`             | Execute against an approved plan with senior-level design judgment                       |
+| `/review`     | Reviewing           | `reviewer`          | Strict, skeptical review of code / plans / architecture with severity-graded findings    |
+| `/ship`       | Pipeline            | planner+coder+reviewer | Full plan → code → review pipeline against a single problem statement                  |
 
-Supporting agents (used by handoff): `security-reviewer`, `architecture-reviewer`, `test-strategist`, `refactorer`.
+`/discover` is the upstream, greenfield-only step that feeds `/plan`; the plan → code → review trio is the
+daily build loop. Supporting agents (used by handoff): `security-reviewer`, `architecture-reviewer`,
+`test-strategist`, `refactorer`.
 
 ---
 
@@ -82,20 +87,36 @@ commands/         Slash-command entrypoints (/plan, /code, /review, /ship, ...)
 skills/           On-demand expert knowledge packs (OWASP, SOLID, test strategy, ...)
 rules/            Global ruleset composed into CLAUDE.md
 hooks/            Deterministic guardrails (block dangerous bash, secret writes, ...)
-templates/        Artifact templates (CONTEXT, SPEC, DECISIONS, PHASE, PROGRESS, DIARY, REVIEW, ADR, DOD)
+templates/        Artifact templates (CONTEXT, SPEC, DECISIONS, PHASE, PROGRESS, DIARY, REVIEW, ADR, DOD; R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD)
 .copilot-extension/ Copilot extension + marketplace manifests (mirrors .claude-plugin/)
 examples/         Worked examples + a minimal consuming project
 docs/             Full documentation
 ```
 
 When you use SoMi AI in a project, workflows write their artifacts into a `.somi/` directory
-at the project root. Plans live under `.somi/plans/<slug>/` (context, spec, decisions, progress,
-diary, phases); reviews live under `.somi/reviews/<slug>/` — separate directories, no clutter.
+at the project root. Discovery foundations live under `.somi/rd/<slug>/` (research report, BRD, SRS,
+FRD, SDD, TDD); plans live under `.somi/plans/<slug>/` (context, spec, decisions, progress, diary,
+phases); reviews live under `.somi/reviews/<slug>/` — separate directories, no clutter.
 See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the full layout.
 
 ---
 
 ## Quick start (after install)
+
+For a **brand-new product**, start one step earlier with discovery:
+
+```text
+> /discover  A self-hosted alternative to Calendly for clinics, with HIPAA-aware
+            scheduling, SMS reminders, and no per-seat pricing.
+
+# Claude proposes a slug ("clinic-scheduler"), researches competitors and real user
+# complaints (cited), pauses on each crossroads (persona, scope, build-vs-integrate,
+# expensive-to-reverse architecture), and writes a traceable requirements & design set
+# to .somi/rd/clinic-scheduler/ (research report, BRD, SRS, FRD, SDD, TDD). Then run
+# /plan clinic-scheduler — the planner consumes that foundation.
+```
+
+For an **incremental change** (the daily loop), start at planning:
 
 ```text
 > /plan  Add per-team rate limiting to the public webhook ingestion endpoint

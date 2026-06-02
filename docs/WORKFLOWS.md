@@ -1,12 +1,26 @@
 # Workflows
 
-SoMi AI organises Claude's behavior into three first-class workflows. Each has a clean handoff to
-the next. Each produces durable artifacts inside `.somi/plans/<slug>/`. Each can be invoked alone or as
-part of `/ship`.
+SoMi AI organises Claude's behavior into three first-class **build** workflows — planning, coding,
+reviewing — plus an upstream **discovery** workflow for greenfield work. Each has a clean handoff to
+the next. The build workflows produce durable artifacts inside `.somi/plans/<slug>/`; discovery
+produces the requirements & design foundation inside `.somi/rd/<slug>/`. Each can be invoked alone,
+and the build trio can run together as part of `/ship`.
 
-## The three workflows
+## The workflows
 
 ```
+   (greenfield only)
+┌──────────────────────┐
+│   DISCOVERY          │
+│   /discover          │
+│ agent:discovery-     │
+│       analyst        │
+│ → .somi/rd/<slug>/   │
+│  research + BRD/SRS/ │
+│  FRD/SDD/TDD         │
+└──────────┬───────────┘
+           │ requirements + design direction
+           ▼
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
 │   PLANNING      │ ───▶ │     CODING      │ ───▶ │   REVIEWING     │
 │   /plan         │      │     /code       │      │   /review       │
@@ -20,6 +34,10 @@ part of `/ship`.
         └──────────────  re-plan if blocker  ──────────────┘
 ```
 
+> **Discovery is optional and upstream.** It runs once per greenfield initiative to decide *what* to
+> build and *whether* it's worth building, then feeds planning. Incremental work with settled
+> requirements skips it and starts at `/plan`. See [Discovery](#discovery-pre-development) below.
+
 ## Where artifacts live
 
 Plans and reviews live in separate subdirectories to avoid cluttering work-item directories with
@@ -28,6 +46,17 @@ review output:
 ```
 .somi/
 ├── README.md
+├── rd/                                 ← discovery initiatives (pre-development)
+│   └── <slug>/
+│       ├── README.md                   ← index, status, traceability map
+│       ├── research-report.md          ← competition, complaints, failure modes (cited)
+│       ├── brd.md                       ← business requirements
+│       ├── srs.md                       ← software requirements spec (FR/NFR, canonical)
+│       ├── frd.md                       ← functional requirements detail
+│       ├── sdd.md                       ← software design (high-level direction)
+│       ├── tdd.md                       ← technical design (high-level constraints)
+│       ├── decisions.md                ← crossroads resolved with the user
+│       └── diary.md                    ← discovery narrative
 ├── plans/
 │   └── <slug>/                         ← one directory per work item
 │       ├── context.md                  ← background, surrounding code, constraints
@@ -47,13 +76,60 @@ review output:
 The `.somi/` directory holds **both current and past work** — work items are not auto-archived.
 Status lives in `progress.md`, not in the directory location. Only humans delete from `.somi/`.
 
+## Discovery (pre-development)
+
+**Purpose**: turn a raw software *idea* into a research-grounded, traceable requirements & design
+foundation — *before* planning or coding. This is the requirements-engineering and high-level
+software-design phase of the SDLC. Its output is the cornerstone the planner consumes.
+
+**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md). Runs on the **most capable model
+end-to-end** (the orchestrating `/discover` command is `opus` too, not `sonnet`) because the output
+anchors the entire project.
+
+**Input**: a software idea / product concept from the user.
+
+**Output**: the document set under `.somi/rd/<slug>/` — `research-report.md`, `brd.md`, `srs.md`,
+`frd.md`, `sdd.md`, `tdd.md`, plus `decisions.md`, `diary.md`, and a `README.md` index with a
+**traceability map**. The list is not fixed: the analyst may add a document the project needs (e.g.
+a data/privacy doc for a regulated domain) or omit one that would be ceremony — each recorded in
+`README.md` with a reason.
+
+**Extensive research, not a summary** — the analyst scans direct and indirect competitors, mines
+real user complaints and churn reasons, and surfaces the recurring failure modes of the space so the
+new project can design *away* from them. **Every non-obvious claim is cited**; signal (the same
+complaint across many independent sources) is distinguished from noise; fabricating a competitor,
+statistic, or citation is the cardinal sin. Every finding lands downstream as a requirement, a
+non-goal, or a risk.
+
+**User verification at crossroads** — identical to the planner's protocol: present the decision,
+offer 2–4 concrete options with specific pros/cons (grounded in the research where possible),
+recommend with reason, offer **Other** and **Discover** escape hatches, record in `decisions.md`.
+Direction-shaping choices (target persona, scope boundary, build-vs-integrate, expensive-to-reverse
+architecture) are never picked silently.
+
+**Design-depth boundary** — discovery owns the *what* (BRD/SRS/FRD) and the architectural
+*direction* (high-level SDD/TDD); the planner owns the *detailed* design, file layout, and PR-sized
+slices. The SDD/TDD set direction and the expensive-to-reverse calls, then stop — keeping the two
+workflows from duplicating or contradicting each other.
+
+**Stops the workflow**: never plans or codes. When the foundation is complete and crossroads are
+verified, status in `README.md` becomes `ready-for-planning`.
+
+**Handoff to planning**: explicit. `/plan <slug>` consumes `.somi/rd/<slug>/` — the SRS/FRD as the
+requirements source, the SDD/TDD as architectural direction, the research report as risk context.
+Planning re-opens a direction only where it genuinely diverges, recording why.
+
 ## Planning
 
 **Purpose**: produce deep implementation plans before any code is written.
 
 **Agent**: [`planner`](../agents/planner.md).
 
-**Input**: a problem statement from the user.
+**Input**: a problem statement from the user — **or** a discovery foundation at `.somi/rd/<slug>/`
+(see [Discovery](#discovery-pre-development)). When a foundation exists, the planner treats the
+SRS/FRD as the requirements source and the SDD/TDD as architectural direction rather than
+re-deriving them. Discovery is **not a prerequisite**: incremental work proceeds from a problem
+statement alone.
 
 **Output**: the six-file artifact set under `.somi/plans/<slug>/` plus phase files. At minimum the
 artifacts together capture: problem framing, goals/non-goals, assumptions, unknowns, architecture
@@ -154,12 +230,22 @@ The split tracks the **three reasons engineering work is hard**:
 These three exist in every engineering team's day; SoMi AI makes them explicit and gives each one
 a specialised agent with a clear quality bar.
 
+**Why discovery is separate, not a fourth daily stage.** Discovery answers a different question than
+planning: not "how do we build this and in what order" but "*what* should exist, for whom, and is it
+worth building at all" — settled once at the start of a greenfield initiative, grounded in
+competitive research, and rarely revisited per change. It has a genuinely different problem shape
+(research + requirements engineering vs. implementation sequencing), a different artifact set
+(`.somi/rd/` vs. `.somi/plans/`), and a different cadence (per product, not per change). So it earns
+its own workflow — but it sits *upstream* of the build trio rather than inside the daily loop.
+
 Support agents (`security-reviewer`, `architecture-reviewer`, `test-strategist`, `refactorer`) are
 *facets* of these three, invoked when the work clearly engages their domain. They aren't separate
 workflows because they don't have separate problem-shapes; they're depth-on-demand.
 
 ## When workflows compose
 
+- **Discover → Plan → Code → Review** for a greenfield product or major new initiative — discovery
+  produces the requirements & design foundation, which planning turns into phased work.
 - **Plan → Code → Review** is the normal sequence.
 - **Plan → Plan-review → Code → Review** when the plan is high-stakes or high-ambiguity.
 - **Code → Review → Code (rework) → Review** when the first review surfaces findings.

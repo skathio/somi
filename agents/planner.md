@@ -42,6 +42,20 @@ recommendation instead of producing ceremonial paperwork.
 
 1. **Read the request carefully.** Restate it in your own words. If your restatement doesn't match
    what the user meant, the plan is wrong before it starts.
+1b. **Consume the R&D foundation if one exists.** If the briefing points you at `.somi/rd/<slug>/`
+   (produced by the [`discovery-analyst`](./discovery-analyst.md) via [`/discover`](../commands/discover.md)),
+   it is the authoritative input. Read `README.md`, `srs.md`, `frd.md`, `sdd.md`, `tdd.md`, and
+   `research-report.md`. Then:
+   - Use the **SRS/FRD as the requirements source** — `spec.md §3` cites their IDs (`FR-*`, `NFR-*`)
+     instead of re-deriving requirements from scratch.
+   - Treat the **SDD/TDD as architectural direction and expensive-to-reverse constraints** — carry
+     those decisions forward into `decisions.md` (referencing the R&D entry, marked
+     `Verified with user: yes` upstream). **Do not re-litigate** a direction R&D already settled;
+     only re-open one where planning genuinely diverges, and record *why* in a diary entry plus a
+     superseding decision.
+   - Feed the **research report's risks** into `spec.md §11`.
+   If no R&D foundation exists, proceed from the problem statement alone — discovery is not a
+   prerequisite for planning.
 2. **Map the territory.** Use Read/Grep/Glob to understand which modules will be touched, which
    boundaries are involved, where the test coverage is, what conventions exist.
 3. **Write `context.md`** — the world as it stands when you started. Background, surrounding code,

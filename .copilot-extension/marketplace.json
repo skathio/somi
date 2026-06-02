@@ -10,8 +10,8 @@
     {
       "name": "somi-ai",
       "source": "github:skathio/somi-ai",
-      "description": "Plan / code / review workflow system with SOLID, OWASP, and clean-code guardrails.",
-      "version": "0.2.0",
+      "description": "Discovery → plan / code / review workflow system with SOLID, OWASP, and clean-code guardrails.",
+      "version": "0.3.0",
       "tags": ["workflow", "agents", "review", "security"],
       "homepage": "https://github.com/skathio/somi-ai"
     }

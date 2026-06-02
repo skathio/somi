@@ -1,0 +1,85 @@
+# Software Requirements Specification (SRS) — <initiative name>
+
+> Index: [`README.md`](./README.md) • Business frame: [`brd.md`](./brd.md)
+> Functional detail: [`frd.md`](./frd.md) • Design: [`sdd.md`](./sdd.md) / [`tdd.md`](./tdd.md)
+> Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD>
+
+The **canonical "what"** — the authoritative functional and non-functional requirements. Every
+requirement has a **stable ID**, is **testable**, is **prioritized** (MoSCoW), and **traces** to a
+BRD goal (and, where relevant, a research finding). IDs are forever: supersede, never renumber.
+
+> The one test for every requirement: *"How would I write a test that proves this is met?"* If you
+> can't answer in one sentence, it's not a requirement yet — rewrite it. See
+> [`requirements-engineering`](../../../skills/requirements-engineering/SKILL.md).
+
+## 1. Purpose & scope
+
+<One paragraph: what this software is and the boundary of this specification. Point to `brd.md` for
+the business frame; don't restate it.>
+
+## 2. Personas / actors
+
+- **<actor>** — <who they are, what they're trying to accomplish>
+- **<actor / external system>** — <…>
+
+## 3. Functional requirements
+
+Each is independent, testable, single-behavior, and includes its **failure behavior**. Tag priority
+**Must / Should / Could / Won't**.
+
+| ID | Requirement | Priority | Traces to | Failure behavior |
+|----|-------------|----------|-----------|------------------|
+| FR-1 | <The system MUST …> | Must | BR-1 | <what happens on bad input / dependency down / limit hit> |
+| FR-2 | <The system SHOULD …> | Should | BR-1, finding C2 | <…> |
+| FR-3 | <…> | Could | BR-2 | <…> |
+
+<For requirements that need elaboration — multi-step flows, edge cases — write the detail in
+[`frd.md`](./frd.md) and reference it here (e.g., "FR-7 — detailed flow in frd.md §3"). Don't inline
+the whole flow.>
+
+## 4. Non-functional requirements
+
+Numbers and conditions, not adjectives. Cover the relevant "-ilities" and explicitly mark any that
+are **not a concern for v1** with a reason.
+
+| ID | Category | Requirement (measurable) | Priority | Traces to |
+|----|----------|--------------------------|----------|-----------|
+| NFR-1 | Performance | <e.g. p95 read latency < 200 ms at 500 rps> | Must | BR-2 |
+| NFR-2 | Reliability | <e.g. 99.9% monthly availability of the API> | Must | finding §6 |
+| NFR-3 | Security | <e.g. all PII encrypted at rest; auth on every endpoint> | Must | BR-1 |
+| NFR-4 | Usability | <e.g. new user completes first <task> in < N steps> | Should | finding C1 |
+| NFR-5 | Operability | <e.g. structured logs + one golden-signal dashboard> | Should | — |
+| — | Portability | <not a concern for v1 because <reason>> | Won't | — |
+
+## 5. Data requirements
+
+- **Entities owned**: <the core data the system is the source of truth for>
+- **Retention / lifecycle**: <how long, what deletion guarantees>
+- **Sensitivity**: <PII / PHI / financial — drives NFR-3 and any privacy doc>
+
+## 6. External interfaces
+
+- **APIs / integrations consumed**: <name, what for, trust level>
+- **APIs / events produced**: <name, consumers>
+- **Constraints from those interfaces**: <rate limits, contracts, versioning>
+
+## 7. Acceptance criteria (work-item-level)
+
+Concrete, checkable conditions that, taken together, mean v1 meets this spec. Given/When/Then where
+it helps.
+
+- [ ] <criterion tied to FR/NFR IDs>
+- [ ] <criterion>
+
+## 8. Requirements traceability
+
+The forward/backward links are maintained in [`README.md`](./README.md)'s traceability map. Keep
+this section pointing there rather than duplicating the table — a requirement with no upstream goal
+is scope creep; a goal with no requirement is a gap.
+
+## 9. Out of scope
+
+Mirror of `brd.md §5` non-goals, stated as "Won't (this release)" requirements so planning can't
+accidentally pull them in.
+
+- **WN-1** — <won't do X this release — reason / link>

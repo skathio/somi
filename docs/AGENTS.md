@@ -1,11 +1,12 @@
 # Agents
 
-SoMi AI ships seven subagents. The three **core** agents are the user-facing trio
-(planner / coder / reviewer). The four **support** agents are invoked by the core agents (or
-directly by the user) when the work clearly enters their domain.
+SoMi AI ships eight subagents: one upstream **discovery** agent, the three **core** build agents
+(the user-facing trio planner / coder / reviewer), and four **support** agents invoked by the core
+agents (or directly by the user) when the work clearly enters their domain.
 
 | Agent                                                        | Tier     | When                                                                  |
 |--------------------------------------------------------------|----------|-----------------------------------------------------------------------|
+| [`discovery-analyst`](../agents/discovery-analyst.md)        | discovery| New product / greenfield idea, before planning; requirements + research |
 | [`planner`](../agents/planner.md)                            | core     | Non-trivial change; before any code is written                        |
 | [`coder`](../agents/coder.md)                                | core     | Executing against an approved plan; small, well-scoped tasks          |
 | [`reviewer`](../agents/reviewer.md)                          | core     | Before merge; whenever you want a skeptical second opinion            |
@@ -29,6 +30,29 @@ Three paths:
 SoMi AI prefers **explicit handoff** over silent specialisation. When a core agent thinks a
 support agent should be consulted, it surfaces the recommendation; the human (or the
 orchestrating command) decides.
+
+## The discovery agent
+
+### discovery-analyst
+
+Pre-development requirements engineering + competitive research + high-level software design, rolled
+into one. Turns a raw idea into the `.somi/rd/<slug>/` document set (research report, BRD, SRS, FRD,
+SDD, TDD) with full traceability — every requirement traces to a business goal and a research
+finding. Pauses for **user verification** on every requirement- or direction-shaping decision, with
+the same options/pros-cons/recommend/`Other`/`Discover` protocol as the planner. Researches the
+competition and mines real user complaints to design *away* from known failure modes; cites every
+non-obvious claim and never fabricates. Respects the **design-depth boundary**: sets architectural
+*direction* (high-level SDD/TDD) and hands *detailed* design to the planner.
+
+- **Model**: `opus` — and its `/discover` command runs `opus` too (the one command-layer exception;
+  see [COMMANDS.md](./COMMANDS.md)), because the output anchors the whole project.
+- **Won't**: plan or code; fabricate research; produce detailed design that competes with the
+  planner.
+- **Will**: stop and hand off to the planner if the idea is already well-specified rather than
+  manufacturing ceremonial paperwork.
+
+Invoke directly via `/discover`. Optional and upstream — incremental work with settled requirements
+goes straight to `/plan`.
 
 ## The core trio
 
@@ -120,6 +144,10 @@ keeps the opus spend on reasoning, not orchestration. The agent model can be ove
 per-invocation via the Task tool's `model` argument when a command knows the agent's work is
 mechanical.
 
+**The one exception is `/discover`**, which runs `opus` at *both* layers. Discovery's orchestration
+is itself judgment-heavy and its output is the cornerstone of a new project, so it deliberately
+opts out of the `sonnet`-orchestrator default. See [COMMANDS.md](./COMMANDS.md).
+
 ## Adding new agents
 
 See [EXTENDING.md](./EXTENDING.md). The short version:
@@ -137,7 +165,8 @@ test-strategist) based on the trigger table in [`commands/review.md`](../command
 plain prose escalations from inside an agent are no longer the only path.
 
 ```
-/plan        → planner         (writes .somi/plans/<slug>/)
+/discover    → discovery-analyst (writes .somi/rd/<slug>/; feeds /plan — greenfield only)
+/plan        → planner         (writes .somi/plans/<slug>/; consumes .somi/rd/<slug>/ if present)
 /code        → coder           (handoff from planner: spec + active iteration)
 /code-loop   → coder + reviewer (bounded code↔review loop, single iteration)
 /review      → reviewer        (and auto-invokes consultants per trigger table)

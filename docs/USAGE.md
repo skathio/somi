@@ -6,8 +6,10 @@ to type, what to expect, and where the artifacts go.
 ## The fundamental loop
 
 ```
-/plan <problem>            →  .somi/plans/<slug>/ created    →  user reviews + approves
-   ↓                          (6 docs + phases/)
+/discover <idea>           →  .somi/rd/<slug>/ created       →  user reviews + approves
+   ↓ (greenfield only)        (research + BRD/SRS/FRD/SDD/TDD)
+/plan <problem|slug>       →  .somi/plans/<slug>/ created    →  user reviews + approves
+   ↓                          (6 docs + phases/; consumes .somi/rd/<slug>/ if present)
 /code-loop <slug>           →  diff + tests + review files;  →  user inspects
        phase N, iteration M    bounded by caps (max passes,
                                severity floor, diff cap)
@@ -15,16 +17,63 @@ to type, what to expect, and where the artifacts go.
 (next iteration; or merge if done)
 ```
 
+`/discover` is the upstream, greenfield-only step — it produces the requirements & design
+foundation a new product needs before planning. Incremental work skips it and starts at `/plan`.
+
 `/code <slug>` runs a single coder pass without the review loop. `/code-loop` is the bounded
 code↔review cycle for a single iteration. `/ship` runs the whole pipeline with hard gates;
 `/ship-loop` is the both-layers-bounded composition.
 
 ---
 
+## `/discover`
+
+**When**: a **new product or greenfield initiative** described as an idea, not yet specified — or a
+major new capability where "what should we even build, and is it worth building" is the real
+question. Runs the requirements-engineering & high-level-design phase of the SDLC before any
+planning.
+
+**Skip**: incremental work with settled requirements (go straight to `/plan`); bug fixes; refactors.
+
+**Type**:
+```text
+/discover A self-hosted alternative to Calendly for clinics, with HIPAA-aware scheduling, SMS
+          reminders, and no per-seat pricing.
+```
+
+**Expect**:
+- SoMi AI proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
+- Runs on the **most capable model end-to-end** (the `/discover` command itself is `opus`, not just
+  the agent) — its output is the cornerstone of the project.
+- **Researches the competition extensively** — scans direct/indirect competitors, mines real user
+  complaints and churn reasons, and surfaces recurring failure modes to design *away* from. Every
+  non-obvious claim is cited; signal is distinguished from noise; nothing is fabricated.
+- **Pauses on each crossroads** — target persona, scope boundaries, build-vs-integrate, the one or
+  two expensive-to-reverse architectural calls — presenting options with concrete pros/cons
+  (grounded in the research), a recommendation, and `Other` / `Discover` escape hatches. You decide.
+- Authors the document set under `.somi/rd/<slug>/`: `research-report.md`, `brd.md`, `srs.md`,
+  `frd.md`, `sdd.md`, `tdd.md`, plus `decisions.md`, `diary.md`, and a `README.md` index with a
+  traceability map. The list adapts — a document the project needs is added, one that would be
+  ceremony is omitted, each with a reason in `README.md`.
+- Sets `README.md` status to `ready-for-planning` and summarises back: product framing, top
+  competitive insights, must-avoid pitfalls, top risks, and the next step.
+- **Stops.** Does not plan or code.
+
+**Then**:
+- Read `.somi/rd/<slug>/README.md`, then `srs.md` and `sdd.md`. Edit any file directly — they're
+  your artifacts.
+- When happy: `/plan <slug>`. The planner consumes the SRS/FRD as the requirements source and the
+  SDD/TDD as architectural direction, re-opening a decision only where it genuinely diverges.
+
+See [`examples/discovery-example.md`](../examples/discovery-example.md) for a worked output.
+
+---
+
 ## `/plan`
 
 **When**: non-trivial change, multi-module work, anything touching security/auth/contracts, or any
-request you can't restate in one sentence with confidence.
+request you can't restate in one sentence with confidence. For a **new product**, run `/discover`
+first and then `/plan <slug>`.
 
 **Skip**: trivial single-file bug fix, doc-only changes, renames.
 
@@ -253,6 +302,7 @@ in.
 
 | Artifact                              | Lives at                                             | Lifetime                                          |
 |---------------------------------------|------------------------------------------------------|---------------------------------------------------|
+| Discovery initiative (R&D foundation) | `.somi/rd/<slug>/` (research, BRD, SRS, FRD, SDD, TDD) | Persists indefinitely; only you delete it        |
 | Work-item directory                   | `.somi/plans/<slug>/`                                | Persists indefinitely; only you delete it         |
 | `context.md`, `spec.md`, `decisions.md`, `progress.md`, `diary.md` | `.somi/plans/<slug>/`            | Same                                              |
 | Phase files                           | `.somi/plans/<slug>/phases/<NN>-*.md`                | Same                                              |

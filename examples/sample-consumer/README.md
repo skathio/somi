@@ -16,8 +16,10 @@ files SoMi AI's plugin runtime places.
 ```
 <your project>/
 ├── CLAUDE.md                              # composed from rules/CLAUDE.md
-├── .somi/                                 # workflow artifacts (created when /plan runs)
+├── .somi/                                 # workflow artifacts (created when /discover or /plan runs)
 │   ├── README.md
+│   ├── rd/                                # discovery initiatives (created when /discover runs)
+│   │   └── <slug>/                        # research-report, brd, srs, frd, sdd, tdd, decisions, diary
 │   ├── plans/
 │   │   └── <slug>/                        # one per /plan invocation
 │   │       ├── context.md
@@ -33,11 +35,11 @@ files SoMi AI's plugin runtime places.
     └── plugins/
         └── somi-ai/
             ├── .claude-plugin/plugin.json
-            ├── agents/                    # planner, coder, reviewer + support
-            ├── commands/                  # /plan, /code, /review, /ship + support
-            ├── skills/                    # OWASP, SOLID, clean-code, test-strategy, ...
+            ├── agents/                    # discovery-analyst, planner, coder, reviewer + support
+            ├── commands/                  # /discover, /plan, /code, /review, /ship + support
+            ├── skills/                    # market-research, requirements-engineering, OWASP, SOLID, ...
             ├── rules/                     # global ruleset
-            ├── templates/                 # context, spec, decisions, phase, progress, diary, review, ADR, DoD
+            ├── templates/                 # context, spec, decisions, phase, progress, diary, review, ADR, DoD; R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD
             └── hooks/                     # guardrail scripts settings.json points at
 ```
 

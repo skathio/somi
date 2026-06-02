@@ -1,7 +1,7 @@
 {
   "name": "somi-ai",
   "displayName": "SoMi AI",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
     "workflow",
@@ -30,6 +30,7 @@
   },
   "rules": "./rules/CLAUDE.md",
   "commands": [
+    { "name": "discover",            "description": "Pre-development discovery: research competition + author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) for a new product. Feeds /plan." },
     { "name": "plan",                "description": "Generate a structured engineering plan (phases, risks, DoD, test strategy)" },
     { "name": "plan-loop",           "description": "Bounded plan → review → revise loop. Stops on approve, cap, divergence, or user stop." },
     { "name": "code",                "description": "Implement against an approved plan with senior-engineer judgment" },

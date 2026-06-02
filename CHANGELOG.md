@@ -4,7 +4,44 @@ All notable changes to `@skathio/somi-ai` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
-## [Unreleased] — Audit-driven overhaul
+## [Unreleased] — Discovery & requirements-engineering workflow
+
+### Added
+
+- **`/discover` — a new upstream discovery workflow** (the requirements-engineering and high-level
+  software-design phase of the SDLC, before planning or coding). Turns a raw product idea into a
+  research-grounded, traceable foundation under `.somi/rd/<slug>/` and hands it to `/plan`. Optional
+  and greenfield-only; incremental work still starts at `/plan`.
+- **`discovery-analyst` agent** — requirements engineer + product strategist + software architect in
+  one. Performs extensive competitive and complaint research (every non-obvious claim cited; signal
+  vs. noise distinguished; fabrication forbidden), then authors the document set with full
+  traceability and inline user verification at every crossroads. Runs on `opus`.
+- **`/discover` runs `opus` end-to-end** — the one deliberate exception to the
+  `sonnet`-orchestrator / `opus`-agent split. Its output is the cornerstone of a new project, so the
+  orchestration runs on the most capable model too. Documented in `docs/COMMANDS.md` / `docs/AGENTS.md`.
+- **Two new skills**: `market-research` (competitor scan, complaint mining, churn analysis,
+  signal-vs-noise, citation discipline, turning findings into requirements/non-goals/risks) and
+  `requirements-engineering` (INVEST, MoSCoW, functional vs non-functional, acceptance criteria,
+  traceability, ambiguity elimination, and which document holds what).
+- **R&D document templates** under `templates/`: `RD-README.md.tmpl` (index + traceability map),
+  `RESEARCH.md.tmpl`, `BRD.md.tmpl`, `SRS.md.tmpl`, `FRD.md.tmpl`, `SDD.md.tmpl`, `TDD.md.tmpl`. The
+  `decisions.md` / `diary.md` for an initiative reuse the existing templates.
+- **`examples/discovery-example.md`** — a worked walkthrough of a `/discover` run.
+
+### Changed
+
+- **`/plan` and the `planner` agent consume an R&D foundation when present.** If `.somi/rd/<slug>/`
+  exists, the planner treats the SRS/FRD as the requirements source (`spec.md` cites `FR-*`/`NFR-*`
+  IDs), the SDD/TDD as architectural direction (carried into `decisions.md`, re-opened only where
+  planning genuinely diverges), and the research report as risk context. **Not mandatory** —
+  planning still works from a bare problem statement.
+- **`inject-workflow-context.sh`** now tracks `.somi/rd/**/README.md` in its state signature and
+  surfaces an "active discovery" / "R&D foundation ready" hint, mirroring the existing plan hint.
+- **Docs updated throughout** — `WORKFLOWS.md` (new workflow, diagram, "why discovery is separate"),
+  `COMMANDS.md`, `AGENTS.md`, `SKILLS.md`, `USAGE.md`, `architecture.md`, `EXTENDING.md`, both
+  READMEs, `rules/CLAUDE.md`, and `rules/50-collaboration.md` (Discovery → Planning handoff).
+
+## [0.2.0] — 2026-06-01 — Audit-driven overhaul
 
 ### Fixed (bugs)
 
@@ -153,4 +190,5 @@ extending, versioning, governance, plugin, architecture.
 Worked examples: feature plan (full six-artifact walkthrough), code review, end-to-end pipeline
 transcript, and a sample consuming project showing the post-install layout.
 
+[0.2.0]: https://github.com/skathio/somi-ai/releases/tag/v0.2.0
 [0.1.0]: https://github.com/skathio/somi-ai/releases/tag/v0.1.0

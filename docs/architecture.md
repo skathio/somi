@@ -7,7 +7,7 @@ How the pieces fit together. Read this when you want to understand *why* SoMi AI
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  USER                                                                │
-│   types /plan, /code, /review, /ship, …                              │
+│   types /discover, /plan, /code, /review, /ship, …                   │
 └──────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -44,13 +44,36 @@ Each layer has a clear job:
 
 ## Data flow per workflow
 
+### Discovery (pre-development, greenfield only)
+
+```
+user: "/discover <idea>"
+  → command /discover (runs opus end-to-end) reads $ARGUMENTS, validates it's a researchable idea
+  → command derives slug, scaffolds .somi/rd/<slug>/ from templates/ (RD-README, RESEARCH, BRD,
+    SRS, FRD, SDD, TDD + reused DECISIONS/DIARY)
+  → invokes Task[subagent_type=discovery-analyst, prompt=<idea + slug + paths + context>]
+  → analyst researches via WebSearch/WebFetch: competitors, complaints, churn, failure modes
+    (every non-obvious claim cited; signal distinguished from noise; nothing fabricated)
+  → analyst synthesises findings → opportunities / must-avoid pitfalls / risks
+  → analyst PAUSES on each crossroads (persona, scope, build-vs-integrate, expensive-to-reverse
+    architecture): options with concrete pros/cons grounded in the research, recommends, offers
+    Other / Discover; verified choices recorded in decisions.md
+  → analyst authors requirements (BRD → SRS → FRD, traceable IDs) then high-level design
+    (SDD → TDD, direction only — detailed design deferred to the planner)
+  → analyst writes README.md index + traceability map, sets status ready-for-planning, seeds diary
+  → command summarises back: product framing, competitive insights, must-avoid pitfalls, risks,
+    pointer to .somi/rd/<slug>/ + next step (/plan <slug>)
+```
+
 ### Planning
 
 ```
-user: "/plan <problem>"
+user: "/plan <problem>" (or "/plan <slug>" pointing at a discovery foundation)
   → command /plan reads $ARGUMENTS, validates non-empty
   → command derives slug, scaffolds .somi/plans/<slug>/ from templates/
-  → invokes Task[subagent_type=planner, prompt=<problem + slug + paths + context>]
+  → IF .somi/rd/<slug>/ exists: command passes its paths to the planner, which treats the
+    SRS/FRD as the requirements source and the SDD/TDD as architectural direction (no re-deriving)
+  → invokes Task[subagent_type=planner, prompt=<problem + slug + paths + rd-foundation + context>]
   → planner reads repo (Read/Grep/Glob), drafts context.md, then spec skeleton
   → planner PAUSES on each architectural decision: presents 2–4 concrete options with
     pros/cons, recommends one, offers Other / Discover escape hatches
@@ -112,7 +135,8 @@ lives in `commands/ship.md`; the agents are unchanged.
 | Workflow-specific thinking process       | `agents/`     | Subagent system prompts; can have their own tool sets                |
 | User-facing entrypoints                  | `commands/`   | Slash-command shape; thin orchestrators                              |
 | Deterministic guardrails                 | `hooks/`      | Runs in Claude Code's hook framework; no model involved              |
-| Artifact templates                       | `templates/`  | Shape of `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files |
+| Artifact templates                       | `templates/`  | Shape of `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
+| Discovery artifacts (per project)        | `.somi/rd/<slug>/` | One subdir per greenfield initiative; the requirements & design foundation; feeds `.somi/plans/<slug>/` |
 | Work-item artifacts (per project)        | `.somi/plans/<slug>/` | One subdir per work item; persists indefinitely; user-controlled retention |
 | Claude Code plugin packaging             | `.claude-plugin/` | Plugin manifest; marketplace manifest for `/plugin install`      |
 | Copilot extension packaging              | `.copilot-extension/` | Extension manifest; marketplace manifest for `copilot plugin install` |

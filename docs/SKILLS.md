@@ -8,6 +8,8 @@ not a replacement for the global ruleset; they're depth-on-demand.
 
 | Skill                                                          | Use when                                                                          |
 |----------------------------------------------------------------|-----------------------------------------------------------------------------------|
+| [`market-research`](../skills/market-research/SKILL.md)        | Researching a software idea: competitors, complaints, churn, failure modes to avoid |
+| [`requirements-engineering`](../skills/requirements-engineering/SKILL.md) | Writing/critiquing BRD/SRS/FRD/SDD/TDD; turning an idea into testable, traceable requirements |
 | [`owasp-defense`](../skills/owasp-defense/SKILL.md)            | Auth, crypto, input validation at trust boundaries, deserialization, file uploads |
 | [`solid-principles`](../skills/solid-principles/SKILL.md)      | Designing a module, naming a class, evaluating an abstraction                     |
 | [`clean-code`](../skills/clean-code/SKILL.md)                  | Naming, function structure, comments, errors                                      |
@@ -93,6 +95,10 @@ when one domain calls into another:
 - `threat-modeling` references `owasp-defense` for mitigations.
 - `clean-code` references `test-strategy` (untestable code is often badly-coupled code).
 - `test-strategy` references `refactorer` (when a test-shape problem is really a design problem).
+- `market-research` references `requirements-engineering` (every research finding must become a
+  requirement, non-goal, or risk).
+- `requirements-engineering` references `solid-principles`, `api-design`, and `threat-modeling` for
+  the high-level design (SDD/TDD) portion of discovery.
 
 ## Local skills
 

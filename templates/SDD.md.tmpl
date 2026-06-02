@@ -1,0 +1,82 @@
+# Software Design Document (SDD) — <initiative name>
+
+> Index: [`README.md`](./README.md) • Requirements: [`srs.md`](./srs.md) • Tech: [`tdd.md`](./tdd.md)
+> Decisions: [`decisions.md`](./decisions.md)
+> Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD>
+
+The **architecture direction** for the solution — high-level only. This sets the *shape* and the
+one or two choices that are **expensive to reverse**. It deliberately stops short of detailed design.
+
+> **Design-depth boundary.** R&D owns *direction and constraints*; the [`planner`](../../../agents/planner.md)
+> owns *detailed module/interface design, file layout, and PR-sized slices*. If this document starts
+> specifying function signatures or per-file plans, it has overstepped — that work will be redone by
+> the planner and will go stale here. Keep it to direction crisp enough to plan from.
+
+## 1. Design overview
+
+<One paragraph: the chosen architectural shape in plain language and the single sentence of *why*
+it fits the requirements. Reference the SRS NFRs that drove it.>
+
+## 2. Major components
+
+The big boxes and their responsibilities — not classes, not files.
+
+| Component | Responsibility | Owns (data/state) | Talks to |
+|-----------|----------------|-------------------|----------|
+| <e.g. Ingest service> | <single responsibility> | <…> | <component / external> |
+| <e.g. Core domain> | <…> | <…> | <…> |
+| <e.g. API layer> | <…> | <…> | <…> |
+
+<A simple component/data-flow sketch (ASCII or described) showing how a primary request flows
+through the components. Keep it conceptual.>
+
+## 3. Data the system owns
+
+- **Core entities**: <the source-of-truth data and their relationships at a conceptual level>
+- **Ownership boundaries**: <what this system owns vs. what it reads from elsewhere>
+- **Lifecycle**: <creation, retention, deletion — ties to SRS §5 and any privacy doc>
+
+## 4. Integration & trust boundaries
+
+Where this system meets others and where trust changes — the inputs that must be validated, the
+outputs that cross a boundary.
+
+| Boundary | Direction | Trust change | Requirement it must honor |
+|----------|-----------|--------------|---------------------------|
+| <e.g. public HTTP API> | inbound | untrusted → trusted | NFR-3 (auth, validation) |
+| <e.g. third-party payment> | outbound | trusted → external | <contract, idempotency> |
+
+> Engage [`threat-modeling`](../../../skills/threat-modeling/SKILL.md) and
+> [`owasp-defense`](../../../skills/owasp-defense/SKILL.md) for the boundaries that carry attack
+> surface; the resulting controls are NFRs in `srs.md`.
+
+## 5. Expensive-to-reverse decisions
+
+The one or two choices the planner should treat as settled direction (each has a full entry in
+[`decisions.md`](./decisions.md), verified with the user).
+
+- **<decision>** — <the direction chosen> — _why expensive to reverse:_ <what it would cost to undo
+  in 6–24 months> ([`decisions.md#d<n>`](./decisions.md)).
+- **<decision>** — <…>.
+
+## 6. Cross-cutting concerns (direction only)
+
+- **AuthN/AuthZ**: <the model — e.g., delegate to an IdP vs. own it — direction, not implementation>
+- **Observability**: <the signals that matter for this product; detail deferred to planning — see
+  [`observability`](../../../skills/observability/SKILL.md)>
+- **Error handling**: <the product's stance — fail loud vs. degrade — tie to FRD exception flows>
+- **Extensibility**: <only the extension points the requirements actually demand; no speculative
+  flexibility>
+
+## 7. Alternatives considered (architecture-level)
+
+The shapes that were rejected and why — so the planner doesn't re-open settled ground.
+
+- **<alternative shape>** — rejected because <concrete reason tied to a requirement or research
+  finding>.
+
+## 8. Open design questions for the planner
+
+Explicitly handed to planning (the *how*), not decided here.
+
+- [ ] <detailed-design question that is the planner's call, with the constraint it must respect>

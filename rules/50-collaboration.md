@@ -18,8 +18,19 @@ How to work with humans, and how agents hand off to each other inside SOMI.
 
 ## Handoffs between workflows
 
-The three workflows compose. Each one has a clean handoff shape, anchored by the
-`.somi/plans/<slug>/` artifact set.
+The workflows compose. Each one has a clean handoff shape — the build trio is anchored by the
+`.somi/plans/<slug>/` artifact set; the upstream discovery workflow is anchored by
+`.somi/rd/<slug>/` and feeds planning.
+
+### Discovery → Planning
+
+Discovery (the [`discovery-analyst`](../agents/discovery-analyst.md), greenfield only) produces the
+`.somi/rd/<slug>/` foundation: `research-report.md`, `brd.md`, `srs.md`, `frd.md`, `sdd.md`,
+`tdd.md`, plus `decisions.md`, `diary.md`, and a `README.md` index with a traceability map. The
+planner consumes it: the **SRS/FRD are the requirements source** (`spec.md` cites `FR-*`/`NFR-*`
+IDs), the **SDD/TDD are architectural direction** (carried into `decisions.md`, re-opened only where
+planning genuinely diverges — with a diary entry recording why), and the **research report is risk
+context**. Discovery is not a prerequisite for planning; incremental work starts at `/plan`.
 
 ### Planning → Coding
 
@@ -76,10 +87,12 @@ and surface the scoping decision to the human before drafting a half-credible me
 
 ## Artifacts
 
-Every workflow produces durable artifacts under `.somi/plans/<slug>/`:
+Every workflow produces durable artifacts under `.somi/` (discovery in `.somi/rd/<slug>/`; the build
+trio in `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`):
 
 | Workflow  | Artifacts                                                                                                |
 |-----------|----------------------------------------------------------------------------------------------------------|
+| Discovery | `README.md`, `research-report.md`, `brd.md`, `srs.md`, `frd.md`, `sdd.md`, `tdd.md`, `decisions.md`, `diary.md` (under `.somi/rd/<slug>/`) |
 | Planning  | `context.md`, `spec.md`, `decisions.md`, `progress.md`, `diary.md`, `phases/<NN>-*.md`                   |
 | Coding    | The diff + a PR/commit summary referencing the iteration; updates to `progress.md`, phase file, `diary.md` |
 | Reviewing | `.somi/reviews/<slug>/<YYYY-MM-DD>-<phase>.<iter>-<verdict>.md` (severity-graded)                        |

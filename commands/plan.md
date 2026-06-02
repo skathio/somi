@@ -41,6 +41,25 @@ If `.somi/plans/<slug>/` already exists and is for a **different** work item, ap
 re-planning, ask whether to continue the existing one (preserve diary), reset it, or branch into a
 new slug.
 
+### 2b. Check for an upstream R&D foundation (optional)
+
+If a discovery initiative exists at `.somi/rd/<slug>/` (or the user points at one, or one obviously
+matches this problem statement), it is the **authoritative input** for the plan. Read its
+`README.md` first, then `srs.md`, `frd.md`, `sdd.md`, `tdd.md`, and `research-report.md`. When
+briefing the planner (§4), pass these paths and instruct it to:
+
+- Treat `srs.md` / `frd.md` as the **requirements source** — `spec.md §3` cites their requirement
+  IDs (`FR-*`, `NFR-*`) rather than re-deriving requirements.
+- Treat `sdd.md` / `tdd.md` as **architectural direction and constraints** — carry their
+  expensive-to-reverse decisions forward into `decisions.md` (referencing the R&D entry); only
+  re-open and re-verify a direction where planning genuinely diverges, and record why in a diary
+  entry.
+- Treat `research-report.md` as **risk and competitor context** — feed its risks into `spec.md §11`.
+
+This is **not mandatory**: if no R&D foundation exists, proceed exactly as before from the problem
+statement alone. The R&D documents are produced by [`/discover`](./discover.md); see
+[`docs/WORKFLOWS.md`](../docs/WORKFLOWS.md) for the handoff.
+
 ### 3. Scaffold the work-item directory
 
 Create `.somi/plans/<slug>/` with the six artifact files (and `phases/` + `reviews/` subdirs) from the
@@ -65,6 +84,9 @@ If `.somi/README.md` does not yet exist at the repo root, also write it from
 Brief the agent via the Task tool with:
 - The full problem statement.
 - The slug and `.somi/plans/<slug>/` paths.
+- **The `.somi/rd/<slug>/` paths if an R&D foundation exists** (see §2b), with the instruction to
+  treat the SRS/FRD as the requirements source, the SDD/TDD as architectural direction, and the
+  research report as risk context — not to re-decide what R&D already settled and verified.
 - A reminder to follow the **verification protocol** (see §6 below).
 - Any context from the current conversation.
 
