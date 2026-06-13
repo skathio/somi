@@ -7,6 +7,17 @@ Chronological narrative of this work item: discoveries, decisions, plan changes,
 ends, and resolutions. Append-only — new entries go at the **top** (newest first). Old entries are
 not deleted or rewritten; if you're wrong about something, write a new entry correcting it.
 
+> **Reading discipline (keeps reviews and handoffs cheap).** This file grows without bound. Agents
+> read the **recent slice** — entries since the last review, or the last ~10 — not the whole history;
+> they reach for older entries only when a specific finding needs the backstory. So keep each entry
+> short (one paragraph) and self-contained, and capture the *why*, not a diff dump.
+>
+> **Optional compaction.** When the diary grows past ~40 entries on a long-running work item, a human
+> (or an explicit request) may fold resolved, no-longer-relevant entries into a single dated
+> **"Compacted: <range>"** summary entry, preserving every decision-change, blocker, and supersession
+> verbatim. Never compact silently and never drop a `decision-change` / `plan-change` entry — those
+> are the audit trail.
+
 **Always write a diary entry when**:
 
 - A decision in `decisions.md` changes (supersession).

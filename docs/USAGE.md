@@ -296,6 +296,38 @@ in.
           src/order/repo.ts.
 ```
 
+### `/review-panel`
+
+Parallel multi-lens review. Seats the `reviewer` plus the security / architecture / test lenses **as
+the diff warrants**, runs them concurrently on the same diff, and merges their findings into one
+de-duplicated, severity-graded verdict (highest severity wins; lens disagreement is surfaced).
+
+```text
+/review-panel rate-limiting-webhooks                 # latest iteration of a work item
+/review-panel main..feature-x                        # a range, before merge
+```
+
+Use it for a high-stakes change that crosses several concerns at once; use plain `/review` for the
+everyday single pass. Inside `/code-loop`, set `SOMI_CODE_LOOP_REVIEW=panel` to make the loop review
+with the panel. (On hosts without concurrent sub-agents — e.g. Copilot — the lenses run
+sequentially; same result, slower.)
+
+### `/code-parallel`
+
+Builds **provably-independent** iterations concurrently, each in its own git worktree, then
+integrates them **one at a time** with a full test run + review at every merge. Only iterations the
+plan marks `Parallelizable: yes` with disjoint file sets are eligible; everything else runs
+sequentially. A merge conflict means the iterations weren't actually independent — it's surfaced as a
+planning signal, never auto-resolved.
+
+```text
+/code-parallel rate-limiting-webhooks            # eligible iterations across the active phase
+/code-parallel rate-limiting-webhooks phase 2    # restrict to one phase
+```
+
+Conservative by design: when in doubt it falls back to plain `/code-loop`. Use it when a phase has
+several genuinely independent slices and you want smaller, more focused per-iteration diffs.
+
 ---
 
 ## What happens to the artifacts

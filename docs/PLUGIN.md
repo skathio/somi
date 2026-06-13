@@ -3,6 +3,15 @@
 SoMi AI ships as a Claude Code plugin and as a GitHub Copilot extension. Both use the same
 underlying markdown files — agents, commands, skills, rules, hooks — so there is no duplication.
 
+> **The two hosts are not feature-equivalent.** The shared markdown is portable, but two layers are
+> **Claude Code capabilities that don't carry to Copilot**: the deterministic **guardrail hooks**
+> (they don't fire on Copilot — no blocking of dangerous bash / secret writes / protected paths, no
+> dep-install gate, no audit log) and **concurrent multi-agent orchestration** (the loops and the
+> `/review-panel` / `/code-parallel` fan-outs degrade to sequential where the host can't spawn
+> sub-agents). Treat the Copilot extension as the **portable subset** — same prompts and judgment,
+> without the enforcement and concurrency layers. See the parity caveat in the
+> [`GitHub Copilot extension`](#github-copilot-extension) section below and [`HOOKS.md`](./HOOKS.md).
+
 ---
 
 ## Claude Code plugin
@@ -123,6 +132,13 @@ After `/plugin install somi-ai@...`:
 
 SoMi AI is also a GitHub Copilot extension, distributed through the same marketplace pattern as
 the Claude Code plugin.
+
+> **Parity caveat.** Copilot gets the commands, agents, skills, rules, and templates — but **not** the
+> hook-enforced guardrails (dangerous-bash / secret-write / protected-path blocks, dep-install
+> gating, audit log are Claude Code `hooks` and simply don't run here) and **not** concurrent
+> sub-agent orchestration (the loops and the `/review-panel` / `/code-parallel` parallel fan-outs run
+> sequentially when the host can't spawn sub-agents). The judgment layer is identical; the
+> enforcement and concurrency layers are Claude Code-only. Don't rely on the hard stops on Copilot.
 
 ### Manifests
 

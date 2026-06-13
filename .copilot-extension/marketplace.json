@@ -11,7 +11,7 @@
       "name": "somi-ai",
       "source": "github:skathio/somi-ai",
       "description": "Discovery → plan / code / review workflow system with SOLID, OWASP, and clean-code guardrails.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "tags": ["workflow", "agents", "review", "security"],
       "homepage": "https://github.com/skathio/somi-ai"
     }

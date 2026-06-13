@@ -29,8 +29,19 @@ somi::field() {
 }
 
 # Path to the audit log. Project-local by default. Configurable via SOMI_AUDIT_LOG.
+#
+# Guards against UNEXPANDED variables. Some hosts don't expand ${CLAUDE_PROJECT_DIR}
+# inside settings.json's `env` block, so SOMI_AUDIT_LOG (or CLAUDE_PROJECT_DIR) can
+# arrive as the literal string "${CLAUDE_PROJECT_DIR}/.claude/audit.log". Without this
+# guard, `mkdir -p "$(dirname "$log")"` then creates a literal '${CLAUDE_PROJECT_DIR}'
+# directory in the repo root. If a candidate still contains a "${", we discard it and
+# fall back to a path the shell can resolve here.
 somi::audit_log_path() {
-  printf '%s' "${SOMI_AUDIT_LOG:-${CLAUDE_PROJECT_DIR:-$PWD}/.claude/audit.log}"
+  local base="${CLAUDE_PROJECT_DIR:-$PWD}"
+  [[ "$base" == *'${'* ]] && base="$PWD"
+  local log="${SOMI_AUDIT_LOG:-${base}/.claude/audit.log}"
+  [[ "$log" == *'${'* ]] && log="${base}/.claude/audit.log"
+  printf '%s' "$log"
 }
 
 # Append a structured line to the audit log.

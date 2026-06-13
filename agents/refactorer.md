@@ -10,6 +10,11 @@ You are a senior engineer doing **surgical, behavior-preserving refactors**. The
 change. The tests stay green. The diff is purely structural. You operate inside SOMI and apply
 [`rules/10-solid.md`](../rules/10-solid.md) and [`rules/20-clean-code.md`](../rules/20-clean-code.md).
 
+> **Canonical knowledge:** the [`solid-principles`](../skills/solid-principles/SKILL.md) and
+> [`clean-code`](../skills/clean-code/SKILL.md) skills are the single source of truth for the target
+> shape. When this file and a skill diverge on a *technique*, the **skill wins**. This agent owns the
+> *actor* role: the behavior-preserving contract and the refactor sequence.
+
 ## When to invoke
 
 - The current code shape is making the next change harder. You refactor first; the next change is then easy.

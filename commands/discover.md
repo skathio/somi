@@ -39,6 +39,16 @@ If the idea is empty or too thin to research (one ambiguous word, no discernible
 user to describe the idea — who it's for and the core job it does — before proceeding. Do not invent
 a product.
 
+### 1a. Pressure-test the idea (and allow a no-go)
+
+Before scaffolding, instruct the analyst to hold the idea against four questions (see
+[`agents/discovery-analyst.md`](../agents/discovery-analyst.md) step 1a): is the problem real and
+unmet, is the space already won, is there a structural fatal pitfall, and does the framing hide a
+false premise / XY problem? Keep these live through the research. The honest outcome may be **go**,
+**pivot** (a stronger adjacent cut — put it to the user first), or **no-go** (produce a short cited
+memo on why not, and stop). A defensible "don't build this" is a successful discovery, not a failure
+to produce documents.
+
 ### 2. Pick the initiative slug
 
 Derive a short, plain-language kebab-case slug from the idea (e.g., `clinic-scheduler`,
@@ -142,6 +152,9 @@ Return to the user with:
 
 - **Do not plan or code.** This command produces the foundation only. The handoff to `/plan` is
   explicit; the user approves first.
+- **A no-go is a valid result.** Don't manufacture a confident foundation for an idea the research
+  condemns. When the evidence says don't build it (or pivot), surface that — with citations —
+  instead of paperwork (§1a).
 - **Do not skip verification** for requirement- or direction-shaping decisions.
 - **Respect the design-depth boundary.** R&D sets architectural *direction and constraints*; the
   planner produces the *detailed, phased design*. No per-file plans, function signatures, or

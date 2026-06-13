@@ -4,6 +4,11 @@ Hooks are **deterministic guardrails**. They run in Claude Code's hook framework
 and can block, modify, or log tool calls without consulting the agent's judgment. SoMi AI uses hooks for
 non-negotiables and uses agents for judgment-heavy work.
 
+> **Claude Code only.** Hooks are a Claude Code host capability. On the **GitHub Copilot** extension
+> they do **not** run — none of the blocks below are enforced and nothing is written to the audit
+> log. The agent/skill/rule judgment still applies on Copilot, but the *hard stops* in this document
+> are specific to the Claude Code plugin. See the parity caveat in [`PLUGIN.md`](./PLUGIN.md).
+
 ## What SoMi AI ships
 
 | Event              | Matcher       | Script                                           | What it does                                                                                                                |

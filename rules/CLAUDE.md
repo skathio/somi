@@ -23,6 +23,35 @@ If you are forced to compromise on (3) or (4) to honor (1) or (2), say so explic
 
 ---
 
+## Always-on digest
+
+This digest is **always in force** — it is the compressed form of the numbered rule files, enough to
+act correctly on the common path without loading all of them. Each line points at the file that holds
+the full treatment; read that file when you **enter its domain** (see "How to load the rules" below).
+
+- **Priorities:** security > correctness > maintainability > convenience. Compromise on the lower
+  only to honor the higher, and say so. (`00`)
+- **Honesty:** identify uncertainty; verify before claiming (read the file, grep the symbol, run the
+  command); never invent facts to sound confident. (`00`)
+- **Discipline:** read before writing; smallest sufficient change (fix ≠ refactor); no silent
+  compromises — name every shortcut in plain text. (`00`, `20`)
+- **SOLID, in practice:** one reason to change per unit; depend on abstractions at boundaries; keep
+  interfaces small and caller-shaped; no god objects or `Manager`/`Helper` catch-alls. (`10`)
+- **Clean code:** names state intent and don't lie; small functions, one level of abstraction;
+  comment the *why*, not the *what*; delete dead code rather than commenting it out. (`20`)
+- **Security floor:** validate untrusted input at the trust boundary; parameterize every sink (SQL,
+  shell, template, path, HTTP); authorize at the sink; never log secrets; constant-time compare
+  secrets; fail closed. (`30`)
+- **Testing:** risk-driven coverage, not coverage-worship; don't mock what you don't own; tests must
+  assert behavior and be deterministic. (`40`)
+- **Observability:** structured logs with correlation, low-cardinality metrics, a signal on every
+  critical path — "what does on-call see at 3am?" (`40`)
+- **Dependencies:** a new dependency is a decision — justify it, check its provenance, don't add one
+  the hooks would gate. (`40`)
+- **Collaboration:** challenge the premise, not just the architecture; match the answer to the
+  question; recommend with concrete options, the user decides direction; surface tradeoffs and
+  blockers in the first line. (`50`)
+
 ## What composes this ruleset
 
 | File                                         | Purpose                                                       |
@@ -35,7 +64,21 @@ If you are forced to compromise on (3) or (4) to honor (1) or (2), say so explic
 | [`50-collaboration.md`](./50-collaboration.md) | Working with humans + handoffs between agents               |
 | [`99-overrides.md`](./99-overrides.md)       | Project escape hatch (SOMI never modifies this file)          |
 
-**Read every numbered file before acting.** They are short on purpose. Skipping them is a violation of this ruleset.
+### How to load the rules (context discipline)
+
+The **digest above is always on**. Load the full numbered file when its domain is engaged — the same
+on-demand model the skills use — so a long agent run doesn't re-read ~600 lines of rules it isn't
+exercising:
+
+- **`00-priorities.md` and `50-collaboration.md`** — read in full at the start of any workflow; they
+  govern *how* you work regardless of domain.
+- **`10` / `20` / `30` / `40`** — read when you enter their domain: writing or restructuring code
+  (`10`, `20`), touching a trust boundary or sink (`30`), or shaping tests / observability /
+  dependencies (`40`). The digest line is enough until then.
+- **`99-overrides.md`** — always check; the project's overrides win over everything here.
+
+When in doubt, read the file — the digest is a fast path, not a license to skip a rule whose domain
+you're clearly in. Skipping a rule whose domain you've entered is a violation of this ruleset.
 
 ---
 

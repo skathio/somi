@@ -22,7 +22,8 @@ the `coder` and `reviewer` agents it Tasks remain `opus`.
 | `MAX_PASSES` — code→review cycles per iteration | `3` | `SOMI_CODE_LOOP_MAX_PASSES` |
 | `SEVERITY_FLOOR` — verdicts that re-loop | `Major` (Blocker + Major) | `SOMI_CODE_LOOP_SEVERITY_FLOOR` (`Blocker` to only re-loop on Blockers) |
 | `DIFF_CAP_LINES` — cumulative diff across passes | `400` | `SOMI_CODE_LOOP_DIFF_CAP` |
-| `CIRCUIT_BREAKER` — stop if the same finding (file:line + title) recurs in 2 consecutive passes | always on | (n/a) |
+| `CIRCUIT_BREAKER` — stop if the same finding (file + symbol + title) recurs in 2 consecutive passes | always on | (n/a) |
+| `REVIEW_MODE` — `single` (Task `reviewer`) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens) | `single` | `SOMI_CODE_LOOP_REVIEW` (`panel`) |
 | `HUMAN_CHECKPOINT` — pause between passes if user reply `stop` is detected | always on | (n/a) |
 
 Read overrides from the environment at the start of the run; record the effective values in
@@ -38,6 +39,11 @@ ask the user.
 ### 2. Initialize loop state
 
 - Set `pass = 1`.
+- **Capture the diff baseline once, now**, before the coder touches anything:
+  `BASELINE_SHA = git rev-parse HEAD`. Every pass measures the cumulative diff against this fixed
+  ref *including the working tree* (`git diff --shortstat $BASELINE_SHA`), so the cap means the same
+  thing whether the coder commits each pass or leaves an uncommitted tree. Record `BASELINE_SHA` in
+  the first diary entry. **Do not** recompute the baseline between passes.
 - Compute `iteration_file_list` = the iteration's "Files (approx)" list. Diff outside this list
   during the loop is **scope expansion**; the diff cap shrinks proportionally.
 - Initialize `previous_findings = []` (used by the circuit breaker).
@@ -52,23 +58,29 @@ while pass <= MAX_PASSES:
   # 3a. Code
   Task coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
 
-  # 3b. Verify diff size & scope
-  cumulative_diff_lines = git diff --shortstat <baseline>..HEAD | parse
+  # 3b. Verify diff size & scope (cumulative since the §2 baseline, working tree included)
+  cumulative_diff_lines = git diff --shortstat $BASELINE_SHA | parse   # counts committed + uncommitted
   if cumulative_diff_lines > DIFF_CAP_LINES:
     STOP — write follow-ups to progress.md, summarise, exit "diff-cap-exceeded"
   if any file changed not in iteration_file_list:
     SHRINK DIFF_CAP — scope expansion counts double; if still over, STOP
 
-  # 3c. Review
-  Task reviewer ( = /review <slug>, scope = this iteration's diff )
+  # 3c. Review — single reviewer, or the parallel panel when REVIEW_MODE == panel
+  if REVIEW_MODE == "panel":
+    Task /review-panel ( = <slug> phase <N>, iteration <M> )   # parallel multi-lens, merged verdict
+  else:
+    Task reviewer ( = /review <slug>, scope = this iteration's diff )
 
   # 3d. Verdict
   if verdict == "approve" or no finding at severity >= SEVERITY_FLOOR:
     DONE — proceed to §4
 
-  # 3e. Circuit breaker
+  # 3e. Circuit breaker — match on a STABLE locus, not the raw line number.
+  #   A finding recurs when it shares (file path + nearest symbol/function + title) with a
+  #   prior-pass finding. Line numbers shift as the diff changes between passes, so matching on
+  #   file:line silently misses the recurrence and lets coder and reviewer oscillate to MAX_PASSES.
   if any finding in current_findings matches a finding in previous_findings
-      by (path:line, title):
+      by (path + nearest symbol/function + title):
     STOP — coder and reviewer disagree; hand to human
 
   # 3f. Next pass

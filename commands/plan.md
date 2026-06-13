@@ -30,6 +30,15 @@ $ARGUMENTS
 If the problem statement is empty or fundamentally unclear, ask the user for the problem statement
 before proceeding. Do not invent one.
 
+### 1a. Challenge the premise
+
+Before scaffolding anything, instruct the planner to run its **premise check** (see
+[`agents/planner.md`](../agents/planner.md) step 1a): state the strongest honest case against the
+request as posed — false premise / XY problem, contradictory requirements, an existing mechanism
+that makes the work unnecessary, or expensive-to-reverse cost not justified by the stated value. If
+the premise holds, note it in one line and continue. If it doesn't, **surface the objection to the
+user and pause** before writing a spec. A faithful plan of the wrong thing is still wrong.
+
 ### 2. Pick the work-item slug
 
 Derive a short, plain-language kebab-case slug from the problem statement (e.g.,
@@ -139,6 +148,9 @@ Return to the user with:
 
 ## Guardrails
 
+- **Challenge before you plan.** The premise check (§1a) is not optional. Don't take the request's
+  framing as truth — a false premise, an XY problem, or an already-solved need is surfaced *before*
+  a spec exists, not discovered three iterations into coding.
 - **Do not start coding.** This command is plan-only.
 - **Do not skip verification** for design/architectural decisions. The user gets the final call.
 - **If the planner discovers the work is much larger than presented**, return a **scoping note**

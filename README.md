@@ -76,6 +76,23 @@ Once installed, use `@somi-ai` in GitHub Copilot chat:
 @somi-ai /review  rate-limiting-webhooks
 ```
 
+> **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Two things do **not** carry
+> over, because they depend on Claude Code host capabilities Copilot doesn't expose:
+>
+> - **The deterministic guardrail hooks do not fire.** Blocking dangerous bash, secret-writes,
+>   protected-path writes, dep-install gating, and the audit log are Claude Code `hooks` — on Copilot
+>   they are **absent**, so those safety nets are not enforced. The agent/skill judgment still
+>   applies, but the hard stops don't.
+> - **Multi-agent orchestration degrades to sequential.** The loops (`/code-loop`, `/plan-loop`,
+>   `/ship`) and the parallel commands (`/review-panel`, `/code-parallel`) drive Claude Code
+>   sub-agents via the Task tool. Where the host can't spawn sub-agents concurrently, these run
+>   **one lens / one iteration at a time** — same result, no parallelism, and the sonnet-orchestrator
+>   / opus-agent model split may not apply.
+>
+> The commands, agents, skills, rules, and templates are shared; the **enforcement and concurrency
+> layers are Claude Code features**. Treat Copilot as the portable subset, not a drop-in equal. See
+> [`docs/HOOKS.md`](docs/HOOKS.md) and [`docs/PLUGIN.md`](docs/PLUGIN.md).
+
 ---
 
 ## What's in the box
