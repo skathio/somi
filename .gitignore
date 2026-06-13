@@ -3,6 +3,10 @@
 .claude/audit.log
 .claude/somi-state/
 .somi-state/
+# Defensive: if a host doesn't expand ${CLAUDE_PROJECT_DIR} in settings.json's env block,
+# the audit hook could create a literal-named directory here before the path guard in
+# hooks/lib/common.sh resolves it. Never commit that runtime artifact.
+${CLAUDE_PROJECT_DIR}/
 
 # OS noise
 .DS_Store

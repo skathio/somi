@@ -88,8 +88,8 @@ After each `/code-loop` exits:
 
 ### Cross-layer circuit breaker
 
-Track findings across all loops in this run. If a finding (file:line + title, or for plan-level:
-spec-section + topic) recurs across:
+Track findings across all loops in this run. If a finding (file + nearest symbol/function + title,
+or for plan-level: spec-section + topic) recurs across:
 
 - A `/plan-loop` review and a `/code-loop` review, or
 - Two separate `/code-loop` invocations,

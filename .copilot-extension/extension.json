@@ -1,7 +1,7 @@
 {
   "name": "somi-ai",
   "displayName": "SoMi AI",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
     "workflow",
@@ -35,7 +35,9 @@
     { "name": "plan-loop",           "description": "Bounded plan → review → revise loop. Stops on approve, cap, divergence, or user stop." },
     { "name": "code",                "description": "Implement against an approved plan with senior-engineer judgment" },
     { "name": "code-loop",           "description": "Bounded code → review → fix loop on a single iteration. Stops on approve, cap, diff cap, circuit breaker, or user stop." },
+    { "name": "code-parallel",       "description": "Fan out provably-independent iterations into isolated git worktrees, then integrate them sequentially behind a gate. Falls back to sequential /code-loop on hosts without worktrees/concurrent sub-agents." },
     { "name": "review",              "description": "Strict code or plan review with severity-graded findings (use `plan <slug>` for plan-level review)" },
+    { "name": "review-panel",        "description": "Parallel multi-lens review: seats reviewer + security/architecture/test lenses as the diff warrants, merges and de-duplicates findings into one verdict. Runs sequentially on Copilot (no concurrent sub-agents)." },
     { "name": "ship",                "description": "Full plan → code → review pipeline against a problem statement. Code iterations run under /code-loop's caps." },
     { "name": "ship-loop",           "description": "Bounded composition of /plan-loop → [hard human gate] → /code-loop per iteration." },
     { "name": "security-review",     "description": "Security-focused review: auth, crypto, input validation, injection risks" },

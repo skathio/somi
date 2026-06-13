@@ -47,9 +47,10 @@ non-obvious claim and never fabricates. Respects the **design-depth boundary**: 
 - **Model**: `opus` — and its `/discover` command runs `opus` too (the one command-layer exception;
   see [COMMANDS.md](./COMMANDS.md)), because the output anchors the whole project.
 - **Won't**: plan or code; fabricate research; produce detailed design that competes with the
-  planner.
+  planner; cheerlead an idea the research condemns.
 - **Will**: stop and hand off to the planner if the idea is already well-specified rather than
-  manufacturing ceremonial paperwork.
+  manufacturing ceremonial paperwork; **pressure-test the idea and decide go / no-go / pivot** — a
+  cited "don't build this" memo is a valid, first-class outcome, not a failure to deliver documents.
 
 Invoke directly via `/discover`. Optional and upstream — incremental work with settled requirements
 goes straight to `/plan`.
@@ -65,8 +66,10 @@ recommends one, and offers `Other` (user-proposed option) plus `Discover` (guide
 questions) as escape hatches.
 
 - **Model**: `opus` (heavy judgment work).
-- **Won't**: write code, silently pick architectural defaults.
-- **Will**: stop and recommend re-scoping if the work is much larger than presented.
+- **Won't**: write code, silently pick architectural defaults, take the request's framing as truth.
+- **Will**: stop and recommend re-scoping if the work is much larger than presented; **challenge the
+  request's premise** (false premise, XY problem, contradiction, already-solved need) before planning
+  and pause if it doesn't hold.
 
 ### coder
 
@@ -89,9 +92,13 @@ changes get captured in `decisions.md` and `diary.md`, is `progress.md` accurate
 Severity-graded findings, will reject weak solutions.
 
 - **Model**: `opus`.
-- **Won't**: rubber-stamp; bury Blockers under Nits; review the author instead of the code.
+- **Won't**: rubber-stamp; bury Blockers under Nits; review the author instead of the code; read the
+  full accumulated artifact history when a bounded slice suffices (live decisions, active phase,
+  recent diary entries).
 - **Will**: call in support agents when the change matches their territory (via separate Task
-  calls); return a proposed `review-feedback` diary entry when a finding surfaces a plan issue.
+  calls); return a proposed `review-feedback` diary entry when a finding surfaces a plan issue. Can
+  run as a **parallel panel** via [`/review-panel`](./COMMANDS.md) — the relevant lenses review the
+  same diff concurrently and their findings are merged into one verdict.
 
 ## The support quartet
 
@@ -104,6 +111,9 @@ Invoke directly via `/security-review`, or via `/review` on a diff that touches 
 territory (the reviewer auto-invokes when the consultant-trigger table fires).
 
 - **Model**: `opus`.
+- **Canonical knowledge**: the [`owasp-defense`](../skills/owasp-defense/SKILL.md) and
+  [`threat-modeling`](../skills/threat-modeling/SKILL.md) skills — on a technique divergence, the
+  skill wins. The agent owns the actor role (when/how to trace, what to produce).
 
 ### architecture-reviewer
 
@@ -114,6 +124,8 @@ Invoke directly via `/architecture-review`, or via `/review` when the change int
 contract/module/service (the consultant-trigger table auto-invokes).
 
 - **Model**: `opus`.
+- **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
+  [`api-design`](../skills/api-design/SKILL.md) skills — skill wins on divergence.
 
 ### test-strategist
 
@@ -124,6 +136,8 @@ Invoke directly via `/test-strategy`, or via `/review` when the diff has mock-he
 e2e-only-on-risky-code symptoms.
 
 - **Model**: `opus`.
+- **Canonical knowledge**: the [`test-strategy`](../skills/test-strategy/SKILL.md) skill — skill wins
+  on divergence.
 
 ### refactorer
 
@@ -131,6 +145,8 @@ Surgical, behavior-preserving structure changes. Tests stay green at every step.
 mixed in. Returns the codebase to a state where the next planned change is easy.
 
 - **Model**: `opus`.
+- **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
+  [`clean-code`](../skills/clean-code/SKILL.md) skills — skill wins on divergence.
 
 ## Model split: commands sonnet, agents opus
 
@@ -168,11 +184,14 @@ plain prose escalations from inside an agent are no longer the only path.
 /discover    → discovery-analyst (writes .somi/rd/<slug>/; feeds /plan — greenfield only)
 /plan        → planner         (writes .somi/plans/<slug>/; consumes .somi/rd/<slug>/ if present)
 /code        → coder           (handoff from planner: spec + active iteration)
-/code-loop   → coder + reviewer (bounded code↔review loop, single iteration)
+/code-loop   → coder + reviewer (bounded code↔review loop, single iteration; reviewer may be /review-panel)
+/code-parallel → per eligible iteration: /code-loop in an isolated worktree, then sequential gated integration
 /review      → reviewer        (and auto-invokes consultants per trigger table)
              → security-reviewer       (when sensitive territory)
              → architecture-reviewer   (when introducing structure / contract change)
              → test-strategist         (when test shape is unclear)
+/review-panel → reviewer + security-reviewer + architecture-reviewer + test-strategist
+             (seated by relevance, run concurrently, findings merged into one verdict)
 /security-review     → security-reviewer
 /architecture-review → architecture-reviewer (+ security-reviewer if security implications)
 /test-strategy       → test-strategist

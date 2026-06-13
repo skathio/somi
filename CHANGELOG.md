@@ -4,7 +4,91 @@ All notable changes to `@skathio/somi-ai` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
-## [Unreleased] — Discovery & requirements-engineering workflow
+## [0.4.0] — 2026-06-13 — Critical thinking, parallel review & context discipline
+
+A quality-focused release: agents now **challenge the premise** of a request instead of taking it as
+truth, reviews can run as a **parallel multi-lens panel**, provably-independent iterations can be
+built in **isolated worktrees and integrated sequentially**, and the generated artifacts + ruleset
+are bounded so they **don't rot the context** as a work item ages. Plus three correctness fixes in
+the loop machinery and the audit hook.
+
+> **Pre-1.0 note:** one change adjusts how the ruleset is loaded (always-on digest + read-on-demand)
+> rather than "read every numbered file before acting." Behavior is preserved on the common path; the
+> numbered rule files remain authoritative and are pulled in when their domain is engaged. Flagged
+> here per the pre-1.0 policy (MINOR may include behavior changes, documented).
+
+### Added
+
+- **`/review-panel` — parallel multi-lens review.** Seats the `reviewer` plus the
+  `security-reviewer` / `architecture-reviewer` / `test-strategist` lenses **as the diff warrants**,
+  runs them concurrently on the *same* captured diff, then **merges and de-duplicates** their findings
+  (locus-based, not line-based) into one severity-graded verdict — highest severity wins, lens
+  disagreement is surfaced, not averaged. Read-only lenses; the orchestrator owns all writes. Falls
+  back to sequential where the host can't spawn concurrent sub-agents.
+- **`/code-parallel` — independent iterations in parallel, integrated sequentially.** Fans the
+  iterations the planner marked `Parallelizable` (with **provably disjoint file sets**) into isolated
+  git worktrees, builds each under `/code-loop`, then **integrates one at a time behind a gate**
+  (full test run + review per merge). A merge conflict is treated as a planning bug and handed back,
+  never auto-resolved. Conservative by construction: parallel only where proven, sequential
+  everywhere else, with a worktree/host fallback to plain `/code-loop`.
+- **Premise-challenge step** in the `planner` (step 1a) and `discovery-analyst` (step 1a). Before
+  generating options, agents now state the strongest honest case *against* the request — false
+  premise, XY problem, contradictory requirements, already-solved need, or cost/value mismatch — and
+  pause if it doesn't hold. Discovery gains an explicit **go / no-go / pivot** decision: a cited
+  "don't build this" memo is now a valid, first-class outcome instead of manufactured paperwork.
+- **`Parallelizable` field** on each iteration in `templates/PHASE.md.tmpl`, recording the
+  disjoint-file-set contract that `/code-parallel` verifies before fanning out.
+- **Always-on rules digest** in `rules/CLAUDE.md` — the compressed, always-in-force form of the
+  numbered rule files, with a documented on-demand model for loading the full files.
+- **`SOMI_CODE_LOOP_REVIEW=panel`** — run the parallel review panel inside `/code-loop` instead of
+  the single reviewer.
+
+### Changed
+
+- **`reviewer` reads a bounded artifact set.** Live decisions (not the superseded appendix), the
+  active phase file(s) (not every phase), and the recent diary slice (entries since the last review,
+  or the last ~10) instead of the full accumulated history — caps review cost on long-lived work
+  items where `diary.md` / `decisions.md` grow without bound.
+- **`planner` parallelism marking is now a precise, consumed contract.** Step 6 sets each iteration's
+  `Parallelizable` field to `yes — with <N>.K` only when file sets are provably disjoint and neither
+  depends on the other; `/code-parallel` is the consumer. Previously the "parallelizable" hint was a
+  loose note nothing acted on.
+- **Ruleset loading: always-on digest + read-on-demand.** `rules/CLAUDE.md`'s "read every numbered
+  file before acting" is replaced by an always-on digest plus "read the full numbered file when you
+  enter its domain" (the model the skills already use) — reducing the fixed per-agent context tax of
+  re-reading ~600 lines of rules on every sub-agent invocation. The numbered files stay authoritative.
+- **`rules/50-collaboration.md`** gains a "challenge the premise, not just the architecture" rule:
+  deference on *direction* is correct; deference on *whether the direction is sound* is not.
+- **Artifact reading-discipline & compaction.** `templates/DECISIONS.md.tmpl` (live vs. superseded
+  appendix — read live, skip the archive unless tracing a supersession) and `templates/DIARY.md.tmpl`
+  (recent-slice reads + optional human compaction that never drops decision/plan-change entries) now
+  document how to keep artifacts from bloating every reader's context as the work ages.
+- **Specialist agents name their sibling skill as the single source of truth.** `security-reviewer`
+  (→ `owasp-defense`, `threat-modeling`), `test-strategist` (→ `test-strategy`),
+  `architecture-reviewer` (→ `solid-principles`, `api-design`), and `refactorer` (→ `solid-principles`,
+  `clean-code`) now state that on a technique divergence the **skill wins** — preventing the guidance
+  drift that comes from maintaining the same knowledge in two places.
+- **Honest Copilot parity docs.** README, `docs/PLUGIN.md`, and `docs/HOOKS.md` now state plainly that
+  the deterministic guardrail **hooks do not fire on Copilot** and that **multi-agent orchestration
+  degrades to sequential** there. Copilot is the portable subset, not a drop-in equal.
+
+### Fixed (bugs)
+
+- **The audit hook could create a literal `${CLAUDE_PROJECT_DIR}` directory.** When a host didn't
+  expand `${CLAUDE_PROJECT_DIR}` inside `settings.json`'s `env` block, `somi::audit_log_path` returned
+  the literal string and `mkdir -p` created a `${CLAUDE_PROJECT_DIR}/` directory in the repo root. The
+  resolver now discards any candidate containing an unexpanded `${…}` and falls back to a
+  shell-resolvable path (`hooks/lib/common.sh`).
+- **`/code-loop`'s circuit breaker could miss a recurring finding.** It matched recurrences by
+  `file:line + title`, but line numbers shift between passes, so the same logical finding at a moved
+  line slipped past the breaker and let coder and reviewer oscillate to the pass cap. Matching is now
+  `file + nearest symbol/function + title`. The same fix is applied to `/ship-loop`'s cross-layer
+  breaker.
+- **`/code-loop`'s diff cap was measured against an undefined baseline.** The loop now captures
+  `BASELINE_SHA` once at initialization and measures the cumulative working-tree diff against it, so
+  the cap means the same thing whether the coder commits each pass or leaves an uncommitted tree.
+
+## [0.3.0] — 2026-06-02 — Discovery & requirements-engineering workflow
 
 ### Added
 
@@ -190,5 +274,7 @@ extending, versioning, governance, plugin, architecture.
 Worked examples: feature plan (full six-artifact walkthrough), code review, end-to-end pipeline
 transcript, and a sample consuming project showing the post-install layout.
 
+[0.4.0]: https://github.com/skathio/somi-ai/releases/tag/v0.4.0
+[0.3.0]: https://github.com/skathio/somi-ai/releases/tag/v0.3.0
 [0.2.0]: https://github.com/skathio/somi-ai/releases/tag/v0.2.0
 [0.1.0]: https://github.com/skathio/somi-ai/releases/tag/v0.1.0

@@ -12,8 +12,15 @@ agent** (small implementation choices). Decisions verified with the user are mar
 > outside a work item (e.g., under `docs/adr/`), use [`ADR.md.tmpl`](./ADR.md.tmpl) instead.
 
 **When a decision changes mid-workflow**: do **not** edit the original entry. Add a **new entry**
-that supersedes it, mark the old one `superseded by D<N>`, and update the one-liner in `spec.md`.
-Append a diary entry naming the change.
+that supersedes it, **move the old entry down to the "Superseded entries" appendix** (don't leave it
+inline), mark it `superseded by D<N>`, and update the one-liner in `spec.md`. Append a diary entry
+naming the change.
+
+> **Reading discipline (keeps reviews cheap).** The **live** entries above the appendix are the
+> current decision state — read those. The **Superseded entries** appendix is a cold archive: skip it
+> unless a finding turns on *why* a decision changed, then read only that chain. Keeping superseded
+> entries out of the live section is what stops this file from bloating every reader's context as the
+> work item ages.
 
 ---
 

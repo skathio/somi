@@ -42,6 +42,21 @@ recommendation instead of producing ceremonial paperwork.
 
 1. **Read the request carefully.** Restate it in your own words. If your restatement doesn't match
    what the user meant, the plan is wrong before it starts.
+1a. **Challenge the premise before you plan it.** Restating the request is not the same as accepting
+   it. A faithful plan of the wrong thing is still the wrong thing. Before generating any options,
+   state the strongest honest case *against* the request as posed:
+   - **False-premise / XY check** — does the request assume something untrue about the codebase, or
+     ask for Y when the real goal X has a simpler path? Grep to confirm the assumption before
+     trusting it; if it's false, name X and the simpler path.
+   - **Contradiction check** — do two stated requirements (or a requirement and a constraint in
+     `context.md`) conflict? Surface the conflict; don't silently pick a side.
+   - **Necessity check** — does an existing mechanism already do this, making the work unnecessary or
+     much smaller? Look for it before assuming it must be built.
+   - **Cost/value check** — if the expensive-to-reverse part isn't justified by the stated value,
+     say so.
+   If the premise survives, say so in one line and proceed. If it doesn't, **stop and put the
+   objection to the user** (use the Verification protocol's option/recommend shape) before writing
+   any spec. Taking the user's framing as truth without this check is a failure mode, not politeness.
 1b. **Consume the R&D foundation if one exists.** If the briefing points you at `.somi/rd/<slug>/`
    (produced by the [`discovery-analyst`](./discovery-analyst.md) via [`/discover`](../commands/discover.md)),
    it is the authoritative input. Read `README.md`, `srs.md`, `frd.md`, `sdd.md`, `tdd.md`, and
@@ -66,9 +81,16 @@ recommendation instead of producing ceremonial paperwork.
    design decision goes through it. As each decision lands, add an entry to `decisions.md` and a
    one-liner to `spec.md` §5.
 6. **Slice phases.** Each phase is a coherent, reviewable, low-risk increment. Sequential by
-   default; explicitly mark when two are parallelizable. Write one file per phase under `phases/`,
-   using [`templates/PHASE.md.tmpl`](../templates/PHASE.md.tmpl). Each phase contains one or more
-   iterations (each ~1 PR).
+   default. Write one file per phase under `phases/`, using
+   [`templates/PHASE.md.tmpl`](../templates/PHASE.md.tmpl). Each phase contains one or more
+   iterations (each ~1 PR). **Mark parallelism precisely, because something consumes it.** Set each
+   iteration's `Parallelizable` field to `yes — with <N>.K` **only** when its `Files (approx)` set is
+   provably disjoint from the sibling's and neither needs the other's output — that is the exact
+   contract [`/code-parallel`](../commands/code-parallel.md) checks before fanning iterations into
+   isolated worktrees. If file sets overlap or a real dependency exists, it's `no`. When in doubt,
+   `no`: a wrong `yes` causes a merge collision; a conservative `no` only costs sequencing. Disjoint
+   file sets are also a design signal — iterations that *can't* be made disjoint may be coupled more
+   tightly than the slicing implies.
 7. **Fill in spec sections** that depend on the verified decisions: test strategy (§7), security
    (§8), observability (§9), rollout (§10), risks (§11), DoD (§12).
 8. **Initialize `progress.md`** with status `awaiting-approval`, the phase table, and "Decisions
@@ -173,6 +195,10 @@ A plan is **not done** when:
 
 ## Failure modes to avoid
 
+- **Premise-taking.** Accepting the request's framing as truth and planning it faithfully when it
+  rests on a false premise, an XY problem, a self-contradiction, or an already-solved need.
+  Restating ≠ challenging. Run the premise check (step 1a) first — a plan that's responsive to a
+  wrong question is wasted work.
 - **Plans that read like code** — pseudo-implementation with no decisions. The plan's value is in
   the *choices*, not the *steps*.
 - **Ceremonial completeness** — filling in every template section with "N/A" or "TBD" is worse

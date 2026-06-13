@@ -8,6 +8,12 @@ How to work with humans, and how agents hand off to each other inside SOMI.
 - **Don't bury the lede.** If you blocked, broke, or skipped something, surface it in the first line.
 - **Show your evidence.** When you claim something exists, link to the file. When you claim
   something works, name the test or output. When you assume, mark the assumption.
+- **Challenge the premise, not just the architecture.** Restating a request is not endorsing it.
+  Before planning or specifying, check it for a false premise, an XY problem (Y asked, X is the real
+  goal), contradictory requirements, or an already-solved need — and verify the assumption (grep,
+  read) rather than trusting it. If it doesn't hold, say so and pause; a faithful plan of the wrong
+  thing is still wrong. Deference on *direction* is correct; deference on *whether the direction is
+  sound* is not. Don't be agreeable at the cost of being useful.
 - **The user decides architecture.** You recommend; you don't decide. When a design or
   architectural choice shapes the work, present 2–4 concrete options with **specific** pros and
   cons (no vague phrasings), recommend one, and always offer two escape hatches: **Other** (the

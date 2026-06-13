@@ -7,6 +7,13 @@ A phase is one coherent, reviewable, low-risk increment of the work item. It con
 **iterations** (each ~1 PR). Iterations within a phase are sequential by default unless explicitly
 parallelizable.
 
+> **Parallelization contract.** Two iterations may run concurrently (e.g. under
+> [`/code-parallel`](../../../commands/code-parallel.md), each in its own git worktree) **only when
+> their `Files (approx)` sets are provably disjoint and neither depends on the other's output.** The
+> `Parallelizable` field on each iteration records this judgment explicitly — it's what the parallel
+> runner checks before fanning out. Overlapping files or a real dependency means sequential; when in
+> doubt, sequential. Integration is always sequential and gated, never a free-for-all merge.
+
 > **Single source of truth for status:** [`../progress.md`](../progress.md). This file describes
 > what each iteration *is* — scope, files, acceptance — not what state it's in. Phase status and
 > per-iteration status live in `progress.md`'s tables; mirroring them here only invites drift.
@@ -33,6 +40,9 @@ phase-row "Notes" column when worth surfacing.>
 
 - **Scope**: <what's in this PR>
 - **Files (approx)**: `path/to/foo` (new), `path/to/bar` (modified)
+- **Parallelizable**: `no` (default) / `yes — with <N>.K` — only `yes` when this iteration's files are
+  disjoint from <N>.K's and neither needs the other's output; that's the contract `/code-parallel`
+  verifies before fanning out.
 - **Acceptance**: <criteria — usually a test passes + behavior X visible>
 - **Tests added/changed**: <unit / integration / e2e — brief>
 - **Observability**: <logs / metrics / traces added or changed>
@@ -44,6 +54,7 @@ phase-row "Notes" column when worth surfacing.>
 
 - **Scope**: …
 - **Files (approx)**: …
+- **Parallelizable**: `no` / `yes — with <N>.K`
 - **Acceptance**: …
 - **Tests added/changed**: …
 - **Observability**: …

@@ -125,6 +125,12 @@ Planning re-opens a direction only where it genuinely diverges, recording why.
 
 **Agent**: [`planner`](../agents/planner.md).
 
+**Premise check first.** Before scaffolding a plan, the planner challenges the request itself — false
+premise, XY problem (Y asked, X is the real goal), contradictory requirements, or an already-solved
+need — and pauses if it doesn't hold. Restating a request is not endorsing it; a faithful plan of the
+wrong thing is still wrong. (Discovery does the same at the idea level, where the honest outcome can
+be **go / no-go / pivot**.)
+
 **Input**: a problem statement from the user — **or** a discovery foundation at `.somi/rd/<slug>/`
 (see [Discovery](#discovery-pre-development)). When a foundation exists, the planner treats the
 SRS/FRD as the requirements source and the SDD/TDD as architectural direction rather than
@@ -218,6 +224,16 @@ changes get captured in `decisions.md` and `diary.md`? Is `progress.md` accurate
 When findings point at the *plan* (not just the code), the reviewer says so and the next `/code`
 run applies the plan-change protocol.
 
+**The parallel panel ([`/review-panel`](../commands/review-panel.md))** — for a high-stakes change
+that crosses several concerns at once, the panel seats the relevant lenses (`reviewer` plus
+`security-reviewer` / `architecture-reviewer` / `test-strategist` as the diff warrants) and runs them
+**concurrently** on the same captured diff, then merges and de-duplicates their findings into one
+verdict (highest severity wins; lens disagreement is surfaced). It's safe to parallelize because
+every lens is read-only — there's no write contention — and the orchestrator owns the single merged
+write. Use `/review` for the everyday single-lens pass; reach for `/review-panel` before merging
+something that touches auth *and* a new contract *and* the test shape. (On hosts without concurrent
+sub-agents, the panel runs the same lenses sequentially.)
+
 ---
 
 ## Why these three (and not four, or five)
@@ -253,6 +269,13 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   not just the code. Spec/decisions/phases get updated in place; diary entry captures why.
 - **Refactor (standalone)** when the next planned change requires untangling first; refactor is
   its own mini-cycle that returns the codebase to a state where the planned change is easy.
+- **Plan → Code-parallel → Review** when a phase has iterations the planner proved **independent**
+  (`Parallelizable: yes` with disjoint file sets). [`/code-parallel`](../commands/code-parallel.md)
+  builds each in its own git worktree concurrently, then **integrates them one at a time** with tests
+  and review at every merge — smaller, more focused per-iteration diffs without the merge-hell tax.
+  A merge conflict means the iterations weren't actually independent, so it's surfaced as a planning
+  signal, not auto-resolved. The default path stays sequential (`/code-loop`); parallel is opt-in and
+  only where proven safe.
 
 ## The `/ship` shortcut
 
