@@ -4,6 +4,25 @@ All notable changes to `@skathio/somi` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
+## [1.0.0] — 2026-06-21 — Rename to **SoMi** (`@skathio/somi`)
+
+First stable release under the new name. This is a **breaking change**: the project, npm package,
+and GitHub repository were all renamed from `somi-ai` to `somi`.
+
+### Changed (BREAKING)
+
+- **npm package** renamed `@skathio/somi-ai` → `@skathio/somi`. The old package is no longer
+  updated; `@skathio/somi-ai` is deprecated and pinned at its last `0.x` release.
+- **GitHub repository** renamed `skathio/somi-ai` → `skathio/somi` (old URLs redirect).
+- **Plugin / Copilot-extension / marketplace identifiers** renamed `somi-ai` → `somi`.
+- **Brand / display name** `SoMi AI` → `SoMi`.
+
+### Migration
+
+- Reinstall from the new package/marketplace: `@skathio/somi` (see the README for plugin and
+  Copilot-extension install commands). No behavior or workflow changes accompany the rename — only
+  the name.
+
 ## [0.4.0] — 2026-06-13 — Critical thinking, parallel review & context discipline
 
 A quality-focused release: agents now **challenge the premise** of a request instead of taking it as
@@ -274,6 +293,7 @@ extending, versioning, governance, plugin, architecture.
 Worked examples: feature plan (full six-artifact walkthrough), code review, end-to-end pipeline
 transcript, and a sample consuming project showing the post-install layout.
 
+[1.0.0]: https://github.com/skathio/somi/releases/tag/v1.0.0
 [0.4.0]: https://github.com/skathio/somi/releases/tag/v0.4.0
 [0.3.0]: https://github.com/skathio/somi/releases/tag/v0.3.0
 [0.2.0]: https://github.com/skathio/somi/releases/tag/v0.2.0
