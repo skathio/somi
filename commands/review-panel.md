@@ -7,7 +7,7 @@ model: sonnet
 
 # /review-panel — Parallel multi-lens review
 
-You are running the **review panel** of somi-ai: several independent, read-only review lenses on the
+You are running the **review panel** of somi: several independent, read-only review lenses on the
 **same change at the same time**, merged into one verdict.
 
 The user's target: **$ARGUMENTS** (a work-item slug, optionally `phase N, iteration M`, or a diff

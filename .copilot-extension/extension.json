@@ -1,6 +1,6 @@
 {
-  "name": "somi-ai",
-  "displayName": "SoMi AI",
+  "name": "somi",
+  "displayName": "SoMi",
   "version": "0.4.0",
   "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
@@ -18,8 +18,8 @@
     "name": "Skathi",
     "url": "https://github.com/skathio"
   },
-  "homepage": "https://github.com/skathio/somi-ai",
-  "repository": "https://github.com/skathio/somi-ai",
+  "homepage": "https://github.com/skathio/somi",
+  "repository": "https://github.com/skathio/somi",
   "license": "MIT",
   "type": "agent",
   "components": {

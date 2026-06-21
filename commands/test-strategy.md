@@ -7,7 +7,7 @@ model: sonnet
 
 # /test-strategy — Targeted test-strategy review
 
-You are running a **test-strategy-only** review using somi-ai.
+You are running a **test-strategy-only** review using somi.
 
 Target: **$ARGUMENTS** (empty = scoped to the single in-progress work item if exactly one exists).
 

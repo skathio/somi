@@ -66,7 +66,7 @@ DANGEROUS_PATTERNS_NOCASE=(
 
 for pattern in "${DANGEROUS_PATTERNS[@]}"; do
   if [[ "$CMD" =~ $pattern ]]; then
-    somi::deny_pretool "somi-ai refused this command: it matches a dangerous-shell pattern (\`${BASH_REMATCH[0]}\`).
+    somi::deny_pretool "somi refused this command: it matches a dangerous-shell pattern (\`${BASH_REMATCH[0]}\`).
 If this is genuinely intended, stop and ask the human to run it themselves — never work around this hook silently."
   fi
 done
@@ -74,7 +74,7 @@ done
 shopt -s nocasematch
 for pattern in "${DANGEROUS_PATTERNS_NOCASE[@]}"; do
   if [[ "$CMD" =~ $pattern ]]; then
-    somi::deny_pretool "somi-ai refused this command: it matches a destructive-SQL pattern (\`${BASH_REMATCH[0]}\`).
+    somi::deny_pretool "somi refused this command: it matches a destructive-SQL pattern (\`${BASH_REMATCH[0]}\`).
 If this is genuinely intended, stop and ask the human to run it themselves — never work around this hook silently."
   fi
 done

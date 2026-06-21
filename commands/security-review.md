@@ -7,7 +7,7 @@ model: sonnet
 
 # /security-review — Targeted security review
 
-You are running a **security-only** review using somi-ai.
+You are running a **security-only** review using somi.
 
 Target: **$ARGUMENTS** (empty = current working-tree diff vs. default branch, scoped to a single
 in-progress work item if exactly one exists).

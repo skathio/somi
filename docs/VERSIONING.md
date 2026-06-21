@@ -1,12 +1,12 @@
 # Versioning
 
-SoMi AI follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Releases are
+SoMi follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Releases are
 **automated from [Conventional Commits](https://www.conventionalcommits.org/)** (see Release process
 below). The **published git tags (`v<VERSION>`) and the npm registry are the source of truth** for
 the released version — the in-repo `VERSION` / `package.json` are not committed back on each release,
 so they may lag behind what's published; check the
-[npm page](https://www.npmjs.com/package/@skathio/somi-ai) or
-[Releases](https://github.com/skathio/somi-ai/releases).
+[npm page](https://www.npmjs.com/package/@skathio/somi) or
+[Releases](https://github.com/skathio/somi/releases).
 
 ## What counts as which kind of change
 
@@ -42,14 +42,14 @@ Bumped for **bug fixes and clarifications**:
 
 ## What is the public surface?
 
-Treat these as the **public API** of SoMi AI:
+Treat these as the **public API** of SoMi:
 
 - Slash command names and their argument shapes.
 - Agent names, descriptions, and tool sets.
 - Skill names and descriptions.
 - Hook script paths and the contract (stdin payload shape, stdout decision shape).
 - `VERSION`, `CHANGELOG.md`, and the plugin manifest schema.
-- The `settings.json` schema SoMi AI produces.
+- The `settings.json` schema SoMi produces.
 
 Anything else (internal helpers, comments, doc structure) is internal.
 
@@ -102,7 +102,7 @@ For breaking changes in a MAJOR release, include a migration note in `CHANGELOG.
   - **Migration**: replace any team docs, shortcuts, or aliases referencing `/audit` with
     `/security-review`. The old command will not be restored.
 - **Removed `agents/audit.md`** (replaced by `agents/security-reviewer.md` in 0.5.0).
-  - **Migration**: run `/plugin update somi-ai` to pick up the new agent. Custom prompts referencing
+  - **Migration**: run `/plugin update somi` to pick up the new agent. Custom prompts referencing
     `audit` should reference `security-reviewer`.
 ```
 
@@ -111,7 +111,7 @@ For breaking changes in a MAJOR release, include a migration note in `CHANGELOG.
 Teams can pin to a specific tag:
 
 ```text
-/plugin pin somi-ai 0.1.0
+/plugin pin somi 0.1.0
 ```
 
 Or pin to a specific tag in your org's marketplace manifest (`"version": "0.1.0"`) to control

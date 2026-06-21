@@ -1,6 +1,6 @@
 # Workflows
 
-SoMi AI organises Claude's behavior into three first-class **build** workflows — planning, coding,
+SoMi organises Claude's behavior into three first-class **build** workflows — planning, coding,
 reviewing — plus an upstream **discovery** workflow for greenfield work. Each has a clean handoff to
 the next. The build workflows produce durable artifacts inside `.somi/plans/<slug>/`; discovery
 produces the requirements & design foundation inside `.somi/rd/<slug>/`. Each can be invoked alone,
@@ -243,7 +243,7 @@ The split tracks the **three reasons engineering work is hard**:
 - **Coding** — executing without introducing new problems.
 - **Reviewing** — catching what the executor missed.
 
-These three exist in every engineering team's day; SoMi AI makes them explicit and gives each one
+These three exist in every engineering team's day; SoMi makes them explicit and gives each one
 a specialised agent with a clear quality bar.
 
 **Why discovery is separate, not a fourth daily stage.** Discovery answers a different question than
@@ -283,7 +283,7 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 `/plan`, then `/code`, then `/review` manually — just with the orchestration baked in. Use
 whichever feels natural; the underlying agents, artifacts, and quality bars are the same.
 
-## What SoMi AI workflows are *not*
+## What SoMi workflows are *not*
 
 - **Not a substitute for human judgment.** The human approves between stages and decides on every
   architectural choice (the agent recommends; the user picks).

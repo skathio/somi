@@ -7,7 +7,7 @@ model: sonnet
 
 # /refactor — Surgical refactor
 
-You are invoking the **refactorer** workflow of somi-ai.
+You are invoking the **refactorer** workflow of somi.
 
 The user's refactor target: **$ARGUMENTS**
 

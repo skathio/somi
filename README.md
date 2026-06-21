@@ -1,14 +1,14 @@
-# SoMi AI
+# SoMi
 
 > An opinionated, reusable multi-agent engineering workflow system for Claude Code and GitHub Copilot.
 
-[![npm](https://img.shields.io/npm/v/@skathio/somi-ai?logo=npm)](https://www.npmjs.com/package/@skathio/somi-ai)
+[![npm](https://img.shields.io/npm/v/@skathio/somi?logo=npm)](https://www.npmjs.com/package/@skathio/somi)
 
-The latest published version is on [npm](https://www.npmjs.com/package/@skathio/somi-ai) and in the
-[GitHub Releases](https://github.com/skathio/somi-ai/releases); see [CHANGELOG.md](CHANGELOG.md) for
+The latest published version is on [npm](https://www.npmjs.com/package/@skathio/somi) and in the
+[GitHub Releases](https://github.com/skathio/somi/releases); see [CHANGELOG.md](CHANGELOG.md) for
 release notes.
 
-SoMi AI gives engineering teams a shared, version-controlled "operating system" for working with Claude:
+SoMi gives engineering teams a shared, version-controlled "operating system" for working with Claude:
 three first-class build workflows — **plan → code → review** — plus an upstream **discovery** workflow
 that turns a raw product idea into a research-grounded requirements & design foundation. All backed by
 specialised subagents, deterministic guardrail hooks, composable skills, and a global ruleset that
@@ -44,36 +44,36 @@ daily build loop. Supporting agents (used by handoff): `security-reviewer`, `arc
 ### Option 1 — Claude Code plugin (marketplace)
 
 ```text
-# Add the SoMi AI marketplace and install the plugin:
-/plugin marketplace add https://github.com/skathio/somi-ai
-/plugin install somi-ai@somi-ai
+# Add the SoMi marketplace and install the plugin:
+/plugin marketplace add https://github.com/skathio/somi
+/plugin install somi@somi
 ```
 
-Updates flow through `/plugin update somi-ai`.
+Updates flow through `/plugin update somi`.
 
 ### Option 2 — npm (Claude Code)
 
 ```bash
-npm install -g @skathio/somi-ai
+npm install -g @skathio/somi
 ```
 
-Then in Claude Code: `/plugin install somi-ai`.
+Then in Claude Code: `/plugin install somi`.
 
 ### Option 3 — GitHub Copilot (extension marketplace)
 
-SoMi AI is also a GitHub Copilot extension, installable the same way as the Claude Code plugin:
+SoMi is also a GitHub Copilot extension, installable the same way as the Claude Code plugin:
 
 ```text
-copilot plugin marketplace add https://github.com/skathio/somi-ai
-copilot plugin install somi-ai@somi-ai
+copilot plugin marketplace add https://github.com/skathio/somi
+copilot plugin install somi@somi
 ```
 
-Once installed, use `@somi-ai` in GitHub Copilot chat:
+Once installed, use `@somi` in GitHub Copilot chat:
 
 ```text
-@somi-ai /plan  Add per-team rate limiting to the public webhook endpoint
-@somi-ai /code  rate-limiting-webhooks phase 1, iteration 1
-@somi-ai /review  rate-limiting-webhooks
+@somi /plan  Add per-team rate limiting to the public webhook endpoint
+@somi /code  rate-limiting-webhooks phase 1, iteration 1
+@somi /review  rate-limiting-webhooks
 ```
 
 > **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Two things do **not** carry
@@ -110,7 +110,7 @@ examples/         Worked examples + a minimal consuming project
 docs/             Full documentation
 ```
 
-When you use SoMi AI in a project, workflows write their artifacts into a `.somi/` directory
+When you use SoMi in a project, workflows write their artifacts into a `.somi/` directory
 at the project root. Discovery foundations live under `.somi/rd/<slug>/` (research report, BRD, SRS,
 FRD, SDD, TDD); plans live under `.somi/plans/<slug>/` (context, spec, decisions, progress, diary,
 phases); reviews live under `.somi/reviews/<slug>/` — separate directories, no clutter.
@@ -165,7 +165,7 @@ For the all-in-one pipeline: `/ship <problem statement>`.
 
 - **Consistency** — every repo gets the same review bar, the same security posture, the same plan shape.
 - **Upgrade once** — update the plugin; every project benefits.
-- **Override locally** — projects keep their own `CLAUDE.md` and `rules/99-overrides.md`; SoMi AI never silently overrides them.
+- **Override locally** — projects keep their own `CLAUDE.md` and `rules/99-overrides.md`; SoMi never silently overrides them.
 - **Auditable** — hooks log denied actions; reviewers can see what the system blocked vs. what humans approved.
 
 ---
@@ -190,15 +190,15 @@ For the all-in-one pipeline: `/ship <problem statement>`.
 
 ## Versioning
 
-SoMi AI follows [Semantic Versioning](https://semver.org/). Releases are **automated from
+SoMi follows [Semantic Versioning](https://semver.org/). Releases are **automated from
 [Conventional Commits](https://www.conventionalcommits.org/)**: merging to `main` runs the publish
 workflow, which derives the next version, publishes to npm (with a signed provenance attestation via
 OIDC trusted publishing), pushes the `v<version>` git tag, and creates the matching GitHub Release.
 
 The **published git tags and the npm registry are the source of truth** for the released version —
 the in-repo `VERSION` / `package.json` are not committed back on each release, so don't rely on them
-for "what's published." Check the [npm page](https://www.npmjs.com/package/@skathio/somi-ai) or
-[Releases](https://github.com/skathio/somi-ai/releases) instead.
+for "what's published." Check the [npm page](https://www.npmjs.com/package/@skathio/somi) or
+[Releases](https://github.com/skathio/somi/releases) instead.
 
 See [docs/VERSIONING.md](docs/VERSIONING.md) for the breaking-change policy and migration guide template.
 

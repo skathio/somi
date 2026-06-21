@@ -7,7 +7,7 @@ model: opus
 
 # /discover — Discovery & requirements-engineering workflow
 
-You are running the **discovery workflow** of somi-ai — the requirements-engineering and high-level
+You are running the **discovery workflow** of somi — the requirements-engineering and high-level
 software-design phase of the SDLC that happens *before* planning or coding. Its output is the
 **cornerstone of a new project**: a research-grounded, traceable foundation that
 [`/plan`](./plan.md) consumes. All artifacts live under `.somi/rd/<slug>/`.

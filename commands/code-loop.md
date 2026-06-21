@@ -7,7 +7,7 @@ model: sonnet
 
 # /code-loop — Bounded code↔review iteration
 
-You are running the **bounded code↔review loop** of somi-ai.
+You are running the **bounded code↔review loop** of somi.
 
 The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, iteration M`).
 

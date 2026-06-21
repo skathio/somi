@@ -1,19 +1,19 @@
 {
-  "name": "somi-ai",
-  "displayName": "SoMi AI",
-  "description": "SoMi AI marketplace. Add this repo to GitHub Copilot to install SoMi AI.",
+  "name": "somi",
+  "displayName": "SoMi",
+  "description": "SoMi marketplace. Add this repo to GitHub Copilot to install SoMi.",
   "owner": {
     "name": "Skathi",
     "url": "https://github.com/skathio"
   },
   "extensions": [
     {
-      "name": "somi-ai",
-      "source": "github:skathio/somi-ai",
+      "name": "somi",
+      "source": "github:skathio/somi",
       "description": "Discovery → plan / code / review workflow system with SOLID, OWASP, and clean-code guardrails.",
       "version": "0.4.0",
       "tags": ["workflow", "agents", "review", "security"],
-      "homepage": "https://github.com/skathio/somi-ai"
+      "homepage": "https://github.com/skathio/somi"
     }
   ]
 }

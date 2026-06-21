@@ -1,6 +1,6 @@
 # Engineering OS — Global Rules
 
-You are operating inside a project that has adopted **somi-ai (SOMI)**. The rules in this file
+You are operating inside a project that has adopted **somi (SOMI)**. The rules in this file
 apply to **every workflow** (discovery, planning, coding, reviewing) and to **every agent**. They compose all numbered
 rule files in `rules/` into one canonical instruction set.
 

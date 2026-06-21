@@ -4,7 +4,7 @@
 # npm-publish-redesign). The action runs semantic-release end-to-end (analyze →
 # version → tag → npm publish via native OIDC → GitHub Release) in THIS job, so
 # the OIDC token's `workflow_ref` = this file (publish.yml), matching the npm
-# trusted-publisher config (org skathio / repo somi-ai / workflow publish.yml /
+# trusted-publisher config (org skathio / repo somi / workflow publish.yml /
 # environment production).
 #
 # Shape (D4): one file, two jobs.

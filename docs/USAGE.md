@@ -42,7 +42,7 @@ planning.
 ```
 
 **Expect**:
-- SoMi AI proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
+- SoMi proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
 - Runs on the **most capable model end-to-end** (the `/discover` command itself is `opus`, not just
   the agent) — its output is the cornerstone of the project.
 - **Researches the competition extensively** — scans direct/indirect competitors, mines real user
@@ -84,7 +84,7 @@ first and then `/plan <slug>`.
 ```
 
 **Expect**:
-- SoMi AI proposes a slug (e.g., `rate-limiting-webhooks`) and confirms with you.
+- SoMi proposes a slug (e.g., `rate-limiting-webhooks`) and confirms with you.
 - Reads the relevant code (Read/Grep/Glob).
 - Drafts `context.md` (background, surroundings, constraints — the **verbatim** user problem
   statement lands here, fenced as untrusted data) and the spec skeleton.
@@ -113,7 +113,7 @@ See [`examples/feature-plan-example.md`](../examples/feature-plan-example.md) fo
 
 ## `/plan-loop`
 
-**When**: ambiguous or architecturally heavy work where you want SoMi AI to iterate the plan
+**When**: ambiguous or architecturally heavy work where you want SoMi to iterate the plan
 through reviewer feedback before you read it.
 
 **Type**:
@@ -142,7 +142,7 @@ This is the **single-pass** form — for the bounded code↔review loop, use `/c
 ```
 
 **Expect**:
-- SoMi AI reads `spec.md`, the iteration's phase file, recent `diary.md`, and the surrounding
+- SoMi reads `spec.md`, the iteration's phase file, recent `diary.md`, and the surrounding
   code. Marks the iteration `in-progress` in `progress.md` (single source of truth for status).
 - Edits or writes code, adds tests, runs them.
 - If implementation reveals the plan needs to change (constraints, dead ends, false assumptions),
@@ -354,10 +354,10 @@ future readers understand what was built and why.
 ## Multiple work items
 
 Each `/plan` creates its own work item. Slugs come from the problem statement; you can pick a
-different one when prompted. If you re-invoke `/plan` on the same problem, SoMi AI asks whether to
+different one when prompted. If you re-invoke `/plan` on the same problem, SoMi asks whether to
 continue the existing work item (preserving diary), reset it, or branch into a new slug.
 
-When invoking `/code` or `/review` without a slug, SoMi AI looks at `.somi/` for a single work
+When invoking `/code` or `/review` without a slug, SoMi looks at `.somi/` for a single work
 item with `status: in-progress` in its `progress.md` and uses it. If there are multiple, it asks.
 
 ## Plan changes during implementation
@@ -399,6 +399,6 @@ surfaced in the iteration summary for human sign-off. Bare lockfile-respecting r
   reveals a new Major.
 - **Commit `.somi/`** with the feature branch — the artifact set explains the work to future
   readers.
-- **Inspect `audit.log`** if you're curious what tools SoMi AI touched during a session.
+- **Inspect `audit.log`** if you're curious what tools SoMi touched during a session.
 - **`diary.md` is the time machine** — when you come back to a work item in three months, read
   diary first to understand the journey.

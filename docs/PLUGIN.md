@@ -1,6 +1,6 @@
 # Plugin distribution
 
-SoMi AI ships as a Claude Code plugin and as a GitHub Copilot extension. Both use the same
+SoMi ships as a Claude Code plugin and as a GitHub Copilot extension. Both use the same
 underlying markdown files — agents, commands, skills, rules, hooks — so there is no duplication.
 
 > **The two hosts are not feature-equivalent.** The shared markdown is portable, but two layers are
@@ -32,7 +32,7 @@ plugin-root/
 └── CLAUDE.md                 # project-context (optional)
 ```
 
-The SoMi AI repo is shaped that way: it is both a plugin and its own marketplace.
+The SoMi repo is shaped that way: it is both a plugin and its own marketplace.
 
 ### Manifests
 
@@ -40,14 +40,14 @@ The SoMi AI repo is shaped that way: it is both a plugin and its own marketplace
 - [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) — marketplace manifest
   (lists this plugin so `/plugin marketplace add` resolves it).
 
-### Installing SoMi AI
+### Installing SoMi
 
 ```text
-# 1. Add SoMi AI as a marketplace source.
-/plugin marketplace add https://github.com/skathio/somi-ai
+# 1. Add SoMi as a marketplace source.
+/plugin marketplace add https://github.com/skathio/somi
 
-# 2. Install the somi-ai plugin.
-/plugin install somi-ai@somi-ai
+# 2. Install the somi plugin.
+/plugin install somi@somi
 
 # 3. Check available updates.
 /plugin update
@@ -55,7 +55,7 @@ The SoMi AI repo is shaped that way: it is both a plugin and its own marketplace
 
 ### Hosting your own marketplace
 
-Fork SoMi AI or wrap it in your own marketplace repo:
+Fork SoMi or wrap it in your own marketplace repo:
 
 ```
 your-marketplace/
@@ -63,7 +63,7 @@ your-marketplace/
     └── marketplace.json
 ```
 
-Where `marketplace.json` lists SoMi AI (or your fork):
+Where `marketplace.json` lists SoMi (or your fork):
 
 ```json
 {
@@ -72,8 +72,8 @@ Where `marketplace.json` lists SoMi AI (or your fork):
   "owner": { "name": "skathio", "url": "https://github.com/skathio" },
   "plugins": [
     {
-      "name": "somi-ai",
-      "source": "github:skathio/somi-ai",
+      "name": "somi",
+      "source": "github:skathio/somi",
       "version": "0.1.0",
       "description": "Plan / code / review workflow system.",
       "tags": ["workflow", "review", "security"]
@@ -92,7 +92,7 @@ Teams then run:
 
 ```text
 /plugin marketplace add https://github.com/skathio/your-marketplace
-/plugin install somi-ai@skathio-claude-tools
+/plugin install somi@skathio-claude-tools
 /plugin install skathio-conventions@skathio-claude-tools
 ```
 
@@ -103,10 +103,10 @@ The two plugins compose at runtime.
 ```text
 /plugin list                  # shows installed plugins and versions
 /plugin update                # update all
-/plugin update somi-ai
-/plugin pin somi-ai 0.1.0
-/plugin unpin somi-ai
-/plugin uninstall somi-ai
+/plugin update somi
+/plugin pin somi 0.1.0
+/plugin unpin somi
+/plugin uninstall somi
 ```
 
 ### What a plugin install doesn't do
@@ -115,22 +115,22 @@ The two plugins compose at runtime.
   context but doesn't replace your project's own.
 - It does **not** create `.somi/` or any artifacts — those appear when you run the workflows
   (`/plan` creates the first `.somi/plans/<slug>/` directory).
-- It does **not** modify your project's `settings.json`. SoMi AI hooks are wired through the plugin's
+- It does **not** modify your project's `settings.json`. SoMi hooks are wired through the plugin's
   own settings.
 
 ### Verifying a plugin install
 
-After `/plugin install somi-ai@...`:
+After `/plugin install somi@...`:
 
 - `/discover`, `/plan`, `/code`, `/review` should appear in `/` autocomplete.
-- `/agents` should list the SoMi AI agents.
+- `/agents` should list the SoMi agents.
 - Try `/plan list a trivial change` — Claude should produce a plan.
 
 ---
 
 ## GitHub Copilot extension
 
-SoMi AI is also a GitHub Copilot extension, distributed through the same marketplace pattern as
+SoMi is also a GitHub Copilot extension, distributed through the same marketplace pattern as
 the Claude Code plugin.
 
 > **Parity caveat.** Copilot gets the commands, agents, skills, rules, and templates — but **not** the
@@ -149,11 +149,11 @@ the Claude Code plugin.
 ### Installing
 
 ```text
-# 1. Add SoMi AI as a marketplace source.
-copilot plugin marketplace add https://github.com/skathio/somi-ai
+# 1. Add SoMi as a marketplace source.
+copilot plugin marketplace add https://github.com/skathio/somi
 
-# 2. Install the somi-ai extension.
-copilot plugin install somi-ai@somi-ai
+# 2. Install the somi extension.
+copilot plugin install somi@somi
 
 # 3. Check for updates.
 copilot plugin update
@@ -163,28 +163,28 @@ copilot plugin update
 
 | Command                          | Agent(s) used                                                                            |
 |----------------------------------|------------------------------------------------------------------------------------------|
-| `@somi-ai /discover`             | `discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
-| `@somi-ai /plan`                 | `planner`                                                                                |
-| `@somi-ai /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
-| `@somi-ai /code`                 | `coder`                                                                                  |
-| `@somi-ai /code-loop`            | `coder` + `reviewer` (bounded)                                                           |
-| `@somi-ai /review`               | `reviewer` (+ `security-reviewer` / `architecture-reviewer` / `test-strategist` auto-invoked) |
-| `@somi-ai /ship`                 | `planner` + (per iteration) `/code-loop`                                                 |
-| `@somi-ai /ship-loop`            | `/plan-loop` + (per iteration) `/code-loop`                                              |
-| `@somi-ai /security-review`      | `security-reviewer`                                                                      |
-| `@somi-ai /architecture-review`  | `architecture-reviewer` (+ `security-reviewer` when relevant)                            |
-| `@somi-ai /test-strategy`        | `test-strategist`                                                                        |
-| `@somi-ai /refactor`             | `refactorer`                                                                             |
+| `@somi /discover`             | `discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
+| `@somi /plan`                 | `planner`                                                                                |
+| `@somi /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
+| `@somi /code`                 | `coder`                                                                                  |
+| `@somi /code-loop`            | `coder` + `reviewer` (bounded)                                                           |
+| `@somi /review`               | `reviewer` (+ `security-reviewer` / `architecture-reviewer` / `test-strategist` auto-invoked) |
+| `@somi /ship`                 | `planner` + (per iteration) `/code-loop`                                                 |
+| `@somi /ship-loop`            | `/plan-loop` + (per iteration) `/code-loop`                                              |
+| `@somi /security-review`      | `security-reviewer`                                                                      |
+| `@somi /architecture-review`  | `architecture-reviewer` (+ `security-reviewer` when relevant)                            |
+| `@somi /test-strategy`        | `test-strategist`                                                                        |
+| `@somi /refactor`             | `refactorer`                                                                             |
 
-> Plan-level review uses `@somi-ai /review plan <slug>` — there is no separate `/plan-review`.
+> Plan-level review uses `@somi /review plan <slug>` — there is no separate `/plan-review`.
 
 ### Plugin lifecycle
 
 ```text
 copilot plugin list
-copilot plugin update somi-ai
-copilot plugin pin somi-ai 0.1.0
-copilot plugin uninstall somi-ai
+copilot plugin update somi
+copilot plugin pin somi 0.1.0
+copilot plugin uninstall somi
 ```
 
 ### Hosting your own Copilot marketplace
@@ -197,8 +197,8 @@ to your org's marketplace repo:
   "name": "skathio-copilot-tools",
   "extensions": [
     {
-      "name": "somi-ai",
-      "source": "github:skathio/somi-ai",
+      "name": "somi",
+      "source": "github:skathio/somi",
       "version": "0.1.0"
     }
   ]
@@ -214,8 +214,8 @@ Then: `copilot plugin marketplace add https://github.com/skathio/your-marketplac
 The pattern for an org-specific plugin (e.g., `skathio-conventions`):
 
 1. New repo with the plugin shape (`.claude-plugin/plugin.json` + agents/commands/skills/hooks).
-2. Compose with SoMi AI — your skills can link to SoMi AI skills, your agents can call SoMi AI agents.
+2. Compose with SoMi — your skills can link to SoMi skills, your agents can call SoMi agents.
 3. List both in your marketplace.
 
-Don't fork SoMi AI for org conventions; **compose** SoMi AI with a sibling plugin. Forks rot.
+Don't fork SoMi for org conventions; **compose** SoMi with a sibling plugin. Forks rot.
 Composition survives upgrades.

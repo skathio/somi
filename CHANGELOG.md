@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@skathio/somi-ai` are documented here.
+All notable changes to `@skathio/somi` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
@@ -205,7 +205,7 @@ the loop machinery and the audit hook.
 
 ## [0.1.0] — 2026-05-21 — Initial release
 
-First public release of SoMi AI.
+First public release of SoMi.
 
 ### Added
 
@@ -261,7 +261,7 @@ audit-log every tool call.
 
 #### Distribution
 
-- Claude Code plugin: marketplace manifest (`.claude-plugin/`) and npm package (`@skathio/somi-ai`).
+- Claude Code plugin: marketplace manifest (`.claude-plugin/`) and npm package (`@skathio/somi`).
 - GitHub Copilot extension: `.copilot-extension/` manifest mirrors the Claude Code plugin.
 - Validator workflow (`.github/workflows/validate.yml`): JSON, shellcheck, frontmatter checks.
 - Release workflow (`.github/workflows/release.yml`).
@@ -274,7 +274,7 @@ extending, versioning, governance, plugin, architecture.
 Worked examples: feature plan (full six-artifact walkthrough), code review, end-to-end pipeline
 transcript, and a sample consuming project showing the post-install layout.
 
-[0.4.0]: https://github.com/skathio/somi-ai/releases/tag/v0.4.0
-[0.3.0]: https://github.com/skathio/somi-ai/releases/tag/v0.3.0
-[0.2.0]: https://github.com/skathio/somi-ai/releases/tag/v0.2.0
-[0.1.0]: https://github.com/skathio/somi-ai/releases/tag/v0.1.0
+[0.4.0]: https://github.com/skathio/somi/releases/tag/v0.4.0
+[0.3.0]: https://github.com/skathio/somi/releases/tag/v0.3.0
+[0.2.0]: https://github.com/skathio/somi/releases/tag/v0.2.0
+[0.1.0]: https://github.com/skathio/somi/releases/tag/v0.1.0

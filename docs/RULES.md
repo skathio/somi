@@ -1,6 +1,6 @@
 # Rules
 
-The SoMi AI ruleset is the **always-loaded** layer of the system. Every agent, every workflow, every
+The SoMi ruleset is the **always-loaded** layer of the system. Every agent, every workflow, every
 slash command operates against these rules. The composed `CLAUDE.md` is the canonical entry point.
 
 ## Composition
@@ -34,9 +34,9 @@ explicit human sign-off captured in the artifact (PR description, ADR, plan).
 
 ## What goes in `99-overrides.md`
 
-Project-specific overrides and conventions. **SoMi AI never touches this file.** Use it when:
+Project-specific overrides and conventions. **SoMi never touches this file.** Use it when:
 
-- You need to override a SoMi AI default (with a documented reason and removal condition).
+- You need to override a SoMi default (with a documented reason and removal condition).
 - You have project-specific conventions on top of the global rules.
 - You want a pinned list of "things that look wrong but are intentional in this codebase."
 
@@ -49,7 +49,7 @@ Claude Code loads the project's `CLAUDE.md` automatically. By placing the compos
 (installer writes `CLAUDE.md` at the project root pointing at the numbered files), every Claude
 session in the project starts with the same priors, in the same order.
 
-Project-specific additions sit above or below the SoMi AI-managed section in `CLAUDE.md`. SoMi AI marks its
+Project-specific additions sit above or below the SoMi-managed section in `CLAUDE.md`. SoMi marks its
 section so future installs/updates can refresh it without clobbering project additions.
 
 ## Why not put everything in `CLAUDE.md` directly?
@@ -63,19 +63,19 @@ Two reasons:
 
 ## Conflict resolution between layers
 
-When a SoMi AI rule and a project rule conflict:
+When a SoMi rule and a project rule conflict:
 
 1. Project rules win (specifically: `99-overrides.md` and the project's own `CLAUDE.md`).
-2. Within SoMi AI, lower-numbered files compose into higher-numbered ones — but the **priority stack**
+2. Within SoMi, lower-numbered files compose into higher-numbered ones — but the **priority stack**
    in `00-priorities.md` is the final tie-breaker.
 3. If conflict remains: surface it to the human in the artifact (don't make a silent call).
 
 ## Updating rules
 
-If a SoMi AI rule is wrong, file an issue / PR against SoMi AI. Local hot-fixes go in `99-overrides.md`
+If a SoMi rule is wrong, file an issue / PR against SoMi. Local hot-fixes go in `99-overrides.md`
 with a removal condition pointing at the upstream fix.
 
-When SoMi AI updates a numbered file, `/plugin update somi-ai` pulls the new version. Your
+When SoMi updates a numbered file, `/plugin update somi` pulls the new version. Your
 `99-overrides.md` remains untouched.
 
 ## What rules are *not*
