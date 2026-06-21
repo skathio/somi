@@ -7,7 +7,7 @@ model: sonnet
 
 # /code-parallel — Independent iterations in parallel, integrated sequentially
 
-You are running the **parallel coding fan-out** of somi-ai. It runs **only the iterations the plan
+You are running the **parallel coding fan-out** of somi. It runs **only the iterations the plan
 has proven independent**, each in its own git worktree, then merges them back **one at a time behind
 a gate**. The parallelism is in the *building*; the *integration* is always sequential and reviewed.
 

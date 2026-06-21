@@ -28,7 +28,7 @@ on this choice.
 
 - [ ] (If hook/command/agent change) Manually invoked the affected component in a real Claude Code
       session and observed expected behavior.
-- [ ] (If Copilot extension change) Tested `@somi-ai /<command>` in GitHub Copilot chat.
+- [ ] (If Copilot extension change) Tested `@somi /<command>` in GitHub Copilot chat.
 
 ## Related issues
 

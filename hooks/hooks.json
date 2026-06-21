@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-hooks.json",
-  "description": "somi-ai deterministic guardrails: dangerous-bash / secret-writes / protected-paths / dep-install gates, lint surfacing, audit logging, workflow context injection.",
+  "description": "somi deterministic guardrails: dangerous-bash / secret-writes / protected-paths / dep-install gates, lint surfacing, audit logging, workflow context injection.",
   "hooks": {
     "PreToolUse": [
       {

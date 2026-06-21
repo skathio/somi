@@ -1,15 +1,15 @@
-# sample-consumer — minimal project consuming somi-ai
+# sample-consumer — minimal project consuming somi
 
-This directory shows what a project looks like **after** installing SoMi AI via the Claude Code
+This directory shows what a project looks like **after** installing SoMi via the Claude Code
 plugin marketplace:
 
 ```text
-/plugin marketplace add https://github.com/skathio/somi-ai
-/plugin install somi-ai@somi-ai
+/plugin marketplace add https://github.com/skathio/somi
+/plugin install somi@somi
 ```
 
 It's a layout reference, not a runnable project — there's no application code here, just the
-files SoMi AI's plugin runtime places.
+files SoMi's plugin runtime places.
 
 ## What you should see in your own project after install
 
@@ -31,9 +31,9 @@ files SoMi AI's plugin runtime places.
 │   └── reviews/
 │       └── <slug>/                        # reviews keyed by work-item slug
 └── .claude/
-    ├── settings.json                      # SoMi AI hooks wired up (merged with yours if it existed)
+    ├── settings.json                      # SoMi hooks wired up (merged with yours if it existed)
     └── plugins/
-        └── somi-ai/
+        └── somi/
             ├── .claude-plugin/plugin.json
             ├── agents/                    # discovery-analyst, planner, coder, reviewer + support
             ├── commands/                  # /discover, /plan, /code, /review, /ship + support
@@ -47,31 +47,31 @@ files SoMi AI's plugin runtime places.
 
 - **`CLAUDE.md` is at the project root**, not under `.claude/`. Claude Code automatically loads it
   as project-level instructions.
-- **Hooks live under `.claude/plugins/somi-ai/hooks/`** and are referenced via `${SOMI_ROOT}` in
+- **Hooks live under `.claude/plugins/somi/hooks/`** and are referenced via `${SOMI_ROOT}` in
   `settings.json` so they work regardless of where the plugin root resolves.
-- **`settings.json` is the merge of your existing settings + SoMi AI hooks/permissions**. Your
-  existing `permissions.allow` is preserved; SoMi AI hook entries are appended; SoMi AI deny rules are
+- **`settings.json` is the merge of your existing settings + SoMi hooks/permissions**. Your
+  existing `permissions.allow` is preserved; SoMi hook entries are appended; SoMi deny rules are
   added (union-merge).
 
 ## What stays yours after install
 
 - `CLAUDE.md` — the plugin runtime does not overwrite a hand-edited `CLAUDE.md`. Add
   project-specific instructions in [`rules/99-overrides.md`](../../rules/99-overrides.md)
-  (which SoMi AI never touches) or directly in your `CLAUDE.md`.
+  (which SoMi never touches) or directly in your `CLAUDE.md`.
 - All your existing `settings.json` keys outside of `hooks`, `permissions`, and `env`.
-- Everything under `.somi/` — workflow artifacts, not SoMi AI internals. Work items persist
+- Everything under `.somi/` — workflow artifacts, not SoMi internals. Work items persist
   indefinitely; only you delete from there.
 
 ## Updating
 
 ```text
-/plugin update somi-ai
+/plugin update somi
 ```
 
 ## Uninstalling
 
 ```text
-/plugin uninstall somi-ai
+/plugin uninstall somi
 ```
 
 Removes the plugin. Leaves your `CLAUDE.md`, `.somi/` artifacts, and `audit.log` alone.

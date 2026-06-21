@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared helpers for somi-ai hooks.
+# Shared helpers for somi hooks.
 #
 # Hooks receive a JSON payload on stdin describing the tool invocation, and may
 # emit a JSON response on stdout to control the harness. Output schema is

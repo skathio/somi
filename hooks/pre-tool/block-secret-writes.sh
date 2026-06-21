@@ -75,7 +75,7 @@ done
 
 for pattern in "${SECRET_PATTERNS[@]}"; do
   if [[ "$BASENAME" =~ $pattern ]]; then
-    somi::deny_pretool "somi-ai refused to ${TOOL} \`${PATH_INPUT}\`: this path is in the secret-bearing allowlist.
+    somi::deny_pretool "somi refused to ${TOOL} \`${PATH_INPUT}\`: this path is in the secret-bearing allowlist.
 Bootstrap secret files by hand, or commit only \`.env.example\`-style templates."
   fi
 done

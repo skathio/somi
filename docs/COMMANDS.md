@@ -1,6 +1,6 @@
 # Slash command reference
 
-Every SoMi AI command is a Claude Code slash command defined under `commands/`. Commands are the
+Every SoMi command is a Claude Code slash command defined under `commands/`. Commands are the
 **user-facing entrypoints** to workflows; they orchestrate one or more agents and produce durable
 artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 
@@ -45,7 +45,7 @@ You can reference `$ARGUMENTS` to insert the user's argument string.
 ```
 
 The command body is essentially a **prompt template**. It tells Claude what to do when the user
-invokes the command. SoMi AI commands typically:
+invokes the command. SoMi commands typically:
 
 1. Validate input (ask the user if `$ARGUMENTS` is missing/unclear).
 2. Resolve context — work-item slug, current iteration, target diff.
@@ -69,7 +69,7 @@ The heavy lifting lives in **agents**. Commands are deliberately small because:
 
 ## Default model & tool grants
 
-Commands declare what tools they expect to use. The default for SoMi AI commands is broad
+Commands declare what tools they expect to use. The default for SoMi commands is broad
 (`Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch`) — narrowing happens inside the agent
 definitions, where each agent declares its own tools.
 
@@ -110,7 +110,7 @@ See [EXTENDING.md](./EXTENDING.md) for the full extensibility guide.
 
 ## Local commands
 
-Project-specific commands live under your project's `.claude/commands/`. SoMi AI will not touch
+Project-specific commands live under your project's `.claude/commands/`. SoMi will not touch
 them. Common project-local commands:
 
 - `/db-migrate` — wrap your migration tool.
@@ -120,6 +120,6 @@ them. Common project-local commands:
 ## Running commands from other commands
 
 A command body can invoke another command's workflow by calling the agent directly via Task, or
-by Tasking another SoMi AI command. This is how `/ship` composes `/plan` + `/code-loop` per
+by Tasking another SoMi command. This is how `/ship` composes `/plan` + `/code-loop` per
 iteration and how `/ship-loop` composes `/plan-loop` + `/code-loop` per iteration without
 re-implementing their loop logic.

@@ -11,7 +11,7 @@
 
 # Review — `RateLimiter` interface + `InMemoryLimiter` (Phase 1 / Iteration 1.1)
 
-> Reviewer: `reviewer` agent (somi-ai) • Date: 2026-05-20
+> Reviewer: `reviewer` agent (somi) • Date: 2026-05-20
 > Work item: `rate-limiting-webhooks` • Target: `feature-ratelimit-iter1` ↔ `main`
 
 ## Summary

@@ -114,7 +114,7 @@ fi
 # Build the final context payload.
 PARTS=()
 if [[ "$EMIT_REMINDER" == "yes" ]]; then
-  PARTS+=("somi-ai is active. Reminders:
+  PARTS+=("somi is active. Reminders:
 - Follow rules/CLAUDE.md priorities: security > correctness > maintainability > performance > convenience.
 - Plan before coding non-trivial work. Code from the plan, not around it.
 - Surface tradeoffs and shortcuts in plain text; never silently compromise.
@@ -122,7 +122,7 @@ if [[ "$EMIT_REMINDER" == "yes" ]]; then
 fi
 
 if (( ${#NUDGES[@]} > 0 )); then
-  NUDGE_BLOCK="somi-ai loose-end check:"
+  NUDGE_BLOCK="somi loose-end check:"
   for n in "${NUDGES[@]}"; do
     NUDGE_BLOCK+=$'\n  - '"$n"
   done

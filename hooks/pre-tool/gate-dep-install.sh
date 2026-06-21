@@ -60,7 +60,7 @@ DEP_ADD_PATTERNS=(
 
 for pattern in "${DEP_ADD_PATTERNS[@]}"; do
   if [[ "$CMD" =~ $pattern ]]; then
-    somi::deny_pretool "somi-ai refused this command: it would add a new dependency (\`${BASH_REMATCH[0]}\`).
+    somi::deny_pretool "somi refused this command: it would add a new dependency (\`${BASH_REMATCH[0]}\`).
 Adding a dep is a decision — record it in \`.somi/plans/<slug>/decisions.md\` (or surface it in
 the iteration summary for the human) and re-run with \`SOMI_ALLOW_DEP_INSTALL=1\` in the
 environment for this session, or have the human run the install themselves.

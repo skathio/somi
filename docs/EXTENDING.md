@@ -1,6 +1,6 @@
-# Extending SoMi AI
+# Extending SoMi
 
-SoMi AI is opinionated, but it's a starting point — your team will want to add workflows, agents,
+SoMi is opinionated, but it's a starting point — your team will want to add workflows, agents,
 skills, hooks, and project-specific rules. This guide shows how.
 
 ## Mental model for extension
@@ -24,7 +24,7 @@ to an agent if it needs its own thinking process.
 A workflow is a **named, durable flow** with a clear input and a clear artifact. Adding one is a
 multi-piece change:
 
-1. **Decide if it earns its own workflow.** Not everything does. The three SoMi AI workflows track the
+1. **Decide if it earns its own workflow.** Not everything does. The three SoMi workflows track the
    three fundamentally different shapes of engineering work. New workflows should also map to a
    distinct problem shape (e.g., **debugging** has a different shape than coding — diagnose, isolate,
    fix, regression-test).
@@ -163,7 +163,7 @@ judgment. For judgment-heavy work, write an agent or skill instead.
 
 ## Adding a project-specific override
 
-In `rules/99-overrides.md` (which SoMi AI never touches):
+In `rules/99-overrides.md` (which SoMi never touches):
 
 ```markdown
 ## Override: <short name>
@@ -174,7 +174,7 @@ In `rules/99-overrides.md` (which SoMi AI never touches):
 **Removal condition:** <what would make this override obsolete>
 ```
 
-Or add a brand-new project convention that doesn't conflict with SoMi AI:
+Or add a brand-new project convention that doesn't conflict with SoMi:
 
 ```markdown
 ## Convention: <short name>
@@ -184,16 +184,16 @@ Or add a brand-new project convention that doesn't conflict with SoMi AI:
 
 ## Versioning your extensions
 
-If you're extending SoMi AI for your team, treat your extensions like the upstream repo: SemVer, change
-log, validate-on-CI. See [VERSIONING.md](./VERSIONING.md) for the policy SoMi AI itself follows.
+If you're extending SoMi for your team, treat your extensions like the upstream repo: SemVer, change
+log, validate-on-CI. See [VERSIONING.md](./VERSIONING.md) for the policy SoMi itself follows.
 
 ## Contributing back
 
 If your extension is generic enough to help other teams, consider upstreaming it:
 
-1. Open an issue on the SoMi AI repo describing the gap and the proposed addition.
+1. Open an issue on the SoMi repo describing the gap and the proposed addition.
 2. Submit a PR with the new file, doc updates, profile updates, and validator passing.
-3. SoMi AI maintainers review against the same quality bar as core SoMi AI components.
+3. SoMi maintainers review against the same quality bar as core SoMi components.
 
 ## What to avoid
 

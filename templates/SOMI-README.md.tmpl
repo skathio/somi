@@ -1,6 +1,6 @@
-# `.somi/` — SoMi AI workflow artifacts
+# `.somi/` — SoMi workflow artifacts
 
-This directory holds the durable artifacts produced by SoMi AI's planning, coding, and review
+This directory holds the durable artifacts produced by SoMi's planning, coding, and review
 workflows. Everything in here is committed to your repository so it travels with the work and is
 visible to teammates and reviewers.
 
@@ -46,16 +46,16 @@ visible to teammates and reviewers.
 
 - **Reading existing work**: start with `plans/<slug>/progress.md` to see status, then `spec.md`
   for the what/why, then `phases/` and `decisions.md` for the how.
-- **Resuming work**: invoke `/code <slug>` and SoMi AI will pick up from the current state in
+- **Resuming work**: invoke `/code <slug>` and SoMi will pick up from the current state in
   `plans/<slug>/progress.md`.
 - **Reviews**: `/review` writes its output under `reviews/<slug>/` (separate from the plan
   artifacts — no clutter inside `plans/<slug>/`).
 - **Archiving**: rename the work-item directory or move it under `plans/archived/<slug>/` if you
-  prefer — SoMi AI tolerates this but does not require it.
+  prefer — SoMi tolerates this but does not require it.
 
 ## When you should edit these files directly
 
-Any time. These are **your** artifacts. SoMi AI writes them; you own them. Common edits:
+Any time. These are **your** artifacts. SoMi writes them; you own them. Common edits:
 
 - Sharpening the user story or requirements in `spec.md`.
 - Adding a phase or splitting an iteration in `phases/`.

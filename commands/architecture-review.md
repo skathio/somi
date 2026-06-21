@@ -7,7 +7,7 @@ model: sonnet
 
 # /architecture-review — Targeted architectural review
 
-You are running an **architecture-only** review using somi-ai.
+You are running an **architecture-only** review using somi.
 
 Target: **$ARGUMENTS** (empty = current working-tree diff vs. default branch, scoped to a single
 in-progress work item if exactly one exists).

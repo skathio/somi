@@ -4,7 +4,7 @@ Skills are **on-demand expert knowledge packs**. They live under `skills/` as `S
 frontmatter, and are pulled into context only when the work clearly enters their domain. They are
 not a replacement for the global ruleset; they're depth-on-demand.
 
-## What SoMi AI ships
+## What SoMi ships
 
 | Skill                                                          | Use when                                                                          |
 |----------------------------------------------------------------|-----------------------------------------------------------------------------------|
@@ -47,7 +47,7 @@ You can think of it as:
 
 ### Rules vs. skills — no duplication
 
-Skills are **operational depth on top of rules**, not a restatement. Each SoMi AI skill links to
+Skills are **operational depth on top of rules**, not a restatement. Each SoMi skill links to
 its corresponding rule(s) at the top and adds only what the rule doesn't already say (examples,
 decision tables, before/after pairs, anti-patterns). When you edit a skill, ask: "is this line
 already in the rule?" — if yes, replace it with a pointer instead of mirroring it. Keeping both
@@ -88,7 +88,7 @@ descriptions that name the **trigger conditions**, not the topic.
 
 ## Linking skills together
 
-Skills can reference each other with `[[skill-name]]` or direct markdown links. SoMi AI skills do this
+Skills can reference each other with `[[skill-name]]` or direct markdown links. SoMi skills do this
 when one domain calls into another:
 
 - `api-design` references `owasp-defense` for security touchpoints.
@@ -103,7 +103,7 @@ when one domain calls into another:
 ## Local skills
 
 Project-specific skills can live under your project's `.claude/skills/`. They are loaded with the
-same triggering rules as SoMi AI skills. SoMi AI will not touch project-local skills during install/update.
+same triggering rules as SoMi skills. SoMi will not touch project-local skills during install/update.
 
 A common pattern: a `skills/<project>-conventions/SKILL.md` that captures project idioms — HTTP error
 envelope, repository layout, logging vocabulary. Pulled in when a new module is being designed.

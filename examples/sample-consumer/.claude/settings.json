@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Sample post-install settings.json for a project that installed somi-ai as a plugin. Hooks are NOT declared here — Claude Code auto-merges them from the plugin's hooks/hooks.json (paths resolve via ${CLAUDE_PLUGIN_ROOT}). This file holds project-specific env, permissions, and any project-only hooks. If you vendor somi-ai instead of using the plugin marketplace, copy the hooks block from somi-ai's own .claude/settings.json (which uses ${SOMI_VENDOR_ROOT}) and merge it here.",
+  "_comment": "Sample post-install settings.json for a project that installed somi as a plugin. Hooks are NOT declared here — Claude Code auto-merges them from the plugin's hooks/hooks.json (paths resolve via ${CLAUDE_PLUGIN_ROOT}). This file holds project-specific env, permissions, and any project-only hooks. If you vendor somi instead of using the plugin marketplace, copy the hooks block from somi's own .claude/settings.json (which uses ${SOMI_VENDOR_ROOT}) and merge it here.",
   "env": {
     "NODE_ENV": "development"
   },

@@ -1,21 +1,21 @@
 {
-  "name": "somi-ai",
-  "description": "Self-hosted marketplace for the somi-ai plugin. Add this repo to Claude Code to install somi-ai.",
+  "name": "somi",
+  "description": "Self-hosted marketplace for the somi plugin. Add this repo to Claude Code to install somi.",
   "owner": {
-    "name": "somi-ai",
-    "url": "https://github.com/skathio/somi-ai"
+    "name": "somi",
+    "url": "https://github.com/skathio/somi"
   },
   "plugins": [
     {
-      "name": "somi-ai",
+      "name": "somi",
       "source": {
         "source": "url",
-        "url": "https://github.com/skathio/somi-ai.git"
+        "url": "https://github.com/skathio/somi.git"
       },
       "description": "Discovery → plan / code / review workflow system with SOLID, OWASP, and clean-code guardrails.",
       "version": "0.4.0",
       "tags": ["workflow", "agents", "review", "security"],
-      "homepage": "https://github.com/skathio/somi-ai"
+      "homepage": "https://github.com/skathio/somi"
     }
   ]
 }

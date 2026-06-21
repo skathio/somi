@@ -1,10 +1,10 @@
 {
-  "name": "@skathio/somi-ai",
+  "name": "@skathio/somi",
   "version": "0.4.0",
   "scripts": {
     "test": "bash scripts/validate.sh"
   },
-  "description": "SoMi AI — multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
+  "description": "SoMi — multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
     "workflow",
     "agents",
@@ -19,17 +19,17 @@
     "copilot"
   ],
   "author": {
-    "name": "SoMi AI contributors",
-    "url": "https://github.com/skathio/somi-ai"
+    "name": "SoMi contributors",
+    "url": "https://github.com/skathio/somi"
   },
   "license": "MIT",
-  "homepage": "https://github.com/skathio/somi-ai",
+  "homepage": "https://github.com/skathio/somi",
   "repository": {
     "type": "git",
-    "url": "https://github.com/skathio/somi-ai.git"
+    "url": "https://github.com/skathio/somi.git"
   },
   "bugs": {
-    "url": "https://github.com/skathio/somi-ai/issues"
+    "url": "https://github.com/skathio/somi/issues"
   },
   "publishConfig": {
     "access": "public"

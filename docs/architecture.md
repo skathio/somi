@@ -1,6 +1,6 @@
 # Architecture
 
-How the pieces fit together. Read this when you want to understand *why* SoMi AI is shaped the way it is.
+How the pieces fit together. Read this when you want to understand *why* SoMi is shaped the way it is.
 
 ## The four layers
 
@@ -160,7 +160,7 @@ the rest of the system.
 
 ## Why agents instead of just prompts
 
-Subagents in Claude Code have their own context window and system prompt. SoMi AI uses subagents
+Subagents in Claude Code have their own context window and system prompt. SoMi uses subagents
 because:
 
 - Planning, coding, and reviewing are different shapes of work. Each benefits from a system prompt
@@ -180,7 +180,7 @@ distribution paths:
 - **Claude Code plugin** (marketplace): the plugin runtime loads these directories directly.
   Hook paths in [`hooks/hooks.json`](../hooks/hooks.json) use `${CLAUDE_PLUGIN_ROOT}`, which the
   harness resolves to the plugin install root.
-- **Claude Code vendored** (`.claude/plugins/somi-ai/`): the project's own `.claude/settings.json`
+- **Claude Code vendored** (`.claude/plugins/somi/`): the project's own `.claude/settings.json`
   merges the hooks block from [`.claude/settings.json`](../.claude/settings.json) in this repo,
   using `${SOMI_VENDOR_ROOT}` to point at the hook scripts.
 - **GitHub Copilot extension** (Copilot marketplace): the same directories are referenced from
@@ -201,11 +201,11 @@ Together, they're enough to retrace any session — not just what files changed,
 took the shape it did and how it evolved. Commit `.somi/` alongside the feature branch; it's the
 durable record of the work.
 
-## What SoMi AI deliberately doesn't do
+## What SoMi deliberately doesn't do
 
 - **It doesn't replace humans in the loop.** Every workflow stops at decision points.
 - **It doesn't ship with project-specific knowledge.** That belongs in `99-overrides.md` or in a
   project-local plugin.
 - **It doesn't try to be a CI system.** Validation scripts catch repo-level issues; CI is your job.
-- **It doesn't lock you in.** `/plugin uninstall somi-ai` removes the plugin; your artifacts under `.somi/` and `audit.log` persist — they're plain markdown files, readable without the plugin.
+- **It doesn't lock you in.** `/plugin uninstall somi` removes the plugin; your artifacts under `.somi/` and `audit.log` persist — they're plain markdown files, readable without the plugin.
 - **It doesn't auto-archive.** Work items stay in `.somi/` indefinitely. Only humans delete from `.somi/`. Status lives in `progress.md`, not in directory location.

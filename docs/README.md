@@ -1,4 +1,4 @@
-# SoMi AI documentation
+# SoMi documentation
 
 Start here if you're new. Skim the headings, then read what matches your situation.
 
@@ -6,7 +6,7 @@ Start here if you're new. Skim the headings, then read what matches your situati
 
 | Want to…                                            | Read                                     |
 |-----------------------------------------------------|------------------------------------------|
-| Install SoMi AI into my project                        | [INSTALL.md](./INSTALL.md)               |
+| Install SoMi into my project                        | [INSTALL.md](./INSTALL.md)               |
 | Understand the workflows (discovery + plan/code/review) | [WORKFLOWS.md](./WORKFLOWS.md)          |
 | Start a new product idea (research + requirements)  | [USAGE.md](./USAGE.md#discover)          |
 | Actually run `/discover`, `/plan`, `/code`, `/review` | [USAGE.md](./USAGE.md)                  |
@@ -17,13 +17,13 @@ Start here if you're new. Skim the headings, then read what matches your situati
 | See the slash command reference                     | [COMMANDS.md](./COMMANDS.md)             |
 | Add a new workflow, agent, or skill                 | [EXTENDING.md](./EXTENDING.md)           |
 | Understand the SemVer policy                        | [VERSIONING.md](./VERSIONING.md)         |
-| Adopt SoMi AI in a team safely                         | [GOVERNANCE.md](./GOVERNANCE.md)         |
+| Adopt SoMi in a team safely                         | [GOVERNANCE.md](./GOVERNANCE.md)         |
 | Distribute via Claude Code's plugin marketplace     | [PLUGIN.md](./PLUGIN.md)                 |
 | See how everything fits together                    | [architecture.md](./architecture.md)     |
 
 ## Conventions in these docs
 
-- **"SoMi AI"** — the product; **"SoMi"** — the short form used in prose.
+- **"SoMi"** — the product; **"SoMi"** — the short form used in prose.
 - **"agent"** = a specialised subagent under `agents/` invoked via the Task tool.
 - **"command"** = a `/slash-command` under `commands/`.
 - **"skill"** = an on-demand expert pack under `skills/`.

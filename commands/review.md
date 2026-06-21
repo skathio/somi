@@ -7,7 +7,7 @@ model: sonnet
 
 # /review — Reviewing workflow
 
-You are running the **reviewing workflow** of somi-ai.
+You are running the **reviewing workflow** of somi.
 
 The user's review target: **$ARGUMENTS** (empty = the current working-tree diff vs. the default
 branch, scoped to the single in-progress work item if exactly one exists).

@@ -1,6 +1,6 @@
 # Agents
 
-SoMi AI ships eight subagents: one upstream **discovery** agent, the three **core** build agents
+SoMi ships eight subagents: one upstream **discovery** agent, the three **core** build agents
 (the user-facing trio planner / coder / reviewer), and four **support** agents invoked by the core
 agents (or directly by the user) when the work clearly enters their domain.
 
@@ -27,7 +27,7 @@ Three paths:
    `/test-strategy`, `/refactor`) which directly targets a support agent. (Plan-level review
    uses `/review plan <slug>` — there is no separate `/plan-review`.)
 
-SoMi AI prefers **explicit handoff** over silent specialisation. When a core agent thinks a
+SoMi prefers **explicit handoff** over silent specialisation. When a core agent thinks a
 support agent should be consulted, it surfaces the recommendation; the human (or the
 orchestrating command) decides.
 
