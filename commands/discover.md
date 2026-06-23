@@ -73,6 +73,7 @@ Create `.somi/rd/<slug>/` with the document set and supporting files from the te
 ├── sdd.md               ← from templates/SDD.md.tmpl         (high-level software design)
 ├── tdd.md               ← from templates/TDD.md.tmpl         (high-level technical design)
 ├── decisions.md         ← from templates/DECISIONS.md.tmpl   (crossroads, ADR-style)
+├── brief.md             ← from templates/BRIEF.md.tmpl       (the MAX→ECO handoff for the planner)
 └── diary.md             ← from templates/DIARY.md.tmpl       (chronological narrative)
 ```
 
@@ -126,7 +127,7 @@ The research is the part that earns the model spend. Hold the analyst to it:
   result; an invented competitor weakness that steers the whole project is the worst outcome.
 - **Date the findings** — note when the research was done.
 
-### 7. Index, traceability, and diary
+### 7. Index, traceability, diary, and brief
 
 After the documents are written:
 - Fill `README.md` with the document list (and applicability reasons), the status, and the
@@ -134,6 +135,20 @@ After the documents are written:
 - Set the status in `README.md` to `ready-for-planning`.
 - Append a `diary.md` entry: **"Discovery started"** — quote the idea inside a
   ` ```user-software-idea … ``` ` fence and list the crossroads verified.
+- **Compile `brief.md`** ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)) — the dense
+  MAX→ECO handoff that lets `/plan` consume the foundation cheaply instead of re-reading every
+  document. Its **"What ECO does NOT need to re-research"** section is the load-bearing part. Keep it
+  bounded and reference-not-inline (it links the deep docs, doesn't restate them).
+
+### 7a. Optional MAX review loop (review the foundation in MAX scope)
+
+For a high-stakes initiative, run a bounded **discover → review → revise** loop before handing off —
+the MAX-tier counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md). Task
+[`/review`](./review.md) as `design <slug>` (and the [`architecture-reviewer`](../agents/architecture-reviewer.md)
+where the SDD warrants) on a **fresh context** — give it the artifacts only (`brief.md`, `srs.md`,
+`sdd.md`, …), **not** the discovery conversation, so the review is unbiased. Revise on Blocker/Major
+findings; re-review. **Bounded:** stop on a clean verdict, on an iteration cap (default 2, env
+`SOMI_DISCOVER_LOOP_MAX_PASSES`), or on divergence. Skip it for a routine initiative.
 
 ### 8. Summarise back
 
@@ -142,11 +157,11 @@ Return to the user with:
 - The **top 3 competitive insights** and the **must-avoid pitfalls** they imply.
 - The **document set produced** (and anything added/omitted, with the reason).
 - **Top 3 open risks** from the research report.
-- Pointer to `.somi/rd/<slug>/` and the key files to read first (`README.md`, then `srs.md` and
-  `sdd.md`).
+- Pointer to `.somi/rd/<slug>/` and the key files to read first (`brief.md`, then `README.md`,
+  `srs.md`, `sdd.md`).
 - A specific next step: "Review / edit `.somi/rd/<slug>/` directly, then run `/plan <slug>` — the
-  planner will treat the SRS/FRD as the requirements source and the SDD/TDD as architectural
-  direction."
+  planner consumes `brief.md` (the MAX→ECO handoff) as its primary input, treating the SRS/FRD as the
+  requirements source and the SDD/TDD as architectural direction, on the ECO tier."
 
 ## Guardrails
 

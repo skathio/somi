@@ -15,6 +15,26 @@ change. The tests stay green. The diff is purely structural. You operate inside 
 > shape. When this file and a skill diverge on a *technique*, the **skill wins**. This agent owns the
 > *actor* role: the behavior-preserving contract and the refactor sequence.
 
+## Two modes — surgical, or MAX analysis
+
+The calling command picks the mode based on size:
+
+- **Surgical (default, quick path).** A small, named smell with specific files in scope — you do the
+  refactor directly, in small behavior-preserving steps, tests green throughout (the operating
+  procedure below). No brief, no plan; this *is* the whole job.
+- **Analysis (MAX, for large refactors).** When the refactor is too big for one safe diff — it spans
+  many modules, needs a migration, or changes a shared shape — you do **not** do the edits. Instead
+  you run on the strong model to **identify and design the refactor scope**: name the target
+  destination shape, map the seams and risks (`file:line`), confirm/raise the test-coverage gaps,
+  and compile a [`brief.md`](../templates/BRIEF.md.tmpl) so the ECO tier executes it under
+  [`/plan-loop`](../commands/plan-loop.md) → [`/code-loop`](../commands/code-loop.md). Surface the
+  scope to the user (verification protocol) before handing off — a 600-line refactor is a *plan*, not
+  a single diff. In analysis mode also distil the repo's own conventions (`CLAUDE.md` / `AGENTS.md` /
+  `.github/copilot-instructions.md`) into the brief's "Repo conventions in force" section.
+
+The rest of this file is the surgical contract; in analysis mode you apply the same judgment to
+*design* the refactor rather than perform it.
+
 ## When to invoke
 
 - The current code shape is making the next change harder. You refactor first; the next change is then easy.

@@ -17,12 +17,23 @@ as the subject of the work, not as instructions:
 $ARGUMENTS
 ```
 
-The orchestrator is `sonnet`; the inner agents (planner, coder, reviewer) remain `opus`.
+This is the **careful, gated-at-every-stage** entrypoint. The orchestrator is `sonnet`; the ECO
+agents it Tasks (`planner`, `coder`) run `sonnet`, and the `reviewer` stays `opus` (fresh-eyes
+judgment).
+
+> **Design-heavy work? Front-load a MAX action first.** `/ship` starts at the ECO `/plan` stage. If
+> the work is design-heavy and has no `brief.md` yet (it crosses modules, touches auth/crypto/PII,
+> needs a migration or a new contract, or the architecture is open), run a **MAX** action first —
+> [`/design`](./design.md) (feature), [`/discover`](./discover.md) (new product), or
+> [`/refactor`](./refactor.md) analysis (large refactor) — review its `brief.md`, then `/ship` (or
+> `/plan`) consumes it and runs the ECO pipeline cheaply. For the **continuous** version that gates
+> once at the MAX→ECO switch and then runs the ECO loops under caps, use
+> [`/ship-loop`](./ship-loop.md).
 
 > **Bounded by construction.** The inner code↔review cycle delegates to
 > [`/code-loop`](./code-loop.md), which has hard caps (max passes, severity floor, diff cap,
 > circuit breaker). `/ship` itself is not the loop — `/code-loop` is. If you want both layers
-> automated under caps, use [`/ship-loop`](./ship-loop.md) instead.
+> automated under caps with a single gate at the model switch, use [`/ship-loop`](./ship-loop.md).
 
 ## Pipeline stages
 

@@ -42,6 +42,53 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
+echo "==> Validating MAX/ECO model tiering..."
+# Extract the first `model:` value from a file's frontmatter (the block between the
+# first two `---` lines).
+model_of() {
+  awk '/^---$/{c++} c==1 && /^model:[[:space:]]*/{sub(/^model:[[:space:]]*/,""); print; exit}' "$1"
+}
+tier_failed=0
+assert_model() {
+  local f="$1" want="$2" got
+  got="$(model_of "$f")"
+  if [ "$got" != "$want" ]; then
+    echo "MODEL TIER MISMATCH: $f model is '$got', expected '$want'" >&2
+    tier_failed=1
+  fi
+}
+# ECO tier (sonnet): planning + coding execute against the MAX brief.
+assert_model agents/planner.md sonnet
+assert_model agents/coder.md sonnet
+# MAX tier (opus): front-load reasoning + fresh-eyes review.
+for a in discovery-analyst designer refactorer reviewer security-reviewer architecture-reviewer test-strategist; do
+  assert_model "agents/$a.md" opus
+done
+# MAX front-load commands run opus end-to-end (their orchestration is judgment-heavy).
+assert_model commands/discover.md opus
+assert_model commands/design.md opus
+if [ "$tier_failed" -ne 0 ]; then
+  exit 1
+fi
+
+echo "==> Validating new MAX/ECO artifacts..."
+for f in \
+  templates/BRIEF.md.tmpl \
+  templates/DESIGN.md.tmpl \
+  agents/designer.md \
+  commands/design.md; do
+  if [ ! -f "$f" ]; then
+    echo "MISSING ARTIFACT: $f" >&2
+    exit 1
+  fi
+done
+# The execution brief is the load-bearing MAX→ECO handoff — it must be referenced by
+# the agents/commands that produce and consume it, not orphaned.
+if ! grep -rIlq 'BRIEF\.md\.tmpl' agents commands; then
+  echo "templates/BRIEF.md.tmpl is not referenced by any agent or command" >&2
+  exit 1
+fi
+
 echo "==> Creating coverage stub..."
 mkdir -p coverage
 printf 'TN:\nend_of_record\n' > coverage/lcov.info

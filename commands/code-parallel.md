@@ -13,8 +13,9 @@ a gate**. The parallelism is in the *building*; the *integration* is always sequ
 
 The user's target: **$ARGUMENTS** (a work-item slug, optionally a specific `phase N`).
 
-The orchestrator (this command) is `sonnet`; each `/code-loop` it Tasks runs its `coder`/`reviewer`
-on `opus`.
+This is an **ECO-tier** fan-out: the orchestrator (this command) is `sonnet`, and each `/code-loop`
+it Tasks runs its `coder` on `sonnet` (executing against the work item's `brief.md` + plan) and its
+`reviewer` on `opus` (fresh-eyes MAX judgment).
 
 > **Why this exists, and why it's conservative.** Smaller diffs from focused agents are higher
 > quality — *if* they don't collide. Letting several coders edit the same tree at once produces merge

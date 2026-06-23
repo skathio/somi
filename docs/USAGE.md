@@ -6,10 +6,16 @@ to type, what to expect, and where the artifacts go.
 ## The fundamental loop
 
 ```
-/discover <idea>           →  .somi/rd/<slug>/ created       →  user reviews + approves
-   ↓ (greenfield only)        (research + BRD/SRS/FRD/SDD/TDD)
+MAX tier (opus) — front-load reasoning into a dense brief.md:
+/discover <idea>           →  .somi/rd/<slug>/ + brief.md     →  user reviews + approves
+   ↓ (new product)           (research + BRD/SRS/FRD/SDD/TDD)
+/design <feature>          →  .somi/plans/<slug>/ + brief.md  →  user reviews + approves
+   ↓ (brownfield, design-    (design.md + decisions + brief)
+   ↓  heavy feature)
+─────────────────────────  MAX→ECO model switch  ─────────────────────────
+ECO tier (sonnet) — execute against the brief, cheaply:
 /plan <problem|slug>       →  .somi/plans/<slug>/ created    →  user reviews + approves
-   ↓                          (6 docs + phases/; consumes .somi/rd/<slug>/ if present)
+   ↓                          (consumes brief.md as primary input)
 /code-loop <slug>           →  diff + tests + review files;  →  user inspects
        phase N, iteration M    bounded by caps (max passes,
                                severity floor, diff cap)
@@ -17,12 +23,14 @@ to type, what to expect, and where the artifacts go.
 (next iteration; or merge if done)
 ```
 
-`/discover` is the upstream, greenfield-only step — it produces the requirements & design
-foundation a new product needs before planning. Incremental work skips it and starts at `/plan`.
+The **MAX** front-loads (`/discover` for a new product, `/design` for a brownfield design-heavy
+feature) compile a dense `brief.md` so the **ECO** tier (`/plan`, `/code`) executes *without
+re-researching*. Incremental work with a settled design skips the front-load and starts at `/plan`;
+a cold design-heavy plan triggers `/plan`'s depth gate, which recommends `/design` first.
 
 `/code <slug>` runs a single coder pass without the review loop. `/code-loop` is the bounded
-code↔review cycle for a single iteration. `/ship` runs the whole pipeline with hard gates;
-`/ship-loop` is the both-layers-bounded composition.
+code↔review cycle for a single iteration. `/ship` runs the whole pipeline with hard gates at every
+stage; `/ship-loop` runs it continuously, gating once at the MAX→ECO model switch.
 
 ---
 

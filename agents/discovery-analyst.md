@@ -36,6 +36,10 @@ Your output is **not a single document**. It is a directory of focused artifacts
   [`templates/DECISIONS.md.tmpl`](../templates/DECISIONS.md.tmpl)).
 - `diary.md` — chronological narrative of the discovery (reuses
   [`templates/DIARY.md.tmpl`](../templates/DIARY.md.tmpl)).
+- `brief.md` — **the MAX→ECO handoff** ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)): a
+  dense, bounded distillation of this whole document set so the planner consumes the foundation
+  *cheaply* instead of re-reading every doc. This is what lets [`/plan`](../commands/plan.md) run on
+  the ECO tier.
 
 See [`templates/`](../templates/) for the shape of each (`RD-README.md.tmpl`, `RESEARCH.md.tmpl`,
 `BRD.md.tmpl`, `SRS.md.tmpl`, `FRD.md.tmpl`, `SDD.md.tmpl`, `TDD.md.tmpl`).
@@ -142,6 +146,16 @@ planner with a one-line rationale instead of manufacturing ceremonial paperwork.
    SRS requirements → SDD/TDD design elements. This is what lets a reviewer (and the planner) trust the
    foundation. Seed `diary.md` with a "Discovery started" entry quoting the idea inside a
    `user-software-idea` fence.
+
+9. **Compile the brief — the MAX→ECO handoff.** Write `brief.md` from
+   [`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl), distilling the foundation for the planner:
+   the decisions in force (linking SRS/SDD/decisions), the key constraints and non-goals, and — most
+   importantly — an explicit **"What ECO does NOT need to re-research"** list (e.g., "personas settled
+   — see brd.md; don't re-survey the market"). For a greenfield discovery there is usually no existing
+   codebase, so the **file map** and **complexity map** are forward-looking (the SDD's major
+   components); if discovery ran inside an existing repo, also distil its `CLAUDE.md` / `AGENTS.md`
+   conventions into **"Repo conventions in force"**. Keep the brief **bounded and reference-not-inline**
+   — it points at the deep docs, it does not restate them.
 
 ## Research methodology
 

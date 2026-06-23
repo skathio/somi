@@ -1,6 +1,6 @@
 ---
-description: Strict, skeptical review of the current changes — or a plan, ADR, PR, or arbitrary diff. Severity-graded findings, evidence-driven, will reject weak solutions. Output lands under .somi/reviews/<slug>/.
-argument-hint: <slug> | <diff range> | <PR #> | <file path> | "plan <slug>"
+description: Strict, skeptical, fresh-context review of the current changes — or a plan, a MAX design+brief, an ADR, a PR, or an arbitrary diff. Severity-graded findings, evidence-driven, will reject weak solutions. Output lands under .somi/reviews/<slug>/.
+argument-hint: <slug> | <diff range> | <PR #> | <file path> | "plan <slug>" | "design <slug>"
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 model: sonnet
 ---
@@ -13,8 +13,17 @@ The user's review target: **$ARGUMENTS** (empty = the current working-tree diff 
 branch, scoped to the single in-progress work item if exactly one exists).
 
 > **Note:** plan-level review is part of this command. Use `plan <slug>` (or pass an `.somi/plans/`
-> path) to review a spec/decisions/phases set instead of a diff. There is no separate
-> `/plan-review` command anymore.
+> path) to review a spec/decisions/phases set instead of a diff. Use `design <slug>` to review a
+> MAX-tier design + `brief.md` (from [`/design`](./design.md), [`/discover`](./discover.md), or a
+> [`/refactor`](./refactor.md) analysis) before it hands off to the ECO tier. There is no separate
+> `/plan-review` or `/design-review` command — this is the single deepest review surface.
+
+> **Fresh-context review (bias avoidance).** The `reviewer` (and any consultant) is **always** Tasked
+> on a **cold context** — given the artifacts to review (diff, plan, or design/brief) and the spec,
+> **not** the producing agent's reasoning or conversation. A reviewer that inherits the author's
+> chain of thought rationalizes the author's choices instead of testing them. The subagent boundary
+> gives this for free; preserve it — never paste the planner's/coder's/designer's transcript into the
+> reviewer's brief. (It also keeps the model-scoped prompt cache clean and trims tokens.)
 
 ## What to do
 
@@ -30,6 +39,11 @@ branch, scoped to the single in-progress work item if exactly one exists).
 - **`plan <slug>`** → review the spec/decisions/phases for that work item, not its code. If
   exactly one work item has `status: awaiting-approval` or `planning` in `.somi/plans/` and the
   user typed bare `plan`, use it.
+- **`design <slug>`** → review a MAX-tier design + handoff: `design.md` (or the `.somi/rd/<slug>/`
+  doc set for discovery), `decisions.md`, and especially **`brief.md`**. This is the "MAX reviewed in
+  MAX scope" pass — calibrate as a plan review (cheaper to fix here), and additionally check the
+  brief is **dense, bounded, reference-not-inline**, and that its **"What ECO does NOT need to
+  re-research"** section is concrete enough to actually save the ECO tier the research.
 - **A file path** → review the file (typically an ADR or design doc outside `.somi/`).
 
 ### 2. Read for intent first
