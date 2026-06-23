@@ -8,8 +8,9 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 
 | Command                                                  | Workflow            | Agent(s) invoked                                                                          | Output                                                                       |
 |----------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev) | `discovery-analyst`                                                                       | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README) |
-| [`/plan`](../commands/plan.md)                           | Planning            | `planner`                                                                                 | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
+| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev, MAX) | `discovery-analyst`                                                                  | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README, **brief**) |
+| [`/design`](../commands/design.md)                       | Feature design (MAX) | `designer`                                                                               | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — the MAX→ECO handoff for a brownfield feature |
+| [`/plan`](../commands/plan.md)                           | Planning (ECO)      | `planner`                                                                                 | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
 | [`/plan-loop`](../commands/plan-loop.md)                 | Bounded planning    | `planner` + `reviewer`                                                                    | `.somi/plans/<slug>/` + plan reviews under `.somi/reviews/<slug>/`           |
 | [`/code`](../commands/code.md)                           | Coding              | `coder`                                                                                   | diff + tests; updates `progress.md` + `diary.md`                             |
 | [`/code-loop`](../commands/code-loop.md)                 | Bounded coding      | `coder` + `reviewer` (or `/review-panel` when `SOMI_CODE_LOOP_REVIEW=panel`)              | diff + tests + per-pass review files; bounded by caps                        |
@@ -64,8 +65,10 @@ The heavy lifting lives in **agents**. Commands are deliberately small because:
   understand what the planner workflow does.
 - They isolate orchestration from agent-internal behavior; you can swap an agent's prompt without
   touching the command.
-- They run on `sonnet` (cheaper) while Tasking opus-tier agents that do the actual reasoning — the
-  router/file-IO/summarize layer doesn't need the heavy tier.
+- They run on `sonnet` (cheaper) while Tasking the tier-appropriate agent — **MAX** agents (`opus`:
+  design, discovery, review) for front-loaded reasoning, **ECO** agents (`sonnet`: planner, coder)
+  for execution against the brief. A single-model orchestrator Tasking a differently-modeled subagent
+  is the cache-correct way to mix tiers. See [Economic tiering](./AGENTS.md#economic-tiering-maxeco).
 
 ## Default model & tool grants
 
@@ -73,18 +76,18 @@ Commands declare what tools they expect to use. The default for SoMi commands is
 (`Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch`) — narrowing happens inside the agent
 definitions, where each agent declares its own tools.
 
-**All orchestration commands run on `sonnet`**; the agents they Task remain on `opus` where the
-reasoning happens. Review commands (`/review`, `/security-review`, `/architecture-review`,
-`/test-strategy`) still need `Write` and `Edit` to produce the review file and to append diary
-entries — they're not pure read-only at the command level even though the underlying review agents
-are read-only.
+**Orchestration commands run on `sonnet`**; the agent they Task runs on its **economic tier** —
+`opus` for MAX agents (design, discovery, review), `sonnet` for ECO agents (planner, coder). See
+[Economic tiering](./AGENTS.md#economic-tiering-maxeco). Review commands (`/review`,
+`/security-review`, `/architecture-review`, `/test-strategy`) still need `Write` and `Edit` to
+produce the review file and append diary entries — they're not pure read-only at the command level
+even though the underlying review agents are read-only.
 
-> **One deliberate exception: `/discover` runs `opus` at the command layer too.** The discovery
-> orchestration is judgment-heavy (framing the idea, deciding the document set, shaping research
-> crossroads) and its output is the cornerstone of a new project, so the workflow runs on the most
-> capable model end-to-end rather than splitting `sonnet` orchestrator / `opus` agent. This is the
-> only command that opts out of the `sonnet`-orchestrator default; it's intentional, not an
-> oversight.
+> **Two deliberate exceptions run `opus` at the command layer too: `/discover` and `/design`.** Their
+> orchestration is judgment-heavy (framing the work, reading the codebase, shaping crossroads) and
+> their `brief.md` anchors the whole work item, so they run on the most capable model end-to-end
+> rather than splitting `sonnet`-orchestrator / `opus`-agent. They are the MAX front-load of the
+> MAX→ECO economy — intentional, not an oversight.
 
 ## How `$ARGUMENTS` works
 

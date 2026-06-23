@@ -1,10 +1,28 @@
 # Workflows
 
-SoMi organises Claude's behavior into three first-class **build** workflows — planning, coding,
-reviewing — plus an upstream **discovery** workflow for greenfield work. Each has a clean handoff to
-the next. The build workflows produce durable artifacts inside `.somi/plans/<slug>/`; discovery
-produces the requirements & design foundation inside `.somi/rd/<slug>/`. Each can be invoked alone,
-and the build trio can run together as part of `/ship`.
+SoMi organises Claude's behavior into two **economic tiers**. A **MAX** tier (`opus`) front-loads the
+expensive reasoning — research, design, decisions, complexity mapping, fresh-eyes review — into a
+dense, bounded **`brief.md`**. An **ECO** tier (`sonnet`) then executes against that brief *without
+re-researching*, so the high-volume work (plan detail, iterative coding) runs cheaply.
+
+- **MAX front-loads:** `/discover` (a whole new product), `/design` (a brownfield feature/story), and
+  `/refactor` analysis (a large refactor) — each compiles a `brief.md`. `/review` is the MAX
+  fresh-eyes judgment.
+- **ECO execution:** `/plan` (+ `/plan-loop`) sequences the brief into phases; `/code` (+ `/code-loop`,
+  `/code-parallel`) implements against it.
+
+Each workflow has a clean handoff to the next and can be invoked alone (**chunked execution** — run
+`/design` today, `/code-loop` next week, each cold-starting from the brief). The whole pipeline can
+run together as `/ship` (gated at every stage) or `/ship-loop` (continuous, gated once at the MAX→ECO
+model switch). The build workflows produce durable artifacts inside `.somi/plans/<slug>/`; discovery
+produces the requirements & design foundation inside `.somi/rd/<slug>/`.
+
+> **Why tier this way.** Previously every agent ran `opus`, spreading the expensive model across the
+> whole lifecycle — including the highest-volume work. Concentrating `opus` on the front-loaded brief
+> and on review, then running plan/code on `sonnet` against the brief, is the **plan-and-execute /
+> model-cascade** pattern: a strong model compiles the context once, a cheaper model executes it many
+> times. The `brief.md` is the contract that makes the cheap tier safe — it carries the decisions,
+> the complexity map, and an explicit *"what ECO does NOT need to re-research"* list.
 
 ## The workflows
 
@@ -56,9 +74,12 @@ review output:
 │       ├── sdd.md                       ← software design (high-level direction)
 │       ├── tdd.md                       ← technical design (high-level constraints)
 │       ├── decisions.md                ← crossroads resolved with the user
+│       ├── brief.md                    ← the MAX→ECO handoff (dense; feeds /plan)
 │       └── diary.md                    ← discovery narrative
 ├── plans/
 │   └── <slug>/                         ← one directory per work item
+│       ├── brief.md                    ← MAX→ECO handoff (from /design or /refactor analysis)
+│       ├── design.md                   ← feature design (from /design — direction + hard parts)
 │       ├── context.md                  ← background, surrounding code, constraints
 │       ├── spec.md                     ← purpose, requirements, decisions, user story, DoD
 │       ├── decisions.md                ← ADR-style log of architectural choices
@@ -118,6 +139,36 @@ verified, status in `README.md` becomes `ready-for-planning`.
 **Handoff to planning**: explicit. `/plan <slug>` consumes `.somi/rd/<slug>/` — the SRS/FRD as the
 requirements source, the SDD/TDD as architectural direction, the research report as risk context.
 Planning re-opens a direction only where it genuinely diverges, recording why.
+
+## Design (feature, pre-planning, MAX)
+
+**Purpose**: settle a **brownfield feature or user story's architecture** against the existing
+codebase — *before* planning — and compile it into the `brief.md` the ECO tier executes against. It
+fills the gap between discovery (a whole new product) and planning (sequencing): the requirement is
+clear, but how it should be shaped against *this* repo is not.
+
+**Agent**: [`designer`](../agents/designer.md). Runs on the **most capable model end-to-end** (the
+`/design` command is `opus` too, like `/discover`) because its `brief.md` anchors the whole work item.
+
+**Input**: a feature / user story on an existing codebase.
+
+**Output**: `design.md` (the approach + complexity analysis), `decisions.md` (user-verified
+architectural choices), **`brief.md`** (the load-bearing MAX→ECO handoff), and `diary.md`, under
+`.somi/plans/<slug>/`. The designer reads the codebase deeply, ingests the repo's own instruction
+files once (folding conventions into the brief), resolves the expensive-to-reverse calls with the
+user (same verification protocol as the planner), and maps the complexity hotspots.
+
+**Design-depth boundary** — design owns the *architectural approach* and the *complexity map*; the
+planner owns *sequencing* into phases and PR-sized slices, and the concrete file-level design. Same
+seam as discovery↔planning, one level down.
+
+**Stops the workflow**: never plans or codes. **Handoff to planning**: explicit — `/plan <slug>`
+consumes `brief.md` as its primary input and sequences it on the ECO tier. For a high-stakes design,
+review it in MAX scope first via `/review design <slug>` (fresh context, bounded loop).
+
+> **When to use which front-load.** New product, open requirements → `/discover`. Feature/story on an
+> existing repo, design unsettled → `/design`. Large structural untangle → `/refactor` analysis.
+> Settled design, just sequence it → straight to `/plan`.
 
 ## Planning
 
@@ -261,8 +312,11 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 ## When workflows compose
 
 - **Discover → Plan → Code → Review** for a greenfield product or major new initiative — discovery
-  produces the requirements & design foundation, which planning turns into phased work.
-- **Plan → Code → Review** is the normal sequence.
+  produces the requirements & design foundation (+ `brief.md`), which planning turns into phased work.
+- **Design → Plan → Code → Review** for a design-heavy brownfield feature — `/design` (MAX) compiles
+  the `brief.md`; `/plan` (ECO) sequences it; `/code-loop` (ECO) implements against it. This is the
+  daily MAX→ECO chain for non-trivial features.
+- **Plan → Code → Review** is the normal sequence when the design is already settled.
 - **Plan → Plan-review → Code → Review** when the plan is high-stakes or high-ambiguity.
 - **Code → Review → Code (rework) → Review** when the first review surfaces findings.
 - **Plan → Code → Review → Plan-change protocol → Code** when review reveals the plan was wrong,
@@ -277,11 +331,18 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   signal, not auto-resolved. The default path stays sequential (`/code-loop`); parallel is opt-in and
   only where proven safe.
 
-## The `/ship` shortcut
+## The `/ship` and `/ship-loop` pipelines
 
-`/ship <problem>` runs the full pipeline with hard gates between stages. It's identical to running
-`/plan`, then `/code`, then `/review` manually — just with the orchestration baked in. Use
-whichever feels natural; the underlying agents, artifacts, and quality bars are the same.
+`/ship <problem>` runs the full pipeline with **hard gates between every stage** — the careful path.
+It's identical to running (an optional MAX front-load, then) `/plan`, then `/code`, then `/review`
+manually, with the orchestration baked in.
+
+`/ship-loop <problem>` is the **continuous** path of the MAX→ECO economy: it front-loads a MAX action
+once (compiling `brief.md`), gates a **single** human checkpoint **at the MAX→ECO model switch** (you
+review the brief), then runs the ECO loops (`/plan-loop` → `/code-loop`) to completion **under bounded
+caps** with no per-iteration stop. If you start cold with no MAX front-load, the gate falls to after
+`/plan-loop` — the pipeline is never run end-to-end with zero human review. The model switch is the
+gate; the caps (per-layer + global budget + cross-layer breaker) are the safety net.
 
 ## What SoMi workflows are *not*
 

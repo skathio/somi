@@ -1,17 +1,32 @@
 ---
-description: Surgical, behavior-preserving refactor of a named smell. Tests stay green; no feature work mixed in. Use when the next change requires untangling first.
+description: Refactor a named smell. Surgical (default) — behavior-preserving, tests stay green, no feature work. Or MAX analysis for a large refactor — designs the scope and compiles a brief.md, then /plan-loop → /code-loop execute it. Use when the next change requires untangling first.
 argument-hint: <smell description and target files>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
 model: sonnet
 ---
 
-# /refactor — Surgical refactor
+# /refactor — Refactor (surgical, or MAX analysis for large ones)
 
 You are invoking the **refactorer** workflow of somi.
 
 The user's refactor target: **$ARGUMENTS**
 
-## What to do
+## Pick the mode first
+
+- **Surgical (default).** A small, named smell that fits one safe behavior-preserving diff — the
+  refactorer does it directly (steps 1–6 below).
+- **Analysis (MAX, large refactor).** When the refactor spans many modules, needs a migration, or
+  changes a shared shape — too big for one safe diff (a 600-line refactor is a *plan*, not a diff) —
+  the refactorer instead runs the MAX **analysis mode**: it identifies and designs the refactor
+  scope and compiles a [`brief.md`](../templates/BRIEF.md.tmpl) under `.somi/plans/<slug>/`, then the
+  ECO tier executes it via [`/plan-loop`](./plan-loop.md) → [`/code-loop`](./code-loop.md). Choose
+  this when the destination needs more than a single reviewable diff; surface the scope to the user
+  before handing off. For a high-stakes refactor, review the brief in MAX scope first via
+  [`/review`](./review.md) `design <slug>` (fresh context, bounded).
+
+The steps below are the **surgical** path.
+
+## What to do (surgical path)
 
 1. **Verify the precondition**: the refactor target is a *named smell* (e.g., "`OrderService` mixes pricing
    and persistence") with specific files in scope. If `$ARGUMENTS` is vague ("clean up the codebase"),
@@ -34,8 +49,9 @@ The user's refactor target: **$ARGUMENTS**
 
 - **No behavior changes.** No bug fixes mixed in. If a bug is discovered, file it as follow-up.
 - **No feature work.** This is structure-only.
-- **No big-bang rewrites.** If the destination requires a 600-line diff, the refactor should probably be
-  a plan, not a single command.
+- **No big-bang rewrites on the surgical path.** If the destination requires a 600-line diff, switch
+  to **analysis mode** above: the refactorer designs the scope and compiles a `brief.md`, then
+  `/plan-loop` → `/code-loop` execute it as bounded, reviewable iterations.
 - **Tests stay green** at every step. Not "green at the end" — green at every commit.
 
 ## Quality bar

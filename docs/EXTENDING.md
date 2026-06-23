@@ -64,7 +64,10 @@ quality bar, output shape, failure modes to avoid, escalation rules, examples.>
 Rules of thumb:
 
 - **`description`** is the single most important field. Get it right.
-- **`model`** defaults to `opus` for judgment-heavy work; `sonnet` for high-volume mechanical work.
+- **`model`** follows the [MAX/ECO tiers](./AGENTS.md#economic-tiering-maxeco): `opus` for **MAX**
+  agents that front-load reasoning into a `brief.md` or do fresh-eyes review; `sonnet` for **ECO**
+  agents that execute against the brief. A new agent that compiles context is MAX; one that executes
+  it is ECO.
 - Omit `tools:` — leave it unrestricted so the agent works across Claude Code and GitHub Copilot.
   If the underlying runtime enforces restrictions, it does so at its own layer.
 

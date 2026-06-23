@@ -1,0 +1,102 @@
+# Execution Brief — <work item name>
+
+> The MAX→ECO handoff. Written by a MAX action ([`/design`](../commands/design.md),
+> a [`/refactor`](../commands/refactor.md) analysis, or [`/discover`](../commands/discover.md));
+> consumed by the ECO tier ([`/plan`](../commands/plan.md), [`/code`](../commands/code.md) and
+> their loops).
+> Deep docs: <links — `design.md` / `sdd.md` / `research-report.md`>
+> Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD> • Produced by: <discover | design | refactor>
+
+This is the dense, bounded distillation the expensive (MAX) layer leaves for the cheap (ECO) layer.
+Its whole job is to let plan and code execute **without re-running the research** — and to do that
+**without bloating context**.
+
+**Author discipline (non-negotiable):**
+
+- **Reference, never inline.** Point at the deep docs and at `file:line` locations. Do **not** paste
+  research, large code blocks, or whole specs in here.
+- **Bounded.** Target ≤ ~400 lines / ~6k tokens. If it's longer than that, you're inlining what
+  should be a link.
+- **Stable prefix.** ECO loops cache this file as a prompt prefix across passes — keep edits
+  additive and the ordering stable so the cache keeps hitting.
+- **Decisive.** Every entry states a conclusion, not a discussion. The deliberation lives in
+  `decisions.md` / `sdd.md`; the brief carries the *result*.
+
+---
+
+## 1. One-paragraph framing
+
+<What this work item is, in two or three sentences. The reader should know what they're building and
+why before reading anything else.>
+
+## 2. Decisions in force
+
+The settled calls the ECO tier must build on. One line each + the reason + a link to the full entry.
+**Do not re-litigate these** — if reality contradicts one, that's a plan-change-protocol event, not
+a research task.
+
+- **D1** — <decision> — *because* <one-line reason>. ([`decisions.md#d1`](./decisions.md#d1) /
+  `sdd.md §<n>`)
+- **D2** — <decision> — *because* <reason>. (<link>)
+
+## 3. Complexity map — here be dragons
+
+Where the hard parts are, so ECO spends its attention there and nowhere else. Pointers, not prose.
+
+| Hotspot | Location | Why it's tricky | What to watch |
+|---------|----------|-----------------|---------------|
+| <name> | `path/to/file:LL` | <e.g., shared mutable state across replicas> | <the failure mode> |
+| <name> | `path/to/file:LL` | <e.g., implicit ordering dependency> | <what breaks if violated> |
+
+## 4. File map
+
+The files in play and each one's role in this work item. ECO starts here instead of re-discovering
+the codebase.
+
+| File | Role in this work | Touch? |
+|------|-------------------|--------|
+| `path/to/foo` | <e.g., the handler the change wires into> | edit |
+| `path/to/bar` | <e.g., interface this must satisfy — read only> | read |
+| `path/to/new` | <e.g., new package for the limiter> | create |
+
+## 5. Repo conventions in force
+
+The relevant subset distilled from the repo's own instruction files (`CLAUDE.md`, `AGENTS.md`,
+`.github/copilot-instructions.md`, etc.) — surfaced once here so ECO inherits them without
+re-reading. Source files, if present: <list paths, or "none found">.
+
+- <convention 1 — e.g., "errors wrapped with `fmt.Errorf("...: %w", err)`; never bare returns">
+- <convention 2 — e.g., "tests are table-driven; one file per package under `*_test.go`">
+- <convention 3 — e.g., "this repo's `CLAUDE.md` forbids adding new runtime deps without sign-off">
+
+> Repo-local instructions **win** over SoMi defaults where they conflict. SoMi does **not**
+> auto-invoke the repo's own agents — if relevant ones exist, they're noted here for the user to
+> opt into, not called automatically.
+
+## 6. Constraints & non-goals
+
+- **Constraints** (non-negotiable): <perf budgets, compat, deadlines, security rules>.
+- **Non-goals** (explicitly out of scope this work item): <list — keeps ECO from gold-plating>.
+
+## 7. What ECO does NOT need to re-research
+
+The point of the brief. List, explicitly, the questions MAX already answered so the ECO tier doesn't
+burn tokens re-deriving them. Be concrete — name the thing and where the answer lives.
+
+- <e.g., "Storage backend — settled on Redis (D3); don't re-evaluate in-memory.">
+- <e.g., "Library choice — `x/time/rate` chosen (D5); don't survey alternatives.">
+- <e.g., "Auth model — read `sdd.md §4`; the trust boundaries are mapped there, don't re-derive.">
+
+## 8. Open risks ECO must watch
+
+The few things MAX could **not** fully settle and that execution must keep an eye on — each with a
+trigger for surfacing it back to the user (usually via the plan-change protocol).
+
+| Risk / unknown | Why it's open | Surface it when… |
+|----------------|---------------|------------------|
+| <unknown 1> | <e.g., depends on a migration shipping this week> | <e.g., the dep isn't available at code time> |
+| <unknown 2> | <e.g., perf of the new path unverified> | <e.g., a benchmark regresses p99> |
+
+## 9. Suggested next step
+
+<Usually: `/plan <slug>` (or `/plan-loop <slug>`) to sequence this, then `/code-loop <slug>`.>

@@ -25,17 +25,23 @@ It is designed to be:
 
 ## The workflows
 
-| Command       | Workflow            | Agent               | Purpose                                                                                  |
-|---------------|---------------------|---------------------|------------------------------------------------------------------------------------------|
-| `/discover`   | Discovery (pre-dev) | `discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) for a new product |
-| `/plan`       | Planning            | `planner`           | Staff-engineer-grade plan: phases, risks, slices, DoD, test & rollout strategy           |
-| `/code`       | Coding              | `coder`             | Execute against an approved plan with senior-level design judgment                       |
-| `/review`     | Reviewing           | `reviewer`          | Strict, skeptical review of code / plans / architecture with severity-graded findings    |
-| `/ship`       | Pipeline            | planner+coder+reviewer | Full plan → code → review pipeline against a single problem statement                  |
+| Command       | Tier | Agent               | Purpose                                                                                  |
+|---------------|------|---------------------|------------------------------------------------------------------------------------------|
+| `/discover`   | MAX  | `discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
+| `/design`     | MAX  | `designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
+| `/plan`       | ECO  | `planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
+| `/code`       | ECO  | `coder`             | Execute against an approved plan + brief with senior-level design judgment               |
+| `/review`     | MAX  | `reviewer`          | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
+| `/ship`       | both | planner+coder+reviewer | Full (optional MAX front-load →) plan → code → review pipeline, gated at every stage   |
 
-`/discover` is the upstream, greenfield-only step that feeds `/plan`; the plan → code → review trio is the
-daily build loop. Supporting agents (used by handoff): `security-reviewer`, `architecture-reviewer`,
-`test-strategist`, `refactorer`.
+**Two economic tiers.** The **MAX** tier (`opus`) front-loads expensive reasoning — research, design,
+decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The **ECO** tier
+(`sonnet`) executes against that brief *without re-researching*, so the high-volume work (plan detail,
+iterative coding) runs cheaply. `/discover` (new product) and `/design` (brownfield feature) are the
+MAX front-loads that feed `/plan`; `/ship-loop` runs the whole pipeline continuously, gating once at
+the MAX→ECO model switch. Supporting MAX agents (by handoff): `security-reviewer`,
+`architecture-reviewer`, `test-strategist`, `refactorer`. See
+[`docs/AGENTS.md`](docs/AGENTS.md#economic-tiering-maxeco).
 
 ---
 
@@ -86,12 +92,16 @@ Once installed, use `@somi` in GitHub Copilot chat:
 > - **Multi-agent orchestration degrades to sequential.** The loops (`/code-loop`, `/plan-loop`,
 >   `/ship`) and the parallel commands (`/review-panel`, `/code-parallel`) drive Claude Code
 >   sub-agents via the Task tool. Where the host can't spawn sub-agents concurrently, these run
->   **one lens / one iteration at a time** — same result, no parallelism, and the sonnet-orchestrator
->   / opus-agent model split may not apply.
+>   **one lens / one iteration at a time** — same result, no parallelism.
+> - **The MAX/ECO model split is a Claude Code feature.** The economy depends on per-agent model
+>   tiering (`opus` for MAX, `sonnet` for ECO) and the cache-correct subagent-model split. Where the
+>   host runs a single model, the workflow shape (MAX front-load → dense `brief.md` → ECO execution)
+>   still holds and still helps — but the *cost* split does not. **Priority is Claude Code; quality is
+>   not sacrificed for Copilot parity** — Copilot gets the portable subset.
 >
-> The commands, agents, skills, rules, and templates are shared; the **enforcement and concurrency
-> layers are Claude Code features**. Treat Copilot as the portable subset, not a drop-in equal. See
-> [`docs/HOOKS.md`](docs/HOOKS.md) and [`docs/PLUGIN.md`](docs/PLUGIN.md).
+> The commands, agents, skills, rules, and templates are shared; the **enforcement, concurrency, and
+> model-tiering layers are Claude Code features**. Treat Copilot as the portable subset, not a
+> drop-in equal. See [`docs/HOOKS.md`](docs/HOOKS.md) and [`docs/PLUGIN.md`](docs/PLUGIN.md).
 
 ---
 
@@ -104,7 +114,7 @@ commands/         Slash-command entrypoints (/plan, /code, /review, /ship, ...)
 skills/           On-demand expert knowledge packs (OWASP, SOLID, test strategy, ...)
 rules/            Global ruleset composed into CLAUDE.md
 hooks/            Deterministic guardrails (block dangerous bash, secret writes, ...)
-templates/        Artifact templates (CONTEXT, SPEC, DECISIONS, PHASE, PROGRESS, DIARY, REVIEW, ADR, DOD; R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD)
+templates/        Artifact templates (BRIEF [MAX→ECO handoff], DESIGN, CONTEXT, SPEC, DECISIONS, PHASE, PROGRESS, DIARY, REVIEW, ADR, DOD; R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD)
 .copilot-extension/ Copilot extension + marketplace manifests (mirrors .claude-plugin/)
 examples/         Worked examples + a minimal consuming project
 docs/             Full documentation
@@ -133,7 +143,21 @@ For a **brand-new product**, start one step earlier with discovery:
 # /plan clinic-scheduler — the planner consumes that foundation.
 ```
 
-For an **incremental change** (the daily loop), start at planning:
+For a **design-heavy feature on an existing repo**, front-load the design (MAX) so planning and
+coding run cheaply against it:
+
+```text
+> /design  Add per-team rate limiting to the public webhook endpoint, sharing budget
+          across replicas, with an emergency kill switch.
+
+# Claude (opus) reads the codebase, ingests the repo's own CLAUDE.md/AGENTS.md once,
+# resolves the expensive-to-reverse calls with you (storage backend, where the limiter
+# lives), maps the complexity hotspots, and compiles .somi/plans/rate-limiting-webhooks/
+# brief.md — the dense MAX→ECO handoff. Then /plan rate-limiting-webhooks sequences it
+# into phases on the cheaper (sonnet) tier, /code-loop implements against the brief.
+```
+
+For an **incremental change** with a settled design (the daily loop), start at planning:
 
 ```text
 > /plan  Add per-team rate limiting to the public webhook ingestion endpoint

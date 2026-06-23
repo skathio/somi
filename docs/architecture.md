@@ -42,6 +42,41 @@ Each layer has a clear job:
 - **Skills + rules + hooks** are the substrate that shapes both commands and agents — universal
   priors (rules), domain-specific depth (skills), and non-negotiable guardrails (hooks).
 
+## Economic tiering (MAX/ECO) — the second axis
+
+The four layers above describe *structure*. A second, orthogonal axis describes *economics*: which
+model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth.
+
+```
+        MAX tier (opus)                                  ECO tier (sonnet)
+  front-load reasoning → brief.md                    execute against the brief
+  ┌───────────────────────────────┐   brief.md   ┌──────────────────────────────┐
+  │ discovery-analyst, designer,  │ ───────────▶ │ planner, coder               │
+  │ refactorer (analysis),        │  (the dense  │ (sequence + implement,       │
+  │ reviewer + security/arch/test │   handoff)   │  no re-research)             │
+  └───────────────────────────────┘              └──────────────────────────────┘
+        ▲ opus is spent here: once, up front, and on fresh-eyes review
+```
+
+- **MAX (`opus`)** front-loads research, design, decisions, and complexity mapping into a dense,
+  bounded **`brief.md`** ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)), and provides
+  fresh-context review. The brief references its deep docs (research-report, sdd, design) rather than
+  inlining them, and carries an explicit *"What ECO does NOT need to re-research"* list.
+- **ECO (`sonnet`)** sequences and implements **against** the brief, so the high-volume work runs
+  cheap. This is the **plan-and-execute / model-cascade** pattern (strong planner, cheap executor).
+
+**Interaction with the layers.** Commands (the orchestration layer) stay `sonnet` and `Task` the
+tier-appropriate agent. A single-model orchestrator Tasking a differently-modeled subagent is the
+**cache-correct** way to mix models — and because prompt caches are model-scoped, the MAX→ECO switch
+is a natural cache boundary (which is exactly where `/ship-loop` places its single human gate).
+`/discover` and `/design` are the two commands that run `opus` at the orchestration layer too —
+their framing is judgment-heavy and their brief anchors the work item.
+
+**Repo-awareness.** A SessionStart hook surfaces repo-local instruction files (`CLAUDE.md`,
+`AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; MAX actions read them once and distil
+the conventions into the brief, so the ECO tier inherits them without re-reading. Repo-local
+instructions win over SoMi defaults; SoMi never auto-invokes foreign agents.
+
 ## Data flow per workflow
 
 ### Discovery (pre-development, greenfield only)
@@ -135,7 +170,7 @@ lives in `commands/ship.md`; the agents are unchanged.
 | Workflow-specific thinking process       | `agents/`     | Subagent system prompts; can have their own tool sets                |
 | User-facing entrypoints                  | `commands/`   | Slash-command shape; thin orchestrators                              |
 | Deterministic guardrails                 | `hooks/`      | Runs in Claude Code's hook framework; no model involved              |
-| Artifact templates                       | `templates/`  | Shape of `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
+| Artifact templates                       | `templates/`  | Shape of `brief.md` (the MAX→ECO handoff), `design.md`, `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
 | Discovery artifacts (per project)        | `.somi/rd/<slug>/` | One subdir per greenfield initiative; the requirements & design foundation; feeds `.somi/plans/<slug>/` |
 | Work-item artifacts (per project)        | `.somi/plans/<slug>/` | One subdir per work item; persists indefinitely; user-controlled retention |
 | Claude Code plugin packaging             | `.claude-plugin/` | Plugin manifest; marketplace manifest for `/plugin install`      |

@@ -1,0 +1,83 @@
+# Design — <feature / user-story name>
+
+> Brief (the ECO handoff): [`brief.md`](./brief.md) • Decisions: [`decisions.md`](./decisions.md)
+> Diary: [`diary.md`](./diary.md)
+> Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD> • Produced by: `/design` (MAX tier)
+
+The feature design against **this** codebase — **direction and the hard parts**, not the file-by-file
+implementation. The planner sequences this into phases; the coder executes it. This is the deep doc
+the [`brief.md`](./brief.md) references; keep the brief dense and let the detail live here.
+
+> **Boundary.** This document owns the architectural approach and the complexity analysis. It does
+> **not** own PR-sized slicing, concrete function signatures, or per-file plans — that's the
+> planner's job. If a section here is turning into a step-by-step implementation, stop and leave it
+> for the plan.
+
+## 1. Feature framing
+
+<Two or three sentences: the capability, who it serves, the outcome. The agent's restatement of the
+request. The verbatim request is quoted in `diary.md` fenced as untrusted data — don't duplicate it
+here.>
+
+## 2. Premise check
+
+<The strongest honest case considered against the feature as posed — false-premise / XY problem,
+contradiction with an existing constraint, or an existing mechanism that already does this — and why
+the premise held (or how it was renegotiated with the user). One short paragraph.>
+
+## 3. Chosen approach
+
+<The architecture at the feature level: how the pieces fit, the data/control flow, the boundaries
+crossed. Diagrams welcome. Interface and data *shapes* (what exists and how it relates) — **not**
+concrete signatures or file layouts.>
+
+- **Components / responsibilities**: <component → what it owns>
+- **Data flow**: <where data enters, how it moves, where it's owned>
+- **Boundaries crossed**: <module / service / trust boundaries this touches>
+
+## 4. Decisions (summary)
+
+One-liners; full ADR entries in [`decisions.md`](./decisions.md). Every architectural choice here is
+user-verified.
+
+- **D1** — <decision> ([`decisions.md#d1`](./decisions.md#d1))
+- **D2** — <decision> ([`decisions.md#d2`](./decisions.md#d2))
+
+## 5. Alternatives considered
+
+The roads not taken, briefly, with the concrete reason each lost. (Keeps the planner and reviewer
+from re-proposing them.)
+
+| Alternative | Why rejected (concrete) |
+|-------------|-------------------------|
+| <option> | <e.g., adds a Redis dependency this repo doesn't run; per-replica budgets acceptable> |
+
+## 6. Complexity map — here be dragons
+
+The hard parts, named, with `file:line` pointers. This is what the brief's complexity section
+distills. Be specific — "the ordering dependency at `x.go:120`", not "concurrency is hard".
+
+| Hotspot | Location | Why it's tricky | What execution must respect |
+|---------|----------|-----------------|------------------------------|
+| <name> | `path:LL` | <the real difficulty> | <the invariant / failure mode> |
+
+## 7. Repo conventions in force
+
+The conventions distilled from the repo's own instruction files (`CLAUDE.md`, `AGENTS.md`,
+`.github/copilot-instructions.md`, …) that bear on this feature. Source files: <paths, or "none
+found">. (Also surfaced in the brief so ECO inherits them without re-reading.)
+
+- <convention 1>
+- <convention 2>
+
+## 8. Constraints, non-goals, and risks
+
+- **Constraints**: <perf budgets, compat, deadlines, security/compliance rules>.
+- **Non-goals**: <explicitly out of scope — keeps execution from gold-plating>.
+- **Open risks** (could not be fully settled at design time): <list — each becomes an "Open risks ECO
+  must watch" row in the brief, with a surfacing trigger>.
+
+## 9. Handoff
+
+<Usually: "`/plan <slug>` consumes `brief.md` and sequences this into phases; then `/code-loop
+<slug>`.">

@@ -4,6 +4,71 @@ All notable changes to `@skathio/somi` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
+## [1.1.0] — 2026-06-23 — MAX/ECO economy & the execution brief
+
+Re-tiers SoMi's models on the **SDLC-phase axis** instead of the orchestration axis. A **MAX** tier
+(`opus`) front-loads the expensive reasoning — research, design, decisions, complexity mapping,
+fresh-eyes review — into a dense, bounded **`brief.md`**; an **ECO** tier (`sonnet`) then executes
+against that brief *without re-researching*. Previously every agent ran `opus`, spreading the
+expensive model across the whole lifecycle (including the highest-volume work). Now `opus` is
+concentrated where it pays off — the front-loaded brief and review — and the bulk token volume (plan
+detail, iterative coding) runs on `sonnet`. This is the **plan-and-execute / model-cascade** pattern,
+with **LLM-as-judge on fresh context** for review.
+
+### Added
+
+- **`/design` — feature/user-story design (MAX tier).** New command + `designer` agent. Settles a
+  **brownfield** feature's architecture against the existing codebase — the gap between `/discover`
+  (a whole new product) and `/plan` (sequencing). Reads the repo deeply, resolves the
+  expensive-to-reverse calls with the user (same verification protocol as the planner), maps the
+  complexity, and compiles the `brief.md`. Runs `opus` end-to-end (like `/discover`).
+- **The execution brief (`templates/BRIEF.md.tmpl` → `brief.md`).** The dense, bounded MAX→ECO
+  handoff every MAX action emits: decisions in force, a complexity map (`file:line`), a file map, the
+  repo conventions in force, constraints/non-goals, open risks — and an explicit **"What ECO does NOT
+  need to re-research"** list. References its deep docs rather than inlining them, so it doesn't bloat
+  context. `/discover`, `/design`, and `/refactor` analysis all produce one; `/plan` and `/code`
+  consume it.
+- **`templates/DESIGN.md.tmpl`** — the feature design doc the brief references (`design.md`).
+- **Repo-awareness (respect as context).** A new **SessionStart hook**
+  (`hooks/session-start/detect-repo-instructions.sh`) surfaces a repo's own instruction files
+  (`CLAUDE.md` root + nested, `AGENTS.md`, `.github/copilot-instructions.md`, `.cursorrules`) and any
+  `.claude/agents/`. MAX actions read them once and distil the conventions into the brief, so the ECO
+  tier inherits them without re-reading. Repo-local instructions **win** over SoMi defaults; SoMi
+  **never auto-invokes** foreign agents.
+- **MAX review loops.** `/design`, `/discover`, and `/refactor` analysis can run a bounded
+  produce → review → revise loop in **MAX scope** (mirroring `/plan-loop` / `/code-loop`), and
+  `/review` now accepts a `design <slug>` target — review a design + `brief.md` on a **fresh
+  context**, artifacts-only, so the review isn't biased by the producer's reasoning.
+
+### Changed (behavior — documented)
+
+- **Default model tiers re-assigned.** `planner` and `coder` move `opus` → **`sonnet`** (ECO). All
+  reviewers plus `discovery-analyst`, `designer`, and `refactorer` stay `opus` (MAX). Overridable per
+  project in the agent frontmatter. **Upgrade note:** if you depend on `opus`-grade planning/coding
+  with no MAX front-load, either run `/design` first (recommended — it compiles the brief the ECO
+  tier needs) or set `planner`/`coder` `model: opus` in your install.
+- **`/ship-loop` is now the continuous, model-switch-gated pipeline.** It optionally front-loads a MAX
+  action, gates a **single** human checkpoint **at the MAX→ECO model switch** (review the brief), then
+  runs `/plan-loop` → `/code-loop` to completion **under the bounded caps with no per-iteration human
+  stop**. For a cold start (no MAX action), the gate falls to after `/plan-loop` — never fully
+  gateless. **Upgrade note:** the old per-iteration `next` prompt is gone; the caps (per-layer +
+  global budget + cross-layer breaker) are the safety net. Use `/ship` for a human gate at every
+  stage.
+- **`/refactor` gains an analysis mode.** Small named smells still take the surgical path; large
+  refactors (multi-module, migrations, shared-shape changes) run a MAX analysis that compiles a
+  refactor `brief.md`, then `/plan-loop` → `/code-loop` execute it under bounded gates.
+- **`/plan` gains a depth gate.** A cold, design-heavy plan with no upstream brief now recommends
+  `/design` (MAX) first rather than under-thinking the architecture on the ECO tier.
+- **Loop commands document cache-prefix discipline.** Keeping `rules/CLAUDE.md` + `brief.md` + the
+  spec/phase prefix byte-stable across passes lets the 5-minute prompt cache hit — a direct token
+  saving in multi-pass loops.
+
+### Notes
+
+- No command was removed or renamed; `.somi/` artifact layout is backward-compatible (the brief and
+  design files are additive). Existing plans without a `brief.md` continue to work — the planner/coder
+  fall back to reading the full artifact set.
+
 ## [1.0.0] — 2026-06-21 — Rename to **SoMi** (`@skathio/somi`)
 
 First stable release under the new name. This is a **breaking change**: the project, npm package,

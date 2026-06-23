@@ -12,8 +12,15 @@ You are running the **bounded code↔review loop** of somi.
 The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, iteration M`).
 
 This command automates the manual `/code` → `/review` → `/code` cycle for a single iteration,
-with **hard gates** that ensure it terminates. The orchestrator (this command) is `sonnet`;
-the `coder` and `reviewer` agents it Tasks remain `opus`.
+with **hard gates** that ensure it terminates. This is an **ECO-tier** loop: the orchestrator and
+the `coder` it Tasks both run `sonnet` (executing against the work item's `brief.md` + plan), while
+the `reviewer` it Tasks stays `opus` — review is the fresh-eyes MAX judgment, run on a cold context
+so it isn't biased by the coder's reasoning.
+
+> **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
+> `spec.md`, and the active `phases/<NN>-*.md` — in the **same order at the front** of each pass's
+> coder brief, and append the volatile per-pass content (prior findings) **last**. A byte-stable
+> prefix lets the 5-minute prompt cache hit across passes, a direct token saving in a multi-pass loop.
 
 ## Gates (hard, configurable via env)
 
