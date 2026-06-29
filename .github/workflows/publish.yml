@@ -1,4 +1,4 @@
-# Publish workflow — single file, CI gates publish, one production approval.
+# Publish workflow — single file, one production approval.
 #
 # Adopts skathio/hashira's v2 contract (work item hashira-v2): an explicit,
 # dispatch-driven version resolver (`version-resolver`) feeding the
@@ -8,28 +8,61 @@
 # (commit-message-driven version inference, its own tag push, its own
 # Release-notes generation).
 #
-# Shape (D4, carried forward from v1): one file, three jobs.
-#   - ci      : runs on every PR + push to main + manual dispatch. Validates
-#               the repo (scripts/validate.sh) AND that the package is
-#               publishable (`npm publish --dry-run`). This is the gate —
-#               UNCHANGED from the pre-migration shape (hashira-v2 iteration
-#               6.2, not this iteration, adopts the full npm-package-ci.yml
-#               reusable workflow and retires this hand-rolled job).
-#   - version : NEW. Runs ONLY on a manual `workflow_dispatch` with a
-#               non-empty `bump` input — see "## Trigger model" below. Needs
-#               `ci` (don't resolve/pack a release candidate if validate.sh
-#               would fail anyway). Resolves the next version via hashira's
-#               `version-resolver` composite (D14 self-checkout), surfaces it
-#               to the run summary (NFR-DX-3), and packs+stamps a tarball
-#               that `publish` hands to `npm-release` (see "## Same-run
-#               artifact handoff" below) — this is the smallest correct
-#               extension of "mirror npm-package-ci.yml's version job," not
-#               the broader lint/test/scan-suite/coverage-report machinery,
-#               which stays out of scope until iteration 6.2.
-#   - publish : needs ci + version; runs under the SAME gate as `version`
-#               (manual dispatch + non-empty bump); gated by the `production`
+# Shape: one file, two jobs (iteration 6.2 retired the old hand-rolled `ci`
+# job — see "## CI gating, post-6.2" below for why).
+#   - version : Runs ONLY on a manual `workflow_dispatch` with a non-empty
+#               `bump` input — see "## Trigger model" below. Resolves the
+#               next version via hashira's `version-resolver` composite (D14
+#               self-checkout), surfaces it to the run summary (NFR-DX-3),
+#               and packs+stamps a tarball that `publish` hands to
+#               `npm-release` (see "## Same-run artifact handoff" below).
+#   - publish : needs version; runs under the SAME gate as `version` (manual
+#               dispatch + non-empty bump); gated by the `production`
 #               Environment (one approval). Calls npm-release@v2 with the
 #               resolver's output — never recomputes a version itself.
+#
+# ## CI gating, post-6.2 — why there is no in-file `ci` job anymore, and why
+# ## `version` re-validates anyway (pass-1 review correction)
+#
+# Pre-6.2, `version`/`publish` declared `needs: ci` against a hand-rolled
+# in-file job that ran `scripts/validate.sh` + `npm publish --dry-run`
+# directly. Iteration 6.2 added a SEPARATE workflow, `.github/workflows/
+# ci.yml`, which runs on every PR/push to `main` and covers both checks
+# (`validate.sh` via its `test` job's `test_command` default of `npm test`;
+# the dry-run via its own `publish-dry-run` custom job) — see ci.yml's
+# top-of-file comment for the full enumerated comparison. The richer parts
+# of `ci.yml` (`lint`/`scan-suite`/`coverage-report`) genuinely don't need
+# to re-run on every release dispatch — they're routine PR/push hygiene, not
+# release-time safety checks, so dropping the in-file `ci` job's `needs:`
+# edge for THOSE is correct.
+#
+# What the in-file `ci` job's `needs:` edge actually guaranteed, though, was
+# narrower and easy to overstate: NOT "branch protection already proved this
+# commit is good" (an earlier version of this comment claimed exactly that,
+# and it was wrong — corrected here). Branch protection's required status
+# checks gate MERGES into `main`; they do NOT gate which ref a
+# `workflow_dispatch` targets. A dispatch can select a non-`main` branch tip
+# (`ci.yml`'s push trigger is `branches: [main]` only, so a feature/release
+# branch tip may never have run `ci.yml` at all) or a historical commit that
+# predates `ci.yml`'s existence — neither is anything branch protection ever
+# touched. So the `version` job below re-runs `scripts/validate.sh` +
+# `npm publish --dry-run` itself, against the ACTUAL dispatched ref, before
+# resolving a version or packing anything — restoring the one ref-local
+# guarantee that matters at release time, regardless of whether `ci.yml` was
+# ever triggered for this specific ref. This is cheap (only runs on an
+# actual release dispatch, a few times a month) and is not redundant with
+# `ci.yml`: it's the dispatch-time analog of what `ci.yml` provides for
+# routine PR/push, not a second copy of the same check on the same ref.
+#
+# The `production` Environment's required-reviewer approval (per D2/D12)
+# remains the actual release gate — a human still looks before anything
+# reaches the registry — but it is a backstop, not a substitute for the
+# ref-local validation above; a human approving a deployment is not the same
+# guarantee as the dispatched ref having been mechanically checked.
+# `scripts/validate.sh` itself is NOT deleted — it remains somi's local dev
+# tool (`npm test`) and is what BOTH `ci.yml`'s `test` job AND this job run;
+# only the old SEPARATE in-file `ci` job (as its own job, gating via
+# `needs:`) is retired in favor of running the same check inline here.
 #
 # npm trusted publishing is OIDC-only here: NO NPM_TOKEN secret is set. The
 # `production` Environment must have >=1 required reviewer for the gate to
@@ -50,11 +83,12 @@
 # message parsing left anywhere in this pipeline (semantic-release's
 # commit-analyzer plugin is deleted). A bare push to main can therefore no
 # longer carry an opinion about whether/how to release — there is nothing
-# left to infer a bump from. Consequence: pushing to main now ONLY runs `ci`
-# (the validate+dry-run gate) — it never reaches `version`/`publish`.
-# Cutting a release is now an explicit act: a maintainer runs
-# `workflow_dispatch` and picks a `bump` (and, only for the very first
-# release under this model, a `seed_version`). Both new jobs are gated on
+# left to infer a bump from. Consequence: this workflow no longer listens on
+# `push`/`pull_request` at all (post-6.2 — see "## CI gating, post-6.2"
+# above); a bare push to main now only runs the separate `ci.yml`, never
+# touches `publish.yml`. Cutting a release is now an explicit act: a
+# maintainer runs `workflow_dispatch` and picks a `bump` (and, only for the
+# very first release under this model, a `seed_version`). Both jobs are gated on
 # `github.event.inputs.bump != ''` — the original, always-available form of
 # a `workflow_dispatch` input (GitHub later unified the top-level `inputs`
 # context to also work for `workflow_dispatch`, not just `workflow_call`, so
@@ -65,14 +99,20 @@
 # which doesn't apply to either input here).
 name: publish
 
+# Trigger model, post-6.2: `workflow_dispatch` only. Pre-6.2 this also
+# listened on `pull_request`/`push: branches: [main]`, but those triggers
+# existed solely to run the old in-file `ci` job — `version`/`publish`
+# always skipped on those events via their own `if:` gate below, dispatch
+# being the only event that can carry a non-empty `bump`. Now that `ci` is
+# retired (see the "## CI gating, post-6.2" comment above; that role moved
+# to the separate `.github/workflows/ci.yml`), keeping those triggers here
+# would only produce no-op workflow runs (every job skipped) on every PR/
+# push — pure noise, not a real gate. `ci.yml` already covers PR/push.
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       bump:
-        description: "One of 'patch' | 'minor' | 'major' to cut a release. Leave empty for a routine manual CI-only run that does not publish."
+        description: "One of 'patch' | 'minor' | 'major' to cut a release. Leave empty for a no-op dispatch that resolves/publishes nothing."
         required: false
         type: string
         default: ""
@@ -86,38 +126,15 @@ on:
 permissions: {}
 
 jobs:
-  ci:
-    name: ci
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Install validation tooling
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends jq shellcheck
-
-      - name: Run validation
-        run: bash scripts/validate.sh
-
-      # Publishability gate (R7): assert the package can be packed/published
-      # before the publish job is ever allowed to run. `npm publish --dry-run`
-      # exercises pack + the `files`/.npmignore selection + publishConfig
-      # without contacting the registry's publish endpoint, so it needs no auth.
-      - name: Assert package is publishable (dry-run)
-        run: npm publish --dry-run
-
   # Resolves the next release version and packs+stamps the tarball
   # `npm-release` (in the `publish` job below) will download and publish.
   # Gated on an explicit `workflow_dispatch` with a non-empty `bump` — see
-  # "## Trigger model" above. A bare push to main, or a dispatch with `bump`
-  # left empty, skips this job entirely (shows as "skipped"); `ci` above is
-  # unaffected either way.
+  # "## Trigger model" above. A dispatch with `bump` left empty skips this
+  # job entirely (shows as "skipped"). No `needs:` — see "## CI gating,
+  # post-6.2" above for why this job no longer depends on an in-file `ci`
+  # job.
   version:
     name: version
-    needs: ci
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
     runs-on: ubuntu-latest
     permissions:
@@ -131,6 +148,31 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '24'
+
+      # Ref-local safety net (pass-1 review, Major): branch protection gates
+      # MERGES into `main` — it does NOT gate which ref a `workflow_dispatch`
+      # targets. A dispatch could select a non-`main` branch tip (`ci.yml`'s
+      # push trigger is `branches: [main]` only, so such a tip may never have
+      # run `ci.yml` at all) or a historical commit that predates `ci.yml`'s
+      # existence. Re-running `validate.sh` + the publishability dry-run
+      # HERE, against the actual dispatched ref, restores the ref-local
+      # guarantee the old in-file `ci` job's `needs:` edge used to provide —
+      # not a redundant re-run of routine PR/push CI, but the one check that
+      # specifically must hold for *this* ref, *this* dispatch, regardless of
+      # whether `ci.yml` ever touched it. Cheap: this only runs on an actual
+      # release dispatch (a few times a month), not on every PR/push.
+      - name: Install validation tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends jq shellcheck
+      - name: Ref-local validation (restores the gate workflow_dispatch can bypass)
+        run: bash scripts/validate.sh
+      - name: Ref-local publishability gate (restores the gate workflow_dispatch can bypass)
+        run: npm publish --dry-run
 
       # D14 self-checkout: version-resolver is an in-repo hashira composite
       # action; GitHub's `uses:` keyword rejects an expression in the `@ref`
@@ -151,10 +193,6 @@ jobs:
           ref: 18ed5cd32de455d5886aac07d11cb7262de7a352 # main tip at hashira-v2 phase 6.1; no v2 tag exists yet
           path: .hashira
           persist-credentials: false
-
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
-        with:
-          node-version: '24'
 
       - name: Gather tag list
         id: tags
@@ -236,11 +274,9 @@ jobs:
 
   publish:
     name: publish
-    needs: [ci, version]
-    # Same gate as `version` (see "## Trigger model" above) — a bare push to
-    # main no longer auto-publishes; there is nothing left to infer a bump
-    # from. A manual dispatch with `bump` left empty also does not publish
-    # (it's a routine CI-only dispatch).
+    needs: version
+    # Same gate as `version` (see "## Trigger model" above) — a dispatch with
+    # `bump` left empty is a no-op (resolves/publishes nothing).
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
     runs-on: ubuntu-latest
     # Single production gate → exactly one approval per release.

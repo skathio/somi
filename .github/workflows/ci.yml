@@ -1,0 +1,124 @@
+# CI workflow — adopts skathio/hashira's v2 `npm-package-ci.yml` reusable
+# workflow (work item hashira-v2, iteration 6.2).
+#
+# v1 context: somi previously hand-rolled its own `ci` job (inside
+# publish.yml): `validate.sh` + `npm publish --dry-run`, and deliberately
+# DECLINED the npm CI reusable workflow (`npm-publish-redesign`'s stated
+# non-goal). v2 revisits that call — see decisions.md D5/Q3.
+#
+# ## The validate.sh-vs-reusable-CI comparison (the phase file's required
+#    enumeration; do not weaken this to a vague "looks equivalent" claim)
+#
+# `npm-package-ci.yml`'s `test` job runs `inputs.test_command` (default
+# `"npm test"`) via the library's `run-tests-js` composite action. somi's
+# own `package.json` already declares `"test": "bash scripts/validate.sh"`.
+# Leaving `test_command` at its default therefore runs `validate.sh`
+# UNCHANGED — the literal same script (JSON validity via jq, ShellCheck +
+# `bash -n` over hooks/*.sh, agent/command/skill frontmatter presence,
+# MAX/ECO model-tiering assertions, new-MAX/ECO-artifact existence checks),
+# just invoked from the reusable workflow's `test` job instead of somi's old
+# hand-rolled `ci` job. This is full preservation, not an approximation:
+#   - JSON validity (jq)                      -> covered, unchanged
+#   - ShellCheck + bash -n over hooks/*.sh     -> covered, unchanged
+#   - agent/command/skill frontmatter presence -> covered, unchanged
+#   - MAX/ECO model-tiering assertions         -> covered, unchanged
+#   - new-artifact existence (BRIEF.md.tmpl…)  -> covered, unchanged
+#   - coverage/lcov.info stub                  -> covered, unchanged; now
+#     actually consumed by `coverage-report` (a capability somi never had)
+# `lint` (commitlint, D11, non-blocking) and `scan-suite` (CodeQL/OSV/
+# Gitleaks/dependency-review/actionlint) are pure net-new capabilities — they
+# don't replace or approximate anything `validate.sh` did.
+#
+# The ONE real gap: `npm publish --dry-run` (the old hand-rolled `ci` job's
+# publishability gate — asserts pack/`files`-allowlist/publishConfig without
+# contacting the registry) has NO equivalent anywhere in `npm-package-ci.yml`
+# (setup/version/lint/test/scan-suite/coverage-report). It is preserved below
+# as a small custom parallel job, `publish-dry-run`, per D10's
+# consumer-composition pattern (the same shape rogue already uses for its 4
+# custom jobs alongside the shared NuGet CI call — see rogue's
+# `.github/workflows/ci.yml`).
+#
+# ## scan_disable — left at the reusable workflow's default ("codeql,actionlint")
+#
+# Deliberate, not an oversight: somi has no JS/TS application source (`find`
+# confirms zero .js/.ts files) — CodeQL's JS/TS analysis has nothing to scan,
+# pure overhead with zero signal for this repo. actionlint is more
+# marginal (somi now owns two workflow files) but isn't load-bearing for
+# this iteration and the library's own default already skips it; revisit if
+# somi's GitHub Actions surface grows. `osv`/`gitleaks`/`dependency-review`
+# (NOT in the default skip list) stay enabled — those are valuable
+# regardless of language (vulnerable/typosquatted deps, committed secrets)
+# and somi never had any equivalent of them before this adoption.
+#
+# ## library_ref — pinned to the SAME SHA as publish.yml (dual-pin invariant, D9)
+#
+# Must resolve to the same commit as publish.yml's `npm-release@<sha>` outer
+# pin and its `version` job's D14 self-checkout `ref:`. Do NOT introduce a
+# second, different pin here — that would violate the dual-pin invariant
+# iteration 4.1 mechanized (a lint elsewhere in hashira's own self-CI checks
+# for exactly this drift class on hashira's own fixtures; consumers must
+# uphold it by discipline). hashira has no `v2` tag yet (re-verified: `git
+# tag --list | grep '^v2'` returns nothing as of this iteration too), so this
+# pins to the same unreleased `main`-tip SHA publish.yml already uses — the
+# D6-supported interim state, not a new shortcut invented here.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  ci:
+    uses: skathio/hashira/.github/workflows/npm-package-ci.yml@18ed5cd32de455d5886aac07d11cb7262de7a352 # main tip at hashira-v2 phase 6.1; no v2 tag exists yet — same SHA as publish.yml's pins (dual-pin invariant, D9)
+    permissions:
+      contents: read
+      pull-requests: write     # commitlint + coverage-report sticky comments
+      security-events: write   # CodeQL SARIF upload — granted for forward-
+                                # compat even though CodeQL is in the default
+                                # `scan_disable` skip list for this repo (no
+                                # .js/.ts source to scan); no scan currently
+                                # active under somi's config writes here
+    with:
+      library_ref: '18ed5cd32de455d5886aac07d11cb7262de7a352' # MUST match the uses: pin above (dual-pin invariant, D9) — same SHA as publish.yml
+      node_version: '24'
+      # test_command, coverage_path, scan_disable left at their documented
+      # defaults — see the comments above for why each is correct as-is.
+
+  # Preserves the old hand-rolled `ci` job's publishability gate (D10
+  # consumer-composition pattern — same shape as rogue's 4 custom jobs
+  # alongside its shared CI call). `npm-package-ci.yml` has no equivalent
+  # job; this is the one real gap the validate.sh-vs-reusable-CI comparison
+  # found (see the top-of-file comment).
+  #
+  # No `needs:` — deliberately independent/parallel, not sequenced after the
+  # `ci` job above. `npm publish --dry-run` only exercises pack + the
+  # `files`/.npmignore selection + `publishConfig`; it needs no resolved
+  # version (a dry-run packs whatever version is currently in package.json,
+  # version validity isn't what this gate is checking) and no artifact the
+  # `ci` job produces. Making it `needs: ci` would only add latency (waiting
+  # on lint/test/scan-suite/coverage-report to finish) for zero added
+  # correctness — the two checks are unrelated.
+  publish-dry-run:
+    name: publish dry-run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '24'
+
+      # Publishability gate (R7): assert the package can be packed/published
+      # before the publish job (in publish.yml) is ever allowed to run.
+      # `npm publish --dry-run` exercises pack + the `files`/.npmignore
+      # selection + publishConfig without contacting the registry's publish
+      # endpoint, so it needs no auth. Identical step to the old hand-rolled
+      # `ci` job's third step in publish.yml (pre-6.2) — moved here, not
+      # rewritten.
+      - name: Assert package is publishable (dry-run)
+        run: npm publish --dry-run
