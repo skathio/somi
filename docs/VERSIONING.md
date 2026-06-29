@@ -1,8 +1,9 @@
 # Versioning
 
 SoMi follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Releases are
-**automated from [Conventional Commits](https://www.conventionalcommits.org/)** (see Release process
-below). The **published git tags (`v<VERSION>`) and the npm registry are the source of truth** for
+**explicit and dispatch-driven**: a maintainer triggers a release by running `publish.yml`'s
+`workflow_dispatch` with a `bump` choice (`patch`/`minor`/`major`) — see Release process below.
+The **published git tags (`v<VERSION>`) and the npm registry are the source of truth** for
 the released version — the in-repo `VERSION` / `package.json` are not committed back on each release,
 so they may lag behind what's published; check the
 [npm page](https://www.npmjs.com/package/@skathio/somi) or
@@ -60,22 +61,35 @@ After `1.0.0`, the policy above applies strictly.
 
 ## Release process
 
-Releases are **automated** by the `publish.yml` workflow (which adopts the hashira `npm-release`
-action). You do **not** hand-edit `VERSION`, tag, or publish manually.
+Releases are **explicit and dispatch-driven** (adopting hashira's v2 contract: the
+`version-resolver` composite action feeding the `npm-release` composite action). There is **no**
+automatic inference from commit messages anywhere in this pipeline — a maintainer always
+explicitly chooses the bump. You do **not** hand-edit `VERSION`, tag, or publish manually.
 
-1. **Land changes** on `main` via PR, using [Conventional Commits](https://www.conventionalcommits.org/)
-   (`feat:` → MINOR, `fix:`/`perf:` → PATCH, `feat!:` or a `BREAKING CHANGE:` footer → MAJOR).
-   Commit types that aren't release-worthy (`chore:`, `docs:`, `ci:`, `refactor:`, `test:`) don't
-   trigger a release on their own.
-2. **On merge to `main`** (or a manual `workflow_dispatch`), after the `ci` gate passes and the
-   `production` Environment is approved, semantic-release:
-   - derives the next version from the commits since the last tag,
-   - publishes to npm with a signed **provenance attestation** via OIDC trusted publishing (no
-     long-lived token),
+1. **Land changes** on `main` via PR as usual. [Conventional Commits](https://www.conventionalcommits.org/)
+   style is still a reasonable convention for commit hygiene, but **no commit message is parsed to
+   decide whether or how to release** — a bare push to `main` only runs the `ci` gate
+   (`scripts/validate.sh` + `npm publish --dry-run`); it never triggers a publish.
+2. **To cut a release**, a maintainer runs `publish.yml` via `workflow_dispatch` and sets the
+   `bump` input to one of `patch`, `minor`, or `major`:
+   - `patch`/`minor` increment off the latest stable git tag.
+   - `major` produces the next major with minor/patch reset to `0`.
+   - **First release only** (no prior stable tag): also set `seed_version` (e.g. `0.0.0`) — the
+     chosen `bump` applies on top of the seed, it is not published literally.
+3. The `version` job resolves the next version from the repo's tag history, surfaces it in the
+   run summary **before** anything is built, and packs a tarball with that version stamped in
+   (an isolated copy — never the checked-out tree; see "no commit-back" below).
+4. The `publish` job (gated by the `production` Environment — one required approval) calls
+   hashira's `npm-release` action with the resolved version and `auth: oidc`:
+   - publishes the same-run tarball to npm via native OIDC trusted publishing (no long-lived
+     token; `auth: oidc` fails loud on any OIDC failure rather than falling back to a secret —
+     there is none configured),
    - pushes the `v<X.Y.Z>` git tag, and
-   - creates the matching **GitHub Release** with generated notes.
-3. If there are no release-worthy commits since the last tag, the run is a no-op (nothing is
-   published) — this is expected.
+   - creates the matching **GitHub Release** using GitHub's server-side `--generate-notes`
+     (summarized from merged-PR titles/labels — expect different-looking notes than the old
+     commit-message-driven generator produced, not necessarily worse, just a different source).
+5. Leaving `bump` empty on a `workflow_dispatch` (or omitting it) runs only the `ci` gate — useful
+   for a manual CI-only re-run that isn't cutting a release.
 
 > The committed `VERSION` / `package.json` are not bumped back into the repo (tag-driven, no
 > commit-back). Treat the git tags + npm as authoritative.

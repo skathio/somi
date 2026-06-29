@@ -1,89 +1,312 @@
-# Publish workflow — single file, CI gates publish, one production approval.
+# Publish workflow — single file, one production approval.
 #
-# Adopts skathio/hashira's `npm-release` composite action (work item
-# npm-publish-redesign). The action runs semantic-release end-to-end (analyze →
-# version → tag → npm publish via native OIDC → GitHub Release) in THIS job, so
-# the OIDC token's `workflow_ref` = this file (publish.yml), matching the npm
-# trusted-publisher config (org skathio / repo somi / workflow publish.yml /
-# environment production).
+# Adopts skathio/hashira's v2 contract (work item hashira-v2): an explicit,
+# dispatch-driven version resolver (`version-resolver`) feeding the
+# `npm-release` composite action (OIDC trusted publishing, tag + GitHub
+# Release via `gh release create --generate-notes`). This REPLACES the v1
+# `npm-release@v1` contract, which ran `semantic-release` end-to-end
+# (commit-message-driven version inference, its own tag push, its own
+# Release-notes generation).
 #
-# Shape (D4): one file, two jobs.
-#   - ci      : runs on every PR + push to main + manual dispatch. Validates the
-#               repo (scripts/validate.sh) AND that the package is publishable
-#               (`npm publish --dry-run`). This is the gate.
-#   - publish : needs ci; runs ONLY on push to main / manual dispatch; gated by
-#               the `production` Environment (one approval). Calls npm-release.
+# Shape: one file, two jobs (iteration 6.2 retired the old hand-rolled `ci`
+# job — see "## CI gating, post-6.2" below for why).
+#   - version : Runs ONLY on a manual `workflow_dispatch` with a non-empty
+#               `bump` input — see "## Trigger model" below. Resolves the
+#               next version via hashira's `version-resolver` composite (D14
+#               self-checkout), surfaces it to the run summary (NFR-DX-3),
+#               and packs+stamps a tarball that `publish` hands to
+#               `npm-release` (see "## Same-run artifact handoff" below).
+#   - publish : needs version; runs under the SAME gate as `version` (manual
+#               dispatch + non-empty bump); gated by the `production`
+#               Environment (one approval). Calls npm-release@v2 with the
+#               resolver's output — never recomputes a version itself.
 #
-# This replaces the previous two-file shape (separate ci.yml + a publish.yml
-# that called the reusable workflow + a hand-rolled second OIDC job). That shape
-# ran CI and publish as two INDEPENDENT actions on a merge (CI gated nothing)
-# and required TWO production approvals (one per publishing job). ci.yml is
-# deleted; this file is the whole story.
+# ## CI gating, post-6.2 — why there is no in-file `ci` job anymore, and why
+# ## `version` re-validates anyway (pass-1 review correction)
+#
+# Pre-6.2, `version`/`publish` declared `needs: ci` against a hand-rolled
+# in-file job that ran `scripts/validate.sh` + `npm publish --dry-run`
+# directly. Iteration 6.2 added a SEPARATE workflow, `.github/workflows/
+# ci.yml`, which runs on every PR/push to `main` and covers both checks
+# (`validate.sh` via its `test` job's `test_command` default of `npm test`;
+# the dry-run via its own `publish-dry-run` custom job) — see ci.yml's
+# top-of-file comment for the full enumerated comparison. The richer parts
+# of `ci.yml` (`lint`/`scan-suite`/`coverage-report`) genuinely don't need
+# to re-run on every release dispatch — they're routine PR/push hygiene, not
+# release-time safety checks, so dropping the in-file `ci` job's `needs:`
+# edge for THOSE is correct.
+#
+# What the in-file `ci` job's `needs:` edge actually guaranteed, though, was
+# narrower and easy to overstate: NOT "branch protection already proved this
+# commit is good" (an earlier version of this comment claimed exactly that,
+# and it was wrong — corrected here). Branch protection's required status
+# checks gate MERGES into `main`; they do NOT gate which ref a
+# `workflow_dispatch` targets. A dispatch can select a non-`main` branch tip
+# (`ci.yml`'s push trigger is `branches: [main]` only, so a feature/release
+# branch tip may never have run `ci.yml` at all) or a historical commit that
+# predates `ci.yml`'s existence — neither is anything branch protection ever
+# touched. So the `version` job below re-runs `scripts/validate.sh` +
+# `npm publish --dry-run` itself, against the ACTUAL dispatched ref, before
+# resolving a version or packing anything — restoring the one ref-local
+# guarantee that matters at release time, regardless of whether `ci.yml` was
+# ever triggered for this specific ref. This is cheap (only runs on an
+# actual release dispatch, a few times a month) and is not redundant with
+# `ci.yml`: it's the dispatch-time analog of what `ci.yml` provides for
+# routine PR/push, not a second copy of the same check on the same ref.
+#
+# The `production` Environment's required-reviewer approval (per D2/D12)
+# remains the actual release gate — a human still looks before anything
+# reaches the registry — but it is a backstop, not a substitute for the
+# ref-local validation above; a human approving a deployment is not the same
+# guarantee as the dispatched ref having been mechanically checked.
+# `scripts/validate.sh` itself is NOT deleted — it remains somi's local dev
+# tool (`npm test`) and is what BOTH `ci.yml`'s `test` job AND this job run;
+# only the old SEPARATE in-file `ci` job (as its own job, gating via
+# `needs:`) is retired in favor of running the same check inline here.
 #
 # npm trusted publishing is OIDC-only here: NO NPM_TOKEN secret is set. The
-# `production` Environment must have >=1 required reviewer for the gate to pause.
-
+# `production` Environment must have >=1 required reviewer for the gate to
+# pause. `auth: oidc` is passed explicitly to npm-release (fails loud on any
+# OIDC failure rather than silently falling back to a token that does not
+# exist in this repo's secrets) — matches somi's pre-migration posture
+# exactly; nothing about the auth story changes in this migration.
+#
+# ## Trigger model — the real, visible v2 behavior change
+#
+# v1: semantic-release auto-decided whether a push to main warranted a
+# release by parsing conventional-commit messages since the last tag. A bare
+# push to main could silently cut a release (or silently no-op) depending on
+# commit message shape — no explicit human decision point.
+#
+# v2 (D1, work-item-wide — not a new decision made here): the resolver
+# requires an EXPLICIT `bump` (`patch`/`minor`/`major`). There is no commit
+# message parsing left anywhere in this pipeline (semantic-release's
+# commit-analyzer plugin is deleted). A bare push to main can therefore no
+# longer carry an opinion about whether/how to release — there is nothing
+# left to infer a bump from. Consequence: this workflow no longer listens on
+# `push`/`pull_request` at all (post-6.2 — see "## CI gating, post-6.2"
+# above); a bare push to main now only runs the separate `ci.yml`, never
+# touches `publish.yml`. Cutting a release is now an explicit act: a
+# maintainer runs `workflow_dispatch` and picks a `bump` (and, only for the
+# very first release under this model, a `seed_version`). Both jobs are gated on
+# `github.event.inputs.bump != ''` — the original, always-available form of
+# a `workflow_dispatch` input (GitHub later unified the top-level `inputs`
+# context to also work for `workflow_dispatch`, not just `workflow_call`, so
+# `inputs.bump` would be equally valid here; `github.event.inputs.*` is used
+# for no reason beyond being the form this file already used pre-migration —
+# either is correct, since `bump`/`seed_version` are plain strings and the
+# only behavioral difference between the two contexts is Boolean-typing,
+# which doesn't apply to either input here).
 name: publish
 
+# Trigger model, post-6.2: `workflow_dispatch` only. Pre-6.2 this also
+# listened on `pull_request`/`push: branches: [main]`, but those triggers
+# existed solely to run the old in-file `ci` job — `version`/`publish`
+# always skipped on those events via their own `if:` gate below, dispatch
+# being the only event that can carry a non-empty `bump`. Now that `ci` is
+# retired (see the "## CI gating, post-6.2" comment above; that role moved
+# to the separate `.github/workflows/ci.yml`), keeping those triggers here
+# would only produce no-op workflow runs (every job skipped) on every PR/
+# push — pure noise, not a real gate. `ci.yml` already covers PR/push.
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      bump:
+        description: "One of 'patch' | 'minor' | 'major' to cut a release. Leave empty for a no-op dispatch that resolves/publishes nothing."
+        required: false
+        type: string
+        default: ""
+      seed_version:
+        description: "Bare semver baseline (e.g. '0.0.0') for a first release with no prior stable tag. Ignored unless 'bump' is set and no stable tag exists yet."
+        required: false
+        type: string
+        default: ""
 
 # Deny-all baseline; each job grants the minimum it needs.
 permissions: {}
 
 jobs:
-  ci:
-    name: ci
+  # Resolves the next release version and packs+stamps the tarball
+  # `npm-release` (in the `publish` job below) will download and publish.
+  # Gated on an explicit `workflow_dispatch` with a non-empty `bump` — see
+  # "## Trigger model" above. A dispatch with `bump` left empty skips this
+  # job entirely (shows as "skipped"). No `needs:` — see "## CI gating,
+  # post-6.2" above for why this job no longer depends on an in-file `ci`
+  # job.
+  version:
+    name: version
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      resolved_version: ${{ steps.resolve.outputs.version }}
     steps:
+      # Full tag history (not the shallow default) so the resolver can see
+      # the real tag list via `git tag --list` below.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '24'
+
+      # Ref-local safety net (pass-1 review, Major): branch protection gates
+      # MERGES into `main` — it does NOT gate which ref a `workflow_dispatch`
+      # targets. A dispatch could select a non-`main` branch tip (`ci.yml`'s
+      # push trigger is `branches: [main]` only, so such a tip may never have
+      # run `ci.yml` at all) or a historical commit that predates `ci.yml`'s
+      # existence. Re-running `validate.sh` + the publishability dry-run
+      # HERE, against the actual dispatched ref, restores the ref-local
+      # guarantee the old in-file `ci` job's `needs:` edge used to provide —
+      # not a redundant re-run of routine PR/push CI, but the one check that
+      # specifically must hold for *this* ref, *this* dispatch, regardless of
+      # whether `ci.yml` ever touched it. Cheap: this only runs on an actual
+      # release dispatch (a few times a month), not on every PR/push.
       - name: Install validation tooling
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends jq shellcheck
-
-      - name: Run validation
+      - name: Ref-local validation (restores the gate workflow_dispatch can bypass)
         run: bash scripts/validate.sh
-
-      # Publishability gate (R7): assert the package can be packed/published
-      # before the publish job is ever allowed to run. `npm publish --dry-run`
-      # exercises pack + the `files`/.npmignore selection + publishConfig
-      # without contacting the registry's publish endpoint, so it needs no auth.
-      - name: Assert package is publishable (dry-run)
+      - name: Ref-local publishability gate (restores the gate workflow_dispatch can bypass)
         run: npm publish --dry-run
+
+      # D14 self-checkout: version-resolver is an in-repo hashira composite
+      # action; GitHub's `uses:` keyword rejects an expression in the `@ref`
+      # position, so the library is checked out locally and invoked via a
+      # literal `./` path instead (mirrors npm-package-ci.yml's `version`
+      # job exactly). Pinned to hashira's current `main` tip, NOT a `@v2` tag
+      # — hashira has not yet cut a `v2` release (no `v2` tag exists on
+      # hashira as of this migration); D6's refinement explicitly names "a
+      # consumer pinned to a released commit SHA on an unreleased main" as a
+      # supported interim state for exactly this reason (it's rogue's
+      # current state too). Re-pin to a released `@v2`/`@v2.x.y` tag once
+      # hashira cuts one — tracked alongside iteration 6.3/6.4's equivalent
+      # move for rogue, not invented fresh here.
+      - name: Checkout hashira library (D14)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: skathio/hashira
+          ref: 396cfe5cc443178c67b89ee8933a84d7ac6c870f # main tip at hashira-v2 phase 6.1; no v2 tag exists yet
+          path: .hashira
+          persist-credentials: false
+
+      - name: Gather tag list
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_list="$(git tag --list)"
+          {
+            echo "tags<<SOMI_TAGS_EOF"
+            echo "${tag_list}"
+            echo "SOMI_TAGS_EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Resolve next version
+        id: resolve
+        uses: ./.hashira/.github/actions/version-resolver
+        with:
+          tags: ${{ steps.tags.outputs.tags }}
+          bump: ${{ github.event.inputs.bump }}
+          seed_version: ${{ github.event.inputs.seed_version }}
+
+      - name: Surface resolved version in run summary (NFR-DX-3)
+        shell: bash
+        env:
+          RESOLVED_VERSION: ${{ steps.resolve.outputs.version }}
+          BUMP: ${{ github.event.inputs.bump }}
+        run: |
+          set -euo pipefail
+          echo "publish: resolved version ${RESOLVED_VERSION} (bump=${BUMP})" >> "${GITHUB_STEP_SUMMARY}"
+
+      # Stamp + pack in an ISOLATED COPY of the working tree, never the
+      # checked-out tree itself (D1's stamp-only, no-commit-back invariant).
+      # npm-release@v2 does not compute or stamp a version itself — it only
+      # downloads and publishes the same-run artifact this step produces.
+      - name: Pack tarball with stamped version (D1 — stamp-only, no commit-back)
+        shell: bash
+        env:
+          RESOLVED_VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          pack_dir="${RUNNER_TEMP}/somi-pack"
+          rm -rf "${pack_dir}"
+          mkdir -p "${pack_dir}"
+          # .hashira is this job's D14 library self-checkout, not part of
+          # somi's own package — excluded so it never ships in the tarball.
+          rsync -a --exclude='.git' --exclude='.hashira' --exclude="${pack_dir}" ./ "${pack_dir}/"
+          (
+            cd "${pack_dir}"
+            npm pkg set version="${RESOLVED_VERSION}"
+            mkdir -p "${RUNNER_TEMP}/somi-pack-output"
+            npm pack --pack-destination "${RUNNER_TEMP}/somi-pack-output"
+          )
+          echo "publish: packed tarball stamped with version ${RESOLVED_VERSION} at ${RUNNER_TEMP}/somi-pack-output" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload packed tarball (same-run artifact handoff for npm-release)
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          # npm-release@v2 downloads this exact artifact name unconditionally
+          # — it has no mechanism to produce or re-pack it itself. Must match
+          # exactly.
+          name: npm-tarball
+          path: ${{ runner.temp }}/somi-pack-output/*.tgz
+          if-no-files-found: error
+          retention-days: 5
+
+      - name: Assert stamp did not touch the checked-out working tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          # --untracked-files=no: the D14 self-checkout above lands .hashira/
+          # as untracked content in the workspace; that's expected and
+          # harmless. The real invariant is that no TRACKED file changed.
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo "::error::publish/version: working tree changed during pack — stamp must only touch the packed output, never the checked-out tree" >&2
+            git status --porcelain --untracked-files=no >&2
+            exit 1
+          fi
+          echo "publish: git status (tracked files) clean after stamp — no commit-back occurred" >> "${GITHUB_STEP_SUMMARY}"
 
   publish:
     name: publish
-    needs: ci
-    # Only publish on a push to main or a manual dispatch — never on PRs.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: version
+    # Same gate as `version` (see "## Trigger model" above) — a dispatch with
+    # `bump` left empty is a no-op (resolves/publishes nothing).
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
     runs-on: ubuntu-latest
     # Single production gate → exactly one approval per release.
     environment: production
     permissions:
-      id-token: write      # npm OIDC trusted-publishing token exchange
-      contents: write      # semantic-release pushes the version tag
-      issues: write        # @semantic-release/github failure issue
-      pull-requests: write # @semantic-release/github release-note comment
+      id-token: write       # npm OIDC trusted-publishing token exchange
+      contents: write        # `gh release create` tags the commit + creates the Release
+      pull-requests: read    # --generate-notes reads merged-PR metadata (read-only)
     steps:
+      # npm-release's own documented runtime contract requires the caller to
+      # have checked out the repo (for the tag/Release step's `gh`
+      # invocation) with persist-credentials left at its default `true`
+      # before the composite runs. This is unrelated to git-push credentials
+      # (the composite tags/releases via `gh release create`, authenticated
+      # by `GITHUB_TOKEN`/`github.token` passed as an env var inside the
+      # composite itself, not by a pushed git credential) — verified
+      # directly against npm-release/action.yml's own "Tag + GitHub Release"
+      # step, which never calls `git push`. Kept because the composite's own
+      # adoption doc names it as required; not carried over from
+      # semantic-release's now-deleted tag-push behavior (the v1-era
+      # justification this comment used to cite).
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          fetch-depth: 0          # semantic-release walks full history for versioning
-          persist-credentials: true  # REQUIRED: semantic-release core pushes the
-                                  # version tag via these git credentials. Without
-                                  # them the publish succeeds but the tag push fails,
-                                  # leaving the next run unable to compute a release.
+          persist-credentials: true
 
-      - uses: skathio/hashira/.github/actions/npm-release@v1
+      - uses: skathio/hashira/.github/actions/npm-release@396cfe5cc443178c67b89ee8933a84d7ac6c870f # main tip at hashira-v2 phase 6.1; no v2 tag exists yet — see version job's checkout comment
         with:
+          version: ${{ needs.version.outputs.resolved_version }}
           node_version: '24'
+          auth: oidc
           # target defaults to https://registry.npmjs.org (official registry → OIDC).
-          # No NPM_TOKEN: OIDC trusted publishing handles auth.
+          # No npm_token: OIDC trusted publishing handles auth; auth: oidc
+          # never falls back to one even if it were set.
