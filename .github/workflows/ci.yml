@@ -74,7 +74,7 @@ permissions: {}
 
 jobs:
   ci:
-    uses: skathio/hashira/.github/workflows/npm-package-ci.yml@4005e0a8305e1ff912dea9568d76062ce1790f2a # main tip at hashira-v2 phase 6.1; no v2 tag exists yet — same SHA as publish.yml's pins (dual-pin invariant, D9)
+    uses: skathio/hashira/.github/workflows/npm-package-ci.yml@396cfe5cc443178c67b89ee8933a84d7ac6c870f # main tip at hashira-v2 phase 6.1; no v2 tag exists yet — same SHA as publish.yml's pins (dual-pin invariant, D9)
     permissions:
       contents: read
       pull-requests: write     # commitlint + coverage-report sticky comments
@@ -84,7 +84,7 @@ jobs:
                                 # .js/.ts source to scan); no scan currently
                                 # active under somi's config writes here
     with:
-      library_ref: '4005e0a8305e1ff912dea9568d76062ce1790f2a' # MUST match the uses: pin above (dual-pin invariant, D9) — same SHA as publish.yml
+      library_ref: '396cfe5cc443178c67b89ee8933a84d7ac6c870f' # MUST match the uses: pin above (dual-pin invariant, D9) — same SHA as publish.yml
       node_version: '24'
       # test_command, coverage_path, scan_disable left at their documented
       # defaults — see the comments above for why each is correct as-is.

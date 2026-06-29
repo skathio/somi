@@ -190,7 +190,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: skathio/hashira
-          ref: 4005e0a8305e1ff912dea9568d76062ce1790f2a # main tip at hashira-v2 phase 6.1; no v2 tag exists yet
+          ref: 396cfe5cc443178c67b89ee8933a84d7ac6c870f # main tip at hashira-v2 phase 6.1; no v2 tag exists yet
           path: .hashira
           persist-credentials: false
 
@@ -302,7 +302,7 @@ jobs:
         with:
           persist-credentials: true
 
-      - uses: skathio/hashira/.github/actions/npm-release@4005e0a8305e1ff912dea9568d76062ce1790f2a # main tip at hashira-v2 phase 6.1; no v2 tag exists yet — see version job's checkout comment
+      - uses: skathio/hashira/.github/actions/npm-release@396cfe5cc443178c67b89ee8933a84d7ac6c870f # main tip at hashira-v2 phase 6.1; no v2 tag exists yet — see version job's checkout comment
         with:
           version: ${{ needs.version.outputs.resolved_version }}
           node_version: '24'
