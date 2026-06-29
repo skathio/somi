@@ -178,19 +178,15 @@ jobs:
       # action; GitHub's `uses:` keyword rejects an expression in the `@ref`
       # position, so the library is checked out locally and invoked via a
       # literal `./` path instead (mirrors npm-package-ci.yml's `version`
-      # job exactly). Pinned to hashira's current `main` tip, NOT a `@v2` tag
-      # — hashira has not yet cut a `v2` release (no `v2` tag exists on
-      # hashira as of this migration); D6's refinement explicitly names "a
-      # consumer pinned to a released commit SHA on an unreleased main" as a
-      # supported interim state for exactly this reason (it's rogue's
-      # current state too). Re-pin to a released `@v2`/`@v2.x.y` tag once
-      # hashira cuts one — tracked alongside iteration 6.3/6.4's equivalent
-      # move for rogue, not invented fresh here.
+      # job exactly). Pinned to `v2`, hashira's rolling major-version tag
+      # (hashira's `docs/usage.md` "Pin policy" — "acceptable for most
+      # consumers"; auto-advances to future `v2.x.y` releases). Must match
+      # the `npm-release@v2` pin below (dual-pin invariant, D9).
       - name: Checkout hashira library (D14)
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: skathio/hashira
-          ref: 396cfe5cc443178c67b89ee8933a84d7ac6c870f # main tip at hashira-v2 phase 6.1; no v2 tag exists yet
+          ref: v2
           path: .hashira
           persist-credentials: false
 
@@ -302,7 +298,7 @@ jobs:
         with:
           persist-credentials: true
 
-      - uses: skathio/hashira/.github/actions/npm-release@396cfe5cc443178c67b89ee8933a84d7ac6c870f # main tip at hashira-v2 phase 6.1; no v2 tag exists yet — see version job's checkout comment
+      - uses: skathio/hashira/.github/actions/npm-release@v2 # rolling major tag — see version job's checkout comment
         with:
           version: ${{ needs.version.outputs.resolved_version }}
           node_version: '24'

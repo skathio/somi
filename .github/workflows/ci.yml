@@ -52,17 +52,17 @@
 # regardless of language (vulnerable/typosquatted deps, committed secrets)
 # and somi never had any equivalent of them before this adoption.
 #
-# ## library_ref — pinned to the SAME SHA as publish.yml (dual-pin invariant, D9)
+# ## library_ref — pinned to the SAME ref as publish.yml (dual-pin invariant, D9)
 #
-# Must resolve to the same commit as publish.yml's `npm-release@<sha>` outer
+# Must resolve to the same commit as publish.yml's `npm-release@<ref>` outer
 # pin and its `version` job's D14 self-checkout `ref:`. Do NOT introduce a
 # second, different pin here — that would violate the dual-pin invariant
 # iteration 4.1 mechanized (a lint elsewhere in hashira's own self-CI checks
 # for exactly this drift class on hashira's own fixtures; consumers must
-# uphold it by discipline). hashira has no `v2` tag yet (re-verified: `git
-# tag --list | grep '^v2'` returns nothing as of this iteration too), so this
-# pins to the same unreleased `main`-tip SHA publish.yml already uses — the
-# D6-supported interim state, not a new shortcut invented here.
+# uphold it by discipline). Pinned to `v2`, hashira's rolling major-version
+# tag (now that `v2.0.0` has shipped — see hashira's `docs/usage.md` "Pin
+# policy"): consumers who want byte-exact reproducibility instead should use
+# `@v2.0.0` or a SHA; `v2` auto-advances to future `v2.x.y` releases.
 name: ci
 
 on:
@@ -74,7 +74,7 @@ permissions: {}
 
 jobs:
   ci:
-    uses: skathio/hashira/.github/workflows/npm-package-ci.yml@396cfe5cc443178c67b89ee8933a84d7ac6c870f # main tip at hashira-v2 phase 6.1; no v2 tag exists yet — same SHA as publish.yml's pins (dual-pin invariant, D9)
+    uses: skathio/hashira/.github/workflows/npm-package-ci.yml@v2 # rolling major tag (hashira docs/usage.md "Pin policy") — same ref as publish.yml's pins (dual-pin invariant, D9)
     permissions:
       contents: read
       pull-requests: write     # commitlint + coverage-report sticky comments
@@ -84,7 +84,7 @@ jobs:
                                 # .js/.ts source to scan); no scan currently
                                 # active under somi's config writes here
     with:
-      library_ref: '396cfe5cc443178c67b89ee8933a84d7ac6c870f' # MUST match the uses: pin above (dual-pin invariant, D9) — same SHA as publish.yml
+      library_ref: 'v2' # MUST match the uses: pin above (dual-pin invariant, D9) — same ref as publish.yml
       node_version: '24'
       # test_command, coverage_path, scan_disable left at their documented
       # defaults — see the comments above for why each is correct as-is.
