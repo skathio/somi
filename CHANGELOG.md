@@ -4,6 +4,19 @@ All notable changes to `@skathio/somi` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
+## [1.1.1] — 2026-06-29 — CI/CD migrated to hashira v2
+
+### Changed
+
+- **CI/CD pipeline migrated to [`skathio/hashira`](https://github.com/skathio/hashira)'s v2
+  contract.** Releases are now cut via an explicit `workflow_dispatch` with a `bump`
+  (`patch`/`minor`/`major`) input, resolved by hashira's version-resolver — replacing
+  `semantic-release`'s commit-message-driven inference. npm publishing uses OIDC trusted
+  publishing (no `NPM_TOKEN`). CI now also runs hashira's shared `npm-package-ci.yml` (commitlint,
+  CodeQL/OSV/Gitleaks/dependency-review, coverage reporting) alongside the existing
+  `scripts/validate.sh` and publishability dry-run checks.
+- No behavior change to any `/command`, agent, hook, or template — this release is CI/tooling only.
+
 ## [1.1.0] — 2026-06-23 — MAX/ECO economy & the execution brief
 
 Re-tiers SoMi's models on the **SDLC-phase axis** instead of the orchestration axis. A **MAX** tier
