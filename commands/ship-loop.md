@@ -44,7 +44,10 @@ orchestrator is `sonnet`; the MAX agents it Tasks are `opus`, the ECO agents (`p
 | `CONTINUOUS_ECO` — once past the gate, `/plan-loop`→`/code-loop` run to completion with **no per-iteration human stop**; the caps are the safety net | always on | (n/a) |
 | `CROSS_LAYER_CIRCUIT_BREAKER` — stop if a finding recurs across loops (e.g., same security issue surfaces in both plan and code review) | always on | (n/a) |
 
-Record effective values in the first diary entry of the run.
+**Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
+key `ship_loop.global_budget_passes`; the per-layer caps read their own `code_loop.*` /
+`plan_loop.*` keys) > the defaults above. Record effective values in the first diary entry of
+the run.
 
 ## Pipeline
 
@@ -113,19 +116,24 @@ brief; they do not approve every iteration.
 
 ### Cross-layer circuit breaker
 
-Track findings across all loops in this run. If a finding (file + nearest symbol/function + title,
-or for plan-level: spec-section + topic) recurs across:
+The findings ledger (`.somi/reviews/<slug>/findings.json`, maintained by the inner loops via
+[`scripts/somi-findings.sh`](../scripts/somi-findings.sh)) computes this mechanically: every
+`record` call classifies each finding, and a **`recurring_cross_run: true`** means the same locus
+(file + nearest symbol + title; for plan-level: artifact + section + topic) was already seen by a
+*different* loop run — a `/plan-loop` review then a `/code-loop` review, or two separate
+`/code-loop` invocations.
 
-- A `/plan-loop` review and a `/code-loop` review, or
-- Two separate `/code-loop` invocations,
-
-then STOP. The same problem reappearing across layers means the abstraction or boundary itself
-needs human attention, not another automated pass.
+When an inner loop surfaces a `recurring_cross_run` finding, STOP the pipeline. The same problem
+reappearing across layers means the abstraction or boundary itself needs human attention, not
+another automated pass. (Because the ledger is durable, this breaker also works across
+*sessions* — a finding from last week's stopped run still counts.)
 
 ### Global budget
 
-Sum passes across all `/plan-loop` and `/code-loop` invocations in this run. If
-`GLOBAL_BUDGET_PASSES` is hit, STOP — even if individual layers haven't tripped their own caps.
+Sum passes across all `/plan-loop` and `/code-loop` invocations in this run — read each loop's
+`pass` from `bash scripts/somi-loop.sh stats --slug <slug> [--iteration <N>.<M>]` rather than
+recounting from memory. If `GLOBAL_BUDGET_PASSES` is hit, STOP — even if individual layers
+haven't tripped their own caps.
 
 ## Summarise back
 

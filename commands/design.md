@@ -88,13 +88,22 @@ distils the relevant conventions into the brief's **"Repo conventions in force"*
 tier inherits them without re-reading. **Repo-local instructions win** over SoMi defaults where they
 conflict. Do **not** auto-invoke the repo's own agents — surface them for the user to opt into.
 
-### 6. Verification protocol (inline, during design)
+### 6. Verification protocol (the batch round-trip — this command owns the user conversation)
 
-On every choice that shapes the architecture, the designer: states the decision, offers 2–4 concrete
-options with **specific** pros/cons (no vague "more flexible"/"cleaner"), recommends one with a
-reason, and always offers **`Other`** and **`Discover`** escape hatches. Each choice is recorded in
-`decisions.md` with `Verified with user: yes`. See [`commands/plan.md`](./plan.md) §5 — the shared
-protocol. **Do not silently pick** expensive-to-reverse defaults.
+On every choice that shapes the architecture, the designer offers 2–4 concrete options with
+**specific** pros/cons (no vague "more flexible"/"cleaner"), a recommendation with a reason, and
+the **`Other`** / **`Discover`** escape hatches — but a Tasked subagent cannot pause to converse
+with the user, so run the **shared batch round-trip** (see [`commands/plan.md`](./plan.md) §5):
+
+1. The designer's research pass returns a **`DECISIONS-NEEDED` block** (codebase read, crossroads
+   framed, nothing recorded).
+2. **You present each decision to the user faithfully** — options, pros/cons, recommendation, the
+   escape hatches; the designer's pre-supplied narrowing questions power Discover mode.
+3. Re-invoke the designer with a **`VERIFIED-DECISIONS` block appended** to the same briefing; it
+   then records `decisions.md` entries with `Verified with user: yes` and compiles the brief.
+
+**Do not silently pick** expensive-to-reverse defaults, and never let a decision be recorded as
+user-verified without an actual user verdict from step 2.
 
 ### 7. The brief is the deliverable
 
@@ -112,7 +121,8 @@ MAX-tier counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-l
   the artifacts only (`design.md`, `decisions.md`, `brief.md`), **not** the design conversation, so
   the review is unbiased.
 - Revise on Blocker/Major findings; re-review. **Bounded:** stop on a clean verdict, on an iteration
-  cap (default 2, env `SOMI_DESIGN_LOOP_MAX_PASSES`), or on divergence (findings not dropping).
+  cap (default 2; config key `design_loop.max_passes` in `.somi/config.json`, env
+  `SOMI_DESIGN_LOOP_MAX_PASSES` — env wins), or on divergence (findings not dropping).
 - The user can skip this for a routine design.
 
 ### 9. Summarise back

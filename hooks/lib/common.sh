@@ -44,6 +44,19 @@ somi::audit_log_path() {
   printf '%s' "$log"
 }
 
+# Read a value from the project's committed config at .somi/config.json.
+# Usage: somi::config '.dep_install.allow[]?'   → prints the jq result (or nothing).
+# Precedence contract (callers enforce it): env var > .somi/config.json > default.
+# Same unexpanded-variable guard as somi::audit_log_path.
+somi::config() {
+  local path="$1"
+  local base="${CLAUDE_PROJECT_DIR:-$PWD}"
+  [[ "$base" == *'${'* ]] && base="$PWD"
+  local cfg="$base/.somi/config.json"
+  [[ -f "$cfg" ]] || return 0
+  jq -r "$path // empty" "$cfg" 2>/dev/null || true
+}
+
 # Append a structured line to the audit log.
 somi::audit() {
   local kind="$1"

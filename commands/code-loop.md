@@ -33,8 +33,10 @@ so it isn't biased by the coder's reasoning.
 | `REVIEW_MODE` — `single` (Task `reviewer`) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens) | `single` | `SOMI_CODE_LOOP_REVIEW` (`panel`) |
 | `HUMAN_CHECKPOINT` — pause between passes if user reply `stop` is detected | always on | (n/a) |
 
-Read overrides from the environment at the start of the run; record the effective values in
-the first diary entry of the loop.
+**Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
+keys `code_loop.max_passes`, `code_loop.severity_floor`, `code_loop.diff_cap_lines`,
+`code_loop.review_mode`) > the defaults above. Read both at the start of the run; record the
+effective values in the first diary entry of the loop.
 
 ## What to do
 
@@ -43,66 +45,87 @@ the first diary entry of the loop.
 Same logic as [`/code`](./code.md) §1–§2. If the iteration is missing or already `done`, stop and
 ask the user.
 
-### 2. Initialize loop state
+### 2. Initialize loop state (deterministic, resumable)
 
-- Set `pass = 1`.
-- **Capture the diff baseline once, now**, before the coder touches anything:
-  `BASELINE_SHA = git rev-parse HEAD`. Every pass measures the cumulative diff against this fixed
-  ref *including the working tree* (`git diff --shortstat $BASELINE_SHA`), so the cap means the same
-  thing whether the coder commits each pass or leaves an uncommitted tree. Record `BASELINE_SHA` in
-  the first diary entry. **Do not** recompute the baseline between passes.
-- Compute `iteration_file_list` = the iteration's "Files (approx)" list. Diff outside this list
-  during the loop is **scope expansion**; the diff cap shrinks proportionally.
-- Initialize `previous_findings = []` (used by the circuit breaker).
-- Append a diary entry (category `note`):
-  - Title: `code-loop started for phase <N>.<M>`.
-  - Body: effective gate values + the iteration file list.
+The loop's arithmetic — pass counting, the diff baseline, cap checks, finding recurrence — is
+owned by two shipped scripts, **not** by you simulating a state machine in context:
+[`scripts/somi-loop.sh`](../scripts/somi-loop.sh) (state + caps) and
+[`scripts/somi-findings.sh`](../scripts/somi-findings.sh) (the findings ledger). State survives
+session death at `.claude/somi-state/loop/<slug>.<N>.<M>.json`.
+
+- **Resume check first:** `bash scripts/somi-loop.sh resume --slug <slug> --iteration <N>.<M>`
+  (path relative to the SoMi install root). If it prints a `running` state, a previous session
+  died mid-loop — **continue from its recorded pass and baseline** instead of starting over, and
+  tell the user you resumed.
+- Otherwise initialize:
+
+  ```bash
+  bash scripts/somi-loop.sh init --slug <slug> --loop code --iteration <N>.<M> \
+    --files "<the iteration's 'Files (approx)' paths, space-separated>"
+  ```
+
+  This captures `BASELINE_SHA = HEAD` **once** (never recomputed between passes; the cumulative
+  diff is measured against it *including the working tree*, with `.somi/` and `.claude/`
+  excluded so artifact churn doesn't eat the code budget), resolves the caps
+  (flag > env > `.somi/config.json` > defaults), and prints the effective values.
+- Set `RUN_ID` = the `started` timestamp from the state; pass it to every findings-ledger call
+  in this loop.
+- Append a diary entry (category `note`): title `code-loop started for phase <N>.<M>`, body =
+  effective gate values + the iteration file list (+ "resumed from pass P" if resuming).
+
+> **Host fallback.** If the host can't run shell scripts, track the same state manually as
+> before (baseline SHA, pass counter, cumulative `git diff --shortstat`, finding recurrence by
+> file + symbol + title) — identical gates, judgment-enforced — and say so in the summary.
 
 ### 3. Loop
 
 ```text
-while pass <= MAX_PASSES:
-  # 3a. Code
+while true:
+  # 3a. Pass gate (deterministic)
+  bash scripts/somi-loop.sh pass --slug <slug> --iteration <N>.<M>
+    exit 2 → STOP — write remaining ≥Major findings as progress.md follow-ups (by F-id),
+             summarise, exit "max-passes-exceeded"
+
+  # 3b. Code
   Task coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
 
-  # 3b. Verify diff size & scope (cumulative since the §2 baseline, working tree included)
-  cumulative_diff_lines = git diff --shortstat $BASELINE_SHA | parse   # counts committed + uncommitted
-  if cumulative_diff_lines > DIFF_CAP_LINES:
-    STOP — write follow-ups to progress.md, summarise, exit "diff-cap-exceeded"
-  if any file changed not in iteration_file_list:
-    SHRINK DIFF_CAP — scope expansion counts double; if still over, STOP
+  # 3c. Diff & scope gate (deterministic — cumulative vs the recorded baseline, working tree
+  #     included, .somi/.claude excluded; out-of-scope lines count DOUBLE)
+  bash scripts/somi-loop.sh check-diff --slug <slug> --iteration <N>.<M>
+    exit 3 → STOP — exit "diff-cap-exceeded"; if the printed JSON's out_of_scope is non-empty,
+             report the stop as "scope-expansion" and name the files
 
-  # 3c. Review — single reviewer, or the parallel panel when REVIEW_MODE == panel
+  # 3d. Review — single reviewer, or the parallel panel when REVIEW_MODE == panel
   if REVIEW_MODE == "panel":
     Task /review-panel ( = <slug> phase <N>, iteration <M> )   # parallel multi-lens, merged verdict
   else:
     Task reviewer ( = /review <slug>, scope = this iteration's diff )
 
-  # 3d. Verdict
+  # 3e. Record the pass + findings. The ledger computes recurrence on a STABLE locus
+  #     (file + symbol + normalized title — never the raw line number, which drifts between
+  #     passes and would let coder and reviewer oscillate to the pass cap unnoticed).
+  bash scripts/somi-loop.sh record-pass --slug <slug> --iteration <N>.<M> \
+    --verdict <V> --blockers <B> --majors <MJ>
+  echo '<review findings as a JSON array [{file, symbol, title, severity, confidence}, …]>' \
+    | bash scripts/somi-findings.sh record --slug <slug> --review <review-file> \
+        --run $RUN_ID --pass <current pass>
+    exit 5 → STOP — the same finding recurred in two consecutive passes: coder and reviewer
+             disagree; hand to human (circuit breaker). Also surface any finding the output
+             flags recurring_cross_run — that's /ship-loop's cross-layer breaker signal.
+
+  # 3f. Verdict
   if verdict == "approve" or no finding at severity >= SEVERITY_FLOOR:
+    somi-findings.sh resolve each finding this pass fixed ( --status fixed --by <review-file> )
     DONE — proceed to §4
 
-  # 3e. Circuit breaker — match on a STABLE locus, not the raw line number.
-  #   A finding recurs when it shares (file path + nearest symbol/function + title) with a
-  #   prior-pass finding. Line numbers shift as the diff changes between passes, so matching on
-  #   file:line silently misses the recurrence and lets coder and reviewer oscillate to MAX_PASSES.
-  if any finding in current_findings matches a finding in previous_findings
-      by (path + nearest symbol/function + title):
-    STOP — coder and reviewer disagree; hand to human
-
-  # 3f. Next pass
-  previous_findings = current_findings
+  # 3g. Next pass
   current_findings = subset of new findings at severity >= SEVERITY_FLOOR
-  pass += 1
-  append diary line: pass#, verdict, Blocker/Major counts, cumulative diff size
-
-# Out of loop
-if pass > MAX_PASSES:
-  STOP — write remaining findings as progress.md follow-ups, summarise, exit "max-passes-exceeded"
+  append diary line: pass#, verdict, Blocker/Major counts, cumulative diff size (from 3c)
 ```
 
 ### 4. On DONE (clean exit)
 
+- `bash scripts/somi-loop.sh finish --slug <slug> --iteration <N>.<M> --status done`.
 - Mark iteration `done` in `phases/<NN>-*.md`.
 - Update `progress.md` (phase row, "Last activity").
 - Append a diary entry (category `note`): `code-loop done at pass <P>; verdict <V>`.
@@ -110,10 +133,12 @@ if pass > MAX_PASSES:
 
 ### 5. On STOP (gate hit)
 
+- `bash scripts/somi-loop.sh finish --slug <slug> --iteration <N>.<M> --status stopped-<reason>`.
 - Do **not** mark iteration `done`.
 - Append a diary entry (category `blocker` or `plan-change`): which gate fired, what's
   outstanding, what the user needs to decide.
-- Write remaining ≥Major findings as `progress.md` follow-ups so they aren't lost.
+- Write remaining ≥Major findings as `progress.md` follow-ups **by ledger id** (`F-3: <title>`)
+  so they aren't lost and the next review can assert their resolution.
 - Summarise with explicit next step (usually: human review of the partial work, then a
   manual `/code` or `/plan` revision).
 
@@ -121,7 +146,8 @@ if pass > MAX_PASSES:
 
 - Loop status: `done` | `max-passes-exceeded` | `diff-cap-exceeded` | `scope-expansion` |
   `circuit-breaker` | `user-stop`.
-- Passes used (out of `MAX_PASSES`).
+- Passes used (out of `MAX_PASSES`) — from `somi-loop.sh stats` (also the run's telemetry:
+  per-pass verdicts, Blocker/Major counts, diff sizes).
 - Final verdict + count by severity.
 - Cumulative diff size and any out-of-scope files touched.
 - Pointer to all review files under `.somi/reviews/<slug>/` from this loop.

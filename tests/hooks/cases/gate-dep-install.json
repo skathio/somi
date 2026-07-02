@@ -1,0 +1,37 @@
+{
+  "script": "pre-tool/gate-dep-install.sh",
+  "cases": [
+    { "name": "npm-install-package", "expect": "deny",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install lodash" } } },
+    { "name": "yarn-add", "expect": "deny",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "yarn add react" } } },
+    { "name": "pip-install-package", "expect": "deny",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "pip install requests" } } },
+    { "name": "cargo-add", "expect": "deny",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "cargo add serde" } } },
+    { "name": "brew-install", "expect": "deny",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "brew install jq" } } },
+
+    { "name": "bare-npm-install", "expect": "allow",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install" } } },
+    { "name": "npm-ci", "expect": "allow",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm ci" } } },
+    { "name": "bundle-install", "expect": "allow",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "bundle install" } } },
+    { "name": "npm-install-package-opted-in", "expect": "allow",
+      "env": { "SOMI_ALLOW_DEP_INSTALL": "1" },
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install lodash" } } },
+    { "name": "config-allowlist-prefix-match", "expect": "allow",
+      "config": { "dep_install": { "allow": ["@types/"] } },
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install @types/node" } } },
+    { "name": "config-allowlist-non-matching-package", "expect": "deny",
+      "config": { "dep_install": { "allow": ["@types/"] } },
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install lodash" } } },
+    { "name": "config-allowlist-mixed-packages", "expect": "deny",
+      "config": { "dep_install": { "allow": ["@types/"] } },
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install @types/node lodash" } } },
+    { "name": "config-allowlist-compound-command-stays-denied", "expect": "deny",
+      "config": { "dep_install": { "allow": ["@types/"] } },
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install @types/node && echo done" } } }
+  ]
+}

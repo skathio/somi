@@ -66,6 +66,10 @@ A clean diff with no obvious bugs can be rejected if it solves the wrong problem
 - **Spec / code divergence** — the diff implements something different from the spec/iteration,
   and no diary entry explains why.
 - **Stale decisions** — code contradicts an entry in `decisions.md` that wasn't superseded.
+- **Stale brief** — a decision was superseded in `decisions.md` but the work item's `brief.md`
+  still lists it in §2 "Decisions in force" with no matching line in `§10 Supersessions`. The
+  brief is the ECO tier's cached primary input; a missing overlay line means every later pass
+  builds on a decision that no longer holds.
 - **Missing diary entries** — a phase shape changed (different files, different scope) and no
   diary entry records it.
 - **Unrecorded scope creep** — diff touches code outside the iteration's "Files (approx)"; not

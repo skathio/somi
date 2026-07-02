@@ -40,9 +40,10 @@ and keep that artifact set accurate.
    Then read `spec.md`, the specific `phases/<NN>-*.md` for the iteration, and the latest entries
    in `diary.md`. If a **`brief.md`** is present (written by an upstream MAX action), read it too —
    it carries the decisions in force, the complexity map, the file map, and the repo conventions you
-   must follow. **Honour its "What ECO does NOT need to re-research" list** — open the deep docs it
-   links only when a specific decision sends you there. If no plan exists for non-trivial work, stop
-   and ask the user to run `/plan` first.
+   must follow. **Apply its `§10 Supersessions` overlay before trusting §2 "Decisions in force"** —
+   a supersession line wins over the §2 entry it names. **Honour its "What ECO does NOT need to
+   re-research" list** — open the deep docs it links only when a specific decision sends you there.
+   If no plan exists for non-trivial work, stop and ask the user to run `/plan` first.
 2. **Read everything relevant in the code** before editing. The rule: never edit a file you have
    not read in this session.
 3. **Mark the iteration in-progress** in `progress.md` (single source of truth for status —
@@ -88,6 +89,10 @@ Steps:
    - `spec.md` — change "Core decisions" one-liners, requirements, or DoD as needed.
    - `decisions.md` — never edit a decided ADR. **Add a new entry that supersedes the old one**,
      and mark the old one `superseded by D<N>`.
+   - `brief.md` — if present and the superseded decision appears in its §2 "Decisions in force",
+     **append one line to `§10 Supersessions`** (`D<N> superseded by D<M> — <reason>`). Never
+     rewrite §1–§9: the brief is a cached prompt prefix; the append-only overlay is what keeps it
+     truthful for every later pass without invalidating the cache.
    - `phases/<NN>-*.md` — update scope, acceptance criteria, files, or split the phase.
    - `progress.md` — reflect new state. If decisions were pending, mark them resolved or move them.
 3. **Append a diary entry** (top of `diary.md`):

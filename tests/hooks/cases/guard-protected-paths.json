@@ -1,0 +1,30 @@
+{
+  "script": "pre-tool/guard-protected-paths.sh",
+  "cases": [
+    { "name": "write-node-modules-absolute", "expect": "deny",
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/node_modules/lodash/index.js" } } },
+    { "name": "write-node-modules-relative", "expect": "deny",
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "node_modules/lodash/index.js" } } },
+    { "name": "write-git-internals", "expect": "deny",
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/.git/config" } } },
+    { "name": "write-dist-relative", "expect": "deny",
+      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "dist/bundle.js" } } },
+    { "name": "write-somi-plugin-install", "expect": "deny",
+      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/home/u/.claude/plugins/somi/rules/CLAUDE.md" } } },
+    { "name": "edit-package-lock", "expect": "deny",
+      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/repo/package-lock.json" } } },
+
+    { "name": "edit-package-lock-opted-in", "expect": "allow",
+      "env": { "SOMI_ALLOW_LOCKFILES": "1" },
+      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/repo/package-lock.json" } } },
+    { "name": "edit-package-lock-config-policy", "expect": "allow",
+      "config": { "lockfiles": { "allow_edit": true } },
+      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/repo/package-lock.json" } } },
+    { "name": "edit-package-lock-env-zero-beats-config", "expect": "deny",
+      "env": { "SOMI_ALLOW_LOCKFILES": "0" },
+      "config": { "lockfiles": { "allow_edit": true } },
+      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/repo/package-lock.json" } } },
+    { "name": "write-source-file", "expect": "allow",
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/src/app.ts" } } }
+  ]
+}

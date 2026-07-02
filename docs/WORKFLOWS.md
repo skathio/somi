@@ -64,6 +64,8 @@ review output:
 ```
 .somi/
 ├── README.md
+├── atlas.md                            ← the Repo Atlas (from /atlas) — SHA-stamped repo map
+├── config.json                         ← optional committed policy (loop caps, hook allowlists)
 ├── rd/                                 ← discovery initiatives (pre-development)
 │   └── <slug>/
 │       ├── README.md                   ← index, status, traceability map
@@ -85,11 +87,13 @@ review output:
 │       ├── decisions.md                ← ADR-style log of architectural choices
 │       ├── progress.md                 ← single source of truth for status
 │       ├── diary.md                    ← chronological narrative of changes and discoveries
+│       ├── rca.md                      ← root-cause record (only for /debug work items)
 │       └── phases/
 │           ├── 01-<slug>.md            ← one file per phase, iterations inside
 │           └── …
 └── reviews/
     └── <slug>/                         ← reviews scoped to a work item
+        ├── findings.json               ← the findings ledger (stable F-<n> ids, lifecycle)
         ├── 2026-05-21-iter-1-1.md
         └── …
 ```
@@ -229,10 +233,13 @@ not done, what to look at first.
 1. Stop the contested work.
 2. Update `spec.md`, `decisions.md` (supersede entries; never edit in place), `phases/<NN>-*.md`,
    `progress.md` to reflect the new truth.
-3. Append a diary entry with category `plan-change` / `decision-change` / `blocker`.
-4. Surface to the user before continuing.
+3. If a `brief.md` exists and the superseded decision appears in its §2 "Decisions in force",
+   append a supersession line to the brief's `§10 Supersessions` (append-only overlay — §1–§9
+   are a cached prompt prefix and are never rewritten).
+4. Append a diary entry with category `plan-change` / `decision-change` / `blocker`.
+5. Surface to the user before continuing.
 
-The plan never shows stale state. The diary remembers what changed.
+The plan never shows stale state — including the brief. The diary remembers what changed.
 
 **Quality bar**: tests pass locally (the agent ran them), naming/structure match surrounding code,
 no scope drift, no silent compromises, no leftover debug, plan kept in sync if changed.
@@ -323,6 +330,28 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   not just the code. Spec/decisions/phases get updated in place; diary entry captures why.
 - **Refactor (standalone)** when the next planned change requires untangling first; refactor is
   its own mini-cycle that returns the codebase to a state where the planned change is easy.
+- **Impact → Design/Plan** when the change's *cost* is the open question —
+  [`/impact`](../commands/impact.md) (read-only, atlas-first) maps the blast radius first; its
+  report becomes `/design`'s pre-read, tells `/review-panel` which lenses the surface warrants,
+  or honestly says "reconsider" with the numbers.
+- **Upgrade** for a dependency bump — [`/upgrade`](../commands/upgrade.md): cited
+  breaking-change/CVE research (MAX) → usage scan → mini-brief (doubles as the dep-gate
+  sign-off) → migration under `/code-loop` (ECO).
+- **Release-readiness** before shipping a set of work items —
+  [`/release-readiness`](../commands/release-readiness.md): a deterministic checklist over the
+  artifacts plus one MAX review of the cumulative integration diff; verdict + draft release notes.
+- **Incident (emergency lane)** when production is broken —
+  [`/incident`](../commands/incident.md): mitigate fast (hooks stay on), live diary timeline,
+  then **mandatory** postmortem + a seeded `/debug` or `/plan` follow-up. The lane exists so
+  urgency doesn't mean bypassing SoMi entirely.
+- **Adopt** once per existing repo — [`/adopt`](../commands/adopt.md): atlas + confirmed
+  conventions into `99-overrides.md` + gap report + a calibration work item.
+- **Debug (standalone)** when a bug's cause is not yet isolated — [`/debug`](../commands/debug.md)
+  reproduces first (failing test as the non-overridable gate), isolates under a bounded
+  hypothesis budget (with a fresh-context MAX diagnosis hatch when narrowing stalls), fixes under
+  `/code-loop` with the repro as acceptance, and leaves the repro test as the regression guard
+  plus a one-page `rca.md` under `.somi/plans/<slug>/`. If diagnosis reveals a feature-sized fix
+  or a wrong architectural decision, it hands off to `/plan` with the RCA as input.
 - **Plan → Code-parallel → Review** when a phase has iterations the planner proved **independent**
   (`Parallelizable: yes` with disjoint file sets). [`/code-parallel`](../commands/code-parallel.md)
   builds each in its own git worktree concurrently, then **integrates them one at a time** with tests
@@ -343,6 +372,45 @@ review the brief), then runs the ECO loops (`/plan-loop` → `/code-loop`) to co
 caps** with no per-iteration stop. If you start cold with no MAX front-load, the gate falls to after
 `/plan-loop` — the pipeline is never run end-to-end with zero human review. The model switch is the
 gate; the caps (per-layer + global budget + cross-layer breaker) are the safety net.
+
+## The Repo Atlas (amortized MAX)
+
+The `brief.md` compresses a *work item*; **`.somi/atlas.md`** (built by
+[`/atlas`](../commands/atlas.md), MAX tier) compresses the *repository*: module map, dependency
+rules, conventions digest, complexity hotspots, test topology — SHA-stamped. Every later MAX
+action (`/design`, a cold `/plan`, `/refactor` analysis, `/impact`) starts from the atlas, runs
+its staleness check (`git diff --stat <atlas-SHA>..HEAD`), and deep-reads **only the drift plus
+the paths the work touches** — instead of paying a full repo read per work item. On a repo with
+regular feature work this is the largest remaining MAX-cost lever, and it makes designs more
+consistent (every feature works from the same map). A stale atlas is worse than none: consumers
+check before trusting, and structural drift triggers a refresh rather than silent reliance.
+
+## The deterministic loop core (state + findings ledger)
+
+The bounded loops' central promise — *hard* gates — is enforced by code, not by the model
+simulating a state machine in context. Two scripts ship with SoMi:
+
+- [`scripts/somi-loop.sh`](../scripts/somi-loop.sh) — per-loop state at
+  `.claude/somi-state/loop/<slug>[.<N>.<M>].json` (project-local, gitignored): the baseline SHA
+  captured once at init, resolved caps (flag > env > `.somi/config.json` > default), the pass
+  counter, and a per-pass history (verdict, Blocker/Major counts, diff size — the run's
+  telemetry). `pass` exits `2` past the cap; `check-diff` measures the cumulative weighted diff
+  (working tree included, `.somi/`/`.claude/` excluded, out-of-scope files count double) and
+  exits `3` over the cap. Because the state is durable, a loop **resumes** after a session dies
+  (`resume`) instead of starting over or re-guessing its baseline.
+- [`scripts/somi-findings.sh`](../scripts/somi-findings.sh) — the **findings ledger** at
+  `.somi/reviews/<slug>/findings.json` (committed; the machine view beside the markdown review
+  files). Every review's findings are recorded with a stable id (`F-<n>`) and a stable locus
+  (file + symbol + normalized title — never a line number), and carry a lifecycle
+  (`open → fixed / accepted / wontfix`). Recurrence is computed mechanically:
+  **consecutive-pass recurrence** (exit `5`) is `/code-loop`'s and `/plan-loop`'s circuit
+  breaker; **cross-run recurrence** is `/ship-loop`'s cross-layer breaker — and both work across
+  sessions, because the ledger is durable. `/review` starts by re-checking the open findings
+  instead of starting blind, and `progress.md` follow-ups reference `F-<n>` ids.
+
+The model keeps the judgment — what a finding *is*, what to do when a gate fires; the scripts own
+the counting. On hosts without a shell, the loops fall back to the old judgment-enforced
+tracking and say so in the summary.
 
 ## What SoMi workflows are *not*
 

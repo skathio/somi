@@ -100,22 +100,26 @@ researches the competition and common complaints, synthesizes findings, decides 
 then authors the requirements (BRD → SRS → FRD) and high-level design (SDD → TDD) with full
 traceability — pausing on each crossroads for verification.
 
-### 5. Verification protocol (inline, during discovery)
+### 5. Verification protocol (the batch round-trip — this command owns the user conversation)
 
-**On every decision that shapes the requirements or the architectural direction**, the analyst must:
+**On every decision that shapes the requirements or the architectural direction**, the analyst
+offers 2–4 concrete options with explicit pros and cons (no vague options; grounded in the
+research where possible — "competitor complaints X/Y show users abandon the A-style flow"), a
+recommendation with its reason, and the **Other** / **Discover** escape hatches — but a Tasked
+subagent cannot pause to converse with the user, so run the **shared batch round-trip** (see
+[`commands/plan.md`](./plan.md) §5):
 
-1. **Present the decision** in plain language.
-2. **Offer 2–4 concrete options**, each with explicit **pros** and **cons**. No vague options
-   ("more flexible", "more scalable", "best-of-breed"). Where possible, ground the pros/cons in the
-   research ("competitor complaints X/Y show users abandon the A-style flow").
-3. **State a recommendation** with the reason.
-4. **Always offer two escape hatches**: **Other** (the user describes a custom option) and
-   **Discover** (the agent asks narrowing questions, one at a time, each specific enough that the
-   answer measurably changes which option is favored).
+1. The analyst's research pass returns a **`DECISIONS-NEEDED` block** covering every crossroads —
+   persona, scope, build-vs-integrate, the expensive-to-reverse calls, and any **go / no-go /
+   pivot** verdict (which rides the block as the first decision). Nothing is recorded yet.
+2. **You present each decision to the user faithfully** — options, pros/cons, recommendation, the
+   escape hatches; the analyst's pre-supplied narrowing questions power Discover mode.
+3. Re-invoke the analyst with a **`VERIFIED-DECISIONS` block appended** to the same briefing; it
+   then authors the document set and records `decisions.md` entries with
+   `Verified with user: yes`, referenced from the relevant documents.
 
-Each choice is recorded in `decisions.md` with `Verified with user: yes`, and referenced from the
-relevant document. **Do not silently pick** direction-shaping defaults. See §5 of
-[`commands/plan.md`](./plan.md) for the shared protocol — discovery uses the same one.
+**Do not silently pick** direction-shaping defaults, and never let a decision be recorded as
+user-verified without an actual user verdict from step 2.
 
 ### 6. Research integrity
 
@@ -147,8 +151,9 @@ the MAX-tier counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./co
 [`/review`](./review.md) as `design <slug>` (and the [`architecture-reviewer`](../agents/architecture-reviewer.md)
 where the SDD warrants) on a **fresh context** — give it the artifacts only (`brief.md`, `srs.md`,
 `sdd.md`, …), **not** the discovery conversation, so the review is unbiased. Revise on Blocker/Major
-findings; re-review. **Bounded:** stop on a clean verdict, on an iteration cap (default 2, env
-`SOMI_DISCOVER_LOOP_MAX_PASSES`), or on divergence. Skip it for a routine initiative.
+findings; re-review. **Bounded:** stop on a clean verdict, on an iteration cap (default 2; config
+key `discover_loop.max_passes` in `.somi/config.json`, env `SOMI_DISCOVER_LOOP_MAX_PASSES` — env
+wins), or on divergence. Skip it for a routine initiative.
 
 ### 8. Summarise back
 

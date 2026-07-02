@@ -43,8 +43,10 @@ judgment).
    problem statement (keep it inside the `user-problem-statement` fence).
    This creates `.somi/plans/<slug>/` with `context.md`, `spec.md`, `decisions.md`,
    `progress.md`, `diary.md`, and `phases/`.
-2. The planner **pauses inline** for any architectural/design decision and verifies with the
-   user (options/pros/cons, "Other", "Discover" escape hatches). See `/plan` §5.
+2. Every architectural/design decision is verified with the user via the **batch round-trip**
+   (options/pros/cons, "Other", "Discover" escape hatches; the planner returns a
+   `DECISIONS-NEEDED` block, this pipeline presents it and re-Tasks with the verdicts). See
+   `/plan` §5.
 3. When planning is complete, `progress.md` status is `awaiting-approval`.
 4. **STOP.** Present the summary. Explicitly ask:
 

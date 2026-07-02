@@ -131,6 +131,7 @@ user: "/code <slug> [phase N, iteration M]"
   → PostToolUse hooks lint changed files and audit-log every call
   → IF coder discovers plan needs to change:
     → updates spec/decisions(supersede)/phases/progress in place
+    → appends a supersession line to brief.md §10 if the superseded decision is in its §2
     → appends a diary.md entry (plan-change / decision-change / blocker)
     → surfaces to user before continuing
   → coder marks iteration done, updates progress.md, appends diary note
@@ -170,9 +171,14 @@ lives in `commands/ship.md`; the agents are unchanged.
 | Workflow-specific thinking process       | `agents/`     | Subagent system prompts; can have their own tool sets                |
 | User-facing entrypoints                  | `commands/`   | Slash-command shape; thin orchestrators                              |
 | Deterministic guardrails                 | `hooks/`      | Runs in Claude Code's hook framework; no model involved              |
+| Runtime tooling (loop state, findings ledger, portable guard) | `scripts/` | `somi-loop.sh` / `somi-findings.sh` own the loops' arithmetic (invoked via Bash by the loop commands); `somi-check.sh` is the host-agnostic pre-commit/CI guard; tested by `tests/` in CI |
 | Artifact templates                       | `templates/`  | Shape of `brief.md` (the MAX→ECO handoff), `design.md`, `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
 | Discovery artifacts (per project)        | `.somi/rd/<slug>/` | One subdir per greenfield initiative; the requirements & design foundation; feeds `.somi/plans/<slug>/` |
 | Work-item artifacts (per project)        | `.somi/plans/<slug>/` | One subdir per work item; persists indefinitely; user-controlled retention |
+| Repo Atlas (per project)                 | `.somi/atlas.md` | SHA-stamped repo map from `/atlas`; MAX actions consume it and deep-read only the drift |
+| Findings ledger (per work item)          | `.somi/reviews/<slug>/findings.json` | Machine view of review findings (stable `F-<n>` ids, lifecycle); powers the circuit breakers across sessions |
+| Project policy (optional, committed)     | `.somi/config.json` | Loop caps, dep-install allowlist, lockfile policy; env vars override per session |
+| Loop state (runtime, per loop)           | `.claude/somi-state/loop/` | Baseline SHA, pass counter, per-pass history; survives session death so loops resume; gitignored |
 | Claude Code plugin packaging             | `.claude-plugin/` | Plugin manifest; marketplace manifest for `/plugin install`      |
 | Copilot extension packaging              | `.copilot-extension/` | Extension manifest; marketplace manifest for `copilot plugin install` |
 | Project-default settings (hooks, perms)  | `.claude/`    | Reference settings loaded by the plugin runtime                      |

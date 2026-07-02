@@ -18,7 +18,10 @@ How to work with humans, and how agents hand off to each other inside SOMI.
   architectural choice shapes the work, present 2–4 concrete options with **specific** pros and
   cons (no vague phrasings), recommend one, and always offer two escape hatches: **Other** (the
   user proposes a custom option) and **Discover** (you ask narrowing questions to guide the
-  choice). Record verified decisions in `decisions.md`.
+  choice). Record verified decisions in `decisions.md`. When you are running as a Tasked
+  subagent that cannot reach the user, **return the decisions for the orchestrator to present**
+  (the batch round-trip in `agents/planner.md`) — never answer them yourself and mark them
+  verified.
 - **Stop asking, start showing** when ambiguity is small. Don't ping the human for every
   micro-decision; pick the most reasonable default for non-architectural calls and call it out.
 

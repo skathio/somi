@@ -17,9 +17,13 @@ The marketplace path is the recommended way to install SoMi into Claude Code.
 /plugin install somi@somi
 ```
 
-Once installed, `/discover`, `/plan`, `/code`, `/code-loop`, `/review`, `/ship`, `/ship-loop`,
-`/plan-loop`, `/security-review`, `/architecture-review`, `/test-strategy`, and `/refactor` will
-appear in Claude Code's `/` autocomplete.
+Once installed, the SoMi commands appear in Claude Code's `/` autocomplete: the build flows
+(`/discover`, `/design`, `/plan`, `/plan-loop`, `/code`, `/code-loop`, `/code-parallel`,
+`/review`, `/review-panel`, `/ship`, `/ship-loop`), debugging (`/debug`), the targeted reviews
+(`/security-review`, `/architecture-review`, `/test-strategy`), refactoring (`/refactor`), the
+repo-level utilities (`/atlas`, `/impact`, `/adopt`, `/somi`, `/pr`), and the lifecycle flows
+(`/upgrade`, `/release-readiness`, `/incident`). For an existing codebase, run `/adopt` once
+after installing; type `/somi` any time for status and routing.
 
 ### How hooks load on plugin install
 
@@ -132,9 +136,10 @@ For the dep-install gate (`SOMI_ALLOW_DEP_INSTALL=1` opt-in): see [HOOKS.md](./H
 
 ## Verifying the install
 
-**Claude Code (plugin)**: type `/` — you should see `/discover`, `/plan`, `/code`, `/code-loop`,
-`/review`, `/ship`, `/ship-loop`, `/plan-loop` in autocomplete. Try `/plan list a trivial change` to
-confirm the planner agent loads. Then run `/plugin info somi` to confirm hooks are registered.
+**Claude Code (plugin)**: type `/` — you should see `/somi`, `/discover`, `/plan`, `/code`,
+`/code-loop`, `/review`, `/ship`, `/ship-loop`, `/plan-loop`, `/debug` (and the rest) in
+autocomplete. Try `/somi` for the status dashboard, or `/plan list a trivial change` to confirm
+the planner agent loads. Then run `/plugin info somi` to confirm hooks are registered.
 
 **Claude Code (vendored)**: confirm `.claude/settings.json` in your project includes the SoMi
 hooks block (paths under `${SOMI_VENDOR_ROOT}/hooks/…`). The auto-generated `.claude/audit.log`

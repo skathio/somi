@@ -51,6 +51,13 @@ branch, scoped to the single in-progress work item if exactly one exists).
 Find the relevant work item's `spec.md`, the iteration's `phases/<NN>-*.md`, recent diary entries,
 and commit messages. If you can't tell what the change is for, that's finding #1.
 
+**Check the findings ledger before reviewing** (when scoped to a work item):
+`bash scripts/somi-findings.sh open --slug <slug>` lists the still-open findings from previous
+reviews (`.somi/reviews/<slug>/findings.json`). Pass them to the reviewer with the instruction to
+**verify each one's resolution first** — confirmed fixed, still present, or accepted — before
+hunting new findings. A re-review that rediscovers a known finding from scratch wastes the ledger;
+one that silently drops a still-open finding is worse.
+
 For **plan reviews**, read the plan in full — don't skim. The point of plan review is to catch
 errors that are cheaper to fix here than after code is written.
 
@@ -108,6 +115,18 @@ Filename patterns:
 
 The command (not the agent) writes these:
 
+- **The findings ledger** — record this review's findings so they have durable identity:
+
+  ```bash
+  echo '<findings as JSON array [{file, symbol, title, severity, confidence}, …]>' \
+    | bash scripts/somi-findings.sh record --slug <slug> --review <review-filename>
+  ```
+
+  Reference the returned `F-<n>` ids in the review file's findings. For each previously-open
+  finding the reviewer confirmed resolved:
+  `bash scripts/somi-findings.sh resolve --slug <slug> --id F-<n> --status fixed --by <review-filename>`
+  (`accepted` / `wontfix` when the human signed off on not fixing). The markdown review file is
+  the human view; the ledger is the machine view — same command, same step, no drift.
 - In `progress.md`: append a line under "Recent activity" referencing the review file and verdict.
 - If the reviewer returned a proposed `review-feedback` diary entry (because a Blocker/Major
   points at the plan rather than the code, or a plan-review finding requires plan changes),

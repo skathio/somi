@@ -1,8 +1,8 @@
 # Execution Brief — <work item name>
 
-> The MAX→ECO handoff. Written by a MAX action ([`/design`](../commands/design.md),
-> a [`/refactor`](../commands/refactor.md) analysis, or [`/discover`](../commands/discover.md));
-> consumed by the ECO tier ([`/plan`](../commands/plan.md), [`/code`](../commands/code.md) and
+> The MAX→ECO handoff. Written by a MAX action (`/design`,
+> a `/refactor` analysis, or `/discover`);
+> consumed by the ECO tier (`/plan`, `/code` and
 > their loops).
 > Deep docs: <links — `design.md` / `sdd.md` / `research-report.md`>
 > Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD> • Produced by: <discover | design | refactor>
@@ -21,6 +21,8 @@ Its whole job is to let plan and code execute **without re-running the research*
   additive and the ordering stable so the cache keeps hitting.
 - **Decisive.** Every entry states a conclusion, not a discussion. The deliberation lives in
   `decisions.md` / `sdd.md`; the brief carries the *result*.
+- **Supersessions go in §10, never edited into §2.** When the plan-change protocol supersedes a
+  decision mid-execution, the ECO tier appends one line to §10 — §1–§9 are never rewritten.
 
 ---
 
@@ -63,7 +65,9 @@ the codebase.
 
 The relevant subset distilled from the repo's own instruction files (`CLAUDE.md`, `AGENTS.md`,
 `.github/copilot-instructions.md`, etc.) — surfaced once here so ECO inherits them without
-re-reading. Source files, if present: <list paths, or "none found">.
+re-reading. Source files, if present: <list paths, or "none found">. When a fresh
+`.somi/atlas.md` exists, cite its §4 digest (`atlas.md §4`) instead of re-listing conventions —
+one level of distillation is enough.
 
 - <convention 1 — e.g., "errors wrapped with `fmt.Errorf("...: %w", err)`; never bare returns">
 - <convention 2 — e.g., "tests are table-driven; one file per package under `*_test.go`">
@@ -100,3 +104,15 @@ trigger for surfacing it back to the user (usually via the plan-change protocol)
 ## 9. Suggested next step
 
 <Usually: `/plan <slug>` (or `/plan-loop <slug>`) to sequence this, then `/code-loop <slug>`.>
+
+## 10. Supersessions (append-only overlay on §2)
+
+Appended by the ECO tier when the **plan-change protocol** supersedes a decision listed in §2.
+The brief itself is never rewritten — §1–§9 stay byte-stable so the prompt cache keeps hitting
+across loop passes; this section is the one part that grows.
+
+**Readers: apply these lines as an overlay on §2 before trusting any "decision in force."**
+A supersession here wins over the §2 line it names. Empty section = §2 is current.
+
+<!-- - <YYYY-MM-DD> — **D<N> superseded by D<M>** — <one-line reason>.
+       See [`decisions.md#d<M>`](./decisions.md#d<M>) and the diary entry of the same date. -->
