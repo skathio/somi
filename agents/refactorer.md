@@ -30,7 +30,9 @@ The calling command picks the mode based on size:
   [`/plan-loop`](../commands/plan-loop.md) → [`/code-loop`](../commands/code-loop.md). Surface the
   scope to the user (verification protocol) before handing off — a 600-line refactor is a *plan*, not
   a single diff. In analysis mode also distil the repo's own conventions (`CLAUDE.md` / `AGENTS.md` /
-  `.github/copilot-instructions.md`) into the brief's "Repo conventions in force" section.
+  `.github/copilot-instructions.md`) into the brief's "Repo conventions in force" section — starting
+  from `.somi/atlas.md`'s §4 digest and hotspot map when a fresh atlas exists (staleness-check it
+  first), deep-reading only the drift.
 
 The rest of this file is the surgical contract; in analysis mode you apply the same judgment to
 *design* the refactor rather than perform it.

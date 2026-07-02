@@ -4,6 +4,163 @@ All notable changes to `@skathio/somi` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
+## [1.2.0] — 2026-07-02 — trust core, deterministic loops, and the lifecycle completers
+
+Three arcs in one minor release. **Trust core:** every load-bearing guarantee that was
+documentation-only became mechanical — guardrails behaviorally tested in CI, user verification
+that cannot be self-answered by an agent, briefs that cannot go silently stale. **Deterministic
+loops:** the bounded loops' arithmetic (pass caps, diff caps, circuit breakers) moved from model
+discipline into shipped, tested scripts with durable, resumable state and a findings ledger.
+**Lifecycle completers:** nine new commands covering the problem shapes daily engineering
+actually has — debugging, status/routing, PR handoff, repo onboarding, impact analysis,
+dependency upgrades, release gating, and incidents. Nothing is removed or renamed; all existing
+commands, agents, artifacts, and hook paths are unchanged (additive per the
+[versioning policy](docs/VERSIONING.md) — hence MINOR).
+
+### Added
+
+- **`/atlas` — the Repo Atlas** (`commands/atlas.md` + `templates/ATLAS.md.tmpl`): one MAX-tier
+  deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test
+  topology) written to a SHA-stamped `.somi/atlas.md`. Later MAX actions (`/design`, cold
+  `/plan`, `/refactor` analysis, `/impact`) start from the atlas and deep-read **only the drift
+  since its SHA** — amortizing the repo read across work items instead of paying it per feature.
+  Consumers run the staleness check before trusting it; the brief's "Repo conventions in force"
+  cites `atlas.md §4` instead of re-deriving. CI asserts the command's `opus` tier.
+- **`/impact` — change-impact analysis** (read-only, atlas-first): blast radius with counts
+  (callers per module, contracts crossed, test coverage and gaps, migration surface), the
+  `/review-panel` lenses the surface warrants, and a *proceed / design-first / reconsider*
+  recommendation. Runs before `/design`/`/plan` when the change's cost is the open question.
+- **`/adopt` — brownfield onboarding composite** (one-time per repo): builds the Atlas, drafts
+  `99-overrides.md` **pre-filled with detected conventions** (user confirms before any write —
+  the batch verification protocol applied to onboarding), produces an adoption gap report (test
+  thin ice, hotspots, candidate first refactors, guardrail-fit `.somi/config.json` suggestions),
+  and recommends a calibration work item.
+- **`/upgrade` — dependency upgrade validation**: cited changelog/breaking-change/CVE research
+  (the `discovery-analyst`'s integrity rules at upgrade scope) → usage scan of the flagged
+  APIs → mini-`brief.md` that doubles as the dep-gate sign-off record → human gate → migration
+  under `/code-loop`. Patch/minor with nothing breaking → recommends the short path instead of
+  manufacturing ceremony.
+- **`/release-readiness` — the pre-release gate**: a deterministic checklist over existing
+  artifacts (iterations done, open `F-<n>` Blockers/Majors via the ledger, DoD, real
+  rollout/rollback, interrupted loops, `somi-check --all`) + **one** MAX fresh-context review of
+  the cumulative integration diff (what per-iteration reviews structurally miss). Verdict
+  (`ready` / `ready-with-conditions` with named owners / `not-ready`) + draft release notes
+  generated from specs and diaries. The checklist cannot be argued green.
+- **`/incident` — the sanctioned emergency lane**: minimal framing → mitigate
+  (flag > revert > scoped patch; **hooks stay on**; live diary timeline) → **mandatory** debt
+  capture: blameless postmortem note, a seeded `/debug`/`/plan` follow-up (an incident with no
+  follow-up does not close), and a one-question guardrail retro. Exists so urgency doesn't mean
+  bypassing SoMi — which is when the guardrails matter most.
+- **`somi-check` — the portable working-tree guard** (`scripts/somi-check.sh`, npm `bin`): the
+  working-tree subset of the hook guarantees for hosts where hooks don't run (Copilot, CI, git
+  `pre-commit`): staged secret-bearing files, lockfile hand-edits (lockfile without its
+  manifest; honors `lockfiles.allow_edit` / `SOMI_ALLOW_LOCKFILES`), added
+  `TODO(claude)`/`FIXME(claude)` markers, scratch/backup files. Exit 1 on findings; tested in
+  `tests/scripts/run.sh`; recipes in HOOKS.md/PLUGIN.md.
+
+- **The deterministic loop core** — the bounded loops' arithmetic moves from model discipline
+  into shipped, tested scripts:
+  - **`scripts/somi-loop.sh`** — per-loop state at `.claude/somi-state/loop/…json`: baseline SHA
+    captured once, caps resolved (flag > env > `.somi/config.json` > default), pass counting
+    (exit `2` past the cap), weighted diff measurement (exit `3` over the cap; working tree
+    included; **`.somi/`/`.claude/` excluded** so artifact churn no longer eats the code budget;
+    out-of-scope files count double), per-pass history (verdict/counts/diff — run telemetry).
+    Durable state means **loops resume after session death** (`resume`) instead of re-guessing
+    baselines from a dead conversation.
+  - **`scripts/somi-findings.sh` — the findings ledger** at `.somi/reviews/<slug>/findings.json`
+    (committed; machine view beside the markdown reviews). Findings get stable ids (`F-<n>`), a
+    stable locus (file + symbol + normalized title — never line numbers), and a lifecycle
+    (`open → fixed/accepted/wontfix`). Recurrence is computed mechanically: consecutive-pass
+    recurrence (exit `5`) is the `/code-loop` / `/plan-loop` circuit breaker; cross-run
+    recurrence backs `/ship-loop`'s cross-layer breaker — both now work **across sessions**.
+    `/review` starts by re-checking open findings; `/review-panel` records the merged set;
+    `progress.md` follow-ups reference `F-<n>`.
+  - `/code-loop`, `/plan-loop`, `/ship-loop` rewritten around the scripts (judgment stays with
+    the model; counting doesn't), with an explicit host fallback to the old judgment-enforced
+    tracking. End-to-end tests in `tests/scripts/run.sh` (cap precedence, weighted diff,
+    resume, breaker semantics) run in CI. `scripts/` + `tests/` now ship in the npm package.
+- **`/debug` — the debugging workflow** (`commands/debug.md` + `templates/RCA.md.tmpl`): for
+  bugs whose cause is **not yet isolated** — the problem shape SoMi previously had nothing for.
+  Reproduction is a non-overridable gate (failing test preferred — it stays as the regression
+  guard); isolation runs a bounded hypothesis loop (default 5 — `debug.max_hypotheses` /
+  `SOMI_DEBUG_MAX_HYPOTHESES`) with a **fresh-context MAX diagnosis hatch** (the `reviewer` on
+  the evidence only) when narrowing stalls; the fix runs under `/code-loop` with the repro as
+  acceptance; the deliverable is a one-page `rca.md` (symptom, repro, cause chain with
+  `file:line`, fix rationale, blast radius, "why no test caught this"). Deliberately
+  lightweight — no spec/phases ceremony; hands off to `/plan` if diagnosis reveals a
+  feature-sized fix or a wrong architectural decision.
+- **`/somi` — status dashboard & router** (`commands/somi.md`, read-only): bare `/somi` renders
+  every work item / discovery / interrupted-resumable loop / open finding with a mechanically
+  derived **next action**; `/somi <request>` classifies the problem shape and recommends the
+  entry command — checking for an existing matching work item first, and never auto-invoking.
+- **`/pr` — PR handoff** (`commands/pr.md`): composes the PR title + description from the work
+  item's artifacts (spec/rca, verified decisions, plan-change diary entries, test evidence,
+  review verdicts + open `F-<n>` findings with disposition), respects the repo's own PR
+  template/house style, and runs `gh pr create` only after explicit confirmation.
+- **Hook behavior test suite.** New `tests/hooks/run.sh` + fixture cases under
+  `tests/hooks/cases/` (67 deny/allow cases across all four pre-tool guards), wired into
+  `scripts/validate.sh` (`npm test`) and therefore CI. Each case pipes a payload into the real
+  hook script under a sanitized environment and asserts the decision — a pattern edit that
+  silently weakens a guarantee now fails CI. Adding a hook rule now requires a fixture
+  (see `docs/HOOKS.md` §Testing hooks).
+- **`.somi/config.json` — committed per-project configuration.** Loop caps
+  (`code_loop.*`, `plan_loop.*`, `ship_loop.*`, `design_loop.*`, `discover_loop.*`,
+  `parallel.*`) and hook policy become reviewable project policy instead of per-session env-var
+  folklore. Precedence everywhere: **env var > config > default**. New hook policies:
+  `dep_install.allow` (package-name **prefix** allowlist for `gate-dep-install` — scoped, unlike
+  the all-or-nothing `SOMI_ALLOW_DEP_INSTALL=1`; compound commands never qualify and every
+  package must match) and `lockfiles.allow_edit`. New `somi::config` helper in
+  `hooks/lib/common.sh`. See `docs/USAGE.md` §Project configuration.
+- **Brief supersession overlay.** `templates/BRIEF.md.tmpl` gains an append-only
+  **`§10 Supersessions`** section, closing a staleness hole: the plan-change protocol updated
+  spec/decisions/phases/progress but never the brief — yet the brief is the ECO tier's cached
+  primary input, so a superseded decision kept being served as "in force" to every later pass.
+  The protocol (in `/code`, the `coder`, and the docs) now appends a supersession line to §10
+  (§1–§9 stay byte-stable for the prompt cache); brief consumers (`planner`, `coder`, `/plan`,
+  `/code`) apply §10 as an overlay on §2 before trusting a decision; the `reviewer` treats a
+  superseded decision with no §10 line as a **stale-brief finding**.
+
+### Changed
+
+- **Dangerous-bash guard hardened** (`hooks/pre-tool/block-dangerous-bash.sh`) — closes three
+  bypasses found in review:
+  - All checks also run against a **quote-stripped copy** of the command, so
+    `bash -c "rm -rf /"` can't hide inside quoting.
+  - **Force-push without an explicit target branch is denied** (`git push -f`,
+    `git push -f origin`, `git push -f origin HEAD`): the current branch can't be verified and
+    may be protected — naming the branch is what makes the protected-branch check meaningful.
+    `+refspec` force-pushes to protected branches (`git push origin +main`, `+HEAD:main`) are
+    also denied.
+  - **Shell-level writes to secret-bearing paths are denied** (`> .env`, `>> …/.env`,
+    `tee .env`, `sed -i … .env`, `cp`/`mv` onto a secret path) — the Bash-side twin of
+    `block-secret-writes.sh`, whose `Write|Edit` matcher those shapes bypassed entirely.
+    `.env.example`-style templates stay allowed.
+- **Protected-paths guard normalises relative paths** (`guard-protected-paths.sh`), so a relative
+  `node_modules/x.js` can't slip past the `*/node_modules/*` globs.
+- **Verification protocol mechanics made explicit — the batch round-trip.** A Tasked subagent
+  cannot pause mid-run to converse with the user, so "pauses inline for verification" was
+  mechanically unimplementable and risked silently self-answered decisions. The
+  `planner` / `designer` / `discovery-analyst` research pass now ends by returning a
+  **`DECISIONS-NEEDED` block** (options with concrete pros/cons, recommendation, pre-supplied
+  narrowing questions that power Discover mode); the calling command owns the user conversation
+  and re-invokes the agent with a **`VERIFIED-DECISIONS` block appended** (append-only keeps the
+  briefing prefix cache-warm); only then are decisions recorded `Verified with user: yes`. An
+  agent never marks a decision user-verified in the same pass that generated it. Block shapes
+  are canonical in `agents/planner.md`; `/plan` §5 defines the command side; `/design`,
+  `/discover`, `/ship`, `/plan-loop` (a `DECISIONS-NEEDED` return pauses the loop and never
+  counts toward caps or divergence), `docs/AGENTS.md`, and `rules/50-collaboration.md` updated
+  to match. User-visible behavior is unchanged — you still verify every decision.
+
+### Fixed
+
+- Templates no longer carry plugin-relative links (`../commands/…`, `../../../skills/…`) that
+  break once instantiated into a consumer repo's `.somi/` (BRIEF, PHASE, SRS, SDD, TDD,
+  RD-README — now plain-text command/skill names).
+- `templates/DOD.md.tmpl` referenced the pre-1.x `.somi/<slug>/` layout; paths corrected to
+  `.somi/plans/<slug>/` / `.somi/reviews/<slug>/`, and the template is now referenced from the
+  GOVERNANCE adoption checklist instead of being orphaned.
+- `commands/plan.md` §4 pointed at the wrong section (§6) for the verification protocol.
+
 ## [1.1.1] — 2026-06-29 — CI/CD migrated to hashira v2
 
 ### Changed

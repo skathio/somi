@@ -138,7 +138,10 @@ the Claude Code plugin.
 > gating, audit log are Claude Code `hooks` and simply don't run here) and **not** concurrent
 > sub-agent orchestration (the loops and the `/review-panel` / `/code-parallel` parallel fan-outs run
 > sequentially when the host can't spawn sub-agents). The judgment layer is identical; the
-> enforcement and concurrency layers are Claude Code-only. Don't rely on the hard stops on Copilot.
+> enforcement and concurrency layers are Claude Code-only. Don't rely on the hard stops on Copilot —
+> but do install [`scripts/somi-check.sh`](../scripts/somi-check.sh) as a git pre-commit hook / CI
+> step: it carries the working-tree subset of the guarantees (staged secrets, lockfile hand-edits,
+> loose-end markers) to any host. See [`HOOKS.md`](./HOOKS.md#somi-check--the-portable-working-tree-guard).
 
 ### Manifests
 
@@ -164,17 +167,33 @@ copilot plugin update
 | Command                          | Agent(s) used                                                                            |
 |----------------------------------|------------------------------------------------------------------------------------------|
 | `@somi /discover`             | `discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
+| `@somi /design`               | `designer` (brownfield feature design → `brief.md`)                                      |
+| `@somi /atlas`                | (none — MAX command; repo map → `.somi/atlas.md`)                                        |
 | `@somi /plan`                 | `planner`                                                                                |
 | `@somi /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
 | `@somi /code`                 | `coder`                                                                                  |
 | `@somi /code-loop`            | `coder` + `reviewer` (bounded)                                                           |
+| `@somi /code-parallel`        | per eligible iteration: `/code-loop` (sequential on Copilot — no worktrees/concurrency)   |
+| `@somi /debug`                | `coder` (+ `reviewer` as MAX diagnosis hatch)                                            |
 | `@somi /review`               | `reviewer` (+ `security-reviewer` / `architecture-reviewer` / `test-strategist` auto-invoked) |
+| `@somi /review-panel`         | reviewer + specialist lenses (sequential on Copilot)                                     |
 | `@somi /ship`                 | `planner` + (per iteration) `/code-loop`                                                 |
 | `@somi /ship-loop`            | `/plan-loop` + (per iteration) `/code-loop`                                              |
 | `@somi /security-review`      | `security-reviewer`                                                                      |
 | `@somi /architecture-review`  | `architecture-reviewer` (+ `security-reviewer` when relevant)                            |
 | `@somi /test-strategy`        | `test-strategist`                                                                        |
 | `@somi /refactor`             | `refactorer`                                                                             |
+| `@somi /impact`               | (none — read-only blast-radius analysis)                                                 |
+| `@somi /adopt`                | `/atlas` flow (+ `test-strategist` for depth)                                            |
+| `@somi /upgrade`              | `discovery-analyst` (research) + `/code-loop` (migration)                                |
+| `@somi /release-readiness`    | `reviewer` (one integration pass; the checklist is deterministic)                        |
+| `@somi /incident`             | (mitigation inline; seeds `/debug` / `/plan` after)                                      |
+| `@somi /somi`                 | (none — status dashboard & router, read-only)                                            |
+| `@somi /pr`                   | (none — composes the PR from artifacts; `gh` after confirmation)                         |
+
+> On Copilot the loop caps fall back to judgment-enforced tracking when the host can't run the
+> `scripts/somi-loop.sh` / `somi-findings.sh` helpers — and `scripts/somi-check.sh` (below) is
+> the enforcement layer that *does* work here.
 
 > Plan-level review uses `@somi /review plan <slug>` — there is no separate `/plan-review`.
 

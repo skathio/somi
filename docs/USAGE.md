@@ -177,8 +177,42 @@ paths, and unsanctioned dependency installs are denied deterministically. See [H
 **Expect**: bounded code → review → fix cycles per iteration (default caps: 3 passes, Major
 severity floor, 400-line diff cap, circuit breaker if the same finding recurs). Stops on
 approve, cap hit, scope expansion, or user `stop`. See
-[`commands/code-loop.md`](../commands/code-loop.md) for the gate table. Override caps via env
-vars (`SOMI_CODE_LOOP_MAX_PASSES`, `SOMI_CODE_LOOP_DIFF_CAP`, etc.).
+[`commands/code-loop.md`](../commands/code-loop.md) for the gate table. Override caps per project
+in `.somi/config.json` (`code_loop.*` keys — see [Project configuration](#project-configuration-somiconfigjson))
+or per session via env vars (`SOMI_CODE_LOOP_MAX_PASSES`, `SOMI_CODE_LOOP_DIFF_CAP`, etc.; env wins).
+
+---
+
+## `/debug`
+
+**When**: a bug whose **cause is not yet isolated** — intermittent failures, "works on my
+machine", a stack trace pointing somewhere implausible. (Cause already known + trivial fix →
+`/code`. Cause known + design-heavy fix → `/plan`.)
+
+**Type**:
+```text
+/debug Webhook deliveries silently drop when the payload exceeds ~1MB; started after the v2.3
+       deploy. CI link: <url>
+```
+
+**Expect**:
+- SoMi proposes a slug, scaffolds a **lightweight** work item (`rca.md` + `progress.md` +
+  `diary.md` — no spec/phases ceremony), and quotes the report as fenced data.
+- **Reproduction is the gate**: no fix work until a failing test (preferred) or deterministic
+  repro script exists, recorded in `rca.md` §2. Unreproducible → evidence recorded, handed back
+  with what's missing; no hunch-fixes.
+- **Bounded isolation**: one falsifiable hypothesis at a time (default budget 5 — config
+  `debug.max_hypotheses`, env `SOMI_DEBUG_MAX_HYPOTHESES`); when narrowing stalls, a
+  fresh-context MAX diagnosis pass (the `reviewer` on the evidence only) discriminates the
+  remaining candidates.
+- The **fix runs under `/code-loop`** with the repro test as acceptance — the usual caps apply,
+  and a fix that blows the diff cap is treated as a signal the change is feature-sized (hand-off
+  to `/plan`, RCA as input).
+- The repro test **stays in the suite** as the regression guard; `rca.md` §6 answers *why no
+  test caught this* (consulting `test-strategist` if the answer is a test-shape problem).
+
+**Then**: read `rca.md` — symptom, repro, cause chain with `file:line`, fix rationale, blast
+radius, follow-ups. It's the durable record for the next person who hits this class of bug.
 
 ---
 
@@ -259,6 +293,47 @@ loops. Global budget caps total passes. See [`commands/ship-loop.md`](../command
 
 ## Specialised commands
 
+### `/atlas`
+
+Builds (or refreshes) the **Repo Atlas** at `.somi/atlas.md` — one MAX-tier deep read of the
+codebase (module map, dependency rules, conventions digest, hotspots, test topology),
+SHA-stamped. Later MAX actions (`/design`, cold `/plan`, `/refactor` analysis, `/impact`) start
+from it and deep-read only the drift since its SHA, instead of re-reading the repo per work
+item. Worth running once on any repo you'll do repeated SoMi work in; refresh after structural
+changes. Commit it.
+
+```text
+/atlas
+/atlas refresh
+```
+
+### `/somi`
+
+The front door. Bare `/somi` prints a status table of every work item, discovery, interrupted
+loop (resumable), and open finding — each with a mechanically derived **next action** ("answer
+D4", "approve the plan then `/code-loop`", "address F-3"). With an argument, it classifies the
+request's problem shape and **recommends** the right entry command (`/debug` vs `/plan` vs
+`/design` vs `/review` …) — it never auto-invokes, and it checks for an existing matching work
+item first so you don't scaffold duplicates.
+
+```text
+/somi
+/somi users report the export button 500s since yesterday's deploy
+```
+
+### `/pr`
+
+The exit ramp into your PR workflow: composes a PR title + description from the work item's
+artifacts — spec §1 (or `rca.md` for a `/debug` item), verified decisions, plan-change diary
+entries, test evidence, review verdicts and any open `F-<n>` findings with their disposition —
+respecting the repo's own PR template and house style. Shows you the result and only runs
+`gh pr create` after you confirm.
+
+```text
+/pr rate-limiting-webhooks
+/pr fix-webhook-drops --draft
+```
+
 ### `/security-review`
 
 Targeted security review. Walks trust boundaries to sinks and produces attack-path-grounded
@@ -320,6 +395,68 @@ everyday single pass. Inside `/code-loop`, set `SOMI_CODE_LOOP_REVIEW=panel` to 
 with the panel. (On hosts without concurrent sub-agents — e.g. Copilot — the lenses run
 sequentially; same result, slower.)
 
+### `/impact`
+
+Read-only blast-radius analysis **before** committing to `/design` or `/plan` (atlas-first when
+one exists): callers/consumers with counts per module, contracts crossed, tests covering the
+surface (and the gaps where regression risk concentrates), migration surface, and which
+`/review-panel` lenses the change warrants. Ends with one of: *proceed small* (`/plan`),
+*design first* (`/design`, report as pre-read), or *reconsider* — with the numbers.
+
+```text
+/impact rename the tenant_id column to org_id across the API
+/impact src/billing/invoice.ts
+```
+
+### `/adopt`
+
+One-time onboarding of SoMi into an existing repo: builds the Atlas, drafts `99-overrides.md`
+**pre-filled with the detected conventions** (you confirm before anything is written), produces
+a gap report (test thin ice, hotspots, candidate first refactors, guardrail-fit config
+suggestions), and recommends a small calibration work item to run as `/ship` or `/debug`.
+
+```text
+/adopt
+```
+
+### `/upgrade`
+
+Dependency upgrade validation, MAX→ECO shaped: cited changelog/breaking-change/CVE research →
+usage scan of the flagged APIs → mini-`brief.md` (which doubles as the dep-gate sign-off
+record) → human gate → migration under `/code-loop` with the full suite as acceptance.
+Patch/minor with nothing breaking documented → it says so and recommends the short path.
+
+```text
+/upgrade prisma 5 → 6
+/upgrade <link to the Renovate PR>
+```
+
+### `/release-readiness`
+
+The pre-release gate: a deterministic checklist over the artifacts (all iterations done? open
+Blocker/Major `F-<n>`s? DoD checkable? rollout/rollback real? interrupted loops?
+`somi-check --all` clean?) plus **one** MAX fresh-context review of the *cumulative* release
+diff — the integration surface per-iteration reviews never saw. Output: `ready` /
+`ready-with-conditions` / `not-ready` with evidence, and draft release notes generated from the
+work items' specs and diaries.
+
+```text
+/release-readiness rate-limiting-webhooks sso-login
+/release-readiness the v2.4 milestone
+```
+
+### `/incident`
+
+The sanctioned emergency lane: minimal framing → mitigate (flag flip > revert > scoped patch;
+**hooks stay on**; every action gets a live diary timeline entry) → **mandatory** debt capture:
+a blameless postmortem note, a seeded follow-up (`/debug` for the unknown cause, `/plan` for a
+known-but-nontrivial fix), and a one-question guardrail retro. An incident with no follow-up
+item does not close — the lane's speed is paid for by the accounting.
+
+```text
+/incident checkout 500s for ~20% of EU users since the 14:10 deploy
+```
+
 ### `/code-parallel`
 
 Builds **provably-independent** iterations concurrently, each in its own git worktree, then
@@ -342,13 +479,17 @@ several genuinely independent slices and you want smaller, more focused per-iter
 
 | Artifact                              | Lives at                                             | Lifetime                                          |
 |---------------------------------------|------------------------------------------------------|---------------------------------------------------|
+| Repo Atlas                            | `.somi/atlas.md`                                     | Persists; refresh via `/atlas` on structural drift |
+| Project config (optional)             | `.somi/config.json`                                  | Committed team policy; env vars override per session |
 | Discovery initiative (R&D foundation) | `.somi/rd/<slug>/` (research, BRD, SRS, FRD, SDD, TDD) | Persists indefinitely; only you delete it        |
 | Work-item directory                   | `.somi/plans/<slug>/`                                | Persists indefinitely; only you delete it         |
 | `context.md`, `spec.md`, `decisions.md`, `progress.md`, `diary.md` | `.somi/plans/<slug>/`            | Same                                              |
 | Phase files                           | `.somi/plans/<slug>/phases/<NN>-*.md`                | Same                                              |
 | Review files                          | `.somi/reviews/<slug>/<YYYY-MM-DD>-*.md`             | Same; one per review run                          |
+| Findings ledger                       | `.somi/reviews/<slug>/findings.json`                 | Same; machine view of findings (stable `F-<n>` ids, open/fixed lifecycle) |
 | `audit.log`                           | `.claude/audit.log`                                  | Append-only across sessions                       |
 | Context-injection state               | `.claude/somi-state/last-context-signature`          | Project-local, gitignored                         |
+| Loop state                            | `.claude/somi-state/loop/<slug>[.<N>.<M>].json`      | Project-local, gitignored; survives session death (loops resume) |
 | Diff                                  | git                                                  | As long as the branch / history is kept           |
 
 All artifacts under `.somi/` should be committed to the repository. They're how the team and
@@ -378,11 +519,44 @@ follows the **plan-change protocol**:
    (status fields, single source of truth) in place.
 3. In `decisions.md`, never edit an accepted entry — supersede it with a new one and mark the old
    one `superseded by D<N>`.
-4. Append a `diary.md` entry (top of file, newest first) with category `plan-change` (or
+4. If a `brief.md` exists and the superseded decision appears in its §2 "Decisions in force",
+   append one line to the brief's **`§10 Supersessions`** section (never rewrite §1–§9 — the brief
+   is a cached prompt prefix; the append-only overlay keeps it truthful for later passes).
+5. Append a `diary.md` entry (top of file, newest first) with category `plan-change` (or
    `decision-change`, `blocker`) explaining what was discovered and why the plan changed.
-5. Surface to you with the revised plan before continuing.
+6. Surface to you with the revised plan before continuing.
 
 The spec never shows stale state. The diary remembers what changed.
+
+## Project configuration (`.somi/config.json`)
+
+Loop caps and hook policies are configurable **per project** via an optional, committed
+`.somi/config.json` — reviewable team policy instead of per-session env-var folklore.
+**Precedence: env var (session override) > `.somi/config.json` > SoMi defaults.** All keys are
+optional; omit anything you don't want to change:
+
+```json
+{
+  "code_loop":     { "max_passes": 3, "severity_floor": "Major", "diff_cap_lines": 400, "review_mode": "single" },
+  "plan_loop":     { "max_passes": 3, "severity_floor": "Major" },
+  "ship_loop":     { "global_budget_passes": 15 },
+  "design_loop":   { "max_passes": 2 },
+  "discover_loop": { "max_passes": 2 },
+  "parallel":      { "max_parallel": 3 },
+  "debug":         { "max_hypotheses": 5 },
+  "dep_install":   { "allow": ["@types/", "eslint-"] },
+  "lockfiles":     { "allow_edit": false }
+}
+```
+
+- The loop keys map 1:1 to the env vars in each command's gate table
+  (`code_loop.max_passes` ↔ `SOMI_CODE_LOOP_MAX_PASSES`, etc.).
+- `dep_install.allow` is a list of **package-name prefixes** the `gate-dep-install` hook permits
+  without the session-wide `SOMI_ALLOW_DEP_INSTALL=1` — scoped policy (e.g. type stubs) instead
+  of an all-or-nothing switch. Conservative by construction: compound commands never qualify,
+  and every package in the command must match a prefix.
+- `lockfiles.allow_edit: true` permits hand-editing lockfiles as project policy
+  (`SOMI_ALLOW_LOCKFILES` still wins for a session, including `=0` to re-deny).
 
 ## Dependency additions
 

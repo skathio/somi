@@ -19,12 +19,22 @@ for f in \
 done
 
 echo "==> ShellCheck hook scripts..."
-find hooks -name '*.sh' -type f -print0 \
+find hooks tests scripts -name '*.sh' -type f -print0 \
   | xargs -0 shellcheck --severity=warning
 
 echo "==> Bash syntax check..."
-find hooks -name '*.sh' -type f -print0 \
+find hooks tests scripts -name '*.sh' -type f -print0 \
   | xargs -0 -I{} bash -n {}
+
+echo "==> Hook behavior fixtures..."
+for f in tests/hooks/cases/*.json; do
+  echo "  jq: $f"
+  jq empty "$f"
+done
+bash tests/hooks/run.sh
+
+echo "==> Loop-state & findings-ledger tests..."
+bash tests/scripts/run.sh
 
 echo "==> Validating agent/command/skill frontmatter..."
 failed=0
@@ -67,6 +77,7 @@ done
 # MAX front-load commands run opus end-to-end (their orchestration is judgment-heavy).
 assert_model commands/discover.md opus
 assert_model commands/design.md opus
+assert_model commands/atlas.md opus
 if [ "$tier_failed" -ne 0 ]; then
   exit 1
 fi
@@ -75,8 +86,16 @@ echo "==> Validating new MAX/ECO artifacts..."
 for f in \
   templates/BRIEF.md.tmpl \
   templates/DESIGN.md.tmpl \
+  templates/ATLAS.md.tmpl \
+  templates/RCA.md.tmpl \
   agents/designer.md \
-  commands/design.md; do
+  commands/design.md \
+  commands/atlas.md \
+  commands/debug.md \
+  commands/somi.md \
+  commands/pr.md \
+  scripts/somi-loop.sh \
+  scripts/somi-findings.sh; do
   if [ ! -f "$f" ]; then
     echo "MISSING ARTIFACT: $f" >&2
     exit 1

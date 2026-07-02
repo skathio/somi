@@ -11,7 +11,11 @@ How a team adopts SoMi, keeps it updated safely, and contributes back without ch
    host their own marketplace manifest.
 3. **Pin to a tag.** Don't track `main`. Pin to the latest `vX.Y.Z` and update deliberately.
 4. **Write your `99-overrides.md`** for project-specific conventions before the team uses SoMi for the
-   first time. Empty is fine; the file's presence is the signal.
+   first time. Empty is fine; the file's presence is the signal. If the team wants a standalone
+   shipping standard on top of each work item's `spec.md` §12, instantiate
+   [`templates/DOD.md.tmpl`](../templates/DOD.md.tmpl) as a team-level checklist. Loop caps and
+   hook policy (dep-install allowlist, lockfile edits) can be committed per project in
+   `.somi/config.json` — see [USAGE.md](./USAGE.md#project-configuration-somiconfigjson).
 5. **Run a `/ship` on a small feature** as a calibration exercise. Tweak the override file based on
    what the team disagrees with.
 6. **Add SoMi to your CI**: validate the plugin install is intact and hooks still fire on a

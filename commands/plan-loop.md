@@ -36,8 +36,9 @@ it isn't biased by the planner's reasoning.
 | `DIVERGENCE_DETECTOR` — stop if `spec.md §1` / `decisions.md` keeps churning across passes without finding-count dropping | always on | (n/a) |
 | `HUMAN_CHECKPOINT` — pause if user replies `stop` between passes | always on | (n/a) |
 
-Read overrides from the environment at the start of the run; record the effective values in
-the first diary entry of the loop.
+**Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
+keys `plan_loop.max_passes`, `plan_loop.severity_floor`) > the defaults above. Read both at the
+start of the run; record the effective values in the first diary entry of the loop.
 
 ## What to do
 
@@ -53,49 +54,70 @@ the first diary entry of the loop.
   non-destructively per §3 — never clobbering the design's `decisions.md`/`diary.md`). Subsequent
   passes revise it.
 
-### 2. Initialize loop state
+### 2. Initialize loop state (deterministic, resumable)
 
-- Set `pass = 1`.
+Pass counting and finding recurrence are owned by the shipped scripts
+([`scripts/somi-loop.sh`](../scripts/somi-loop.sh), [`scripts/somi-findings.sh`](../scripts/somi-findings.sh))
+— state survives session death at `.claude/somi-state/loop/<slug>.json`.
+
+- **Resume check first:** `bash scripts/somi-loop.sh resume --slug <slug>`. A `running` state
+  means a previous session died mid-loop — continue from its recorded pass (tell the user).
+- Otherwise: `bash scripts/somi-loop.sh init --slug <slug> --loop plan` (resolves `MAX_PASSES` /
+  `SEVERITY_FLOOR` per the precedence above and prints the effective values). Set `RUN_ID` = the
+  state's `started` timestamp for the findings-ledger calls.
 - Capture `initial_spec_signature` = SHA of `spec.md §1` + `decisions.md` (excluding superseded
-  section). Used by the divergence detector.
+  section). Used by the divergence detector (judgment-side — the script doesn't own this one).
 - Initialize `previous_finding_count = ∞` (so the first pass always continues).
 - Append a diary entry (category `note`):
   - Title: `plan-loop started`.
   - Body: effective gate values + slug + (if existing) baseline summary.
 
+> **Host fallback.** No shell → track pass count and finding recurrence manually as before;
+> identical gates, judgment-enforced; say so in the summary.
+
 ### 3. Loop
 
 ```text
-while pass <= MAX_PASSES:
-  # 3a. Plan
+while true:
+  # 3a. Pass gate (deterministic)
+  bash scripts/somi-loop.sh pass --slug <slug>
+    exit 2 → STOP — summarise current best plan + remaining findings (by F-id),
+             exit "max-passes-exceeded"
+
+  # 3b. Plan (the batch verification round-trip pauses here for the user when the
+  #     planner returns DECISIONS-NEEDED — that pause never counts as a pass)
   Task planner (= /plan <problem>  or  /plan revision <slug> with prior findings as brief)
 
-  # 3b. Plan review
+  # 3c. Plan review
   Task reviewer (= /review plan <slug>)
 
-  # 3c. Verdict
-  if verdict == "approve" or no finding at severity >= SEVERITY_FLOOR:
-    DONE — proceed to §4
+  # 3d. Record the pass + findings (locus file for a plan finding is the artifact —
+  #     e.g. spec.md / decisions.md / phases/02-…md — symbol is the section)
+  bash scripts/somi-loop.sh record-pass --slug <slug> --verdict <V> --blockers <B> --majors <MJ>
+  echo '<findings JSON array>' | bash scripts/somi-findings.sh record --slug <slug> \
+    --review <review-file> --run $RUN_ID --pass <current pass>
+    exit 5 → STOP — the same plan finding recurred in two consecutive passes; planner and
+             reviewer disagree; hand to human
 
-  # 3d. Divergence detector
+  # 3e. Verdict
+  if verdict == "approve" or no finding at severity >= SEVERITY_FLOOR:
+    somi-findings.sh resolve each finding this pass fixed; DONE — proceed to §4
+
+  # 3f. Divergence detector (judgment-side)
   current_finding_count = count(findings >= SEVERITY_FLOOR)
   current_spec_signature = SHA of spec.md §1 + decisions.md (live entries)
   if current_spec_signature != initial_spec_signature
      AND current_finding_count >= previous_finding_count:
     STOP — plan is oscillating without converging; hand to human
 
-  # 3e. Next pass
+  # 3g. Next pass
   previous_finding_count = current_finding_count
-  pass += 1
   append diary line: pass#, verdict, Blocker/Major counts, spec churn (which §s changed)
-
-# Out of loop
-if pass > MAX_PASSES:
-  STOP — summarise current best plan + remaining findings, exit "max-passes-exceeded"
 ```
 
 ### 4. On DONE (clean exit)
 
+- `bash scripts/somi-loop.sh finish --slug <slug> --status done`.
 - Set `progress.md` status to `awaiting-approval`.
 - Append a diary entry (category `note`): `plan-loop done at pass <P>; verdict <V>`.
 - Summarise (see §6) — explicitly call out that the user still owns the final go/no-go on the
@@ -103,6 +125,7 @@ if pass > MAX_PASSES:
 
 ### 5. On STOP (gate hit)
 
+- `bash scripts/somi-loop.sh finish --slug <slug> --status stopped-<reason>`.
 - Leave `progress.md` status as `planning`.
 - Append a diary entry (category `plan-change` or `blocker`): which gate fired, what's
   outstanding, what the user needs to decide.
@@ -121,8 +144,10 @@ if pass > MAX_PASSES:
 ## Guardrails
 
 - **Verification protocol is not optional.** Even inside a loop, architectural decisions go
-  through the planner's verify-with-user protocol (`/plan` §6) — the loop does not silently
-  pick on the user's behalf.
+  through the planner's verify-with-user protocol via the **batch round-trip** ([`/plan`](./plan.md)
+  §5): a `DECISIONS-NEEDED` return from the planner **pauses the loop for the user's verdicts**
+  (it is not a review pass and never counts toward `MAX_PASSES` or the divergence detector) —
+  the loop does not silently pick on the user's behalf.
 - **Never silently bypass a gate.** Adjust via env vars explicitly and re-run.
 - **The user can reply `stop` between passes.** Honour it immediately.
 - **Divergence is information.** When the plan oscillates, the human disagreement between

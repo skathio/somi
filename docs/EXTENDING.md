@@ -159,7 +159,11 @@ Keep commands thin; agents do the heavy lifting.
    }
    ```
 
-4. Open a PR — CI validates the hook script syntax and JSON wiring.
+4. Add behavioral fixtures under `tests/hooks/cases/<script-name>.json` — at minimum one deny and
+   one allow case per rule (see [HOOKS.md](./HOOKS.md#testing-hooks-behavioral-fixtures) for the
+   fixture shape). Determinism is the hook layer's entire value; a rule without a fixture can be
+   silently weakened by a later pattern edit.
+5. Open a PR — CI validates the hook script syntax, the JSON wiring, and runs the fixture suite.
 
 Hooks should encode **non-negotiables** — things you want to be deterministic, not subject to model
 judgment. For judgment-heavy work, write an agent or skill instead.

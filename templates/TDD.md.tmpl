@@ -9,7 +9,7 @@ engineering targets, and the posture (security, compliance, operability) that th
 build within. Each choice is tied to an SRS requirement and a reason.
 
 > **Boundary, again.** This names the technology *family* and the *limits* (e.g., "a relational
-> store with ACID guarantees", "p95 < 200 ms"). The [`planner`](../../../agents/planner.md) picks the
+> store with ACID guarantees", "p95 < 200 ms"). The `planner` picks the
 > *concrete* library/version within those limits and designs the implementation. Don't pin exact
 > dependency versions or write code here.
 
@@ -22,7 +22,7 @@ build within. Each choice is tied to an SRS requirement and a reason.
 | Compute / hosting | <e.g. containerized, single region v1> | BR constraints | <…> |
 | Async / messaging | <e.g. needed? sync v1, queue later> | NFR-1 | <…> |
 
-> A dependency added later is a decision (the [`gate-dep-install`](../../../docs/HOOKS.md) hook gates
+> A dependency added later is a decision (the `gate-dep-install` hook gates
 > it at coding time). This document sets the *direction*; the planner records the concrete pick in
 > `decisions.md` when it commits.
 
@@ -46,8 +46,8 @@ engineering.
 - **Compliance**: <regulatory regime, if any (HIPAA/GDPR/PCI…) and what it forces — consider a
   dedicated compliance doc, noted in `README.md`>
 
-> Ground this with [`owasp-defense`](../../../skills/owasp-defense/SKILL.md) and
-> [`threat-modeling`](../../../skills/threat-modeling/SKILL.md).
+> Ground this with `owasp-defense` and
+> `threat-modeling`.
 
 ## 4. Operability & observability direction
 
@@ -56,7 +56,7 @@ engineering.
 - **Failure modes to instrument**: <the ones the research/FRD say will hurt>
 
 Detailed metric names, log fields, and dashboards are the planner's output — see
-[`observability`](../../../skills/observability/SKILL.md).
+`observability`.
 
 ## 5. Technical risks & constraints
 

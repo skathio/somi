@@ -223,10 +223,14 @@ plain prose escalations from inside an agent are no longer the only path.
 # MAX tier (opus) — front-load reasoning into brief.md
 /discover    → discovery-analyst (writes .somi/rd/<slug>/ + brief.md; feeds /plan — greenfield only)
 /design      → designer         (writes .somi/plans/<slug>/{design.md,brief.md}; feeds /plan — brownfield feature)
+/atlas       → (no agent — the opus command reads the repo itself; writes .somi/atlas.md, which
+                /design, cold /plan, /refactor analysis, and /impact consume instead of re-reading)
 
 # ECO tier (sonnet) — execute against the brief
 /plan        → planner         (writes .somi/plans/<slug>/; consumes brief.md / .somi/rd/<slug>/ if present)
 /code        → coder           (handoff from planner: spec + active iteration + brief)
+/debug       → coder           (repro-gated diagnose→isolate→fix; reviewer Tasked as a fresh-context
+                                MAX diagnosis hatch when isolation stalls; fix runs under /code-loop)
 /code-loop   → coder + reviewer (bounded code↔review loop, single iteration; reviewer may be /review-panel)
 /code-parallel → per eligible iteration: /code-loop in an isolated worktree, then sequential gated integration
 /review      → reviewer        (and auto-invokes consultants per trigger table)
@@ -243,6 +247,15 @@ plain prose escalations from inside an agent are no longer the only path.
 /ship        → [optional MAX front-load] → /plan + (per iteration) /code-loop  (human gate at every stage)
 /plan-loop   → planner + reviewer  (bounded plan↔review loop, ECO planner + MAX reviewer)
 /ship-loop   → [optional MAX front-load] → [gate at MAX→ECO switch] → /plan-loop → /code-loop (continuous, under caps)
+
+# Lifecycle & utility commands
+/upgrade     → discovery-analyst (cited changelog/CVE research) + /code-loop (migration)
+/release-readiness → reviewer   (ONE MAX integration pass; the checklist itself is deterministic)
+/incident    → (mitigation inline, hooks stay on; seeds /debug or /plan as the mandatory follow-up)
+/impact      → (no agent — read-only blast-radius tracing, atlas-first)
+/adopt       → /atlas flow (+ test-strategist for gap-report depth)
+/somi        → (no agent — read-only status dashboard & router)
+/pr          → (no agent — composes the PR from artifacts; gh only after confirmation)
 
 # Within a code workflow:
 coder        → plan-change protocol  (when plan needs revising; updates spec/decisions/phases)
@@ -266,4 +279,13 @@ that shapes the spec:
 Decisions changed mid-workflow are **never edited in place** — they're superseded by a new entry,
 the old one stays marked `superseded by D<N>`, and a diary entry records the change.
 
-See [`agents/planner.md`](../agents/planner.md) for the full protocol and examples.
+**Mechanics — the batch round-trip.** A Tasked subagent cannot pause mid-run to converse with the
+user, so the protocol is a round-trip owned by the calling command: the agent's **research pass**
+returns a `DECISIONS-NEEDED` block (options, pros/cons, recommendation, plus pre-supplied
+narrowing questions that power Discover mode); the command presents each decision to the user and
+re-invokes the agent in **authoring mode** with a `VERIFIED-DECISIONS` block appended (append-only,
+so the stable briefing prefix stays cache-warm). Only then are decisions recorded with
+`Verified with user: yes` — an agent never marks a decision user-verified in the same pass that
+generated it. The same mechanics apply to `designer` and `discovery-analyst`.
+
+See [`agents/planner.md`](../agents/planner.md) for the full protocol, the block shapes, and examples.

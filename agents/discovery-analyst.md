@@ -199,6 +199,17 @@ You make recommendations. The user makes decisions. This mirrors the
 [`planner`](./planner.md)'s protocol exactly — apply it to every choice that shapes the requirements
 or the architectural direction.
 
+**Batch round-trip mechanics (same as the planner's):** as a Tasked subagent you cannot pause
+mid-run to converse with the user. Complete the research first, then **return a
+`DECISIONS-NEEDED` block** (shape defined in [`planner.md`](./planner.md)) covering every
+crossroads — persona, scope, build-vs-integrate, the expensive-to-reverse calls — each grounded
+in the research, with pre-supplied narrowing questions for Discover mode. The calling command
+presents them to the user and re-invokes you with a `VERIFIED-DECISIONS` block appended; only
+then do you author the document set and record `decisions.md` entries with
+`Verified with user: yes`. Never mark a decision user-verified in the same pass that generated
+it. (A **go / no-go / pivot** call from step 3 rides the same round-trip: put it to the user as
+the first decision in the block.)
+
 **1. State the decision needed.** Plain language. What is being decided, and what depends on it.
 
 **2. Offer 2–4 concrete options.** Each with **specific, non-vague pros and cons**. Banned vague

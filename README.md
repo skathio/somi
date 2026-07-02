@@ -31,6 +31,7 @@ It is designed to be:
 | `/design`     | MAX  | `designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
 | `/plan`       | ECO  | `planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
 | `/code`       | ECO  | `coder`             | Execute against an approved plan + brief with senior-level design judgment               |
+| `/debug`      | ECO  | `coder` (+MAX hatch) | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop`, keep the repro test as the regression guard; writes a one-page `rca.md` |
 | `/review`     | MAX  | `reviewer`          | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
 | `/ship`       | both | planner+coder+reviewer | Full (optional MAX front-load →) plan → code → review pipeline, gated at every stage   |
 
@@ -110,11 +111,16 @@ Once installed, use `@somi` in GitHub Copilot chat:
 ```
 .claude-plugin/   Plugin + marketplace manifests (Claude Code plugin distribution)
 agents/           Subagent definitions (planner, coder, reviewer, + support)
-commands/         Slash-command entrypoints (/plan, /code, /review, /ship, ...)
+commands/         Slash-command entrypoints (/plan, /code, /review, /ship, /debug, /somi, ...)
 skills/           On-demand expert knowledge packs (OWASP, SOLID, test strategy, ...)
 rules/            Global ruleset composed into CLAUDE.md
 hooks/            Deterministic guardrails (block dangerous bash, secret writes, ...)
-templates/        Artifact templates (BRIEF [MAX→ECO handoff], DESIGN, CONTEXT, SPEC, DECISIONS, PHASE, PROGRESS, DIARY, REVIEW, ADR, DOD; R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD)
+scripts/          Runtime tooling: somi-loop (resumable loop state & caps), somi-findings
+                  (the findings ledger), somi-check (portable working-tree guard, npm bin)
+templates/        Artifact templates (BRIEF [MAX→ECO handoff], ATLAS [repo map], DESIGN, RCA,
+                  CONTEXT, SPEC, DECISIONS, PHASE, PROGRESS, DIARY, REVIEW, ADR, DOD;
+                  R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD)
+tests/            Behavioral fixtures for hooks + end-to-end tests for the runtime scripts
 .copilot-extension/ Copilot extension + marketplace manifests (mirrors .claude-plugin/)
 examples/         Worked examples + a minimal consuming project
 docs/             Full documentation
@@ -123,8 +129,10 @@ docs/             Full documentation
 When you use SoMi in a project, workflows write their artifacts into a `.somi/` directory
 at the project root. Discovery foundations live under `.somi/rd/<slug>/` (research report, BRD, SRS,
 FRD, SDD, TDD); plans live under `.somi/plans/<slug>/` (context, spec, decisions, progress, diary,
-phases); reviews live under `.somi/reviews/<slug>/` — separate directories, no clutter.
-See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the full layout.
+phases — or a one-page `rca.md` for `/debug` items); reviews live under `.somi/reviews/<slug>/`
+(including the machine-readable findings ledger, `findings.json`); the repo-wide map lives at
+`.somi/atlas.md` (from `/atlas`); optional committed policy lives at `.somi/config.json` —
+separate directories, no clutter. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the full layout.
 
 ---
 
@@ -182,6 +190,10 @@ For an **incremental change** with a settled design (the daily loop), start at p
 ```
 
 For the all-in-one pipeline: `/ship <problem statement>`.
+
+**Lost?** Type `/somi` for a status dashboard of everything in flight (with a next action per
+item), or `/somi <what you want to do>` to get routed to the right command. When a work item is
+ready to merge, `/pr <slug>` turns its artifacts into the pull-request description.
 
 ---
 

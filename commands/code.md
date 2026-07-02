@@ -43,8 +43,10 @@ Parse the fenced user request (above) for the resolution shape:
 
 Read `.somi/plans/<slug>/spec.md`, `progress.md`, and the relevant `phases/<NN>-*.md`. If a
 **`brief.md`** is present (the MAX→ECO handoff), read it too — it carries the decisions in force, the
-complexity map, the file map, and the repo conventions. **Honour its "What ECO does NOT need to
-re-research" list**: open the deep docs it links only where a specific decision sends you there. Find
+complexity map, the file map, and the repo conventions. **Apply its `§10 Supersessions` overlay
+before trusting §2** — a supersession line there wins over the §2 decision it names. **Honour its
+"What ECO does NOT need to re-research" list**: open the deep docs it links only where a specific
+decision sends you there. Find
 the iteration the user named (or, if unspecified, the first iteration with status `not-started` after
 all earlier ones are `done`).
 
@@ -82,6 +84,10 @@ plan itself (not just the code):
 2. **Update the affected files in place**:
    - `spec.md` — update Core decisions, requirements, or DoD as needed.
    - `decisions.md` — supersede the old entry; add a new one. Never edit a decided ADR in place.
+   - `brief.md` (if present, and the superseded decision appears in its §2 "Decisions in force") —
+     **append one line to its `§10 Supersessions` section** (`D<N> superseded by D<M> — <reason>`).
+     Never rewrite §1–§9 (the cached prefix); the append-only overlay keeps the MAX→ECO handoff
+     truthful for every later pass without breaking the prompt cache.
    - `phases/<NN>-*.md` — update scope, acceptance, files, or split into more iterations.
    - `progress.md` — reflect the new state.
 3. **Append a diary entry** to `diary.md` (top of file) with:

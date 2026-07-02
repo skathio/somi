@@ -8,7 +8,7 @@ A phase is one coherent, reviewable, low-risk increment of the work item. It con
 parallelizable.
 
 > **Parallelization contract.** Two iterations may run concurrently (e.g. under
-> [`/code-parallel`](../../../commands/code-parallel.md), each in its own git worktree) **only when
+> `/code-parallel`, each in its own git worktree) **only when
 > their `Files (approx)` sets are provably disjoint and neither depends on the other's output.** The
 > `Parallelizable` field on each iteration records this judgment explicitly — it's what the parallel
 > runner checks before fanning out. Overlapping files or a real dependency means sequential; when in

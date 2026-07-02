@@ -1,7 +1,7 @@
 {
   "name": "somi",
   "displayName": "SoMi",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
     "workflow",
@@ -32,9 +32,11 @@
   "commands": [
     { "name": "discover",            "description": "Pre-development discovery (MAX): research competition + author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a dense brief.md for a new product. Feeds /plan." },
     { "name": "design",              "description": "Feature/user-story design (MAX): settle a brownfield feature's architecture against the codebase and compile the brief.md the cheaper tier executes against. Feeds /plan." },
+    { "name": "atlas",               "description": "Build or refresh the Repo Atlas (.somi/atlas.md, MAX): one deep codebase read — module map, dependency rules, conventions digest, hotspots, test topology — SHA-stamped and amortized across every later /design, cold /plan, /refactor analysis, and /impact." },
     { "name": "plan",                "description": "Sequence the design (brief) into a structured engineering plan (phases, risks, DoD, test strategy)" },
     { "name": "plan-loop",           "description": "Bounded plan → review → revise loop. Stops on approve, cap, divergence, or user stop." },
     { "name": "code",                "description": "Implement against an approved plan with senior-engineer judgment" },
+    { "name": "debug",               "description": "Debug a bug whose cause isn't isolated: reproduce first (failing test as the gate), isolate under a bounded hypothesis budget, fix under /code-loop, keep the repro as the regression guard. Writes rca.md." },
     { "name": "code-loop",           "description": "Bounded code → review → fix loop on a single iteration. Stops on approve, cap, diff cap, circuit breaker, or user stop." },
     { "name": "code-parallel",       "description": "Fan out provably-independent iterations into isolated git worktrees, then integrate them sequentially behind a gate. Falls back to sequential /code-loop on hosts without worktrees/concurrent sub-agents." },
     { "name": "review",              "description": "Strict, fresh-context code / plan / design review with severity-graded findings (use `plan <slug>` or `design <slug>`)" },
@@ -44,7 +46,14 @@
     { "name": "security-review",     "description": "Security-focused review: auth, crypto, input validation, injection risks" },
     { "name": "architecture-review", "description": "Architectural review: boundaries, contracts, dependency direction, reversibility" },
     { "name": "test-strategy",       "description": "Test-strategy review: risk-driven coverage, level selection, mock policy, determinism" },
-    { "name": "refactor",            "description": "Untangle complex code before patching antipatterns" }
+    { "name": "refactor",            "description": "Untangle complex code before patching antipatterns" },
+    { "name": "impact",              "description": "Read-only change-impact analysis: blast radius (callers, contracts, test coverage, migration surface) before committing to /design or /plan. Sometimes the honest output is 'reconsider'." },
+    { "name": "adopt",               "description": "One-time SoMi onboarding for an existing repo: builds the Atlas, confirms detected conventions into 99-overrides, produces a gap report, suggests a calibration work item." },
+    { "name": "upgrade",             "description": "Dependency upgrade validation: MAX researches changelog/breaking-changes/CVE (cited), scans actual API usage, compiles a mini-brief; ECO migrates under /code-loop. Integrates with the dep-install gate." },
+    { "name": "release-readiness",   "description": "Pre-release gate: deterministic checklist over the artifacts (done? open Blockers? DoD? rollback real?) + one MAX review of the integration surface. Verdict + draft release notes." },
+    { "name": "incident",            "description": "The sanctioned emergency lane: mitigate fast (flag/revert/scoped patch) with hooks still enforcing, then MANDATORY postmortem note + seeded /debug follow-up. Less ceremony now, enforced accounting after." },
+    { "name": "somi",                "description": "Status dashboard of all work items / discoveries / open findings with next actions; with an argument, routes your request to the right SoMi command (recommends, never auto-invokes)." },
+    { "name": "pr",                  "description": "Compose a PR title + description from a work item's .somi/ artifacts (spec, decisions, reviews, diary) and optionally open it via gh after confirmation." }
   ],
   "compatibility": {
     "copilot": ">=1.0.0"

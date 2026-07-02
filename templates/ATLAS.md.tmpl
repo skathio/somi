@@ -1,0 +1,75 @@
+# Repo Atlas — <repository name>
+
+> **Built at:** commit `<SHA>` (<YYYY-MM-DD>) • **Refreshed:** <YYYY-MM-DD or "never">
+> **Staleness check:** `git diff --stat <SHA>..HEAD` — small drift: trust the atlas and deep-read
+> only the drifted areas; structural drift (new/moved top-level modules, manifest changes):
+> refresh via `/atlas` before relying on it.
+
+The repo-level MAX artifact: one deep read of the codebase, amortized across every subsequent
+work item. MAX actions (`/design`, `/plan` cold starts, `/refactor` analysis, `/impact`) consume
+this **first** and deep-read only what has drifted since `<SHA>` — instead of re-reading the
+repo from scratch per work item.
+
+**Author discipline (non-negotiable):**
+
+- **Bounded.** Target ≤ ~300 lines. Reference `file:line`; never inline code or whole docs.
+- **Descriptive, not aspirational.** The atlas records how the repo *is*, including the warts —
+  an atlas that describes the intended architecture misleads every consumer.
+- **Stable ordering.** Refreshes update sections in place; consumers cache-read this file.
+
+---
+
+## 1. What this repository is
+
+<Two or three sentences: the system's job, its users, its deployment shape.>
+
+## 2. Module map
+
+| Module / dir | Responsibility | Depends on | Notes |
+|---|---|---|---|
+| `src/<x>/` | <one line> | <modules> | <e.g. "the only module allowed to touch the DB"> |
+
+## 3. Dependency-direction rules
+
+<The load-bearing arrows, as enforced rules with evidence — "domain never imports infra
+(enforced by <lint rule / convention / hope>)". Name known violations honestly.>
+
+- <rule 1 — and where it's enforced>
+- <known violation — `file:line`, why it's tolerated>
+
+## 4. Conventions digest
+
+The distilled subset of the repo's instruction files + observed practice. Source files:
+<list `CLAUDE.md` / `AGENTS.md` / `.github/copilot-instructions.md` / `.cursorrules` paths, or
+"none — conventions below are observed from code">. Repo-local instructions **win** over SoMi
+defaults; repo-local agents (if any) are listed here for the user to opt into — never
+auto-invoked.
+
+- **Errors**: <e.g. wrapped with `fmt.Errorf("…: %w", err)`; never bare returns>
+- **Testing**: <framework, layout, how to run, what's mocked by convention>
+- **Naming / structure**: <the patterns a new file is expected to follow>
+- **Dependencies**: <policy — e.g. "no new runtime deps without sign-off">
+- **Logging / observability**: <logger, format, correlation>
+
+## 5. Complexity hotspots — here be dragons
+
+| Hotspot | Location | Why it's tricky |
+|---|---|---|
+| <name> | `path/file:LL` | <shared mutable state / implicit ordering / load-bearing hack> |
+
+## 6. Test topology
+
+- **Where tests live / how they run**: <paths + the actual commands>
+- **Strong coverage**: <areas a change can lean on>
+- **Thin ice**: <areas where tests won't catch a regression — consumers budget review attention here>
+
+## 7. Build, run, CI facts
+
+- **Build/run**: <the commands that actually work, with any non-obvious setup>
+- **CI**: <what gates a merge — workflows, required checks>
+- **Environments/flags**: <env vars, feature-flag system, config files that matter>
+
+## 8. Refresh log
+
+- <YYYY-MM-DD> — built at `<SHA>` (initial)
+- <YYYY-MM-DD> — refreshed at `<SHA>`: <which sections changed and why, one line>

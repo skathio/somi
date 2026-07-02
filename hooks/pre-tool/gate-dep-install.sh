@@ -27,6 +27,42 @@ if [[ "${SOMI_ALLOW_DEP_INSTALL:-0}" == "1" ]]; then
   exit 0
 fi
 
+# Per-project allowlist from .somi/config.json (`dep_install.allow`) — committed,
+# reviewable policy, scoped to name prefixes, unlike the all-or-nothing env opt-in.
+# An entry is a PREFIX of a package argument: "@types/" allows `npm install
+# @types/node`. Conservative by construction: compound commands (`;`, `&&`, `|`)
+# never qualify, and EVERY package token must match an entry.
+config_allows_dep() {
+  local c="$1"
+  local -a allow=()
+  mapfile -t allow < <(somi::config '.dep_install.allow[]?')
+  (( ${#allow[@]} > 0 )) || return 1
+  [[ "$c" == *';'* || "$c" == *'&'* || "$c" == *'|'* ]] && return 1
+
+  local -a toks=()
+  local seen_verb=0 tok
+  # shellcheck disable=SC2086  # intentional word splitting of the command
+  for tok in $c; do
+    if (( seen_verb )); then
+      [[ "$tok" == -* ]] && continue
+      toks+=("$tok")
+    elif [[ "$tok" =~ ^(install|i|add|get|require)$ ]]; then
+      seen_verb=1
+    fi
+  done
+  (( ${#toks[@]} > 0 )) || return 1
+
+  local t a ok
+  for t in "${toks[@]}"; do
+    ok=0
+    for a in "${allow[@]}"; do
+      [[ "$t" == "$a"* ]] && { ok=1; break; }
+    done
+    (( ok )) || return 1
+  done
+  return 0
+}
+
 # Patterns for "add a new dependency". A trailing package argument is required;
 # bare `<pm> install` (no package) is the lockfile-respecting form and is fine.
 DEP_ADD_PATTERNS=(
@@ -60,10 +96,15 @@ DEP_ADD_PATTERNS=(
 
 for pattern in "${DEP_ADD_PATTERNS[@]}"; do
   if [[ "$CMD" =~ $pattern ]]; then
+    if config_allows_dep "$CMD"; then
+      somi::audit "ALLOW" "dep install permitted by .somi/config.json dep_install.allow: $CMD"
+      exit 0
+    fi
     somi::deny_pretool "somi refused this command: it would add a new dependency (\`${BASH_REMATCH[0]}\`).
 Adding a dep is a decision — record it in \`.somi/plans/<slug>/decisions.md\` (or surface it in
 the iteration summary for the human) and re-run with \`SOMI_ALLOW_DEP_INSTALL=1\` in the
-environment for this session, or have the human run the install themselves.
+environment for this session, or have the human run the install themselves. Projects can also
+allowlist package-name prefixes in \`.somi/config.json\` under \`dep_install.allow\`.
 Lockfile-respecting reinstalls (bare \`npm install\` / \`pip install -r requirements.txt\`-less,
 \`bundle install\`, etc.) are allowed without acknowledgement."
   fi

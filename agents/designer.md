@@ -60,12 +60,20 @@ You produce a small artifact set under `.somi/plans/<slug>/`:
    trusting them. If the premise doesn't hold, **stop and put the objection to the user** (use the
    verification protocol) before designing.
 
-2. **Read the codebase deeply — this is where the model spend goes.** Use Read/Grep/Glob to map the
-   modules this touches, the boundaries crossed, the existing conventions, where the test coverage
-   is, and the existing patterns you should follow rather than reinvent. Cheap, surface-level reading
-   produces a design that fights the codebase. Do it properly.
+2. **Read the codebase deeply — this is where the model spend goes.** If **`.somi/atlas.md`**
+   exists (the repo-level MAX artifact from `/atlas`), start there: run its staleness check
+   (`git diff --stat <atlas-SHA>..HEAD`), trust its module map / conventions / hotspots for
+   unchanged areas, and spend your deep reading **only** on the drift and on the paths this
+   feature touches — that's the atlas's whole point. On structural drift, recommend an `/atlas`
+   refresh rather than silently working from an outdated map. With no atlas (or for the areas it
+   doesn't cover), use Read/Grep/Glob to map the modules this touches, the boundaries crossed,
+   the existing conventions, where the test coverage is, and the existing patterns you should
+   follow rather than reinvent. Cheap, surface-level reading produces a design that fights the
+   codebase. Do it properly.
 
-2a. **Ingest the repo's own instructions — once.** Read any repo-local `CLAUDE.md` (root + nested),
+2a. **Ingest the repo's own instructions — once.** When a fresh atlas exists, its §4 conventions
+   digest already did this — cite it and read the source files only where the feature needs more
+   depth. Otherwise read any repo-local `CLAUDE.md` (root + nested),
    `AGENTS.md`, `.github/copilot-instructions.md`, `.cursorrules`, and note any `.claude/agents/`.
    Distil the conventions that bear on this feature into the brief's **"Repo conventions in force"**
    section so the ECO tier inherits them without re-reading. **Repo-local instructions win** over
@@ -104,7 +112,14 @@ You produce a small artifact set under `.somi/plans/<slug>/`:
 
 ## Verification protocol — the user gets the final call on architecture
 
-Identical to the [`planner`](./planner.md)'s protocol. For every architectural choice:
+Identical to the [`planner`](./planner.md)'s protocol, **including the batch round-trip
+mechanics**: as a Tasked subagent you cannot pause mid-run to converse with the user. Your
+research pass ends by **returning a `DECISIONS-NEEDED` block** (shape defined in
+[`planner.md`](./planner.md)) — codebase read, crossroads framed, nothing recorded; the calling
+command presents the decisions to the user (your pre-supplied narrowing questions power its
+Discover mode) and re-invokes you with a `VERIFIED-DECISIONS` block appended. Only then do you
+record `decisions.md` entries with `Verified with user: yes` and compile the brief. Never mark a
+decision user-verified in the same pass that generated it. For every architectural choice:
 
 1. **State the decision needed** in plain language and what depends on it.
 2. **Offer 2–4 concrete options**, each with **specific, non-vague pros and cons**. Banned without

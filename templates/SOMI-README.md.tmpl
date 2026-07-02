@@ -7,13 +7,22 @@ visible to teammates and reviewers.
 ## What you'll find
 
 **Plans** and **reviews** live in separate top-level subdirectories — all plan artifacts under
-`plans/`, all review files under `reviews/`:
+`plans/`, all review files under `reviews/`; discovery foundations under `rd/`; repo-wide files
+at the root:
 
 ```
 .somi/
 ├── README.md                       ← this file
+├── atlas.md                        ← the Repo Atlas (from /atlas): SHA-stamped repo map that
+│                                      MAX actions consume instead of re-reading the codebase
+├── config.json                     ← optional committed policy: loop caps, dep-install
+│                                      allowlist, lockfile policy (env vars override per session)
+├── rd/                             ← discovery initiatives (from /discover, greenfield)
+│   └── clinic-scheduler/           ← research report, BRD, SRS, FRD, SDD, TDD, decisions,
+│                                      diary, brief.md (the MAX→ECO handoff), README index
 ├── plans/
 │   ├── rate-limiting-webhooks/     ← one work item (slug from the problem statement)
+│   │   ├── brief.md                ← MAX→ECO handoff (when /design or /discover ran upstream)
 │   │   ├── context.md              ← background, surrounding code, constraints
 │   │   ├── spec.md                 ← purpose, requirements, core decisions, user story, DoD
 │   │   ├── decisions.md            ← ADR-style log of architectural choices
@@ -23,9 +32,15 @@ visible to teammates and reviewers.
 │   │       ├── 01-define-limiter.md
 │   │       ├── 02-wire-into-handler.md
 │   │       └── 03-rollout.md
+│   ├── fix-webhook-drops/          ← a /debug work item (lightweight)
+│   │   ├── rca.md                  ← the root-cause record: symptom, repro, cause chain, fix
+│   │   ├── progress.md
+│   │   └── diary.md
 │   └── audit-log-rotation/         ← another work item
 └── reviews/
     ├── rate-limiting-webhooks/      ← reviews scoped to this work item
+    │   ├── findings.json            ← the findings ledger: stable F-<n> ids + open/fixed
+    │   │                               lifecycle (machine view; the .md files are the human view)
     │   ├── 2026-05-21-iteration-1-1-approve.md
     │   └── 2026-05-22-iteration-1-2-request-changes.md
     └── _ad-hoc/                     ← ad-hoc reviews not scoped to a work item
@@ -44,10 +59,12 @@ visible to teammates and reviewers.
 
 ## How to use this directory
 
+- **Getting oriented**: type `/somi` — a status table of every work item with its next action.
 - **Reading existing work**: start with `plans/<slug>/progress.md` to see status, then `spec.md`
-  for the what/why, then `phases/` and `decisions.md` for the how.
+  for the what/why, then `phases/` and `decisions.md` for the how (or `rca.md` for a bug item).
 - **Resuming work**: invoke `/code <slug>` and SoMi will pick up from the current state in
-  `plans/<slug>/progress.md`.
+  `plans/<slug>/progress.md`. Interrupted `/code-loop` / `/plan-loop` runs resume from their
+  recorded pass automatically.
 - **Reviews**: `/review` writes its output under `reviews/<slug>/` (separate from the plan
   artifacts — no clutter inside `plans/<slug>/`).
 - **Archiving**: rename the work-item directory or move it under `plans/archived/<slug>/` if you

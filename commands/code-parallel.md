@@ -36,7 +36,9 @@ it Tasks runs its `coder` on `sonnet` (executing against the work item's `brief.
 | `INTEGRATION` — merges are applied **one at a time**, each followed by full test run + review | always sequential, **non-overridable** | (n/a) |
 | `HOST_FALLBACK` — if worktrees or concurrent sub-agents are unavailable, run eligible iterations sequentially via `/code-loop` | always on | (n/a) |
 
-Record effective values in the first diary entry of the run.
+**Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
+key `parallel.max_parallel`; the per-iteration caps read their own `code_loop.*` keys) > the
+defaults above. Record effective values in the first diary entry of the run.
 
 ## What to do
 

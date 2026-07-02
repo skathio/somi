@@ -64,7 +64,9 @@ front-loaded research itself. So look first for a **`brief.md`** left by a MAX a
 
 If one exists, it is the planner's **primary input**: pass its path to the planner (§4) and instruct
 it to honour the brief's **"What ECO does NOT need to re-research"** list — open the deep docs only
-where the brief points. The planner's job then shrinks to sequencing and slicing.
+where the brief points — and to **apply the brief's `§10 Supersessions` overlay on §2** (a
+supersession line wins over the §2 decision it names). The planner's job then shrinks to sequencing
+and slicing.
 
 If **no brief exists** and the work is genuinely design-heavy (crosses modules, touches auth/crypto/PII,
 needs a migration or a new contract, or the architecture is still open), run the planner's **depth
@@ -127,36 +129,46 @@ Brief the agent via the Task tool with:
 - **The `.somi/rd/<slug>/` paths if an R&D foundation exists** (see §2b), with the instruction to
   treat the SRS/FRD as the requirements source, the SDD/TDD as architectural direction, and the
   research report as risk context — not to re-decide what R&D already settled and verified.
-- A reminder to follow the **verification protocol** (see §6 below).
+- A reminder to follow the **verification protocol** (see §5 below) — first pass runs in
+  **research mode** and returns a `DECISIONS-NEEDED` block instead of recording decisions.
 - Any context from the current conversation.
 
 The planner ([`agents/planner.md`](../agents/planner.md)) does the heavy lifting: reading the repo,
-drafting `context.md`, then walking the user through decisions, then writing `spec.md`,
+drafting `context.md`, surfacing the decisions, then (once verdicts are in) writing `spec.md`,
 `decisions.md`, and `phases/`.
 
-### 5. Verification protocol (inline, during planning)
+### 5. Verification protocol (the batch round-trip — this command owns the user conversation)
 
-**On every architectural or design decision**, the planner must:
+**On every architectural or design decision**, the planner follows its verification protocol
+([`agents/planner.md`](../agents/planner.md)) — but a Tasked subagent cannot pause mid-run to
+converse with the user, so verification is a **batch round-trip owned by this command**:
 
-1. **Present the decision** in plain language.
-2. **Offer 2–4 concrete options**, each with explicit **pros** and **cons**. No vague options
-   ("flexible approach", "best-of-breed", "more robust"). If the agent can't name concrete pros and
-   cons for an option, it should not offer that option.
-3. **State a recommendation** with the reason it's recommended.
-4. **Always offer two escape hatches**:
-   - **Other (custom)** — the user describes their own option.
-   - **Discover** — the user wants guidance. The agent then asks **narrowing questions** whose
-     answers favor or disadvantage specific options. Each question must be specific enough that the
-     user's answer measurably changes the recommendation. Continue until one option is clearly the
-     best fit or the user is ready to choose.
+1. **First Task — research mode.** The planner reads the repo, drafts `context.md` and the spec
+   skeleton, and returns a **`DECISIONS-NEEDED` block**: every architecture-shaping decision it
+   can foresee, each with 2–4 concrete options (specific pros and cons — no vague phrasings like
+   "flexible approach" or "more robust"), a recommendation with its reason, and 1–3 pre-supplied
+   **narrowing questions** for Discover mode.
+2. **Present each decision to the user — faithfully.** Relay the agent's options, pros/cons, and
+   recommendation verbatim (use the host's structured-question tool when available; plain chat
+   otherwise). Always offer the two escape hatches:
+   - **Other (custom)** — the user describes their own option; capture it verbatim.
+   - **Discover** — walk the agent's pre-supplied narrowing questions with the user one at a
+     time, stating what each answer favors, until one option clearly fits or the user is ready
+     to choose.
+   Do not editorialize the agent's options, drop any, or invent new ones.
+3. **Second Task — authoring mode.** Re-invoke the planner with the same briefing **plus a
+   `VERIFIED-DECISIONS` block appended at the end** (append-only, so the stable prefix keeps the
+   prompt cache warm). The planner records each entry in `decisions.md` with
+   `Verified with user: yes` (including the discovery Q&A when used, and the agent's original
+   options when the user chose via Other) and completes spec, phases, progress, and diary.
 
-The user's choice is recorded as an entry in `decisions.md`, with a one-line summary in `spec.md`'s
-**Core decisions** section pointing to it. The decision entry must note whether it was
-user-verified (yes/no) and, if discovery mode was used, record the narrowing questions and answers
-for posterity.
+If authoring surfaces a decision the research pass didn't foresee, the planner returns a
+follow-up `DECISIONS-NEEDED` block and the round-trip repeats — it should be rare; the planner
+is instructed to batch aggressively because every extra round-trip is a cold re-read.
 
-**Do not silently pick architectural defaults.** If the planner finds itself making a choice that
-shapes the design, surface it for verification.
+**Never let a decision be recorded as user-verified without an actual user verdict from step 2.**
+A `decisions.md` full of `Verified with user: yes` entries the user never saw is the exact
+failure this protocol exists to prevent.
 
 ### 6. Initial progress + diary state
 

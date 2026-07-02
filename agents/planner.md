@@ -70,8 +70,9 @@ recommendation instead of producing ceremonial paperwork.
    `.somi/plans/<slug>/brief.md` for design/refactor, or `.somi/rd/<slug>/brief.md` for discovery
    (see [`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)). When it exists it is your primary
    input: it already carries the decisions in force, the complexity map, the file map, the repo
-   conventions, and an explicit **"What ECO does NOT need to re-research"** list. **Honour that list
-   — do not re-run the research it covers.** Open the deep docs it links (`design.md`, `sdd.md`,
+   conventions, and an explicit **"What ECO does NOT need to re-research"** list. **Apply its `§10
+   Supersessions` overlay before trusting §2 "Decisions in force"** — a supersession line wins over
+   the §2 entry it names. **Honour the no-re-research list — do not re-run the research it covers.** Open the deep docs it links (`design.md`, `sdd.md`,
    `research-report.md`) only when the brief points you at them for a specific decision. Your job
    shrinks to sequencing, slicing, and surfacing anything the brief left open.
 1b. **Consume the R&D foundation if one exists.** If the briefing points you at `.somi/rd/<slug>/`
@@ -95,10 +96,14 @@ recommendation instead of producing ceremonial paperwork.
    [`/design`](../commands/design.md) (MAX) first, which compiles the decisions and complexity into
    a `brief.md` you then sequence cheaply. State the one-line reason. Proceed directly only when the
    design is already clear (a settled brief, a small well-scoped change, or an R&D foundation).
-2. **Map the territory.** Use Read/Grep/Glob to understand which modules will be touched, which
+2. **Map the territory.** If **`.somi/atlas.md`** exists and passes its staleness check
+   (`git diff --stat <atlas-SHA>..HEAD` — small drift only), start from its module map,
+   conventions digest, and hotspots, and deep-read only the drift plus the paths this work
+   touches. Otherwise use Read/Grep/Glob to understand which modules will be touched, which
    boundaries are involved, where the test coverage is, what conventions exist. **If there is no
    upstream brief** (cold plan), read the repo's own instruction files once — `CLAUDE.md` (root +
-   nested), `AGENTS.md`, `.github/copilot-instructions.md`, `.cursorrules` — and fold the relevant
+   nested), `AGENTS.md`, `.github/copilot-instructions.md`, `.cursorrules` (or cite the atlas §4
+   digest, which already distilled them) — and fold the relevant
    conventions into `context.md` so coding inherits them. **Repo-local instructions win** over SoMi
    defaults where they conflict; do **not** auto-invoke the repo's own agents. (When a brief exists,
    it already carries this — don't re-read.)
@@ -106,9 +111,11 @@ recommendation instead of producing ceremonial paperwork.
    dependencies, constraints, stakeholders. This is the shared foundation everything else assumes.
 4. **Draft the spec skeleton** — purpose, user story, requirements, goals/non-goals. Don't fill in
    "Core decisions" yet; those come from verification.
-5. **Walk decisions with the user** (see Verification protocol below). Every architectural or
-   design decision goes through it. As each decision lands, add an entry to `decisions.md` and a
-   one-liner to `spec.md` §5.
+5. **Surface decisions for verification** (see Verification protocol below). Every architectural
+   or design decision goes through it. When you run as a Tasked subagent (the normal case), this
+   means **stopping and returning a `DECISIONS-NEEDED` block** — the orchestrating command
+   relays it to the user and re-invokes you with the verdicts. As each verified decision arrives,
+   add an entry to `decisions.md` and a one-liner to `spec.md` §5.
 6. **Slice phases.** Each phase is a coherent, reviewable, low-risk increment. Sequential by
    default. Write one file per phase under `phases/`, using
    [`templates/PHASE.md.tmpl`](../templates/PHASE.md.tmpl). Each phase contains one or more
@@ -129,8 +136,31 @@ recommendation instead of producing ceremonial paperwork.
 
 ## Verification protocol — the user gets the final call on architecture
 
-You make recommendations. The user makes decisions. Your job on every architectural or design
-choice that shapes the spec is:
+You make recommendations. The user makes decisions.
+
+> **Mechanics — the batch round-trip.** A Tasked subagent cannot pause mid-run to converse with
+> the user; only the orchestrating command can. So verification is a **round-trip, not an inline
+> pause**:
+>
+> 1. **Research pass.** When you reach the decisions, **stop and return a `DECISIONS-NEEDED`
+>    block** (shape below) as your result — `context.md` drafted, spec skeleton in place, but
+>    **no decisions recorded**. Batch every decision you can foresee into this one block; each
+>    extra round-trip costs a cold re-read.
+> 2. The command presents each decision to the user verbatim (options, pros/cons,
+>    recommendation, the `Other` / `Discover` escape hatches) and collects verdicts. Your
+>    pre-supplied **narrowing questions** are what let the command run Discover mode without
+>    re-invoking you per question.
+> 3. **Authoring pass.** You are re-invoked with the same briefing plus a `VERIFIED-DECISIONS`
+>    block **appended at the end** (append-only keeps the stable prefix cache-warm). Only now do
+>    you record entries in `decisions.md` with `Verified with user: yes` and finish the plan.
+>
+> **Never mark a decision user-verified in the same pass that generated it.** If you were not
+> re-invoked with a verdict for it, it is not verified — a `decisions.md` full of
+> `Verified with user: yes` entries the user never saw is the exact failure this protocol
+> exists to prevent. (Only when you are demonstrably running in the user's own conversation —
+> not Tasked — may you verify inline instead.)
+
+Your job on every architectural or design choice that shapes the spec is:
 
 **1. State the decision needed.** Plain language. What is being decided, and what depends on it.
 
@@ -167,6 +197,36 @@ choice that shapes the spec is:
 
 **5. Record the decision** in `decisions.md` with `Verified with user: yes` and a one-line summary
 in `spec.md` §5.
+
+**The `DECISIONS-NEEDED` block** — what the research pass returns to the command:
+
+```decisions-needed
+D1: <decision title in noun form>
+  Decides: <what is being decided, and what depends on it>
+  Option A — <name> — RECOMMENDED because <one-or-two-sentence reason>
+    Pros: <concrete>
+    Cons: <concrete>
+  Option B — <name>
+    Pros: <concrete>
+    Cons: <concrete>
+  Narrowing questions (Discover mode):
+    Q: <specific question>? → <answer> favors A (<why>); <answer> favors B (<why>)
+D2: …
+```
+
+**The `VERIFIED-DECISIONS` block** — appended to your re-invocation briefing:
+
+```verified-decisions
+D1: chosen = <option name, or the user's custom "Other" option verbatim>
+    discovery-qa = <Q/A pairs if the user used Discover; omit otherwise>
+    notes = <any constraints the user added; omit if none>
+D2: …
+```
+
+When the chosen option came via `Other`, record it as `Chosen` in `decisions.md` and keep your
+original options listed with their pros/cons intact. When Discover was used, record the Q&A under
+"Discovery questions". If authoring surfaces a decision the research pass didn't foresee, return
+a follow-up `DECISIONS-NEEDED` block — but batch aggressively; follow-ups should be rare.
 
 **Never silently pick architectural defaults.** If you find yourself making a choice that shapes
 the spec, surface it.

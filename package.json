@@ -4,6 +4,9 @@
   "scripts": {
     "test": "bash scripts/validate.sh"
   },
+  "bin": {
+    "somi-check": "scripts/somi-check.sh"
+  },
   "description": "SoMi — multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
     "workflow",
@@ -42,6 +45,8 @@
     "hooks/",
     "templates/",
     "examples/",
+    "scripts/",
+    "tests/",
     ".claude-plugin/",
     ".copilot-extension/",
     ".claude/",
