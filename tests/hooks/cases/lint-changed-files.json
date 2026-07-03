@@ -1,0 +1,25 @@
+{
+  "_note": "lint-changed-files.sh is PostToolUse (matcher: Write|Edit), best-effort/informational — never blocks. This dev/CI-authoring sandbox has no linter toolchain installed (ruff, eslint, shellcheck, go, cargo, pyright all confirmed absent via `command -v`; no eslint config present at repo root either — confirmed by direct search), so the delegate path (a real lint run producing additionalContext) cannot be exercised here without fabricating output; per the iteration's instruction, only the no-op paths are covered. Each case's throwaway case_dir (used as CLAUDE_PROJECT_DIR) is guaranteed fresh, so it never contains pyproject.toml/.ruff.toml/an eslintrc/go.mod/Cargo.toml regardless of host tooling — the .py/.ts/.go/.rs no-op cases below are therefore deterministic in any environment, not just this one. The .sh extension is deliberately NOT covered here: unlike the other extensions, its shellcheck branch has no config-file guard (command-presence only, `command -v shellcheck`), and CI (.github/workflows/publish.yml) apt-get-installs shellcheck while this authoring sandbox does not — a 'no shellcheck present' no-op case authored here would be expected to flip to a real (unverified) lint delegate run under CI, which is exactly the kind of environment-fragile assertion the iteration's brief says not to fabricate. Revisit .sh coverage when this hook is ported (Phase 2 iteration 2.5), either with a staged sample verified shellcheck-clean against a real shellcheck binary, or an environment-conditional case. Every case below was verified by direct invocation of the unmodified hooks/post-tool/lint-changed-files.sh.",
+  "script": "post-tool/lint-changed-files.sh",
+  "cases": [
+    { "name": "no-file-path-noop", "expect_no_context": true,
+      "payload": { "tool_name": "Write", "tool_input": {} } },
+    { "name": "file-not-found-noop", "expect_no_context": true,
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/does-not-exist.py" } } },
+    { "name": "python-no-linter-config-noop", "expect_no_context": true,
+      "files": { "sample.py": "x = 1\n" },
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.py" } } },
+    { "name": "typescript-no-eslint-config-noop", "expect_no_context": true,
+      "files": { "sample.ts": "const x = 1;\n" },
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.ts" } } },
+    { "name": "go-no-gomod-noop", "expect_no_context": true,
+      "files": { "sample.go": "package main\n" },
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.go" } } },
+    { "name": "rust-no-cargotoml-noop", "expect_no_context": true,
+      "files": { "sample.rs": "fn main() {}\n" },
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.rs" } } },
+    { "name": "unhandled-extension-noop", "expect_no_context": true,
+      "files": { "sample.md": "# hi\n" },
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.md" } } }
+  ]
+}

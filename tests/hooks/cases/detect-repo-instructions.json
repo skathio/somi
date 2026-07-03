@@ -1,0 +1,9 @@
+{
+  "_note": "Minimal proving case for the runner's expect_context + files staging mechanism (added in Phase 0 iteration 0.2). Iteration 0.4 owns building this out to full coverage (silent-exit no-files case, nested CLAUDE.md within -maxdepth 3, .claude/agents/ count) — do not add more cases here ahead of 0.4.",
+  "script": "session-start/detect-repo-instructions.sh",
+  "cases": [
+    { "name": "surfaces-root-agents-md", "expect_context": "AGENTS.md",
+      "files": { "AGENTS.md": "# repo instructions\n" },
+      "payload": {} }
+  ]
+}
