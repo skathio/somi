@@ -56,6 +56,10 @@
 #   - "expect_no_audit_log": true — asserts the case's audit-log file was never
 #     created (e.g. audit-log.sh's no-tool_name early exit).
 #
+# A case that declares none of the six recognized assertion fields above runs
+# the hook and passes vacuously (a typo'd field name would silently produce a
+# meaningless green case) — the runner fails such a case loudly instead.
+#
 # The runner pipes each payload into the script under a sanitized environment
 # (session opt-ins unset unless the case sets them; SOMI_AUDIT_LOG defaults to
 # a per-case throwaway file, "$case_dir/audit.log", so audit writes never leak
@@ -111,6 +115,7 @@ for case_file in "$CASES_DIR"/*.json; do
     expect_no_context="$(jq -r ".cases[$i].expect_no_context // false" "$case_file")"
     expect_audit_log="$(jq -r ".cases[$i].expect_audit_log // empty" "$case_file")"
     expect_no_audit_log="$(jq -r ".cases[$i].expect_no_audit_log // false" "$case_file")"
+    has_assertion="$(jq -r ".cases[$i] | (has(\"expect\") or has(\"expect_context\") or has(\"expect_reason\") or has(\"expect_no_context\") or has(\"expect_audit_log\") or has(\"expect_no_audit_log\"))" "$case_file")"
     payload="$(jq -c ".cases[$i].payload" "$case_file")"
 
     # Sanitized environment: session opt-ins never leak in from the caller;
@@ -218,6 +223,11 @@ for case_file in "$CASES_DIR"/*.json; do
     if [[ "$expect_no_audit_log" == "true" ]] && [[ -f "$case_dir/audit.log" ]]; then
       echo "FAIL: [$script_rel] $name — expected no audit-log write, but one occurred" >&2
       echo "        actual audit log: $(cat "$case_dir/audit.log")" >&2
+      failures=$((failures + 1))
+    fi
+
+    if [[ "$has_assertion" != "true" ]]; then
+      echo "FAIL: [$script_rel] $name — case declares no recognized assertion field (expect/expect_context/expect_reason/expect_no_context/expect_audit_log/expect_no_audit_log); it would pass vacuously" >&2
       failures=$((failures + 1))
     fi
   done
