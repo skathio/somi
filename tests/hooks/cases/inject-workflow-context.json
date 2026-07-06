@@ -1,0 +1,127 @@
+{
+  "_note": "Phase 0 iteration 0.5 — the brief's named heaviest procedural-bash hook, zero fixtures before this iteration. Every case's expected output was captured by running the unmodified bash hook directly against a staged throwaway CLAUDE_PROJECT_DIR before being written here, never assumed (see the runner mechanisms added alongside this file: \"setup_git\"/\"dirty_files\" for git-backed nudge cases, \"prime\"/\"files_after_prime\" for the signature-gate cases, and \"expect_context_excludes\" — a new, symmetric-to-\"expect_context\" assertion — for the one discovery below that a positive substring match cannot rule out). SURPRISING DISCOVERY (parallel to 0.4's non-functional prune list; pinned as current behavior per D2, not corrected here): the hook's own in-progress detection, hooks/user-prompt-submit/inject-workflow-context.sh:59-60, only recognizes a bare status line matching `^[[:space:]]*<?in-progress>?[[:space:]]*$` (optional angle brackets, NOT backticks) or a line matching `status:[[:space:]]*`?in-progress`?` (requires a literal \"status:\" prefix). This project's OWN progress.md convention — a bare backtick-wrapped line, e.g. this very work item's own .somi/plans/node-runtime-port/progress.md line 10, `` `in-progress` `` with no \"Status:\" prefix — matches NEITHER pattern, confirmed directly with grep -qiE against both regexes. So this hook, as currently written, would silently fail to surface node-runtime-port itself (or any other work item that follows this repo's own progress.md style) as an active work item on a fresh Claude Code turn. Meanwhile the R&D README.md convention (`> Status: `ready-for-planning`` — see examples/discovery-example.md:22) DOES match its sibling regex, because it already carries the \"Status:\" prefix the plans-detection regex additionally requires. This asymmetry is real, reproducible, and worth a naming call, not a silent default — filed below and in progress.md's Follow-ups as a decision for Phase 2 iteration 2.8 (the Node port of this hook) to make explicitly: normalize this repo's own progress.md convention to match the regex, or normalize the port's detection to match the convention actually in use. Note on the \"files_after_prime\" perturbation used in the signature-gate cases: it stages a brand-new .somi/reviews/*.md path (or a new file entirely) rather than touching an existing file's mtime, so the signature change is exact-listing-driven, not timing/mtime-resolution-dependent — deliberately avoids a flaky sleep-then-touch pattern. Note on ordering: the multi-in-progress case does not assert the specific slug list text, only the static surrounding phrase — verified directly that the slug order in that message follows `find`'s raw (unsorted) directory-traversal order, which is not stable across differently-created directories, so asserting an exact order would be a false, environment-fragile precision this fixture avoids.",
+  "script": "user-prompt-submit/inject-workflow-context.sh",
+  "cases": [
+    {
+      "name": "emits-reminder-on-first-turn-absent-signature",
+      "_note": "No .somi/plans, .somi/reviews, .somi/rd, or git repo staged at all — a genuinely fresh project. No prior state file exists in this case's throwaway CLAUDE_PROJECT_DIR/.claude/somi-state/, so LAST_SIG is empty and EMIT_REMINDER is forced to \"yes\" regardless of content. This is the baseline 'signature absent -> emission happens' proof the phase spec asks for, and the pairing partner for the two signature-gate cases below (same empty staging, but those add \"prime\").",
+      "expect_context": "somi is active. Reminders:\n- Follow rules/CLAUDE.md priorities: security > correctness > maintainability > performance > convenience.",
+      "expect_context_excludes": "loose-end check",
+      "payload": {}
+    },
+    {
+      "name": "signature-gate-suppresses-unchanged-repeat",
+      "_note": "Same (empty) staging as the case above, plus \"prime\": true — the runner invokes the hook once first (writing .claude/somi-state/last-context-signature naturally, via the hook's own code, not a hand-computed hash), discards that output, then runs again for the real assertion. Nothing changes between the two invocations, so the second call's computed signature equals what the first call just persisted -> EMIT_REMINDER=\"no\" -> the PARTS array stays empty (no nudges either, no git repo staged) -> no hookSpecificOutput at all. This is the core 'no re-emission when mtimes are unchanged since the last emission' proof the phase spec requires.",
+      "expect_no_context": true,
+      "prime": true,
+      "payload": {}
+    },
+    {
+      "name": "signature-gate-reemits-when-state-changes",
+      "_note": "The required companion to the suppression case above, proving it is not vacuously green: identical empty baseline and identical \"prime\": true, but \"files_after_prime\" stages a brand-new .somi/reviews/probe/note.md between the priming call and the real one. The reviews_state segment of the hook's signature (find .somi/reviews -maxdepth 3 -name '*.md' | sort | sha256sum) now differs from what priming persisted, so the real call's LAST_SIG != CURRENT_SIG and the reminder is emitted again — proving the suppression case above is actually gating on the signature, not on some unrelated always-suppress condition.",
+      "expect_context": "somi is active. Reminders:",
+      "prime": true,
+      "files_after_prime": {
+        ".somi/reviews/probe/note.md": "throwaway review note used only to change the reviews_state hash\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "plan-hint-single-in-progress-surfaced",
+      "_note": "PLAN_HINT's singular branch: exactly one .somi/plans/*/progress.md matching the \"status:\" + in-progress regex. First turn (absent signature) so the reminder block (and therefore PLAN_HINT, embedded inside it) is guaranteed to render.",
+      "expect_context": "Active work item: `.somi/plans/demo-active/`. Follow its `spec.md` and active iteration in `phases/`; update `progress.md` / `diary.md` as work proceeds.",
+      "expect_context_excludes": "Multiple in-progress work items",
+      "files": {
+        ".somi/plans/demo-active/progress.md": "## Status\n\nStatus: `in-progress`\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "plan-hint-bare-backtick-status-not-detected",
+      "_note": "Pins the surprising discovery described in the file-level _note above: this project's OWN progress.md convention (a bare backtick-wrapped status line, no \"status:\" prefix) matches neither of the hook's two in-progress regexes, so PLAN_HINT stays empty even though a real, current work item is staged as in-progress. \"expect_no_context\" cannot express this pin — the reminder block itself still renders (first turn, absent signature), so the context is NOT empty; only the work-item hint clause inside it must be absent, which is exactly what \"expect_context_excludes\" was added for. Sanity-checked by deliberately rewriting this case's staged content to the detected form (\"Status: `in-progress`\") and confirming expect_context_excludes fails loudly on the resulting \"Active work item:\" text, then restoring — see diary. Preserved as current behavior per D2; not corrected here. Filed as a Phase 2 iteration 2.8 decision in progress.md's Follow-ups: normalize this repo's own progress.md convention to match the regex, or normalize the port's detection to match the convention actually in use — either is defensible, but it should be a named call, not a silent default.",
+      "expect_context": "somi is active. Reminders:",
+      "expect_context_excludes": "Active work item:",
+      "files": {
+        ".somi/plans/demo-slug/progress.md": "## Status\n\n`in-progress`\n\nSome other text.\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "plan-hint-multiple-in-progress",
+      "_note": "PLAN_HINT's plural branch: two .somi/plans/*/progress.md files both matching the in-progress regex. Asserts only the static surrounding phrase, not the specific slug list or its order — verified directly that the comma-joined slug order follows find's raw (unsorted) traversal order, which differs run to run across differently-created directories, so pinning an exact order here would be an environment-fragile false precision.",
+      "expect_context": "Multiple in-progress work items in `.somi/plans/`:",
+      "expect_context_excludes": "Active work item:",
+      "files": {
+        ".somi/plans/alpha-work/progress.md": "Status: `in-progress`\n",
+        ".somi/plans/beta-work/progress.md": "Status: `in-progress`\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "rd-hint-active-discovery-surfaced",
+      "_note": "RD_HINT's active branch (status researching/drafting/awaiting-verification). Unlike the plans convention above, the real R&D README.md convention (`> Status: `researching``, matching examples/discovery-example.md's own style) already carries the \"status:\" prefix the regex requires, so this branch fires exactly as documented — no discovered gap here.",
+      "expect_context": "Active discovery in `.somi/rd/`: widget-research. This is requirements-engineering work (`/discover`): research the competition, author the R&D doc set, verify crossroads, before handing to `/plan`.",
+      "expect_context_excludes": "R&D foundation ready in",
+      "files": {
+        ".somi/rd/widget-research/README.md": "> Status: `researching`\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "rd-hint-ready-for-planning-surfaced",
+      "_note": "RD_HINT's ready-for-planning branch — only reachable when zero active-status R&D directories exist (see the precedence case below).",
+      "expect_context": "R&D foundation ready in `.somi/rd/widget-ready/`. `/plan widget-ready` will consume its SRS/FRD as the requirements source and SDD/TDD as architectural direction.",
+      "expect_context_excludes": "Active discovery in",
+      "files": {
+        ".somi/rd/widget-ready/README.md": "> Status: `ready-for-planning`\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "rd-hint-active-overrides-ready-when-both-present",
+      "_note": "Pins the precedence branch directly: the hook's RD_HINT logic is `if active>=1 ... elif ready==1`, so a ready-for-planning directory is silently ignored whenever any active-status directory exists, even though both were scanned. Distinguished from rd-hint-active-discovery-surfaced (which has no ready dir at all) by staging both simultaneously and asserting the ready branch's distinct text is absent.",
+      "expect_context": "Active discovery in `.somi/rd/`: widget-active.",
+      "expect_context_excludes": "R&D foundation ready in",
+      "files": {
+        ".somi/rd/widget-active/README.md": "> Status: `drafting`\n",
+        ".somi/rd/widget-ready2/README.md": "> Status: `ready-for-planning`\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "todo-claude-marker-in-diff-nudge",
+      "_note": "The hook checks `git -C PROJECT_ROOT diff --no-color --unified=0 HEAD | grep '^\\+.*(TODO(claude)|TODO(agent)|FIXME(claude))'` — an added line containing the marker, relative to HEAD, regardless of whether it's staged in the index. \"setup_git\" commits the baseline src/app.js untouched; \"dirty_files\" then overwrites it post-commit (left unstaged on purpose, proving the check is not staged-only) with a TODO(claude) line added.",
+      "expect_context": "Detected new TODO(claude)/FIXME(claude) markers in the diff against HEAD. List them explicitly as 'not done' in your next summary.",
+      "setup_git": true,
+      "files": {
+        "src/app.js": "function foo() {}\n"
+      },
+      "dirty_files": {
+        "src/app.js": "function foo() {}\n// TODO(claude): fix this\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "scratch-file-in-status-nudge",
+      "_note": "The hook checks `git status --porcelain | grep '^\\?\\? .*(\\.bak|\\.orig|scratch_)'`. \"dirty_files\" here lands a brand-new, never-added path after the baseline commit, so it's untracked (`?? scratch_debug.txt` in porcelain output) — exactly the shape the regex is looking for.",
+      "expect_context": "Detected scratch / .bak files in working tree. Clean them up before declaring done.",
+      "setup_git": true,
+      "dirty_files": {
+        "scratch_debug.txt": "leftover debug output\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "nudge-fires-independent-of-suppressed-reminder",
+      "_note": "Combines the signature-gate mechanism with a nudge to pin a subtle, easy-to-regress interaction: NUDGES are computed unconditionally every call, while the reminder block (with PLAN_HINT/RD_HINT inside it) is gated on EMIT_REMINDER alone — the two are independent branches in the same PARTS array, not one gated by the other. \"prime\" establishes a git repo with no loose ends yet (first call: absent signature, emits the plain reminder, discarded); \"files_after_prime\" then lands an untracked scratch file with the signature-relevant state (.somi/plans|reviews|rd) completely unchanged, so the real call's reminder is suppressed exactly as in signature-gate-suppresses-unchanged-repeat, yet the loose-end nudge still fires and is the ONLY thing in the output — a naive port that nested the nudge check inside the same `if EMIT_REMINDER` branch as the reminder would silently drop end-of-turn nudges on every suppressed turn, a real regression this case is designed to catch.",
+      "expect_context": "Detected scratch / .bak files in working tree.",
+      "expect_context_excludes": "somi is active. Reminders:",
+      "setup_git": true,
+      "prime": true,
+      "files_after_prime": {
+        "scratch_debug.txt": "leftover debug output\n"
+      },
+      "payload": {}
+    }
+  ]
+}

@@ -30,6 +30,34 @@
 #     staging below, generalized to arbitrary relative paths. Keys are
 #     rejected (case FAILS loudly) if they contain a ".." path segment or a
 #     leading "/" — such a key would otherwise escape the case dir.
+#   - "setup_git": true — initializes a real git repo in the case dir (`git
+#     init -b main`, a throwaway commit identity, `git add -A` + an
+#     `--allow-empty` commit of whatever "files" staged) before the hook
+#     runs — for hooks that shell out to `git diff`/`git status` (e.g.
+#     inject-workflow-context.sh's loose-end nudges). The commit gives those
+#     hooks a real HEAD to diff against even when "files" staged nothing.
+#   - "dirty_files": like "files", but written *after* the "setup_git"
+#     baseline commit — so a new path lands untracked (visible in `git status
+#     --porcelain` as `??`) and an overwritten already-committed path lands
+#     modified-unstaged (visible in `git diff HEAD`). Same unsafe-key guard as
+#     "files". Meaningless without "setup_git" (no git repo to be dirty in).
+#   - "prime": true — runs the hook once beforehand (same sanitized env and
+#     payload as the real run below), discarding its output but still failing
+#     the case loudly if that priming invocation errors, so a hook whose
+#     behavior depends on its own prior invocation (e.g.
+#     inject-workflow-context.sh's signature-gated re-emission, which reads a
+#     state file the hook itself wrote last time) can be tested against its
+#     *second* call rather than its first. Note: this reuses the case's audit
+#     log path, so pairing "prime" with an audit-log assertion on a hook that
+#     writes audit lines would double-count; harmless for hooks (like
+#     inject-workflow-context.sh) that never call somi::audit.
+#   - "files_after_prime": like "files", but written after the priming
+#     invocation and before the real one — for perturbing whatever state the
+#     prior invocation just persisted (e.g. adding a new
+#     .somi/reviews/*/*.md so a signature computed from directory-listing
+#     mtimes changes deterministically, with no sleep/timing dependency,
+#     rather than relying on touching an existing file's mtime). Only
+#     meaningful alongside "prime".
 #   - A payload may reference the literal token "{{CASE_DIR}}", substituted
 #     with the case's absolute throwaway-dir path before the hook runs — for
 #     hooks that check real absolute paths (e.g. lint-changed-files.sh's
@@ -45,6 +73,15 @@
 #   - "expect_no_context": true — asserts `.hookSpecificOutput.additionalContext`
 #     is absent/empty — for PostToolUse hooks whose current behavior is a
 #     documented no-op (e.g. lint-changed-files.sh with no configured linter).
+#   - "expect_context_excludes": asserted as a substring that must NOT appear
+#     in `.hookSpecificOutput.additionalContext` — the negative complement to
+#     "expect_context", for a hook that emits *some* context (so
+#     "expect_no_context" doesn't apply — a plain substring match on the part
+#     that IS present can't rule out something else silently being appended
+#     alongside it) but where one specific piece of content must be absent
+#     (e.g. inject-workflow-context.sh still prints its standing reminder
+#     block on an unrelated branch, but a particular work-item hint inside
+#     that block must not appear for this case's staged input).
 #   - "expect_reason": asserted as a substring of
 #     `.hookSpecificOutput.permissionDecisionReason` on deny cases — catches a
 #     hook that still denies (so `expect: deny` alone would pass) but whose
@@ -56,9 +93,10 @@
 #   - "expect_no_audit_log": true — asserts the case's audit-log file was never
 #     created (e.g. audit-log.sh's no-tool_name early exit).
 #
-# A case that declares none of the six recognized assertion fields above runs
-# the hook and passes vacuously (a typo'd field name would silently produce a
-# meaningless green case) — the runner fails such a case loudly instead.
+# A case that declares none of the seven recognized assertion fields above
+# runs the hook and passes vacuously (a typo'd field name would silently
+# produce a meaningless green case) — the runner fails such a case loudly
+# instead.
 #
 # The runner pipes each payload into the script under a sanitized environment
 # (session opt-ins unset unless the case sets them; SOMI_AUDIT_LOG defaults to
@@ -96,6 +134,28 @@ is_unsafe_staging_key() {
   return 1
 }
 
+# Writes cases[$idx].$field (an object mapping relative path -> content) into
+# $dir, one file per key, validating every key via is_unsafe_staging_key first
+# (shared by "files", "dirty_files", and "files_after_prime" — same shape,
+# different write timing). Prints a FAIL line and returns 1 on an unsafe key
+# (caller must count a failure and skip the case); returns 0 otherwise,
+# including when the field is absent/empty.
+stage_case_files() {
+  local case_file="$1" idx="$2" dir="$3" field="$4" script_rel="$5" name="$6"
+  local rel_path
+  while IFS= read -r rel_path; do
+    [[ -z "$rel_path" ]] && continue
+    if is_unsafe_staging_key "$rel_path"; then
+      echo "FAIL: [$script_rel] $name — unsafe \"$field\" key escapes the case dir: $rel_path" >&2
+      return 1
+    fi
+    mkdir -p "$dir/$(dirname "$rel_path")"
+    jq -r --argjson idx "$idx" --arg key "$rel_path" ".cases[\$idx].$field[\$key]" "$case_file" \
+      > "$dir/$rel_path"
+  done < <(jq -r ".cases[$idx].$field // {} | keys[]" "$case_file")
+  return 0
+}
+
 for case_file in "$CASES_DIR"/*.json; do
   script_rel="$(jq -r '.script' "$case_file")"
   script="$ROOT/hooks/$script_rel"
@@ -113,9 +173,10 @@ for case_file in "$CASES_DIR"/*.json; do
     expect_context="$(jq -r ".cases[$i].expect_context // empty" "$case_file")"
     expect_reason="$(jq -r ".cases[$i].expect_reason // empty" "$case_file")"
     expect_no_context="$(jq -r ".cases[$i].expect_no_context // false" "$case_file")"
+    expect_context_excludes="$(jq -r ".cases[$i].expect_context_excludes // empty" "$case_file")"
     expect_audit_log="$(jq -r ".cases[$i].expect_audit_log // empty" "$case_file")"
     expect_no_audit_log="$(jq -r ".cases[$i].expect_no_audit_log // false" "$case_file")"
-    has_assertion="$(jq -r ".cases[$i] | (has(\"expect\") or has(\"expect_context\") or has(\"expect_reason\") or has(\"expect_no_context\") or has(\"expect_audit_log\") or has(\"expect_no_audit_log\"))" "$case_file")"
+    has_assertion="$(jq -r ".cases[$i] | (has(\"expect\") or has(\"expect_context\") or has(\"expect_reason\") or has(\"expect_no_context\") or has(\"expect_context_excludes\") or has(\"expect_audit_log\") or has(\"expect_no_audit_log\"))" "$case_file")"
     payload="$(jq -c ".cases[$i].payload" "$case_file")"
 
     # Sanitized environment: session opt-ins never leak in from the caller;
@@ -136,27 +197,54 @@ for case_file in "$CASES_DIR"/*.json; do
     # to be written into the case dir before the hook runs (e.g. AGENTS.md for
     # detect-repo-instructions.sh). Generalizes the config staging above.
     # Keys are validated (no ".." segment, no leading "/") before any write.
-    bad_key=""
-    while IFS= read -r rel_path; do
-      [[ -z "$rel_path" ]] && continue
-      if is_unsafe_staging_key "$rel_path"; then
-        bad_key="$rel_path"
-        break
-      fi
-      mkdir -p "$case_dir/$(dirname "$rel_path")"
-      jq -r --argjson idx "$i" --arg key "$rel_path" '.cases[$idx].files[$key]' "$case_file" \
-        > "$case_dir/$rel_path"
-    done < <(jq -r ".cases[$i].files // {} | keys[]" "$case_file")
-    if [[ -n "$bad_key" ]]; then
-      echo "FAIL: [$script_rel] $name — unsafe \"files\" key escapes the case dir: $bad_key" >&2
+    if ! stage_case_files "$case_file" "$i" "$case_dir" "files" "$script_rel" "$name"; then
       failures=$((failures + 1))
       continue
     fi
+
+    # "setup_git": true — real git repo in the case dir, with whatever
+    # "files" staged committed as its baseline, so hooks that shell out to
+    # `git diff`/`git status` (e.g. inject-workflow-context.sh) have a real
+    # HEAD to compare against.
+    setup_git="$(jq -r ".cases[$i].setup_git // false" "$case_file")"
+    if [[ "$setup_git" == "true" ]]; then
+      git -C "$case_dir" init -q -b main
+      git -C "$case_dir" config user.email "somi-fixture@test.local"
+      git -C "$case_dir" config user.name "somi-fixture"
+      git -C "$case_dir" add -A
+      git -C "$case_dir" commit -q -m "fixture baseline" --allow-empty
+    fi
+
+    # "dirty_files": written after the baseline commit above, so a new path
+    # is untracked and an overwritten committed path is modified-unstaged.
+    if ! stage_case_files "$case_file" "$i" "$case_dir" "dirty_files" "$script_rel" "$name"; then
+      failures=$((failures + 1))
+      continue
+    fi
+
     env_args=("SOMI_AUDIT_LOG=$case_dir/audit.log" "CLAUDE_PROJECT_DIR=$case_dir")
     while IFS= read -r kv; do
       [[ -z "$kv" ]] && continue
       env_args+=("$kv")
     done < <(jq -r ".cases[$i].env // {} | to_entries[] | \"\(.key)=\(.value)\"" "$case_file")
+
+    # "prime": true — run the hook once first, discarding output, so a
+    # signature/state file the hook itself writes is already in place before
+    # the real (assertable) invocation below. "files_after_prime" perturbs
+    # that state between the two invocations (see header comment).
+    prime="$(jq -r ".cases[$i].prime // false" "$case_file")"
+    if [[ "$prime" == "true" ]]; then
+      if ! printf '%s' "$payload" \
+          | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES "${env_args[@]}" "$script" >/dev/null; then
+        echo "FAIL: [$script_rel] $name — priming invocation exited non-zero" >&2
+        failures=$((failures + 1))
+        continue
+      fi
+      if ! stage_case_files "$case_file" "$i" "$case_dir" "files_after_prime" "$script_rel" "$name"; then
+        failures=$((failures + 1))
+        continue
+      fi
+    fi
 
     if ! out="$(printf '%s' "$payload" \
         | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES "${env_args[@]}" "$script")"; then
@@ -204,6 +292,17 @@ for case_file in "$CASES_DIR"/*.json; do
       [[ -n "$out" ]] && context="$(jq -r '.hookSpecificOutput.additionalContext // empty' <<<"$out")"
       if [[ -n "$context" ]]; then
         echo "FAIL: [$script_rel] $name — expected no additionalContext, got one" >&2
+        echo "        actual context: $context" >&2
+        failures=$((failures + 1))
+      fi
+    fi
+
+    if [[ -n "$expect_context_excludes" ]]; then
+      context=""
+      [[ -n "$out" ]] && context="$(jq -r '.hookSpecificOutput.additionalContext // empty' <<<"$out")"
+      if [[ "$context" == *"$expect_context_excludes"* ]]; then
+        echo "FAIL: [$script_rel] $name — additionalContext contained a substring it must not" >&2
+        echo "        excluded substring: $expect_context_excludes" >&2
         echo "        actual context: $context" >&2
         failures=$((failures + 1))
       fi
