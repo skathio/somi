@@ -1,0 +1,168 @@
+[
+  {
+    "script": "somi-loop.sh",
+    "name": "init: config-resolved caps",
+    "argv": [
+      "init",
+      "--slug",
+      "g",
+      "--loop",
+      "code",
+      "--iteration",
+      "1.1",
+      "--files",
+      "src/a.txt"
+    ],
+    "exit": 0,
+    "stdout": "{\"baseline_sha\":\"<SHA>\",\"caps\":{\"max_passes\":2,\"diff_cap_lines\":10,\"severity_floor\":\"Major\"},\"state_file\":\"<DIR>/repo/.claude/somi-state/loop/g.1.1.json\"}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "pass: 1st pass (1 of 2)",
+    "argv": [
+      "pass",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1"
+    ],
+    "exit": 0,
+    "stdout": "{\"pass\":1,\"max_passes\":2}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "pass: 2nd pass (2 of 2, at cap, allowed)",
+    "argv": [
+      "pass",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1"
+    ],
+    "exit": 0,
+    "stdout": "{\"pass\":2,\"max_passes\":2}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "pass: 3rd pass exceeds max_passes (exit 2)",
+    "argv": [
+      "pass",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "max-passes-exceeded: pass 3 > cap 2"
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "check-diff: in-scope only, under cap",
+    "argv": [
+      "check-diff",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1"
+    ],
+    "exit": 0,
+    "stdout": "{\"diff_lines\":2,\"weighted_lines\":2,\"cap\":10,\"out_of_scope\":[]}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "check-diff: out-of-scope doubled, exactly at cap",
+    "argv": [
+      "check-diff",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1"
+    ],
+    "exit": 0,
+    "stdout": "{\"diff_lines\":6,\"weighted_lines\":10,\"cap\":10,\"out_of_scope\":[\"src/b.txt\"]}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "check-diff: over weighted cap (exit 3)",
+    "argv": [
+      "check-diff",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1"
+    ],
+    "exit": 3,
+    "stdout": "{\"diff_lines\":7,\"weighted_lines\":12,\"cap\":10,\"out_of_scope\":[\"src/b.txt\"]}",
+    "stderr": "diff-cap-exceeded: weighted 12 > cap 10 (out-of-scope counts double)"
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "record-pass: appends history entry",
+    "argv": [
+      "record-pass",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1",
+      "--verdict",
+      "request-changes",
+      "--blockers",
+      "0",
+      "--majors",
+      "2"
+    ],
+    "exit": 0,
+    "stdout": "{\"pass\":2,\"verdict\":\"request-changes\",\"blockers\":0,\"majors\":2,\"diff_lines\":7,\"at\":\"<TS>\"}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "resume: state with pass count and history",
+    "argv": [
+      "resume",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1"
+    ],
+    "exit": 0,
+    "stdout": "{\"slug\":\"g\",\"loop\":\"code\",\"iteration\":\"1.1\",\"baseline_sha\":\"<SHA>\",\"started\":\"<TS>\",\"status\":\"running\",\"caps\":{\"max_passes\":2,\"diff_cap_lines\":10,\"severity_floor\":\"Major\"},\"iteration_files\":[\"src/a.txt\"],\"pass\":2,\"history\":[{\"pass\":2,\"verdict\":\"request-changes\",\"blockers\":0,\"majors\":2,\"diff_lines\":7,\"at\":\"<TS>\"}]}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "finish: records terminal status",
+    "argv": [
+      "finish",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1",
+      "--status",
+      "stopped-diff-cap"
+    ],
+    "exit": 0,
+    "stdout": "{\"status\":\"stopped-diff-cap\",\"pass\":2,\"history\":1}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-loop.sh",
+    "name": "stats: full state ledger",
+    "argv": [
+      "stats",
+      "--slug",
+      "g",
+      "--iteration",
+      "1.1"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"slug\": \"g\",\n  \"loop\": \"code\",\n  \"iteration\": \"1.1\",\n  \"baseline_sha\": \"<SHA>\",\n  \"started\": \"<TS>\",\n  \"status\": \"stopped-diff-cap\",\n  \"caps\": {\n    \"max_passes\": 2,\n    \"diff_cap_lines\": 10,\n    \"severity_floor\": \"Major\"\n  },\n  \"iteration_files\": [\n    \"src/a.txt\"\n  ],\n  \"pass\": 2,\n  \"history\": [\n    {\n      \"pass\": 2,\n      \"verdict\": \"request-changes\",\n      \"blockers\": 0,\n      \"majors\": 2,\n      \"diff_lines\": 7,\n      \"at\": \"<TS>\"\n    }\n  ],\n  \"finished\": \"<TS>\"\n}",
+    "stderr": ""
+  }
+]

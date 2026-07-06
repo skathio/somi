@@ -1,0 +1,336 @@
+[
+  {
+    "script": "somi-findings.sh",
+    "name": "record: first sighting is new (F-1)",
+    "argv": [
+      "record",
+      "--slug",
+      "gf",
+      "--review",
+      "r1.md",
+      "--run",
+      "RUN1",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"symbol\":\"HandleWebhook\",\"title\":\"Missing rate limit on retry path\",\"severity\":\"Major\",\"confidence\":\"High\"}]",
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"state\":\"new\",\"recurring_consecutive\":false,\"recurring_cross_run\":false}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "record: consecutive-pass recurrence (exit 5)",
+    "argv": [
+      "record",
+      "--slug",
+      "gf",
+      "--review",
+      "r2.md",
+      "--run",
+      "RUN1",
+      "--pass",
+      "2"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"symbol\":\"handlewebhook\",\"title\":\"missing rate limit on retry path\",\"severity\":\"Major\"}]",
+    "exit": 5,
+    "stdout": "{\"id\":\"F-1\",\"state\":\"known\",\"recurring_consecutive\":true,\"recurring_cross_run\":false}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "record: cross-run recurrence (exit 0, not consecutive)",
+    "argv": [
+      "record",
+      "--slug",
+      "gf",
+      "--review",
+      "r3.md",
+      "--run",
+      "RUN2",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"symbol\":\"HandleWebhook\",\"title\":\"Missing rate limit on retry path\",\"severity\":\"Major\",\"confidence\":\"High\"}]",
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"state\":\"known\",\"recurring_consecutive\":false,\"recurring_cross_run\":true}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "resolve: F-1 fixed",
+    "argv": [
+      "resolve",
+      "--slug",
+      "gf",
+      "--id",
+      "F-1",
+      "--status",
+      "fixed",
+      "--by",
+      "r4.md"
+    ],
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"status\":\"fixed\",\"resolved_by\":\"r4.md\"}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "open: empty after resolve",
+    "argv": [
+      "open",
+      "--slug",
+      "gf"
+    ],
+    "exit": 0,
+    "stdout": "[]",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "record: resolved locus re-reported becomes new (F-2)",
+    "argv": [
+      "record",
+      "--slug",
+      "gf",
+      "--review",
+      "r5.md",
+      "--run",
+      "RUN3",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"symbol\":\"HandleWebhook\",\"title\":\"Missing rate limit on retry path\",\"severity\":\"Major\",\"confidence\":\"High\"}]",
+    "exit": 0,
+    "stdout": "{\"id\":\"F-2\",\"state\":\"new\",\"recurring_consecutive\":false,\"recurring_cross_run\":false}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "reopen: F-1 back to open",
+    "argv": [
+      "reopen",
+      "--slug",
+      "gf",
+      "--id",
+      "F-1",
+      "--by",
+      "r6.md"
+    ],
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"status\":\"open\"}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "get: F-1 (reopened)",
+    "argv": [
+      "get",
+      "--slug",
+      "gf",
+      "--id",
+      "F-1"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"id\": \"F-1\",\n  \"key\": \"src/a.txt|handlewebhook|missing rate limit on retry path\",\n  \"locus\": {\n    \"file\": \"src/a.txt\",\n    \"symbol\": \"HandleWebhook\"\n  },\n  \"title\": \"Missing rate limit on retry path\",\n  \"severity\": \"Major\",\n  \"confidence\": \"High\",\n  \"status\": \"open\",\n  \"introduced_by\": \"r1.md\",\n  \"resolved_by\": null,\n  \"seen\": [\n    {\n      \"review\": \"r1.md\",\n      \"run\": \"RUN1\",\n      \"pass\": 1,\n      \"date\": \"<DATE>\"\n    },\n    {\n      \"review\": \"r2.md\",\n      \"run\": \"RUN1\",\n      \"pass\": 2,\n      \"date\": \"<DATE>\"\n    },\n    {\n      \"review\": \"r3.md\",\n      \"run\": \"RUN2\",\n      \"pass\": 1,\n      \"date\": \"<DATE>\"\n    }\n  ],\n  \"reopened_by\": \"r6.md\"\n}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "get: F-2",
+    "argv": [
+      "get",
+      "--slug",
+      "gf",
+      "--id",
+      "F-2"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"id\": \"F-2\",\n  \"key\": \"src/a.txt|handlewebhook|missing rate limit on retry path\",\n  \"locus\": {\n    \"file\": \"src/a.txt\",\n    \"symbol\": \"HandleWebhook\"\n  },\n  \"title\": \"Missing rate limit on retry path\",\n  \"severity\": \"Major\",\n  \"confidence\": \"High\",\n  \"status\": \"open\",\n  \"introduced_by\": \"r5.md\",\n  \"resolved_by\": null,\n  \"seen\": [\n    {\n      \"review\": \"r5.md\",\n      \"run\": \"RUN3\",\n      \"pass\": 1,\n      \"date\": \"<DATE>\"\n    }\n  ]\n}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: empty title (dies 64, never reaches normalize_title) — record",
+    "argv": [
+      "record",
+      "--slug",
+      "edge-empty",
+      "--review",
+      "r.md",
+      "--run",
+      "R1",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"title\":\"\"}]",
+    "exit": 64,
+    "stdout": "",
+    "stderr": "somi-findings: finding 0 needs at least {file, title}"
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: single word — record",
+    "argv": [
+      "record",
+      "--slug",
+      "edge-single",
+      "--review",
+      "r.md",
+      "--run",
+      "R1",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"title\":\"Bug\"}]",
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"state\":\"new\",\"recurring_consecutive\":false,\"recurring_cross_run\":false}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: single word — get (exposes key)",
+    "argv": [
+      "get",
+      "--slug",
+      "edge-single",
+      "--id",
+      "F-1"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"id\": \"F-1\",\n  \"key\": \"src/a.txt||bug\",\n  \"locus\": {\n    \"file\": \"src/a.txt\",\n    \"symbol\": \"\"\n  },\n  \"title\": \"Bug\",\n  \"severity\": \"Minor\",\n  \"confidence\": \"Medium\",\n  \"status\": \"open\",\n  \"introduced_by\": \"r.md\",\n  \"resolved_by\": null,\n  \"seen\": [\n    {\n      \"review\": \"r.md\",\n      \"run\": \"R1\",\n      \"pass\": 1,\n      \"date\": \"<DATE>\"\n    }\n  ]\n}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: >8 words truncates — record",
+    "argv": [
+      "record",
+      "--slug",
+      "edge-many",
+      "--review",
+      "r.md",
+      "--run",
+      "R1",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"title\":\"one two three four five six seven eight nine ten\"}]",
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"state\":\"new\",\"recurring_consecutive\":false,\"recurring_cross_run\":false}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: >8 words truncates — get (exposes key)",
+    "argv": [
+      "get",
+      "--slug",
+      "edge-many",
+      "--id",
+      "F-1"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"id\": \"F-1\",\n  \"key\": \"src/a.txt||one two three four five six seven eight\",\n  \"locus\": {\n    \"file\": \"src/a.txt\",\n    \"symbol\": \"\"\n  },\n  \"title\": \"one two three four five six seven eight nine ten\",\n  \"severity\": \"Minor\",\n  \"confidence\": \"Medium\",\n  \"status\": \"open\",\n  \"introduced_by\": \"r.md\",\n  \"resolved_by\": null,\n  \"seen\": [\n    {\n      \"review\": \"r.md\",\n      \"run\": \"R1\",\n      \"pass\": 1,\n      \"date\": \"<DATE>\"\n    }\n  ]\n}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: leading/trailing whitespace — record",
+    "argv": [
+      "record",
+      "--slug",
+      "edge-ws",
+      "--review",
+      "r.md",
+      "--run",
+      "R1",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"title\":\"   Missing rate limit   \"}]",
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"state\":\"new\",\"recurring_consecutive\":false,\"recurring_cross_run\":false}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: leading/trailing whitespace — get (exposes key)",
+    "argv": [
+      "get",
+      "--slug",
+      "edge-ws",
+      "--id",
+      "F-1"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"id\": \"F-1\",\n  \"key\": \"src/a.txt||missing rate limit\",\n  \"locus\": {\n    \"file\": \"src/a.txt\",\n    \"symbol\": \"\"\n  },\n  \"title\": \"   Missing rate limit   \",\n  \"severity\": \"Minor\",\n  \"confidence\": \"Medium\",\n  \"status\": \"open\",\n  \"introduced_by\": \"r.md\",\n  \"resolved_by\": null,\n  \"seen\": [\n    {\n      \"review\": \"r.md\",\n      \"run\": \"R1\",\n      \"pass\": 1,\n      \"date\": \"<DATE>\"\n    }\n  ]\n}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: multiple internal spaces — record",
+    "argv": [
+      "record",
+      "--slug",
+      "edge-multispace",
+      "--review",
+      "r.md",
+      "--run",
+      "R1",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"title\":\"Missing   rate    limit\"}]",
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"state\":\"new\",\"recurring_consecutive\":false,\"recurring_cross_run\":false}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: multiple internal spaces — get (exposes key)",
+    "argv": [
+      "get",
+      "--slug",
+      "edge-multispace",
+      "--id",
+      "F-1"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"id\": \"F-1\",\n  \"key\": \"src/a.txt||missing rate limit\",\n  \"locus\": {\n    \"file\": \"src/a.txt\",\n    \"symbol\": \"\"\n  },\n  \"title\": \"Missing   rate    limit\",\n  \"severity\": \"Minor\",\n  \"confidence\": \"Medium\",\n  \"status\": \"open\",\n  \"introduced_by\": \"r.md\",\n  \"resolved_by\": null,\n  \"seen\": [\n    {\n      \"review\": \"r.md\",\n      \"run\": \"R1\",\n      \"pass\": 1,\n      \"date\": \"<DATE>\"\n    }\n  ]\n}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: punctuation stripped — record",
+    "argv": [
+      "record",
+      "--slug",
+      "edge-punct",
+      "--review",
+      "r.md",
+      "--run",
+      "R1",
+      "--pass",
+      "1"
+    ],
+    "stdin": "[{\"file\":\"src/a.txt\",\"title\":\"Missing rate-limit! (on retry) path?\"}]",
+    "exit": 0,
+    "stdout": "{\"id\":\"F-1\",\"state\":\"new\",\"recurring_consecutive\":false,\"recurring_cross_run\":false}",
+    "stderr": ""
+  },
+  {
+    "script": "somi-findings.sh",
+    "name": "normalize_title: punctuation stripped — get (exposes key)",
+    "argv": [
+      "get",
+      "--slug",
+      "edge-punct",
+      "--id",
+      "F-1"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"id\": \"F-1\",\n  \"key\": \"src/a.txt||missing rate limit on retry path\",\n  \"locus\": {\n    \"file\": \"src/a.txt\",\n    \"symbol\": \"\"\n  },\n  \"title\": \"Missing rate-limit! (on retry) path?\",\n  \"severity\": \"Minor\",\n  \"confidence\": \"Medium\",\n  \"status\": \"open\",\n  \"introduced_by\": \"r.md\",\n  \"resolved_by\": null,\n  \"seen\": [\n    {\n      \"review\": \"r.md\",\n      \"run\": \"R1\",\n      \"pass\": 1,\n      \"date\": \"<DATE>\"\n    }\n  ]\n}",
+    "stderr": ""
+  }
+]
