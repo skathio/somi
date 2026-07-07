@@ -159,11 +159,34 @@ stage_case_files() {
 for case_file in "$CASES_DIR"/*.json; do
   script_rel="$(jq -r '.script' "$case_file")"
   script="$ROOT/hooks/$script_rel"
-  if [[ ! -x "$script" ]]; then
-    echo "FAIL: $(basename "$case_file") — hook script missing or not executable: hooks/$script_rel" >&2
-    failures=$((failures + 1))
-    continue
-  fi
+  # Dispatch by extension (node-runtime-port phase 2, iteration 2.1): a
+  # ".mjs" hook is invoked via `node "$script"`; a ".sh" hook stays a direct
+  # exec, as before. This lets a single hook flip to its .mjs port (by
+  # changing the fixture's "script" field) without disturbing any other
+  # fixture still pointed at ".sh" — no hook is deleted until Phase 3.
+  #
+  # The executable-bit precondition is relaxed to the ".sh" branch only: a
+  # ".mjs" file invoked via `node "$script"` doesn't need an exec bit, and
+  # the exec bit doesn't exist on Windows — the exact host this work item
+  # targets. The ".mjs" branch checks readability instead.
+  case "$script_rel" in
+    *.mjs)
+      if [[ ! -r "$script" ]]; then
+        echo "FAIL: $(basename "$case_file") — hook script missing or not readable: hooks/$script_rel" >&2
+        failures=$((failures + 1))
+        continue
+      fi
+      cmd=(node "$script")
+      ;;
+    *)
+      if [[ ! -x "$script" ]]; then
+        echo "FAIL: $(basename "$case_file") — hook script missing or not executable: hooks/$script_rel" >&2
+        failures=$((failures + 1))
+        continue
+      fi
+      cmd=("$script")
+      ;;
+  esac
 
   count="$(jq '.cases | length' "$case_file")"
   for ((i = 0; i < count; i++)); do
@@ -235,7 +258,7 @@ for case_file in "$CASES_DIR"/*.json; do
     prime="$(jq -r ".cases[$i].prime // false" "$case_file")"
     if [[ "$prime" == "true" ]]; then
       if ! printf '%s' "$payload" \
-          | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES "${env_args[@]}" "$script" >/dev/null; then
+          | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES "${env_args[@]}" "${cmd[@]}" >/dev/null; then
         echo "FAIL: [$script_rel] $name — priming invocation exited non-zero" >&2
         failures=$((failures + 1))
         continue
@@ -247,7 +270,7 @@ for case_file in "$CASES_DIR"/*.json; do
     fi
 
     if ! out="$(printf '%s' "$payload" \
-        | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES "${env_args[@]}" "$script")"; then
+        | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES "${env_args[@]}" "${cmd[@]}")"; then
       echo "FAIL: [$script_rel] $name — hook exited non-zero" >&2
       failures=$((failures + 1))
       continue
