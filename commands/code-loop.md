@@ -49,18 +49,18 @@ ask the user.
 
 The loop's arithmetic — pass counting, the diff baseline, cap checks, finding recurrence — is
 owned by two shipped scripts, **not** by you simulating a state machine in context:
-[`scripts/somi-loop.sh`](../scripts/somi-loop.sh) (state + caps) and
-[`scripts/somi-findings.sh`](../scripts/somi-findings.sh) (the findings ledger). State survives
+[`scripts/somi-loop.mjs`](../scripts/somi-loop.mjs) (state + caps) and
+[`scripts/somi-findings.mjs`](../scripts/somi-findings.mjs) (the findings ledger). State survives
 session death at `.claude/somi-state/loop/<slug>.<N>.<M>.json`.
 
-- **Resume check first:** `bash scripts/somi-loop.sh resume --slug <slug> --iteration <N>.<M>`
+- **Resume check first:** `node scripts/somi-loop.mjs resume --slug <slug> --iteration <N>.<M>`
   (path relative to the SoMi install root). If it prints a `running` state, a previous session
   died mid-loop — **continue from its recorded pass and baseline** instead of starting over, and
   tell the user you resumed.
 - Otherwise initialize:
 
   ```bash
-  bash scripts/somi-loop.sh init --slug <slug> --loop code --iteration <N>.<M> \
+  node scripts/somi-loop.mjs init --slug <slug> --loop code --iteration <N>.<M> \
     --files "<the iteration's 'Files (approx)' paths, space-separated>"
   ```
 
@@ -82,7 +82,7 @@ session death at `.claude/somi-state/loop/<slug>.<N>.<M>.json`.
 ```text
 while true:
   # 3a. Pass gate (deterministic)
-  bash scripts/somi-loop.sh pass --slug <slug> --iteration <N>.<M>
+  node scripts/somi-loop.mjs pass --slug <slug> --iteration <N>.<M>
     exit 2 → STOP — write remaining ≥Major findings as progress.md follow-ups (by F-id),
              summarise, exit "max-passes-exceeded"
 
@@ -91,7 +91,7 @@ while true:
 
   # 3c. Diff & scope gate (deterministic — cumulative vs the recorded baseline, working tree
   #     included, .somi/.claude excluded; out-of-scope lines count DOUBLE)
-  bash scripts/somi-loop.sh check-diff --slug <slug> --iteration <N>.<M>
+  node scripts/somi-loop.mjs check-diff --slug <slug> --iteration <N>.<M>
     exit 3 → STOP — exit "diff-cap-exceeded"; if the printed JSON's out_of_scope is non-empty,
              report the stop as "scope-expansion" and name the files
 
@@ -104,10 +104,10 @@ while true:
   # 3e. Record the pass + findings. The ledger computes recurrence on a STABLE locus
   #     (file + symbol + normalized title — never the raw line number, which drifts between
   #     passes and would let coder and reviewer oscillate to the pass cap unnoticed).
-  bash scripts/somi-loop.sh record-pass --slug <slug> --iteration <N>.<M> \
+  node scripts/somi-loop.mjs record-pass --slug <slug> --iteration <N>.<M> \
     --verdict <V> --blockers <B> --majors <MJ>
   echo '<review findings as a JSON array [{file, symbol, title, severity, confidence}, …]>' \
-    | bash scripts/somi-findings.sh record --slug <slug> --review <review-file> \
+    | node scripts/somi-findings.mjs record --slug <slug> --review <review-file> \
         --run $RUN_ID --pass <current pass>
     exit 5 → STOP — the same finding recurred in two consecutive passes: coder and reviewer
              disagree; hand to human (circuit breaker). Also surface any finding the output
@@ -115,7 +115,7 @@ while true:
 
   # 3f. Verdict
   if verdict == "approve" or no finding at severity >= SEVERITY_FLOOR:
-    somi-findings.sh resolve each finding this pass fixed ( --status fixed --by <review-file> )
+    somi-findings.mjs resolve each finding this pass fixed ( --status fixed --by <review-file> )
     DONE — proceed to §4
 
   # 3g. Next pass
@@ -125,7 +125,7 @@ while true:
 
 ### 4. On DONE (clean exit)
 
-- `bash scripts/somi-loop.sh finish --slug <slug> --iteration <N>.<M> --status done`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status done`.
 - Mark iteration `done` in `phases/<NN>-*.md`.
 - Update `progress.md` (phase row, "Last activity").
 - Append a diary entry (category `note`): `code-loop done at pass <P>; verdict <V>`.
@@ -133,7 +133,7 @@ while true:
 
 ### 5. On STOP (gate hit)
 
-- `bash scripts/somi-loop.sh finish --slug <slug> --iteration <N>.<M> --status stopped-<reason>`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status stopped-<reason>`.
 - Do **not** mark iteration `done`.
 - Append a diary entry (category `blocker` or `plan-change`): which gate fired, what's
   outstanding, what the user needs to decide.
@@ -146,7 +146,7 @@ while true:
 
 - Loop status: `done` | `max-passes-exceeded` | `diff-cap-exceeded` | `scope-expansion` |
   `circuit-breaker` | `user-stop`.
-- Passes used (out of `MAX_PASSES`) — from `somi-loop.sh stats` (also the run's telemetry:
+- Passes used (out of `MAX_PASSES`) — from `somi-loop.mjs stats` (also the run's telemetry:
   per-pass verdicts, Blocker/Major counts, diff sizes).
 - Final verdict + count by severity.
 - Cumulative diff size and any out-of-scope files touched.

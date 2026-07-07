@@ -139,7 +139,7 @@ the Claude Code plugin.
 > sub-agent orchestration (the loops and the `/review-panel` / `/code-parallel` parallel fan-outs run
 > sequentially when the host can't spawn sub-agents). The judgment layer is identical; the
 > enforcement and concurrency layers are Claude Code-only. Don't rely on the hard stops on Copilot —
-> but do install [`scripts/somi-check.sh`](../scripts/somi-check.sh) as a git pre-commit hook / CI
+> but do install [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) as a git pre-commit hook / CI
 > step: it carries the working-tree subset of the guarantees (staged secrets, lockfile hand-edits,
 > loose-end markers) to any host. See [`HOOKS.md`](./HOOKS.md#somi-check--the-portable-working-tree-guard).
 
@@ -192,7 +192,7 @@ copilot plugin update
 | `@somi /pr`                   | (none — composes the PR from artifacts; `gh` after confirmation)                         |
 
 > On Copilot the loop caps fall back to judgment-enforced tracking when the host can't run the
-> `scripts/somi-loop.sh` / `somi-findings.sh` helpers — and `scripts/somi-check.sh` (below) is
+> `scripts/somi-loop.mjs` / `somi-findings.mjs` helpers — and `scripts/somi-check.mjs` (below) is
 > the enforcement layer that *does* work here.
 
 > Plan-level review uses `@somi /review plan <slug>` — there is no separate `/plan-review`.

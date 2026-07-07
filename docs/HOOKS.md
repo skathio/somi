@@ -8,7 +8,7 @@ non-negotiables and uses agents for judgment-heavy work.
 > they do **not** run — none of the blocks below are enforced and nothing is written to the audit
 > log. The agent/skill/rule judgment still applies on Copilot, but the *hard stops* in this document
 > are specific to the Claude Code plugin. See the parity caveat in [`PLUGIN.md`](./PLUGIN.md).
-> **Partial portable fallback:** [`scripts/somi-check.sh`](../scripts/somi-check.sh) (below) carries
+> **Partial portable fallback:** [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) (below) carries
 > the working-tree subset of these guarantees to any host as a git pre-commit hook or CI step.
 
 ## What SoMi ships
@@ -132,7 +132,7 @@ State file: `.claude/somi-state/last-context-signature` (project-local, gitignor
 ## `somi-check` — the portable working-tree guard
 
 Tool-call-time hooks are Claude Code-only; **commit-time and CI-time enforcement works
-everywhere**. [`scripts/somi-check.sh`](../scripts/somi-check.sh) (also exposed as the
+everywhere**. [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) (also exposed as the
 `somi-check` npm bin) re-checks the working-tree subset of the hook guarantees:
 
 - staged **secret-bearing files** (same basename patterns as `block-secret-writes.sh`;
@@ -147,7 +147,7 @@ Exit `1` on findings — wire it as a git `pre-commit` hook or a CI step:
 # pre-commit
 ln -s ../../<path-to-somi>/scripts/somi-check.sh .git/hooks/pre-commit
 # CI
-bash <path-to-somi>/scripts/somi-check.sh --all
+node <path-to-somi>/scripts/somi-check.mjs --all
 ```
 
 This is **defense-in-depth on Claude Code** (hooks can't stop a human or another tool committing

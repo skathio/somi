@@ -26,7 +26,7 @@ From `.somi/plans/<slug>/`:
 - `progress.md` — phases/iterations completed; follow-ups filed.
 - `diary.md` — plan-change entries only (the "what changed along the way" a reviewer needs).
 - `.somi/reviews/<slug>/` — the latest verdict per iteration; plus
-  `bash scripts/somi-findings.sh open --slug <slug>` for anything still open.
+  `node scripts/somi-findings.mjs open --slug <slug>` for anything still open.
 - `git log` / `git diff` against the default branch for the actual change summary and test files.
 
 ### 2. Compose

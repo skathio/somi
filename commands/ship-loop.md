@@ -117,7 +117,7 @@ brief; they do not approve every iteration.
 ### Cross-layer circuit breaker
 
 The findings ledger (`.somi/reviews/<slug>/findings.json`, maintained by the inner loops via
-[`scripts/somi-findings.sh`](../scripts/somi-findings.sh)) computes this mechanically: every
+[`scripts/somi-findings.mjs`](../scripts/somi-findings.mjs)) computes this mechanically: every
 `record` call classifies each finding, and a **`recurring_cross_run: true`** means the same locus
 (file + nearest symbol + title; for plan-level: artifact + section + topic) was already seen by a
 *different* loop run — a `/plan-loop` review then a `/code-loop` review, or two separate
@@ -131,7 +131,7 @@ another automated pass. (Because the ledger is durable, this breaker also works 
 ### Global budget
 
 Sum passes across all `/plan-loop` and `/code-loop` invocations in this run — read each loop's
-`pass` from `bash scripts/somi-loop.sh stats --slug <slug> [--iteration <N>.<M>]` rather than
+`pass` from `node scripts/somi-loop.mjs stats --slug <slug> [--iteration <N>.<M>]` rather than
 recounting from memory. If `GLOBAL_BUDGET_PASSES` is hit, STOP — even if individual layers
 haven't tripped their own caps.
 
