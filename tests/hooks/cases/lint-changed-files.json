@@ -1,25 +1,120 @@
 {
-  "_note": "lint-changed-files.sh is PostToolUse (matcher: Write|Edit), best-effort/informational — never blocks. This dev/CI-authoring sandbox has no linter toolchain installed (ruff, eslint, shellcheck, go, cargo, pyright all confirmed absent via `command -v`; no eslint config present at repo root either — confirmed by direct search), so the delegate path (a real lint run producing additionalContext) cannot be exercised here without fabricating output; per the iteration's instruction, only the no-op paths are covered. Each case's throwaway case_dir (used as CLAUDE_PROJECT_DIR) is guaranteed fresh, so it never contains pyproject.toml/.ruff.toml/an eslintrc/go.mod/Cargo.toml regardless of host tooling — the .py/.ts/.go/.rs no-op cases below are therefore deterministic in any environment, not just this one. The .sh extension is deliberately NOT covered here: unlike the other extensions, its shellcheck branch has no config-file guard (command-presence only, `command -v shellcheck`), and CI (.github/workflows/publish.yml) apt-get-installs shellcheck while this authoring sandbox does not — a 'no shellcheck present' no-op case authored here would be expected to flip to a real (unverified) lint delegate run under CI, which is exactly the kind of environment-fragile assertion the iteration's brief says not to fabricate. Revisit .sh coverage when this hook is ported (Phase 2 iteration 2.5), either with a staged sample verified shellcheck-clean against a real shellcheck binary, or an environment-conditional case. Every case below was verified by direct invocation of the unmodified hooks/post-tool/lint-changed-files.sh.",
-  "script": "post-tool/lint-changed-files.sh",
+  "_note": "lint-changed-files hook is PostToolUse (matcher: Write|Edit), best-effort/informational \u2014 never blocks. Retargeted to the .mjs port in Phase 2 iteration 2.5. Each case's throwaway case_dir (used as CLAUDE_PROJECT_DIR) is guaranteed fresh, so it never contains pyproject.toml/.ruff.toml/an eslintrc/go.mod/Cargo.toml regardless of host tooling \u2014 the .py/.ts(no-config)/.go/.rs no-op cases below are therefore deterministic in any environment, not just this one. LINTER-AVAILABILITY FINDING (2.5, re-checked, not inherited from 0.3): ruff/eslint/go/cargo/shellcheck/pyright are all still confirmed absent via `command -v` in this authoring sandbox, AND absent in CI (.github/workflows/ci.yml's reusable job only installs node; only publish.yml's release-dispatch job apt-get-installs shellcheck \u2014 ci.yml's actual PR/push gate, the one this fixture corpus really needs to hold under, does NOT, though GitHub's ubuntu-latest hosted runner image typically ships shellcheck preinstalled regardless). npx (bundled with npm, which ships with the official Node distributions, actions/setup-node, and nvm \u2014 NOT guaranteed on split-packaged hosts like Debian's nodejs-without-npm apt package, where this one case would fail) is present everywhere this repo's CI and dev environments actually run Node \u2014 used below for a genuine, non-fabricated positive emit-path case (F-13, from 0.3's review): the eslint branch's `command -v` gate checks 'npx', not 'eslint' (bash: `run_if_present npx --no-install eslint --no-color \"$PATH_INPUT\"`), and no eslint package is installed anywhere in this repo's tree (checked: no root .eslintrc*/eslint.config.*, no eslint in package.json) or on any CI runner image by default \u2014 so `npx --no-install eslint ...` deterministically fails to resolve eslint and surfaces an `npm error npx canceled ...` diagnostic on stderr, EVERY time, in every environment this repo's CI or dev sandboxes actually run in. This is the real bash-original code path being exercised for real, not a stand-in. FAKE-LINTER-VIA-PATH MECHANISM CONSIDERED AND DECLINED for the .sh/shellcheck case below: tests/hooks/run.sh's per-case \"env\" field (the only case-level PATH-influencing mechanism the runner exposes) passes each `key=value` straight through to the `env` command via a `jq -r` read with NO shell variable expansion \u2014 a value like \"$case_dir/bin:$PATH\" is passed as that literal 20-character string, not interpolated, and case_dir is a `mktemp -d` path unknown until runtime, so it can't be baked into the static JSON either. There is no way, with the runner's CURRENT field semantics, to prepend a fake-binary directory onto PATH while still preserving whatever PATH entry the host actually needs to resolve `node` itself (verified this would break: this authoring sandbox's `node` lives under an nvm path, not any hardcodable /usr/bin-style default) \u2014 so a case authored to rely on that mechanism would not actually run, on this host or any other. Not fabricated; instead the .sh gap (previously zero coverage of any kind, per 0.3's deferral note) is filled with 0.3's other explicitly pre-approved option: a shellcheck-CLEAN sample script, staged as a deterministic no-op that holds identically whether shellcheck is real (clean input -> empty stdout, exit 0) or absent (`command -v` gate no-ops) \u2014 verified against the actual hook, both branches converge on `expect_no_context`. SHELLCHECK-CLEAN CLAIM SCOPE (2.5 review): neither the authoring sandbox nor the review environment had a shellcheck binary, so sample.sh's cleanliness is verified by inspection only (trivially clean POSIX: quoted echo, valid shebang, no expansions) \u2014 on CI hosts that ship shellcheck (GitHub ubuntu-latest does) the case runs it for real and the no-op determinism rests on that inspection; if shellcheck ever flags it, fix the SAMPLE, not the assertion.",
+  "script": "post-tool/lint-changed-files.mjs",
   "cases": [
-    { "name": "no-file-path-noop", "expect_no_context": true,
-      "payload": { "tool_name": "Write", "tool_input": {} } },
-    { "name": "file-not-found-noop", "expect_no_context": true,
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/does-not-exist.py" } } },
-    { "name": "python-no-linter-config-noop", "expect_no_context": true,
-      "files": { "sample.py": "x = 1\n" },
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.py" } } },
-    { "name": "typescript-no-eslint-config-noop", "expect_no_context": true,
-      "files": { "sample.ts": "const x = 1;\n" },
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.ts" } } },
-    { "name": "go-no-gomod-noop", "expect_no_context": true,
-      "files": { "sample.go": "package main\n" },
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.go" } } },
-    { "name": "rust-no-cargotoml-noop", "expect_no_context": true,
-      "files": { "sample.rs": "fn main() {}\n" },
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.rs" } } },
-    { "name": "unhandled-extension-noop", "expect_no_context": true,
-      "files": { "sample.md": "# hi\n" },
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "{{CASE_DIR}}/sample.md" } } }
+    {
+      "name": "no-file-path-noop",
+      "expect_no_context": true,
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {}
+      }
+    },
+    {
+      "name": "file-not-found-noop",
+      "expect_no_context": true,
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "{{CASE_DIR}}/does-not-exist.py"
+        }
+      }
+    },
+    {
+      "name": "python-no-linter-config-noop",
+      "expect_no_context": true,
+      "files": {
+        "sample.py": "x = 1\n"
+      },
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "{{CASE_DIR}}/sample.py"
+        }
+      }
+    },
+    {
+      "name": "typescript-no-eslint-config-noop",
+      "expect_no_context": true,
+      "files": {
+        "sample.ts": "const x = 1;\n"
+      },
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "{{CASE_DIR}}/sample.ts"
+        }
+      }
+    },
+    {
+      "name": "go-no-gomod-noop",
+      "expect_no_context": true,
+      "files": {
+        "sample.go": "package main\n"
+      },
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "{{CASE_DIR}}/sample.go"
+        }
+      }
+    },
+    {
+      "name": "rust-no-cargotoml-noop",
+      "expect_no_context": true,
+      "files": {
+        "sample.rs": "fn main() {}\n"
+      },
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "{{CASE_DIR}}/sample.rs"
+        }
+      }
+    },
+    {
+      "name": "unhandled-extension-noop",
+      "expect_no_context": true,
+      "files": {
+        "sample.md": "# hi\n"
+      },
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "{{CASE_DIR}}/sample.md"
+        }
+      }
+    },
+    {
+      "name": "typescript-eslint-config-present-delegate-emits-context",
+      "_note": "Positive emit-path case (F-13, mandatory per this iteration): a real .eslintrc.json config gates the eslint branch open; the branch's command-presence gate checks 'npx' (bundled with Node, always present here), not 'eslint' (never installed in this repo). `npx --no-install eslint ...` therefore always fails to resolve eslint and surfaces a real npm/npx diagnostic on stderr \u2014 a genuine subprocess run through the real capture/wrap/emit path, not a stand-in. sample.ts is also deliberately invalid syntax so that IF a real eslint were ever reachable in some other environment, a parse error would still guarantee non-empty lint output (deterministic either way, not just deterministic in THIS sandbox's specific absence of eslint).",
+      "expect": "allow",
+      "expect_context": "Lint output for the file just changed:",
+      "files": {
+        ".eslintrc.json": "{}\n",
+        "sample.ts": "const x = ;\n"
+      },
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "{{CASE_DIR}}/sample.ts"
+        }
+      }
+    },
+    {
+      "name": "shell-shellcheck-clean-noop",
+      "_note": "Deferred .sh/shellcheck case (from 0.3's review follow-up). The shellcheck branch has no config-file gate (command-presence only), so unlike the other extensions a 'clean case_dir' alone doesn't guarantee determinism \u2014 it depends on whether shellcheck itself is reachable, which differs between this sandbox (absent) and some CI hosts (may be preinstalled). Staged sample.sh is deliberately shellcheck-clean (correct shebang, no unquoted expansions, no deprecated constructs) so this case holds identically under EITHER a real, clean-passing shellcheck (exit 0, empty stdout -> no context) OR no shellcheck at all (command-presence gate no-ops -> no context) \u2014 see the file-level _note for why a fake-binary-via-PATH mechanism was considered and declined instead of this approach.",
+      "expect": "allow",
+      "expect_no_context": true,
+      "files": {
+        "sample.sh": "#!/bin/sh\necho \"example\"\n"
+      },
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "{{CASE_DIR}}/sample.sh"
+        }
+      }
+    }
   ]
 }
