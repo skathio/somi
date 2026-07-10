@@ -5,7 +5,7 @@
     "test": "bash scripts/validate.sh"
   },
   "bin": {
-    "somi-check": "scripts/somi-check.sh"
+    "somi-check": "scripts/somi-check.mjs"
   },
   "description": "SoMi — multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
