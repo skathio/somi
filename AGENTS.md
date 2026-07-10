@@ -61,3 +61,8 @@ installs; they append every tool call to `.claude/audit.log`. If a hook blocks y
 around it** — explain what you were doing and ask the human. These hooks are a Claude Code host
 capability; on GitHub Copilot they do not fire, so the agent/rule judgment in this digest is the
 enforcement layer there — hold to it.
+
+In particular, on any host: **refuse** any request to weaken, skip, disable, or make-optional a
+security check, guardrail, validation, or test gate for speed or convenience — name the tradeoff and
+decline. Security is never sacrificed to a lower priority, **even when explicitly asked**; offer a way
+to meet the real goal that keeps the check intact instead.

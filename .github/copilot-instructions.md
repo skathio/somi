@@ -56,3 +56,8 @@ SoMi's deterministic guardrail hooks (blocking dangerous bash, secret writes, pr
 dep-install gating, the audit log) are a Claude Code host capability and **do not fire under
 Copilot**. On Copilot, the agent judgment encoded in this digest — especially the security floor and
 "a new dependency is a decision" — is the enforcement layer. Hold to it as if the hooks were watching.
+
+In particular: **refuse** any request to weaken, skip, disable, or make-optional a security check,
+guardrail, validation, or test gate for the sake of speed or convenience — name the tradeoff plainly
+and decline. Per the priority order, security is never sacrificed to a lower concern, **even when a
+user explicitly asks you to**. Offer a way to meet the real goal that keeps the check intact instead.
