@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${SOMI_VENDOR_ROOT}/hooks/session-start/detect-repo-instructions.sh"
+            "command": "node ${SOMI_VENDOR_ROOT}/hooks/session-start/detect-repo-instructions.mjs"
           }
         ]
       }
@@ -62,11 +62,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${SOMI_VENDOR_ROOT}/hooks/pre-tool/block-dangerous-bash.sh"
+            "command": "node ${SOMI_VENDOR_ROOT}/hooks/pre-tool/block-dangerous-bash.mjs"
           },
           {
             "type": "command",
-            "command": "${SOMI_VENDOR_ROOT}/hooks/pre-tool/gate-dep-install.sh"
+            "command": "node ${SOMI_VENDOR_ROOT}/hooks/pre-tool/gate-dep-install.mjs"
           }
         ]
       },
@@ -75,11 +75,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${SOMI_VENDOR_ROOT}/hooks/pre-tool/block-secret-writes.sh"
+            "command": "node ${SOMI_VENDOR_ROOT}/hooks/pre-tool/block-secret-writes.mjs"
           },
           {
             "type": "command",
-            "command": "${SOMI_VENDOR_ROOT}/hooks/pre-tool/guard-protected-paths.sh"
+            "command": "node ${SOMI_VENDOR_ROOT}/hooks/pre-tool/guard-protected-paths.mjs"
           }
         ]
       }
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${SOMI_VENDOR_ROOT}/hooks/post-tool/lint-changed-files.sh"
+            "command": "node ${SOMI_VENDOR_ROOT}/hooks/post-tool/lint-changed-files.mjs"
           }
         ]
       },
@@ -99,7 +99,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${SOMI_VENDOR_ROOT}/hooks/post-tool/audit-log.sh"
+            "command": "node ${SOMI_VENDOR_ROOT}/hooks/post-tool/audit-log.mjs"
           }
         ]
       }
@@ -109,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${SOMI_VENDOR_ROOT}/hooks/user-prompt-submit/inject-workflow-context.sh"
+            "command": "node ${SOMI_VENDOR_ROOT}/hooks/user-prompt-submit/inject-workflow-context.mjs"
           }
         ]
       }
