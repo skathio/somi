@@ -3,6 +3,11 @@
 SoMi ships as a Claude Code plugin and as a GitHub Copilot extension. Both use the same
 underlying markdown files — agents, commands, skills, rules, hooks — so there is no duplication.
 
+The hook scripts and state tooling underneath are zero-dependency Node (`.mjs`) — no `bash`, no
+`jq` to install on either host, and the runtime itself works the same on Windows, Linux, and
+macOS. (One open caveat on Windows path-separator coverage in the path-matching guards: see
+[`HOOKS.md`](./HOOKS.md).)
+
 > **The two hosts are not feature-equivalent.** The shared markdown is portable, but two layers are
 > **Claude Code capabilities that don't carry to Copilot**: the deterministic **guardrail hooks**
 > (they don't fire on Copilot — no blocking of dangerous bash / secret writes / protected paths, no

@@ -126,6 +126,11 @@ copilot plugin update somi
 | Claude Code plugin | Claude Code with `/plugin` support |
 | Vendored install | Same, plus a project `.claude/settings.json` you control |
 | Copilot extension | GitHub Copilot subscription |
+| Runtime (all install paths) | A current Node (LTS) on `PATH`. No `bash`, no `jq` — both were removed by the Node port. Both Claude Code and GitHub Copilot already bundle Node, so most users need nothing extra. |
+
+The Node runtime itself is Windows-native (no bash/jq to install), so all three install paths work
+on Windows as well as Linux/macOS. One open caveat: see [HOOKS.md](./HOOKS.md)'s note on Windows
+path-separator coverage for the path-matching guards.
 
 For lint hooks to run: the linter your project uses (`ruff`, `eslint`, `go vet`, etc.) must be on
 `$PATH`. Missing linters are silently skipped rather than failing.
