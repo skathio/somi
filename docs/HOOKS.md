@@ -144,8 +144,8 @@ everywhere**. [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) (also expose
 Exit `1` on findings — wire it as a git `pre-commit` hook or a CI step:
 
 ```bash
-# pre-commit
-ln -s ../../<path-to-somi>/scripts/somi-check.sh .git/hooks/pre-commit
+# pre-commit (somi-check.mjs carries a `#!/usr/bin/env node` shebang and is executable)
+ln -s ../../<path-to-somi>/scripts/somi-check.mjs .git/hooks/pre-commit
 # CI
 node <path-to-somi>/scripts/somi-check.mjs --all
 ```
