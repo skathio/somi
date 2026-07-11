@@ -4,7 +4,11 @@ All notable changes to `@skathio/somi` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
-## [Unreleased] — portable Node runtime (jq-free, bash-free, Windows-capable, Copilot-native)
+## [Unreleased]
+
+_Nothing yet._
+
+## [2.0.0] — 2026-07-10 — portable Node runtime (jq-free, bash-free, Windows-capable, Copilot-native)
 
 **This is a MAJOR release** (breaking — see below). SoMi's entire deterministic runtime — the loop-state
 engine, findings ledger, working-tree guard, and all 8 hooks + the shared lib — was ported from
@@ -16,7 +20,7 @@ and the security-critical `block-dangerous-bash` port passed a mandatory `securi
 deleted; the Node sources are what Claude Code, the vendored install, `npx somi-check`, and `npm test`
 now run.
 
-### ⚠️ Breaking
+### Breaking changes
 
 - **Every shipped script/hook is now `.mjs`, not `.sh`.** The retired `.sh` sources under `scripts/`
   and `hooks/` are **deleted**. Consumers who reference a bash source **by path** must repoint:
@@ -27,13 +31,23 @@ now run.
     must use the `.mjs`. **The documented install paths are unaffected and continue to work**: the
     plugin auto-merges `hooks/hooks.json` (`${CLAUDE_PLUGIN_ROOT}`), the vendored install uses
     `.claude/settings.json` (`${SOMI_VENDOR_ROOT}`), and both now invoke `node …/*.mjs`.
+  - **Migration**: if you install via the plugin marketplace or the vendored `.claude/settings.json`,
+    **no action** — the paths are internal and already updated. Only repoint if you hand-wired a
+    somi `.sh` by its literal path (custom pre-commit symlink, bespoke `hooks.json`, a script that
+    `source`d `hooks/lib/common.sh`): swap the `.sh` for the same-named `.mjs` and invoke it with
+    `node`. **A `node` runtime is now required** where a POSIX shell + `jq` used to be.
 - **SessionStart no longer surfaces nested instruction files inside `.git`/`node_modules`/`.somi`/
   `vendor`.** The bash prune was non-functional (GNU `find`'s `-mindepth 2` suppressed `-prune`); the
   Node port makes it fire as documented. A third-party `CLAUDE.md` inside `node_modules/` is no longer
   injected as if it were the repo's own convention. (decision D6)
+  - **Migration**: if you actually relied on a nested `CLAUDE.md`/`AGENTS.md` (e.g. inside a vendored
+    dependency) being surfaced at session start, move or symlink it to the repo root — only root-level
+    and non-pruned subtrees are injected now.
 - **UserPromptSubmit now detects bare-backtick `` `in-progress` `` status lines** — the format
   `/plan` actually generates — so more work-item context surfaces at prompt time than before. Bounded
   and empirically checked against false positives (1 match in a 1255-line `progress.md`). (decision D7)
+  - **Migration**: none required — this is additive context injection. If a `progress.md` surfaces
+    more than you want, mark completed items so they no longer read as `` `in-progress` ``.
 
 ### Removed
 
