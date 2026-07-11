@@ -3,9 +3,11 @@
 SoMi follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Releases are
 **explicit and dispatch-driven**: a maintainer triggers a release by running `publish.yml`'s
 `workflow_dispatch` with a `bump` choice (`patch`/`minor`/`major`) — see Release process below.
-The **published git tags (`v<VERSION>`) and the npm registry are the source of truth** for
-the released version — the in-repo `VERSION` / `package.json` are not committed back on each release,
-so they may lag behind what's published; check the
+Before cutting a release, the maintainer **hand-updates the in-repo version files to the target
+version and commits them** (see the **Version files** section), so the repo's declared version
+matches what is published rather than lagging behind it — nothing in the pipeline writes a version
+back into the repo. The **published git tags (`v<VERSION>`) and the npm registry remain the record
+of what was actually released**; cross-check the
 [npm page](https://www.npmjs.com/package/@skathio/somi) or
 [Releases](https://github.com/skathio/somi/releases).
 
@@ -59,17 +61,36 @@ Anything else (internal helpers, comments, doc structure) is internal.
 Until `1.0.0`, **MINOR bumps may include breaking changes** documented as such in `CHANGELOG.md`.
 After `1.0.0`, the policy above applies strictly.
 
+## Version files
+
+The version is carried in several files, and they are **hand-maintained to match each release** —
+nothing in the pipeline writes them back (see Release process). Bump **all** of them together, to
+the same value, in the release-prep change:
+
+- `VERSION`
+- `package.json` and `package-lock.json` (both the root `version` and `packages[""].version`)
+- `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`
+- `.copilot-extension/extension.json` and `.copilot-extension/marketplace.json`
+
+Then move the `CHANGELOG.md` `[Unreleased]` entry under a dated `## [X.Y.Z] — YYYY-MM-DD` heading
+(add migration notes for a MAJOR — see the template below). `npm test` validates that every
+manifest is still valid JSON after the bump.
+
 ## Release process
 
 Releases are **explicit and dispatch-driven** (adopting hashira's v2 contract: the
 `version-resolver` composite action feeding the `npm-release` composite action). There is **no**
 automatic inference from commit messages anywhere in this pipeline — a maintainer always
-explicitly chooses the bump. You do **not** hand-edit `VERSION`, tag, or publish manually.
+explicitly chooses the bump. Tagging and publishing to npm are done by the workflow, **not** by
+hand; the one thing you **do** update by hand is the set of version files above (step 1 below).
 
-1. **Land changes** on `main` via PR as usual. [Conventional Commits](https://www.conventionalcommits.org/)
-   style is still a reasonable convention for commit hygiene, but **no commit message is parsed to
-   decide whether or how to release** — a bare push to `main` only runs the `ci` gate
-   (`scripts/validate.sh` + `npm publish --dry-run`); it never triggers a publish.
+1. **Land changes** on `main` via PR as usual, and — as part of the release-prep change —
+   **hand-bump every version file** (see the **Version files** section) to the target version and
+   move the `CHANGELOG.md` `[Unreleased]` entry under a dated `[X.Y.Z]` heading.
+   [Conventional Commits](https://www.conventionalcommits.org/) style is still a reasonable
+   convention for commit hygiene, but **no commit message is parsed to decide whether or how to
+   release** — a bare push to `main` only runs the `ci` gate (`scripts/validate.sh` +
+   `npm publish --dry-run`); it never triggers a publish.
 2. **To cut a release**, a maintainer runs `publish.yml` via `workflow_dispatch` and sets the
    `bump` input to one of `patch`, `minor`, or `major`:
    - `patch`/`minor` increment off the latest stable git tag.
@@ -78,7 +99,9 @@ explicitly chooses the bump. You do **not** hand-edit `VERSION`, tag, or publish
      chosen `bump` applies on top of the seed, it is not published literally.
 3. The `version` job resolves the next version from the repo's tag history, surfaces it in the
    run summary **before** anything is built, and packs a tarball with that version stamped in
-   (an isolated copy — never the checked-out tree; see "no commit-back" below).
+   (an isolated copy — never the checked-out tree; see "no commit-back" below). Because both the
+   hand-bump in step 1 and this resolver derive from the **same explicit `bump`**, the resolved
+   version should equal the one you committed — pick the matching `bump` so they don't diverge.
 4. The `publish` job (gated by the `production` Environment — one required approval) calls
    hashira's `npm-release` action with the resolved version and `auth: oidc`:
    - publishes the same-run tarball to npm via native OIDC trusted publishing (no long-lived
@@ -91,8 +114,11 @@ explicitly chooses the bump. You do **not** hand-edit `VERSION`, tag, or publish
 5. Leaving `bump` empty on a `workflow_dispatch` (or omitting it) runs only the `ci` gate — useful
    for a manual CI-only re-run that isn't cutting a release.
 
-> The committed `VERSION` / `package.json` are not bumped back into the repo (tag-driven, no
-> commit-back). Treat the git tags + npm as authoritative.
+> The `publish` workflow does **not** bump `VERSION` / `package.json` back into the repo — it stamps
+> the resolved version only into the isolated tarball it publishes. Keeping the in-repo version files
+> current is therefore a **manual** step, done in the release-prep change (step 1 / the **Version
+> files** section). The git tags + npm registry remain the record of what was actually released; the
+> hand-committed files should match them, not lag.
 
 ## Deprecation policy
 
