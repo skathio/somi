@@ -1,5 +1,5 @@
 {
-  "script": "pre-tool/guard-protected-paths.sh",
+  "script": "pre-tool/guard-protected-paths.mjs",
   "cases": [
     { "name": "write-node-modules-absolute", "expect": "deny",
       "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/node_modules/lodash/index.js" } } },

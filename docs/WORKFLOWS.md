@@ -390,7 +390,7 @@ check before trusting, and structural drift triggers a refresh rather than silen
 The bounded loops' central promise — *hard* gates — is enforced by code, not by the model
 simulating a state machine in context. Two scripts ship with SoMi:
 
-- [`scripts/somi-loop.sh`](../scripts/somi-loop.sh) — per-loop state at
+- [`scripts/somi-loop.mjs`](../scripts/somi-loop.mjs) — per-loop state at
   `.claude/somi-state/loop/<slug>[.<N>.<M>].json` (project-local, gitignored): the baseline SHA
   captured once at init, resolved caps (flag > env > `.somi/config.json` > default), the pass
   counter, and a per-pass history (verdict, Blocker/Major counts, diff size — the run's
@@ -398,7 +398,7 @@ simulating a state machine in context. Two scripts ship with SoMi:
   (working tree included, `.somi/`/`.claude/` excluded, out-of-scope files count double) and
   exits `3` over the cap. Because the state is durable, a loop **resumes** after a session dies
   (`resume`) instead of starting over or re-guessing its baseline.
-- [`scripts/somi-findings.sh`](../scripts/somi-findings.sh) — the **findings ledger** at
+- [`scripts/somi-findings.mjs`](../scripts/somi-findings.mjs) — the **findings ledger** at
   `.somi/reviews/<slug>/findings.json` (committed; the machine view beside the markdown review
   files). Every review's findings are recorded with a stable id (`F-<n>`) and a stable locus
   (file + symbol + normalized title — never a line number), and carry a lifecycle

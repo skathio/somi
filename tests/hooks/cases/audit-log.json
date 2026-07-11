@@ -1,0 +1,21 @@
+{
+  "_note": "audit-log.sh is PostToolUse (matcher: *) and append-only: it writes a timestamp\\tkind\\ttool\\tdetail line via somi::audit and never emits a stdout decision. These cases assert the audit-log side-effect (via the runner's per-case SOMI_AUDIT_LOG default, $case_dir/audit.log) rather than additionalContext. Every case was verified against the current, unmodified hooks/post-tool/audit-log.sh by direct invocation before authoring these cases, not assumed. F-14 (phase 2 iteration 2.6): the last two cases pin the `*)` default-tool branch (compact-JSON tool_input, `jq -c ... | head -c 240`), which had no Phase-0 parity anchor. Both were captured by direct invocation against the unmodified bash hook BEFORE hooks/post-tool/audit-log.mjs existed, not hand-computed. NOTE on the boundary case's assertion strength: the runner's `expect_audit_log` is a contains-only substring check, so it structurally cannot detect a port that fails to truncate at all (an untruncated superset would still 'contain' the correctly-truncated prefix) — it only guards against under-truncation and content drift. True truncation-boundary parity (240 vs 241 bytes, byte-exact) was additionally verified via a manual differential probe outside the fixture corpus (see progress.md/diary.md, iteration 2.6) since the runner has no exact-length or exclusion assertion for audit-log content.",
+  "script": "post-tool/audit-log.mjs",
+  "cases": [
+    { "name": "bash-call-logs-cmd-summary",
+      "expect_audit_log": "Bash\tcmd=\"echo somi-fixture-test\"",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "echo somi-fixture-test" } } },
+    { "name": "write-call-logs-path-summary",
+      "expect_audit_log": "Write\tpath=\"/repo/src/app.ts\"",
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/src/app.ts" } } },
+    { "name": "no-tool-name-writes-nothing",
+      "expect_no_audit_log": true,
+      "payload": {} },
+    { "name": "unrecognized-tool-logs-compact-tool-input",
+      "expect_audit_log": "WebFetch\t{\"url\":\"https://example.com/page\",\"prompt\":\"summarize this page for me\"}",
+      "payload": { "tool_name": "WebFetch", "tool_input": { "url": "https://example.com/page", "prompt": "summarize this page for me" } } },
+    { "name": "unrecognized-tool-tool-input-truncated-at-240",
+      "expect_audit_log": "WebFetch\t{\"note\":\"lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lor",
+      "payload": { "tool_name": "WebFetch", "tool_input": { "note": "lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ipsum-lorem-ip" } } }
+  ]
+}

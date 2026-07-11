@@ -24,7 +24,7 @@ Assemble the state of the world **from the artifacts only** — read, never writ
 2. **Discoveries** — for every `.somi/rd/<slug>/README.md`: status (`researching` /
    `awaiting-verification` / `ready-for-planning`).
 3. **Open findings** — for every `.somi/reviews/<slug>/findings.json`:
-   `bash scripts/somi-findings.sh open --slug <slug>` (count + worst severity).
+   `node scripts/somi-findings.mjs open --slug <slug>` (count + worst severity).
 4. **Interrupted loops** — any `.claude/somi-state/loop/*.json` with `"status": "running"`: a
    session died mid-loop; `/code-loop` / `/plan-loop` on that slug will **resume** it.
 

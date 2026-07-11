@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Validation script run as `npm test`. Checks JSON, shell scripts, and frontmatter.
-# Also emits a minimal coverage/lcov.info stub so the hashira-ops CI coverage-report
-# action has a file to parse (no unit test suite; coverage is N/A for this plugin).
+# Validation script run as `npm test`. Checks JSON validity, Node source syntax, and frontmatter.
+# The runtime it validates is zero-dependency Node (D1/D5): JSON validity uses `node -e JSON.parse`
+# (not `jq`), and source syntax uses `node --check` over the ported `.mjs` files (not `shellcheck`/
+# `bash -n` over `.sh`, which no longer exist under scripts/ or hooks/ — see work item
+# node-runtime-port). This file itself stays bash (dev/CI tooling, per context.md §6), invoked from
+# `npm test`; it needs neither jq nor shellcheck installed. Also emits a minimal coverage/lcov.info
+# stub so the hashira-ops CI coverage-report action has a file to parse (no unit test suite).
 set -euo pipefail
+
+# JSON validity via Node's own parser (D5: no jq). Fails loudly on the first invalid file.
+json_valid() { node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$1"; }
 
 echo "==> Validating JSON files..."
 for f in \
@@ -14,22 +21,18 @@ for f in \
   package.json \
   hooks/hooks.json \
   examples/sample-consumer/.claude/settings.json; do
-  echo "  jq: $f"
-  jq empty "$f"
+  echo "  node JSON.parse: $f"
+  json_valid "$f"
 done
 
-echo "==> ShellCheck hook scripts..."
-find hooks tests scripts -name '*.sh' -type f -print0 \
-  | xargs -0 shellcheck --severity=warning
-
-echo "==> Bash syntax check..."
-find hooks tests scripts -name '*.sh' -type f -print0 \
-  | xargs -0 -I{} bash -n {}
+echo "==> Node syntax check (node --check over the ported .mjs)..."
+find hooks scripts -name '*.mjs' -type f -print0 \
+  | xargs -0 -I{} node --check {}
 
 echo "==> Hook behavior fixtures..."
 for f in tests/hooks/cases/*.json; do
-  echo "  jq: $f"
-  jq empty "$f"
+  echo "  node JSON.parse: $f"
+  json_valid "$f"
 done
 bash tests/hooks/run.sh
 
@@ -94,8 +97,10 @@ for f in \
   commands/debug.md \
   commands/somi.md \
   commands/pr.md \
-  scripts/somi-loop.sh \
-  scripts/somi-findings.sh; do
+  scripts/somi-loop.mjs \
+  scripts/somi-findings.mjs \
+  scripts/somi-check.mjs \
+  hooks/lib/common.mjs; do
   if [ ! -f "$f" ]; then
     echo "MISSING ARTIFACT: $f" >&2
     exit 1

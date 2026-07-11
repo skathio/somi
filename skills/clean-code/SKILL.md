@@ -124,7 +124,7 @@ addition specific to this skill:
 ## Diff hygiene
 
 See [`rules/20-clean-code.md`](../../rules/20-clean-code.md) §Diff hygiene for the canonical
-list. Operational note: hooks (`hooks/pre-tool/guard-protected-paths.sh`) enforce some of these
+list. Operational note: hooks (`hooks/pre-tool/guard-protected-paths.mjs`) enforce some of these
 mechanically (e.g., no lockfile hand-edits, no writes inside `.git/`). When a hook fires, the
 rule is being enforced — don't work around the hook.
 

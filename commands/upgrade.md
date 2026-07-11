@@ -51,7 +51,7 @@ Classify: used-and-breaking (must migrate), used-but-compatible, unused. The
 Write `.somi/plans/<slug>/brief.md` ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)) —
 decisions in force = the upgrade + cited breaking changes; file map = the usage scan; "what ECO
 does NOT need to re-research" = the changelog findings. **This brief is the dep-decision record**
-the [`gate-dep-install`](../hooks/pre-tool/gate-dep-install.sh) hook's policy asks for — note in
+the [`gate-dep-install`](../hooks/pre-tool/gate-dep-install.mjs) hook's policy asks for — note in
 it that the human approved the version change.
 
 **Gate (human):** present the breaking-change list, the usage counts, and the migration shape.

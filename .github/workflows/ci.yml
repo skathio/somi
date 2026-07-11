@@ -13,17 +13,19 @@
 # `"npm test"`) via the library's `run-tests-js` composite action. somi's
 # own `package.json` already declares `"test": "bash scripts/validate.sh"`.
 # Leaving `test_command` at its default therefore runs `validate.sh`
-# UNCHANGED — the literal same script (JSON validity via jq, ShellCheck +
-# `bash -n` over hooks/*.sh, agent/command/skill frontmatter presence,
-# MAX/ECO model-tiering assertions, new-MAX/ECO-artifact existence checks),
-# just invoked from the reusable workflow's `test` job instead of somi's old
-# hand-rolled `ci` job. This is full preservation, not an approximation:
-#   - JSON validity (jq)                      -> covered, unchanged
-#   - ShellCheck + bash -n over hooks/*.sh     -> covered, unchanged
-#   - agent/command/skill frontmatter presence -> covered, unchanged
-#   - MAX/ECO model-tiering assertions         -> covered, unchanged
-#   - new-artifact existence (BRIEF.md.tmpl…)  -> covered, unchanged
-#   - coverage/lcov.info stub                  -> covered, unchanged; now
+# UNCHANGED entry point — the literal same script, just invoked from the
+# reusable workflow's `test` job instead of somi's old hand-rolled `ci` job.
+# (The checks INSIDE validate.sh changed with the node-runtime-port work item:
+# JSON validity now uses `node -e JSON.parse` not jq, and source syntax uses
+# `node --check` over the ported .mjs not ShellCheck/`bash -n` over .sh — the
+# retired .sh sources no longer exist. No CI tooling install needed; `node`
+# comes from setup-node.) What validate.sh covers:
+#   - JSON validity (node JSON.parse)           -> covered
+#   - node --check over the ported .mjs sources -> covered (replaces shellcheck)
+#   - agent/command/skill frontmatter presence  -> covered, unchanged
+#   - MAX/ECO model-tiering assertions          -> covered, unchanged
+#   - new-artifact existence (BRIEF.md.tmpl…)   -> covered, unchanged
+#   - coverage/lcov.info stub                   -> covered, unchanged; now
 #     actually consumed by `coverage-report` (a capability somi never had)
 # `lint` (commitlint, D11, non-blocking) and `scan-suite` (CodeQL/OSV/
 # Gitleaks/dependency-review/actionlint) are pure net-new capabilities — they

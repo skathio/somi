@@ -1,5 +1,5 @@
 {
-  "script": "pre-tool/gate-dep-install.sh",
+  "script": "pre-tool/gate-dep-install.mjs",
   "cases": [
     { "name": "npm-install-package", "expect": "deny",
       "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install lodash" } } },
@@ -26,6 +26,11 @@
       "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install @types/node" } } },
     { "name": "config-allowlist-non-matching-package", "expect": "deny",
       "config": { "dep_install": { "allow": ["@types/"] } },
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install lodash" } } },
+    { "name": "config-allowlist-deny-reason-shows-full-match", "expect": "deny",
+      "_note": "Pins the port's DELIBERATELY-CORRECT deny reason on the allowlist-configured path: bash's config_allows_dep clobbers BASH_REMATCH so its message shows just the bare verb; the .mjs captures the match first and shows the full command (2.4 review ruling: intentional divergence, node correct). This case locks that decision in — a regression toward the bash text fails here.",
+      "config": { "dep_install": { "allow": ["@types/"] } },
+      "expect_reason": "(`npm install lodash`)",
       "payload": { "tool_name": "Bash", "tool_input": { "command": "npm install lodash" } } },
     { "name": "config-allowlist-mixed-packages", "expect": "deny",
       "config": { "dep_install": { "allow": ["@types/"] } },

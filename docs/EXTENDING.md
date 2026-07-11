@@ -109,36 +109,40 @@ Keep commands thin; agents do the heavy lifting.
 
 ## Adding a hook
 
-1. Write a script under `hooks/<event-name>/<script-name>.sh`:
+1. Write an ES module under `hooks/<event-name>/<script-name>.mjs`:
 
-   ```bash
-   #!/usr/bin/env bash
-   set -euo pipefail
-   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   source "$SCRIPT_DIR/../lib/common.sh"
-   somi::read_payload
+   ```js
+   #!/usr/bin/env node
+   import { readPayload, denyPretool, contextOutput, audit, runHook } from '../lib/common.mjs';
 
-   # Pick the right helper for the event:
-   #
-   #   PreToolUse        → somi::deny_pretool "reason"
-   #                       (emits hookSpecificOutput.permissionDecision="deny")
-   #
-   #   PostToolUse       → somi::context "PostToolUse" "..."
-   #                       (emits hookSpecificOutput.additionalContext)
-   #
-   #   UserPromptSubmit  → somi::context "UserPromptSubmit" "..."
-   #
-   #   Stop              → has no additionalContext channel. Use {decision:"block",reason}
-   #                       only when you genuinely want to refuse the stop (rare). Otherwise
-   #                       move your nudge to PostToolUse or UserPromptSubmit.
-   #
-   # Audit everything you decide via somi::audit (the helpers already do this for denials).
+   function main() {
+     const payload = readPayload();
 
-   exit 0
+     // Pick the right helper for the event:
+     //
+     //   PreToolUse        → denyPretool(payload, "reason")
+     //                       (emits hookSpecificOutput.permissionDecision="deny")
+     //
+     //   PostToolUse       → contextOutput("PostToolUse", "...")
+     //                       (emits hookSpecificOutput.additionalContext)
+     //
+     //   UserPromptSubmit  → contextOutput("UserPromptSubmit", "...")
+     //
+     //   Stop              → has no additionalContext channel. Use {decision:"block",reason}
+     //                       only when you genuinely want to refuse the stop (rare). Otherwise
+     //                       move your nudge to PostToolUse or UserPromptSubmit.
+     //
+     // Audit everything you decide via audit(payload, kind, detail) (denyPretool already does
+     // this for denials).
+   }
+
+   runHook(main);
    ```
 
-2. `chmod +x` it.
-3. Wire it in **two** places so both install paths work:
+   No shebang or exec bit is required for the hook to run — Claude Code invokes it as
+   `node <file>` (shell form), not by executing the file directly. The shebang above is a
+   convention for humans running the file manually, not a runtime requirement.
+2. Wire it in **two** places so both install paths work:
    - **Plugin install**: add to [`hooks/hooks.json`](../hooks/hooks.json) using `${CLAUDE_PLUGIN_ROOT}`.
    - **Vendored install reference**: add to [`.claude/settings.json`](../.claude/settings.json) using `${SOMI_VENDOR_ROOT}`.
 
@@ -151,7 +155,7 @@ Keep commands thin; agents do the heavy lifting.
          {
            "matcher": "Bash",
            "hooks": [
-             {"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/your-script.sh"}
+             {"type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/your-script.mjs"}
            ]
          }
        ]
@@ -159,11 +163,12 @@ Keep commands thin; agents do the heavy lifting.
    }
    ```
 
-4. Add behavioral fixtures under `tests/hooks/cases/<script-name>.json` — at minimum one deny and
+3. Add behavioral fixtures under `tests/hooks/cases/<script-name>.json` — at minimum one deny and
    one allow case per rule (see [HOOKS.md](./HOOKS.md#testing-hooks-behavioral-fixtures) for the
    fixture shape). Determinism is the hook layer's entire value; a rule without a fixture can be
    silently weakened by a later pattern edit.
-5. Open a PR — CI validates the hook script syntax, the JSON wiring, and runs the fixture suite.
+4. Open a PR — CI validates the hook script syntax (`node --check`), the JSON wiring, and runs the
+   fixture suite.
 
 Hooks should encode **non-negotiables** — things you want to be deterministic, not subject to model
 judgment. For judgment-heavy work, write an agent or skill instead.

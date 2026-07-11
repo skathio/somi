@@ -165,10 +165,9 @@ jobs:
       # specifically must hold for *this* ref, *this* dispatch, regardless of
       # whether `ci.yml` ever touched it. Cheap: this only runs on an actual
       # release dispatch (a few times a month), not on every PR/push.
-      - name: Install validation tooling
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends jq shellcheck
+      # No tooling install needed: validate.sh (node-runtime-port) validates JSON via
+      # `node -e JSON.parse` and source syntax via `node --check` — no jq, no shellcheck.
+      # `node` is already provisioned by this job's setup-node (for `npm publish`).
       - name: Ref-local validation (restores the gate workflow_dispatch can bypass)
         run: bash scripts/validate.sh
       - name: Ref-local publishability gate (restores the gate workflow_dispatch can bypass)

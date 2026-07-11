@@ -99,7 +99,7 @@ lenses found the change.
   [`templates/REVIEW.md.tmpl`](../templates/REVIEW.md.tmpl), with a **Panel** header noting which
   lenses sat and which were skipped (and why).
 - Record the **merged, de-duplicated** findings in the ledger
-  (`echo '<findings JSON array>' | bash scripts/somi-findings.sh record --slug <slug> --review
+  (`echo '<findings JSON array>' | node scripts/somi-findings.mjs record --slug <slug> --review
   <review-filename>`) and resolve any previously-open findings the panel confirmed fixed — same
   protocol as [`/review`](./review.md) §6. Record each finding once (post-merge), crediting the
   lenses in the markdown, not as duplicate ledger entries.

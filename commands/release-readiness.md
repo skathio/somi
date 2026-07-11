@@ -22,14 +22,14 @@ For each in-scope work item, check mechanically and record pass/fail + evidence:
 | Check | Source |
 |---|---|
 | All phases/iterations `done` | `progress.md` tables |
-| No `open` Blocker/Major findings | `bash scripts/somi-findings.sh open --slug <slug>` |
+| No `open` Blocker/Major findings | `node scripts/somi-findings.mjs open --slug <slug>` |
 | No decisions outstanding | `progress.md` "Decisions outstanding" |
 | Work-item DoD satisfiable | `spec.md` §12 checkboxes vs. reality (tests green? docs updated?) |
 | Rollout & rollback sections real | `spec.md` §10 — non-empty, names a flag/metric, rollback is executable not aspirational |
 | Security items landed, not deferred | `spec.md` §8 mitigations vs. the diffs; `security-reviewer` consulted where §8 gated it |
 | No interrupted loops | `.claude/somi-state/loop/*.json` with `status: running` for in-scope slugs |
 | Follow-ups triaged | `progress.md` follow-ups each either scheduled or explicitly accepted for post-release |
-| Working tree honest | `bash scripts/somi-check.sh --all` (secrets, lockfile hand-edits, loose ends) |
+| Working tree honest | `node scripts/somi-check.mjs --all` (secrets, lockfile hand-edits, loose ends) |
 
 Any hard failure here (open Blocker, red tests, unexecutable rollback) → the verdict is already
 `not-ready`; finish the checklist anyway so the report is complete, but say it early.
@@ -44,7 +44,7 @@ items, config/flag interactions, and observability of the release as a whole ("w
 and something degrades, what tells us which work item did it?"). Skip only if the release is a
 single already-panel-reviewed work item.
 
-Record its findings into the ledger(s) (`somi-findings.sh record`) like any review.
+Record its findings into the ledger(s) (`somi-findings.mjs record`) like any review.
 
 ## Stage 3 — Verdict + release notes
 

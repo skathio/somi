@@ -40,7 +40,9 @@ Each layer has a clear job:
 - **Commands** are user-facing entrypoints. They are deliberately thin so the workflow is readable.
 - **Agents** do the thinking. Each agent has its own system prompt and is invoked via the Task tool.
 - **Skills + rules + hooks** are the substrate that shapes both commands and agents — universal
-  priors (rules), domain-specific depth (skills), and non-negotiable guardrails (hooks).
+  priors (rules), domain-specific depth (skills), and non-negotiable guardrails (hooks — zero-
+  dependency Node, no `bash`/`jq`, so the hook runtime itself runs the same on Windows, Linux, and
+  macOS; see [`docs/HOOKS.md`](./HOOKS.md) for the one open Windows path-guard caveat).
 
 ## Economic tiering (MAX/ECO) — the second axis
 
@@ -170,8 +172,8 @@ lives in `commands/ship.md`; the agents are unchanged.
 | Domain knowledge with triggers           | `skills/`     | Loaded on-demand by the model; rich; not always relevant             |
 | Workflow-specific thinking process       | `agents/`     | Subagent system prompts; can have their own tool sets                |
 | User-facing entrypoints                  | `commands/`   | Slash-command shape; thin orchestrators                              |
-| Deterministic guardrails                 | `hooks/`      | Runs in Claude Code's hook framework; no model involved              |
-| Runtime tooling (loop state, findings ledger, portable guard) | `scripts/` | `somi-loop.sh` / `somi-findings.sh` own the loops' arithmetic (invoked via Bash by the loop commands); `somi-check.sh` is the host-agnostic pre-commit/CI guard; tested by `tests/` in CI |
+| Deterministic guardrails                 | `hooks/`      | Runs in Claude Code's hook framework as Node (`.mjs`, no `bash`/`jq`); no model involved |
+| Runtime tooling (loop state, findings ledger, portable guard) | `scripts/` | `somi-loop.mjs` / `somi-findings.mjs` own the loops' arithmetic (invoked via Node by the loop commands); `somi-check.mjs` is the host-agnostic pre-commit/CI guard; tested by `tests/` in CI |
 | Artifact templates                       | `templates/`  | Shape of `brief.md` (the MAX→ECO handoff), `design.md`, `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
 | Discovery artifacts (per project)        | `.somi/rd/<slug>/` | One subdir per greenfield initiative; the requirements & design foundation; feeds `.somi/plans/<slug>/` |
 | Work-item artifacts (per project)        | `.somi/plans/<slug>/` | One subdir per work item; persists indefinitely; user-controlled retention |

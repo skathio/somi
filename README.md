@@ -48,6 +48,11 @@ the MAX→ECO model switch. Supporting MAX agents (by handoff): `security-review
 
 ## Install
 
+> **Runtime**: a current Node (LTS) on `PATH` — no `bash`, no `jq` required. Both Claude Code and
+> GitHub Copilot already bundle Node, so most installs need nothing extra; the Node runtime itself
+> is Windows-native (no bash/jq to install). See [`docs/HOOKS.md`](docs/HOOKS.md) for one open
+> caveat on Windows path-separator coverage in the path-matching guards.
+
 ### Option 1 — Claude Code plugin (marketplace)
 
 ```text

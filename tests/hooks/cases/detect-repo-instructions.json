@@ -1,0 +1,84 @@
+{
+  "_note": "Full-coverage fixture for hooks/session-start/detect-repo-instructions.{sh,mjs}, built in Phase 0 iteration 0.4 on top of 0.2's single proving case (surfaces-root-agents-md, kept unchanged below). Every case's expected output was originally captured by running the unmodified bash hook directly against a staged throwaway CLAUDE_PROJECT_DIR \u2014 never assumed. Three behaviors worth flagging (see the per-case notes below for detail): (1) the root-file loop's all 4 filenames each have a dedicated case (CLAUDE.md via surfaces-root-claude-md, AGENTS.md via surfaces-root-agents-md, .cursorrules and copilot-instructions.md via their own cases) \u2014 added in pass 2 (F-15) after review caught that CLAUDE.md, the hook's own namesake file, was reachable only through the nested find scan in every other case and so a port dropping it from the root array would have passed all 8 prior cases undetected; (2) the nested-file find's maxdepth/mindepth boundary is inclusive at 2 nested subdirectories and exclusive at 3 \u2014 verified by direct find invocation, not inferred from the flag values; (3) PRUNE-LIST DECISION (iteration 2.7, GNU-findutils-scoped): bash's documented prune list (.git/node_modules/.somi/vendor) is confirmed NON-functional for files one level inside those directories, because GNU find's -mindepth 2 suppresses ALL predicate evaluation (including the -prune test) for entries at depth < 2 \u2014 the prune group therefore never fires, since the pruned directories themselves are always depth-1 children of CLAUDE_PROJECT_DIR (confirmed directly with /usr/bin/find, GNU findutils 4.9.0, and independently reproduced by 0.4 pass 2's review with a control experiment: the identical find expression without -mindepth 2 prunes correctly). Iteration 2.7 made the explicit, named call to FIX FORWARD in the .mjs port rather than reproduce the bug (see the port's own header comment for the full reasoning: self-documented intent violated by an accident not a choice; correctness \u2014 a third-party CLAUDE.md inside node_modules is not this repo's own convention; performance \u2014 empirically measured ~150-350x slower for a naive non-pruning Node walk vs a pruning one against a synthetic 800-package node_modules; fail-quiet-in-the-safe-direction, matching this work item's other accepted divergences; confined blast radius, no shared-file coupling). The 'surfaces-nested-claude-md-under-pruned-dir' case (which pinned the CURRENT bash bug) is therefore RENAMED and its expectation FLIPPED below to assert the .mjs port's fixed behavior \u2014 a named, reviewed edit, not a silent one. The .sh hook is untouched and still exhibits the original bug (this case would still pass against bash before iteration 2.7 pointed the fixture at .mjs). Scope note: the underlying bash bug this decision responds to is captured against GNU findutils (confirmed 4.9.0, Linux); BSD/macOS find is documented to treat -mindepth/-prune interaction differently \u2014 moot for the .mjs port itself, which does not depend on any platform's find binary or its interaction quirks.",
+  "script": "session-start/detect-repo-instructions.mjs",
+  "cases": [
+    {
+      "name": "surfaces-root-agents-md",
+      "expect_context": "AGENTS.md",
+      "files": {
+        "AGENTS.md": "# repo instructions\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "surfaces-root-claude-md",
+      "expect_context": "CLAUDE.md",
+      "_note": "F-15 fix (0.4 pass 2): the namesake root-file-loop entry. Every other CLAUDE.md-bearing case in this fixture (a/b/CLAUDE.md, a/b/c/CLAUDE.md, node_modules/CLAUDE.md) reaches the file through the nested find scan, never through the root -f loop at detect-repo-instructions.sh:30 -- so a port whose root-file array drops CLAUDE.md passed all 8 prior cases undetected. This case closes that gap directly.",
+      "files": {
+        "CLAUDE.md": "# root\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "no-instructions-silent-exit",
+      "_note": "No repo-local instruction files and no .claude/agents/ present anywhere in the staged (empty) project dir -> the hook's FOUND array and REPO_AGENTS are both empty, so it exits 0 with no hookSpecificOutput at all.",
+      "expect_no_context": true,
+      "payload": {}
+    },
+    {
+      "name": "surfaces-root-cursorrules",
+      "expect_context": ".cursorrules",
+      "_note": "Pins a second entry in the root-file loop distinct from AGENTS.md, so a port that drops .cursorrules from its filename list is caught.",
+      "files": {
+        ".cursorrules": "# cursor rules\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "surfaces-root-copilot-instructions",
+      "expect_context": ".github/copilot-instructions.md",
+      "_note": "Third entry in the root-file loop; this repo itself will ship this exact file per D3 (Phase 4), so this branch matters in practice, not just in theory.",
+      "files": {
+        ".github/copilot-instructions.md": "# copilot instructions\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "surfaces-nested-claude-md-at-max-scan-depth",
+      "expect_context": "a/b/CLAUDE.md",
+      "_note": "Nested find is `find PROJECT_ROOT -maxdepth 3 ... -mindepth 2 -type f`. PROJECT_ROOT itself is depth 0, so a file two directories down (a/b/CLAUDE.md) is depth 3 -- the deepest depth the scan reaches. Verified directly: this file IS surfaced.",
+      "files": {
+        "a/b/CLAUDE.md": "# nested\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "omits-claude-md-beyond-scan-depth",
+      "_note": "Companion to the case above, one directory deeper (a/b/c/CLAUDE.md, depth 4) -- exceeds -maxdepth 3, so find never visits it. Verified directly: this file is NOT surfaced and the hook exits 0 with no context (no other FOUND entries or REPO_AGENTS in this staged dir).",
+      "expect_no_context": true,
+      "files": {
+        "a/b/c/CLAUDE.md": "# too deep\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "surfaces-claude-agents-dir-with-count",
+      "expect_context": ".claude/agents/ (2 repo-local subagent definition(s))",
+      "_note": "Pins the exact count-message format: '<count> repo-local subagent definition(s))' with the staged entry count interpolated (2 .md files staged here).",
+      "files": {
+        ".claude/agents/foo.md": "# agent foo\n",
+        ".claude/agents/bar.md": "# agent bar\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "prunes-nested-claude-md-under-node-modules",
+      "expect_no_context": true,
+      "_note": "RENAMED + FLIPPED at iteration 2.7 (was 'surfaces-nested-claude-md-under-pruned-dir', expect_context: \"node_modules/CLAUDE.md\") as the named, reviewed edit that goes WITH the prune-list DECISION documented in the file-level _note above and in detect-repo-instructions.mjs's own header comment: this port makes the prune actually fire, so node_modules is genuinely never descended into and a CLAUDE.md one level inside it is no longer found -- the hook exits silently (no other FOUND entry or REPO_AGENTS is staged in this case). This is the opposite assertion from the case it replaces, on purpose: bash still surfaces this file (the .sh original is untouched and still carries the prune bug), the .mjs port deliberately does not.",
+      "files": {
+        "node_modules/CLAUDE.md": "# now genuinely pruned by the .mjs port\n"
+      },
+      "payload": {}
+    }
+  ]
+}

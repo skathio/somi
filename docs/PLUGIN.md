@@ -3,6 +3,11 @@
 SoMi ships as a Claude Code plugin and as a GitHub Copilot extension. Both use the same
 underlying markdown files — agents, commands, skills, rules, hooks — so there is no duplication.
 
+The hook scripts and state tooling underneath are zero-dependency Node (`.mjs`) — no `bash`, no
+`jq` to install on either host, and the runtime itself works the same on Windows, Linux, and
+macOS. (One open caveat on Windows path-separator coverage in the path-matching guards: see
+[`HOOKS.md`](./HOOKS.md).)
+
 > **The two hosts are not feature-equivalent.** The shared markdown is portable, but two layers are
 > **Claude Code capabilities that don't carry to Copilot**: the deterministic **guardrail hooks**
 > (they don't fire on Copilot — no blocking of dangerous bash / secret writes / protected paths, no
@@ -139,7 +144,7 @@ the Claude Code plugin.
 > sub-agent orchestration (the loops and the `/review-panel` / `/code-parallel` parallel fan-outs run
 > sequentially when the host can't spawn sub-agents). The judgment layer is identical; the
 > enforcement and concurrency layers are Claude Code-only. Don't rely on the hard stops on Copilot —
-> but do install [`scripts/somi-check.sh`](../scripts/somi-check.sh) as a git pre-commit hook / CI
+> but do install [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) as a git pre-commit hook / CI
 > step: it carries the working-tree subset of the guarantees (staged secrets, lockfile hand-edits,
 > loose-end markers) to any host. See [`HOOKS.md`](./HOOKS.md#somi-check--the-portable-working-tree-guard).
 
@@ -192,7 +197,7 @@ copilot plugin update
 | `@somi /pr`                   | (none — composes the PR from artifacts; `gh` after confirmation)                         |
 
 > On Copilot the loop caps fall back to judgment-enforced tracking when the host can't run the
-> `scripts/somi-loop.sh` / `somi-findings.sh` helpers — and `scripts/somi-check.sh` (below) is
+> `scripts/somi-loop.mjs` / `somi-findings.mjs` helpers — and `scripts/somi-check.mjs` (below) is
 > the enforcement layer that *does* work here.
 
 > Plan-level review uses `@somi /review plan <slug>` — there is no separate `/plan-review`.

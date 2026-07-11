@@ -4,6 +4,79 @@ All notable changes to `@skathio/somi` are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning: [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+_Nothing yet._
+
+## [2.0.0] — 2026-07-10 — portable Node runtime (jq-free, bash-free, Windows-capable, Copilot-native)
+
+**This is a MAJOR release** (breaking — see below). SoMi's entire deterministic runtime — the loop-state
+engine, findings ledger, working-tree guard, and all 8 hooks + the shared lib — was ported from
+`bash`+`jq` to **zero-dependency Node** (`.mjs`, stdlib only). The motivation: corporate networks
+often block installing `jq`, and `bash` is not native on Windows; both are removed. Every `.mjs` was
+proven byte-parity against its retired bash original via an expanded golden-fixture corpus (152 cases),
+and the security-critical `block-dangerous-bash` port passed a mandatory `security-reviewer` gate
+(which caught and fixed two `deny→allow` under-gates before they shipped). The bash originals are
+deleted; the Node sources are what Claude Code, the vendored install, `npx somi-check`, and `npm test`
+now run.
+
+### Breaking changes
+
+- **Every shipped script/hook is now `.mjs`, not `.sh`.** The retired `.sh` sources under `scripts/`
+  and `hooks/` are **deleted**. Consumers who reference a bash source **by path** must repoint:
+  - `scripts/somi-check.sh` → `scripts/somi-check.mjs` (the `bin` and the documented
+    `ln -s … .git/hooks/pre-commit` are updated; `somi-check.mjs` carries a `#!/usr/bin/env node`
+    shebang and is executable, so the symlink path still works).
+  - The 8 hook `.sh` and `hooks/lib/common.sh` are gone; anyone wiring a hook by direct `.sh` path
+    must use the `.mjs`. **The documented install paths are unaffected and continue to work**: the
+    plugin auto-merges `hooks/hooks.json` (`${CLAUDE_PLUGIN_ROOT}`), the vendored install uses
+    `.claude/settings.json` (`${SOMI_VENDOR_ROOT}`), and both now invoke `node …/*.mjs`.
+  - **Migration**: if you install via the plugin marketplace or the vendored `.claude/settings.json`,
+    **no action** — the paths are internal and already updated. Only repoint if you hand-wired a
+    somi `.sh` by its literal path (custom pre-commit symlink, bespoke `hooks.json`, a script that
+    `source`d `hooks/lib/common.sh`): swap the `.sh` for the same-named `.mjs` and invoke it with
+    `node`. **A `node` runtime is now required** where a POSIX shell + `jq` used to be.
+- **SessionStart no longer surfaces nested instruction files inside `.git`/`node_modules`/`.somi`/
+  `vendor`.** The bash prune was non-functional (GNU `find`'s `-mindepth 2` suppressed `-prune`); the
+  Node port makes it fire as documented. A third-party `CLAUDE.md` inside `node_modules/` is no longer
+  injected as if it were the repo's own convention. (decision D6)
+  - **Migration**: if you actually relied on a nested `CLAUDE.md`/`AGENTS.md` (e.g. inside a vendored
+    dependency) being surfaced at session start, move or symlink it to the repo root — only root-level
+    and non-pruned subtrees are injected now.
+- **UserPromptSubmit now detects bare-backtick `` `in-progress` `` status lines** — the format
+  `/plan` actually generates — so more work-item context surfaces at prompt time than before. Bounded
+  and empirically checked against false positives (1 match in a 1255-line `progress.md`). (decision D7)
+  - **Migration**: none required — this is additive context injection. If a `progress.md` surfaces
+    more than you want, mark completed items so they no longer read as `` `in-progress` ``.
+
+### Removed
+
+- **The `jq` runtime dependency.** No shipped script or hook invokes `jq`; JSON is handled by the Node
+  standard library.
+- **The `jq` + `shellcheck` CI/validation install.** `scripts/validate.sh` now validates JSON via
+  `node -e JSON.parse` and source syntax via `node --check` over the `.mjs`; `publish.yml` no longer
+  `apt-get install`s either binary. (`validate.sh` and the two `tests/*/run.sh` runners remain bash as
+  dev/CI tooling — they call neither jq nor shellcheck.)
+
+### Added
+
+- **Root [`AGENTS.md`](AGENTS.md) + [`.github/copilot-instructions.md`](.github/copilot-instructions.md)**
+  carrying the always-on rules digest. GitHub Copilot loads these natively (it does not read
+  `rules/CLAUDE.md`), so SoMi's guardrail digest now reaches Copilot without the extension — closing a
+  silent gap. Includes an explicit "refuse to weaken security checks" directive for Copilot, where the
+  deterministic hooks don't fire and agent judgment is the only enforcement layer. (decision D3)
+- **Windows-capable runtime.** The state scripts and hooks run via `node <file>` with no `bash` and no
+  `jq`, so they run identically on Windows, Linux, and macOS. **Caveat (not yet closed):** the
+  path-matching guards (`guard-protected-paths`, `block-secret-writes`) build forward-slash globs, and
+  their behavior against native Windows `\`-separated paths is unverified — a tracked follow-up, **not**
+  a claim of full guard parity on Windows. The Claude Code ↔ Copilot parity caveat is unchanged: hooks
+  are a Claude Code capability and do not fire under Copilot.
+
+> **Note for the release manager:** one item was consciously deferred — a live-wiring smoke test (a real
+> per-event Claude Code session proving the manifest `command` dispatch fires the `.mjs`) was waived in
+> favor of revert-as-safety-net; the residual "silent no-fire" risk should be closed by a fast-follow
+> live smoke test on first real plugin load. See the work item's follow-ups.
+
 ## [1.2.0] — 2026-07-02 — trust core, deterministic loops, and the lifecycle completers
 
 Three arcs in one minor release. **Trust core:** every load-bearing guarantee that was
