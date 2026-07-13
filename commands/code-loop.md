@@ -51,7 +51,7 @@ The loop's arithmetic — pass counting, the diff baseline, cap checks, finding 
 owned by two shipped scripts, **not** by you simulating a state machine in context:
 [`scripts/somi-loop.mjs`](../scripts/somi-loop.mjs) (state + caps) and
 [`scripts/somi-findings.mjs`](../scripts/somi-findings.mjs) (the findings ledger). State survives
-session death at `.claude/somi-state/loop/<slug>.<N>.<M>.json`.
+session death at `.somi/somi-state/loop/<slug>.<N>.<M>.json`.
 
 - **Resume check first:** `node scripts/somi-loop.mjs resume --slug <slug> --iteration <N>.<M>`
   (path relative to the SoMi install root). If it prints a `running` state, a previous session

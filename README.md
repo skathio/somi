@@ -206,7 +206,7 @@ ready to merge, `/pr <slug>` turns its artifacts into the pull-request descripti
 
 - **Consistency** — every repo gets the same review bar, the same security posture, the same plan shape.
 - **Upgrade once** — update the plugin; every project benefits.
-- **Override locally** — projects keep their own `CLAUDE.md` and `rules/99-overrides.md`; SoMi never silently overrides them.
+- **Override locally** — projects keep their own `CLAUDE.md` and `.somi/rules/99-overrides.md`; SoMi never silently overrides them.
 - **Auditable** — hooks log denied actions; reviewers can see what the system blocked vs. what humans approved.
 
 ---

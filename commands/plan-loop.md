@@ -58,7 +58,7 @@ start of the run; record the effective values in the first diary entry of the lo
 
 Pass counting and finding recurrence are owned by the shipped scripts
 ([`scripts/somi-loop.mjs`](../scripts/somi-loop.mjs), [`scripts/somi-findings.mjs`](../scripts/somi-findings.mjs))
-— state survives session death at `.claude/somi-state/loop/<slug>.json`.
+— state survives session death at `.somi/somi-state/loop/<slug>.json`.
 
 - **Resume check first:** `node scripts/somi-loop.mjs resume --slug <slug>`. A `running` state
   means a previous session died mid-loop — continue from its recorded pass (tell the user).

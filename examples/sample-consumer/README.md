@@ -16,8 +16,10 @@ files SoMi's plugin runtime places.
 ```
 <your project>/
 ├── CLAUDE.md                              # composed from rules/CLAUDE.md
-├── .somi/                                 # workflow artifacts (created when /discover or /plan runs)
+├── .somi/                                 # workflow artifacts + project-local SoMi state
 │   ├── README.md
+│   ├── rules/
+│   │   └── 99-overrides.md                # your project escape hatch (created by /adopt or by hand)
 │   ├── rd/                                # discovery initiatives (created when /discover runs)
 │   │   └── <slug>/                        # research-report, brd, srs, frd, sdd, tdd, decisions, diary
 │   ├── plans/
@@ -28,8 +30,10 @@ files SoMi's plugin runtime places.
 │   │       ├── progress.md
 │   │       ├── diary.md
 │   │       └── phases/
-│   └── reviews/
-│       └── <slug>/                        # reviews keyed by work-item slug
+│   ├── reviews/
+│   │   └── <slug>/                        # reviews keyed by work-item slug
+│   ├── somi-state/                        # runtime state (loop resume, context-injection signature); gitignored
+│   └── audit.log                          # append-only tool-call log; gitignored
 └── .claude/
     ├── settings.json                      # SoMi hooks wired up (merged with yours if it existed)
     └── plugins/
@@ -38,7 +42,7 @@ files SoMi's plugin runtime places.
             ├── agents/                    # discovery-analyst, planner, coder, reviewer + support
             ├── commands/                  # /discover, /plan, /code, /review, /ship + support
             ├── skills/                    # market-research, requirements-engineering, OWASP, SOLID, ...
-            ├── rules/                     # global ruleset
+            ├── rules/                     # global ruleset (00-50 + the 99-overrides.md starter template)
             ├── templates/                 # context, spec, decisions, phase, progress, diary, review, ADR, DoD; R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD
             └── hooks/                     # guardrail scripts settings.json points at
 ```
@@ -52,15 +56,21 @@ files SoMi's plugin runtime places.
 - **`settings.json` is the merge of your existing settings + SoMi hooks/permissions**. Your
   existing `permissions.allow` is preserved; SoMi hook entries are appended; SoMi deny rules are
   added (union-merge).
+- **All SoMi-written runtime state lives under `.somi/`, never `.claude/`.** `audit.log`,
+  `somi-state/` (loop resume, context-injection signature), and `rules/99-overrides.md` are all
+  project-local and host-neutral — the same regardless of whether the consumer is Claude Code or
+  GitHub Copilot. Only the plugin's own *installed code* (agents/commands/skills/rules/hooks) lives
+  under `.claude/plugins/somi/`.
 
 ## What stays yours after install
 
 - `CLAUDE.md` — the plugin runtime does not overwrite a hand-edited `CLAUDE.md`. Add
-  project-specific instructions in [`rules/99-overrides.md`](../../rules/99-overrides.md)
-  (which SoMi never touches) or directly in your `CLAUDE.md`.
+  project-specific instructions in [`.somi/rules/99-overrides.md`](.somi/rules/99-overrides.md)
+  (which SoMi never touches, and which survives `/plugin update somi`) or directly in your
+  `CLAUDE.md`.
 - All your existing `settings.json` keys outside of `hooks`, `permissions`, and `env`.
-- Everything under `.somi/` — workflow artifacts, not SoMi internals. Work items persist
-  indefinitely; only you delete from there.
+- Everything under `.somi/` — workflow artifacts and SoMi's own project-local state. Work items
+  persist indefinitely; only you delete from there.
 
 ## Updating
 
@@ -74,4 +84,5 @@ files SoMi's plugin runtime places.
 /plugin uninstall somi
 ```
 
-Removes the plugin. Leaves your `CLAUDE.md`, `.somi/` artifacts, and `audit.log` alone.
+Removes the plugin. Leaves your `CLAUDE.md` and everything under `.somi/` (including `audit.log`
+and `rules/99-overrides.md`) alone.

@@ -26,9 +26,11 @@ first `/design`.
 ## Stage 2 — Confirm conventions into `99-overrides.md`
 
 From the atlas §4 digest (and the instruction files it lists), draft the project's
-`rules/99-overrides.md` scaffold **pre-filled with the detected conventions** — each as a
+`.somi/rules/99-overrides.md` scaffold **pre-filled with the detected conventions** — each as a
 `## Convention:` block, plus a `## Override:` block for anything that contradicts a SoMi default
-(name the rule file it overrides and a removal condition).
+(name the rule file it overrides and a removal condition). `.somi/` is the neutral location
+regardless of which host (Claude Code, GitHub Copilot) is consuming SoMi — never write this under
+`.claude/` or `.github/`, and never at the project root.
 
 **Present the draft to the user for confirmation before writing** — detected ≠ intended; the
 team may be tolerating practices they don't want codified. Apply their edits, then write the
@@ -55,7 +57,7 @@ From the atlas plus targeted checks, produce a short **gap report** (in-chat, pl
 Recommend one **small, real** feature or fix from the team's actual backlog shape (ask if none
 is obvious) to run as `/ship` — the calibration exercise from
 [GOVERNANCE.md](../docs/GOVERNANCE.md): it exercises plan → code-loop → review end-to-end, and
-disagreements it surfaces belong in `99-overrides.md` while they're fresh. For a bug, recommend
+disagreements it surfaces belong in `.somi/rules/99-overrides.md` while they're fresh. For a bug, recommend
 `/debug` instead.
 
 ## Summarise back
@@ -70,7 +72,7 @@ disagreements it surfaces belong in `99-overrides.md` while they're fresh. For a
 
 - **Stage 2 writes nothing without confirmation.** Codifying conventions is a team decision;
   you draft, they decide (this is the batch verification protocol applied to onboarding).
-- **Never clobber** an existing `99-overrides.md`, `CLAUDE.md`, or atlas — propose additions.
+- **Never clobber** an existing `.somi/rules/99-overrides.md`, `CLAUDE.md`, or atlas — propose additions.
 - **The gap report is descriptive.** No unsolicited refactoring, no "fixing" anything during
   adoption. The output is knowledge + a recommended first exercise, not diffs.
 - **Once per repo, roughly.** Re-running is safe (atlas refresh + report regeneration) but the

@@ -4,8 +4,9 @@ You are operating inside a project that has adopted **somi (SOMI)**. The rules i
 apply to **every workflow** (discovery, planning, coding, reviewing) and to **every agent**. They compose all numbered
 rule files in `rules/` into one canonical instruction set.
 
-> **If anything in this file conflicts with a downstream project's own `CLAUDE.md` or `rules/99-overrides.md`,
-> the project wins.** SOMI provides defaults, not mandates that override the human in the loop.
+> **If anything in this file conflicts with a downstream project's own `CLAUDE.md` or
+> `.somi/rules/99-overrides.md`, the project wins.** SOMI provides defaults, not mandates that
+> override the human in the loop.
 
 ---
 
@@ -62,7 +63,7 @@ the full treatment; read that file when you **enter its domain** (see "How to lo
 | [`30-security-owasp.md`](./30-security-owasp.md) | OWASP Top 10 defenses + secure-by-default patterns        |
 | [`40-engineering-practices.md`](./40-engineering-practices.md) | Testing, observability, dependencies, delivery      |
 | [`50-collaboration.md`](./50-collaboration.md) | Working with humans + handoffs between agents               |
-| [`99-overrides.md`](./99-overrides.md)       | Project escape hatch (SOMI never modifies this file)          |
+| [`99-overrides.md`](./99-overrides.md)       | Project escape hatch — starter template shown here; the live copy for a project lives at **`.somi/rules/99-overrides.md`** (never `.claude/` or `.github/`, so it stays neutral across hosts and survives plugin updates). SOMI never modifies it. |
 
 ### How to load the rules (context discipline)
 
@@ -75,7 +76,7 @@ exercising:
 - **`10` / `20` / `30` / `40`** — read when you enter their domain: writing or restructuring code
   (`10`, `20`), touching a trust boundary or sink (`30`), or shaping tests / observability /
   dependencies (`40`). The digest line is enough until then.
-- **`99-overrides.md`** — always check; the project's overrides win over everything here.
+- **`.somi/rules/99-overrides.md`** — always check; the project's overrides win over everything here.
 
 When in doubt, read the file — the digest is a fast path, not a license to skip a rule whose domain
 you're clearly in. Skipping a rule whose domain you've entered is a violation of this ruleset.
@@ -128,7 +129,7 @@ SOMI ships deterministic hooks that enforce a small set of non-negotiables indep
 - **Writes to secret-bearing paths** (`.env`, `*.pem`, `id_rsa`, …) are blocked.
 - **Writes to protected paths** (`.git/`, `.claude/`, `node_modules/`, `dist/`, lockfiles when not requested)
   are blocked.
-- **Audit log** (`.claude/audit.log`) records denied actions for post-hoc review.
+- **Audit log** (`.somi/audit.log`) records denied actions for post-hoc review.
 
 These hooks are guardrails, not policy debates. If a hook blocks you, **do not try to work around it** —
 explain what you were trying to do and ask the human.

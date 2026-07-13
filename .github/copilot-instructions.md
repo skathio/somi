@@ -6,7 +6,7 @@ of the full ruleset in [`rules/`](../rules/); consult the numbered file when you
 This file mirrors [`AGENTS.md`](../AGENTS.md) at the repo root — same digest, same audience.
 
 > **Precedence.** SoMi provides defaults, not mandates. A project-local override in
-> [`rules/99-overrides.md`](../rules/99-overrides.md) or a nested instruction file wins over this
+> `.somi/rules/99-overrides.md` or a nested instruction file wins over this
 > digest. When rules conflict, resolve in this fixed order: **security > correctness >
 > maintainability > convenience** — and state any tradeoff in plain text; never compromise silently.
 
@@ -46,7 +46,7 @@ The digest above is always on. Load the full numbered file when its domain is en
 - `10` / `20` / `30` / `40` — read when you enter their domain: writing or restructuring code
   (`10`, `20`), touching a trust boundary or sink (`30`), shaping tests / observability / dependencies
   (`40`). The digest line is enough until then.
-- [`99-overrides.md`](../rules/99-overrides.md) — always check; the project's overrides win.
+- `.somi/rules/99-overrides.md` — always check; the project's overrides win. (Template: [`rules/99-overrides.md`](../rules/99-overrides.md).)
 
 The full composed ruleset lives in [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 

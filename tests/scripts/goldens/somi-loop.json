@@ -14,7 +14,7 @@
       "src/a.txt"
     ],
     "exit": 0,
-    "stdout": "{\"baseline_sha\":\"<SHA>\",\"caps\":{\"max_passes\":2,\"diff_cap_lines\":10,\"severity_floor\":\"Major\"},\"state_file\":\"<DIR>/repo/.claude/somi-state/loop/g.1.1.json\"}",
+    "stdout": "{\"baseline_sha\":\"<SHA>\",\"caps\":{\"max_passes\":2,\"diff_cap_lines\":10,\"severity_floor\":\"Major\"},\"state_file\":\"<DIR>/repo/.somi/somi-state/loop/g.1.1.json\"}",
     "stderr": ""
   },
   {

@@ -391,7 +391,7 @@ The bounded loops' central promise — *hard* gates — is enforced by code, not
 simulating a state machine in context. Two scripts ship with SoMi:
 
 - [`scripts/somi-loop.mjs`](../scripts/somi-loop.mjs) — per-loop state at
-  `.claude/somi-state/loop/<slug>[.<N>.<M>].json` (project-local, gitignored): the baseline SHA
+  `.somi/somi-state/loop/<slug>[.<N>.<M>].json` (project-local, gitignored): the baseline SHA
   captured once at init, resolved caps (flag > env > `.somi/config.json` > default), the pass
   counter, and a per-pass history (verdict, Blocker/Major counts, diff size — the run's
   telemetry). `pass` exits `2` past the cap; `check-diff` measures the cumulative weighted diff

@@ -7,7 +7,7 @@
 // rationale (state survives session death, caps are SoMi's central safety
 // claim, etc).
 //
-// State: .claude/somi-state/loop/<slug>[.<iteration>].json under the project
+// State: .somi/somi-state/loop/<slug>[.<iteration>].json under the project
 // root (project-local, gitignored by SoMi's conventions). Never committed.
 //
 // Cap precedence (matches the gate tables): CLI flag > env var > .somi/config.json
@@ -150,7 +150,7 @@ function main() {
   requireGit();
 
   const root = projectRoot();
-  const STATE_DIR = process.env.SOMI_LOOP_STATE_DIR || path.join(root, '.claude', 'somi-state', 'loop');
+  const STATE_DIR = process.env.SOMI_LOOP_STATE_DIR || path.join(root, '.somi', 'somi-state', 'loop');
 
   // --- argument parsing (shared) ---------------------------------------------
   const argv = process.argv.slice(2);

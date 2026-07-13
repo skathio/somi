@@ -56,7 +56,7 @@
 //   produces empty segments there today (`-printf` errors, `2>/dev/null` swallows it, `find`
 //   exits non-zero, the pipeline's stdout is empty) — a pre-existing bash-only portability gap,
 //   not introduced by this port. More importantly: **the gate is self-referential.** The state
-//   file at `.claude/somi-state/last-context-signature` is only ever compared against a value
+//   file at `.somi/somi-state/last-context-signature` is only ever compared against a value
 //   THIS SAME hook previously wrote — never against an external oracle, never read by any other
 //   tool. Byte-identical hex-digest parity between a bash-computed signature and a Node-computed
 //   signature for the identical on-disk state is therefore neither achievable in general (it
@@ -65,7 +65,7 @@
 //   preserved exactly, is the gate's BEHAVIORAL contract: stable across repeated invocations when
 //   nothing changed, and different whenever the matched file set or any matched file's mtime
 //   changes — both verified by direct probe (see the diary). One bounded, expected consequence:
-//   the FIRST Node-hook invocation on a host whose `.claude/somi-state/last-context-signature`
+//   the FIRST Node-hook invocation on a host whose `.somi/somi-state/last-context-signature`
 //   was last written by the bash hook will see a "changed" signature (different hash algorithms
 //   for the same state) and re-emit the reminder ONE extra time at cutover — benign, not a bug.
 //
@@ -385,7 +385,7 @@ function main() {
   readPayload();
 
   const root = projectRoot();
-  const stateDir = path.join(root, '.claude', 'somi-state');
+  const stateDir = path.join(root, '.somi', 'somi-state');
   const stateFile = path.join(stateDir, 'last-context-signature');
   fs.mkdirSync(stateDir, { recursive: true });
 

@@ -6,7 +6,7 @@ digest below. It is the compressed form of the full ruleset in [`rules/`](./rule
 file when you enter its domain.
 
 > **Precedence.** SoMi provides defaults, not mandates. If a project-local override in
-> [`rules/99-overrides.md`](./rules/99-overrides.md) or a nested `CLAUDE.md`/`AGENTS.md` conflicts
+> `.somi/rules/99-overrides.md` or a nested `CLAUDE.md`/`AGENTS.md` conflicts
 > with this digest, the project wins. When two rules pull apart, resolve in this fixed order:
 > **security > correctness > maintainability > convenience** — and name any tradeoff in plain text;
 > never make a silent compromise.
@@ -47,7 +47,7 @@ The digest above is always on. Load the full numbered file when its domain is en
 - `10` / `20` / `30` / `40` — read when you enter their domain: writing or restructuring code
   (`10`, `20`), touching a trust boundary or sink (`30`), shaping tests / observability / dependencies
   (`40`). The digest line is enough until then.
-- [`99-overrides.md`](./rules/99-overrides.md) — always check; the project's overrides win.
+- `.somi/rules/99-overrides.md` — always check; the project's overrides win. (Template: [`rules/99-overrides.md`](./rules/99-overrides.md).)
 
 The full composed ruleset lives in [`rules/CLAUDE.md`](./rules/CLAUDE.md). Skills (on-demand expert
 packs) are under [`skills/`](./skills/); workflow agents under [`agents/`](./agents/).
@@ -57,7 +57,7 @@ packs) are under [`skills/`](./skills/); workflow agents under [`agents/`](./age
 SoMi ships deterministic hooks that block dangerous shell commands (`rm -rf /`, force-push to
 protected branches, `curl | sh`), writes to secret-bearing paths (`.env`, `*.pem`, `id_rsa`), and
 writes to protected paths (`.git/`, `.claude/`, `node_modules/`), and gate unsanctioned dependency
-installs; they append every tool call to `.claude/audit.log`. If a hook blocks you, **do not work
+installs; they append every tool call to `.somi/audit.log`. If a hook blocks you, **do not work
 around it** — explain what you were doing and ask the human. These hooks are a Claude Code host
 capability; on GitHub Copilot they do not fire, so the agent/rule judgment in this digest is the
 enforcement layer there — hold to it.

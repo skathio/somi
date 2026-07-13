@@ -15,7 +15,7 @@ slash command operates against these rules. The composed `CLAUDE.md` is the cano
 | [`rules/30-security-owasp.md`](../rules/30-security-owasp.md)  | OWASP Top 10 defenses                  |
 | [`rules/40-engineering-practices.md`](../rules/40-engineering-practices.md) | Testing, observability, delivery |
 | [`rules/50-collaboration.md`](../rules/50-collaboration.md)    | Working with humans + agent handoffs   |
-| [`rules/99-overrides.md`](../rules/99-overrides.md)            | Project escape hatch                   |
+| [`.somi/rules/99-overrides.md`](../rules/99-overrides.md) (template shown) | Project escape hatch       |
 
 ## The fixed priority stack
 
@@ -34,7 +34,9 @@ explicit human sign-off captured in the artifact (PR description, ADR, plan).
 
 ## What goes in `99-overrides.md`
 
-Project-specific overrides and conventions. **SoMi never touches this file.** Use it when:
+Lives at **`.somi/rules/99-overrides.md`** in your project — never under `.claude/` or `.github/`,
+so the location is the same regardless of which host (Claude Code, GitHub Copilot) is consuming
+SoMi. Project-specific overrides and conventions. **SoMi never touches this file.** Use it when:
 
 - You need to override a SoMi default (with a documented reason and removal condition).
 - You have project-specific conventions on top of the global rules.

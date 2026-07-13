@@ -27,7 +27,7 @@ For each in-scope work item, check mechanically and record pass/fail + evidence:
 | Work-item DoD satisfiable | `spec.md` §12 checkboxes vs. reality (tests green? docs updated?) |
 | Rollout & rollback sections real | `spec.md` §10 — non-empty, names a flag/metric, rollback is executable not aspirational |
 | Security items landed, not deferred | `spec.md` §8 mitigations vs. the diffs; `security-reviewer` consulted where §8 gated it |
-| No interrupted loops | `.claude/somi-state/loop/*.json` with `status: running` for in-scope slugs |
+| No interrupted loops | `.somi/somi-state/loop/*.json` with `status: running` for in-scope slugs |
 | Follow-ups triaged | `progress.md` follow-ups each either scheduled or explicitly accepted for post-release |
 | Working tree honest | `node scripts/somi-check.mjs --all` (secrets, lockfile hand-edits, loose ends) |
 

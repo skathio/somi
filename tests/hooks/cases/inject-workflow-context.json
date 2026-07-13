@@ -4,14 +4,14 @@
   "cases": [
     {
       "name": "emits-reminder-on-first-turn-absent-signature",
-      "_note": "No .somi/plans, .somi/reviews, .somi/rd, or git repo staged at all — a genuinely fresh project. No prior state file exists in this case's throwaway CLAUDE_PROJECT_DIR/.claude/somi-state/, so LAST_SIG is empty and EMIT_REMINDER is forced to \"yes\" regardless of content. This is the baseline 'signature absent -> emission happens' proof the phase spec asks for, and the pairing partner for the two signature-gate cases below (same empty staging, but those add \"prime\").",
+      "_note": "No .somi/plans, .somi/reviews, .somi/rd, or git repo staged at all — a genuinely fresh project. No prior state file exists in this case's throwaway CLAUDE_PROJECT_DIR/.somi/somi-state/, so LAST_SIG is empty and EMIT_REMINDER is forced to \"yes\" regardless of content. This is the baseline 'signature absent -> emission happens' proof the phase spec asks for, and the pairing partner for the two signature-gate cases below (same empty staging, but those add \"prime\").",
       "expect_context": "somi is active. Reminders:\n- Follow rules/CLAUDE.md priorities: security > correctness > maintainability > performance > convenience.",
       "expect_context_excludes": "loose-end check",
       "payload": {}
     },
     {
       "name": "signature-gate-suppresses-unchanged-repeat",
-      "_note": "Same (empty) staging as the case above, plus \"prime\": true — the runner invokes the hook once first (writing .claude/somi-state/last-context-signature naturally, via the hook's own code, not a hand-computed hash), discards that output, then runs again for the real assertion. Nothing changes between the two invocations, so the second call's computed signature equals what the first call just persisted -> EMIT_REMINDER=\"no\" -> the PARTS array stays empty (no nudges either, no git repo staged) -> no hookSpecificOutput at all. This is the core 'no re-emission when mtimes are unchanged since the last emission' proof the phase spec requires.",
+      "_note": "Same (empty) staging as the case above, plus \"prime\": true — the runner invokes the hook once first (writing .somi/somi-state/last-context-signature naturally, via the hook's own code, not a hand-computed hash), discards that output, then runs again for the real assertion. Nothing changes between the two invocations, so the second call's computed signature equals what the first call just persisted -> EMIT_REMINDER=\"no\" -> the PARTS array stays empty (no nudges either, no git repo staged) -> no hookSpecificOutput at all. This is the core 'no re-emission when mtimes are unchanged since the last emission' proof the phase spec requires.",
       "expect_no_context": true,
       "prime": true,
       "payload": {}

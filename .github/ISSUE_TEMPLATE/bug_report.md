@@ -30,7 +30,7 @@ labels: bug
 ## Audit log excerpt (if relevant)
 
 ```
-<paste lines from .claude/audit.log around the event>
+<paste lines from .somi/audit.log around the event>
 ```
 
 ## Additional context

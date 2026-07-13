@@ -8,6 +8,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 _Nothing yet._
 
+## [2.0.1] — 2026-07-13 — fix: runtime state and project overrides under `.claude/` instead of `.somi/`
+
+**Patch — bug fix.** Consumers of the plugin were getting SoMi-owned, project-local assets created
+under `.claude/` instead of `.somi/`. Fixed, in code and in every doc that documented the old paths:
+
+- **`audit.log`** — `hooks/lib/common.mjs`'s default (and the vendored reference
+  `.claude/settings.json`'s `SOMI_AUDIT_LOG`) now resolve to `.somi/audit.log`, not
+  `.claude/audit.log`.
+- **`somi-state/`** (loop state, context-injection signature) — `scripts/somi-loop.mjs` and
+  `hooks/user-prompt-submit/inject-workflow-context.mjs` now default to `.somi/somi-state/`, not
+  `.claude/somi-state/`.
+- **`99-overrides.md`** — the project's escape-hatch file now defaults to
+  `.somi/rules/99-overrides.md`, not `<project-root>/rules/99-overrides.md`. SoMi has two host
+  surfaces (Claude Code, GitHub Copilot), so a project-root `rules/` or a `.claude/`-rooted path is
+  ambiguous and collides with the plugin's own install layout; `.somi/` is host-neutral and already
+  the documented home for every other project-local SoMi artifact. `commands/adopt.md` (the only
+  place that writes this file today) is updated accordingly; `rules/99-overrides.md` in the plugin
+  source remains the starter template `/adopt` scaffolds from.
+
+No migration action is required for new installs. Projects with existing `.claude/audit.log` or
+`.claude/somi-state/` from a prior install may delete them (or leave them — SoMi will not read from
+or write to them again) once this version is picked up.
+
 ## [2.0.0] — 2026-07-10 — portable Node runtime (jq-free, bash-free, Windows-capable, Copilot-native)
 
 **This is a MAJOR release** (breaking — see below). SoMi's entire deterministic runtime — the loop-state

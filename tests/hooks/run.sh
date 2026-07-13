@@ -204,7 +204,7 @@ for case_file in "$CASES_DIR"/*.json; do
 
     # Sanitized environment: session opt-ins never leak in from the caller;
     # audit-log writes land in a per-case throwaway file, not the repo's
-    # .claude/; the project root is a per-case temp dir so .somi/config.json
+    # .somi/; the project root is a per-case temp dir so .somi/config.json
     # is case-controlled.
     case_dir="$TMP/case-$total"
     mkdir -p "$case_dir"

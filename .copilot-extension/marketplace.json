@@ -11,7 +11,7 @@
       "name": "somi",
       "source": "github:skathio/somi",
       "description": "MAX/ECO economy: discover/design (MAX) → plan / code / review (ECO) workflow system with SOLID, OWASP, and clean-code guardrails.",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "tags": ["workflow", "agents", "review", "security"],
       "homepage": "https://github.com/skathio/somi"
     }

@@ -7,11 +7,14 @@ ruleset with project-specific instructions that you add below.
 
 ## SOMI global ruleset (do not edit)
 
-The composed SOMI ruleset is included from [`.claude/rules/CLAUDE.md`](.claude/rules/CLAUDE.md). When
+The composed SOMI ruleset is included from
+[`.claude/plugins/somi/rules/CLAUDE.md`](.claude/plugins/somi/rules/CLAUDE.md). When
 this `CLAUDE.md` is loaded, Claude Code follows both the SOMI rules and any project rules below.
 
 > If you want to override a SOMI default, edit
-> [`.claude/rules/99-overrides.md`](.claude/rules/99-overrides.md) — SOMI will never touch that file.
+> [`.somi/rules/99-overrides.md`](.somi/rules/99-overrides.md) — SOMI will never touch that file.
+> This lives under `.somi/`, not `.claude/` or `.github/`, so it stays the same regardless of
+> which host (Claude Code, GitHub Copilot) is consuming SoMi.
 
 ---
 

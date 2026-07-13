@@ -180,7 +180,7 @@ lives in `commands/ship.md`; the agents are unchanged.
 | Repo Atlas (per project)                 | `.somi/atlas.md` | SHA-stamped repo map from `/atlas`; MAX actions consume it and deep-read only the drift |
 | Findings ledger (per work item)          | `.somi/reviews/<slug>/findings.json` | Machine view of review findings (stable `F-<n>` ids, lifecycle); powers the circuit breakers across sessions |
 | Project policy (optional, committed)     | `.somi/config.json` | Loop caps, dep-install allowlist, lockfile policy; env vars override per session |
-| Loop state (runtime, per loop)           | `.claude/somi-state/loop/` | Baseline SHA, pass counter, per-pass history; survives session death so loops resume; gitignored |
+| Loop state (runtime, per loop)           | `.somi/somi-state/loop/` | Baseline SHA, pass counter, per-pass history; survives session death so loops resume; gitignored |
 | Claude Code plugin packaging             | `.claude-plugin/` | Plugin manifest; marketplace manifest for `/plugin install`      |
 | Copilot extension packaging              | `.copilot-extension/` | Extension manifest; marketplace manifest for `copilot plugin install` |
 | Project-default settings (hooks, perms)  | `.claude/`    | Reference settings loaded by the plugin runtime                      |
@@ -234,7 +234,7 @@ distribution paths:
 
 Two artifacts let you reconstruct what the system did:
 
-1. **`.claude/audit.log`** — every tool call (PostToolUse hook). Useful for "what files did the
+1. **`.somi/audit.log`** — every tool call (PostToolUse hook). Useful for "what files did the
    agent touch / what bash did it run?"
 2. **`.somi/plans/<slug>/`** — the full per-work-item artifact set: context, spec, decisions (with
    superseded history), phases, progress, diary, reviews. Useful for "what did we decide, what
@@ -247,8 +247,8 @@ durable record of the work.
 ## What SoMi deliberately doesn't do
 
 - **It doesn't replace humans in the loop.** Every workflow stops at decision points.
-- **It doesn't ship with project-specific knowledge.** That belongs in `99-overrides.md` or in a
-  project-local plugin.
+- **It doesn't ship with project-specific knowledge.** That belongs in `.somi/rules/99-overrides.md`
+  or in a project-local plugin.
 - **It doesn't try to be a CI system.** Validation scripts catch repo-level issues; CI is your job.
 - **It doesn't lock you in.** `/plugin uninstall somi` removes the plugin; your artifacts under `.somi/` and `audit.log` persist — they're plain markdown files, readable without the plugin.
 - **It doesn't auto-archive.** Work items stay in `.somi/` indefinitely. Only humans delete from `.somi/`. Status lives in `progress.md`, not in directory location.

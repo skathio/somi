@@ -1,11 +1,14 @@
 # Local install / runtime artifacts
 .claude/settings.local.json
+.somi/audit.log
+.somi/somi-state/
+# Pre-2.0.1 paths — kept ignored so an install upgrading from an older version doesn't surface
+# its stale runtime artifacts as untracked noise. SoMi no longer reads from or writes to these.
 .claude/audit.log
 .claude/somi-state/
-.somi-state/
 # Defensive: if a host doesn't expand ${CLAUDE_PROJECT_DIR} in settings.json's env block,
 # the audit hook could create a literal-named directory here before the path guard in
-# hooks/lib/common.sh resolves it. Never commit that runtime artifact.
+# hooks/lib/common.mjs resolves it. Never commit that runtime artifact.
 ${CLAUDE_PROJECT_DIR}/
 
 # OS noise

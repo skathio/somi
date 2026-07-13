@@ -410,7 +410,7 @@ surface (and the gaps where regression risk concentrates), migration surface, an
 
 ### `/adopt`
 
-One-time onboarding of SoMi into an existing repo: builds the Atlas, drafts `99-overrides.md`
+One-time onboarding of SoMi into an existing repo: builds the Atlas, drafts `.somi/rules/99-overrides.md`
 **pre-filled with the detected conventions** (you confirm before anything is written), produces
 a gap report (test thin ice, hotspots, candidate first refactors, guardrail-fit config
 suggestions), and recommends a small calibration work item to run as `/ship` or `/debug`.
@@ -487,9 +487,9 @@ several genuinely independent slices and you want smaller, more focused per-iter
 | Phase files                           | `.somi/plans/<slug>/phases/<NN>-*.md`                | Same                                              |
 | Review files                          | `.somi/reviews/<slug>/<YYYY-MM-DD>-*.md`             | Same; one per review run                          |
 | Findings ledger                       | `.somi/reviews/<slug>/findings.json`                 | Same; machine view of findings (stable `F-<n>` ids, open/fixed lifecycle) |
-| `audit.log`                           | `.claude/audit.log`                                  | Append-only across sessions                       |
-| Context-injection state               | `.claude/somi-state/last-context-signature`          | Project-local, gitignored                         |
-| Loop state                            | `.claude/somi-state/loop/<slug>[.<N>.<M>].json`      | Project-local, gitignored; survives session death (loops resume) |
+| `audit.log`                           | `.somi/audit.log`                                    | Append-only across sessions                       |
+| Context-injection state               | `.somi/somi-state/last-context-signature`            | Project-local, gitignored                         |
+| Loop state                            | `.somi/somi-state/loop/<slug>[.<N>.<M>].json`        | Project-local, gitignored; survives session death (loops resume) |
 | Diff                                  | git                                                  | As long as the branch / history is kept           |
 
 All artifacts under `.somi/` should be committed to the repository. They're how the team and

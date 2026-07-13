@@ -25,7 +25,7 @@ Assemble the state of the world **from the artifacts only** — read, never writ
    `awaiting-verification` / `ready-for-planning`).
 3. **Open findings** — for every `.somi/reviews/<slug>/findings.json`:
    `node scripts/somi-findings.mjs open --slug <slug>` (count + worst severity).
-4. **Interrupted loops** — any `.claude/somi-state/loop/*.json` with `"status": "running"`: a
+4. **Interrupted loops** — any `.somi/somi-state/loop/*.json` with `"status": "running"`: a
    session died mid-loop; `/code-loop` / `/plan-loop` on that slug will **resume** it.
 
 Render a compact table:

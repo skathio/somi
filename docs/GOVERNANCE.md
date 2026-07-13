@@ -10,7 +10,7 @@ How a team adopts SoMi, keeps it updated safely, and contributes back without ch
    marketplace. Orgs that want a locked version can pin via `/plugin pin somi <version>` or
    host their own marketplace manifest.
 3. **Pin to a tag.** Don't track `main`. Pin to the latest `vX.Y.Z` and update deliberately.
-4. **Write your `99-overrides.md`** for project-specific conventions before the team uses SoMi for the
+4. **Write your `.somi/rules/99-overrides.md`** for project-specific conventions before the team uses SoMi for the
    first time. Empty is fine; the file's presence is the signal. If the team wants a standalone
    shipping standard on top of each work item's `spec.md` §12, instantiate
    [`templates/DOD.md.tmpl`](../templates/DOD.md.tmpl) as a team-level checklist. Loop caps and
@@ -36,7 +36,7 @@ Don't auto-update across MAJOR boundaries. SemVer says you might break.
 
 You will eventually want to do something SoMi doesn't natively support. Three escalating responses:
 
-1. **Override locally** in `99-overrides.md`. No coordination needed.
+1. **Override locally** in `.somi/rules/99-overrides.md`. No coordination needed.
 2. **Add a local agent / command / skill** under your project's `.claude/`. SoMi will not touch it.
 3. **Fork or vendor SoMi** if your team's needs diverge significantly. Mark your fork clearly; track
    upstream tags so you can periodically merge.
@@ -63,7 +63,7 @@ Teams reporting bugs / proposing changes should provide:
 - **Reproduction**: the command that triggered the issue, what was expected, what happened.
 - **Relevant excerpts** of any artifact files (with secrets redacted).
 
-The audit log (`.claude/audit.log`) is often useful for bug reports — it shows exactly what tools
+The audit log (`.somi/audit.log`) is often useful for bug reports — it shows exactly what tools
 SoMi attempted.
 
 ## Security

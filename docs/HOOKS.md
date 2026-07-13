@@ -27,7 +27,7 @@ tracked follow-up, not a claim of full guard parity on Windows.
 | `PreToolUse`       | `Write\|Edit` | `pre-tool/block-secret-writes.mjs`               | Denies writes to `.env`, `*.pem`, `id_rsa`, secret YAML/JSON.                                                              |
 | `PreToolUse`       | `Write\|Edit` | `pre-tool/guard-protected-paths.mjs`             | Denies writes to `.git/`, `node_modules/`, `dist/`, lockfiles, the SoMi plugin dir.                                     |
 | `PostToolUse`      | `Write\|Edit` | `post-tool/lint-changed-files.mjs`               | Runs the project's linter on the changed file; surfaces output back to the model via `hookSpecificOutput.additionalContext`. |
-| `PostToolUse`      | `*`           | `post-tool/audit-log.mjs`                        | Appends every tool call to `.claude/audit.log`.                                                                            |
+| `PostToolUse`      | `*`           | `post-tool/audit-log.mjs`                        | Appends every tool call to `.somi/audit.log`.                                                                              |
 | `UserPromptSubmit` | (any)         | `user-prompt-submit/inject-workflow-context.mjs` | Injects a SoMi reminder + active work-item state on first turn / state-change; surfaces TODO(claude)/scratch-file loose ends every turn. |
 
 All hooks live under `hooks/` in the repo. **Plugin install**: Claude Code auto-merges
@@ -57,7 +57,7 @@ Each hook script:
   - `field(payload, '.dotted.path')` — extract a payload field.
   - `denyPretool(payload, reason)` — emit a `PreToolUse` deny (and audit it).
   - `contextOutput(event, text)` — emit `hookSpecificOutput.additionalContext` for an event.
-  - `audit(payload, kind, detail)` — append a line to `.claude/audit.log`.
+  - `audit(payload, kind, detail)` — append a line to `.somi/audit.log`.
   - `matchesAny(str, patterns)` / `matchesAnyNocase(str, patterns)` — regex match helpers.
   - `runHook(main)` — the standard top-level wrapper every hook calls itself with.
 
@@ -119,7 +119,7 @@ the file is already written by the time post-tool hooks run.
 
 ### `audit-log.mjs`
 
-Appends `<timestamp>\t<kind>\t<tool>\t<summary>` to `.claude/audit.log` for every tool call. Pairs
+Appends `<timestamp>\t<kind>\t<tool>\t<summary>` to `.somi/audit.log` for every tool call. Pairs
 with the `DENY` entries written by pre-tool hooks. Grep the audit log when you want to know exactly
 what tools the agent touched during a session.
 
@@ -136,7 +136,7 @@ Two responsibilities, both surfaced via `hookSpecificOutput.additionalContext` o
    markers (vs. HEAD) or stray `.bak` / scratch files. Replaces the old `Stop` hook, which used a
    channel Stop events don't actually have.
 
-State file: `.claude/somi-state/last-context-signature` (project-local, gitignored).
+State file: `.somi/somi-state/last-context-signature` (project-local, gitignored).
 
 ## `somi-check` — the portable working-tree guard
 

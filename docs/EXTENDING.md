@@ -9,7 +9,7 @@ Pick the right layer for what you want to do:
 
 | You want to…                                                | Add a…                          |
 |-------------------------------------------------------------|---------------------------------|
-| Encode a universal team standard                            | Rule (in your `99-overrides.md`)|
+| Encode a universal team standard                            | Rule (in your `.somi/rules/99-overrides.md`)|
 | Capture domain expertise for on-demand use                  | Skill                           |
 | Give Claude a new specialised way of thinking               | Agent                           |
 | Expose a new user-facing entrypoint                         | Command                         |
@@ -175,7 +175,7 @@ judgment. For judgment-heavy work, write an agent or skill instead.
 
 ## Adding a project-specific override
 
-In `rules/99-overrides.md` (which SoMi never touches):
+In `.somi/rules/99-overrides.md` (which SoMi never touches):
 
 ```markdown
 ## Override: <short name>

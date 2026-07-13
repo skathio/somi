@@ -147,7 +147,7 @@ autocomplete. Try `/somi` for the status dashboard, or `/plan list a trivial cha
 the planner agent loads. Then run `/plugin info somi` to confirm hooks are registered.
 
 **Claude Code (vendored)**: confirm `.claude/settings.json` in your project includes the SoMi
-hooks block (paths under `${SOMI_VENDOR_ROOT}/hooks/…`). The auto-generated `.claude/audit.log`
+hooks block (paths under `${SOMI_VENDOR_ROOT}/hooks/…`). The auto-generated `.somi/audit.log`
 appearing after the first session is a good sign hooks are firing.
 
 **Copilot extension**: type `@somi /plan test` in Copilot chat — SoMi should respond with

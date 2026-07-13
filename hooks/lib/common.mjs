@@ -140,7 +140,7 @@ export function field(payload, fieldPath) {
 // unexpanded literal there too, independent of CLAUDE_PROJECT_DIR).
 export function auditLogPath() {
   const base = projectRoot();
-  const fallback = path.join(base, '.claude', 'audit.log');
+  const fallback = path.join(base, '.somi', 'audit.log');
   let log = process.env.SOMI_AUDIT_LOG || fallback;
   if (log.includes('${')) log = fallback;
   return log;
