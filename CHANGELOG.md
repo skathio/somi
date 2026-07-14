@@ -8,6 +8,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 _Nothing yet._
 
+## [2.0.2] — 2026-07-14 — fix: `somi-findings.mjs record` crashed instead of erroring cleanly on an unreadable stdin
+
+**Patch — bug fix.** A library consumer running under GitHub Copilot on Windows hit a raw,
+uncaught-exception crash ("stdin is not a tty") instead of a clean error message.
+
+- **`scripts/somi-findings.mjs`'s `record` subcommand now handles a failed stdin read.** Every
+  documented invocation (`commands/review.md`, `commands/code-loop.md`, `commands/plan-loop.md`,
+  `commands/review-panel.md`) pipes JSON in (`echo '<json>' | node scripts/somi-findings.mjs
+  record …`); if an agent host reconstructs that pipeline differently — as happens on
+  Windows, where a synchronous read of a TTY console handle throws `EAGAIN` instead of blocking
+  (a known Node/libuv limitation, unlike POSIX) — `fs.readFileSync(0)` threw, and that throw had
+  no try/catch, so it escaped as a raw stack trace (exit `1`) instead of the script's own
+  `die()` convention (a one-line message, exit `64`) that every other error path here already
+  uses. The read is now guarded the same way; a failure produces `somi-findings: failed to read
+  stdin — findings must be piped in as a JSON array` instead of a crash.
+- The sibling call site (`hooks/lib/common.mjs`'s `readPayload()`, used by every hook) was
+  checked and was already safe — no change needed there.
+
+No migration action required; this only affects the error path taken when stdin can't be read.
+
 ## [2.0.1] — 2026-07-13 — fix: runtime state and project overrides under `.claude/` instead of `.somi/`
 
 **Patch — bug fix.** Consumers of the plugin were getting SoMi-owned, project-local assets created
