@@ -132,6 +132,18 @@ check "record: resolved locus re-reported becomes a new finding (F-2)" \
 check "ledger: stored under .somi/reviews/<slug>/findings.json" \
   "$([[ -f "$REPO/.somi/reviews/demo/findings.json" ]]; echo $?)"
 
+# --- somi-findings: record surfaces a clean error, not a raw crash, when the stdin
+# read itself fails (fix-stdin-read-crash: fs.readFileSync(0) threw uncaught on any OS
+# error — e.g. Windows' EAGAIN for a TTY stdin — bypassing this script's own die()/exit-64
+# convention). Mocked platform-independently via a --require preload; see the fixture's
+# header comment. -----------------------------------------------------------------------
+STDIN_THROW_MOCK="$ROOT/tests/scripts/fixtures/mock-stdin-read-throw.cjs"
+got=0
+err="$(node --require "$STDIN_THROW_MOCK" "$FINDINGS" record --slug demo --review r6.md --run RUN4 --pass 1 2>&1 >/dev/null)" || got=$?
+check "record: stdin read failure exits via die() (64), not an uncaught crash" "$([[ "$got" == "64" ]]; echo $?)"
+check "record: stdin read failure prints the die() message, not a raw stack trace" \
+  "$([[ "$err" == "somi-findings: "* && "$err" != *"at Object."* ]]; echo $?)"
+
 # --- somi-check: portable working-tree guard -------------------------------------
 CHECK="$ROOT/scripts/somi-check.mjs"
 

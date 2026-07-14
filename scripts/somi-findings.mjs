@@ -166,7 +166,16 @@ function main() {
     case 'record': {
       ensureLedger(LEDGER_DIR, LEDGER);
 
-      const stdinText = fs.readFileSync(0, 'utf8');
+      let stdinText;
+      try {
+        stdinText = fs.readFileSync(0, 'utf8');
+      } catch {
+        // Any OS-level read failure — e.g. Windows raises EAGAIN for a synchronous read of
+        // a TTY console handle (no piped input attached) rather than blocking, the POSIX
+        // behavior — should degrade to the same clean die() exit every other bad-input path
+        // here uses, not an uncaught exception.
+        die('failed to read stdin — findings must be piped in as a JSON array');
+      }
       let input;
       try {
         input = JSON.parse(stdinText);
