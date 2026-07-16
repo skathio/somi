@@ -113,6 +113,23 @@ if ! grep -rIlq 'BRIEF\.md\.tmpl' agents commands; then
   exit 1
 fi
 
+echo "==> Validating skill <-> docs/SKILLS.md index completeness..."
+# Every skills/<name>/SKILL.md must have a matching markdown link in docs/SKILLS.md's
+# "What SoMi ships" table — that table is the real, human-facing registration surface
+# (there is no manifest that enumerates skills individually to sync against instead).
+index_failed=0
+for f in skills/*/SKILL.md; do
+  [ -f "$f" ] || continue
+  name="$(basename "$(dirname "$f")")"
+  if ! grep -qF "../skills/$name/SKILL.md" docs/SKILLS.md; then
+    echo "SKILL NOT INDEXED: $name (docs/SKILLS.md has no link to ../skills/$name/SKILL.md)" >&2
+    index_failed=1
+  fi
+done
+if [ "$index_failed" -ne 0 ]; then
+  exit 1
+fi
+
 echo "==> Creating coverage stub..."
 mkdir -p coverage
 printf 'TN:\nend_of_record\n' > coverage/lcov.info

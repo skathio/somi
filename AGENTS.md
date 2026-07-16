@@ -37,6 +37,15 @@ file when you enter its domain.
 - **Collaboration:** challenge the premise, not just the architecture; match the answer to the
   question; recommend with concrete options, the user decides direction; surface tradeoffs and
   blockers in the first line. ([`rules/50-collaboration.md`](./rules/50-collaboration.md))
+- **Reasoning craft:** before writing, parse trajectory (what will the reader do with this in 10
+  minutes; answer the predictable next question now) → shape (choose the deliverable's form before
+  the words; put the answer first) → verify (mark inference as inference; never trade "I confirmed"
+  for "should work"). While writing, run four cuts: drift (answering the asked question, not an
+  easier neighbor), hedge (two qualifiers → commit, or name the deciding variable), horoscope
+  (delete any sentence true of every project), deletion (cut anything whose removal wouldn't change
+  what the reader does). At most one metaphor, only if it lets the reader predict something new —
+  otherwise name the single axis the decision turns on. As stakes rise, get blunter, not more
+  hedged. (`50`)
 
 ## How to load the rules
 
