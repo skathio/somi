@@ -8,6 +8,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 _Nothing yet._
 
+## [2.1.0] — 2026-07-16 — feat: reasoning-craft mindset kernel — executable detectors, not adjectives
+
+**Minor — additive.** Converts SoMi's craft guidance from adjectives ("direct, specific, brief")
+into executable mechanisms every agent actually runs.
+
+- **New skill: `skills/reasoning-craft`.** The full mechanism catalog — 3 ordered pre-write parses
+  (trajectory, shape, verify), 4 mid-generation detectors (drift, hedge, horoscope, deletion),
+  metaphor/axis discipline, and stakes→directness voice calibration — each with concrete
+  before/after examples and a worked trace. Indexed in `docs/SKILLS.md`.
+- **New always-on digest rule.** One dense, ≤150-word "Reasoning craft" bullet, byte-identical in
+  `rules/CLAUDE.md` and `AGENTS.md` (dual-host parity), plus a skill-trigger line in `rules/CLAUDE.md`'s
+  "When to invoke skills" section. Zero diff to `rules/50-collaboration.md` or any `agents/*.md`
+  file — this adds a gap in the existing collaboration rules, it doesn't restate or fork them.
+- **New regression check** in `scripts/validate.sh`: fails loudly, naming the skill, if any
+  `skills/*/SKILL.md` lacks a matching `docs/SKILLS.md` index row.
+
+No migration action required — purely additive; no existing command, agent, hook, or rule changed
+behavior.
+
 ## [2.0.2] — 2026-07-14 — fix: `somi-findings.mjs record` crashed instead of erroring cleanly on an unreadable stdin
 
 **Patch — bug fix.** A library consumer running under GitHub Copilot on Windows hit a raw,
