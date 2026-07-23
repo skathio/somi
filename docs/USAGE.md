@@ -316,6 +316,10 @@ request's problem shape and **recommends** the right entry command (`/debug` vs 
 `/design` vs `/review` …) — it never auto-invokes, and it checks for an existing matching work
 item first so you don't scaffold duplicates.
 
+> `somi` also names a selectable GitHub Copilot **agent** persona (`agents/somi.md`) — the same
+> front-door idea, one layer up: pick it once for the whole session instead of typing `/somi`
+> each time. See [`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension).
+
 ```text
 /somi
 /somi users report the export button 500s since yesterday's deploy

@@ -87,6 +87,11 @@ description: Use when ... (trigger conditions in plain language).
 Skills should include: when to invoke, first principles / operating procedure, per-domain checklists
 or examples, anti-patterns, when *not* to apply, when to escalate. See existing skills for the shape.
 
+> **Worked example — a skill shared by two consumers:**
+> [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) is loaded by both `/somi`
+> (Mode 2) and the `somi` agent's classify step, so the problem-shape → command table has
+> exactly one edit site instead of two copies that can drift.
+
 ## Adding a command
 
 `commands/<name>.md`:
