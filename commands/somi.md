@@ -56,25 +56,9 @@ Classify the request's **problem shape** and recommend the entry command — wit
 — then stop. **Never invoke the recommended command yourself**; the user runs it (or asks you
 to). Recommending is cheap; a wrong auto-invocation scaffolds artifacts the user has to clean up.
 
-| Shape (what the request smells like) | Recommend |
-|---|---|
-| A bug — something worked, now doesn't; error/trace/CI failure; cause unknown | [`/debug`](./debug.md) |
-| A bug with the cause already isolated and a trivial fix | [`/code`](./code.md) (no work item needed if truly one-file) |
-| A whole new product / greenfield idea, requirements open | [`/discover`](./discover.md) |
-| A feature on this repo whose architecture is unsettled (crosses modules, auth/PII, migration, new contract) | [`/design`](./design.md), then `/plan` |
-| A feature whose design is settled — "just sequence and build it" | [`/plan`](./plan.md) → [`/code-loop`](./code-loop.md) |
-| "Clean this up first" / structure blocks the next change | [`/refactor`](./refactor.md) |
-| "Is this OK?" — judge existing code / a plan / a design / a PR | [`/review`](./review.md) (or [`/review-panel`](./review-panel.md) for high-stakes multi-concern) |
-| Security-only / architecture-only / test-shape question | [`/security-review`](./security-review.md) / [`/architecture-review`](./architecture-review.md) / [`/test-strategy`](./test-strategy.md) |
-| "Do the whole thing end to end" | [`/ship`](./ship.md) (gated) or [`/ship-loop`](./ship-loop.md) (continuous, one gate) |
-| Matches an **existing** work item in `.somi/` | continue it — name the slug and its next action (per Mode 1's rules) — instead of starting a parallel item |
-
-Check the existing-work-item row **first** (grep `.somi/plans/*/progress.md` and
-`.somi/rd/*/README.md` for overlap with the request) — the most common routing mistake is
-scaffolding a duplicate work item for something already in flight.
-
-If the shape is genuinely ambiguous between two commands, say so and ask the one question that
-disambiguates (e.g. "is the architecture for this settled?" splits `/plan` from `/design`).
+Classify per [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) — the canonical
+problem-shape → command table, existing-work-item check, and ambiguity guidance (also loaded by
+the `somi` agent's classify step on GitHub Copilot). Don't re-derive or re-embed it here.
 
 ## Guardrails
 
