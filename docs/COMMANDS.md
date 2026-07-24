@@ -36,6 +36,10 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 > **Note:** `/plan-review` no longer exists as a separate command — plan-level review is part of
 > `/review` (use `/review plan <slug>` or pass an `.somi/plans/<slug>/` path).
 
+> `/somi`'s Mode 2 classification table lives in
+> [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) — shared with the `somi`
+> agent, GitHub Copilot's front-door persona (see [`docs/PLUGIN.md`](./PLUGIN.md)).
+
 ## Command file shape
 
 Each command lives in `commands/<name>.md` with frontmatter:

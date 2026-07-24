@@ -88,6 +88,10 @@ Once installed, use `@somi` in GitHub Copilot chat:
 @somi /review  rate-limiting-webhooks
 ```
 
+> On GitHub Copilot, select the **`somi`** agent as your session persona for this same
+> front-door behavior automatically — no need to already know which command to type. See
+> [`docs/PLUGIN.md`](docs/PLUGIN.md#github-copilot-extension).
+
 > **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Two things do **not** carry
 > over, because they depend on Claude Code host capabilities Copilot doesn't expose:
 >

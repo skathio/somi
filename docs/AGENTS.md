@@ -1,6 +1,8 @@
 # Agents
 
-SoMi ships nine subagents across two **economic tiers**. The **MAX** tier (`opus`) front-loads the
+SoMi ships ten agents: nine phase-specific subagents across two **economic tiers**, plus one
+Copilot-only front door (`somi`) documented separately in
+["The front-door agent"](#the-front-door-agent) below. The **MAX** tier (`opus`) front-loads the
 expensive reasoning — research, design, decisions, complexity mapping, and fresh-eyes review — and
 compiles it into a dense `brief.md`. The **ECO** tier (`sonnet`) executes against that brief without
 re-researching. See [Economic tiering](#economic-tiering-maxeco) below.
@@ -16,6 +18,7 @@ re-researching. See [Economic tiering](#economic-tiering-maxeco) below.
 | [`test-strategist`](../agents/test-strategist.md)            | MAX (`opus`)   | Test shape feels wrong; deciding unit vs. integration; flake debugging |
 | [`planner`](../agents/planner.md)                            | ECO (`sonnet`) | Non-trivial change; sequence the design (brief) into phases           |
 | [`coder`](../agents/coder.md)                                | ECO (`sonnet`) | Executing against an approved plan + brief; small, well-scoped tasks  |
+| [`somi`](../agents/somi.md)                                   | ECO (`sonnet`) | GitHub Copilot session persona — not phase-specific; classifies the request and dispatches to whichever of the other 9 fits (see "The front-door agent" below) |
 
 ## How agents get invoked
 
@@ -174,6 +177,35 @@ mixed in. Returns the codebase to a state where the next planned change is easy.
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`clean-code`](../skills/clean-code/SKILL.md) skills — skill wins on divergence.
 
+## The front-door agent
+
+### somi
+
+A Copilot-only dispatcher, not a phase-specific agent. Selecting it as the session persona
+removes the "which of the other 9 do I need?" choice: per incoming message it runs an
+invocation-mode gate first — an explicit non-`/somi` command is proxied directly, an explicit
+`/somi` passes through to the `/somi` command verbatim, and anything else is classified against
+[`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) and carried inline
+(adopt-inline — no sub-agent `Task`, since Copilot has none). MAX flows (`/design`, `/discover`,
+`/atlas`) are routed to their direct command rather than adopted under this agent's own `sonnet`
+tier.
+
+- **Model**: `sonnet` — a thin dispatcher; MAX flows are routed to, not adopted under, this
+  tier.
+- **Won't**: second-guess an explicit command; wrap a second opinion around `/somi`'s own
+  recommendation; adopt a MAX persona inline; emit a sub-agent `Task` (Copilot has none).
+- **Will**: announce which flow it's entering and why before adopting it; keep the dispatched
+  flow's own verification gates intact; nudge Claude Code users toward the direct commands,
+  where this agent adds no value (the direct commands already pick the right agent there).
+
+Invoke by selecting `somi` as your Copilot agent. Not needed on Claude Code.
+
+**`somi` the agent vs. `/somi` the command.** The token names two surfaces, disambiguated by
+kind: the **agent** (`agents/somi.md`) is what a Copilot user *selects* to drive a session; the
+**`/somi` command** (`commands/somi.md`) is the read-only status-dashboard-and-router *invoked
+inside* a session on either host (`@somi /somi`). They coexist deliberately — see
+[`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension) for how a Copilot session uses both.
+
 ## Economic tiering (MAX/ECO)
 
 SoMi tiers models by **SDLC phase**, not by orchestration depth. The expensive model is spent once,
@@ -254,7 +286,9 @@ plain prose escalations from inside an agent are no longer the only path.
 /incident    → (mitigation inline, hooks stay on; seeds /debug or /plan as the mandatory follow-up)
 /impact      → (no agent — read-only blast-radius tracing, atlas-first)
 /adopt       → /atlas flow (+ test-strategist for gap-report depth)
-/somi        → (no agent — read-only status dashboard & router)
+# Note: `somi` also names a selectable Copilot agent persona (agents/somi.md) — not invoked
+# via a command, so it has no row of its own here. See "The front-door agent" section above.
+/somi        → (no agent — read-only status dashboard & router; this is the /somi command)
 /pr          → (no agent — composes the PR from artifacts; gh only after confirmation)
 
 # Within a code workflow:

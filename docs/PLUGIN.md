@@ -167,6 +167,16 @@ copilot plugin install somi@somi
 copilot plugin update
 ```
 
+### Selecting an agent
+
+Copilot requires selecting one agent to drive the whole session. SoMi ships ten: nine
+phase-specific experts (see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which
+phase you're in, and one generic front door, **`somi`**. Select `somi` when you're not sure —
+it recognizes an explicit command and proxies it, passes `/somi` straight through, and
+classifies free-form requests into the matching flow, carrying it inline (adopt-inline — no
+sub-agent `Task`, per the parity caveat above). On Claude Code the direct commands already
+select the right agent, so `somi` mainly matters here, on Copilot.
+
 ### Available commands
 
 | Command                          | Agent(s) used                                                                            |
@@ -201,6 +211,10 @@ copilot plugin update
 > the enforcement layer that *does* work here.
 
 > Plan-level review uses `@somi /review plan <slug>` — there is no separate `/plan-review`.
+
+> The `somi` **agent** — a selectable persona, distinct from the `@somi /somi` **command** row
+> above — is the recommended default agent selection for a Copilot session. See "Selecting an
+> agent" above.
 
 ### Plugin lifecycle
 

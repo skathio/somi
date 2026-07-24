@@ -73,6 +73,7 @@ assert_model() {
 # ECO tier (sonnet): planning + coding execute against the MAX brief.
 assert_model agents/planner.md sonnet
 assert_model agents/coder.md sonnet
+assert_model agents/somi.md sonnet
 # MAX tier (opus): front-load reasoning + fresh-eyes review.
 for a in discovery-analyst designer refactorer reviewer security-reviewer architecture-reviewer test-strategist; do
   assert_model "agents/$a.md" opus

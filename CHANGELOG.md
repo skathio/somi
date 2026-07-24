@@ -8,6 +8,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 _Nothing yet._
 
+## [2.2.0] — 2026-07-23 — feat: `somi` front-door agent for GitHub Copilot + shared routing skill
+
+**Minor — additive.** Removes GitHub Copilot's forced "which of SoMi's 9 agents do I need?"
+choice with one selectable default.
+
+- **New agent: `agents/somi.md`.** Per incoming message: proxies an explicit non-`/somi`
+  command, passes `/somi` through verbatim, or classifies free-form intent against the new
+  routing skill and carries the matched SoMi flow inline (adopt-inline — no sub-agent `Task`,
+  since Copilot has none). MAX flows (`/design`, `/discover`, `/atlas`) are routed to their direct
+  command rather than adopted under this agent's `sonnet` tier. Copilot-scoped by design;
+  Claude Code users are nudged to the direct commands, where this agent adds no value.
+- **New skill: `skills/somi-routing/SKILL.md`.** The canonical problem-shape → command
+  classification table, extracted from `commands/somi.md` and now shared by `/somi`'s Mode 2
+  and the new agent's classify step — one edit site instead of two that could drift. Indexed
+  in `docs/SKILLS.md`.
+- **`commands/somi.md`** — Mode 2 shrinks to reference the shared skill; Mode 1/Mode 2
+  user-facing behavior is unchanged.
+- **Docs** — `docs/AGENTS.md`, `docs/PLUGIN.md`, `docs/COMMANDS.md`, `docs/EXTENDING.md`
+  updated to reflect the new agent and the `somi` agent / `/somi` command coexistence.
+
+No migration action required — purely additive; no existing command, agent, hook, or rule
+changed behavior.
+
 ## [2.1.0] — 2026-07-16 — feat: reasoning-craft mindset kernel — executable detectors, not adjectives
 
 **Minor — additive.** Converts SoMi's craft guidance from adjectives ("direct, specific, brief")
