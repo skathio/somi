@@ -19,6 +19,33 @@
 // independent of the reminder gate (see main() — this independence is pinned by the fixture case
 // "nudge-fires-independent-of-suppressed-reminder").
 //
+// === THE TIER 1 / TIER 2 DIGEST SPLIT (D5, phase 1 iteration 1.2) ===============================
+//
+// D2 asks this hook to carry rules/CLAUDE.md's always-on digest into a consuming Claude Code
+// project — the only delivery path that reaches one (decisions.md#d2: plugin.json has no `rules`
+// key). An always-on floor and the state-change gate below want opposite behavior from the same
+// mechanism, so emission is split into two independent tiers rather than picking one:
+//
+//   Tier 1 — REMINDER_BODY, unconditional, every UserPromptSubmit turn, independent of the
+//   signature gate below (the same independence pattern the loose-end nudges already use).
+//
+//   Tier 2 — the full eleven-bullet digest, extracted at RUNTIME from rules/CLAUDE.md's
+//   `<!-- digest:start/end -->` markers (never hand-copied into this hook as a fourth drift-prone
+//   copy — decisions.md#d3), plus planHint/rdHint. Both hints STAY on Tier 2 rather than moving to
+//   Tier 1: they are themselves state-change signals (which plan/rd is active), so gating them
+//   here preserves their existing, pre-iteration behavior rather than making them newly
+//   always-on. Tier 2 rides the signature gate exactly as the old single-tier reminder did.
+//
+// Tier 2's bullets are read via pluginRoot() (hooks/lib/common.mjs), not assumed to live at this
+// repo's own path, because this hook also runs inside a CONSUMING project, where SoMi's rules/
+// lives inside the plugin's install directory, not at ./rules/... relative to the consumer's
+// project root. For the same reason, each bullet's trailing citation is rewritten to a bare
+// `` `NN` `` numeric code before injection (stripDigestCitations() below) rather than left as
+// whatever link form rules/CLAUDE.md's canonical file uses — an unmodified normalized link would
+// assert six paths that ENOENT in the consumer's context, on every gated turn (F19). Fails safe:
+// an unresolved pluginRoot(), or a rules/CLAUDE.md missing/malformed digest markers, silently
+// omits Tier 2 rather than throwing — Tier 1 still fires regardless (see buildTier2Digest()).
+//
 // === THE SIGNATURE-HASH GATE: what bash actually feeds sha256sum ================================
 //
 // bash's compute_signature() runs THREE independent `find ... -printf '%T@ %p\n' | sort |
@@ -153,7 +180,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readPayload, projectRoot, contextOutput, runHook } from '../lib/common.mjs';
+import { readPayload, projectRoot, pluginRoot, contextOutput, runHook } from '../lib/common.mjs';
 
 // bash: `grep -qiE '^[[:space:]]*<?in-progress>?[[:space:]]*$'` — WIDENED per THE
 // STATUS-DETECTION DECISION above: backtick added as a second optional wrap character alongside
@@ -181,10 +208,120 @@ const GIT_MAX_BUFFER = 10 * 1024 * 1024;
 
 const REMINDER_BODY =
   'somi is active. Reminders:\n' +
-  '- Follow rules/CLAUDE.md priorities: security > correctness > maintainability > performance > convenience.\n' +
+  // No `rules/...` path here, deliberately (F-35). This text is injected into a CONSUMING
+  // project's context, where SoMi's `rules/` lives inside the plugin install dir, not at
+  // `./rules/`. Naming the path asserted a file that ENOENTs there — the same defect class F14
+  // and F19 remove from Tier 2 — and D5 promoted this block from gated to EVERY turn, so the
+  // false assertion got louder. Stating the priority order directly needs no path at all. Keeping
+  // Tier 1 free of `rules/` is also what lets the Tier 2 assertion be a flat "no `rules/`".
+  '- Follow SoMi\'s priority order: security > correctness > maintainability > performance > convenience.\n' +
   '- Plan before coding non-trivial work. Code from the plan, not around it.\n' +
   '- Surface tradeoffs and shortcuts in plain text; never silently compromise.\n' +
   '- Hooks may deny dangerous bash, secret writes, protected paths, and unsanctioned dep installs — do not work around them.';
+
+// Markers pinned in rules/CLAUDE.md's own "Always-on digest" section so extraction never depends
+// on heading text staying stable — phase 2 iteration 2.2's generator consumes the same two
+// markers for its own targets (decisions.md#d5).
+const DIGEST_MARKER_RE = /<!-- digest:start -->\r?\n([\s\S]*?)\r?\n<!-- digest:end -->/;
+
+// Flattens a markdown link to its target, e.g. `[label](target)` -> `target` — the first half of
+// rewriting each bullet's trailing citation to a bare numeric code (see stripDigestCitations()
+// below). `.replace()` with a global regex resets its own lastIndex at the start of every call
+// (per spec), so reusing this module-level pattern across lines carries none of the
+// stateful-/g-regex hazard common.mjs's toRegExp()/matchesAny() guard against.
+const DIGEST_LINK_RE = /\[([^\]]*)\]\(([^)]*)\)/g;
+
+// Rewrites each physical line's trailing `(...)` citation to bare backtick-wrapped numeric
+// code(s): `(`00`)` stays `(`00`)`; `([rules/00-priorities.md](./rules/00-priorities.md))`
+// becomes `(`00`)`; `(`00`, `20`)` stays `(`00`, `20`)`. This is the required OUTPUT, not "strip
+// back to the parenthetical it wrapped" — the latter, applied to a markdown-link source, still
+// leaves a path assertion behind (F19: `(rules/00-priorities.md)` still ENOENTs in a consuming
+// project). Handles today's already-bare canonical form and phase 2 iteration 2.2's future
+// full-markdown-link form identically — a markdown link is flattened to its target text before
+// the numeric code is extracted, so this function doesn't need to know which form rules/CLAUDE.md
+// is currently in.
+function stripDigestCitations(block) {
+  return block
+    .split('\n')
+    .map((line) => {
+      // Match the trailing parenthetical on the ORIGINAL line — never on a pre-flattened copy
+      // (F-37). Flattening the whole line first and returning that copy from the reject paths meant
+      // any line the recognizer DECLINED still had its markdown links destroyed: a bullet reading
+      // `read [the security file](./rules/30-security-owasp.md) before touching a sink` was injected
+      // as `read ./rules/30-security-owasp.md before touching a sink` — F19's exact output reached
+      // through the opposite door, and via the `!citationMatch` branch, which has nothing to do with
+      // citations at all. The mutation is now confined to the citation: links are flattened ONLY
+      // inside the captured body, and every reject path returns `line` byte-identical.
+      //
+      // One level of nesting is tolerated so a full markdown-link citation —
+      // `([rules/00-priorities.md](./rules/00-priorities.md))`, the form phase 2 iteration 2.2
+      // normalizes to — is captured whole rather than truncated at its inner `)`.
+      const citationMatch = line.match(/\((?:[^()]|\([^()]*\))*\)\s*$/);
+      if (!citationMatch) return line; // no trailing parenthetical on this physical line — a
+      // bullet's citation sits on its own word-wrapped continuation line, not every line has one.
+      // Returns `line`, NOT a flattened copy: a line with no citation is none of this function's
+      // business, whatever else it contains.
+      const inner = citationMatch[0].slice(1, -1); // drop the outer parens
+      const flattenedBody = inner.replace(DIGEST_LINK_RE, (_m, label, target) => target || label);
+      // ANCHORED recognizer (F-35 fix). The previous form scanned the parenthetical unanchored
+      // for any two-digit run, so ANY line-final parenthetical containing two consecutive digits
+      // became a rule citation: a bullet ending `(ISO 27001)` was rewritten to (`27`, `00`) —
+      // fabricating a citation to two rule files and delivering it to the model as fact. Phase 4
+      // iteration 4.2 rewraps and trims this exact block, which is precisely when a non-citation
+      // parenthetical lands at end-of-line.
+      //
+      // The whole body must now BE a citation list — comma-separated `NN` / `` `NN` `` /
+      // `rules/NN-*.md` / `./rules/NN-*.md` — or the line is left untouched. Partial matches no
+      // longer leak: `ISO 27001` fails because `27001` is not a two-digit item.
+      const body = flattenedBody.trim();
+      const ITEM_RE = /^(?:`?(\d{2})`?|\.?\/?rules\/(\d{2})-[A-Za-z0-9-]+\.md)$/;
+      const items = body === '' ? [] : body.split(',').map((s) => s.trim());
+      const codes = [];
+      let allItemsAreCitations = items.length > 0;
+      for (const item of items) {
+        const m = ITEM_RE.exec(item);
+        if (!m) {
+          allItemsAreCitations = false;
+          break;
+        }
+        const code = m[1] ?? m[2];
+        if (!codes.includes(code)) codes.push(code);
+      }
+      // Not a citation list — return `line` UNCHANGED (F-37). A rejected line keeps its original
+      // markdown links intact. If such a link points into `rules/`, a digest-wide
+      // `excludes: "rules/"` assertion goes red and forces the digest's author to use the accepted
+      // grammar rather than having the link silently mangled into a bare path. Loud beats silent.
+      if (!allItemsAreCitations || codes.length === 0) return line;
+      const rewritten = `(${codes.map((c) => `\`${c}\``).join(', ')})`;
+      return line.slice(0, citationMatch.index) + rewritten;
+    })
+    .join('\n');
+}
+
+// Tier 2's content, read fresh from rules/CLAUDE.md at runtime rather than hand-copied into this
+// hook as a fourth drift-prone copy (decisions.md#d3). Fails safe at every step — an unresolved
+// pluginRoot(), an unreadable file, or missing/malformed digest markers all return '' (Tier 2
+// silently omitted) rather than throwing; Tier 1 (REMINDER_BODY) fires regardless, in main().
+function buildTier2Digest() {
+  const base = pluginRoot();
+  if (!base) return '';
+  let content;
+  try {
+    content = fs.readFileSync(path.join(base, 'rules', 'CLAUDE.md'), 'utf8');
+  } catch {
+    return '';
+  }
+  const match = DIGEST_MARKER_RE.exec(content);
+  if (!match) return '';
+  return stripDigestCitations(match[1]);
+}
+
+// The single, durable pointer that replaces the per-bullet paths stripDigestCitations() removes.
+// Appended by main() AFTER planHint/rdHint so it is genuinely trailing (F-33): building it into
+// buildTier2Digest() put it before the hints, leaving a hint rendered as a dangling bullet hanging
+// off a prose sentence — readable as an elaboration of "load the rules skill" rather than as the
+// work-item notice it is.
+const RULES_SKILL_POINTER = 'For full detail on any of these, load the `rules` skill.';
 
 function isDirectory(p) {
   try {
@@ -412,10 +549,23 @@ function main() {
   const rdHint = computeRdHint(root);
   const nudges = computeNudges(root);
 
-  const parts = [];
+  // Tier 1: unconditional, every turn, independent of emitReminder (D5).
+  const parts = [REMINDER_BODY];
+
+  // Tier 2: gated exactly as the old single-tier reminder was. planHint/rdHint ride Tier 2 (see
+  // the header note above) — concatenated the same way REMINDER_BODY+hints were joined before
+  // this split, then any leading newline left over from an empty/omitted digest is trimmed so a
+  // fail-safe-omitted Tier 2 with a present hint doesn't emit a stray blank line.
   if (emitReminder) {
-    parts.push(`${REMINDER_BODY}${planHint}${rdHint}`);
+    const tier2Digest = buildTier2Digest();
+    let tier2Block = `${tier2Digest}${planHint}${rdHint}`.replace(/^\n+/, '');
+    // The pointer goes last, after the hints (F-33) — and only when a digest was actually
+    // extracted, so the fail-safe path (missing/marker-less rules/CLAUDE.md) doesn't advertise a
+    // skill for content it just failed to deliver.
+    if (tier2Digest !== '') tier2Block += `\n\n${RULES_SKILL_POINTER}`;
+    if (tier2Block !== '') parts.push(tier2Block);
   }
+
   if (nudges.length > 0) {
     let nudgeBlock = 'somi loose-end check:';
     for (const n of nudges) {
@@ -424,9 +574,10 @@ function main() {
     parts.push(nudgeBlock);
   }
 
-  if (parts.length > 0) {
-    contextOutput('UserPromptSubmit', parts.join('\n\n'));
-  }
+  // Tier 1 is unconditional, so `parts` is never empty — the old `if (parts.length > 0)` guard
+  // became dead code with D5's split and is dropped rather than left as a false suggestion that
+  // a silent turn is still reachable.
+  contextOutput('UserPromptSubmit', parts.join('\n\n'));
 }
 
 runHook(main);

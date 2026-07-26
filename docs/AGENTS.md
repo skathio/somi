@@ -165,7 +165,7 @@ Invoke directly via `/test-strategy`, or via `/review` when the diff has mock-he
 e2e-only-on-risky-code symptoms.
 
 - **Model**: `opus`.
-- **Canonical knowledge**: the [`test-strategy`](../skills/test-strategy/SKILL.md) skill — skill wins
+- **Canonical knowledge**: the [`testing-playbook`](../skills/testing-playbook/SKILL.md) skill — skill wins
   on divergence.
 
 ### refactorer

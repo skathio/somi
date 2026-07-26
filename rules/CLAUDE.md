@@ -30,6 +30,7 @@ This digest is **always in force** — it is the compressed form of the numbered
 act correctly on the common path without loading all of them. Each line points at the file that holds
 the full treatment; read that file when you **enter its domain** (see "How to load the rules" below).
 
+<!-- digest:start -->
 - **Priorities:** security > correctness > maintainability > convenience. Compromise on the lower
   only to honor the higher, and say so. (`00`)
 - **Honesty:** identify uncertainty; verify before claiming (read the file, grep the symbol, run the
@@ -61,6 +62,7 @@ the full treatment; read that file when you **enter its domain** (see "How to lo
   what the reader does). At most one metaphor, only if it lets the reader predict something new —
   otherwise name the single axis the decision turns on. As stakes rise, get blunter, not more
   hedged. (`50`)
+<!-- digest:end -->
 
 ## What composes this ruleset
 
@@ -173,7 +175,7 @@ Skills under `skills/` are on-demand expert packs. Pull one in when the work cle
 - Writing/critiquing requirements or design docs (BRD/SRS/FRD/SDD/TDD) → **`requirements-engineering`**
 - Touching authentication, sessions, input validation, deserialization → **`owasp-defense`**
 - Designing a module, naming a class, deciding what a function should know → **`solid-principles`**, **`clean-code`**
-- Deciding what to test, how to test, whether to mock → **`test-strategy`**
+- Deciding what to test, how to test, whether to mock → **`testing-playbook`**
 - Adding/changing an HTTP/gRPC endpoint → **`api-design`**
 - Adding logging, metrics, tracing → **`observability`**
 - Adding a new external integration or attack surface → **`threat-modeling`**

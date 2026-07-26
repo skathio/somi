@@ -1,5 +1,5 @@
 ---
-name: test-strategy
+name: testing-playbook
 description: Use when deciding what to test, at what level, and how. Distinguishes risk-driven coverage from coverage-worship. Covers unit vs integration vs e2e choices, mocking policy, determinism, and what to intentionally not cover.
 ---
 

@@ -26,6 +26,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Thrown by denyPretool() (and available to any hook that needs an early,
 // non-local exit) to unwind to the hook's own top-level handler — mirrors
@@ -84,6 +85,55 @@ export function projectRoot() {
   let base = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   if (base.includes('${')) base = process.cwd();
   return base;
+}
+
+// plugin_root() — the directory containing SoMi's OWN shipped content (rules/, skills/, etc.),
+// as distinct from projectRoot() above (the CONSUMING project's root). A hook needs this to read
+// rules/CLAUDE.md's digest regardless of whether SoMi is running as an installed plugin, a
+// vendored copy, or this repo's own dev/test checkout (decisions.md#d5,
+// phases/01-restore-delivery.md iteration 1.2).
+//
+// Resolution order, EACH candidate existence-validated, not merely presence-checked — accepted
+// only if `<candidate>/rules/CLAUDE.md` is actually readable, else the search continues to the
+// next candidate:
+//   (a) CLAUDE_PLUGIN_ROOT — Claude Code's documented, confirmed-exported plugin-install path.
+//   (b) SOMI_VENDOR_ROOT — a vendored-install convention, set via `.claude/settings.json`'s `env`
+//       block. This repo's OWN `.claude/settings.json` sets it to a path
+//       (`${CLAUDE_PROJECT_DIR}/.claude/plugins/somi`) that does not exist here — a
+//       presence-only chain would accept this branch, find nothing inside it, and never reach
+//       (c), silently delivering an empty digest in this repo's own dogfooding sessions while
+//       appearing to work everywhere validate.sh's checks pass. Existence-validation is exactly
+//       what prevents that.
+//   (c) import.meta.url, walked up two levels — this file lives at
+//       `<plugin-root>/hooks/lib/common.mjs`, the same relative-import pattern every hook port
+//       already uses for '../lib/common.mjs' itself. The final fallback; what this repo's own
+//       dev/test invocations (including tests/hooks/run.sh) actually exercise today.
+//
+// Same unexpanded-`${...}`-variable guard as projectRoot()/auditLogPath() above, applied to EACH
+// env-var candidate independently — a host can fail to expand either one, or both, independent
+// of the other.
+//
+// Returns null if no candidate resolves (not expected in practice — (c) always resolves inside a
+// real checkout of this repo — but callers must not assume a non-null result; see
+// inject-workflow-context.mjs's buildTier2Digest(), which fails safe to an empty Tier 2 rather
+// than throwing).
+export function pluginRoot() {
+  const candidates = [];
+  const claudePluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
+  if (claudePluginRoot && !claudePluginRoot.includes('${')) candidates.push(claudePluginRoot);
+  const somiVendorRoot = process.env.SOMI_VENDOR_ROOT;
+  if (somiVendorRoot && !somiVendorRoot.includes('${')) candidates.push(somiVendorRoot);
+  const here = path.dirname(fileURLToPath(import.meta.url)); // <plugin-root>/hooks/lib
+  candidates.push(path.join(here, '..', '..'));
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(path.join(candidate, 'rules', 'CLAUDE.md')).isFile()) return candidate;
+    } catch {
+      // ENOENT, EACCES, or a non-file at that path — not a usable candidate; try the next one.
+    }
+  }
+  return null;
 }
 
 // Read the full JSON payload from stdin once, parse it. Tolerates empty or

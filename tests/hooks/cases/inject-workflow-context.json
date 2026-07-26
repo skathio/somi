@@ -5,21 +5,22 @@
     {
       "name": "emits-reminder-on-first-turn-absent-signature",
       "_note": "No .somi/plans, .somi/reviews, .somi/rd, or git repo staged at all — a genuinely fresh project. No prior state file exists in this case's throwaway CLAUDE_PROJECT_DIR/.somi/somi-state/, so LAST_SIG is empty and EMIT_REMINDER is forced to \"yes\" regardless of content. This is the baseline 'signature absent -> emission happens' proof the phase spec asks for, and the pairing partner for the two signature-gate cases below (same empty staging, but those add \"prime\").",
-      "expect_context": "somi is active. Reminders:\n- Follow rules/CLAUDE.md priorities: security > correctness > maintainability > performance > convenience.",
+      "expect_context": "somi is active. Reminders:\n- Follow SoMi's priority order: security > correctness > maintainability > performance > convenience.",
       "expect_context_excludes": "loose-end check",
       "payload": {}
     },
     {
       "name": "signature-gate-suppresses-unchanged-repeat",
-      "_note": "Same (empty) staging as the case above, plus \"prime\": true — the runner invokes the hook once first (writing .somi/somi-state/last-context-signature naturally, via the hook's own code, not a hand-computed hash), discards that output, then runs again for the real assertion. Nothing changes between the two invocations, so the second call's computed signature equals what the first call just persisted -> EMIT_REMINDER=\"no\" -> the PARTS array stays empty (no nudges either, no git repo staged) -> no hookSpecificOutput at all. This is the core 'no re-emission when mtimes are unchanged since the last emission' proof the phase spec requires.",
-      "expect_no_context": true,
+      "_note": "CHANGED at phase 1 iteration 1.2 (D5's Tier 1/Tier 2 split): previously asserted \"expect_no_context\": true. Under Tier 1 (today's REMINDER_BODY) now unconditional, the hook can never again emit nothing at all — the PROPERTY this case exists to prove (no re-emission of the GATED content when nothing changed since the last turn) survives, but the assertion pinning it does not. Same (empty) staging as the case above, plus \"prime\": true, so the second call's signature equals what priming just persisted -> EMIT_REMINDER=\"no\" -> Tier 2 (the full digest, gated) is omitted, while Tier 1 still fires unconditionally. Retargeted: assert the Tier 1 floor text is present (proving the always-on floor really is always-on) AND a Tier-2-only substring (\"Reasoning craft:\", unique to the full digest — see the positive companion assertion on full-digest-fires-on-first-turn below, which keeps this negative assertion from going silently vacuous per F15) is absent (proving the gate still suppresses Tier 2 on an unchanged repeat).",
+      "expect_context": "somi is active. Reminders:",
+      "expect_context_excludes": "Reasoning craft:",
       "prime": true,
       "payload": {}
     },
     {
       "name": "signature-gate-reemits-when-state-changes",
-      "_note": "The required companion to the suppression case above, proving it is not vacuously green: identical empty baseline and identical \"prime\": true, but \"files_after_prime\" stages a brand-new .somi/reviews/probe/note.md between the priming call and the real one. The reviews_state segment of the hook's signature (find .somi/reviews -maxdepth 3 -name '*.md' | sort | sha256sum) now differs from what priming persisted, so the real call's LAST_SIG != CURRENT_SIG and the reminder is emitted again — proving the suppression case above is actually gating on the signature, not on some unrelated always-suppress condition.",
-      "expect_context": "somi is active. Reminders:",
+      "_note": "The required companion to the suppression case above, proving it is not vacuously green: identical empty baseline and identical \"prime\": true, but \"files_after_prime\" stages a brand-new .somi/reviews/probe/note.md between the priming call and the real one. The reviews_state segment of the hook's signature (find .somi/reviews -maxdepth 3 -name '*.md' | sort | sha256sum) now differs from what priming persisted, so the real call's LAST_SIG != CURRENT_SIG and Tier 2 is emitted again.\n\nRETARGETED at iteration 1.2 pass 2 (F-30). This case previously asserted only \"somi is active. Reminders:\" — Tier 1 text, which D5 made UNCONDITIONAL, so the assertion could never fail and the case went silently vacuous. Measured: deleting the `|| lastSig !== currentSig` half of the gate (Tier 2 never re-fires on a state change) left the whole suite green on the 1.2 diff, while the identical mutation against a `git archive HEAD` copy turned this case red — i.e. this iteration REGRESSED a guarantee the suite previously held. Now asserts a Tier-2-only substring, so it fails closed if the state-change branch of the gate is ever broken. This is also scope point 7's required 'digest fires on a state-change turn' half (full-digest-fires-on-first-turn covers the first-turn half).",
+      "expect_context": "Reasoning craft:",
       "prime": true,
       "files_after_prime": {
         ".somi/reviews/probe/note.md": "throwaway review note used only to change the reviews_state hash\n"
@@ -112,14 +113,119 @@
     },
     {
       "name": "nudge-fires-independent-of-suppressed-reminder",
-      "_note": "Combines the signature-gate mechanism with a nudge to pin a subtle, easy-to-regress interaction: NUDGES are computed unconditionally every call, while the reminder block (with PLAN_HINT/RD_HINT inside it) is gated on EMIT_REMINDER alone — the two are independent branches in the same PARTS array, not one gated by the other. \"prime\" establishes a git repo with no loose ends yet (first call: absent signature, emits the plain reminder, discarded); \"files_after_prime\" then lands an untracked scratch file with the signature-relevant state (.somi/plans|reviews|rd) completely unchanged, so the real call's reminder is suppressed exactly as in signature-gate-suppresses-unchanged-repeat, yet the loose-end nudge still fires and is the ONLY thing in the output — a naive port that nested the nudge check inside the same `if EMIT_REMINDER` branch as the reminder would silently drop end-of-turn nudges on every suppressed turn, a real regression this case is designed to catch.",
+      "_note": "CHANGED at phase 1 iteration 1.2 (D5's Tier 1/Tier 2 split): previously asserted \"expect_context_excludes\": \"somi is active. Reminders:\" to prove the reminder stayed suppressed while a nudge fired. That substring (Tier 1) is now always present, so the old assertion is unmeetable as worded — retargeted to the Tier-2-only substring instead, which keeps proving the same property this case exists for. Combines the signature-gate mechanism with a nudge to pin a subtle, easy-to-regress interaction: NUDGES are computed unconditionally every call, while Tier 2 (the full digest, with PLAN_HINT/RD_HINT inside it) is gated on EMIT_REMINDER alone, and Tier 1 (REMINDER_BODY) is unconditional — three independent branches in the same PARTS array, none gated by another. \"prime\" establishes a git repo with no loose ends yet (first call: absent signature, Tier 1 + Tier 2 both emit, discarded); \"files_after_prime\" then lands an untracked scratch file with the signature-relevant state (.somi/plans|reviews|rd) completely unchanged, so the real call's Tier 2 is suppressed exactly as in signature-gate-suppresses-unchanged-repeat (Tier 1 still fires, per D5), yet the loose-end nudge still fires — a naive port that nested the nudge check inside the same `if EMIT_REMINDER` branch as Tier 2 would silently drop end-of-turn nudges on every suppressed turn, a real regression this case is designed to catch.",
       "expect_context": "Detected scratch / .bak files in working tree.",
-      "expect_context_excludes": "somi is active. Reminders:",
+      "expect_context_excludes": "Reasoning craft:",
       "setup_git": true,
       "prime": true,
       "files_after_prime": {
         "scratch_debug.txt": "leftover debug output\n"
       },
+      "payload": {}
+    },
+    {
+      "name": "full-digest-fires-on-first-turn",
+      "_note": "NEW at phase 1 iteration 1.2 (F15's positive companion assertion). The two retargeted cases above assert \"Reasoning craft:\" is ABSENT, which is true only by virtue of that bullet's current absence — vacuously satisfiable if a later phase (phase 4, most plausibly: longest and newest bullet, the likeliest trim target) ever trims or renames it. THIS case is the one that would actually go red if that happened: first turn, absent signature, no .somi/plans|reviews|rd staged, no CLAUDE_PLUGIN_ROOT/SOMI_VENDOR_ROOT set, so pluginRoot() falls to its import.meta.url fallback and reads THIS repo's own real, live rules/CLAUDE.md. Asserts the Reasoning craft bullet is present (Tier 2 genuinely fired via the real digest, not a stale/frozen copy). Sanity-checked per the phase's own mutation-check requirement: temporarily deleting the Reasoning craft bullet from rules/CLAUDE.md made this case fail loudly, then restoring it made the suite green again — recorded in diary.md, not just asserted here.\n\nNOTE CORRECTED at pass 2 (F-32): this note previously claimed 'and the trailing pointer line is present', which it did not assert — its only assertion was the Reasoning craft substring. Measured: deleting the pointer append left the whole suite green. The pointer is load-bearing (scope point 4 makes it the single replacement for the per-bullet paths that same point strips), so it now has its own dedicated case below — tier2-pointer-is-appended-and-trailing — rather than an unasserted claim in prose here.",
+      "expect_context": "Reasoning craft:",
+      "payload": {}
+    },
+    {
+      "name": "tier2-pointer-is-appended-and-trailing",
+      "_note": "NEW at pass 2 (F-32 + F-33). Two properties, neither previously covered by any assertion.\n\n(1) F-32 — the rules-skill pointer exists at all. Measured before this case: deleting the append from buildTier2Digest() left all 130 fixtures green, while two other cases' _notes claimed the pointer was proven present. It is what replaces the per-bullet path assertions stripDigestCitations() removes, so without it Tier 2 strips citations to bare codes and offers no route to the full text.\n\n(2) F-33 — the pointer is genuinely LAST, after any plan/rd hint. The original code appended it inside buildTier2Digest(), then main() concatenated planHint/rdHint AFTER it, so a firing hint rendered as a dangling bullet hanging off a prose sentence — readable as an elaboration of 'load the rules skill' rather than as the work-item notice it is. Under HEAD that hint rendered as the fifth bullet of the Reminders list, so this was a real rendering regression, not merely cosmetic.\n\nStages an in-progress work item so planHint FIRES, then asserts the hint and the pointer appear in that order via a single contiguous expect_context spanning both — which fails if the pointer moves back ahead of the hint. First turn (absent signature) so Tier 2 is guaranteed to render.",
+      "expect_context": "update `progress.md` / `diary.md` as work proceeds.\n\nFor full detail on any of these, load the `rules` skill.",
+      "files": {
+        ".somi/plans/demo-pointer/progress.md": "## Status\n\n`in-progress`\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "prose-markdown-link-on-a-rejected-line-survives-untouched",
+      "_note": "NEW at pass 3 (F-37). Link flattening used to run on the WHOLE line before the recognizer, and both reject branches returned that flattened copy — so any line the recognizer DECLINED still had its markdown links destroyed. Measured: a bullet reading `read [the security file](./rules/30-security-owasp.md) before touching a sink` was injected as `read ./rules/30-security-owasp.md before touching a sink` — F19's exact output (a bare ENOENT path in a consuming project) reached through the opposite door, and via the `!citationMatch` branch, which has nothing to do with citations. The function's name and doc comment promised 'rewrites each line's trailing citation'; it in fact rewrote every markdown link on every line it touched, including lines it had explicitly decided not to handle.\n\nWIDENED at pass 4: the first version staged only a prose-link bullet with no trailing parenthetical, which exercises just ONE of the function's three flattening paths — the `!citationMatch` early return. Measured: restoring the flattened-copy leak on the OTHER reject branch, and separately splicing the SUCCESS path's prefix from a flattened copy, each left all 134 fixtures green. Both reproduce F19's exact output (bare `./rules/NN-*.md` injected into Tier 2) and neither would have turned the suite red.\n\nThree adjacent bullets now cover all three paths in one contiguous assertion: (1) prose link, NO parenthetical -> `!citationMatch` reject; (2) prose link + a REJECTED citation `(ISO 27001)` -> `!allItemsAreCitations` reject; (3) prose link + an ACCEPTED citation `` (`40`) `` -> success path, where the prefix must be spliced from the ORIGINAL line so the in-prose link survives while the citation rewrites. The assertion spans all three lines, so any of the three leaks turns this case red.\n\nNote on an earlier overstatement: per-line (rather than block-level all-or-nothing) rejection is pinned by `plugin-root-env-resolves-and-strips-links`, not by this case — an earlier version of this note credited it here. Bullet (3) now makes the claim true of this case as well, since it proves an accepted and a rejected bullet coexist correctly in one block.",
+      "expect_context": "- **Security:** read [the security file](./rules/30-security-owasp.md) before touching a sink\n- **Compliance:** read [the guide](./rules/00-priorities.md) then apply (ISO 27001)\n- **Testing:** see [the tests file](./rules/40-engineering-practices.md) for detail. (`40`)",
+      "env": {
+        "CLAUDE_PLUGIN_ROOT": "{{CASE_DIR}}/prose-link-root"
+      },
+      "files": {
+        "prose-link-root/rules/CLAUDE.md": "# Engineering OS — Global Rules\n\n## Always-on digest\n\nThis digest is always in force for this scratch fixture.\n\n<!-- digest:start -->\n- **Security:** read [the security file](./rules/30-security-owasp.md) before touching a sink\n- **Compliance:** read [the guide](./rules/00-priorities.md) then apply (ISO 27001)\n- **Testing:** see [the tests file](./rules/40-engineering-practices.md) for detail. (`40`)\n<!-- digest:end -->\n\n## rest\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "non-citation-parenthetical-is-not-rewritten-as-a-rule-code",
+      "_note": "NEW at pass 2 (F-34). stripDigestCitations()'s recognizer previously scanned the line-final parenthetical UNANCHORED for any two-digit run, so any such parenthetical became a rule citation. Measured against a staged digest: a bullet ending `(ISO 27001)` was injected as `(`27`, `00`)` — a FABRICATED citation to two rule files, delivered into the model's context as fact. The function already had the right escape hatch (codes.length === 0 -> leave untouched); the recognizer was simply too loose to ever reach it.\n\nNot hypothetical for this work item: phase 4 iteration 4.2 rewraps and trims this exact block, which is precisely when a non-citation parenthetical most plausibly lands at end-of-line.\n\nThe recognizer is now anchored — the whole parenthetical body must BE a comma-separated citation list (`NN` / bare NN / (./)rules/NN-*.md) or the line is returned untouched. `ISO 27001` fails because `27001` is not a two-digit item. Asserts the bullet survives VERBATIM and that no fabricated backticked code appears.",
+      "expect_context": "follow the control set (ISO 27001)",
+      "expect_context_excludes": "(`27`",
+      "env": {
+        "CLAUDE_PLUGIN_ROOT": "{{CASE_DIR}}/iso-plugin-root"
+      },
+      "files": {
+        "iso-plugin-root/rules/CLAUDE.md": "# Engineering OS — Global Rules\n\n## Always-on digest\n\nThis digest is always in force for this scratch fixture.\n\n<!-- digest:start -->\n- **Compliance:** follow the control set (ISO 27001)\n- **Priorities:** security first. (`00`)\n<!-- digest:end -->\n\n## rest\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "plan-hint-rides-tier2-and-is-suppressed-when-gated",
+      "_note": "NEW at pass 2 (F-36). Scope point 3 deliberately pins planHint/rdHint to Tier 2 — 'preserves their existing behavior unchanged rather than introducing a new, unrequested always-on behavior' — and D5's tier semantics turn on it. Measured before this case: moving both hints into Tier 1's part and removing them from Tier 2 left all 130 fixtures green, so nothing stopped a later refactor flipping the pin silently. The discriminating case did not exist because no fixture combined a SUPPRESSED turn with a staged active plan: the six existing hint cases all run on a first turn, where Tier 2 fires anyway and so cannot distinguish the tiers.\n\nStages the work item in \"files\" (present BEFORE priming, so the signature priming persists already accounts for it and the real call sees LAST_SIG == CURRENT_SIG -> Tier 2 suppressed), with \"prime\": true. Tier 1 must still fire; the hint must NOT appear. If the hints were moved to Tier 1, this case goes red.",
+      "expect_context": "somi is active. Reminders:",
+      "expect_context_excludes": "Active work item",
+      "prime": true,
+      "files": {
+        ".somi/plans/demo-gated/progress.md": "## Status\n\n`in-progress`\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "tier2-omitted-when-digest-markers-malformed",
+      "_note": "NEW at phase 1 iteration 1.2 — the fail-safe path the phase spec requires: 'a missing/malformed rules/CLAUDE.md fails safe (Tier 1 floor still fires, Tier 2 silently omitted, no crash)'. CLAUDE_PLUGIN_ROOT points at a scratch directory whose rules/CLAUDE.md EXISTS and IS readable (so pluginRoot()'s existence-validation accepts it as the resolved candidate and does not fall through to any later candidate) but carries no <!-- digest:start/end --> markers at all — the exact 'malformed' case distinct from the 'missing entirely' case covered by the pluginRoot()-branch cases below (existence-validation only guarantees the FILE is present and readable, never that its content parses; content-level failure is buildTier2Digest()'s own responsibility, checked here). Asserts Tier 1 still fires (the always-on floor is unaffected by Tier 2's source being broken) and Tier 2 is silently absent (no 'Reasoning craft:', which would only be present via a fallthrough to the real repo digest that must NOT happen here) — and, since the runner itself fails any case whose hook process exits non-zero, a passing case is also proof the malformed input did not crash the hook.",
+      "expect_context": "somi is active. Reminders:",
+      "expect_context_excludes": "Reasoning craft:",
+      "env": {
+        "CLAUDE_PLUGIN_ROOT": "{{CASE_DIR}}/broken-plugin-root"
+      },
+      "files": {
+        "broken-plugin-root/rules/CLAUDE.md": "# Engineering OS — Global Rules\n\nNo digest markers anywhere in this file — simulates a malformed rules/CLAUDE.md that pluginRoot() still accepts (the file exists and is readable) but that Tier 2 extraction cannot parse.\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "plugin-root-env-resolves-and-strips-links",
+      "_note": "NEW at phase 1 iteration 1.2 — pluginRoot() branch (a): CLAUDE_PLUGIN_ROOT set and resolves (the plugin-install path). The staged scratch rules/CLAUDE.md's one bullet carries a FULL markdown-link citation (`([rules/00-priorities.md](./rules/00-priorities.md))`), matching the form phase 2 iteration 2.2 will normalize the canonical file to — proving stripDigestCitations() actually rewrites that form, not just today's already-bare one.\n\nASSERTION STRENGTHENED at pass 2 (F-31). The previous exclude — the exact unstripped-link fragment — was measured NON-DISCRIMINATING: mutating stripDigestCitations() to flatten the link to its target and stop injects `(./rules/00-priorities.md)`, six ENOENT path assertions in a consuming project (the plan's verbatim failure mode: 'still a path assertion, merely no longer clickable'), and the whole suite stayed GREEN. It was strictly weaker than the 'no [...](...) syntax' check the plan had already rejected as insufficient.\n\nIt now uses the plan's ORIGINAL F19 wording — a flat 'no rules/ substring anywhere' — which became satisfiable this pass once F-35 removed the `rules/CLAUDE.md` path from REMINDER_BODY. That was the real blocker: the acceptance line was never wrong, it was blocked by a second instance of the very defect it targets. The positive assertion is now the full rewritten tail including the bare-code citation, so a partial strip (which leaves a path where `(`00`)` belongs) fails on BOTH assertions.",
+      "expect_context": "proves the CLAUDE_PLUGIN_ROOT branch resolved. (`00`)",
+      "expect_context_excludes": "rules/",
+      "env": {
+        "CLAUDE_PLUGIN_ROOT": "{{CASE_DIR}}/plugin-install"
+      },
+      "files": {
+        "plugin-install/rules/CLAUDE.md": "# Engineering OS — Global Rules\n\n## Always-on digest\n\nThis digest is always in force for this scratch fixture.\n\n<!-- digest:start -->\n- **Plugin-root marker:** proves the CLAUDE_PLUGIN_ROOT branch resolved. ([rules/00-priorities.md](./rules/00-priorities.md))\n<!-- digest:end -->\n\n## rest\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "vendor-root-env-resolves-when-plugin-root-absent",
+      "_note": "NEW at phase 1 iteration 1.2 — pluginRoot() branch (b): SOMI_VENDOR_ROOT set and resolves, with CLAUDE_PLUGIN_ROOT absent (the vendored-install path; run.sh unsets any ambient CLAUDE_PLUGIN_ROOT/SOMI_VENDOR_ROOT by default — see the runner's env sanitization — so this case's absence of CLAUDE_PLUGIN_ROOT is genuine, not accidental). Asserts the synthetic bullet fired and the real repo's 'Reasoning craft:' bullet did NOT (confirming this branch, not the import.meta.url fallback, supplied Tier 2's content).",
+      "expect_context": "Vendor-root marker",
+      "expect_context_excludes": "Reasoning craft:",
+      "env": {
+        "SOMI_VENDOR_ROOT": "{{CASE_DIR}}/vendor-install"
+      },
+      "files": {
+        "vendor-install/rules/CLAUDE.md": "# Engineering OS — Global Rules\n\n## Always-on digest\n\nThis digest is always in force for this scratch fixture.\n\n<!-- digest:start -->\n- **Vendor-root marker:** proves the SOMI_VENDOR_ROOT branch resolved when CLAUDE_PLUGIN_ROOT is absent. (`00`)\n<!-- digest:end -->\n\n## rest\n"
+      },
+      "payload": {}
+    },
+    {
+      "name": "plugin-root-env-set-but-unreadable-falls-through",
+      "_note": "NEW at phase 1 iteration 1.2 — the existence-validation case the whole correction (decisions.md#d5's F2 correction note) exists to prove: CLAUDE_PLUGIN_ROOT is SET but points at a path with no rules/CLAUDE.md underneath it at all (nothing staged there), and SOMI_VENDOR_ROOT is absent. A presence-only chain would accept CLAUDE_PLUGIN_ROOT's value, find nothing, and stop there — silently omitting Tier 2 exactly as this repo's own '.claude/settings.json' would trigger for SOMI_VENDOR_ROOT today. Asserts Tier 2 still fires (via the import.meta.url fallback, reading the real repo digest) — proving the bad candidate was skipped, not accepted.",
+      "expect_context": "Reasoning craft:",
+      "env": {
+        "CLAUDE_PLUGIN_ROOT": "{{CASE_DIR}}/nonexistent-plugin-root"
+      },
+      "payload": {}
+    },
+    {
+      "name": "neither-plugin-root-nor-vendor-root-set-falls-back-to-import-meta-url",
+      "_note": "NEW at phase 1 iteration 1.2 — pluginRoot() branch (c), the final fallback: neither CLAUDE_PLUGIN_ROOT nor SOMI_VENDOR_ROOT is set at all (distinct from the previous case, which has CLAUDE_PLUGIN_ROOT set-but-broken; this one has no env override declared, and the runner's sanitized environment guarantees neither var leaks in ambiently — see run.sh's env sanitization). This is what this repo's own dev/test invocations (including this very test suite) actually exercise for every OTHER case in this file that doesn't declare CLAUDE_PLUGIN_ROOT/SOMI_VENDOR_ROOT. Asserts Tier 2 fires via the real repo digest.",
+      "expect_context": "Reasoning craft:",
       "payload": {}
     }
   ]

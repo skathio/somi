@@ -58,11 +58,13 @@
 #     mtimes changes deterministically, with no sleep/timing dependency,
 #     rather than relying on touching an existing file's mtime). Only
 #     meaningful alongside "prime".
-#   - A payload may reference the literal token "{{CASE_DIR}}", substituted
-#     with the case's absolute throwaway-dir path before the hook runs — for
-#     hooks that check real absolute paths (e.g. lint-changed-files.sh's
-#     `[[ -f "$PATH_INPUT" ]]`), so a case can point at a file staged via
-#     "files" without hardcoding a path the hook's own CWD wouldn't resolve.
+#   - A payload, or a value inside "env", may reference the literal token
+#     "{{CASE_DIR}}", substituted with the case's absolute throwaway-dir path
+#     before the hook runs — for hooks that check real absolute paths (e.g.
+#     lint-changed-files.sh's `[[ -f "$PATH_INPUT" ]]`, or
+#     inject-workflow-context.mjs's pluginRoot() reading CLAUDE_PLUGIN_ROOT /
+#     SOMI_VENDOR_ROOT), so a case can point at a file staged via "files"
+#     without hardcoding a path the hook's own CWD wouldn't resolve.
 #   - "expect_context": asserted as a substring of
 #     `.hookSpecificOutput.additionalContext` — for PostToolUse/UserPromptSubmit/
 #     SessionStart hooks that surface context instead of a permission decision.
@@ -99,10 +101,13 @@
 # instead.
 #
 # The runner pipes each payload into the script under a sanitized environment
-# (session opt-ins unset unless the case sets them; SOMI_AUDIT_LOG defaults to
-# a per-case throwaway file, "$case_dir/audit.log", so audit writes never leak
-# across cases; CLAUDE_PROJECT_DIR points at the same throwaway per-case dir,
-# into which the optional `config` object is written as .somi/config.json)
+# (session opt-ins unset unless the case sets them; CLAUDE_PLUGIN_ROOT and
+# SOMI_VENDOR_ROOT are also unset unless the case sets them — otherwise
+# whatever's ambient in the environment running `npm test` would leak into
+# pluginRoot()'s fixture cases, phase 1 iteration 1.2; SOMI_AUDIT_LOG defaults
+# to a per-case throwaway file, "$case_dir/audit.log", so audit writes never
+# leak across cases; CLAUDE_PROJECT_DIR points at the same throwaway per-case
+# dir, into which the optional `config` object is written as .somi/config.json)
 # and asserts every expectation the case declares.
 #
 # Wired into scripts/validate.sh (npm test) — CI fails when a pattern change
@@ -248,6 +253,10 @@ for case_file in "$CASES_DIR"/*.json; do
     env_args=("SOMI_AUDIT_LOG=$case_dir/audit.log" "CLAUDE_PROJECT_DIR=$case_dir")
     while IFS= read -r kv; do
       [[ -z "$kv" ]] && continue
+      # {{CASE_DIR}} in an env value resolves the same way it does in the payload (see header
+      # comment) — needed for a case to point CLAUDE_PLUGIN_ROOT / SOMI_VENDOR_ROOT at its own
+      # throwaway case directory (pluginRoot()'s fixture cases, phase 1 iteration 1.2).
+      kv="${kv//\{\{CASE_DIR\}\}/$case_dir}"
       env_args+=("$kv")
     done < <(jq -r ".cases[$i].env // {} | to_entries[] | \"\(.key)=\(.value)\"" "$case_file")
 
@@ -258,7 +267,7 @@ for case_file in "$CASES_DIR"/*.json; do
     prime="$(jq -r ".cases[$i].prime // false" "$case_file")"
     if [[ "$prime" == "true" ]]; then
       if ! printf '%s' "$payload" \
-          | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES "${env_args[@]}" "${cmd[@]}" >/dev/null; then
+          | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES -u CLAUDE_PLUGIN_ROOT -u SOMI_VENDOR_ROOT "${env_args[@]}" "${cmd[@]}" >/dev/null; then
         echo "FAIL: [$script_rel] $name — priming invocation exited non-zero" >&2
         failures=$((failures + 1))
         continue
@@ -270,7 +279,7 @@ for case_file in "$CASES_DIR"/*.json; do
     fi
 
     if ! out="$(printf '%s' "$payload" \
-        | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES "${env_args[@]}" "${cmd[@]}")"; then
+        | env -u SOMI_ALLOW_DEP_INSTALL -u SOMI_ALLOW_LOCKFILES -u CLAUDE_PLUGIN_ROOT -u SOMI_VENDOR_ROOT "${env_args[@]}" "${cmd[@]}")"; then
       echo "FAIL: [$script_rel] $name — hook exited non-zero" >&2
       failures=$((failures + 1))
       continue
