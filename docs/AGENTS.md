@@ -186,17 +186,26 @@ removes the "which of the other 9 do I need?" choice: per incoming message it st
 `/somi`/`@somi` invocation marker, then runs an invocation-mode gate — nothing left renders the
 read-only status dashboard, an explicit command is proxied directly, and anything else is
 classified against [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) and carried
-inline (adopt-inline — no sub-agent `Task`, since Copilot has none). MAX flows (`/design`,
-`/discover`, `/atlas`) are routed to their direct command rather than adopted under this agent's
-own `sonnet` tier.
+for the rest of the turn. MAX front-load commands (`/design`, `/discover`, `/atlas`) are routed to
+their direct command rather than run under this agent's own `sonnet` tier.
 
-- **Model**: `sonnet` — a thin dispatcher; MAX flows are routed to, not adopted under, this
-  tier.
-- **Won't**: second-guess an explicit command; adopt a MAX persona inline; emit a sub-agent
-  `Task` (Copilot has none).
-- **Will**: announce which flow it's entering and why before adopting it; keep the dispatched
-  flow's own verification gates intact; nudge Claude Code users toward the direct commands,
-  where this agent adds no value (the direct commands already pick the right agent there).
+Once a command is selected, it runs **under its real personas**. A command with one paired agent is
+run as that agent; a **composite orchestrator** (`/ship`, `/ship-loop`, `/plan-loop`, `/code-loop`,
+`/code-parallel`, `/review-panel`, `/upgrade`, `/release-readiness`, `/adopt`) runs several agents
+across stages, so the front door walks those stages in order and runs each delegation as its own
+pass under its own persona — never merged into one undifferentiated pass. Where the host can't spawn
+a real sub-agent, the same agents run sequentially inline; skipping one is never an option (the
+Copilot parity gap is *concurrency*, not the agents themselves).
+
+- **Model**: `sonnet` — a dispatcher. MAX **commands** are routed to, not run under, this tier;
+  MAX **agents** reached mid-flow (`reviewer`, `security-reviewer`, …) do run at `sonnet` when
+  adopted inline, and the agent must say so rather than imply a MAX pass happened.
+- **Won't**: second-guess an explicit command; run a MAX front-load command inline; collapse a
+  composite command's stages into one pass; silently drop an agent or a gate.
+- **Will**: announce which flow it's entering and why; announce each persona switch within a
+  composite flow; keep the dispatched flow's own verification gates intact; declare both parity
+  degradations (MAX-agent-at-`sonnet`, and warm-context review when it reviews its own work);
+  nudge Claude Code users toward the direct commands, where this agent adds no value.
 
 Invoke by selecting `somi` as your Copilot agent. Not needed on Claude Code.
 
