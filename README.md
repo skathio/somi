@@ -120,7 +120,7 @@ Once installed, use `@somi` in GitHub Copilot chat:
 ```
 .claude-plugin/   Plugin + marketplace manifests (Claude Code plugin distribution)
 agents/           Subagent definitions (planner, coder, reviewer, + support)
-commands/         Slash-command entrypoints (/plan, /code, /review, /ship, /debug, /somi, ...)
+commands/         Slash-command entrypoints (/plan, /code, /review, /ship, /debug, ...)
 skills/           On-demand expert knowledge packs (OWASP, SOLID, test strategy, ...)
 rules/            Global ruleset composed into CLAUDE.md
 hooks/            Deterministic guardrails (block dangerous bash, secret writes, ...)
@@ -200,9 +200,10 @@ For an **incremental change** with a settled design (the daily loop), start at p
 
 For the all-in-one pipeline: `/ship <problem statement>`.
 
-**Lost?** Type `/somi` for a status dashboard of everything in flight (with a next action per
-item), or `/somi <what you want to do>` to get routed to the right command. When a work item is
-ready to merge, `/pr <slug>` turns its artifacts into the pull-request description.
+**Lost?** On GitHub Copilot, select the `somi` agent — bare `@somi` renders a status dashboard of
+everything in flight (with a next action per item), and `@somi <what you want to do>` routes to
+the right command. When a work item is ready to merge, `/pr <slug>` turns its artifacts into the
+pull-request description.
 
 ---
 

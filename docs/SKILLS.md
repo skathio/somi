@@ -18,7 +18,7 @@ not a replacement for the global ruleset; they're depth-on-demand.
 | [`observability`](../skills/observability/SKILL.md)            | Logs, metrics, traces, alerting philosophy                                        |
 | [`threat-modeling`](../skills/threat-modeling/SKILL.md)        | New attack surface: webhook, OAuth, file upload, new service                      |
 | [`reasoning-craft`](../skills/reasoning-craft/SKILL.md)        | Before answering a substantive question, or self-editing a draft for hedging and bland phrasing |
-| [`somi-routing`](../skills/somi-routing/SKILL.md)              | Classifying a free-form request into the right SoMi command — shared by `/somi` and the `somi` agent |
+| [`somi-routing`](../skills/somi-routing/SKILL.md)              | Classifying a free-form request into the right SoMi command — used by the `somi` agent (Copilot's front door) |
 
 ## When to invoke a skill
 

@@ -1,7 +1,7 @@
 {
   "name": "somi",
   "displayName": "SoMi",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
     "workflow",
@@ -52,7 +52,6 @@
     { "name": "upgrade",             "description": "Dependency upgrade validation: MAX researches changelog/breaking-changes/CVE (cited), scans actual API usage, compiles a mini-brief; ECO migrates under /code-loop. Integrates with the dep-install gate." },
     { "name": "release-readiness",   "description": "Pre-release gate: deterministic checklist over the artifacts (done? open Blockers? DoD? rollback real?) + one MAX review of the integration surface. Verdict + draft release notes." },
     { "name": "incident",            "description": "The sanctioned emergency lane: mitigate fast (flag/revert/scoped patch) with hooks still enforcing, then MANDATORY postmortem note + seeded /debug follow-up. Less ceremony now, enforced accounting after." },
-    { "name": "somi",                "description": "Status dashboard of all work items / discoveries / open findings with next actions; with an argument, routes your request to the right SoMi command (recommends, never auto-invokes)." },
     { "name": "pr",                  "description": "Compose a PR title + description from a work item's .somi/ artifacts (spec, decisions, reviews, diary) and optionally open it via gh after confirmation." }
   ],
   "compatibility": {

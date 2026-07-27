@@ -96,7 +96,6 @@ for f in \
   commands/design.md \
   commands/atlas.md \
   commands/debug.md \
-  commands/somi.md \
   commands/pr.md \
   scripts/somi-loop.mjs \
   scripts/somi-findings.mjs \
