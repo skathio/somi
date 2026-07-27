@@ -66,7 +66,7 @@ disagreements it surfaces belong in `.somi/rules/99-overrides.md` while they're 
 - Conventions: confirmed count, overrides recorded, disagreements resolved.
 - Gap report: the top 3 items, with the report's path.
 - The suggested calibration item + exact next command.
-- One-line orientation: "`/somi` any time for status and routing."
+- One-line orientation: "on GitHub Copilot, `@somi` any time for status and routing."
 
 ## Guardrails
 

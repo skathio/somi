@@ -1,13 +1,13 @@
 ---
 name: somi-routing
-description: Use when classifying a free-form request's problem shape into the right SoMi command. The canonical problem-shape → command table shared by /somi's Mode 2 and the somi agent's classify step — edit only here.
+description: Use when classifying a free-form request's problem shape into the right SoMi command. The canonical problem-shape → command table used by the somi agent's classify step (Copilot's front door) — edit only here.
 ---
 
 # SoMi routing — problem shape → command
 
-This is the single source of truth for SoMi's request-classification table. Both `/somi` (Mode 2)
-and the `somi` agent (Copilot's front-door persona) load it instead of embedding their own copy —
-editing it once here keeps both consumers in sync, which is the whole reason this skill exists (D3).
+This is the single source of truth for SoMi's request-classification table. The `somi` agent
+(Copilot's front-door persona) loads it instead of embedding its own copy — editing it once here
+is what keeps routing decisions in sync across every place a classification is made (D3).
 
 ## The table
 
@@ -37,6 +37,6 @@ disambiguates (e.g. "is the architecture for this settled?" splits `/plan` from 
 
 ## Consumers
 
-Loaded by exactly two surfaces: `commands/somi.md` (Mode 2) and `agents/somi.md` (the classify
-step, reached only after its own invocation-mode gate). Adding a 10th command's routing row means
-editing this file only — neither consumer should re-embed the table.
+Loaded by exactly one surface: `agents/somi.md` (the classify step, reached only after its own
+invocation-mode gate). Adding a new command's routing row means editing this file only — the
+consumer should not re-embed the table.

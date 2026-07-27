@@ -307,23 +307,18 @@ changes. Commit it.
 /atlas refresh
 ```
 
-### `/somi`
+### The front door — GitHub Copilot only
 
-The front door. Bare `/somi` prints a status table of every work item, discovery, interrupted
-loop (resumable), and open finding — each with a mechanically derived **next action** ("answer
-D4", "approve the plan then `/code-loop`", "address F-3"). With an argument, it classifies the
-request's problem shape and **recommends** the right entry command (`/debug` vs `/plan` vs
-`/design` vs `/review` …) — it never auto-invokes, and it checks for an existing matching work
-item first so you don't scaffold duplicates.
+There is no `/somi` command. On GitHub Copilot, select the `somi` **agent** persona
+(`agents/somi.md`) instead: bare `@somi` prints a status table of every work item, discovery,
+interrupted loop (resumable), and open finding — each with a mechanically derived **next action**
+("answer D4", "approve the plan then `/code-loop`", "address F-3"). With free-form text, it
+classifies the request's problem shape and dispatches to the right entry command (`/debug` vs
+`/plan` vs `/design` vs `/review` …), checking for an existing matching work item first so you
+don't scaffold duplicates. See [`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension).
 
-> `somi` also names a selectable GitHub Copilot **agent** persona (`agents/somi.md`) — the same
-> front-door idea, one layer up: pick it once for the whole session instead of typing `/somi`
-> each time. See [`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension).
-
-```text
-/somi
-/somi users report the export button 500s since yesterday's deploy
-```
+Claude Code has no equivalent single entry point — the direct commands below already select the
+right agent, so start with whichever one matches your problem shape.
 
 ### `/pr`
 

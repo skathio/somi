@@ -12,7 +12,7 @@ Start here if you're new. Skim the headings, then read what matches your situati
 | Start a new product idea (research + requirements)  | [USAGE.md](./USAGE.md#discover)          |
 | Actually run `/discover`, `/plan`, `/code`, `/review` | [USAGE.md](./USAGE.md)                  |
 | Debug a bug whose cause isn't isolated              | [USAGE.md](./USAGE.md#debug) (`/debug`)  |
-| See what's in flight / get routed to the right command | [USAGE.md](./USAGE.md#somi) (`/somi`) |
+| See what's in flight / get routed to the right command (Copilot) | [USAGE.md](./USAGE.md#the-front-door--github-copilot-only) (`somi` agent) |
 | Configure loop caps & hook policy per project       | [USAGE.md](./USAGE.md#project-configuration-somiconfigjson) |
 | Learn what each agent does and when it kicks in    | [AGENTS.md](./AGENTS.md)                 |
 | Understand the hook guardrails                      | [HOOKS.md](./HOOKS.md)                   |
@@ -33,7 +33,7 @@ Start here if you're new. Skim the headings, then read what matches your situati
 - **"skill"** = an on-demand expert pack under `skills/`.
 - **"hook"** = a deterministic guardrail script under `hooks/`.
 - **"rule"** = a paragraph or section in `rules/` that the model follows.
-- **"workflow"** = a user-facing flow. The daily build trio is planning/coding/reviewing; discovery is the upstream, greenfield-only one; around them sit debugging (`/debug`), the lifecycle flows (`/upgrade`, `/release-readiness`, `/incident`), and the repo-level utilities (`/atlas`, `/impact`, `/adopt`, `/somi`, `/pr`).
+- **"workflow"** = a user-facing flow. The daily build trio is planning/coding/reviewing; discovery is the upstream, greenfield-only one; around them sit debugging (`/debug`), the lifecycle flows (`/upgrade`, `/release-readiness`, `/incident`), and the repo-level utilities (`/atlas`, `/impact`, `/adopt`, `/pr`).
 - **"artifact"** = a durable file produced by a workflow, stored under `.somi/rd/<slug>/` (discovery: `srs.md`, `sdd.md`, …) or `.somi/plans/<slug>/` (`spec.md`, `decisions.md`, `progress.md`, phase files) or `.somi/reviews/<slug>/`.
 - **"work item"** = one `/plan` invocation's worth of artifacts, living in its own `.somi/plans/<slug>/` directory.
 - **"initiative"** = one `/discover` invocation's worth of artifacts (the R&D foundation), living in its own `.somi/rd/<slug>/` directory.

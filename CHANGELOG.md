@@ -8,6 +8,36 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 _Nothing yet._
 
+## [2.2.1] — 2026-07-27 — fix: GitHub Copilot's `/somi` command swallowing explicit command invocations
+
+**Patch — bug fix.** On GitHub Copilot, an invocation like `/somi ship-loop feature` was being
+misread as an explicit `/somi` (the Mode 2 router), which only **recommends** a command and never
+runs one — so `ship-loop` never actually invoked `/ship-loop`. Root cause: `somi` named two
+coexisting surfaces (the `agents/somi.md` persona and the standalone `commands/somi.md` slash
+command), and Copilot always addresses the agent with a leading `/somi`/`@somi` token — that
+token was indistinguishable from the user's own explicit `/somi` invocation, so every message got
+permanently short-circuited into the recommend-only router.
+
+- **Removed `commands/somi.md`** and its `commands` entry in
+  `.copilot-extension/extension.json`. There is no more standalone `/somi` command.
+- **`agents/somi.md`** now absorbs both of the removed command's modes directly: bare
+  invocation renders the status dashboard (formerly Mode 1); free-form text classifies and
+  dispatches via [`skills/somi-routing/SKILL.md`](skills/somi-routing/SKILL.md) (formerly Mode
+  2, now adopt-inline rather than recommend-only, matching the agent's existing classify-and-run
+  behavior). Step 1 now strips the leading `/somi`/`@somi` marker before recognizing commands, so
+  `/somi ship-loop feature` correctly proxies to `/ship-loop` with argument `feature`.
+- **`scripts/validate.sh`** no longer asserts `commands/somi.md` exists.
+- **Docs** — `docs/AGENTS.md`, `docs/PLUGIN.md`, `docs/COMMANDS.md`, `docs/USAGE.md`,
+  `docs/SKILLS.md`, `docs/EXTENDING.md`, `docs/INSTALL.md`, `README.md` updated: no more `/somi`
+  command, no more `somi` agent / `/somi` command coexistence.
+
+**Claude Code impact**: Claude Code never invoked the `somi` agent (direct commands already
+select the right agent there), so the standalone `/somi` status-dashboard-and-router is simply
+gone on that host with no equivalent replacement — the direct commands (`/plan`, `/review`, …)
+remain the entry points. This is shipped as a patch because the fix removes a broken, conflicting
+duplicate rather than changing any command's or agent's intended contract; the underlying
+capability (dashboard + router) is preserved in full on GitHub Copilot, where it actually matters.
+
 ## [2.2.0] — 2026-07-23 — feat: `somi` front-door agent for GitHub Copilot + shared routing skill
 
 **Minor — additive.** Removes GitHub Copilot's forced "which of SoMi's 9 agents do I need?"
