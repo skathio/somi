@@ -64,8 +64,8 @@ invokes the command. SoMi commands typically:
 1. Validate input (ask the user if `$ARGUMENTS` is missing/unclear).
 2. Resolve context — work-item slug, current iteration, target diff.
 3. Invoke one or more agents via the Task tool.
-4. Write artifacts under `.somi/plans/<slug>/` (the **command** owns the writes — read-only
-   review agents return text; the command persists).
+4. Write artifacts under `.somi/plans/<slug>/` (the **command** owns the writes — review agents are
+   contractually forbidden from writing and return text; the command persists).
 5. Update `progress.md` and `diary.md` as appropriate.
 6. Summarise back with verdict + next step.
 
@@ -86,15 +86,17 @@ The heavy lifting lives in **agents**. Commands are deliberately small because:
 ## Default model & tool grants
 
 Commands declare what tools they expect to use. The default for SoMi commands is broad
-(`Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch`) — narrowing happens inside the agent
-definitions, where each agent declares its own tools.
+(`Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch`). **Agents do not narrow this** — no SoMi
+agent declares a `tools:` field, so every agent inherits full tool access. Review-type agents are
+constrained by a **`## Write discipline` contract in their own prompt**, not by platform restriction; see
+[`docs/AGENTS.md`](./AGENTS.md) for why that trade was made.
 
 **Orchestration commands run on `sonnet`**; the agent they Task runs on its **economic tier** —
 `opus` for MAX agents (design, discovery, review), `sonnet` for ECO agents (planner, coder). See
 [Economic tiering](./AGENTS.md#economic-tiering-maxeco). Review commands (`/review`,
 `/security-review`, `/architecture-review`, `/test-strategy`) still need `Write` and `Edit` to
 produce the review file and append diary entries — they're not pure read-only at the command level
-even though the underlying review agents are read-only.
+even though the underlying review agents are contractually forbidden from writing.
 
 > **Two deliberate exceptions run `opus` at the command layer too: `/discover` and `/design`.** Their
 > orchestration is judgment-heavy (framing the work, reading the codebase, shaping crossroads) and

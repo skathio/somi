@@ -39,6 +39,13 @@ bash tests/hooks/run.sh
 echo "==> Loop-state & findings-ledger tests..."
 bash tests/scripts/run.sh
 
+echo "==> Digest-generator tests..."
+# Guards scripts/generate-digest.mjs: per-target prefix transform, drift detection in EITHER
+# copy alone, clean errors on malformed input, and splice anchoring. Wiring `--check` itself
+# into this script (so CI fails on committed drift) is phase 3, iteration 3.1 — this is the
+# unit guard for the generator, not the drift gate.
+bash tests/scripts/generate-digest.sh
+
 echo "==> Validating agent/command/skill frontmatter..."
 failed=0
 while IFS= read -r f; do

@@ -29,6 +29,10 @@ Via the Task tool, pass:
 - The work-item paths (`spec.md` §8 security considerations, the iteration phase file, recent
   `diary.md` entries) when scoped.
 - The expectation: walk trust boundaries to sinks, produce **attack-path-grounded** findings.
+- The expectation that it **returns** its findings as text rather than writing them. The
+  `security-reviewer` agent is read-only **by contract, not by platform restriction** — it holds
+  Write/Edit and its `## Write discipline` section forbids using them, so this command owns every
+  write (the review file, `progress.md`, `diary.md`).
 
 ### 3. Findings must include
 

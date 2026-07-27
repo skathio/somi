@@ -7,19 +7,27 @@ model: sonnet
 
 # /review-panel — Parallel multi-lens review
 
-You are running the **review panel** of somi: several independent, read-only review lenses on the
-**same change at the same time**, merged into one verdict.
+You are running the **review panel** of somi: several independent review lenses on the **same change
+at the same time**, merged into one verdict. Each lens is read-only **by contract** — it holds
+Write/Edit and is forbidden from using them.
 
 The user's target: **$ARGUMENTS** (a work-item slug, optionally `phase N, iteration M`, or a diff
 target such as a PR / commit range / working tree).
 
 The orchestrator (this command) is `sonnet`; each lens it Tasks (`reviewer`, `security-reviewer`,
-`architecture-reviewer`, `test-strategist`) remains `opus`. The lenses are **read-only** — they
-return findings; this command owns every write (the merged review file, `progress.md`, `diary.md`).
+`architecture-reviewer`, `test-strategist`) remains `opus`. The lenses are read-only **by contract, not by platform
+restriction** — they return findings; this command owns every write (the merged review file,
+`progress.md`, `diary.md`).
 
 > **Why this exists.** A single reviewer carries one set of priorities at a time; running the
 > specialist lenses *in parallel* on one diff catches what a sequential, escalation-only pass misses
-> — and it's safe to parallelize because every lens is read-only, so there is no write contention.
+> — and parallelizing is safe because **this command is the sole writer**: every lens returns
+> findings as text and none is given a write to perform, so there is nothing for them to contend
+> over. **Concurrency does not weaken this**: zero writers is zero writers whether one lens runs or
+> four, so parallelism adds no contention risk the sequential case lacks. Note it rests on the
+> lenses honouring their contract — each carries a `## Write discipline` section — not on a platform
+> restriction; they do hold Write/Edit. Parallelism does raise the *cost* if that contract breaks:
+> concurrent violating writes race, where a sequential one would merely be last-write-wins.
 > This is the panel for a change you want scrutinized hard before merge. For a quick single-lens
 > pass, use [`/review`](./review.md).
 
@@ -105,7 +113,7 @@ lenses found the change.
   lenses in the markdown, not as duplicate ledger entries.
 - Update `progress.md` (the iteration's `Reviewed` column → `panel:<verdict>`) and append a
   `diary.md` entry (category `review-feedback`) naming the verdict, the seated lenses, and the top
-  finding. The lenses are read-only; these writes are yours.
+  finding. The lenses write nothing by contract; these writes are yours.
 - If any lens surfaced a **plan** issue (not just code), include its proposed diary entry and
   recommend `/plan` (or the `/code` plan-change protocol) per [`/review`](./review.md).
 

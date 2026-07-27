@@ -287,7 +287,9 @@ that crosses several concerns at once, the panel seats the relevant lenses (`rev
 `security-reviewer` / `architecture-reviewer` / `test-strategist` as the diff warrants) and runs them
 **concurrently** on the same captured diff, then merges and de-duplicates their findings into one
 verdict (highest severity wins; lens disagreement is surfaced). It's safe to parallelize because
-every lens is read-only — there's no write contention — and the orchestrator owns the single merged
+`/review-panel` is the sole writer: each lens returns findings and none is given a write to perform,
+  so there is nothing to contend over (the lenses do hold Write/Edit — this rests on their
+  `## Write discipline` contract, not on a platform restriction) — and the orchestrator owns the single merged
 write. Use `/review` for the everyday single-lens pass; reach for `/review-panel` before merging
 something that touches auth *and* a new contract *and* the test shape. (On hosts without concurrent
 sub-agents, the panel runs the same lenses sequentially.)

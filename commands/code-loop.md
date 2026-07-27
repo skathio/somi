@@ -164,7 +164,7 @@ while true:
   resumes on the revised plan (this counts as one pass).
 - **One iteration per loop.** This command does *not* march through multiple iterations. Each
   iteration gets its own `/code-loop` invocation.
-- **Reviewer is read-only.** The command (this orchestrator) owns all `progress.md` /
+- **Reviewer is read-only by contract** (it holds Write/Edit; the workflow forbids using them). The command (this orchestrator) owns all `progress.md` /
   `diary.md` writes — the agents return text, this command persists.
 
 ## Why this command exists

@@ -37,7 +37,8 @@ Via the Task tool, pass:
 - The expectation: identify risks, identify testable surface, pick the right level per concern,
   decide mock policy, design for diagnosis, define what's intentionally **not** covered.
 
-The `test-strategist` agent is read-only (Read/Grep/Glob/Bash). Have it **return** its strategy;
+The `test-strategist` agent is read-only **by contract, not by platform restriction** — it holds
+Write/Edit but is forbidden from using them, so the command owns every write. Have it **return** its strategy;
 the command owns all writes.
 
 ### 3. Output shape

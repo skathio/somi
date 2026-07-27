@@ -274,7 +274,13 @@ function stripDigestCitations(block) {
       // `rules/NN-*.md` / `./rules/NN-*.md` — or the line is left untouched. Partial matches no
       // longer leak: `ISO 27001` fails because `27001` is not a two-digit item.
       const body = flattenedBody.trim();
-      const ITEM_RE = /^(?:`?(\d{2})`?|\.?\/?rules\/(\d{2})-[A-Za-z0-9-]+\.md)$/;
+      // The `rules/` segment is OPTIONAL (widened at iteration 2.2's code review). The canonical
+      // digest lives at rules/CLAUDE.md, so a link that RESOLVES from there is `./NN-*.md` with no
+      // `rules/` segment — the form the composition table in that same file already uses. Requiring
+      // `rules/` accepted only `./rules/NN-*.md`, which resolves to `rules/rules/...` and is a dead
+      // link; the round-trip appeared to pass precisely BECAUSE the canonical was broken. Both forms
+      // are accepted now so correcting the canonical cannot silently reintroduce F19.
+      const ITEM_RE = /^(?:`?(\d{2})`?|\.?\/?(?:rules\/)?(\d{2})-[A-Za-z0-9-]+\.md)$/;
       const items = body === '' ? [] : body.split(',').map((s) => s.trim());
       const codes = [];
       let allItemsAreCitations = items.length > 0;

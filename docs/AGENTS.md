@@ -239,7 +239,16 @@ judgment-heavy and their `brief.md` anchors the whole work item, so they don't s
 
 See [EXTENDING.md](./EXTENDING.md). The short version:
 
-1. Add `agents/<name>.md` with proper frontmatter (`name`, `description`, `model`). Omit `tools:` — leave it unrestricted for cross-runtime compatibility.
+1. Add `agents/<name>.md` with proper frontmatter (`name`, `description`, `model`). Omit `tools:` —
+   SoMi's agents are trusted with full tool access by design, and review-type agents are constrained
+   by a **`## Write discipline` contract in their own prompt** rather than by platform restriction
+   (all four review-type agents carry that section). This is a
+   deliberate simplicity choice, **not** a compatibility necessity: both hosts support the field
+   (Copilot documents `tools` and ignores unrecognized tool names rather than erroring; Claude Code
+   supports it too). Escalating to a declared `tools:` is therefore a known-safe move if the
+   contract ever proves insufficient. (Copilot's custom-agent reference documents the `tools`
+   property and states unrecognized tool names are ignored:
+   <https://docs.github.com/en/copilot/reference/custom-agents-configuration>.)
 2. Document it in this file with a one-row entry.
 3. Open a PR — CI validates the frontmatter.
 

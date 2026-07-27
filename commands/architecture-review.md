@@ -44,7 +44,8 @@ Via the Task tool, pass:
   stress-test the contract against three plausible future requirements, check reversibility, check
   team fit.
 
-The `architecture-reviewer` agent is read-only (Read/Grep/Glob). Have it **return** its findings;
+The `architecture-reviewer` agent is read-only **by contract, not by platform restriction** — it
+holds Write/Edit but is forbidden from using them, so the command owns every write. Have it **return** its findings;
 the command owns all writes.
 
 ### 3. Findings must include

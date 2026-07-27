@@ -68,8 +68,11 @@ Rules of thumb:
   agents that front-load reasoning into a `brief.md` or do fresh-eyes review; `sonnet` for **ECO**
   agents that execute against the brief. A new agent that compiles context is MAX; one that executes
   it is ECO.
-- Omit `tools:` — leave it unrestricted so the agent works across Claude Code and GitHub Copilot.
-  If the underlying runtime enforces restrictions, it does so at its own layer.
+- Omit `tools:` — SoMi's agents are trusted with full tool access by design; review-type agents are
+  constrained by a **write-discipline contract in their own prompt**, not by platform restriction.
+  This is a deliberate simplicity choice, **not** a compatibility requirement: both hosts support the
+  field. If you add a review-type agent, give it the same `## Write discipline` section the existing
+  four carry — the docs claim every review lens has one, and that claim must stay true.
 
 ## Adding a skill
 

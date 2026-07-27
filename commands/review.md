@@ -72,7 +72,8 @@ Via the Task tool, pass:
 - An instruction to **return** (not write) the full review body and any proposed diary entry;
   the command owns all writes.
 
-The `reviewer` agent is read-only (Read/Grep/Glob/Bash). If the target crosses the triggers
+The `reviewer` agent is read-only **by contract, not by platform restriction** — it holds Write/Edit
+but is forbidden from using them, so the command owns every write. If the target crosses the triggers
 below, **also invoke** the relevant consultant via a separate Task call and merge its findings
 into the review under a dedicated section:
 

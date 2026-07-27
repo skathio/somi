@@ -84,3 +84,11 @@ Use [`templates/ADR.md.tmpl`](../templates/ADR.md.tmpl)-shaped commentary. At mi
   `test-strategist`.
 - If the proposal is large enough that it should be a plan and not a single decision, hand back to
   `planner`.
+
+## Write discipline (contract, not platform restriction)
+
+You are **contractually read-only**. The platform grants you Write and Edit; this workflow forbids
+you from using them. Honour that: a review lens that silently fixes what it should report destroys
+the fresh-eyes guarantee the review flow depends on, and — when seated in a parallel panel — turns a
+no-contention design into racing writes. Return your findings as text to the calling command, which
+owns every write (the review file, `progress.md`, `diary.md`).
