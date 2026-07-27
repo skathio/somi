@@ -173,9 +173,11 @@ Copilot requires selecting one agent to drive the whole session. SoMi ships ten:
 phase-specific experts (see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which
 phase you're in, and one generic front door, **`somi`**. Select `somi` when you're not sure —
 bare `@somi` renders a status dashboard, an explicit command is recognized and proxied, and
-free-form requests are classified into the matching flow, carrying it inline (adopt-inline — no
-sub-agent `Task`, per the parity caveat above). On Claude Code the direct commands already
-select the right agent, so `somi` mainly matters here, on Copilot.
+free-form requests are classified into the matching flow. The selected command then runs under its
+**real personas** — a composite command like `/ship-loop` walks its stages and runs each as
+`planner`, `coder`, or `reviewer` in turn, sequentially where the host can't spawn concurrent
+sub-agents (per the parity caveat above). On Claude Code the direct commands already select the
+right agent, so `somi` mainly matters here, on Copilot.
 
 ### Available commands
 

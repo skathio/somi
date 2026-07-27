@@ -1,6 +1,6 @@
 {
   "name": "@skathio/somi",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "scripts": {
     "test": "bash scripts/validate.sh"
   },

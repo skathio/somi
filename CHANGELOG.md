@@ -8,6 +8,58 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 _Nothing yet._
 
+## [2.2.2] — 2026-07-27 — fix: the `somi` front door collapsing every command into a single persona
+
+**Patch — bug fix.** Running `@somi /ship-loop <problem>` on GitHub Copilot executed no agents at
+all: planning, coding, and reviewing were done by one undifferentiated `sonnet` pass, and the
+`planner` / `coder` / `reviewer` personas — plus the fresh-context review boundary — silently
+vanished. Three compounding defects in `agents/somi.md`:
+
+- **Composite commands had no defined behavior.** Step 5 offered exactly two cases — "no paired
+  agent" (run inline) and "one paired agent" (adopt it). But `/ship`, `/ship-loop`, `/plan-loop`,
+  `/code-loop`, `/code-parallel`, `/review-panel`, `/upgrade`, `/release-readiness`, and `/adopt`
+  orchestrate **several** agents across stages and match neither case. (The file's own worked
+  example even noted `/ship-loop` "has no single paired agent" and then routed it to a case that
+  didn't cover it.) Step 5 now has a third case: walk the command's stages in written order and run
+  each delegation as its own pass under its own persona, announced, never merged.
+- **A blanket "never emit a `Task` call — there are no sub-agents on Copilot."** This contradicted
+  the rest of the repo, which only ever claims **concurrency** is unavailable and mandates
+  sequential execution anyway — `/review-panel`: "never drop a lens to save a round trip";
+  `/code-parallel`: "do not fake it." Replaced with the actual rule: prefer a real sub-agent `Task`
+  where the host supports one, otherwise run the same agents sequentially inline. Skipping an agent
+  is never an option.
+- **The MAX check tested the wrong layer.** Step 4 diverted only the three commands whose own
+  frontmatter is `opus` (`/design`, `/discover`, `/atlas`), so every command that *Tasks* an `opus`
+  agent — `/review`, `/refactor`, `/security-review`, `/architecture-review`, `/test-strategy`,
+  `/code-loop`, `/plan-loop`, `/release-readiness` — was adopted at `sonnet` with no signal, despite
+  the file claiming a MAX persona is never adopted under `sonnet`. MAX agents now still run (skipping
+  them would make `/review` unreachable from the front door) but must be **declared** at the stage
+  that adopts them.
+
+Also declared rather than hidden: inline review is **warm-context** (adopting `reviewer` right after
+being `coder` loses the cold-context property `/code-loop` requires), and must be re-derived from the
+diff and artifacts on disk, never from recollection of writing the code.
+
+**Cleanup in the same pass** (`agents/somi.md`, 247 → 193 lines despite the additions above):
+
+- **Removed 8 dangling `D2`–`D6` references.** They pointed at nothing in the repo, and collided
+  with SoMi's established convention where `D<n>` means a numbered decision in a work item's
+  `decisions.md` (`agents/planner.md`, `agents/reviewer.md`, `commands/pr.md`, `docs/USAGE.md`).
+- **Removed the vestigial "Mode 2 — Router" section** — 11 lines restating Step 2, and describing
+  the outcome as "recommend" (the deleted command's behavior), contradicting Steps 3–5's dispatch.
+  Renamed the orphaned "Mode 1" to "The status dashboard."
+- **Removed the "Failure modes to avoid" list** — seven bullets restating steps stated imperatively
+  above, two of which addressed a maintainer editing the file rather than the agent running it.
+- **Trimmed the maintainer note** from ~24 lines to 8, dropping the 2.2.1 bug retelling already
+  carried by this changelog and `docs/AGENTS.md`, and the step-header meta-commentary.
+
+**Docs** — `docs/AGENTS.md` and `docs/PLUGIN.md` no longer claim Copilot "has no sub-agents"
+(`docs/PLUGIN.md` cited a parity caveat that actually says *concurrent*); both now describe the
+staged-persona behavior. `skills/somi-routing/SKILL.md` says "Route to" rather than "Recommend",
+matching its only remaining consumer.
+
+No migration action required.
+
 ## [2.2.1] — 2026-07-27 — fix: GitHub Copilot's `/somi` command swallowing explicit command invocations
 
 **Patch — bug fix.** On GitHub Copilot, an invocation like `/somi ship-loop feature` was being

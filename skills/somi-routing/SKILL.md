@@ -11,7 +11,7 @@ is what keeps routing decisions in sync across every place a classification is m
 
 ## The table
 
-| Shape (what the request smells like) | Recommend |
+| Shape (what the request smells like) | Route to |
 |---|---|
 | A bug — something worked, now doesn't; error/trace/CI failure; cause unknown | [`/debug`](../../commands/debug.md) |
 | A bug with the cause already isolated and a trivial fix | [`/code`](../../commands/code.md) (no work item needed if truly one-file) |
@@ -27,7 +27,7 @@ is what keeps routing decisions in sync across every place a classification is m
 ## Existing-work-item check (do this first)
 
 Check the existing-work-item row **first** — grep `.somi/plans/*/progress.md` and
-`.somi/rd/*/README.md` for overlap with the request — before recommending a new work item. The
+`.somi/rd/*/README.md` for overlap with the request — before starting a new work item. The
 most common routing mistake is scaffolding a duplicate work item for something already in flight.
 
 ## Ambiguity disambiguation
