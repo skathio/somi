@@ -1,7 +1,11 @@
 # Rules
 
-The SoMi ruleset is the **always-loaded** layer of the system. Every agent, every workflow, every
-slash command operates against these rules. The composed `CLAUDE.md` is the canonical entry point.
+The SoMi ruleset is the system's baseline layer — every agent, workflow, and slash command operates
+against it. `rules/CLAUDE.md` is the **canonical source**, from which the injected digest is
+extracted. On Claude Code it is not itself loaded into a consuming project's context; on GitHub
+Copilot, `extension.json`'s `"rules"` key loads it directly. See
+[How the ruleset reaches your session](#how-the-ruleset-reaches-your-session) for what actually
+arrives, and when.
 
 ## Composition
 
@@ -45,14 +49,41 @@ SoMi. Project-specific overrides and conventions. **SoMi never touches this file
 Each override has a shape (see the file itself for the template): rule overridden, what changes, why,
 removal condition.
 
-## Why a single, composed `CLAUDE.md`
+## How the ruleset reaches your session
 
-Claude Code loads the project's `CLAUDE.md` automatically. By placing the composed ruleset there
-(installer writes `CLAUDE.md` at the project root pointing at the numbered files), every Claude
-session in the project starts with the same priors, in the same order.
+**SoMi never writes to your project's `CLAUDE.md`, and you do not need to edit anything.**
 
-Project-specific additions sit above or below the SoMi-managed section in `CLAUDE.md`. SoMi marks its
-section so future installs/updates can refresh it without clobbering project additions.
+A Claude Code plugin **cannot** ship an always-on `CLAUDE.md`: `plugin.json` has no `rules` key, and
+a plugin-root `CLAUDE.md` is not loaded as project context. So SoMi delivers the ruleset in three
+pieces. The hook is registered automatically on plugin install — the same "you do not need to edit
+`.claude/settings.json`" guarantee [`docs/INSTALL.md`](./INSTALL.md) makes for hooks generally — but
+what it *emits* varies per turn:
+
+| What arrives | Mechanism | On which turns |
+|---|---|---|
+| **Priority/discipline floor** (a header + 4 bullets) | `UserPromptSubmit` hook, unconditional | **Every turn**, always |
+| **The digest** (the bullets between `<!-- digest:start/end -->` in `rules/CLAUDE.md`) | Same hook, signature-gated | Only when the work-item signature **changes** — or when no signature file exists yet |
+| **The numbered files `00`–`50`** | The `rules` skill | On demand, when the model enters a rule's domain |
+
+> **If the digest never appears at all**, the hook is failing safe rather than erroring:
+> `buildTier2Digest()` returns empty — leaving the floor untouched — when the plugin root cannot be
+> resolved, `rules/CLAUDE.md` is unreadable, or its `<!-- digest:start/end -->` markers are missing
+> or malformed. No warning is emitted in any of those cases.
+
+> **The digest gate is not session-scoped.** It compares against
+> `.somi/somi-state/last-context-signature`, a project-local file that nothing resets — no
+> SessionStart hook clears it (SoMi ships one, but it only detects repo instruction files), and
+> there is no TTL. The signature hashes `.somi/plans/`, `.somi/reviews/`, and
+> `.somi/rd/`. So in a project that **never runs a SoMi workflow**, the digest is emitted on the
+> first prompt after install and **not again**; every later turn, in every later session, gets the
+> floor only. In a project actively using `/plan`, `/code`, or `/review`, it re-fires whenever those
+> artifacts change.
+
+**On GitHub Copilot**, `.copilot-extension/extension.json`'s `"rules"` key already points at
+`rules/CLAUDE.md` and needs no change.
+
+Your own project `CLAUDE.md` stays entirely yours — SoMi never writes to it, and never has. Project
+overrides go in `.somi/rules/99-overrides.md`, which SoMi never touches.
 
 ## Why not put everything in `CLAUDE.md` directly?
 
