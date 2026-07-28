@@ -138,6 +138,131 @@ if [ "$index_failed" -ne 0 ]; then
   exit 1
 fi
 
+echo "==> Validating command/skill namespace collisions..."
+# (a) commands/ and skills/ share ONE namespace on Claude Code — a command and a skill with the
+# same name collide, and the skill silently loses. That is the defect this whole work item started
+# from: commands/test-strategy.md shadowed skills/test-strategy/SKILL.md, the skill never loaded,
+# and nothing errored.
+#
+# Keyed on DIRECTORY name. That is sufficient under EITHER registration mechanism — not because
+# the mechanism is settled (it is not; F-28's probe is still open) but by composition: check (c)
+# below forces declared-name == directory for every skill, so no command basename can equal any
+# skill's declared name either. Unstated premise, verified today and unchecked: zero of 24
+# commands/*.md declare a frontmatter `name:`. If one ever does, this composition breaks silently.
+collision_failed=0
+for f in commands/*.md; do
+  [ -f "$f" ] || continue
+  name="$(basename "$f" .md)"
+  if [ -f "skills/$name/SKILL.md" ]; then
+    echo "NAMESPACE COLLISION: commands/$name.md and skills/$name/SKILL.md — the skill will be shadowed" >&2
+    collision_failed=1
+  fi
+done
+if [ "$collision_failed" -ne 0 ]; then
+  exit 1
+fi
+
+echo "==> Validating skill frontmatter name <-> directory parity..."
+# (c) A skill's declared `name:` and its directory must agree. A mismatch is invisible to every
+# other gate here: iteration 1.1's review reverted a renamed skill's `name:` and BOTH acceptance
+# greps plus the whole suite stayed green. Whether the host registers on directory or on `name:`
+# is not settled (evidence points at directory — Anthropic's hookify ships a mismatch and its own
+# commands invoke the directory name), so this ships as a parity/hygiene assertion: an
+# undetectable inconsistency between the two is worth failing on either way. Do NOT reword this
+# as "prevents a collision" until the mechanism probe in phase 1 iteration 1.1 has returned.
+parity_failed=0
+for f in skills/*/SKILL.md; do
+  [ -f "$f" ] || continue
+  dir="$(basename "$(dirname "$f")")"
+  declared="$(awk '/^---$/{c++; next} c==1 && /^name:[[:space:]]*/{sub(/^name:[[:space:]]*/,""); gsub(/^["'"'"']|["'"'"']$/,""); sub(/[[:space:]]+$/,""); print; exit}' "$f")"
+  if [ "$dir" != "$declared" ]; then
+    echo "SKILL NAME PARITY: skills/$dir/SKILL.md declares name: '$declared' (expected '$dir')" >&2
+    parity_failed=1
+  fi
+done
+if [ "$parity_failed" -ne 0 ]; then
+  exit 1
+fi
+
+echo "==> Validating review-agent write-discipline contracts..."
+# (d) Five documents assert that every review-type agent carries a `## Write discipline` section,
+# and /review-panel's argument for running four lenses concurrently DEPENDS on it. A fifth review
+# agent added without one falsifies all five at once and silently holes that rationale. The
+# two-part sweep below finds false statements; only this finds a MISSING one.
+contract_failed=0
+# DERIVED, not hardcoded: the seated lenses are read out of commands/review-panel.md's own table —
+# the document whose concurrency rationale depends on the claim. A hardcoded list cannot detect the
+# threat this check exists for (a FIFTH review agent seated without a contract); it would only
+# catch removal from the four already known.
+# Extraction is deliberately NAME-AGNOSTIC: any backticked cell leading a table row. An earlier
+# form matched `*-reviewer`/`*-strategist`, which caught a seated `perf-reviewer` but would have
+# let `accessibility-auditor` or `perf-lens` through silently — and because the other four still
+# derived, the vacuity guard below would not have fired either. Trade accepted deliberately: a
+# future table in this file leading with a backticked non-agent cell now produces a LOUD, named
+# MISSING AGENT error rather than a silent miss. Loud-and-wrong is diagnosable; silent-and-missing
+# is the defect class this whole work item exists to remove.
+seated="$(grep -oE '^\| *`[a-z][a-z0-9-]*`' commands/review-panel.md | tr -d '|` ' | sort -u)"
+if [ -z "$seated" ]; then
+  echo "WRITE CONTRACT CHECK: found no seated lenses in commands/review-panel.md — table shape changed?" >&2
+  contract_failed=1
+fi
+for a in $seated; do
+  if [ ! -f "agents/$a.md" ]; then
+    echo "MISSING AGENT: commands/review-panel.md seats '$a' but agents/$a.md does not exist" >&2
+    contract_failed=1
+  elif ! grep -q '^## Write discipline' "agents/$a.md"; then
+    echo "MISSING WRITE CONTRACT: agents/$a.md has no '## Write discipline' section" >&2
+    contract_failed=1
+  fi
+done
+if [ "$contract_failed" -ne 0 ]; then
+  exit 1
+fi
+
+echo "==> Validating the tools-doctrine two-part sweep..."
+# The `read-only` grep STRUCTURALLY cannot find false-rationale locations that omit the phrase —
+# which is why docs/AGENTS.md and docs/COMMANDS.md had to be hand-added to iteration 2.1's list,
+# and why docs/EXTENDING.md was missed entirely until code review. Both patterns must stay clean.
+# Pattern 2 targets the false RATIONALE, not the token `tools:` — a broader pattern matches the
+# corrected text too, and a check that fires on its own fix is a check nobody keeps.
+sweep_failed=0
+# SWEEP ROOTS: the plan's full eight. An earlier draft ran three and silently dropped rules/ —
+# the digest SOURCE injected into every gated turn of every consuming project, and one the
+# parity-only drift gate below cannot cover (it verifies the copies match the canonical, never
+# that the canonical is true).
+SWEEP_ROOTS="agents/ commands/ docs/ rules/ skills/ templates/ AGENTS.md .github/"
+# Pattern 1 must cover BOTH grammatical shapes the false claim takes. An earlier draft matched
+# only "does not have Write/Edit" and "agent is read-only (Read" — 4 of the 12 known instances,
+# missing every commands/review-panel.md case and docs/WORKFLOWS.md:290, which are the two the
+# plan singles out as worst because /review-panel's concurrency argument rests on them. The
+# `by contract` filter is what lets the CORRECTED text through: it says read-only and means it.
+if grep -rnE 'do(es)? not have (Write|Edit)|agent is read-only \(Read|(lens|lenses|[Rr]eviewer|review agents?) (is|are) \*{0,2}read-only|read-only review (lens|lenses|agents?)' $SWEEP_ROOTS 2>/dev/null | grep -vE 'read-only \*{0,2}(by contract|\*{0,2} ?by contract)'; then
+  echo "FALSE CAPABILITY CLAIM: an agent/lens is described as lacking Write/Edit; no SoMi agent declares tools: — restate as a contract" >&2
+  sweep_failed=1
+fi
+# Pattern 2 targets the false RATIONALE, never the token `tools:` — a broader pattern matches the
+# corrected text too, and a check that fires on its own fix is a check nobody keeps. `cross-runtime
+# compat` rather than bare `cross-runtime`: this repo legitimately discusses cross-host runtime
+# portability in docs/HOOKS.md, INSTALL.md, PLUGIN.md and architecture.md, and firing there would
+# report "FALSE TOOLS RATIONALE" about a sentence with nothing to do with tools.
+if grep -rniE 'cross-runtime compat|leave it unrestricted|works across Claude Code and GitHub Copilot|declares its own tools' $SWEEP_ROOTS 2>/dev/null; then
+  echo "FALSE TOOLS RATIONALE: both hosts support tools:; omission is a simplicity choice, not compatibility" >&2
+  sweep_failed=1
+fi
+if [ "$sweep_failed" -ne 0 ]; then
+  exit 1
+fi
+
+echo "==> Validating digest parity across the three copies..."
+# (b) The canonical rules/CLAUDE.md is the only editable copy; AGENTS.md and
+# .github/copilot-instructions.md are generated. Hand-syncing three copies is what let the Copilot
+# copy silently lose the `Reasoning craft` bullet. This is the DRIFT GATE — tests/scripts/
+# generate-digest.sh is the generator's unit guard, which is a different thing.
+if ! node scripts/generate-digest.mjs --check; then
+  echo "DIGEST DRIFT: regenerate with \`node scripts/generate-digest.mjs\`" >&2
+  exit 1
+fi
+
 echo "==> Creating coverage stub..."
 mkdir -p coverage
 printf 'TN:\nend_of_record\n' > coverage/lcov.info
