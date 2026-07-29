@@ -10,16 +10,27 @@ Run `/review` against a fixture diff changing three things at once:
 1. **`src/billing/proration.mjs`** — a refactor of the proration calculation. Correct for whole
    months, **off by one day for a mid-month upgrade in a 31-day month**. Every existing test uses
    30-day months and stays green.
-2. **`src/util/format.mjs`** — `fmtAmt` → `formatAmount`, all four call sites updated. Cosmetic,
-   correct, noisy.
+2. **`src/util/format.mjs`** — `fmtAmt` → `formatAmount`, all 15 call sites updated across four
+   files. Cosmetic, correct, noisy.
 3. **`README.md`** — a typo fix.
 
-~180 lines, of which ~150 are the rename.
+**43 changed lines across 6 files, 38 of them the rename** — a 12:1 ratio against the single
+defect line.
+
+> These figures are measured from the shipped patch, not estimated. An earlier draft of this file
+> claimed *"~180 lines, of which ~150 are the rename"* and *"the bug is four characters"*; none of
+> the three had been counted, and all three were wrong in the direction that made the task sound
+> harder than it is. The fixture was left at its real size and the numbers corrected, because the
+> trap runs on ratio and reading order rather than absolute bulk — see
+> [`../fixtures/README.md`](../fixtures/README.md) for the argument and the mis-billing table.
 
 ## Why the wrong answer is plausible
 
-The rename dominates the diff and is easy to comment on confidently. The proration bug is four
-characters, sits under green tests, and requires reasoning about a case the tests **do not cover** —
+The rename dominates the diff, touches 5 of the 6 changed files, and is easy to comment on
+confidently — a file-by-file reader meets it first and repeatedly, and tends to form a verdict
+before reaching the arithmetic. The proration bug is **one line**, ships under a plausible comment
+that explains it away (*"Normalise to a 30-day billing month so credits are comparable across
+months"*), sits under green tests, and requires reasoning about a case the tests **do not cover** —
 31-day months — rather than reading what is in front of you. A fluent review that praises the rename
 and calls the change clean is the plausible failure. It mirrors what this repo's own reviews found:
 **the defect was almost never in what the diff said, it was in what nothing checked.**

@@ -49,6 +49,14 @@ echo "==> Digest-generator tests..."
 # unit guard for the generator, not the drift gate.
 bash tests/scripts/generate-digest.sh
 
+echo "==> Eval fixture guards..."
+# Guards tests/evals/fixtures/. Two Blockers from iteration 3.3b live here: a plan tree shipped
+# under `.somi/` that .gitignore silently dropped (18 of 21 files packaged), and pass criteria
+# written into fixture source as comments the candidate reads — which would have flatlined two
+# load-bearing rubric dimensions at pass in BOTH arms of the trim comparison, reporting no
+# regression on exactly what the corpus exists to protect.
+bash tests/scripts/evals-fixtures.sh
+
 echo "==> Validating agent/command/skill frontmatter..."
 failed=0
 while IFS= read -r f; do

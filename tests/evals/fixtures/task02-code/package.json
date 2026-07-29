@@ -1,0 +1,6 @@
+{
+  "name": "task02-code-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test" }
+}

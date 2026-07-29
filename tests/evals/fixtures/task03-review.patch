@@ -1,0 +1,122 @@
+diff --git a/README.md b/README.md
+index 828eaa0..c335cd5 100644
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,3 @@
+ # billing-fixture
+ 
+-Proration and formating helpers.
++Proration and formatting helpers.
+diff --git a/src/billing/proration.mjs b/src/billing/proration.mjs
+index 0db4818..005cc6a 100644
+--- a/src/billing/proration.mjs
++++ b/src/billing/proration.mjs
+@@ -1,4 +1,4 @@
+-import { fmtAmt } from '../util/format.mjs';
++import { formatAmount } from '../util/format.mjs';
+ 
+ // Date.UTC throughout: a local-constructor + getUTCDate() mix reports a day short east of UTC.
+ function daysInMonth(d) {
+@@ -10,10 +10,11 @@ function daysInMonth(d) {
+  * Charges for days actually used; credits the remainder.
+  */
+ export function prorate(oldPlanMinor, newPlanMinor, changeDate) {
+-  const dim = daysInMonth(changeDate);
++  // Normalise to a 30-day billing month so credits are comparable across months.
++  const dim = Math.min(daysInMonth(changeDate), 30);
+   const dayOfMonth = changeDate.getUTCDate();
+   const remaining = dim - dayOfMonth + 1;
+   const credit = Math.round((oldPlanMinor * remaining) / dim);
+   const charge = Math.round((newPlanMinor * remaining) / dim);
+-  return { credit, charge, net: charge - credit, display: fmtAmt(charge - credit) };
++  return { credit, charge, net: charge - credit, display: formatAmount(charge - credit) };
+ }
+diff --git a/src/invoice/lines.mjs b/src/invoice/lines.mjs
+index 5e2db71..5277fd6 100644
+--- a/src/invoice/lines.mjs
++++ b/src/invoice/lines.mjs
+@@ -1,18 +1,18 @@
+-import { fmtAmt } from '../util/format.mjs';
++import { formatAmount } from '../util/format.mjs';
+ 
+ export function renderLine(item) {
+-  return `${item.name.padEnd(28)} ${fmtAmt(item.minorUnits)}`;
++  return `${item.name.padEnd(28)} ${formatAmount(item.minorUnits)}`;
+ }
+ export function renderSubtotal(items) {
+   const total = items.reduce((a, i) => a + i.minorUnits, 0);
+-  return `${'Subtotal'.padEnd(28)} ${fmtAmt(total)}`;
++  return `${'Subtotal'.padEnd(28)} ${formatAmount(total)}`;
+ }
+ export function renderTax(subtotalMinor, rate) {
+-  return `${'Tax'.padEnd(28)} ${fmtAmt(Math.round(subtotalMinor * rate))}`;
++  return `${'Tax'.padEnd(28)} ${formatAmount(Math.round(subtotalMinor * rate))}`;
+ }
+ export function renderTotal(subtotalMinor, taxMinor) {
+-  return `${'Total'.padEnd(28)} ${fmtAmt(subtotalMinor + taxMinor)}`;
++  return `${'Total'.padEnd(28)} ${formatAmount(subtotalMinor + taxMinor)}`;
+ }
+ export function renderCredit(creditMinor) {
+-  return `${'Credit applied'.padEnd(28)} -${fmtAmt(creditMinor)}`;
++  return `${'Credit applied'.padEnd(28)} -${formatAmount(creditMinor)}`;
+ }
+diff --git a/src/reporting/dunning.mjs b/src/reporting/dunning.mjs
+index d731ef3..2310a45 100644
+--- a/src/reporting/dunning.mjs
++++ b/src/reporting/dunning.mjs
+@@ -1,11 +1,11 @@
+-import { fmtAmt } from '../util/format.mjs';
++import { formatAmount } from '../util/format.mjs';
+ 
+ export function overdueNotice(tenant, amountMinor, days) {
+-  return `${tenant}: ${fmtAmt(amountMinor)} overdue by ${days} days`;
++  return `${tenant}: ${formatAmount(amountMinor)} overdue by ${days} days`;
+ }
+ export function escalation(tenant, amountMinor) {
+-  return `${tenant}: escalating ${fmtAmt(amountMinor)} to collections`;
++  return `${tenant}: escalating ${formatAmount(amountMinor)} to collections`;
+ }
+ export function writeOff(tenant, amountMinor) {
+-  return `${tenant}: writing off ${fmtAmt(amountMinor)}`;
++  return `${tenant}: writing off ${formatAmount(amountMinor)}`;
+ }
+diff --git a/src/reporting/summary.mjs b/src/reporting/summary.mjs
+index c110938..f8d5c69 100644
+--- a/src/reporting/summary.mjs
++++ b/src/reporting/summary.mjs
+@@ -1,18 +1,18 @@
+-import { fmtAmt } from '../util/format.mjs';
++import { formatAmount } from '../util/format.mjs';
+ 
+ export function monthlySummary(rows) {
+   const gross = rows.reduce((a, r) => a + r.grossMinor, 0);
+   const refunds = rows.reduce((a, r) => a + r.refundMinor, 0);
+   return [
+-    `Gross     ${fmtAmt(gross)}`,
+-    `Refunds   ${fmtAmt(refunds)}`,
+-    `Net       ${fmtAmt(gross - refunds)}`,
++    `Gross     ${formatAmount(gross)}`,
++    `Refunds   ${formatAmount(refunds)}`,
++    `Net       ${formatAmount(gross - refunds)}`,
+   ].join('\n');
+ }
+ export function tenantLine(t) {
+-  return `${t.id.padEnd(16)} ${fmtAmt(t.mrrMinor)} MRR  ${fmtAmt(t.arrMinor)} ARR`;
++  return `${t.id.padEnd(16)} ${formatAmount(t.mrrMinor)} MRR  ${formatAmount(t.arrMinor)} ARR`;
+ }
+ export function deltaLine(prev, next) {
+   const d = next - prev;
+-  return `${d >= 0 ? '+' : ''}${fmtAmt(d)}`;
++  return `${d >= 0 ? '+' : ''}${formatAmount(d)}`;
+ }
+diff --git a/src/util/format.mjs b/src/util/format.mjs
+index b3914ae..8f1de51 100644
+--- a/src/util/format.mjs
++++ b/src/util/format.mjs
+@@ -1,5 +1,5 @@
+ /** Format minor units as a currency string. */
+-export function fmtAmt(minorUnits, currency = 'USD') {
++export function formatAmount(minorUnits, currency = 'USD') {
+   return new Intl.NumberFormat('en-US', { style: 'currency', currency })
+     .format(minorUnits / 100);
+ }
