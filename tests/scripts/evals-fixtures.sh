@@ -20,6 +20,15 @@ echo "== eval fixtures =="
 # `git add -An` was the obvious spelling and is wrong: it lists only UNTRACKED files, so it
 # matches the on-disk count exactly once — before this work is committed — and returns 0 forever
 # after. check-ignore answers the question that is actually being asked, in either state.
+# Floor first: every "no bad files found" assertion below passes vacuously against an empty
+# tree, so establish that the tree is actually populated before trusting any of them.
+n_files=$(find "$F" -type f | wc -l | tr -d ' ')
+if [ "$n_files" -ge 24 ]; then
+  ok "fixture tree is populated ($n_files files)"
+else
+  bad "fixture tree is populated (want >=24, got $n_files)"
+fi
+
 ignored=$(find "$F" -type f -print0 | xargs -0 git check-ignore 2>/dev/null)
 if [ -z "$ignored" ]; then
   ok "no fixture file is gitignored"
@@ -52,9 +61,14 @@ done
 # --- B2: the fixture must not state its own pass criteria --------------------------------
 # The candidate reads these files. A comment naming the trap turns the eval into an open book
 # and flatlines the dimension at pass in BOTH arms of the trim comparison.
-leak=$(grep -rniE 'point of the task|declared file set|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|criterion [0-9]|dimension S[0-9]|graded' \
-        "$F" --include='*.mjs' --include='*.sql' --include='*.md' \
-        2>/dev/null | grep -v "^$F/README.md:" | grep -v '^'"$F"'/make-review-patch.mjs:')
+# Scans EVERY file under the fixture tree. An earlier spelling used
+# --include='*.mjs' --include='*.sql' --include='*.md', which silently exempted package.json
+# and anything else a candidate can open. Only the two scorer-facing files are excluded, by path.
+leak=$(grep -rniE 'point of the task|declared file set|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|criterion [0-9]|dimension S[0-9]|graded|open book|trim comparison' \
+        "$F" 2>/dev/null \
+        | grep -v "^$F/README.md:" \
+        | grep -v "^$F/make-review-patch.mjs:" \
+        | grep -v "^$F/task03-review.patch:")
 if [ -z "$leak" ]; then
   ok "no fixture file states a pass criterion"
 else
@@ -77,8 +91,10 @@ cp -r "$F/task03-review/." "$W"/
   && git config user.email t@somi.invalid && git config user.name t \
   && git add -A && git commit -qm baseline ) >/dev/null 2>&1
 
-before=$( cd "$W" && node --test 2>&1 | grep -cE '^# fail 0|^ℹ fail 0' )
-check "task03 suite is green BEFORE the patch" "$before" "1"
+# `fail 0` alone is satisfied by a suite with NO tests. Pin the pass count as well.
+t3_pass(){ ( cd "$W" && node --test 2>&1 | grep -oE '^(#|ℹ) pass [0-9]+' | grep -oE '[0-9]+' | head -1 ); }
+t3_fail(){ ( cd "$W" && node --test 2>&1 | grep -oE '^(#|ℹ) fail [0-9]+' | grep -oE '[0-9]+' | head -1 ); }
+check "task03 suite is 3 passing / 0 failing BEFORE the patch" "$(t3_pass)/$(t3_fail)" "3/0"
 
 if ( cd "$W" && git apply "$ROOT/$F/task03-review.patch" ) 2>/dev/null; then
   ok "review.patch applies to the shipped fixture"
@@ -86,14 +102,17 @@ else
   bad "review.patch applies to the shipped fixture (run node $F/make-review-patch.mjs)"
 fi
 
-after=$( cd "$W" && node --test 2>&1 | grep -cE '^# fail 0|^ℹ fail 0' )
-check "task03 suite is STILL green after the patch (the trap)" "$after" "1"
+check "task03 suite is STILL 3 passing / 0 failing after the patch (the trap)" "$(t3_pass)/$(t3_fail)" "3/0"
 
 # Directly: every date the suite exercises must fall in a 30-day month. The greenness pair above
 # covers this only as a side effect; asserted here so the failure names the actual invariant.
 months=$( node -e "
   const s = require('fs').readFileSync('$ROOT/$F/task03-review/tests/proration.test.mjs','utf8');
-  const bad = [...s.matchAll(/Date\.UTC\(\s*(\d+)\s*,\s*(\d+)\s*,/g)]
+  const hits = [...s.matchAll(/Date\.UTC\(\s*(\d+)\s*,\s*(\d+)\s*,/g)];
+  // No matches means the date syntax changed, NOT that every date is fine. Fail loudly:
+  // a silent 'ok' here is the exact vacuous-pass shape this guard exists to prevent.
+  if (hits.length < 3) { process.stdout.write('only ' + hits.length + ' Date.UTC literals found'); process.exit(0); }
+  const bad = hits
     .map(m => [Number(m[1]), Number(m[2])])
     .filter(([y,mo]) => new Date(Date.UTC(y, mo+1, 0)).getUTCDate() !== 30)
     .map(([y,mo]) => y+'-'+(mo+1));
