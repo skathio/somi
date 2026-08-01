@@ -67,6 +67,23 @@ try {
   ]]);
 
   const patch = git(work, 'diff');
+
+  // --check: byte-compare against the committed patch instead of overwriting it, mirroring
+  // scripts/generate-digest.mjs --check. Without it, a hand-edit to the committed patch that
+  // still applies passes every other assertion, and the generator silently stops being the
+  // source of truth it claims to be.
+  if (process.argv.includes('--check')) {
+    const current = readFileSync(OUT, 'utf8');
+    if (current !== patch) {
+      process.stderr.write(
+        `make-review-patch --check: ${OUT} differs from what the generator produces.\n` +
+        `Run: node ${OUT.replace(/[^/]+$/, 'make-review-patch.mjs')}\n`);
+      process.exit(1);
+    }
+    process.stdout.write('make-review-patch: committed patch matches the generator\n');
+    process.exit(0);
+  }
+
   writeFileSync(OUT, patch);
 
   const changed = patch.split('\n').filter((l) => /^[+-][^+-]/.test(l)).length;

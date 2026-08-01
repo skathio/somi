@@ -26,7 +26,7 @@ for f in \
 done
 
 echo "==> Node syntax check (node --check over the ported .mjs)..."
-find hooks scripts -name '*.mjs' -type f -print0 \
+find hooks scripts tests/evals -name '*.mjs' -type f -print0 \
   | xargs -0 -I{} node --check {}
 
 echo "==> Hook behavior fixtures..."

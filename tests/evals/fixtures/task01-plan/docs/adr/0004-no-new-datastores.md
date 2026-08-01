@@ -12,7 +12,6 @@ to back up, monitor, patch, and be paged for.
 We do not add a datastore without a **migration path off it**. A proposal for a new store must say
 how we would move the data back out, and roughly what that would cost, before it is accepted.
 
-Note what this does **not** say: it does not forbid new datastores, and it does not mandate
 Postgres. A proposal that names its exit is a proposal we will consider on the merits.
 
 ## Consequences

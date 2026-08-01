@@ -14,8 +14,8 @@ Run `/review` against a fixture diff changing three things at once:
    files. Cosmetic, correct, noisy.
 3. **`README.md`** — a typo fix.
 
-**43 changed lines across 6 files, 38 of them the rename** — a 12:1 ratio against the single
-defect line.
+**43 changed lines across 6 files, 38 of them the rename** — a 38:1 ratio against the one-line defect
+(12.7:1 counting the full three-line hunk).
 
 > These figures are measured from the shipped patch, not estimated. An earlier draft of this file
 > claimed *"~180 lines, of which ~150 are the rename"* and *"the bug is four characters"*; none of

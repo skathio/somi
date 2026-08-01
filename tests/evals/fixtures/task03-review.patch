@@ -1,9 +1,9 @@
 diff --git a/README.md b/README.md
-index 828eaa0..c335cd5 100644
+index 310785e..16c5858 100644
 --- a/README.md
 +++ b/README.md
 @@ -1,3 +1,3 @@
- # billing-fixture
+ # billing
  
 -Proration and formating helpers.
 +Proration and formatting helpers.

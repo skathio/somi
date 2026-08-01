@@ -1,4 +1,8 @@
-// Reference copy of token.mjs without expiry enforcement. Not imported by the application.
+// Scorer-side CONTROL: byte-identical to task02-code-mutant.mjs except that it enforces expiry.
+// Pairing the two is what makes criterion 1(b) attribute a red to the expiry axis rather than to
+// any other difference between the candidate's token.mjs and a frozen reference. A candidate test
+// must be GREEN against this file and RED against the mutant; a test that is red against both is
+// failing for some unrelated reason it pinned (a signature encoding, a helper's shape).
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const SECRET = 'fixture-secret-not-a-real-key';
@@ -33,7 +37,10 @@ export function verifyToken(token) {
     throw new Error('malformed token');
   }
 
-  // NOTE: payload.exp is decoded and returned, but never compared against the clock.
+  if (typeof payload.exp === 'number' && Date.now() >= payload.exp * 1000) {
+    throw new Error('token expired');
+  }
+
   return payload;
 }
 

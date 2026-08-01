@@ -1,3 +1,3 @@
-# billing-fixture
+# billing
 
 Proration and formating helpers.

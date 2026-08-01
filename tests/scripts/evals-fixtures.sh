@@ -59,21 +59,58 @@ for a in spec.md progress.md diary.md phases/01-reject-expired.md; do
 done
 
 # --- B2: the fixture must not state its own pass criteria --------------------------------
-# The candidate reads these files. A comment naming the trap turns the eval into an open book
-# and flatlines the dimension at pass in BOTH arms of the trim comparison.
-# Scans EVERY file under the fixture tree. An earlier spelling used
-# --include='*.mjs' --include='*.sql' --include='*.md', which silently exempted package.json
-# and anything else a candidate can open. Only the two scorer-facing files are excluded, by path.
-leak=$(grep -rniE 'point of the task|declared file set|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|criterion [0-9]|dimension S[0-9]|graded|open book|trim comparison' \
-        "$F" 2>/dev/null \
-        | grep -v "^$F/README.md:" \
-        | grep -v "^$F/make-review-patch.mjs:" \
-        | grep -v "^$F/task03-review.patch:")
-if [ -z "$leak" ]; then
-  ok "no fixture file states a pass criterion"
+# LOAD-BEARING CHECK: a content-hash manifest over every candidate-visible file. The keyword
+# grep below is kept as a cheap first pass, but it cannot carry this claim -- it is a denylist,
+# so it only catches phrasings someone already thought of. Proven: a paraphrase of the exact
+# comment it was written for ("This suite never exercises a 31-day month; that gap is
+# intentional") passed it, as did a leak stated purely in domain language. The manifest fails on
+# ANY edit, which is the only form that survives the next fixture change.
+if [ "${1:-}" = "--update-manifest" ]; then
+  {
+    echo "# Content hashes of every CANDIDATE-VISIBLE fixture file."
+    echo "# Regenerate with: bash tests/scripts/evals-fixtures.sh --update-manifest"
+    echo "# An edit failing here is not a bug: re-read fixtures/README.md's invariant list, confirm"
+    echo "# the change states no pass criterion, then regenerate. A keyword denylist cannot make"
+    echo "# this promise -- it only catches phrasings someone already thought of."
+    find "$F/task01-plan" "$F/task02-code" "$F/task03-review" -type f | LC_ALL=C sort | xargs sha256sum
+  } > "$F/MANIFEST.sha256"
+  echo "manifest regenerated: $(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256") files"
+  exit 0
+fi
+
+if [ -f "$F/MANIFEST.sha256" ]; then
+  man_out=$(grep '^[0-9a-f]' "$F/MANIFEST.sha256" | sha256sum -c --quiet 2>&1)
+  if [ -z "$man_out" ]; then
+    ok "every candidate-visible file matches the content manifest"
+  else
+    bad "every candidate-visible file matches the content manifest"
+    printf '%s\n' "$man_out" | sed 's/^/       /'
+    printf '       (if the change is intended: bash tests/scripts/evals-fixtures.sh --update-manifest)\n'
+  fi
+  # The manifest must also cover the tree exactly -- a NEW file is invisible to sha256sum -c.
+  man_n=$(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256")
+  live_n=$(find "$F/task01-plan" "$F/task02-code" "$F/task03-review" -type f | wc -l | tr -d ' ')
+  check "manifest covers every candidate-visible file (no untracked additions)" "$live_n" "$man_n"
 else
-  bad "no fixture file states a pass criterion"
+  bad "MANIFEST.sha256 exists"
+fi
+
+# Cheap first pass. Scans EVERY file under the fixture tree -- an earlier spelling used
+# --include='*.mjs' --include='*.sql' --include='*.md', silently exempting package.json.
+leak=$(grep -rniE 'point of the task|declared file set|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|control|criterion [0-9]|dimension S[0-9]|graded|open book|trim comparison|you are measured|do not invent' \
+        "$F/task01-plan" "$F/task02-code" "$F/task03-review" 2>/dev/null)
+if [ -z "$leak" ]; then
+  ok "no candidate-visible file trips the leak keyword list"
+else
+  bad "no candidate-visible file trips the leak keyword list"
   printf '%s\n' "$leak" | sed 's/^/       /'
+fi
+
+# The reference implementations must not live inside the copied tree.
+if find "$F/task02-code" -name '*mutant*' -o -name '*control*' | grep -q .; then
+  bad "no reference implementation inside task02-code/ (it lands in the candidate's repo)"
+else
+  ok "no reference implementation inside task02-code/ (it lands in the candidate's repo)"
 fi
 
 # --- task03: patch, greenness, and the mis-billing delta ---------------------------------
@@ -145,7 +182,9 @@ tracked=$( cd "$R" && git ls-files | grep -c '^\.somi/plans/expired-token/' )
 check "reconstructed task02 tracks its plan tree in the baseline commit" "$tracked" "4"
 
 # --- task01: the absence criterion 3 scores ----------------------------------------------
-vol=$(grep -rniE '[0-9][0-9,._]*\s*(rows|req|rps|qps|tb|gb|mb|million|billion)|rows/(s|sec|day|yr|year)' \
+# `kb` was missing and row size is one of the three things criterion 3 forbids; spelled-out
+# magnitudes ("half a billion") slipped because the alternation required an adjacent digit.
+vol=$(grep -rniE '[0-9][0-9,._]*[[:space:]]*(rows|req|rps|qps|[kmgt]b|k\b|million|billion|thousand)|(rows|req)/(s|sec|second|min|hour|day|yr|year)|(half|quarter|couple)[[:space:]]+(a[[:space:]]+)?(million|billion|thousand)|(million|billion|thousand)[[:space:]]+(rows|records|requests|events)' \
       "$F/task01-plan" 2>/dev/null)
 if [ -z "$vol" ]; then
   ok "task01 supplies no traffic/volume/row-size figure"
@@ -157,17 +196,50 @@ fi
 # --- task02: mutant surface parity + the absent expiry coverage ---------------------------
 surf=$( node --input-type=module -e "
   const a = await import('$ROOT/$F/task02-code/src/auth/token.mjs');
-  const b = await import('$ROOT/$F/task02-code/token-mutant.mjs');
-  const ka = Object.keys(a).sort().join(','), kb = Object.keys(b).sort().join(',');
-  process.stdout.write(ka === kb ? 'ok' : ka + ' != ' + kb);
+  const b = await import('$ROOT/$F/task02-code-mutant.mjs');
+  const c = await import('$ROOT/$F/task02-code-control.mjs');
+  const k = (m) => Object.keys(m).sort().join(',');
+  process.stdout.write(k(a) === k(b) && k(b) === k(c) ? 'ok' : k(a)+' | '+k(b)+' | '+k(c));
 " 2>/dev/null )
-check "token-mutant.mjs exports the same surface as token.mjs" "$surf" "ok"
+check "mutant and control export the same surface as token.mjs" "$surf" "ok"
+
+# The control exists so criterion 1(b) can attribute a red to the expiry axis. That only holds
+# if the two differ on expiry and NOTHING else: a candidate test red against both is failing for
+# a reason it pinned, not for the defect. Verified behaviourally, not by diffing source.
+pair=$( node --input-type=module -e "
+  const mut = await import('$ROOT/$F/task02-code-mutant.mjs');
+  const ctl = await import('$ROOT/$F/task02-code-control.mjs');
+  const past = Math.floor(Date.now()/1000) - 60, future = Math.floor(Date.now()/1000) + 3600;
+  const acc = (m, e) => { try { m.verifyToken(m.mintToken('u', e)); return true; } catch { return false; } };
+  // CROSS-verify. Checking each file against its own minted token proves nothing: both are
+  // internally consistent under any shared change (a signature encoding, a payload layout), so
+  // an edit that moves them apart on a non-expiry axis stays invisible. Crossing them is what
+  // actually asserts \"identical except for expiry\".
+  const cross = (a, b, e) => { try { return JSON.stringify(b.verifyToken(a.mintToken('u', e))); } catch (err) { return 'THREW:' + err.message; } };
+  const expiryOnly = acc(mut,past) && !acc(ctl,past)          // they DO differ on expiry
+    && acc(mut,future) && acc(ctl,future)
+    && cross(mut, ctl, future) === cross(ctl, mut, future)    // ...and on nothing else
+    && cross(mut, ctl, future) === cross(mut, mut, future)
+    && cross(ctl, mut, future) === cross(ctl, ctl, future);
+  process.stdout.write(expiryOnly ? 'ok' : 'mutant/control differ on more than expiry, or not on expiry');
+" 2>/dev/null )
+check "mutant accepts an expired token, control rejects it, agree otherwise" "$pair" "ok"
+
+if node "$F/make-review-patch.mjs" --check >/dev/null 2>&1; then
+  ok "committed patch matches its generator (--check)"
+else
+  bad "committed patch matches its generator (run: node $F/make-review-patch.mjs)"
+fi
 
 exp=$(grep -ncE '\bexp\b|expir' "$F/task02-code/tests/auth/token.test.mjs" 2>/dev/null | tr -d ' \n')
 check "task02 suite has NO expiry coverage (the absence is the task)" "${exp:-0}" "0"
 
-tests_n=$( cd "$F/task02-code" && node --test 2>&1 | grep -oE '^(#|ℹ) pass [0-9]+' | grep -oE '[0-9]+' | head -1 )
-check "task02 suite is the 3 passing tests the task describes" "${tests_n:-?}" "3"
+# Pass count alone is satisfied by a suite with a red test appended: `pass 3` stays true while
+# `fail 1` goes unexamined -- and a red task02 baseline makes criterion 1(a) ("green first")
+# unmeetable for every run.
+t2p=$( cd "$F/task02-code" && node --test 2>&1 | grep -oE '^(#|ℹ) pass [0-9]+' | grep -oE '[0-9]+' | head -1 )
+t2f=$( cd "$F/task02-code" && node --test 2>&1 | grep -oE '^(#|ℹ) fail [0-9]+' | grep -oE '[0-9]+' | head -1 )
+check "task02 suite is exactly 3 passing / 0 failing" "${t2p:-?}/${t2f:-?}" "3/0"
 
 # --- runnable fixtures declare a test script ----------------------------------------------
 for d in task02-code task03-review; do

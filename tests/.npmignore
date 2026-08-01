@@ -1,0 +1,6 @@
+# The eval corpus is scorer-facing: task specs carry the pass criteria, and
+# fixtures/README.md carries the invariant list, the trap table and the mis-billing table.
+# Publishing them would put the answer key in every consumer's node_modules.
+# Full packaging story is iteration 3.4c; this line exists so a release cut before then
+# cannot publish the corpus.
+evals/
