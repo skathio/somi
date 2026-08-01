@@ -130,6 +130,20 @@ delta=$( node --input-type=module -e "
 " 2>/dev/null )
 check "defect is invisible in 30-day months and mis-bills in 31-day ones" "$delta" "ok"
 
+# --- B1, one layer down: the RECONSTRUCTED repo, not just the shipped tree ----------------
+# Everything above checks what ships. B1 can reappear at reconstruction time: if SoMi's install
+# step (or a future runner) drops a .gitignore containing `.somi` into $WORK before the baseline
+# commit, `git add -A` silently skips the renamed plan tree and the candidate meets a work item
+# with no phase file. Nothing in SoMi writes a .gitignore today — this asserts it stays that way.
+R=$(mktemp -d)
+trap 'rm -rf "$W" "$R"' EXIT
+cp -r "$F/task02-code/." "$R"/
+[ -d "$R/_somi" ] && mv "$R/_somi" "$R/.somi"
+( cd "$R" && git init -q -b main && git config user.email t@somi.invalid && git config user.name t \
+  && git add -A && git commit -qm baseline ) >/dev/null 2>&1
+tracked=$( cd "$R" && git ls-files | grep -c '^\.somi/plans/expired-token/' )
+check "reconstructed task02 tracks its plan tree in the baseline commit" "$tracked" "4"
+
 # --- task01: the absence criterion 3 scores ----------------------------------------------
 vol=$(grep -rniE '[0-9][0-9,._]*\s*(rows|req|rps|qps|tb|gb|mb|million|billion)|rows/(s|sec|day|yr|year)' \
       "$F/task01-plan" 2>/dev/null)

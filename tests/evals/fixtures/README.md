@@ -49,6 +49,14 @@ Three things that are easy to get wrong, each of which broke a draft of this fil
 - **`review.patch` lives beside the fixture, not inside it.** Inside, it becomes part of the
   baseline commit and the candidate reviews a diff that contains its own diff.
 
+**Nothing in this contract may introduce a `.gitignore` containing `.somi` into `$WORK`.** The
+rename at step 1 restores the plan tree's real name, so a `.gitignore` written by the install
+step — or by a future runner being helpful — makes `git add -A` skip it again and the candidate
+meets a work item with no phase file. That is B1 reappearing one layer down, where none of the
+ship-time checks can see it: they inspect the fixture, and this happens after the copy. No SoMi
+command writes a `.gitignore` today; `tests/scripts/evals-fixtures.sh` reconstructs task 02 and
+asserts all four plan files are tracked in the baseline commit, so it stays that way.
+
 ## What each fixture is for
 
 | Fixture | Task | The trap |
