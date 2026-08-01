@@ -57,6 +57,13 @@ echo "==> Eval fixture guards..."
 # regression on exactly what the corpus exists to protect.
 bash tests/scripts/evals-fixtures.sh
 
+echo "==> Eval runner unit tests..."
+# Guards tests/evals/run.mjs: the N-of-M grading bands, the phase-4 comparison rule, the result
+# schema, and --source worktree cleanup. Hermetic -- every case is --dry-run or a direct call.
+# This runs the runner's UNIT tests; it never invokes the runner against a model. The structural
+# assertion that npm test cannot execute the runner lives inside eval-runner.sh itself.
+bash tests/scripts/eval-runner.sh
+
 echo "==> Validating agent/command/skill frontmatter..."
 failed=0
 while IFS= read -r f; do
