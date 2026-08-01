@@ -14,12 +14,20 @@ ok()   { pass=$((pass+1)); printf '  ok   %s\n' "$1"; }
 bad()  { fail=$((fail+1)); printf '  FAIL %s\n' "$1"; }
 check(){ if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (want '$3', got '$2')"; fi; }
 
+# Pre-declared and trapped once, so a temp dir created after the trap is still cleaned up
+# on an early exit. Previously $R leaked on one path and $RB was never trapped at all.
+W=""; R=""; RB=""
+trap 'rm -rf "$W" "$R" "$RB"' EXIT
+
 echo "== eval fixtures =="
 
 # --- B1: every fixture file must actually ship -------------------------------------------
-# `git add -An` was the obvious spelling and is wrong: it lists only UNTRACKED files, so it
-# matches the on-disk count exactly once — before this work is committed — and returns 0 forever
-# after. check-ignore answers the question that is actually being asked, in either state.
+# Two wrong spellings preceded this one. `git add -An` lists only UNTRACKED files, so it matched
+# the on-disk count exactly once -- before this work was committed -- and returned 0 forever after.
+# Then plain `git check-ignore`, which consults the INDEX and reports nothing for a tracked file:
+# every fixture file is tracked, so it could not fire on any of them. Measured: a rule matching
+# task02's plan tree gave `default: 0 reported, --no-index: 4 reported` while npm pack dropped all
+# four. `--no-index` asks the question the assertion's name claims to ask.
 # Floor first: every "no bad files found" assertion below passes vacuously against an empty
 # tree, so establish that the tree is actually populated before trusting any of them.
 n_files=$(find "$F" -type f | wc -l | tr -d ' ')
@@ -29,7 +37,7 @@ else
   bad "fixture tree is populated (want >=24, got $n_files)"
 fi
 
-ignored=$(find "$F" -type f -print0 | xargs -0 git check-ignore 2>/dev/null)
+ignored=$(find "$F" -type f -print0 | xargs -0 git check-ignore --no-index 2>/dev/null)
 if [ -z "$ignored" ]; then
   ok "no fixture file is gitignored"
 else
@@ -37,7 +45,7 @@ else
   printf '%s\n' "$ignored" | sed 's/^/       /'
 fi
 
-if git check-ignore -q "$F" 2>/dev/null; then
+if git check-ignore -q --no-index "$F" 2>/dev/null; then
   bad "fixtures directory is not itself ignored"
 else
   ok "fixtures directory is not itself ignored"
@@ -134,7 +142,13 @@ elif [ -f "$F/MANIFEST.sha256" ]; then
   # The manifest must also cover the tree exactly -- a NEW file is invisible to sha256sum -c.
   man_n=$(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256")
   live_n=$(( $(find "$F/task01-plan" "$F/task02-code" "$F/task03-review" -type f | wc -l) + ${#EXTRA_MANIFEST[@]} ))
-  check "manifest covers every candidate-visible file (no untracked additions)" "$live_n" "$man_n"
+  # Argument order matters here: the MANIFEST is the stale value when these disagree, so it goes
+  # in the "got" slot. The previous order framed the live tree as wrong.
+  if [ "$man_n" = "$live_n" ]; then
+    ok "manifest covers every candidate-visible file (no untracked additions)"
+  else
+    bad "manifest covers every candidate-visible file (want $live_n live files, manifest has $man_n) — run: bash tests/scripts/evals-fixtures.sh --update-manifest"
+  fi
 else
   bad "MANIFEST.sha256 exists"
 fi
@@ -167,7 +181,6 @@ fi
 
 W=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
 : "${W:?mktemp -d returned empty}"
-trap 'rm -rf "$W"' EXIT
 cp -r "$F/task03-review/." "$W"/
 ( cd "$W" && git init -q -b main \
   && git config user.email t@somi.invalid && git config user.name t \
@@ -248,7 +261,6 @@ check "defect is invisible in 30-day months and mis-bills in 31-day ones" "$delt
 # with no phase file. Nothing in SoMi writes a .gitignore today — this asserts it stays that way.
 R=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
 : "${R:?mktemp -d returned empty}"
-trap 'rm -rf "$W" "$R"' EXIT
 cp -r "$F/task02-code/." "$R"/
 [ -d "$R/_somi" ] && mv "$R/_somi" "$R/.somi"
 ( cd "$R" && git init -q -b main && git config user.email t@somi.invalid && git config user.name t \
@@ -262,9 +274,9 @@ check "reconstructed task02 tracks its plan tree in the baseline commit" "$track
 vol=$(grep -rniE '[0-9][0-9,._]*[[:space:]]*(rows|req|rps|qps|[kmgt]i?b|[kmgtKMGT]\b|million|billion|thousand)|(rows|req)/(s|sec|second|min|hour|day|yr|year)|(hundreds|tens|dozens|scores|half|quarter|couple)[[:space:]]+(of[[:space:]]+)?(a[[:space:]]+)?(million|billion|thousand|gigabyte|terabyte|megabyte)s?|(million|billion|thousand|gigabyte|terabyte)s?([[:space:]]+of)?[[:space:]]+(rows|records|requests|events)|[0-9]+e[0-9]+[[:space:]]*(rows|records|requests|events)' \
       "$F/task01-plan" 2>/dev/null)
 if [ -z "$vol" ]; then
-  ok "task01 supplies no traffic/volume/row-size figure"
+  ok "task01 trips no known volume-figure phrasing (denylist, not a proof)"
 else
-  bad "task01 supplies no traffic/volume/row-size figure"
+  bad "task01 trips no known volume-figure phrasing (denylist, not a proof)"
   printf '%s\n' "$vol" | sed 's/^/       /'
 fi
 
@@ -292,24 +304,8 @@ check "mutant and control export the same surface as token.mjs" "$surf" "ok"
 # are excluded deliberately: the two files explain different things and should say so. Code is
 # what must match, and an earlier version normalised one JSDoc line by regex, which is exactly the
 # kind of "the check has a special case" seam that hides a real divergence.
-ident=$( node -e "
-  const fs = require('fs');
-  const code = (f) => fs.readFileSync(f,'utf8')
-    .split('\n')
-    .filter((l) => { const t = l.trim(); return t && !t.startsWith('//') && !t.startsWith('*') && t !== '/**'; })
-    .join('\n');
-  const mut = code('$F/task02-code-mutant.mjs');
-  let ctl = code('$F/task02-code-control.mjs');
-  // The expiry block, as CODE lines only -- derived from the control rather than hardcoded, so a
-  // reworded comment inside it cannot silently change what this assertion is comparing.
-  const m = ctl.match(/^ *if \\(typeof payload\\.exp[\\s\\S]*?^ *\\}$/m);
-  if (!m) { process.stdout.write('control has no recognisable expiry block'); process.exit(0); }
-  ctl = ctl.replace(m[0] + '\n', '');
-  if (ctl === mut) { process.stdout.write('ok'); process.exit(0); }
-  const a = ctl.split('\n'), b = mut.split('\n');
-  const i = a.findIndex((l, n) => l !== b[n]);
-  process.stdout.write('differs outside the expiry block at code line ' + (i+1) + ': ' + JSON.stringify(a[i] ?? null) + ' vs ' + JSON.stringify(b[i] ?? null));
-" 2>/dev/null )
+ident=$( node "$ROOT/tests/scripts/lib/reference-pair.mjs" \
+           "$F/task02-code-mutant.mjs" "$F/task02-code-control.mjs" 2>/dev/null )
 check "control is the mutant plus EXACTLY the expiry block (source-identical)" "$ident" "ok"
 
 pair=$( node --input-type=module -e "
@@ -362,14 +358,15 @@ adr="$F/task01-plan/docs/adr/0004-no-new-datastores.md"
 # Scoped to the Decision BODY. The title legitimately reads "No new datastores without a migration
 # path" -- that filename-vs-title-vs-content tension is the whole trap, so searching the whole file
 # for a prohibition matches the trap itself and fails a correct fixture.
-adr_body=$( sed -n '/^## Decision/,/^## /p' "$adr" | grep -v '^## ' )
-if printf '%s' "$adr_body" | grep -qi 'migration path off it' \
-   && ! printf '%s' "$adr_body" | grep -qiE 'do not add (a |any )?new datastore|must (use|stay on|remain on) postgres|forbid'; then
-  ok "task01 ADR requires a migration path and prohibits nothing (the filename-vs-content trap)"
-else
-  bad "task01 ADR requires a migration path and prohibits nothing (the filename-vs-content trap)"
-  printf '%s\n' "$adr_body" | sed 's/^/       /'
-fi
+# Scoped to the Decision AND Consequences bodies. The title legitimately reads "No new datastores
+# without a migration path" -- that filename-vs-title-vs-content tension is the whole trap.
+#
+# Asserted POSITIVELY. A denylist of prohibition phrasings let through "we don't add datastores",
+# "New datastores are prohibited", and "Never introduce a new datastore" -- the first being the
+# exact wrong answer criterion 4 fails a candidate for citing. Requiring the conditional-permission
+# construct and forbidding any modal-negative is a claim the pattern can actually make.
+adr_ok=$( node "$ROOT/tests/scripts/lib/adr-shape.mjs" "$adr" 2>/dev/null )
+check "task01 ADR grants conditional permission and prohibits nothing (the trap)" "$adr_ok" "yes"
 
 exp=$(grep -ncE '\bexp\b|expir' "$F/task02-code/tests/auth/token.test.mjs" 2>/dev/null | tr -d ' \n')
 check "task02 suite has NO expiry coverage (the absence is the task)" "${exp:-0}" "0"
@@ -442,6 +439,17 @@ xref=$( node -e "
   process.stdout.write(bad.length ? bad.join('; ') : 'ok');
 " 2>/dev/null )
 check "every task spec's 'criterion N' cross-reference resolves" "$xref" "ok"
+
+# --- the shell-quoting class, closed structurally ----------------------------------------------
+embed=$( node "$ROOT/tests/scripts/lib/shell-embedded-js.mjs" \
+  "$ROOT/tests/scripts/evals-fixtures.sh" "$ROOT/tests/scripts/eval-runner.sh" \
+  "$ROOT/tests/scripts/evals-packaging.sh" 2>/dev/null )
+if [ "$embed" = "ok" ]; then
+  ok "no node -e block contains a backtick or unescaped double quote"
+else
+  bad "no node -e block contains a backtick or unescaped double quote"
+  printf '%s\n' "$embed" | sed 's/^/       /'
+fi
 
 # --- runnable fixtures declare a test script ----------------------------------------------
 for d in task02-code task03-review; do

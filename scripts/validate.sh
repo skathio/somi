@@ -26,7 +26,11 @@ for f in \
 done
 
 echo "==> Node syntax check (node --check over the ported .mjs)..."
-find hooks scripts tests/evals -name '*.mjs' -type f -print0 \
+# tests/evals is excluded from the published package (tests/.npmignore), so this path does not
+# exist in an unpacked tarball -- where `npm test` is exactly what a release smoke check runs.
+# Naming a missing directory makes find exit 1 and the whole script die under `set -e`.
+EVAL_TREE=""; [ -d tests/evals ] && EVAL_TREE="tests/evals"
+find hooks scripts $EVAL_TREE -name '*.mjs' -type f -print0 \
   | xargs -0 -I{} node --check {}
 
 echo "==> Hook behavior fixtures..."
@@ -55,14 +59,14 @@ echo "==> Eval fixture guards..."
 # written into fixture source as comments the candidate reads — which would have flatlined two
 # load-bearing rubric dimensions at pass in BOTH arms of the trim comparison, reporting no
 # regression on exactly what the corpus exists to protect.
-bash tests/scripts/evals-fixtures.sh
+if [ -d tests/evals ]; then bash tests/scripts/evals-fixtures.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
 echo "==> Eval runner unit tests..."
 # Guards tests/evals/run.mjs: the N-of-M grading bands, the phase-4 comparison rule, the result
 # schema, and --source worktree cleanup. Hermetic -- every case is --dry-run or a direct call.
 # This runs the runner's UNIT tests; it never invokes the runner against a model. The structural
 # assertion that npm test cannot execute the runner lives inside eval-runner.sh itself.
-bash tests/scripts/eval-runner.sh
+if [ -d tests/evals ]; then bash tests/scripts/eval-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
 echo "==> Eval packaging & hermeticity..."
 # Phase 3's stated invariant risk lives here, and iteration 3.4c owns it alone: `npm test` never

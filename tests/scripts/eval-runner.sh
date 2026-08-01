@@ -205,6 +205,45 @@ check "scoring leaves the candidate tree untouched" \
      process.stdout.write(String(fs.readFileSync(p, 'utf8') === before));
    ")" "true"
 
+# --- 4.1: the pooled certification gate --------------------------------------------------------
+# Synthetic result files, so the gate is tested without 260 model runs.
+mk() { j "
+  const tasks = {};
+  const [nDims, n, passes] = [$1, $2, $3];
+  for (let i = 0; i < nDims; i++) {
+    tasks['t' + i] = [];
+    for (let r = 0; r < n; r++) tasks['t' + i].push({ index: r, dimensions: { S1: r < passes } });
+  }
+  const res = M.buildResult({ source: { ref: 'x', sha: 'deadbeef' }, tasks, runs: n });
+  const c = M.certify(res);
+  process.stdout.write([c.certified, c.failures, c.draws, c.sufficientDraws].join('|'));
+"; }
+# 13 dimensions x 20 runs = 260 draws. A perfect corpus and a corpus at exactly the bar both pass.
+check "13 dims x 20/20 certifies"                  "$(mk 13 20 20)" "true|0|260|true"
+check "5 failures across 260 draws certifies (at the bar)" "$(mk 13 20 20 | true; j "
+  const tasks = {}; for (let i = 0; i < 13; i++) { tasks['t'+i] = [];
+    for (let r = 0; r < 20; r++) tasks['t'+i].push({ index: r, dimensions: { S1: !(i < 5 && r === 0) } }); }
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 20 }));
+  process.stdout.write([c.certified, c.failures, c.draws].join('|'));")" "true|5|260"
+check "6 failures across 260 draws does NOT certify" "$(j "
+  const tasks = {}; for (let i = 0; i < 13; i++) { tasks['t'+i] = [];
+    for (let r = 0; r < 20; r++) tasks['t'+i].push({ index: r, dimensions: { S1: !(i < 6 && r === 0) } }); }
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 20 }));
+  process.stdout.write([c.certified, c.failures, c.draws].join('|'));")" "false|6|260"
+
+# The case the gate exists for: ONE dimension secretly at 0.90 while the rest hold. Per-dimension
+# `>=19/20` would clear it 73.6% of the time; pooled catches it, because 2 failures from one
+# dimension plus the corpus's own noise crosses the budget.
+check "one dimension at 18/20 with 12 clean is caught by the pooled budget" "$(j "
+  const tasks = {}; for (let i = 0; i < 13; i++) { tasks['t'+i] = [];
+    for (let r = 0; r < 20; r++) tasks['t'+i].push({ index: r, dimensions: { S1: !(i === 0 && r < 6) } }); }
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 20 }));
+  process.stdout.write([c.certified, c.failures, c.softest[0].task, c.softest[0].rate.toFixed(2)].join('|'));")"   "false|6|t0|0.70"
+
+# A short run must not read as certified. 0 failures out of 20 draws is not a sharp corpus; it is
+# a corpus that has barely been sampled.
+check "a 20-draw run is not sufficientDraws" "$(mk 1 20 20)" "true|0|20|false"
+
 # --- npm test must not invoke this runner ------------------------------------------------------
 # Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is
 # explicitly permitted; what is forbidden is executing it.

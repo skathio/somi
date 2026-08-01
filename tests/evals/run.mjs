@@ -84,6 +84,52 @@ export function compare(baseline, candidate) {
   return { accepted: regressions.length === 0, regressions };
 }
 
+/**
+ * Iteration 4.1's gate: certify the assumption the whole error budget rests on -- a working
+ * dimension passes >=99% of runs.
+ *
+ * POOLED, not per-dimension, and that is the whole point. A `>=19/20` per-dimension gate clears a
+ * true-0.95 dimension 73.6% of the time -- exactly the case that then makes `unstable` fire on
+ * something in 64% of every later 120-run comparison -- and bounces a perfectly sharp corpus 19.8%
+ * of the time, because all 13 dimensions must clear independently. Pooled at <=5/260:
+ *
+ *   true rate 0.99 -> clears 95.2%      true rate 0.95 -> clears 0.9%
+ *
+ * Near-total separation, at zero extra cost: the same 20 runs, read pooled instead of per-dimension.
+ * Per-dimension rates are still reported, because pooling decides but only the per-dimension view
+ * says WHICH task to sharpen.
+ *
+ * A soft dimension is a TASK DEFECT, returned to 3.3 for sharpening before 4.2 begins. It is never
+ * absorbed by widening the band -- that would be the corpus certifying itself.
+ */
+export const CERTIFY = { maxFailures: 5, draws: 260 };
+
+export function certify(result, { maxFailures = CERTIFY.maxFailures } = {}) {
+  const dimensions = [];
+  let failures = 0;
+  let draws = 0;
+  for (const [task, t] of Object.entries(result.tasks ?? {})) {
+    for (const [dim, d] of Object.entries(t.dimensions ?? {})) {
+      const missed = d.n - d.passes;
+      failures += missed;
+      draws += d.n;
+      dimensions.push({ task, dim, passes: d.passes, n: d.n, rate: d.n ? d.passes / d.n : null, failures: missed });
+    }
+  }
+  dimensions.sort((a, b) => a.rate - b.rate || a.task.localeCompare(b.task));
+  return {
+    certified: failures <= maxFailures,
+    failures,
+    draws,
+    maxFailures,
+    // Named separately from `certified` so a caller cannot read "few failures" as "enough runs".
+    // A corpus that failed 0 of 20 draws is not certified; it is barely started.
+    sufficientDraws: draws >= CERTIFY.draws,
+    dimensions,
+    softest: dimensions.slice(0, 3),
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Definition-set resolution
 // ---------------------------------------------------------------------------------------------

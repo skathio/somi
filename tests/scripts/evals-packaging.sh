@@ -79,16 +79,23 @@ done
 [ "$net_failed" -eq 0 ] && ok "no script reachable from npm test invokes a network client or reads a credential"
 
 # --- node --check must cover the eval tree ------------------------------------------------------
-if grep -qE "find [^|]*tests/evals[^|]*-name '\*\.mjs'" scripts/validate.sh; then
+if grep -qE 'EVAL_TREE="tests/evals"' scripts/validate.sh \
+   && grep -qE "find hooks scripts \\\$EVAL_TREE -name '\\*\\.mjs'" scripts/validate.sh; then
   ok "validate.sh syntax-checks tests/evals/**/*.mjs"
 else
   bad "validate.sh syntax-checks tests/evals/**/*.mjs"
 fi
-n_mjs=$(find tests/evals -name '*.mjs' -type f | wc -l | tr -d ' ')
-if [ "$n_mjs" -ge 10 ]; then
-  ok "there are .mjs files under tests/evals to check ($n_mjs)"
+# Skipped in a published tarball, where the tree is absent BY DESIGN -- the exclusion asserted
+# above. Failing here would make the guard contradict its own passing assertion.
+if [ -d tests/evals ]; then
+  n_mjs=$(find tests/evals -name '*.mjs' -type f | wc -l | tr -d ' ')
+  if [ "$n_mjs" -ge 10 ]; then
+    ok "there are .mjs files under tests/evals to check ($n_mjs)"
+  else
+    bad "there are .mjs files under tests/evals to check (want >=10, got $n_mjs)"
+  fi
 else
-  bad "there are .mjs files under tests/evals to check (want >=10, got $n_mjs)"
+  ok "tests/evals absent (published tarball) - syntax-check scope assertion skipped"
 fi
 
 echo
