@@ -208,10 +208,14 @@ check "scoring leaves the candidate tree untouched" \
 # --- npm test must not invoke this runner ------------------------------------------------------
 # Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is
 # explicitly permitted; what is forbidden is executing it.
-if grep -nE '(node|bash)[^|]*tests/evals/run\.mjs' scripts/validate.sh package.json >/dev/null 2>&1; then
-  bad "neither validate.sh nor package.json executes the eval runner"
+# Scoped to what `npm test` reaches. package.json's eval:behavioral script references the runner
+# ON PURPOSE -- that is the escape hatch. The full invariant (packaging + hermeticity) is owned by
+# tests/scripts/evals-packaging.sh; this is the narrow version, kept here so 3.4a's own guard
+# fails if someone wires the runner into validate.sh.
+if grep -nE '(node|bash)[^|]*tests/evals/run\.mjs' scripts/validate.sh >/dev/null 2>&1; then
+  bad "validate.sh does not execute the eval runner"
 else
-  ok "neither validate.sh nor package.json executes the eval runner"
+  ok "validate.sh does not execute the eval runner"
 fi
 
 echo

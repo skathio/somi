@@ -64,6 +64,13 @@ echo "==> Eval runner unit tests..."
 # assertion that npm test cannot execute the runner lives inside eval-runner.sh itself.
 bash tests/scripts/eval-runner.sh
 
+echo "==> Eval packaging & hermeticity..."
+# Phase 3's stated invariant risk lives here, and iteration 3.4c owns it alone: `npm test` never
+# invokes a model, reaches the network, or reads a credential -- and the eval corpus never ships
+# to consumers. Asserted at the INVOCATION level, because validate.sh must NAME tests/evals to
+# syntax-check it, so a "no mention" rule would be self-contradicting.
+bash tests/scripts/evals-packaging.sh
+
 echo "==> Validating agent/command/skill frontmatter..."
 failed=0
 while IFS= read -r f; do
