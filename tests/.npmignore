@@ -4,3 +4,7 @@
 # Full packaging story is iteration 3.4c; this line exists so a release cut before then
 # cannot publish the corpus.
 evals/
+
+# The guard is inert without its subject: shipped alone it fails ~28 assertions against a tree
+# that is not in the package. Full packaging story is 3.4c.
+scripts/evals-fixtures.sh

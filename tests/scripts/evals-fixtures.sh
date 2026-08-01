@@ -58,10 +58,16 @@ for a in spec.md progress.md diary.md phases/01-reject-expired.md; do
     || bad "task02 work item has $a"
 done
 
+# Scorer-side files that belong in the manifest even though they sit outside the three fixture
+# directories. Declared ONCE: the generator, the count assertion, and the presence loop all read
+# this array, so adding a file here cannot leave the arithmetic 40 lines away out of step.
+EXTRA_MANIFEST=("$F/task03-review.patch" "$F/make-review-patch.mjs")
+SCORER_SIDE=(README.md MANIFEST.sha256 make-review-patch.mjs task03-review.patch \
+             task02-code-mutant.mjs task02-code-control.mjs)
+
 # --- D1: the scorer-side files exist. None is imported by anything here, so deletion is silent,
 # and fixtures/README.md is the reconstruction contract 3.4b is built from.
-for f in README.md MANIFEST.sha256 make-review-patch.mjs task03-review.patch \
-         task02-code-mutant.mjs task02-code-control.mjs; do
+for f in "${SCORER_SIDE[@]}"; do
   [ -f "$F/$f" ] && ok "scorer-side file present: $f" || bad "scorer-side file present: $f"
 done
 
@@ -80,13 +86,14 @@ done
 if [ "${1:-}" = "--update-manifest" ]; then
   # Refuse while anything else is red. --update-manifest exists to record a reviewed change, not
   # to clear a failing guard; without this it is a one-command bypass of every check below it.
-  if ! "$0" --no-manifest >/tmp/somi-evals-premanifest.$$ 2>&1; then
+  PRE=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
+  if ! bash "$ROOT/tests/scripts/evals-fixtures.sh" --no-manifest >"$PRE" 2>&1; then
     echo "refusing to regenerate: other assertions are failing. Fix them first." >&2
-    grep -E '^  FAIL' /tmp/somi-evals-premanifest.$$ >&2 || true
-    rm -f /tmp/somi-evals-premanifest.$$
+    grep -E '^  FAIL' "$PRE" >&2 || true
+    rm -f "$PRE"
     exit 1
   fi
-  rm -f /tmp/somi-evals-premanifest.$$
+  rm -f "$PRE"
   {
     echo "# Content hashes of every CANDIDATE-VISIBLE fixture file."
     echo "# Regenerate with: bash tests/scripts/evals-fixtures.sh --update-manifest"
@@ -94,7 +101,7 @@ if [ "${1:-}" = "--update-manifest" ]; then
     echo "# the change states no pass criterion, then regenerate. A keyword denylist cannot make"
     echo "# this promise -- it only catches phrasings someone already thought of."
     { find "$F/task01-plan" "$F/task02-code" "$F/task03-review" -type f
-      echo "$F/task03-review.patch"; echo "$F/make-review-patch.mjs"; } \
+      printf '%s\n' "${EXTRA_MANIFEST[@]}"; } \
       | LC_ALL=C sort | xargs sha256sum
   } > "$F/MANIFEST.sha256"
   echo "manifest regenerated: $(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256") files"
@@ -121,7 +128,7 @@ elif [ -f "$F/MANIFEST.sha256" ]; then
   fi
   # The manifest must also cover the tree exactly -- a NEW file is invisible to sha256sum -c.
   man_n=$(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256")
-  live_n=$(( $(find "$F/task01-plan" "$F/task02-code" "$F/task03-review" -type f | wc -l) + 2 ))
+  live_n=$(( $(find "$F/task01-plan" "$F/task02-code" "$F/task03-review" -type f | wc -l) + ${#EXTRA_MANIFEST[@]} ))
   check "manifest covers every candidate-visible file (no untracked additions)" "$live_n" "$man_n"
 else
   bad "MANIFEST.sha256 exists"
@@ -153,7 +160,8 @@ fi
   && bad "review.patch is NOT inside task03-review/" \
   || ok "review.patch is NOT inside task03-review/"
 
-W=$(mktemp -d)
+W=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
+: "${W:?mktemp -d returned empty}"
 trap 'rm -rf "$W"' EXIT
 cp -r "$F/task03-review/." "$W"/
 ( cd "$W" && git init -q -b main \
@@ -200,8 +208,14 @@ months=$( cd "$F/task03-review" && node --input-type=module -e "
   const body = src
     .replace(/^import .*$/gm, '')
     .replace(/\\btest\\(/g, '__t(');
-  const fn = new Function('__t','assert','prorate', body);
-  const assert = new Proxy({}, { get: () => () => {} });
+  let fn;
+  try { fn = new Function('__t','assert','prorate', body); }
+  catch (e) { process.stdout.write('cannot parse proration.test.mjs: ' + e.message); process.exit(0); }
+  // Invoke any function-valued argument. A bare no-op Proxy never runs the callbacks passed to
+  // assert.throws / assert.doesNotThrow / assert.rejects, so a 31-day date written inside one was
+  // invisible here while node --test executed it -- the same measured-the-wrong-thing shape as
+  // the Date.UTC syntax count this check replaced.
+  const assert = new Proxy({}, { get: () => (...a) => { for (const x of a) if (typeof x === 'function') { try { x(); } catch {} } } });
   fn(t, assert, (o,n,d) => { seen.push(d); return { credit:0, charge:0, net:0, display:'' }; });
   for (const f of tests) { try { f(); } catch {} }
   if (seen.length < 3) { process.stdout.write('only ' + seen.length + ' prorate() calls observed'); process.exit(0); }
@@ -227,7 +241,8 @@ check "defect is invisible in 30-day months and mis-bills in 31-day ones" "$delt
 # step (or a future runner) drops a .gitignore containing `.somi` into $WORK before the baseline
 # commit, `git add -A` silently skips the renamed plan tree and the candidate meets a work item
 # with no phase file. Nothing in SoMi writes a .gitignore today — this asserts it stays that way.
-R=$(mktemp -d)
+R=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
+: "${R:?mktemp -d returned empty}"
 trap 'rm -rf "$W" "$R"' EXIT
 cp -r "$F/task02-code/." "$R"/
 [ -d "$R/_somi" ] && mv "$R/_somi" "$R/.somi"
@@ -239,7 +254,7 @@ check "reconstructed task02 tracks its plan tree in the baseline commit" "$track
 # --- task01: the absence criterion 3 scores ----------------------------------------------
 # `kb` was missing and row size is one of the three things criterion 3 forbids; spelled-out
 # magnitudes ("half a billion") slipped because the alternation required an adjacent digit.
-vol=$(grep -rniE '[0-9][0-9,._]*[[:space:]]*(rows|req|rps|qps|[kmgt]i?b|[kmgtKMGT]\b|million|billion|thousand)|(rows|req)/(s|sec|second|min|hour|day|yr|year)|(half|quarter|couple)[[:space:]]+(a[[:space:]]+)?(million|billion|thousand)|(million|billion|thousand)[[:space:]]+(rows|records|requests|events)' \
+vol=$(grep -rniE '[0-9][0-9,._]*[[:space:]]*(rows|req|rps|qps|[kmgt]i?b|[kmgtKMGT]\b|million|billion|thousand)|(rows|req)/(s|sec|second|min|hour|day|yr|year)|(hundreds|tens|dozens|scores|half|quarter|couple)[[:space:]]+(of[[:space:]]+)?(a[[:space:]]+)?(million|billion|thousand|gigabyte|terabyte|megabyte)s?|(million|billion|thousand|gigabyte|terabyte)s?([[:space:]]+of)?[[:space:]]+(rows|records|requests|events)|[0-9]+e[0-9]+[[:space:]]*(rows|records|requests|events)' \
       "$F/task01-plan" 2>/dev/null)
 if [ -z "$vol" ]; then
   ok "task01 supplies no traffic/volume/row-size figure"
@@ -320,6 +335,37 @@ else
   bad "committed patch matches its generator (run: node $F/make-review-patch.mjs)"
 fi
 
+# THE DEFECT MUST STILL BE THERE. Every other task02 assertion guards the *conditions* around
+# the bug -- no expiry coverage, mutant parity, reference greenness -- and none guards the bug.
+# Adding the four-line expiry check to token.mjs and clearing the manifest through the sanctioned
+# --update-manifest path scored 38/38 green: a task with nothing to fix, whose candidate still
+# writes a test that is green on the control and red on the mutant, so S5 flatlines at pass in
+# BOTH arms and reports no regression. task03's symmetric assertion existed from the start.
+defect2=$( node --input-type=module -e "
+  const t = await import('$ROOT/$F/task02-code/src/auth/token.mjs');
+  const expired = t.mintToken('u', Math.floor(Date.now()/1000) - 60);
+  let accepted = false;
+  try { t.verifyToken(expired); accepted = true; } catch {}
+  process.stdout.write(accepted ? 'ok' : 'token.mjs already REJECTS expired tokens - task02 has no defect left to find');
+" 2>/dev/null )
+check "shipped token.mjs accepts an expired token (the defect IS the task)" "$defect2" "ok"
+
+# task01's trap is the ADR's filename-vs-content tension: the filename says no-new-datastores,
+# the content only requires a migration path. If the content ever grows an actual prohibition,
+# criterion 4's "citing it as 'we don't add datastores' fails" becomes a false fail.
+adr="$F/task01-plan/docs/adr/0004-no-new-datastores.md"
+# Scoped to the Decision BODY. The title legitimately reads "No new datastores without a migration
+# path" -- that filename-vs-title-vs-content tension is the whole trap, so searching the whole file
+# for a prohibition matches the trap itself and fails a correct fixture.
+adr_body=$( sed -n '/^## Decision/,/^## /p' "$adr" | grep -v '^## ' )
+if printf '%s' "$adr_body" | grep -qi 'migration path off it' \
+   && ! printf '%s' "$adr_body" | grep -qiE 'do not add (a |any )?new datastore|must (use|stay on|remain on) postgres|forbid'; then
+  ok "task01 ADR requires a migration path and prohibits nothing (the filename-vs-content trap)"
+else
+  bad "task01 ADR requires a migration path and prohibits nothing (the filename-vs-content trap)"
+  printf '%s\n' "$adr_body" | sed 's/^/       /'
+fi
+
 exp=$(grep -ncE '\bexp\b|expir' "$F/task02-code/tests/auth/token.test.mjs" 2>/dev/null | tr -d ' \n')
 check "task02 suite has NO expiry coverage (the absence is the task)" "${exp:-0}" "0"
 
@@ -335,7 +381,7 @@ check "task02 suite is exactly 3 passing / 0 failing" "${t2p:-?}/${t2f:-?}" "3/0
 # because they differ only in expiry and no baseline test touches expiry. Pin the premise.
 refs_ok=ok
 for r in task02-code-control task02-code-mutant; do
-  RB=$(mktemp -d); cp -r "$F/task02-code/." "$RB"/; cp "$F/$r.mjs" "$RB/src/auth/token.mjs"
+  RB=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }; : "${RB:?empty}"; cp -r "$F/task02-code/." "$RB"/; cp "$F/$r.mjs" "$RB/src/auth/token.mjs"
   got=$( cd "$RB" && node --test 2>&1 | grep -oE '^(#|ℹ) (pass|fail) [0-9]+' | grep -oE '[0-9]+' | tr '\n' '/' )
   [ "$got" = "3/0/" ] || refs_ok="$r -> $got"
   rm -rf "$RB"
