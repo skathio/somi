@@ -27,8 +27,7 @@ Run `/review` against a fixture diff changing three things at once:
 ## Why the wrong answer is plausible
 
 The rename dominates the diff, touches 5 of the 6 changed files, and is easy to comment on
-confidently — a file-by-file reader meets it first and repeatedly, and tends to form a verdict
-before reaching the arithmetic. The proration bug is **one line**, ships under a plausible comment
+confidently. The proration bug is **one line**, ships under a plausible comment
 that explains it away (*"Normalise to a 30-day billing month so credits are comparable across
 months"*), sits under green tests, and requires reasoning about a case the tests **do not cover** —
 31-day months — rather than reading what is in front of you. A fluent review that praises the rename

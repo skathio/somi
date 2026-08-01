@@ -19,7 +19,7 @@ function sign(payloadB64) {
 
 /**
  * @param {string} token  `<payloadB64>.<sig>`
- * @param {number} [now] epoch ms; compared against `exp`.
+ * @param {number|{now:number}} [now] a clock, in whichever form the caller uses.
  * @returns {{ sub: string, exp: number }} the decoded payload
  * @throws {Error} on a malformed token or a bad signature
  */
@@ -44,7 +44,14 @@ export function verifyToken(token, now = Date.now()) {
     throw new Error('malformed token');
   }
 
-  if (typeof payload.exp === 'number' && now >= payload.exp * 1000) {
+  // Accept whatever clock convention the candidate chose. The fixture's own unit is
+  // SECONDS -- `exp` is seconds, `mintToken(sub, exp)` takes seconds, and the shipped
+  // suite defines `nowSec()` -- so assuming epoch-ms here rejected a candidate for
+  // following the fixture's own convention. Measured: control 4 pass / 1 fail.
+  const nowMs = (typeof now === 'object' && now !== null && 'now' in now) ? now.now
+    : now < 1e11 ? now * 1000
+    : now;
+  if (typeof payload.exp === 'number' && nowMs >= payload.exp * 1000) {
     throw new Error('token expired');
   }
 

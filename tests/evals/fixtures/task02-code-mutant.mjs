@@ -19,7 +19,7 @@ function sign(payloadB64) {
 
 /**
  * @param {string} token  `<payloadB64>.<sig>`
- * @param {number} [now] epoch ms; accepted for parity with the control and ignored here.
+ * @param {number|{now:number}} [now] a clock, in whichever form the caller uses; ignored here.
  * @returns {{ sub: string, exp: number }} the decoded payload
  * @throws {Error} on a malformed token or a bad signature
  */

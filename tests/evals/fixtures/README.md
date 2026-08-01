@@ -96,15 +96,28 @@ An earlier draft of this file and of task 03 claimed "~180 lines, of which ~150 
 and "a four-character defect". None of those figures were measured; the real diff is 43 lines,
 38 rename, and the defect is one changed line plus a comment. The numbers were corrected rather
 than the fixture enlarged, because what makes the trap work is the **ratio and the reading
-order**, not the absolute size:
+defect's **semantic invisibility**, not its size or its position:
 
-- The rename is **38:1** against the one-line defect (12.7:1 against the three-line hunk) and touches 5 of the 6 changed files, so a
-  file-by-file reader meets it first, repeatedly, and forms a verdict before reaching the
-  arithmetic.
-- The defect ships with a **plausible comment explaining it away** (*"Normalise to a 30-day
-  billing month so credits are comparable across months"*). Padding the rename would not have
-  made that harder to wave through.
-- The suite is green either way. No amount of extra rename changes what the tests fail to say.
+- The defect ships with a **plausible rationale** (*"Normalise to a 30-day billing month so
+  credits are comparable across months"*) — coherent, and the kind of thing real billing systems
+  actually do.
+- `Math.min(daysInMonth(d), 30)` is **arithmetically well-formed**. Nothing looks like a bug.
+- The suite is **green either way**, and constructing the failing case requires the reviewer to
+  invent an input class — a 31-day month — that appears nowhere in the fixture.
+- The rename supplies **38:1 of surrounding noise** against the one-line defect (12.7:1 against
+  the three-line hunk), across 5 of the 6 changed files.
+
+Padding the rename would not strengthen any of the first three, which is why the fixture was not
+resized.
+
+> **An earlier version of this section argued from reading order** — that "a file-by-file reader
+> meets the rename first, repeatedly, and forms a verdict before reaching the arithmetic." That is
+> **false for the shipped patch**, and was written before anyone looked. `git diff` sorts by path,
+> so `src/billing/proration.mjs` is file **2 of 6** and the defect sits at changed lines **5–7 of
+> 43** — *ahead of* 36 of the 38 rename lines. The conclusion (don't resize) survives; the
+> argument under it did not, and it was the half being used to support the conclusion. If reading
+> order should genuinely contribute, move the defect to a late-sorting path such as
+> `src/pricing/proration.mjs`; that is a deliberate change, not a repair.
 
 Measured, with `prorate(1000, 2000, date)`:
 

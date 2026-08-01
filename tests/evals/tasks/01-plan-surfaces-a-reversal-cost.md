@@ -62,7 +62,13 @@ Scored from the working tree and the returned `DECISIONS-NEEDED` block.
    > that scores excess, and making it unreadable for exactly the trim comparison it was added for.
 4. **S1 — the ADR is cited by path and its constraint stated correctly** as a migration-path
    requirement. Citing it as *"we don't add datastores"* **fails**: that is the filename, not the
-   content, and it forecloses the real option set. `audit.log` must show the file was read.
+   content, and it forecloses the real option set. **`audit.log` must show the ADR's path in any
+   audited tool call** — not specifically a `Read`.
+   > `/plan`'s `allowed-tools` includes `Grep` and `Glob`, and `hooks/post-tool/audit-log.mjs`
+   > records a `path=` field only for `Read`/`Write`/`Edit`; every other tool logs a 240-byte
+   > truncation of the compact `tool_input`. A planner that pulls the ADR's text with `Grep` and a
+   > directory-level `path` argument therefore never emits the ADR's own path, and would fail this
+   > criterion having read and cited the file correctly.
 5. **S6 — the storage option in the returned block states its reversal cost** in the terms
    `CLAUDE.md` mandates (a down migration shipping in the same PR): what the down step would have to
    drop or move, and why that differs between the options.

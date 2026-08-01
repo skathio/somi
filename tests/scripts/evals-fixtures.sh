@@ -110,7 +110,14 @@ elif [ -f "$F/MANIFEST.sha256" ]; then
   else
     bad "every candidate-visible file matches the content manifest"
     printf '%s\n' "$man_out" | sed 's/^/       /'
-    printf '       (if the change is intended: bash tests/scripts/evals-fixtures.sh --update-manifest)\n'
+    printf '\n       A candidate-visible file changed. The manifest cannot judge whether the change\n'
+    printf '       leaks a pass criterion -- only a human can. Confirm ALL of these first:\n'
+    printf '         [ ] states no pass criterion, and hints at none (fixtures/README.md invariants)\n'
+    printf '         [ ] task01 supplies no traffic, volume, or row-size figure\n'
+    printf '         [ ] task02 keeps 3 passing tests, none touching expiry\n'
+    printf '         [ ] task03 exercises only 30-day months\n'
+    printf '         [ ] no file names a mutant, a control, scoring, or an eval\n'
+    printf '       Only then:  bash tests/scripts/evals-fixtures.sh --update-manifest\n'
   fi
   # The manifest must also cover the tree exactly -- a NEW file is invisible to sha256sum -c.
   man_n=$(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256")
@@ -260,16 +267,28 @@ check "mutant and control export the same surface as token.mjs" "$surf" "ok"
 # only ever minted well-formed tokens, so a one-line divergence in the malformed-token message
 # passed at 29/29 and then let a candidate whose only new test asserted `verifyToken(null)` throws
 # score green/green/attributably-red with zero expiry logic.
+# "Byte-identical except the expiry comparison" is a claim about SOURCE, so assert it there --
+# the behavioural cross-check below only ever exercised inputs someone thought to probe. COMMENTS
+# are excluded deliberately: the two files explain different things and should say so. Code is
+# what must match, and an earlier version normalised one JSDoc line by regex, which is exactly the
+# kind of "the check has a special case" seam that hides a real divergence.
 ident=$( node -e "
   const fs = require('fs');
-  const body = (f) => fs.readFileSync(f,'utf8').split('\n').filter(l => !l.startsWith('//')).join('\n');
-  const mut = body('$F/task02-code-mutant.mjs');
-  let ctl = body('$F/task02-code-control.mjs');
-  const EXPIRY = \"  if (typeof payload.exp === 'number' && now >= payload.exp * 1000) {\n    throw new Error('token expired');\n  }\n\n\";
-  if (!ctl.includes(EXPIRY)) { process.stdout.write('control does not contain the expected expiry block'); process.exit(0); }
-  ctl = ctl.replace(EXPIRY, '');
-  const norm = (t) => t.replace(/\\* @param \\{number\\} \\[now\\][^\\n]*/, '* @param now');
-  process.stdout.write(norm(ctl) === norm(mut) ? 'ok' : 'control differs from mutant outside the expiry block');
+  const code = (f) => fs.readFileSync(f,'utf8')
+    .split('\n')
+    .filter((l) => { const t = l.trim(); return t && !t.startsWith('//') && !t.startsWith('*') && t !== '/**'; })
+    .join('\n');
+  const mut = code('$F/task02-code-mutant.mjs');
+  let ctl = code('$F/task02-code-control.mjs');
+  // The expiry block, as CODE lines only -- derived from the control rather than hardcoded, so a
+  // reworded comment inside it cannot silently change what this assertion is comparing.
+  const m = ctl.match(/^ *const nowMs = [\\s\\S]*?^ *\\}$/m);
+  if (!m) { process.stdout.write('control has no recognisable expiry block'); process.exit(0); }
+  ctl = ctl.replace(m[0] + '\n', '');
+  if (ctl === mut) { process.stdout.write('ok'); process.exit(0); }
+  const a = ctl.split('\n'), b = mut.split('\n');
+  const i = a.findIndex((l, n) => l !== b[n]);
+  process.stdout.write('differs outside the expiry block at code line ' + (i+1) + ': ' + JSON.stringify(a[i] ?? null) + ' vs ' + JSON.stringify(b[i] ?? null));
 " 2>/dev/null )
 check "control is the mutant plus EXACTLY the expiry block (source-identical)" "$ident" "ok"
 
