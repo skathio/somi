@@ -14,7 +14,7 @@
 // out. A git ref is resolved to a detached worktree, used, and removed.
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -170,6 +170,115 @@ export function buildResult({ source, tasks, runs, dryRun = false, now = new Dat
     };
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fixture execution (iteration 3.4b)
+// ---------------------------------------------------------------------------------------------
+
+/** Run a fixture's own `node:test` suite and parse the counts. Never throws on a red suite. */
+export function runSuite(dir) {
+  let out = '';
+  let crashed = false;
+  try {
+    out = execFileSync(process.execPath, ['--test'], {
+      cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000,
+    });
+  } catch (err) {
+    // A red suite exits non-zero; so does a suite that could not load. Both land here, and the
+    // difference between them is exactly what criterion 1 turns on -- so keep the output and let
+    // classify() decide, rather than treating "threw" as "failed".
+    out = `${err.stdout ?? ''}${err.stderr ?? ''}`;
+    crashed = !err.stdout;
+  }
+  const num = (k) => { const m = out.match(new RegExp(`^(?:#|\u2139) ${k} (\\d+)`, 'm')); return m ? Number(m[1]) : null; };
+  return { pass: num('pass'), fail: num('fail'), tests: num('tests'), crashed, output: out };
+}
+
+/**
+ * Why is this suite red?
+ *
+ * Criterion 1(c) requires an ASSERTION failure. An import error, a TypeError, or a module
+ * resolution failure means the candidate's test never got to express an opinion about expiry --
+ * the red came from the substitution not fitting, not from the defect. Grading those as "the
+ * guard worked" would pass a test that never checks expiry, which is the hole the criterion
+ * exists to close.
+ */
+export function classifyRed({ pass, fail, crashed, output }) {
+  if (!crashed && fail === 0 && pass !== null) return 'green';
+  if (/ERR_MODULE_NOT_FOUND|Cannot find module|ERR_UNKNOWN_FILE_EXTENSION/.test(output)) return 'module-resolution';
+  // BEFORE the SyntaxError branch: node reports a missing named export as
+  // `SyntaxError: The requested module ... does not provide an export named ...`, so checking
+  // SyntaxError first diagnoses a surface mismatch as broken candidate source.
+  if (/does not provide an export named|is not exported|Named export .* not found/.test(output)) return 'import-error';
+  if (/SyntaxError/.test(output)) return 'syntax-error';
+  if (/AssertionError|ERR_ASSERTION|assert\./.test(output)) return 'assertion';
+  if (/TypeError/.test(output)) return 'type-error';
+  if (fail > 0) return 'other-failure';
+  return 'unknown';
+}
+
+/**
+ * Score task 02 criterion 1 against a candidate working tree.
+ *
+ * Three steps, in order, each gating the next:
+ *   (a) green on the candidate's own source  -- a red-before suite proves nothing
+ *   (b) green on the CONTROL                 -- cancels every axis except expiry
+ *   (c) attributably red on the MUTANT       -- an assertion failure, not a load failure
+ *
+ * (b) is what makes (c) mean anything. The mutant is frozen against the SHIPPED token.mjs, so it
+ * differs from the candidate's file on every axis the candidate touched. Without the control, a
+ * candidate that fixes expiry and also changes the signature encoding can pass with a test that
+ * contains no expiry logic at all -- measured, and the reason the control exists.
+ */
+export function scoreExpiryGuard(candidateDir, { mutant, control, target = 'src/auth/token.mjs' } = {}) {
+  const work = mkdtempSync(join(tmpdir(), 'somi-eval-cand-'));
+  const step = (replacement) => {
+    rmSync(work, { recursive: true, force: true });
+    cpSync(candidateDir, work, { recursive: true });
+    if (replacement) cpSync(replacement, join(work, target));
+    return runSuite(work);
+  };
+  try {
+    const own = step(null);
+    if (own.crashed || own.fail !== 0) {
+      return { verdict: 'fail', step: 'own', reason: 'not green on its own source', attributable: true, steps: { own } };
+    }
+    const ctl = step(control);
+    if (ctl.crashed || ctl.fail !== 0) {
+      const observed = classifyRed(ctl);
+      // A LOAD failure means the frozen reference does not fit the candidate's surface -- 3.3b
+      // states R3 to the candidate, so this is a rule the run was given, but the outcome still
+      // says nothing about expiry either way. Recorded rather than graded, so phase 4 cannot read
+      // a corpus/candidate mismatch as a definition-set regression.
+      const loadFailure = observed === 'import-error' || observed === 'module-resolution' || observed === 'syntax-error';
+      return {
+        verdict: loadFailure ? 'non-attributable' : 'fail',
+        step: 'control',
+        reason: loadFailure
+          ? `the control could not load against this candidate (${observed}) - export surface changed, see R3`
+          : 'red on the control: the test disagrees with correct expiry behaviour',
+        observed,
+        attributable: !loadFailure,
+        steps: { own, control: ctl },
+      };
+    }
+    const mut = step(mutant);
+    const observed = classifyRed(mut);
+    if (observed === 'green') {
+      return { verdict: 'fail', step: 'mutant', reason: 'the new test passes against the mutant', observed, attributable: true, steps: { own, control: ctl, mutant: mut } };
+    }
+    if (observed !== 'assertion') {
+      // Neither pass nor fail: the run changed something the frozen reference cannot satisfy
+      // (3.3b states the export-surface rule to the candidate, so this is a rule the run was
+      // given). Recorded rather than graded, so a corpus defect cannot masquerade as a
+      // definition-set regression in phase 4.
+      return { verdict: 'non-attributable', step: 'mutant', reason: `red on the mutant, but from ${observed}`, observed, attributable: false, steps: { own, control: ctl, mutant: mut } };
+    }
+    return { verdict: 'pass', step: 'mutant', observed, attributable: true, steps: { own, control: ctl, mutant: mut } };
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

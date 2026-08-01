@@ -149,6 +149,62 @@ else
 fi
 rm -f "$out"
 
+# --- 3.4b: fixture executor + mutation substitution --------------------------------------------
+# The three hand-written candidates under fixtures/_candidates/ are the acceptance criterion,
+# stated in the phase file. Each pins one outcome of scoreExpiryGuard()'s three steps.
+FX="$ROOT/tests/evals/fixtures"
+# `step` is asserted, not just the verdict. Without it, deleting the control check entirely
+# survived every case: `changed-surface` returns `non-attributable` either way -- at (b) because
+# the control cannot load, or at (c) because the mutant cannot either. Same verdict, different
+# thing measured.
+score() { j "
+  const r = M.scoreExpiryGuard('$FX/_candidates/$1',
+    { mutant: '$FX/task02-code-mutant.mjs', control: '$FX/task02-code-control.mjs' });
+  process.stdout.write(r.verdict + '|' + r.step + '|' + (r.observed ?? '-') + '|' + r.attributable);
+"; }
+check "a correct expiry test passes, attributably" \
+  "$(score correct-guard)"   "pass|mutant|assertion|true"
+check "a test that never checks expiry FAILS (green on the mutant)" \
+  "$(score no-expiry-test)"  "fail|mutant|green|true"
+check "a changed export surface is caught AT THE CONTROL, non-attributably" \
+  "$(score changed-surface)" "non-attributable|control|import-error|false"
+# The only case exercising step (c)'s non-assertion branch. Green on the control, so the
+# substitution fits; red on the mutant from a TypeError, so the test never expressed an opinion
+# about expiry. Grading that as a pass would accept a guard that does not guard.
+check "a TypeError red on the mutant is NON-ATTRIBUTABLE, not a pass" \
+  "$(score type-error-red)"  "non-attributable|mutant|type-error|false"
+
+# The classifier is what makes (c) mean anything: an import error graded as "the guard worked"
+# passes a test that never checks expiry.
+cls() { j "process.stdout.write(M.classifyRed({ pass: 0, fail: 1, crashed: false, output: \`$1\` }))"; }
+check "an AssertionError classifies as assertion"      "$(cls 'AssertionError [ERR_ASSERTION]: x')" "assertion"
+check "a missing named export is import-error, NOT syntax-error" \
+  "$(cls 'SyntaxError: The requested module ./t.mjs does not provide an export named verifyToken')" "import-error"
+check "ERR_MODULE_NOT_FOUND is module-resolution"      "$(cls 'Error [ERR_MODULE_NOT_FOUND]: Cannot find module')" "module-resolution"
+check "a TypeError is type-error, not assertion"       "$(cls 'TypeError: x is not a function')" "type-error"
+check "a real SyntaxError still classifies as one"     "$(cls 'SyntaxError: Unexpected token }')" "syntax-error"
+check "a green suite classifies as green" \
+  "$(j "process.stdout.write(M.classifyRed({ pass: 3, fail: 0, crashed: false, output: '' }))")" "green"
+
+# A candidate that is red on its OWN source is not scored -- red-then-red proves nothing.
+redfirst=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+cp -r "$FX/_candidates/correct-guard/." "$redfirst"/
+printf "\ntest('deliberately red', () => { assert.equal(1, 2); });\n" >> "$redfirst/tests/auth/token.test.mjs"
+check "a candidate red on its own source is failed before substitution" \
+  "$(j "const r = M.scoreExpiryGuard('$redfirst', { mutant: '$FX/task02-code-mutant.mjs', control: '$FX/task02-code-control.mjs' }); process.stdout.write(r.verdict + '|' + r.reason)")" \
+  "fail|not green on its own source"
+rm -rf "$redfirst"
+
+# The executor must not mutate the candidate it scores -- it works on a copy.
+check "scoring leaves the candidate tree untouched" \
+  "$(j "
+     const fs = await import('node:fs');
+     const p = '$FX/_candidates/correct-guard/src/auth/token.mjs';
+     const before = fs.readFileSync(p, 'utf8');
+     M.scoreExpiryGuard('$FX/_candidates/correct-guard', { mutant: '$FX/task02-code-mutant.mjs', control: '$FX/task02-code-control.mjs' });
+     process.stdout.write(String(fs.readFileSync(p, 'utf8') === before));
+   ")" "true"
+
 # --- npm test must not invoke this runner ------------------------------------------------------
 # Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is
 # explicitly permitted; what is forbidden is executing it.

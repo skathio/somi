@@ -12,7 +12,7 @@ c6ba6edcb514a253b6e4869ba01e367499526248bc053a98a58bb355835aae12  tests/evals/fi
 1d3adba40012ab0834d2925262358318712c692863e7d3131fe4c2ee6c2d4e45  tests/evals/fixtures/task02-code/_somi/plans/expired-token/diary.md
 9ce59c9fc60951f23b0ce5b1bcc462d01fc5c353e71b79807295689abb94d6a2  tests/evals/fixtures/task02-code/_somi/plans/expired-token/phases/01-reject-expired.md
 1d32afbe9e8a49840704b32ae6ae708c0b0c5105c234da3e30c5dc16751f7ccf  tests/evals/fixtures/task02-code/_somi/plans/expired-token/progress.md
-9f2eb7df75cbb4a918d9ef142e4006cd255c568189e945159faec8061bc93a98  tests/evals/fixtures/task02-code/_somi/plans/expired-token/spec.md
+0f7fc4d4c86b373ac158d6c4122aae8f723438e198672cff507de60545d8e9cb  tests/evals/fixtures/task02-code/_somi/plans/expired-token/spec.md
 935c868b19cc83e275ade958b1cc1c26db88f96266f4332b1001d3902ba2a1a0  tests/evals/fixtures/task02-code/package.json
 efb988d40c617a41ba6560f14356f60b0410e357cb9d1d0983650355b8a25f77  tests/evals/fixtures/task02-code/src/auth/session.mjs
 be2695e7eb7d93fe725fa0350a0daf6419e715e4af710c6a39d8b5c6d3e7c866  tests/evals/fixtures/task02-code/src/auth/token.mjs

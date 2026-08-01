@@ -1,17 +1,4 @@
-// Scorer-side MUTANT: expiry enforcement removed.
-//
-// Ignores its clock parameter -- that is the mutation. The parameter exists so control and
-// mutant present the SAME seam, and its SHAPE is fixed by R4 in the fixture's own spec
-// (a second positional parameter in epoch ms) rather than guessed at here.
-//
-// Three passes running, the previous approach was to add whichever convention the last review
-// found unsupported -- epoch-seconds, then an options object, then a clock function. That does
-// not converge, and it judged candidates against a rule they were never given. Stating it in
-// spec.md is the same move the export-surface rule already makes.
-//
-// Reference implementation. Lives OUTSIDE task02-code/ so it never reaches the
-// candidate's repo: its existence and its shape are both criterion-revealing. See
-// fixtures/README.md. Substituted for src/auth/token.mjs at scoring time.
+// Token verification.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const SECRET = 'fixture-secret-not-a-real-key';
@@ -22,7 +9,6 @@ function sign(payloadB64) {
 
 /**
  * @param {string} token  `<payloadB64>.<sig>`
- * @param {number} [nowMs] epoch milliseconds; ignored here (that is the mutation).
  * @returns {{ sub: string, exp: number }} the decoded payload
  * @throws {Error} on a malformed token or a bad signature
  */
@@ -47,10 +33,11 @@ export function verifyToken(token, nowMs = Date.now()) {
     throw new Error('malformed token');
   }
 
+  if (typeof payload.exp === 'number' && nowMs >= payload.exp * 1000) throw new Error('token expired');
   return payload;
 }
 
-/** Test helper — mints a token the verifier will accept. */
+/** Mints a token this verifier accepts. */
 export function mintToken(sub, exp) {
   const payloadB64 = Buffer.from(JSON.stringify({ sub, exp }), 'utf8').toString('base64url');
   return `${payloadB64}.${sign(payloadB64)}`;

@@ -1,0 +1,27 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { verifyToken, mintToken } from '../../src/auth/token.mjs';
+
+const HOUR = 3600;
+const nowSec = () => Math.floor(Date.now() / 1000);
+
+test('accepts a validly-signed token', () => {
+  const t = mintToken('user-1', nowSec() + HOUR);
+  assert.equal(verifyToken(t).sub, 'user-1');
+});
+
+test('rejects a tampered signature', () => {
+  const t = mintToken('user-1', nowSec() + HOUR);
+  const bad = `${t.split('.')[0]}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`;
+  assert.throws(() => verifyToken(bad), /bad signature/);
+});
+
+test('rejects malformed input', () => {
+  assert.throws(() => verifyToken('not-a-token'), /malformed token/);
+  assert.throws(() => verifyToken(''), /malformed token/);
+});
+
+test('the decoded payload carries the subject', () => {
+  const t = mintToken('user-1', nowSec() + HOUR);
+  assert.equal(verifyToken(t).sub, 'user-1');
+});

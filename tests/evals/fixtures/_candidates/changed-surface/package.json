@@ -1,0 +1,6 @@
+{
+  "name": "auth-service",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test" }
+}

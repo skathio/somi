@@ -67,6 +67,11 @@ SCORER_SIDE=(README.md MANIFEST.sha256 make-review-patch.mjs task03-review.patch
 
 # --- D1: the scorer-side files exist. None is imported by anything here, so deletion is silent,
 # and fixtures/README.md is the reconstruction contract 3.4b is built from.
+# _candidates/ holds hand-written /code outputs used by tests/scripts/eval-runner.sh. Scorer-side:
+# never copied into a candidate's repo, never in the candidate manifest.
+[ -d "$F/_candidates" ] \
+  && ok "scorer-side candidates present (_candidates/)" \
+  || bad "scorer-side candidates present (_candidates/)"
 for f in "${SCORER_SIDE[@]}"; do
   [ -f "$F/$f" ] && ok "scorer-side file present: $f" || bad "scorer-side file present: $f"
 done
@@ -297,7 +302,7 @@ ident=$( node -e "
   let ctl = code('$F/task02-code-control.mjs');
   // The expiry block, as CODE lines only -- derived from the control rather than hardcoded, so a
   // reworded comment inside it cannot silently change what this assertion is comparing.
-  const m = ctl.match(/^ *const nowMs = [\\s\\S]*?^ *\\}$/m);
+  const m = ctl.match(/^ *if \\(typeof payload\\.exp[\\s\\S]*?^ *\\}$/m);
   if (!m) { process.stdout.write('control has no recognisable expiry block'); process.exit(0); }
   ctl = ctl.replace(m[0] + '\n', '');
   if (ctl === mut) { process.stdout.write('ok'); process.exit(0); }
@@ -387,6 +392,56 @@ for r in task02-code-control task02-code-mutant; do
   rm -rf "$RB"
 done
 check "baseline suite is green against BOTH references (1(b)'s premise)" "$refs_ok" "ok"
+
+# --- routed from 3.3b pass 5: the contract must be asserted, not just written down --------------
+# R4 in task02's spec states the clock shape the candidate may inject. Three passes running, the
+# references were "fixed" by adding whichever convention the last review found unsupported --
+# epoch-seconds, then an options object, then a clock function. That does not converge, and it
+# judged candidates against a rule they were never given. R4 is now the contract; this asserts the
+# references honour exactly it.
+clock=$( node --input-type=module -e "
+  const ctl = await import('$ROOT/$F/task02-code-control.mjs');
+  const mut = await import('$ROOT/$F/task02-code-mutant.mjs');
+  const T = 1700000000;
+  const throws = (m, e, now) => { try { m.verifyToken(m.mintToken('u', e), now); return false; } catch { return true; } };
+  const bad = [];
+  // R4: second positional parameter, epoch MILLISECONDS.
+  if (!throws(ctl, T - 1, T * 1000)) bad.push('control accepts an expired token under an injected ms clock');
+  if (throws(ctl, T + 3600, T * 1000)) bad.push('control rejects a VALID token under an injected ms clock');
+  // Default parameter: a candidate reading the wall clock directly passes no argument.
+  if (!throws(ctl, Math.floor(Date.now()/1000) - 60, undefined)) bad.push('control accepts an expired token with no clock passed');
+  if (throws(ctl, Math.floor(Date.now()/1000) + 3600, undefined)) bad.push('control rejects a valid token with no clock passed');
+  // The mutant must ignore the clock in every one of those positions -- that IS the mutation.
+  if (throws(mut, T - 1, T * 1000) || throws(mut, Math.floor(Date.now()/1000) - 60, undefined)) bad.push('mutant enforces expiry');
+  process.stdout.write(bad.length ? bad.join('; ') : 'ok');
+" 2>/dev/null )
+check "references honour R4's clock contract exactly (ms positional, or none)" "$clock" "ok"
+
+# R4 must actually be stated where the candidate reads it, or the assertion above is scoring a
+# rule nobody was given -- which is the failure it was added to end.
+if grep -q 'epoch' "$F/task02-code/_somi/plans/expired-token/spec.md"; then
+  ok "task02 spec states the clock contract to the candidate (R4)"
+else
+  bad "task02 spec states the clock contract to the candidate (R4)"
+fi
+
+# Task specs have been renumbered once and are cross-referenced from three documents. A
+# `criterion N` pointing at a criterion that no longer means that is a scorer reading the wrong
+# dimension -- task01's Scenario did exactly this after the pass-3 split.
+xref=$( node -e "
+  const fs = require('fs'), path = require('path');
+  const dir = '$ROOT/tests/evals/tasks';
+  const bad = [];
+  for (const f of fs.readdirSync(dir).filter(n => /^\\d+-.*\\.md\$/.test(n))) {
+    const t = fs.readFileSync(path.join(dir, f), 'utf8');
+    const n = (t.match(/^[0-9]+\\. \\*\\*S[1-7]/gm) || []).length;
+    for (const m of t.matchAll(/criterion ([0-9]+)/gi)) {
+      if (Number(m[1]) > n || Number(m[1]) < 1) bad.push(f + ' cites criterion ' + m[1] + ' but has ' + n);
+    }
+  }
+  process.stdout.write(bad.length ? bad.join('; ') : 'ok');
+" 2>/dev/null )
+check "every task spec's 'criterion N' cross-reference resolves" "$xref" "ok"
 
 # --- runnable fixtures declare a test script ----------------------------------------------
 for d in task02-code task03-review; do

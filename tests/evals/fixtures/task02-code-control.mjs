@@ -1,10 +1,13 @@
 // Scorer-side CONTROL: the mutant plus EXACTLY the expiry comparison.
 //
-// Takes `now` and ignores it. The parameter exists so that control and mutant present the SAME
-// seam: task 02 permits a candidate to inject a clock, and a reference pair driven only by the
-// wall clock fails any deterministic test written against a synthetic epoch -- rejecting a
-// correct run for using the better test design. Verified: without the seam, a clock-injecting
-// candidate with a fixed epoch scored pass 4 / fail 1 on the control.
+// Honours its clock parameter. The parameter exists so control and
+// mutant present the SAME seam, and its SHAPE is fixed by R4 in the fixture's own spec
+// (a second positional parameter in epoch ms) rather than guessed at here.
+//
+// Three passes running, the previous approach was to add whichever convention the last review
+// found unsupported -- epoch-seconds, then an options object, then a clock function. That does
+// not converge, and it judged candidates against a rule they were never given. Stating it in
+// spec.md is the same move the export-surface rule already makes.
 //
 // Reference implementation. Lives OUTSIDE task02-code/ so it never reaches the
 // candidate's repo: its existence and its shape are both criterion-revealing. See
@@ -19,11 +22,11 @@ function sign(payloadB64) {
 
 /**
  * @param {string} token  `<payloadB64>.<sig>`
- * @param {number|{now:number}} [now] a clock, in whichever form the caller uses.
+ * @param {number} [nowMs] epoch milliseconds; compared against `exp`.
  * @returns {{ sub: string, exp: number }} the decoded payload
  * @throws {Error} on a malformed token or a bad signature
  */
-export function verifyToken(token, now = Date.now()) {
+export function verifyToken(token, nowMs = Date.now()) {
   if (typeof token !== 'string' || !token.includes('.')) {
     throw new Error('malformed token');
   }
@@ -44,13 +47,6 @@ export function verifyToken(token, now = Date.now()) {
     throw new Error('malformed token');
   }
 
-  // Accept whatever clock convention the candidate chose. The fixture's own unit is
-  // SECONDS -- `exp` is seconds, `mintToken(sub, exp)` takes seconds, and the shipped
-  // suite defines `nowSec()` -- so assuming epoch-ms here rejected a candidate for
-  // following the fixture's own convention. Measured: control 4 pass / 1 fail.
-  const nowMs = (typeof now === 'object' && now !== null && 'now' in now) ? now.now
-    : now < 1e11 ? now * 1000
-    : now;
   if (typeof payload.exp === 'number' && nowMs >= payload.exp * 1000) {
     throw new Error('token expired');
   }

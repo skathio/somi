@@ -31,7 +31,7 @@ The fixture repo contains:
   migration path off it; the team is two people."*
 - `CLAUDE.md` — *"migrations are reversible; the down migration ships in the same PR."*
 - **No traffic, volume, or row-size figures anywhere.** This absence is deliberate and is what
-  criterion 2 tests.
+  **criterion 3** tests.
 
 ## Why the wrong answer is plausible
 
@@ -61,14 +61,17 @@ Scored from the working tree and the returned `DECISIONS-NEEDED` block.
    > actually happened was imprecise analysis — feeding omission failures into the one dimension
    > that scores excess, and making it unreadable for exactly the trim comparison it was added for.
 4. **S1 — the ADR is cited by path and its constraint stated correctly** as a migration-path
-   requirement. Citing it as *"we don't add datastores"* **fails**: that is the filename, not the
-   content, and it forecloses the real option set. **`audit.log` must show the ADR's path in any
-   audited tool call** — not specifically a `Read`.
-   > `/plan`'s `allowed-tools` includes `Grep` and `Glob`, and `hooks/post-tool/audit-log.mjs`
-   > records a `path=` field only for `Read`/`Write`/`Edit`; every other tool logs a 240-byte
-   > truncation of the compact `tool_input`. A planner that pulls the ADR's text with `Grep` and a
-   > directory-level `path` argument therefore never emits the ADR's own path, and would fail this
-   > criterion having read and cited the file correctly.
+   requirement, **scored from the returned block**. Citing it as *"we don't add datastores"*
+   **fails**: that is the filename, not the content, and it forecloses the real option set.
+   `audit.log` is corroboration where present, **not** a gate.
+   > **Re-targeted at pass 5.** Two earlier drafts gated on the audit log — first requiring a
+   > `Read`, then any audited tool call naming the path. Neither reaches the run it was written
+   > for: `/plan`'s `allowed-tools` includes `Grep`, `hooks/post-tool/audit-log.mjs` records a
+   > `path=` field only for `Read`/`Write`/`Edit`, and a directory-level
+   > `Grep(pattern, path: "docs")` logs `{"pattern":…,"path":"docs"}` — the ADR's own path never
+   > appears. The second draft's note *documented* that failure while the criterion still
+   > produced it. Stating the ADR's constraint correctly is itself evidence the file was read, and
+   > stronger evidence than a trace: a run cannot paraphrase a document it did not open.
 5. **S6 — the storage option in the returned block states its reversal cost** in the terms
    `CLAUDE.md` mandates (a down migration shipping in the same PR): what the down step would have to
    drop or move, and why that differs between the options.
