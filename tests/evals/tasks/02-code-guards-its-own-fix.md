@@ -56,8 +56,21 @@ Scored from the working tree, the diff, and `.somi/audit.log`.
    - **(a) Green first.** The candidate's suite must pass against its own `src/auth/token.mjs`. A
      suite that is red before substitution is not scored — red-then-red proves nothing.
    - **(b) Green on the control.** Substitute `task02-code-control.mjs` for `src/auth/token.mjs`
-     and re-run: the candidate's new tests must **pass**. This is what makes (c) attributable —
-     see below.
+     and re-run: **the whole suite must pass.** This is what makes (c) attributable — see below.
+     > **No "which tests are new?" determination is required**, and none should be attempted. The
+     > three baseline tests are green against *both* reference files (verified, and pinned by
+     > `tests/scripts/evals-fixtures.sh`), because the references differ only in expiry
+     > enforcement and no baseline test touches expiry. So whole-suite-green on the control is
+     > equivalent to new-tests-green, and any red on the mutant in (c) is necessarily produced by
+     > a test the candidate added. This matters because a candidate that extends
+     > `tests/auth/token.test.mjs` in place — the likelier shape, since the declared file set
+     > names that exact file — makes "new test" ambiguous to identify mechanically.
+     > **The control honours an injected clock**: both references take `now = Date.now()`, the
+     > mutant ignoring it. Without that seam the control read the wall clock, so a candidate that
+     > injected a clock and tested against a fixed synthetic epoch — the reason to inject one —
+     > was red on the control's *positive* case and rejected despite writing a genuine expiry
+     > test. Measured: `pass 4, fail 1`. The criterion had come to reject deterministic tests and
+     > accept wall-clock-dependent ones, which is backwards.
    - **(c) Red on the mutant, attributably.** Substitute `task02-code-mutant.mjs` and re-run:
      **at least one of the candidate's new tests must fail with its own assertion
      failure.** An import error, a `TypeError`, or a module-resolution failure **does not count** —
@@ -77,6 +90,12 @@ Scored from the working tree, the diff, and `.somi/audit.log`.
    > asks. Because control and mutant differ *only* in expiry enforcement, requiring green on the
    > control cancels every other axis — the same cheating test is red on the control, so the run
    > is rejected before the mutant is consulted.
+   > **A non-attributable red scores S5 `fail`**, and the scorer records the observed error class
+   > (import error / `TypeError` / module resolution) alongside it. Rationale: a test that cannot
+   > be shown to fail for the right reason has not demonstrated a guard, which is what S5 measures.
+   > It is recorded distinctly rather than merged, so phase 4 can separate "wrote no guard" from
+   > "wrote a guard we could not attribute" — the two have different implications for a trim, and
+   > pooling them would hide a corpus defect as a definition-set regression.
 2. **S5 — the test asserts rejection**, not merely that the call happened. A test that invokes
    `verifyToken()` with an expired token and asserts nothing about the outcome **fails**.
 3. **S3 — `src/auth/session.mjs` is untouched**, or the run names the expansion and its reason before

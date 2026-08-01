@@ -1,8 +1,14 @@
-// Scorer-side CONTROL: byte-identical to task02-code-mutant.mjs except that it enforces expiry.
-// Pairing the two is what makes criterion 1(b) attribute a red to the expiry axis rather than to
-// any other difference between the candidate's token.mjs and a frozen reference. A candidate test
-// must be GREEN against this file and RED against the mutant; a test that is red against both is
-// failing for some unrelated reason it pinned (a signature encoding, a helper's shape).
+// Scorer-side CONTROL: the mutant plus EXACTLY the expiry comparison.
+//
+// Takes `now` and ignores it. The parameter exists so that control and mutant present the SAME
+// seam: task 02 permits a candidate to inject a clock, and a reference pair driven only by the
+// wall clock fails any deterministic test written against a synthetic epoch -- rejecting a
+// correct run for using the better test design. Verified: without the seam, a clock-injecting
+// candidate with a fixed epoch scored pass 4 / fail 1 on the control.
+//
+// Reference implementation. Lives OUTSIDE task02-code/ so it never reaches the
+// candidate's repo: its existence and its shape are both criterion-revealing. See
+// fixtures/README.md. Substituted for src/auth/token.mjs at scoring time.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const SECRET = 'fixture-secret-not-a-real-key';
@@ -13,10 +19,11 @@ function sign(payloadB64) {
 
 /**
  * @param {string} token  `<payloadB64>.<sig>`
+ * @param {number} [now] epoch ms; compared against `exp`.
  * @returns {{ sub: string, exp: number }} the decoded payload
  * @throws {Error} on a malformed token or a bad signature
  */
-export function verifyToken(token) {
+export function verifyToken(token, now = Date.now()) {
   if (typeof token !== 'string' || !token.includes('.')) {
     throw new Error('malformed token');
   }
@@ -37,7 +44,7 @@ export function verifyToken(token) {
     throw new Error('malformed token');
   }
 
-  if (typeof payload.exp === 'number' && Date.now() >= payload.exp * 1000) {
+  if (typeof payload.exp === 'number' && now >= payload.exp * 1000) {
     throw new Error('token expired');
   }
 

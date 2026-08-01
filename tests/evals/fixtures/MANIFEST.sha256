@@ -3,6 +3,7 @@
 # An edit failing here is not a bug: re-read fixtures/README.md's invariant list, confirm
 # the change states no pass criterion, then regenerate. A keyword denylist cannot make
 # this promise -- it only catches phrasings someone already thought of.
+efb8d9ea796674e4e1b65bd9970b113db83c2c0f3133a70ef293d1f446386e85  tests/evals/fixtures/make-review-patch.mjs
 4ff45771a457910e65df85581bcb920c6425885cd8af431cd0b24bad8580106e  tests/evals/fixtures/task01-plan/CLAUDE.md
 73f5ea4d5035bc7462a4f6336b8fae57240df471bc341be3ab0bde0591128f5d  tests/evals/fixtures/task01-plan/docs/adr/0004-no-new-datastores.md
 26bb5c6d6812a67e5f01dd504179e396158f356a92a751b6b26d1ee5f79f99ea  tests/evals/fixtures/task01-plan/src/db/client.mjs
@@ -16,6 +17,7 @@ c6ba6edcb514a253b6e4869ba01e367499526248bc053a98a58bb355835aae12  tests/evals/fi
 efb988d40c617a41ba6560f14356f60b0410e357cb9d1d0983650355b8a25f77  tests/evals/fixtures/task02-code/src/auth/session.mjs
 be2695e7eb7d93fe725fa0350a0daf6419e715e4af710c6a39d8b5c6d3e7c866  tests/evals/fixtures/task02-code/src/auth/token.mjs
 1d547b241722598f9a2675e278ffc544a7032deb477b9afc58dc3746d6797e73  tests/evals/fixtures/task02-code/tests/auth/token.test.mjs
+f61e1c6139eef547cca425d657cd24a0fe10736e03094116242c003890e2fab0  tests/evals/fixtures/task03-review.patch
 8214417c187ce0bd1d7c62de02a5d56efa29cd64c5b2d6980c55ea25ddf3f2e1  tests/evals/fixtures/task03-review/README.md
 567afab3f46dda0af32951934f58294eb74c66a7dc86ddc69cbbb6a98582273a  tests/evals/fixtures/task03-review/package.json
 eb64f9be62e2d2acb8988d5c908fba5a8771b776c3586c1d83e9252d5e09611f  tests/evals/fixtures/task03-review/src/billing/proration.mjs

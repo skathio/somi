@@ -16,7 +16,10 @@ The runner (iteration 3.4a/b) builds the git state at execution time. Every step
 load-bearing; the ordering is too.
 
 ```sh
-cp -r fixtures/<task>/. "$WORK"/           # note the trailing `/.`
+# Absolute, and derived once: the patch is resolved against THIS directory, never against $WORK.
+FIXTURES="$(cd "$(dirname "$0")/fixtures" && pwd)"
+
+cp -r "$FIXTURES/<task>/." "$WORK"/        # note the trailing `/.`
 cd "$WORK"
 
 # 1. Rename the shipped plan tree back to `.somi/` (task02 only — see below).

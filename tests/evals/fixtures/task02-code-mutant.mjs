@@ -1,4 +1,12 @@
-// Scorer-side reference implementation. Lives OUTSIDE task02-code/ so it never reaches the
+// Scorer-side MUTANT: expiry enforcement removed.
+//
+// Takes `now` and ignores it. The parameter exists so that control and mutant present the SAME
+// seam: task 02 permits a candidate to inject a clock, and a reference pair driven only by the
+// wall clock fails any deterministic test written against a synthetic epoch -- rejecting a
+// correct run for using the better test design. Verified: without the seam, a clock-injecting
+// candidate with a fixed epoch scored pass 4 / fail 1 on the control.
+//
+// Reference implementation. Lives OUTSIDE task02-code/ so it never reaches the
 // candidate's repo: its existence and its shape are both criterion-revealing. See
 // fixtures/README.md. Substituted for src/auth/token.mjs at scoring time.
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -11,10 +19,11 @@ function sign(payloadB64) {
 
 /**
  * @param {string} token  `<payloadB64>.<sig>`
+ * @param {number} [now] epoch ms; accepted for parity with the control and ignored here.
  * @returns {{ sub: string, exp: number }} the decoded payload
  * @throws {Error} on a malformed token or a bad signature
  */
-export function verifyToken(token) {
+export function verifyToken(token, now = Date.now()) {
   if (typeof token !== 'string' || !token.includes('.')) {
     throw new Error('malformed token');
   }
