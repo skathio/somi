@@ -141,12 +141,16 @@ if grep -qE 'fetch\(|https?://|ANTHROPIC_API_KEY|api\.anthropic' "$R"; then
 else
   ok "run.mjs contains no network call or credential read (dry run cannot leak)"
 fi
-# Live scoring is 3.4b. Until then a non-dry run must refuse, not silently produce empty grades.
-if node "$R" --source HEAD --tasks 01 --runs 1 --out "$out" >/dev/null 2>&1; then
-  bad "a non-dry run refuses until 3.4b lands"
-else
-  ok "a non-dry run refuses until 3.4b lands"
-fi
+# A live run is preflighted before any work. Simulated by clearing PATH and HOME so neither the
+# CLI nor a credential resolves -- the runner must refuse with a named reason, not start spending
+# and discover the problem on run 14 of 20.
+# Keep node reachable; remove only the claude CLI and the credential.
+NODE_BIN=$(command -v node)
+pre=$(env -i "PATH=$(dirname "$NODE_BIN")" HOME=/nonexistent "$NODE_BIN" "$ROOT/$R" --source HEAD --tasks 01 --runs 1 2>&1 || true)
+case "$pre" in
+  *"cannot run live"*) ok "a live run preflights the CLI and credential before spending" ;;
+  *)                   bad "a live run preflights the CLI and credential before spending (got: ${pre:0:80})" ;;
+esac
 rm -f "$out"
 
 # --- 3.4b: fixture executor + mutation substitution --------------------------------------------

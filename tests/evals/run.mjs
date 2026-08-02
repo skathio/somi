@@ -209,7 +209,17 @@ export function buildResult({ source, tasks, runs, dryRun = false, now = new Dat
       }
     }
     out.tasks[taskId] = {
-      runs: perRun.map((r, i) => ({ index: r.index ?? i, dimensions: r.dimensions, error: r.error ?? null })),
+      // Per-criterion verdicts and the evidence quoted for each are kept, not just the rolled-up
+      // dimensions. A dimension that reads `fail` is only actionable if you can see WHICH
+      // criterion failed and on what span -- and 4.1's whole job is to tell a soft TASK from a
+      // weak definition set, which the aggregate cannot do.
+      runs: perRun.map((r, i) => ({
+        index: r.index ?? i,
+        dimensions: r.dimensions,
+        criteria: r.criteria ?? null,
+        error: r.error ?? null,
+        transcript: r.transcript ?? null,
+      })),
       dimensions: Object.fromEntries(
         Object.entries(dims).map(([dim, { passes, n }]) => [dim, { passes, n, grade: grade(passes, n) }]),
       ),
@@ -328,17 +338,109 @@ export function scoreExpiryGuard(candidateDir, { mutant, control, target = 'src/
 }
 
 // ---------------------------------------------------------------------------------------------
+// Live scoring (iteration 4.1's execution path)
+// ---------------------------------------------------------------------------------------------
+
+/** The prompt each task issues, read from its own spec so the two cannot drift. */
+export function taskPrompt(taskSpec) {
+  const fenced = taskSpec.match(/```user-(?:problem-statement|feature)\n([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  const quoted = taskSpec.match(/^> \*\*Iteration [^\n]*\n([\s\S]*?)(?=\n\n)/m);
+  if (quoted) return quoted[0].replace(/^> ?/gm, '').trim();
+  return null;
+}
+
+/**
+ * Execute one run of one task against one definition set, and score it.
+ *
+ * The working tree is rebuilt from scratch for every run. Sharing it would make run N+1 depend on
+ * run N, and the whole N=20 design assumes independent draws -- a shared tree would produce
+ * correlated outcomes that the binomial thresholds are not valid for.
+ */
+export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, model, judgeModel }) {
+  const { installSomi, invokeCommand, workingTreeDiff, uninstallSomi } = await import('./lib/install.mjs');
+  const { judge, toDimensions, criterionTags } = await import('./lib/score.mjs');
+
+  const work = mkdtempSync(join(tmpdir(), `somi-eval-${taskId}-`));
+  try {
+    cpSync(fixtureDir, work, { recursive: true });
+    if (existsSync(join(work, '_somi'))) cpSync(join(work, '_somi'), join(work, '.somi'), { recursive: true });
+    rmSync(join(work, '_somi'), { recursive: true, force: true });
+    installSomi(sourceDir, work);
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: work });
+    execFileSync('git', ['config', 'user.email', 'eval@somi.invalid'], { cwd: work });
+    execFileSync('git', ['config', 'user.name', 'somi eval'], { cwd: work });
+    execFileSync('git', ['add', '-A'], { cwd: work });
+    execFileSync('git', ['commit', '-qm', 'baseline'], { cwd: work });
+
+    const prompt = taskPrompt(taskSpec);
+    if (!prompt) return { index, error: 'no prompt found in the task spec', dimensions: {} };
+
+    const command = (taskSpec.match(/Command under test: `\/(\w[\w-]*)`/) ?? [])[1];
+    const run = invokeCommand(work, `/${command} ${prompt}`, { model });
+    const tree = workingTreeDiff(work);
+    uninstallSomi(work);
+
+    if (!run.ok) {
+      // An errored run is a data point, not an exception: it fails every dimension the task
+      // declares, and the reason is recorded so a harness fault is distinguishable from a
+      // definition-set regression when the results are read.
+      const dims = Object.fromEntries(Object.keys(criterionTags(taskSpec)).length
+        ? [...new Set(Object.values(criterionTags(taskSpec)).flat())].map((d) => [d, false]) : []);
+      return { index, error: run.timedOut ? 'timed out' : (run.error ?? `exit ${run.status}`), dimensions: dims, transcript: run.stdout.slice(-4000) };
+    }
+
+    const evidence = [
+      '### What the run returned\n', run.stdout,
+      '\n### Files the run created or modified\n',
+      tree.changed.map((c) => `${c.status} ${c.path}`).join('\n') || '(none)',
+      '\n### Diff against the baseline commit\n', (tree.diff || '(empty)').slice(0, 20000),
+    ].join('\n');
+
+    const verdict = judge(taskSpec, evidence, { model: judgeModel });
+    if (!verdict.ok) return { index, error: `judge: ${verdict.error}`, dimensions: {}, transcript: run.stdout.slice(-4000) };
+
+    return {
+      index,
+      dimensions: toDimensions(verdict.criteria, criterionTags(taskSpec)),
+      criteria: verdict.criteria,
+      transcript: run.stdout,
+      error: null,
+    };
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------------------------
 
+export function taskFile(id, dir) {
+  const base = join(dir, 'tests', 'evals', 'tasks');
+  const name = execFileSync('ls', [base], { encoding: 'utf8' }).split('\n').find((n) => n.startsWith(`${id}-`));
+  if (!name) throw new Error(`no task spec for id ${id}`);
+  return join(base, name);
+}
+
+export function fixtureFor(id, dir) {
+  const base = join(dir, 'tests', 'evals', 'fixtures');
+  const name = execFileSync('ls', [base], { encoding: 'utf8' }).split('\n')
+    .find((n) => n.startsWith(`task${id}-`) && !n.endsWith('.mjs') && !n.endsWith('.patch'));
+  if (!name) throw new Error(`no fixture for task ${id}`);
+  return join(base, name);
+}
+
 function parseArgs(argv) {
-  const a = { source: 'HEAD', tasks: null, runs: BANDS.n, dryRun: false, out: null };
+  const a = { source: 'HEAD', tasks: null, runs: BANDS.n, dryRun: false, out: null, model: null, judgeModel: null };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === '--source') a.source = argv[++i];
     else if (k === '--tasks') a.tasks = argv[++i].split(',').map((s) => s.trim()).filter(Boolean);
     else if (k === '--runs') a.runs = Number(argv[++i]);
     else if (k === '--out') a.out = argv[++i];
+    else if (k === '--model') a.model = argv[++i];
+    else if (k === '--judge-model') a.judgeModel = argv[++i];
     else if (k === '--dry-run') a.dryRun = true;
     else if (k === '--help' || k === '-h') a.help = true;
     else throw new Error(`unknown argument: ${k}`);
@@ -376,6 +478,15 @@ async function main(argv) {
   const taskIds = args.tasks ?? discoverTasks();
   if (taskIds.length === 0) throw new Error('no tasks found in tests/evals/tasks/');
 
+  if (!args.dryRun) {
+    // Checked once, before any work: discovering a missing credential on run 14 of 20 wastes the
+    // thirteen that already cost money, and a partial result file invites being read as a result.
+    const { preflight } = await import('./lib/install.mjs');
+    const pre = preflight();
+    if (!pre.ready) {
+      throw new Error(`cannot run live: ${pre.problems.join('; ')}. Use --dry-run for a shape check.`);
+    }
+  }
   const source = resolveSource(args.source);
   try {
     const tasks = {};
@@ -387,10 +498,11 @@ async function main(argv) {
           // produces a well-formed file with no grades invented from nothing.
           tasks[id].push({ index: i, dimensions: dryRunDimensions(id, source.dir), error: null });
         } else {
-          throw new Error(
-            'live scoring is iteration 3.4b (fixture executor + mutation substitution). ' +
-            'Use --dry-run until then.',
-          );
+          const spec = readFileSync(taskFile(id, source.dir), 'utf8');
+          const fixture = fixtureFor(id, source.dir);
+          const r = await runOnce({ taskId: id, taskSpec: spec, fixtureDir: fixture, sourceDir: source.dir, index: i, model: args.model, judgeModel: args.judgeModel });
+          process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: ${r.error ? 'ERROR ' + r.error : Object.entries(r.dimensions).map(([k, v]) => k + (v ? '+' : '-')).join(' ')}\n`);
+          tasks[id].push(r);
         }
       }
     }
