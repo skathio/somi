@@ -606,6 +606,20 @@ async function main(argv) {
     }
   }
   const source = resolveSource(args.source);
+
+  // `--source HEAD` across a multi-batch certification is a footgun, and I walked into it: HEAD
+  // moved on a docs commit between batch 1 and batch 2, so the shards landed under two SHAs and
+  // could not pool. The docs already said "pin the SHA"; saying it louder was not the fix.
+  //
+  // A warning, not a refusal -- a single exploratory run against HEAD is perfectly reasonable, and
+  // blocking it would make the common case annoying to serve the batched one.
+  if (!args.dryRun && /^(HEAD|@|main|master)$/.test(args.source) && args.runs > 1) {
+    process.stderr.write(
+      `\n  WARNING: --source ${args.source} is a MOVING ref.\n` +
+      `  Shards are keyed by the SHA it resolves to right now (${source.sha?.slice(0, 12)}). If the ref\n` +
+      `  moves between batches, later runs land under a different SHA and the two sets cannot pool.\n` +
+      `  For a batched certification, pin it:  --source ${source.sha?.slice(0, 12)}\n\n`);
+  }
   try {
     const tasks = {};
     let executed = 0;
