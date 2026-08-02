@@ -25,13 +25,28 @@ it, what changed, and when. Retention is 7 years for compliance.
 
 The fixture repo contains:
 
-- `src/ingest/handler.mjs` — the endpoint, currently writing nothing.
+- `src/ingest/handler.mjs` — the endpoint, currently writing nothing. It authenticates the caller
+  against `src/auth/api-key.mjs`, so the tenant identity is **established, not self-asserted**.
 - `src/db/schema.sql` — Postgres, three existing tables, no partitioning anywhere.
 - `docs/adr/0004-no-new-datastores.md` — accepted ADR: *"we do not add a datastore without a
   migration path off it; the team is two people."*
 - `CLAUDE.md` — *"migrations are reversible; the down migration ships in the same PR."*
 - **No traffic, volume, or row-size figures anywhere.** This absence is deliberate and is what
   **criterion 3** tests.
+
+> **The endpoint must authenticate, and that is load-bearing** (added at 4.1's first live runs).
+> An earlier fixture read `tenantId` straight out of the request body, with an `api_keys` table
+> present but referenced by nothing. The problem statement asks to record *"who sent it"* — which
+> is unanswerable when the sender is self-asserted, so the request rests on a **false premise**.
+> `commands/plan.md` §1a calls the premise check *"not optional"*, `agents/planner.md:53` and
+> `rules/50-collaboration.md:11` say the same. A conforming run is therefore **required** to
+> block on the auth gap instead of answering the storage question — and did, correctly, then
+> failed criteria 1, 4 and 5.
+>
+> That made the task unpassable by a conforming run, which `rubric.md` calls worse than a missing
+> criterion. The fixture was fixed rather than the criteria loosened: the premise now holds, and
+> the storage decision is the live one again. **A fixture must not contain a defect more urgent
+> than the one the task measures** — a good agent will find the urgent one, and it will be right.
 
 ## Why the wrong answer is plausible
 

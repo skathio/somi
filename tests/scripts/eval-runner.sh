@@ -107,6 +107,10 @@ check "a path source records sha null" \
 
 # --- --source resolution and worktree cleanup --------------------------------------------------
 head_sha=$(git rev-parse HEAD)
+# Counted before and after, not absolutely: `git worktree list` is global state, and a concurrent
+# eval run (which legitimately holds one for its whole duration) made this assertion fail on a
+# clean tree. The invariant is "this test leaks none", not "none exist anywhere".
+wt_before=$(git worktree list | grep -c somi-eval-src || true)
 res=$( j "
   const s = M.resolveSource('HEAD');
   const fs = await import('node:fs');
@@ -116,7 +120,7 @@ res=$( j "
   process.stdout.write(s.sha + '|' + had + '|' + gone);
 ")
 check "--source HEAD checks out a worktree and cleans it up" "$res" "$head_sha|true|true"
-check "no worktree is left registered" "$(git worktree list | grep -c somi-eval-src || true)" "0"
+check "this test leaks no worktree" "$(( $(git worktree list | grep -c somi-eval-src || true) - wt_before ))" "0"
 
 check "an unresolvable --source fails loudly" \
   "$( j "try { M.resolveSource('no-such-ref-xyz'); process.stdout.write('NO THROW'); } catch (e) { process.stdout.write('threw'); }" )" \

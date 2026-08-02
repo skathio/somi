@@ -6,9 +6,10 @@
 efb8d9ea796674e4e1b65bd9970b113db83c2c0f3133a70ef293d1f446386e85  tests/evals/fixtures/make-review-patch.mjs
 4ff45771a457910e65df85581bcb920c6425885cd8af431cd0b24bad8580106e  tests/evals/fixtures/task01-plan/CLAUDE.md
 8760f32dabd6af73ea9a90ca608e8735eba076274bcb3e07d89c85a96ad540fc  tests/evals/fixtures/task01-plan/docs/adr/0004-no-new-datastores.md
-26bb5c6d6812a67e5f01dd504179e396158f356a92a751b6b26d1ee5f79f99ea  tests/evals/fixtures/task01-plan/src/db/client.mjs
+142b0468c3c1b067cdaf10033df506494d158b11e4032ad0d69e3418ce04c7cb  tests/evals/fixtures/task01-plan/src/auth/api-key.mjs
+070a0c239c20f9c8bcbf71bd9fc5e9249833d8eef1ea5c09976b0c5ed4c60fe9  tests/evals/fixtures/task01-plan/src/db/client.mjs
 c6ba6edcb514a253b6e4869ba01e367499526248bc053a98a58bb355835aae12  tests/evals/fixtures/task01-plan/src/db/schema.sql
-651dc952947285fd94c34208c812e4e39b3a8e27784f38acf89593d2f26a288f  tests/evals/fixtures/task01-plan/src/ingest/handler.mjs
+fb6566c9fb39fbd5441dcbcf15649cb4663a7aa27fb1a88cd31bcfe1f3255236  tests/evals/fixtures/task01-plan/src/ingest/handler.mjs
 1d3adba40012ab0834d2925262358318712c692863e7d3131fe4c2ee6c2d4e45  tests/evals/fixtures/task02-code/_somi/plans/expired-token/diary.md
 9ce59c9fc60951f23b0ce5b1bcc462d01fc5c353e71b79807295689abb94d6a2  tests/evals/fixtures/task02-code/_somi/plans/expired-token/phases/01-reject-expired.md
 1d32afbe9e8a49840704b32ae6ae708c0b0c5105c234da3e30c5dc16751f7ccf  tests/evals/fixtures/task02-code/_somi/plans/expired-token/progress.md
