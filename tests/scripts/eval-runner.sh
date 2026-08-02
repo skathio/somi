@@ -313,8 +313,22 @@ check "a named 30-day month does not"                    "$(rep 'on June 16 it u
 # this corpus keeps rediscovering. null means "fall back to the judge".
 check "a hedge with no date returns null (judge fallback)" "$(rep 'the proration logic may be wrong')" "null"
 
-check "the judge defaults to a small model" \
-  "$(j "process.stdout.write((await import('$ROOT/tests/evals/lib/score.mjs')).DEFAULT_JUDGE_MODEL)")" "haiku"
+# Reverted after the first agreement check disagreed on 1 of 6 verdicts. `null` means "whatever
+# the CLI defaults to" -- the larger model -- not "unset by accident".
+check "the judge does NOT default to a cheaper model" \
+  "$(j "process.stdout.write(String((await import('$ROOT/tests/evals/lib/score.mjs')).DEFAULT_JUDGE_MODEL))")" "null"
+
+bnd() { j "
+  const B = await import('$ROOT/tests/evals/lib/boundary.mjs');
+  const r = B.boundaryRespected($1);
+  process.stdout.write(r.ok + (r.offenders.length ? ':' + r.offenders.join(',') : ''));
+"; }
+check "a conforming /plan run respects the boundary" \
+  "$(bnd "[{path:'.somi/README.md'},{path:'.somi/audit.log'},{path:'.somi/somi-state/x'},{path:'.somi/plans/y/spec.md'}]")" "true"
+check "a touched source file is caught, and named" \
+  "$(bnd "[{path:'src/ingest/handler.mjs'}]")" "false:src/ingest/handler.mjs"
+check "a stray root file is caught" \
+  "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
 
 # --- npm test must not invoke this runner ------------------------------------------------------
 # Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is

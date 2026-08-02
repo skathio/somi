@@ -414,6 +414,23 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     // ("the cited case must genuinely fail"), and judging it asks a model to do arithmetic it can
     // get wrong in the same direction the candidate did. Overrides the judge's verdict only when
     // a date was actually extractable -- otherwise it returns null and the judge's verdict stands.
+    // Task 01 criterion 6 is a file-list check against an allowlist -- mechanical, and it should
+    // never have been judged. Found by two judges disagreeing on it.
+    if (verdict.ok && taskId === '01') {
+      try {
+        const { boundaryRespected } = await import('./lib/boundary.mjs');
+        const b = boundaryRespected(tree.changed);
+        const c = verdict.criteria.find((x) => x.n === 6);
+        if (c) {
+          c.verdict = b.ok ? 'pass' : 'fail';
+          c.evidence = b.ok
+            ? 'EXECUTED: every changed path is inside the allowlist (not judged)'
+            : `EXECUTED: paths outside the allowlist: ${b.offenders.join(', ')}`;
+          c.executed = true;
+        }
+      } catch { /* fall back to the judged verdict */ }
+    }
+
     if (verdict.ok && taskId === '03') {
       try {
         const { reproduces } = await import('./lib/reproduce.mjs');

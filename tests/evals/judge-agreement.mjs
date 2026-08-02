@@ -43,7 +43,12 @@ for (const f of readdirSync(dir).filter((n) => n.endsWith('.json'))) {
   const [va, vb] = [byN(a), byN(b)];
   const all = [...new Set([...Object.keys(va), ...Object.keys(vb)])];
   const disagree = all.filter((n) => va[n] !== vb[n]);
-  rows.push({ f, total: all.length, disagree, va, vb });
+  // Evidence for the disagreeing criteria is carried through. Reporting "c6: sonnet=fail
+  // haiku=pass" and nothing else states a disagreement the reader cannot adjudicate -- and
+  // adjudicating it is the entire point, since one of the two is wrong and which one matters.
+  const ea = Object.fromEntries(a.criteria.map((c) => [c.n, c.evidence]));
+  const eb = Object.fromEntries(b.criteria.map((c) => [c.n, c.evidence]));
+  rows.push({ f, total: all.length, disagree, va, vb, ea, eb });
 }
 
 let checked = 0, differed = 0;
@@ -53,6 +58,10 @@ for (const r of rows) {
   differed += r.disagree.length;
   const detail = r.disagree.map((n) => `c${n}: ${modelA}=${r.va[n]} ${modelB}=${r.vb[n]}`).join(', ');
   process.stdout.write(`  ${r.f}: ${r.total - r.disagree.length}/${r.total} agree${detail ? ` — ${detail}` : ''}\n`);
+  for (const n of r.disagree) {
+    process.stdout.write(`      ${modelA} c${n}: ${String(r.ea[n] ?? '').replace(/\s+/g, ' ').slice(0, 200)}\n`);
+    process.stdout.write(`      ${modelB} c${n}: ${String(r.eb[n] ?? '').replace(/\s+/g, ' ').slice(0, 200)}\n`);
+  }
 }
 process.stdout.write(
   `\n  ${checked - differed}/${checked} criterion verdicts agree between ${modelA} and ${modelB}\n` +

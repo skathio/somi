@@ -51,7 +51,15 @@ Return ONLY a JSON object, no prose around it:
 // not the open-ended reasoning the candidate does. Overridable with --judge-model, and
 // `tests/evals/judge-agreement.mjs` measures whether a swap changes any verdict before you trust
 // it. Do NOT change this on the strength of it being cheaper.
-export const DEFAULT_JUDGE_MODEL = 'haiku';
+// REVERTED to the larger model. The first agreement check disagreed on 1 of 6 criterion verdicts
+// (task 01 criterion 6: sonnet=fail, haiku=pass -- haiku was the correct one, adjudicated from the
+// stored evidence). A cheaper scorer that grades DIFFERENTLY is not a saving; at N=20 one flipped
+// verdict in twenty moves a dimension a full grade, and phase 4 would read that as a
+// definition-set regression when only the scorer changed.
+//
+// Revisit once criteria 6 and 3 are executed rather than judged (that removes the criterion this
+// disagreement was on) and agreement has been re-measured across ~20 shards rather than one.
+export const DEFAULT_JUDGE_MODEL = null;
 
 export function judge(taskSpec, evidence, { model = DEFAULT_JUDGE_MODEL, timeoutMs = 900_000 } = {}) {
   const prompt = [

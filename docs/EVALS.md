@@ -141,13 +141,20 @@ latency is the bottleneck, and here it is not.
 
 **Implemented so far** (savings that carry no correctness risk):
 
-- **The judge defaults to a small model** — it is ~half of every run's wall clock (300–400 s of a
-  611 s run) and its task is structured extraction against criteria already written out, not the
-  open-ended reasoning the candidate does. `tests/evals/judge-agreement.mjs` re-scores shards
-  **already on disk** with two judge models and reports per-criterion agreement, so a swap is
-  validated rather than assumed. Run it before trusting a change: at N=20, one flipped verdict in
-  twenty moves a dimension a full grade, and phase 4 would read that as a definition-set
-  regression when only the scorer changed.
+- **A cheaper judge was tried and REVERTED.** It is ~half of every run's wall clock, so the saving
+  was real — but `tests/evals/judge-agreement.mjs`, which re-scores shards already on disk with two
+  judge models, disagreed on **1 of 6** criterion verdicts on the very first shard. A scorer that
+  grades *differently* is not a saving: at N=20 one flipped verdict in twenty moves a dimension a
+  full grade, and phase 4 would read that as a definition-set regression when only the scorer
+  changed. Revisit once more criteria are executed and agreement has been measured across ~20
+  shards rather than one.
+
+  The disagreement paid for itself anyway — see below.
+- **Task 01 criterion 6 is executed, not judged.** It is a file-list check against an allowlist —
+  mechanical, and it should never have been judged. It became one only because everything in task
+  01 was. Found by the two judges landing on opposite sides of it; adjudicated from the stored
+  evidence, the *cheaper* judge was the correct one. **A criterion two models read differently is
+  a criterion that should not be read at all.**
 - **Task 03 criterion 3 is executed, not judged** — it already read as an executable assertion
   ("the cited case must genuinely fail"), and judging it asked a model to do arithmetic it could
   get wrong in the same direction the candidate did. It now extracts the cited date and runs
