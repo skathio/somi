@@ -55,7 +55,10 @@ An earlier draft encoded N=10 bands. The arithmetic behind them was wrong by ~3�
 that flattered the design. Both figures were recomputed and the corpus was rebuilt around the
 corrected ones — see `rubric.md` for the table.
 
-Cost: **120 agent runs per trim comparison**, up to 360 for a surface at phase 4's three-attempt cap.
+Cost: **120 agent runs per trim comparison**, up to 360 for a surface at phase 4's three-attempt
+cap. At ~10 minutes per run that is roughly **20 hours** per comparison — and since a single run
+can exceed a 10-minute foreground timeout, [batching](#batching-a-certification-run) is a
+requirement rather than a convenience.
 
 ## Accepting a trim
 
@@ -128,8 +131,17 @@ implying a commit it cannot reproduce.
 
 ### Batching a certification run
 
-A full certification is 260 draws at roughly 320 s each — **hours of wall clock**. It is not meant
-to be one long-lived invocation, and it does not have to be:
+A full certification is 260 draws. Per-run time is **highly variable — observed 3.4 to 13
+minutes** across timed runs, with a single isolated run measured at **10m 11s**. Budget ~10
+minutes and expect the spread; one definition set is on the order of **10 hours** and a trim
+comparison needs two.
+
+> Do not plan against a point estimate here, and do not take one from the fastest runs. The first
+> figure quoted for this — ~320 s — came from the two fastest pilots and was wrong by ~2×. Acting
+> on it produced a `--batch 1` invocation that hit a 10-minute shell cap and completed **nothing**:
+> no shard, no result, the whole run discarded. Time a batch on the host you will actually use.
+
+It is not meant to be one long-lived invocation, and it does not have to be:
 
 ```sh
 SHA=$(git rev-parse HEAD)          # pin it. HEAD moves between batches.
