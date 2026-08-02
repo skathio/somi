@@ -42,7 +42,11 @@ Return ONLY a JSON object, no prose around it:
  * Invoked with `--print` from an empty sandbox directory: it reasons over text handed to it, and
  * an empty cwd means a filesystem read finds nothing rather than finding the answer key.
  */
-export function judge(taskSpec, evidence, { model = null, timeoutMs = 300_000 } = {}) {
+// 300s was too tight and cost a run: the judge reads a full task spec plus a transcript and a
+// diff, and one of three scored runs died on ETIMEDOUT. A timed-out judge is worse than a slow
+// one -- the agent run that preceded it already cost ~280s, and losing the verdict throws that
+// away too.
+export function judge(taskSpec, evidence, { model = null, timeoutMs = 900_000 } = {}) {
   const prompt = [
     JUDGE_PREAMBLE,
     '\n## Task specification (the criteria are numbered under "Pass criteria")\n',

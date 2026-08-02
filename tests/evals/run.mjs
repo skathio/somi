@@ -398,7 +398,12 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     ].join('\n');
 
     const verdict = judge(taskSpec, evidence, { model: judgeModel });
-    if (!verdict.ok) return { index, error: `judge: ${verdict.error}`, dimensions: {}, transcript: run.stdout.slice(-4000) };
+    if (!verdict.ok) {
+      // No dimensions are recorded. A judge fault is not evidence about the definition set, and
+      // scoring it as failures would put a harness problem into the corpus statistics -- exactly
+      // the confusion the non-attributable verdict exists to prevent one layer down.
+      return { index, error: `judge: ${verdict.error}`, dimensions: {}, transcript: run.stdout.slice(-4000), harnessFault: true };
+    }
 
     return {
       index,
