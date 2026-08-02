@@ -390,6 +390,22 @@ for r in task02-code-control task02-code-mutant; do
 done
 check "baseline suite is green against BOTH references (1(b)'s premise)" "$refs_ok" "ok"
 
+# --- routed from 4.1's first live runs ---------------------------------------------------------
+# task01's endpoint must AUTHENTICATE the caller. The problem statement asks to record "who sent
+# it"; when tenantId came straight from the request body that was unanswerable, so the request
+# rested on a false premise -- and commands/plan.md §1a makes the premise check "not optional".
+# All 3 of 3 live runs correctly blocked on the auth gap instead of answering the storage
+# question, and the task failed them for complying: S2 0/3, S1 0/3, S6 0/3.
+#
+# The general property -- a fixture must not contain a defect more urgent than the one it measures
+# -- is not mechanically checkable. This asserts the specific regression, which is.
+if grep -q 'tenantForKey' "$F/task01-plan/src/ingest/handler.mjs" \
+   && ! grep -qE 'const \{ *tenantId' "$F/task01-plan/src/ingest/handler.mjs"; then
+  ok "task01's endpoint authenticates the caller (the premise the task rests on)"
+else
+  bad "task01's endpoint authenticates the caller -- tenantId must not come from the request body"
+fi
+
 # --- routed from 3.3b pass 5: the contract must be asserted, not just written down --------------
 # R4 in task02's spec states the clock shape the candidate may inject. Three passes running, the
 # references were "fixed" by adding whichever convention the last review found unsupported --
