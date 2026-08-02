@@ -75,6 +75,22 @@ echo "==> Eval packaging & hermeticity..."
 # syntax-check it, so a "no mention" rule would be self-contradicting.
 bash tests/scripts/evals-packaging.sh
 
+echo "==> Digest-marker / hook-fixture coupling..."
+# Phase 4 exit criterion. A `rules/` trim that removes or rewords a digest bullet must update
+# tests/hooks/cases/inject-workflow-context.json's Tier-2 marker in the SAME attempt. Phase 1
+# added a fixture PAIR on that bullet (positive + negative); trim the bullet and the cases that
+# carry it as incidental context go quietly vacuous while the suite stays green.
+#
+# `rules/` is one of phase 4's four trim candidates, so this is the coupling most likely to break.
+coupling=$(node tests/scripts/lib/digest-marker-coupling.mjs \
+  tests/hooks/cases/inject-workflow-context.json \
+  hooks/user-prompt-submit/inject-workflow-context.mjs \
+  rules/CLAUDE.md .github/copilot-instructions.md)
+case "$coupling" in
+  ok*) echo "  $coupling" ;;
+  *)   echo "DIGEST-MARKER COUPLING BROKEN:" >&2; echo "$coupling" >&2; exit 1 ;;
+esac
+
 echo "==> Validating agent/command/skill frontmatter..."
 failed=0
 while IFS= read -r f; do
