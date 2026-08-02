@@ -382,12 +382,23 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     uninstallSomi(work);
 
     if (!run.ok) {
-      // An errored run is a data point, not an exception: it fails every dimension the task
-      // declares, and the reason is recorded so a harness fault is distinguishable from a
-      // definition-set regression when the results are read.
-      const dims = Object.fromEntries(Object.keys(criterionTags(taskSpec)).length
-        ? [...new Set(Object.values(criterionTags(taskSpec)).flat())].map((d) => [d, false]) : []);
-      return { index, error: run.timedOut ? 'timed out' : (run.error ?? `exit ${run.status}`), dimensions: dims, transcript: run.stdout.slice(-4000) };
+      // NO dimensions recorded -- the same rule the judge-fault path already follows, and for the
+      // same reason. An earlier version marked every declared dimension `false` here, reasoning
+      // that a failed run "fails everything". That is wrong and it corrupted a real measurement:
+      // four runs died on `You've hit your session limit` and the certification read
+      // 23 failures across 25 draws, with S2/S1/S6 at 0/5 -- numbers describing a QUOTA outage,
+      // presented as evidence about the definition set.
+      //
+      // A run that never executed is not a run that failed. It must not enter the denominator.
+      const quota = /session limit|rate limit|usage limit|quota/i.test(run.stdout + run.stderr);
+      return {
+        index,
+        error: run.timedOut ? 'timed out' : (quota ? 'quota exhausted' : (run.error ?? `exit ${run.status}`)),
+        dimensions: {},
+        transcript: run.stdout.slice(-4000),
+        harnessFault: true,
+        quotaFault: quota,
+      };
     }
 
     const evidence = [
@@ -592,10 +603,26 @@ async function main(argv) {
           const r = await runOnce({ taskId: id, taskSpec: spec, fixtureDir: fixture, sourceDir: source.dir, index: i, model: args.model, judgeModel: args.judgeModel });
           process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: ${r.error ? 'ERROR ' + r.error : Object.entries(r.dimensions).map(([k, v]) => k + (v ? '+' : '-')).join(' ')}\n`);
           // Written BEFORE anything else can fail. Everything after this point is bookkeeping.
-          mkdirSync(dirname(shard), { recursive: true });
-          writeFileSync(shard, JSON.stringify({ sha: source.sha, taskId: id, run: r }, null, 2) + '\n');
+          //
+          // Harness faults are NOT persisted: a shard means "this draw was scored", and resume
+          // treats any shard as done. Persisting a quota outage would bake it in as a permanent
+          // result that no re-run ever revisits.
+          if (!r.harnessFault) {
+            mkdirSync(dirname(shard), { recursive: true });
+            writeFileSync(shard, JSON.stringify({ sha: source.sha, taskId: id, run: r }, null, 2) + '\n');
+          }
           tasks[id].push(r);
           executed += 1;
+          // Quota is not a per-run accident: once it is exhausted every remaining run fails the
+          // same way, and each failure still costs a fixture rebuild and a shard write. Batch 2
+          // burned four runs after the first one hit `You've hit your session limit`. Stop.
+          if (r.quotaFault) {
+            process.stderr.write(
+              `\n  QUOTA EXHAUSTED after ${executed} run(s). Stopping.\n` +
+              `  Shards already on disk are kept; re-run the same command after the reset and it\n` +
+              `  resumes from where it stopped.\n`);
+            throw Object.assign(new Error('quota exhausted'), { quota: true });
+          }
         }
       }
     }
@@ -637,5 +664,10 @@ export function dryRunDimensions(id, sourceDir) {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main(process.argv.slice(2))
     .then((code) => process.exit(code))
-    .catch((err) => { process.stderr.write(`eval runner: ${err.message}\n`); process.exit(1); });
+    .catch((err) => {
+      process.stderr.write(`eval runner: ${err.message}\n`);
+      // Quota exhaustion exits 0: it is an expected pause, not a crash, and a batch script that
+      // retried on non-zero would hammer a limit that only time clears.
+      process.exit(err.quota ? 0 : 1);
+    });
 }

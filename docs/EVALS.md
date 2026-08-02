@@ -129,6 +129,32 @@ definition sets live in one run, and reading them from the working tree would ma
 depend on which branch happened to be checked out. A path source records `sha: null` rather than
 implying a commit it cannot reproduce.
 
+### The real constraint is quota, not wall clock
+
+Measured the hard way. A 5-run batch produced four `exit 1` runs whose transcripts read
+**`You've hit your session limit`** — the runner spends the *same* budget as an interactive
+session, and a long working session leaves little for it.
+
+This inverts the obvious optimisation. **Parallelism does not help a quota-bound workload** — it
+reaches the limit sooner and fails more runs on the way. Concurrency is the right lever only when
+latency is the bottleneck, and here it is not.
+
+What actually reduces the cost, in order:
+
+1. **A smaller model for both arms.** The corpus measures the *definition set*, not the model, so
+   any model is valid as long as both arms use the same one — and a weaker one is arguably more
+   sensitive, having less capacity to paper over instructions that were trimmed away.
+2. **A cheap judge.** The judge is roughly half the wall clock (300–400 s of a 611 s run) and its
+   task is structured extraction against explicit criteria. Validate agreement on existing
+   transcripts before switching.
+3. **Executed criteria instead of judged ones.** A mechanically-scored criterion has no judge leg
+   at all and near-zero variance, so it needs far fewer draws. Task 02's criterion 1 already works
+   this way.
+4. **Cache the baseline arm** across a surface's three trim attempts — it is the same definition
+   set every time, so 6 arms become 4.
+
+Run the batches when quota is fresh, not at the end of a long session.
+
 ### Batching a certification run
 
 A full certification is 260 draws. Per-run time is **highly variable — observed 3.4 to 13
