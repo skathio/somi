@@ -418,6 +418,53 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
 }
 
 // ---------------------------------------------------------------------------------------------
+// Sharded results: batching, resume, and merge
+// ---------------------------------------------------------------------------------------------
+//
+// Certification is 260 draws at ~320 s each -- hours of wall clock. Holding that in one process
+// means a crash at run 19 of 20 discards nineteen runs that were already paid for, and it forces
+// whoever launched it to babysit a single long-lived invocation.
+//
+// So each run is persisted the moment it finishes, as its own file under
+// `results/<sha>/<task>-<index>.json`. A later invocation SKIPS indices that already exist, which
+// makes the runner idempotent: run it with `--runs 20` as many times as you like, in whatever
+// chunks fit, and it converges on 20. `--merge` then folds the shards into one result file for
+// `certify()`.
+//
+// Shards are keyed by SHA, not by date or run label. Pooling draws that were scored against
+// different definition sets would silently answer a question nobody asked -- and `--source HEAD`
+// is exactly how that happens, since HEAD moves between batches.
+
+export function shardDir(sha) {
+  return join(HERE, 'results', sha ?? 'unversioned');
+}
+
+export function shardPath(sha, taskId, index) {
+  return join(shardDir(sha), `${taskId}-${String(index).padStart(3, '0')}.json`);
+}
+
+/** Which run indices for this task are already on disk. */
+export function completedIndices(sha, taskId, runs) {
+  const out = new Set();
+  for (let i = 0; i < runs; i++) if (existsSync(shardPath(sha, taskId, i))) out.add(i);
+  return out;
+}
+
+/** Fold every shard for a SHA into the result shape `certify()` and `compare()` consume. */
+export function mergeShards(sha, { runs = BANDS.n } = {}) {
+  const dir = shardDir(sha);
+  if (!existsSync(dir)) throw new Error(`no shards for ${sha} at ${dir}`);
+  const files = execFileSync('ls', [dir], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.json'));
+  const tasks = {};
+  for (const f of files.sort()) {
+    const rec = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    (tasks[rec.taskId] ??= []).push(rec.run);
+  }
+  for (const id of Object.keys(tasks)) tasks[id].sort((a, b) => a.index - b.index);
+  return buildResult({ source: { ref: sha, sha }, tasks, runs });
+}
+
+// ---------------------------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------------------------
 
@@ -437,7 +484,8 @@ export function fixtureFor(id, dir) {
 }
 
 function parseArgs(argv) {
-  const a = { source: 'HEAD', tasks: null, runs: BANDS.n, dryRun: false, out: null, model: null, judgeModel: null };
+  const a = { source: 'HEAD', tasks: null, runs: BANDS.n, dryRun: false, out: null, model: null,
+              judgeModel: null, merge: null, certifySha: null, batch: Infinity };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === '--source') a.source = argv[++i];
@@ -447,6 +495,9 @@ function parseArgs(argv) {
     else if (k === '--model') a.model = argv[++i];
     else if (k === '--judge-model') a.judgeModel = argv[++i];
     else if (k === '--dry-run') a.dryRun = true;
+    else if (k === '--merge') a.merge = argv[++i];
+    else if (k === '--certify') a.certifySha = argv[++i];
+    else if (k === '--batch') a.batch = Number(argv[++i]);
     else if (k === '--help' || k === '-h') a.help = true;
     else throw new Error(`unknown argument: ${k}`);
   }
@@ -462,6 +513,10 @@ const USAGE = `somi eval runner
                        detached worktree and removed afterwards; a path is used in place.
   --tasks 01,03        task ids to run (default: every task in tests/evals/tasks/)
   --runs N             runs per task (default ${BANDS.n}, the rubric's N)
+  --batch N            execute at most N NEW runs this invocation, then stop. Shards already on
+                       disk are reused, so repeated invocations converge on --runs.
+  --merge <sha>        fold results/<sha>/*.json into one result file and report certification
+  --certify <sha>      same as --merge (certification is just the merged view)
   --dry-run            build the result shape without invoking a model. No network, no credential.
   --out FILE           write the result JSON here (default tests/evals/results/<sha>-<date>.json)
 
@@ -480,6 +535,22 @@ async function main(argv) {
   const args = parseArgs(argv);
   if (args.help) { process.stdout.write(USAGE + '\n'); return 0; }
 
+  if (args.merge || args.certifySha) {
+    const sha = args.merge ?? args.certifySha;
+    const merged = mergeShards(sha, { runs: args.runs });
+    if (args.out) { mkdirSync(dirname(resolve(process.cwd(), args.out)), { recursive: true });
+      writeFileSync(resolve(process.cwd(), args.out), JSON.stringify(merged, null, 2) + '\n'); }
+    const c = certify(merged);
+    process.stdout.write(
+      `${sha.slice(0, 12)}: ${c.failures} failure(s) across ${c.draws} draw(s)\n` +
+      `  certified:       ${c.certified}${c.certified ? '' : `  (budget is <=${c.maxFailures})`}\n` +
+      `  enough draws:    ${c.sufficientDraws}${c.sufficientDraws ? '' : `  (need ${CERTIFY.draws}, have ${c.draws})`}\n` +
+      c.dimensions.map((d) => `  ${d.task} ${d.dim}: ${d.passes}/${d.n}`).join('\n') + '\n');
+    // Exit 0 even when uncertified: "the corpus is not sharp enough yet" is a RESULT, and a
+    // non-zero exit would make a batch script treat it as a crash and retry it forever.
+    return 0;
+  }
+
   const taskIds = args.tasks ?? discoverTasks();
   if (taskIds.length === 0) throw new Error('no tasks found in tests/evals/tasks/');
 
@@ -495,19 +566,36 @@ async function main(argv) {
   const source = resolveSource(args.source);
   try {
     const tasks = {};
+    let executed = 0;
     for (const id of taskIds) {
       tasks[id] = [];
       for (let i = 0; i < args.runs; i++) {
+        if (executed >= args.batch) {
+          process.stderr.write(`  ${id}: batch cap of ${args.batch} reached; ${args.runs - i} run(s) left for the next invocation\n`);
+          break;
+        }
         if (args.dryRun) {
           // Shape only. Every dimension the task declares is recorded as `n-a`, so a dry run
           // produces a well-formed file with no grades invented from nothing.
           tasks[id].push({ index: i, dimensions: dryRunDimensions(id, source.dir), error: null });
         } else {
+          const shard = shardPath(source.sha, id, i);
+          if (existsSync(shard)) {
+            // Already scored in an earlier batch. Read it back rather than re-running: the point
+            // of sharding is that a paid-for run is never paid for twice.
+            tasks[id].push(JSON.parse(readFileSync(shard, 'utf8')).run);
+            process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: (already done)\n`);
+            continue;
+          }
           const spec = readFileSync(taskFile(id, source.dir), 'utf8');
           const fixture = fixtureFor(id, source.dir);
           const r = await runOnce({ taskId: id, taskSpec: spec, fixtureDir: fixture, sourceDir: source.dir, index: i, model: args.model, judgeModel: args.judgeModel });
           process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: ${r.error ? 'ERROR ' + r.error : Object.entries(r.dimensions).map(([k, v]) => k + (v ? '+' : '-')).join(' ')}\n`);
+          // Written BEFORE anything else can fail. Everything after this point is bookkeeping.
+          mkdirSync(dirname(shard), { recursive: true });
+          writeFileSync(shard, JSON.stringify({ sha: source.sha, taskId: id, run: r }, null, 2) + '\n');
           tasks[id].push(r);
+          executed += 1;
         }
       }
     }

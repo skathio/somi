@@ -252,6 +252,52 @@ check "one dimension at 18/20 with 12 clean is caught by the pooled budget" "$(j
 # a corpus that has barely been sampled.
 check "a 20-draw run is not sufficientDraws" "$(mk 1 20 20)" "true|0|20|false"
 
+# --- sharding, resume and merge: what makes a 260-draw certification batchable ------------------
+# Certification is hours of wall clock. Each run is persisted the moment it finishes so a crash at
+# run 19 does not discard eighteen paid-for runs, and a later invocation skips what is already on
+# disk. Tested by writing shards directly -- no model, no network.
+SHARD_SHA="testsha$(date +%s)"
+mk_shard() { j "
+  const fs = await import('node:fs');
+  const p = M.shardPath('$SHARD_SHA', '$1', $2);
+  fs.mkdirSync(p.replace(/\/[^/]+\$/, ''), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify({ sha: '$SHARD_SHA', taskId: '$1', run: { index: $2, dimensions: { S1: $3 }, criteria: null, error: null } }));
+  process.stdout.write('ok');
+"; }
+mk_shard 01 0 true  >/dev/null; mk_shard 01 1 true  >/dev/null
+mk_shard 01 2 false >/dev/null; mk_shard 02 0 true  >/dev/null
+
+check "completedIndices sees the shards already on disk" \
+  "$(j "process.stdout.write([...M.completedIndices('$SHARD_SHA','01',5)].join(','))")" "0,1,2"
+check "an unwritten index is not reported complete" \
+  "$(j "process.stdout.write(String(M.completedIndices('$SHARD_SHA','01',5).has(4)))")" "false"
+
+merged=$( j "
+  const r = M.mergeShards('$SHARD_SHA', { runs: 3 });
+  const d = r.tasks['01'].dimensions.S1;
+  process.stdout.write([Object.keys(r.tasks).sort().join('+'), r.tasks['01'].runs.length, d.passes + '/' + d.n, r.source.sha].join('|'));
+")
+check "mergeShards folds every shard, per task, in index order" "$merged" "01+02|3|2/3|$SHARD_SHA"
+
+# Shards are keyed by SHA. Pooling draws scored against DIFFERENT definition sets would answer a
+# question nobody asked -- and `--source HEAD` is how that happens, because HEAD moves between
+# batches.
+check "a different sha has no shards" \
+  "$(j "try { M.mergeShards('${SHARD_SHA}-other'); process.stdout.write('MERGED'); } catch { process.stdout.write('threw'); }")" \
+  "threw"
+
+# Certification reads the merged view, so a partial run reports honestly rather than certifying.
+part=$( j "
+  const c = M.certify(M.mergeShards('$SHARD_SHA', { runs: 3 }));
+  process.stdout.write([c.certified, c.failures, c.draws, c.sufficientDraws].join('|'));
+")
+check "a partial corpus reports few failures but NOT enough draws" "$part" "true|1|4|false"
+
+rm -rf "$ROOT/tests/evals/results/$SHARD_SHA"
+check "shard directory is removable and merge then fails loudly" \
+  "$(j "try { M.mergeShards('$SHARD_SHA'); process.stdout.write('MERGED'); } catch { process.stdout.write('threw'); }")" \
+  "threw"
+
 # --- npm test must not invoke this runner ------------------------------------------------------
 # Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is
 # explicitly permitted; what is forbidden is executing it.

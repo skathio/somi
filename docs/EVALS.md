@@ -126,6 +126,34 @@ definition sets live in one run, and reading them from the working tree would ma
 depend on which branch happened to be checked out. A path source records `sha: null` rather than
 implying a commit it cannot reproduce.
 
+### Batching a certification run
+
+A full certification is 260 draws at roughly 320 s each — **hours of wall clock**. It is not meant
+to be one long-lived invocation, and it does not have to be:
+
+```sh
+SHA=$(git rev-parse HEAD)          # pin it. HEAD moves between batches.
+
+# Run in whatever chunks fit. Each invocation executes at most --batch NEW runs and reuses
+# everything already on disk, so this converges on --runs no matter how it is sliced.
+npm run eval:behavioral -- --source "$SHA" --runs 20 --batch 5
+npm run eval:behavioral -- --source "$SHA" --runs 20 --batch 5
+# ...repeat until it reports nothing left to do
+
+node tests/evals/run.mjs --certify "$SHA"     # fold the shards, report the pooled gate
+```
+
+Every run is written to `results/<sha>/<task>-<index>.json` **the moment it finishes**, before any
+other bookkeeping. A crash at run 19 of 20 therefore costs one run, not nineteen — which matters
+when each one has already been paid for.
+
+**Shards are keyed by SHA, deliberately.** Pooling draws scored against different definition sets
+answers a question nobody asked, and `--source HEAD` is exactly how that happens once a batch
+spans a commit. Pin the SHA and the runner will refuse to mix.
+
+`--certify` exits **0 even when the corpus fails to certify**: "not sharp enough yet" is a result,
+and a non-zero exit would make a batch script treat it as a crash and retry forever.
+
 Results land in `tests/evals/results/` carrying the definition-set SHA, the date, the run index,
 and pass/fail per task per dimension. Aggregates are derived from the per-run records rather than
 stored alongside them, so a result file cannot disagree with itself.
