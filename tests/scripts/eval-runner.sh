@@ -298,6 +298,24 @@ check "shard directory is removable and merge then fails loudly" \
   "$(j "try { M.mergeShards('$SHARD_SHA'); process.stdout.write('MERGED'); } catch { process.stdout.write('threw'); }")" \
   "threw"
 
+# --- executed criterion: task 03 criterion 3, scored by running it rather than judging it -------
+rep() { j "
+  const R = await import('$ROOT/tests/evals/lib/reproduce.mjs');
+  const refs = await (await import('$ROOT/$R')).task03Reference('$ROOT');
+  process.stdout.write(String(R.reproduces(\`$1\`, refs)));
+"; }
+check "a cited 31-day date reproduces the defect"        "$(rep 'the bug hits on 2026-07-16')" "true"
+check "a cited 30-day date does NOT reproduce"           "$(rep 'consider 2026-04-16 here')"   "false"
+check "a named 31-day month reproduces"                  "$(rep 'on July 16 it under-credits')" "true"
+check "a named 30-day month does not"                    "$(rep 'on June 16 it under-credits')" "false"
+# Fails SAFE. A parser returning `false` on an unrecognised phrasing would fail a correct review
+# for citing its case in a form nobody anticipated -- the "criterion that fails a conforming run"
+# this corpus keeps rediscovering. null means "fall back to the judge".
+check "a hedge with no date returns null (judge fallback)" "$(rep 'the proration logic may be wrong')" "null"
+
+check "the judge defaults to a small model" \
+  "$(j "process.stdout.write((await import('$ROOT/tests/evals/lib/score.mjs')).DEFAULT_JUDGE_MODEL)")" "haiku"
+
 # --- npm test must not invoke this runner ------------------------------------------------------
 # Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is
 # explicitly permitted; what is forbidden is executing it.

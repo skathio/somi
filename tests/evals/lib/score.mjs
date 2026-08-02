@@ -46,7 +46,14 @@ Return ONLY a JSON object, no prose around it:
 // diff, and one of three scored runs died on ETIMEDOUT. A timed-out judge is worse than a slow
 // one -- the agent run that preceded it already cost ~280s, and losing the verdict throws that
 // away too.
-export function judge(taskSpec, evidence, { model = null, timeoutMs = 900_000 } = {}) {
+// Defaults to a SMALL model. The judge is roughly half of every run's wall clock (300-400s of a
+// 611s run) and its job is structured extraction against criteria that are already written out --
+// not the open-ended reasoning the candidate does. Overridable with --judge-model, and
+// `tests/evals/judge-agreement.mjs` measures whether a swap changes any verdict before you trust
+// it. Do NOT change this on the strength of it being cheaper.
+export const DEFAULT_JUDGE_MODEL = 'haiku';
+
+export function judge(taskSpec, evidence, { model = DEFAULT_JUDGE_MODEL, timeoutMs = 900_000 } = {}) {
   const prompt = [
     JUDGE_PREAMBLE,
     '\n## Task specification (the criteria are numbered under "Pass criteria")\n',

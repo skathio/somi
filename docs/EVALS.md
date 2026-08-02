@@ -139,7 +139,24 @@ This inverts the obvious optimisation. **Parallelism does not help a quota-bound
 reaches the limit sooner and fails more runs on the way. Concurrency is the right lever only when
 latency is the bottleneck, and here it is not.
 
-What actually reduces the cost, in order:
+**Implemented so far** (savings that carry no correctness risk):
+
+- **The judge defaults to a small model** — it is ~half of every run's wall clock (300–400 s of a
+  611 s run) and its task is structured extraction against criteria already written out, not the
+  open-ended reasoning the candidate does. `tests/evals/judge-agreement.mjs` re-scores shards
+  **already on disk** with two judge models and reports per-criterion agreement, so a swap is
+  validated rather than assumed. Run it before trusting a change: at N=20, one flipped verdict in
+  twenty moves a dimension a full grade, and phase 4 would read that as a definition-set
+  regression when only the scorer changed.
+- **Task 03 criterion 3 is executed, not judged** — it already read as an executable assertion
+  ("the cited case must genuinely fail"), and judging it asked a model to do arithmetic it could
+  get wrong in the same direction the candidate did. It now extracts the cited date and runs
+  `prorate()`. Fails safe: no extractable date returns `null` and the judged verdict stands,
+  because a parser returning `false` on an unanticipated phrasing would fail a correct review.
+- **The baseline arm is already cached** — shards are keyed by SHA, so re-running the same
+  definition set across a surface's three trim attempts reuses every draw. 6 arms become 4.
+
+Remaining, in order:
 
 1. **A smaller model for both arms.** The corpus measures the *definition set*, not the model, so
    any model is valid as long as both arms use the same one — and a weaker one is arguably more

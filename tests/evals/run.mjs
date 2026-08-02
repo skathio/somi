@@ -409,6 +409,26 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     ].join('\n');
 
     const verdict = judge(taskSpec, evidence, { model: judgeModel });
+
+    // Task 03 criterion 3 is EXECUTED, not judged: it already reads as an executable assertion
+    // ("the cited case must genuinely fail"), and judging it asks a model to do arithmetic it can
+    // get wrong in the same direction the candidate did. Overrides the judge's verdict only when
+    // a date was actually extractable -- otherwise it returns null and the judge's verdict stands.
+    if (verdict.ok && taskId === '03') {
+      try {
+        const { reproduces } = await import('./lib/reproduce.mjs');
+        const refs = await task03Reference(sourceDir);
+        const executed = reproduces(run.stdout, refs);
+        if (executed !== null) {
+          const c = verdict.criteria.find((x) => x.n === 3);
+          if (c) {
+            c.verdict = executed ? 'pass' : 'fail';
+            c.evidence = `EXECUTED: the cited date ${executed ? 'reproduces' : 'does NOT reproduce'} the defect (not judged)`;
+            c.executed = true;
+          }
+        }
+      } catch { /* fall back to the judged verdict */ }
+    }
     if (!verdict.ok) {
       // No dimensions are recorded. A judge fault is not evidence about the definition set, and
       // scoring it as failures would put a harness problem into the corpus statistics -- exactly
@@ -532,6 +552,17 @@ const USAGE = `somi eval runner
   --out FILE           write the result JSON here (default tests/evals/results/<sha>-<date>.json)
 
 Requires network and an API credential unless --dry-run. Deliberately not wired into npm test.`;
+
+/** The correct and patched `prorate` implementations, for executing task 03's criterion 3. */
+export async function task03Reference(sourceDir) {
+  const base = join(sourceDir, 'tests', 'evals', 'fixtures', 'task03-review', 'src', 'billing', 'proration.mjs');
+  const correct = (await import(pathToFileURL(base).href)).prorate;
+  const src = readFileSync(base, 'utf8')
+    .replace('  const dim = daysInMonth(changeDate);', '  const dim = Math.min(daysInMonth(changeDate), 30);')
+    .replace(/^import .*$/m, 'const fmtAmt = () => "";');
+  const patched = (await import('data:text/javascript,' + encodeURIComponent(src))).prorate;
+  return { correct, patched };
+}
 
 /** Task ids, read from the corpus rather than hardcoded so a new task file is picked up. */
 export function discoverTasks(dir = join(HERE, 'tasks')) {
