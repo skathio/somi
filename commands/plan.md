@@ -146,11 +146,14 @@ converse with the user, so verification is a **batch round-trip owned by this co
 1. **First Task — research mode.** The planner reads the repo, drafts `context.md` and the spec
    skeleton, and returns a **`DECISIONS-NEEDED` block**: every architecture-shaping decision it
    can foresee, each with 2–4 concrete options (specific pros and cons — no vague phrasings like
-   "flexible approach" or "more robust"), a recommendation with its reason, and 1–3 pre-supplied
-   **narrowing questions** for Discover mode.
-2. **Present each decision to the user — faithfully.** Relay the agent's options, pros/cons, and
-   recommendation verbatim (use the host's structured-question tool when available; plain chat
-   otherwise). Always offer the two escape hatches:
+   "flexible approach" or "more robust"), **a `Reverses:` line per option** saying what undoing the
+   choice would cost, a recommendation with its reason, and 1–3 pre-supplied **narrowing questions**
+   for Discover mode.
+2. **Present each decision to the user — faithfully.** Relay the agent's options, pros/cons,
+   **`Reverses:` lines** and recommendation verbatim (use the host's structured-question tool when
+   available; plain chat otherwise). Do not summarise `Reverses` away: it is the one field that
+   tells the human which decisions are expensive to get wrong, and a relay that drops it hands them
+   a cheaper-looking choice than the one they are making. Always offer the two escape hatches:
    - **Other (custom)** — the user describes their own option; capture it verbatim.
    - **Discover** — walk the agent's pre-supplied narrowing questions with the user one at a
      time, stating what each answer favors, until one option clearly fits or the user is ready
