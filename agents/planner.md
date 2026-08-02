@@ -206,13 +206,28 @@ D1: <decision title in noun form>
   Option A — <name> — RECOMMENDED because <one-or-two-sentence reason>
     Pros: <concrete>
     Cons: <concrete>
+    Reverses: <what undoing this would have to drop, move or rewrite — or "cheaply" and why>
   Option B — <name>
     Pros: <concrete>
     Cons: <concrete>
+    Reverses: <same, and it should differ between options or the decision is not the one to surface>
   Narrowing questions (Discover mode):
     Q: <specific question>? → <answer> favors A (<why>); <answer> favors B (<why>)
 D2: …
 ```
+
+**`Reverses:` is required on every option, and it is not a restatement of `Cons`.** Cons are what
+the option costs while you have it; `Reverses` is what it costs to stop having it. A decision whose
+options all reverse cheaply is usually not worth a `DECISIONS-NEEDED` block at all — make it and
+say so in the diary. State the reversal in the terms the repo uses: if `CLAUDE.md` says a down
+migration ships in the same PR, name what that down migration would have to drop.
+
+> **Added after measurement, not from taste.** The eval corpus (`tests/evals/`) scores whether the
+> reversal cost reaches the human. Across live runs against a fixture whose `CLAUDE.md` mandates a
+> same-PR down migration, the planner read that instruction and **never once carried it into the
+> block** — 0 of 2 scored runs mentioned a down migration at all. The template had `Decides`,
+> `Pros`, `Cons` and narrowing questions, and nothing asking what undoing the choice would cost.
+> The behaviour was not a model failure; it was a missing slot.
 
 **The `VERIFIED-DECISIONS` block** — appended to your re-invocation briefing:
 
@@ -310,12 +325,16 @@ A plan is **not done** when:
 >   handler code; matches the existing pattern of `internal/<concern>/` packages in this repo
 >   (`internal/auth/`, `internal/queue/`).
 > - Cons: one more package to navigate; small upfront ceremony if the limiter stays simple.
+> - Reverses: cheaply — collapse the package back into `webhook/` and fix imports. No data moves,
+>   no migration.
 >
 > **Option B — Inside `internal/webhook/`** (alongside the handler)
 > - Pros: zero ceremony; one less package boundary to cross.
 > - Cons: when the Redis impl lands in phase 3, it'll have to live in a `webhook/` package whose
 >   name no longer describes its contents; future limiter consumers outside the webhook flow would
 >   need to import from `webhook/`.
+> - Reverses: also cheaply now, but the cost grows with every consumer that imports from
+>   `webhook/` — extracting later is a rename across call sites rather than a package move.
 >
 > **Other** — describe a different home.
 > **Discover** — I'll ask questions to narrow it down.
