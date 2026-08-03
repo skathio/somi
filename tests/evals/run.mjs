@@ -117,14 +117,24 @@ export function certify(result, { maxFailures = CERTIFY.maxFailures } = {}) {
     }
   }
   dimensions.sort((a, b) => a.rate - b.rate || a.task.localeCompare(b.task));
+  // `certified` REQUIRES the full draw count. Reading a raw failure count against a budget
+  // defined for 260 draws is a vacuous pass: 3 failures in 25 draws cleared "<=5" and printed
+  // `certified: true` while scaling to ~31 per 260 -- six times over budget and plainly not on
+  // track. A partial run cannot certify, and saying so in the flag is safer than saying it in a
+  // second flag the reader has to remember to check.
+  const enough = draws >= CERTIFY.draws;
+  // Rate against the budget, so a partial run still says whether it is TRENDING to certify.
+  const projected = draws ? (failures / draws) * CERTIFY.draws : null;
   return {
-    certified: failures <= maxFailures,
+    certified: enough && failures <= maxFailures,
+    onTrack: projected === null ? null : projected <= maxFailures,
+    projectedFailures: projected === null ? null : Math.round(projected * 10) / 10,
     failures,
     draws,
     maxFailures,
     // Named separately from `certified` so a caller cannot read "few failures" as "enough runs".
     // A corpus that failed 0 of 20 draws is not certified; it is barely started.
-    sufficientDraws: draws >= CERTIFY.draws,
+    sufficientDraws: enough,
     dimensions,
     softest: dimensions.slice(0, 3),
   };
@@ -483,6 +493,46 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
 // different definition sets would silently answer a question nobody asked -- and `--source HEAD`
 // is exactly how that happens, since HEAD moves between batches.
 
+/**
+ * Re-score shards already on disk against the CURRENT task specs, without re-running any agent.
+ *
+ * A criterion change invalidates stored verdicts but not stored transcripts. Re-running the agent
+ * to fix a scoring change would discard the expensive half of every draw -- ~12 minutes each --
+ * to redo the cheap half. This redoes only the cheap half.
+ *
+ * Sharpening criterion 4 after 4.1's first five draws is exactly the case: the runs were fine, the
+ * criterion was ambiguous, and the transcripts still say what the runs did.
+ */
+export async function rescoreShards(sha, sourceDir, { judgeModel = null } = {}) {
+  const { judge, toDimensions, criterionTags } = await import('./lib/score.mjs');
+  const dir = shardDir(sha);
+  const files = execFileSync('ls', [dir], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.json'));
+  const changes = [];
+  for (const f of files.sort()) {
+    const path = join(dir, f);
+    const rec = JSON.parse(readFileSync(path, 'utf8'));
+    if (!rec.run.transcript || rec.run.error) continue;
+    const spec = readFileSync(taskFile(rec.taskId, sourceDir), 'utf8');
+    const verdict = judge(spec, `### What the run returned\n\n${rec.run.transcript}`, { model: judgeModel });
+    if (!verdict.ok) {
+      changes.push({ f, error: verdict.error });
+      // Same rule as the run loop: once quota is gone every remaining call fails identically, and
+      // continuing just converts one outage into N indistinguishable errors.
+      if (verdict.quota) { changes.push({ f: '(stopped)', error: 'quota exhausted - re-run after reset; shards are unchanged' }); break; }
+      continue;
+    }
+    const before = rec.run.dimensions;
+    const after = toDimensions(verdict.criteria, criterionTags(spec));
+    const moved = Object.keys({ ...before, ...after }).filter((d) => before[d] !== after[d]);
+    rec.run.dimensions = after;
+    rec.run.criteria = verdict.criteria;
+    rec.run.rescored = true;
+    writeFileSync(path, JSON.stringify(rec, null, 2) + '\n');
+    changes.push({ f, moved, before, after });
+  }
+  return changes;
+}
+
 export function shardDir(sha) {
   return join(HERE, 'results', sha ?? 'unversioned');
 }
@@ -533,7 +583,7 @@ export function fixtureFor(id, dir) {
 
 function parseArgs(argv) {
   const a = { source: 'HEAD', tasks: null, runs: BANDS.n, dryRun: false, out: null, model: null,
-              judgeModel: null, merge: null, certifySha: null, batch: Infinity };
+              judgeModel: null, merge: null, certifySha: null, rescore: null, batch: Infinity };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === '--source') a.source = argv[++i];
@@ -545,6 +595,7 @@ function parseArgs(argv) {
     else if (k === '--dry-run') a.dryRun = true;
     else if (k === '--merge') a.merge = argv[++i];
     else if (k === '--certify') a.certifySha = argv[++i];
+    else if (k === '--rescore') a.rescore = argv[++i];
     else if (k === '--batch') a.batch = Number(argv[++i]);
     else if (k === '--help' || k === '-h') a.help = true;
     else throw new Error(`unknown argument: ${k}`);
@@ -563,6 +614,8 @@ const USAGE = `somi eval runner
   --runs N             runs per task (default ${BANDS.n}, the rubric's N)
   --batch N            execute at most N NEW runs this invocation, then stop. Shards already on
                        disk are reused, so repeated invocations converge on --runs.
+  --rescore <sha>      re-judge stored transcripts against the CURRENT task specs, in place. Use
+                       after a criterion changes: it redoes only the cheap half of each draw.
   --merge <sha>        fold results/<sha>/*.json into one result file and report certification
   --certify <sha>      same as --merge (certification is just the merged view)
   --dry-run            build the result shape without invoking a model. No network, no credential.
@@ -594,6 +647,18 @@ async function main(argv) {
   const args = parseArgs(argv);
   if (args.help) { process.stdout.write(USAGE + '\n'); return 0; }
 
+  if (args.rescore) {
+    const src = resolveSource(args.source);
+    try {
+      const changes = await rescoreShards(args.rescore, src.dir, { judgeModel: args.judgeModel });
+      for (const c of changes) {
+        if (c.error) { process.stdout.write(`  ${c.f}: JUDGE ERROR ${c.error}\n`); continue; }
+        process.stdout.write(`  ${c.f}: ${c.moved.length ? c.moved.map((d) => `${d} ${c.before[d]}->${c.after[d]}`).join(', ') : 'unchanged'}\n`);
+      }
+    } finally { src.cleanup(); }
+    return 0;
+  }
+
   if (args.merge || args.certifySha) {
     const sha = args.merge ?? args.certifySha;
     const merged = mergeShards(sha, { runs: args.runs });
@@ -602,8 +667,9 @@ async function main(argv) {
     const c = certify(merged);
     process.stdout.write(
       `${sha.slice(0, 12)}: ${c.failures} failure(s) across ${c.draws} draw(s)\n` +
-      `  certified:       ${c.certified}${c.certified ? '' : `  (budget is <=${c.maxFailures})`}\n` +
+      `  certified:       ${c.certified}${c.certified ? '' : `  (needs ${CERTIFY.draws} draws AND <=${c.maxFailures} failures)`}\n` +
       `  enough draws:    ${c.sufficientDraws}${c.sufficientDraws ? '' : `  (need ${CERTIFY.draws}, have ${c.draws})`}\n` +
+      `  on track:        ${c.onTrack}  (this rate projects to ${c.projectedFailures} failures per ${CERTIFY.draws})\n` +
       c.dimensions.map((d) => `  ${d.task} ${d.dim}: ${d.passes}/${d.n}`).join('\n') + '\n');
     // Exit 0 even when uncertified: "the corpus is not sharp enough yet" is a RESULT, and a
     // non-zero exit would make a batch script treat it as a crash and retry it forever.

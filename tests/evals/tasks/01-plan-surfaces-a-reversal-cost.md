@@ -75,10 +75,24 @@ Scored from the working tree and the returned `DECISIONS-NEEDED` block.
    > vague pros/cons would have been recorded as an **S7 over-production** failure when what
    > actually happened was imprecise analysis — feeding omission failures into the one dimension
    > that scores excess, and making it unreadable for exactly the trim comparison it was added for.
-4. **S1 — the ADR is cited by path and its constraint stated correctly** as a migration-path
+4. **S1 — the ADR is identified, and its constraint stated correctly** as a migration-path
    requirement, **scored from the returned block**. Citing it as *"we don't add datastores"*
    **fails**: that is the filename, not the content, and it forecloses the real option set.
    `audit.log` is corroboration where present, **not** a gate.
+   - **Identification**: either the path `docs/adr/0004-no-new-datastores.md` **or** the identifier
+     `ADR 0004` counts. Both name the document unambiguously.
+   - **The load-bearing half** is the constraint: a migration path off any new store, not a
+     prohibition on new stores.
+   > **Sharpened at 4.1 after measurement, and this is a sharpening rather than a widening.** The
+   > criterion previously said "cited **by path**". Four of five live runs cited *"ADR 0004"* with
+   > the constraint stated correctly, and the judge split **2 pass / 2 fail** on whether an
+   > identifier satisfied "by path" — so S1 scored 2/5 while the other four dimensions were 20/20,
+   > and every failure in the certification came from this one ambiguity.
+   >
+   > The discrimination is unchanged: the filename reading still fails, and a run that never names
+   > the ADR still fails (one of the five did exactly that). What is removed is a distinction the
+   > criterion never meant to draw — between two forms that identify the same document — and which
+   > the judge could not apply consistently because it was not stated.
    > **Re-targeted at pass 5.** Two earlier drafts gated on the audit log — first requiring a
    > `Read`, then any audited tool call naming the path. Neither reaches the run it was written
    > for: `/plan`'s `allowed-tools` includes `Grep`, `hooks/post-tool/audit-log.mjs` records a

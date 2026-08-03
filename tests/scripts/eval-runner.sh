@@ -228,6 +228,7 @@ mk() { j "
 "; }
 # 13 dimensions x 20 runs = 260 draws. A perfect corpus and a corpus at exactly the bar both pass.
 check "13 dims x 20/20 certifies"                  "$(mk 13 20 20)" "true|0|260|true"
+# A short run reports honestly instead of certifying -- see the partial-run case below.
 check "5 failures across 260 draws certifies (at the bar)" "$(mk 13 20 20 | true; j "
   const tasks = {}; for (let i = 0; i < 13; i++) { tasks['t'+i] = [];
     for (let r = 0; r < 20; r++) tasks['t'+i].push({ index: r, dimensions: { S1: !(i < 5 && r === 0) } }); }
@@ -250,7 +251,7 @@ check "one dimension at 18/20 with 12 clean is caught by the pooled budget" "$(j
 
 # A short run must not read as certified. 0 failures out of 20 draws is not a sharp corpus; it is
 # a corpus that has barely been sampled.
-check "a 20-draw run is not sufficientDraws" "$(mk 1 20 20)" "true|0|20|false"
+check "a 20-draw run cannot certify, however clean" "$(mk 1 20 20)" "false|0|20|false"
 
 # --- sharding, resume and merge: what makes a 260-draw certification batchable ------------------
 # Certification is hours of wall clock. Each run is persisted the moment it finishes so a crash at
@@ -291,7 +292,7 @@ part=$( j "
   const c = M.certify(M.mergeShards('$SHARD_SHA', { runs: 3 }));
   process.stdout.write([c.certified, c.failures, c.draws, c.sufficientDraws].join('|'));
 ")
-check "a partial corpus reports few failures but NOT enough draws" "$part" "true|1|4|false"
+check "a partial corpus cannot certify on few failures alone" "$part" "false|1|4|false"
 
 rm -rf "$ROOT/tests/evals/results/$SHARD_SHA"
 check "shard directory is removable and merge then fails loudly" \
@@ -329,6 +330,33 @@ check "a touched source file is caught, and named" \
   "$(bnd "[{path:'src/ingest/handler.mjs'}]")" "false:src/ingest/handler.mjs"
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
+
+# --- quota outages are named, not lumped into a generic exit code ------------------------------
+# Both the agent path and the judge path must recognise an exhausted limit. Without it a rescore
+# burned four consecutive judge calls against a dead quota and reported four indistinguishable
+# `judge exited 1` errors -- the caller could not tell "wait and retry" from "malformed reply".
+check "a quota message in judge output is classified as quota" \
+  "$(j "
+    const S = await import('$ROOT/tests/evals/lib/score.mjs');
+    // parseVerdict is the non-error path; the quota branch lives in judge()'s spawn handling, so
+    // assert the DETECTOR shape the branch uses rather than spawning a real CLI.
+    const out = 'You\\'ve hit your session limit · resets 7:30pm';
+    process.stdout.write(String(/session limit|rate limit|usage limit|quota/i.test(out)));
+  ")" "true"
+check "an ordinary judge failure is NOT classified as quota" \
+  "$(j "process.stdout.write(String(/session limit|rate limit|usage limit|quota/i.test('SyntaxError: unexpected token')))")" "false"
+
+# --- certification cannot pass on a partial run ------------------------------------------------
+# It printed `certified: true` on 25 draws by reading 3 raw failures against a budget defined for
+# 260 -- a rate projecting to ~31 failures, six times over. The vacuous-pass class again, this
+# time in the check that decides whether every other check passed.
+partial=$( j "
+  const tasks = { '01': [] };
+  for (let i = 0; i < 5; i++) tasks['01'].push({ index: i, dimensions: { S1: i < 2, S2: true } });
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 5 }));
+  process.stdout.write([c.certified, c.onTrack, c.projectedFailures, c.sufficientDraws].join('|'));
+")
+check "a partial run cannot certify, and reports its projection" "$partial" "false|false|78|false"
 
 # --- npm test must not invoke this runner ------------------------------------------------------
 # Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is

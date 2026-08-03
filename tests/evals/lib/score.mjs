@@ -90,7 +90,17 @@ export function judge(taskSpec, evidence, { model = DEFAULT_JUDGE_MODEL, timeout
     rmSync(sandbox, { recursive: true, force: true });
   }
   if (res.status !== 0 || res.error) {
-    return { ok: false, error: res.error ? String(res.error.message ?? res.error) : `judge exited ${res.status}`, raw: res.stdout ?? '' };
+    // Quota is named, not lumped into `judge exited 1`. Without this, a rescore burned four
+    // consecutive judge calls against an exhausted limit and reported four indistinguishable
+    // errors -- the caller could not tell "wait and retry" from "the reply was malformed".
+    const out = `${res.stdout ?? ''}${res.stderr ?? ''}`;
+    const quota = /session limit|rate limit|usage limit|quota/i.test(out);
+    return {
+      ok: false,
+      quota,
+      error: quota ? 'quota exhausted' : (res.error ? String(res.error.message ?? res.error) : `judge exited ${res.status}`),
+      raw: res.stdout ?? '',
+    };
   }
   return parseVerdict(res.stdout ?? '');
 }
