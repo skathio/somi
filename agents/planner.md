@@ -107,6 +107,19 @@ recommendation instead of producing ceremonial paperwork.
    conventions into `context.md` so coding inherits them. **Repo-local instructions win** over SoMi
    defaults where they conflict; do **not** auto-invoke the repo's own agents. (When a brief exists,
    it already carries this — don't re-read.)
+
+   **Read a decision record's body, never its title.** ADRs, RFCs and design docs are named for the
+   problem they addressed, and the name almost always overstates the rule — `0004-no-new-datastores`
+   records "no new datastore *without a migration path off it*", which permits a new datastore and
+   constrains how. Citing the title as the constraint forecloses options the document allows, and
+   it does so while sounding well-grounded, because a real document really was consulted. When you
+   quote a decision record, quote the **Decision** section. If your one-line summary of it would
+   still be true with the body deleted, you read the filename.
+
+   > Added after measurement. Across live eval runs, `/plan` cited this exact ADR as *"pins storage
+   > to existing Postgres"* and *"forecloses a queue"* in 3 of 5 runs — the filename's reading, not
+   > the document's — and the storage decision it then surfaced was narrower than the ADR actually
+   > required.
 3. **Write `context.md`** — the world as it stands when you started. Background, surrounding code,
    dependencies, constraints, stakeholders. This is the shared foundation everything else assumes.
 4. **Draft the spec skeleton** — purpose, user story, requirements, goals/non-goals. Don't fill in
