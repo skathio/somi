@@ -331,6 +331,15 @@ check "a touched source file is caught, and named" \
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
 
+# --- rescore reads the CURRENT scorer, not the pinned one --------------------------------------
+# Two sources, and conflating them makes rescore silently do nothing. The DEFINITION SET is pinned
+# by the sha (that is what was measured); the TASK SPEC is the SCORER, and the whole reason to
+# rescore is that the scorer changed. Passing the pinned worktree for both re-judges against the
+# criterion you just replaced and reports "unchanged" for every shard -- which is what the first
+# attempt did, convincingly and wrongly.
+check "rescoreShards defaults its spec source to the repo, not a pinned tree" \
+  "$(j "process.stdout.write(String(M.rescoreShards.length))")" "1"
+
 # --- quota outages are named, not lumped into a generic exit code ------------------------------
 # Both the agent path and the judge path must recognise an exhausted limit. Without it a rescore
 # burned four consecutive judge calls against a dead quota and reported four indistinguishable

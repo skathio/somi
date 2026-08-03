@@ -502,8 +502,14 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
  *
  * Sharpening criterion 4 after 4.1's first five draws is exactly the case: the runs were fine, the
  * criterion was ambiguous, and the transcripts still say what the runs did.
+ *
+ * TWO SOURCES, and conflating them makes this silently do nothing. The DEFINITION SET is pinned by
+ * `sha` -- that is what was measured and it must not move. The TASK SPEC is the SCORER, and the
+ * entire reason to rescore is that the scorer changed, so it is read from the working tree by
+ * default. Passing the pinned worktree for both re-judges against the criterion you just replaced
+ * and reports "unchanged" for every shard, which is exactly what it did on the first attempt.
  */
-export async function rescoreShards(sha, sourceDir, { judgeModel = null } = {}) {
+export async function rescoreShards(sha, specDir = REPO, { judgeModel = null } = {}) {
   const { judge, toDimensions, criterionTags } = await import('./lib/score.mjs');
   const dir = shardDir(sha);
   const files = execFileSync('ls', [dir], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.json'));
@@ -512,7 +518,7 @@ export async function rescoreShards(sha, sourceDir, { judgeModel = null } = {}) 
     const path = join(dir, f);
     const rec = JSON.parse(readFileSync(path, 'utf8'));
     if (!rec.run.transcript || rec.run.error) continue;
-    const spec = readFileSync(taskFile(rec.taskId, sourceDir), 'utf8');
+    const spec = readFileSync(taskFile(rec.taskId, specDir), 'utf8');
     const verdict = judge(spec, `### What the run returned\n\n${rec.run.transcript}`, { model: judgeModel });
     if (!verdict.ok) {
       changes.push({ f, error: verdict.error });
@@ -648,14 +654,13 @@ async function main(argv) {
   if (args.help) { process.stdout.write(USAGE + '\n'); return 0; }
 
   if (args.rescore) {
-    const src = resolveSource(args.source);
-    try {
-      const changes = await rescoreShards(args.rescore, src.dir, { judgeModel: args.judgeModel });
-      for (const c of changes) {
-        if (c.error) { process.stdout.write(`  ${c.f}: JUDGE ERROR ${c.error}\n`); continue; }
-        process.stdout.write(`  ${c.f}: ${c.moved.length ? c.moved.map((d) => `${d} ${c.before[d]}->${c.after[d]}`).join(', ') : 'unchanged'}\n`);
-      }
-    } finally { src.cleanup(); }
+    // Specs come from the WORKING TREE, not from the pinned definition set. See rescoreShards.
+    process.stdout.write(`  re-judging against the task specs in ${REPO} (the current scorer)\n`);
+    const changes = await rescoreShards(args.rescore, REPO, { judgeModel: args.judgeModel });
+    for (const c of changes) {
+      if (c.error) { process.stdout.write(`  ${c.f}: JUDGE ERROR ${c.error}\n`); continue; }
+      process.stdout.write(`  ${c.f}: ${c.moved.length ? c.moved.map((d) => `${d} ${c.before[d]}->${c.after[d]}`).join(', ') : 'unchanged'}\n`);
+    }
     return 0;
   }
 

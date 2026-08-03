@@ -213,6 +213,22 @@ when each one has already been paid for.
 answers a question nobody asked, and `--source HEAD` is exactly how that happens once a batch
 spans a commit. Pin the SHA and the runner will refuse to mix.
 
+### Re-scoring after a criterion changes
+
+A criterion change invalidates stored **verdicts** but not stored **transcripts**. Re-running the
+agents to fix a scoring change discards the expensive half of every draw (~12 minutes each) to redo
+the cheap half:
+
+```sh
+node tests/evals/run.mjs --rescore "$SHA"     # judge calls only, shards updated in place
+```
+
+**Two sources, and conflating them makes this silently do nothing.** The *definition set* is pinned
+by the SHA — that is what was measured and it must not move. The *task spec* is the **scorer**, and
+the entire reason to rescore is that the scorer changed, so it is read from the working tree. An
+earlier version passed the pinned worktree for both, re-judged against the criterion that had just
+been replaced, and reported `unchanged` for every shard — convincingly, and wrongly.
+
 `--certify` exits **0 even when the corpus fails to certify**: "not sharp enough yet" is a result,
 and a non-zero exit would make a batch script treat it as a crash and retry forever.
 
