@@ -331,6 +331,25 @@ check "a touched source file is caught, and named" \
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
 
+# --- scoped certification: a smaller gate is a WEAKER gate, and says so ------------------------
+# Budgets are DERIVED per scope from the same binomial analysis as the 260-draw gate, not scaled
+# by hand: proportional scaling gives 1.9 for 100 draws and the nearest integer is the wrong one.
+sc() { j "
+  const tasks = { '01': [] };
+  for (let i = 0; i < $2; i++) tasks['01'].push({ index: i, dimensions: { S1: i >= $3, S2: true, S3: true, S6: true, S7: true } });
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: $2 }), { scope: '$1' });
+  process.stdout.write([c.certified, c.failures, c.draws, c.maxFailures, c.requiredDraws].join('|'));
+"; }
+check "task01 scope: 100 draws, 2 failures certifies (at the bar)" "$(sc task01 20 2)" "true|2|100|2|100"
+check "task01 scope: 3 failures does NOT certify"                  "$(sc task01 20 3)" "false|3|100|2|100"
+check "the full scope still needs 260 draws"                       "$(sc full 20 0)"   "false|0|100|5|260"
+check "power is reported for the scope in use" \
+  "$(j "const c = M.certify({tasks:{}}, {scope:'task01'}); process.stdout.write(c.powerGood + '/' + c.powerSoft)")" "0.921/0.118"
+# The derived budgets, pinned. If someone edits SCOPES, the analysis behind it must be redone --
+# these numbers are not preferences.
+check "derived budgets are 5/260 and 2/100" \
+  "$(j "process.stdout.write([M.SCOPES.full.maxFailures, M.SCOPES.full.draws, M.SCOPES.task01.maxFailures, M.SCOPES.task01.draws].join('/'))")" "5/260/2/100"
+
 # --- a malformed judge reply must not discard the agent run that preceded it -------------------
 # Observed once in three runs: the judge returned unparseable JSON and a ~12-minute agent run was
 # thrown away. At ~90% of a usage cap per batch that is not affordable. Only a PARSE failure is

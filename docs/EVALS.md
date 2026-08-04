@@ -129,6 +129,29 @@ definition sets live in one run, and reading them from the working tree would ma
 depend on which branch happened to be checked out. A path source records `sha: null` rather than
 implying a commit it cannot reproduce.
 
+## Scoped certification
+
+The full gate is **≤5 failures across 260 draws** — all 13 task-dimensions at N=20. When that is
+out of budget, certify a **scope** instead, and say which one:
+
+```sh
+node tests/evals/run.mjs --certify "$SHA" --scope task01
+```
+
+| scope | draws | budget | clears a sound corpus | clears a **soft** one | covers |
+|---|---|---|---|---|---|
+| `full` | 260 | ≤5 | 95.2% | 0.9% | 13 of 13 task-dimensions |
+| `task01` | 100 | ≤2 | 92.1% | **11.8%** | 5 of 13 (task 01 only) |
+
+Budgets are **derived** per scope from the same binomial analysis as the full gate, not scaled by
+hand — proportional scaling gives 1.9 for 100 draws, and the nearest integer is the wrong one.
+
+**A smaller gate is a weaker gate, and the number that says how much weaker belongs next to the
+number it qualifies.** The `task01` scope clears a genuinely-soft corpus **11.8%** of the time
+against 0.9% for the full gate — roughly one soft corpus in eight passes. That is the price of
+certifying 5 of 13 task-dimensions, and it is a price, not a technicality. The runner prints it on
+every scoped certification so it cannot be quoted without it.
+
 ### Budget reality: plan in single runs, not batches
 
 Measured over four batches: **one batch of five runs consumes roughly 90% of a usage cap.** In

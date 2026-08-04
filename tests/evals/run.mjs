@@ -104,7 +104,30 @@ export function compare(baseline, candidate) {
  */
 export const CERTIFY = { maxFailures: 5, draws: 260 };
 
-export function certify(result, { maxFailures = CERTIFY.maxFailures } = {}) {
+/**
+ * Scoped gates, for when the full corpus is out of budget.
+ *
+ * Each budget is DERIVED from the same binomial analysis as the 260-draw gate, not scaled by hand
+ * -- proportional scaling would have given 1.9 for 100 draws, and the nearest integer is the wrong
+ * one. Power is recorded for every scope because a smaller gate is a WEAKER gate and the number
+ * that quantifies how much weaker belongs next to the number it qualifies.
+ *
+ *   scope        budget   clears at p=0.99   clears at p=0.95
+ *   full (260)     <=5          95.2%              0.9%
+ *   task01 (100)   <=2          92.1%             11.8%
+ *
+ * The task01 scope accepts a genuinely-soft corpus 11.8% of the time against 0.9% for the full
+ * one. That is the price of certifying 5 of 13 task-dimensions instead of all 13, and it is a
+ * price, not a technicality: roughly one soft corpus in eight would clear this gate.
+ */
+export const SCOPES = {
+  full:   { draws: 260, maxFailures: 5, powerGood: 0.952, powerSoft: 0.009, covers: '13 of 13 task-dimensions' },
+  task01: { draws: 100, maxFailures: 2, powerGood: 0.921, powerSoft: 0.118, covers: '5 of 13 task-dimensions (task 01 only)' },
+};
+
+export function certify(result, { scope = 'full', maxFailures = null } = {}) {
+  const sc = SCOPES[scope] ?? SCOPES.full;
+  const budget = maxFailures ?? sc.maxFailures;
   const dimensions = [];
   let failures = 0;
   let draws = 0;
@@ -122,16 +145,21 @@ export function certify(result, { maxFailures = CERTIFY.maxFailures } = {}) {
   // `certified: true` while scaling to ~31 per 260 -- six times over budget and plainly not on
   // track. A partial run cannot certify, and saying so in the flag is safer than saying it in a
   // second flag the reader has to remember to check.
-  const enough = draws >= CERTIFY.draws;
+  const enough = draws >= sc.draws;
   // Rate against the budget, so a partial run still says whether it is TRENDING to certify.
-  const projected = draws ? (failures / draws) * CERTIFY.draws : null;
+  const projected = draws ? (failures / draws) * sc.draws : null;
   return {
-    certified: enough && failures <= maxFailures,
-    onTrack: projected === null ? null : projected <= maxFailures,
+    scope,
+    scopeCovers: sc.covers,
+    powerGood: sc.powerGood,
+    powerSoft: sc.powerSoft,
+    certified: enough && failures <= budget,
+    onTrack: projected === null ? null : projected <= budget,
     projectedFailures: projected === null ? null : Math.round(projected * 10) / 10,
     failures,
     draws,
-    maxFailures,
+    maxFailures: budget,
+    requiredDraws: sc.draws,
     // Named separately from `certified` so a caller cannot read "few failures" as "enough runs".
     // A corpus that failed 0 of 20 draws is not certified; it is barely started.
     sufficientDraws: enough,
@@ -589,7 +617,7 @@ export function fixtureFor(id, dir) {
 
 function parseArgs(argv) {
   const a = { source: 'HEAD', tasks: null, runs: BANDS.n, dryRun: false, out: null, model: null,
-              judgeModel: null, merge: null, certifySha: null, rescore: null, batch: Infinity };
+              judgeModel: null, merge: null, certifySha: null, rescore: null, scope: 'full', batch: Infinity };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === '--source') a.source = argv[++i];
@@ -602,6 +630,7 @@ function parseArgs(argv) {
     else if (k === '--merge') a.merge = argv[++i];
     else if (k === '--certify') a.certifySha = argv[++i];
     else if (k === '--rescore') a.rescore = argv[++i];
+    else if (k === '--scope') a.scope = argv[++i];
     else if (k === '--batch') a.batch = Number(argv[++i]);
     else if (k === '--help' || k === '-h') a.help = true;
     else throw new Error(`unknown argument: ${k}`);
@@ -669,12 +698,14 @@ async function main(argv) {
     const merged = mergeShards(sha, { runs: args.runs });
     if (args.out) { mkdirSync(dirname(resolve(process.cwd(), args.out)), { recursive: true });
       writeFileSync(resolve(process.cwd(), args.out), JSON.stringify(merged, null, 2) + '\n'); }
-    const c = certify(merged);
+    const c = certify(merged, { scope: args.scope });
     process.stdout.write(
       `${sha.slice(0, 12)}: ${c.failures} failure(s) across ${c.draws} draw(s)\n` +
-      `  certified:       ${c.certified}${c.certified ? '' : `  (needs ${CERTIFY.draws} draws AND <=${c.maxFailures} failures)`}\n` +
-      `  enough draws:    ${c.sufficientDraws}${c.sufficientDraws ? '' : `  (need ${CERTIFY.draws}, have ${c.draws})`}\n` +
-      `  on track:        ${c.onTrack}  (this rate projects to ${c.projectedFailures} failures per ${CERTIFY.draws})\n` +
+      `  scope:           ${c.scope} — ${c.scopeCovers}\n` +
+      `  power:           clears a sound corpus ${(c.powerGood * 100).toFixed(1)}%, a SOFT one ${(c.powerSoft * 100).toFixed(1)}%\n` +
+      `  certified:       ${c.certified}${c.certified ? '' : `  (needs ${c.requiredDraws} draws AND <=${c.maxFailures} failures)`}\n` +
+      `  enough draws:    ${c.sufficientDraws}${c.sufficientDraws ? '' : `  (need ${c.requiredDraws}, have ${c.draws})`}\n` +
+      `  on track:        ${c.onTrack}  (this rate projects to ${c.projectedFailures} failures per ${c.requiredDraws})\n` +
       c.dimensions.map((d) => `  ${d.task} ${d.dim}: ${d.passes}/${d.n}`).join('\n') + '\n');
     // Exit 0 even when uncertified: "the corpus is not sharp enough yet" is a RESULT, and a
     // non-zero exit would make a batch script treat it as a crash and retry it forever.
