@@ -61,9 +61,30 @@ Return ONLY a JSON object, no prose around it:
 // disagreement was on) and agreement has been re-measured across ~20 shards rather than one.
 export const DEFAULT_JUDGE_MODEL = null;
 
-export function judge(taskSpec, evidence, { model = DEFAULT_JUDGE_MODEL, timeoutMs = 900_000 } = {}) {
+/**
+ * Retries a MALFORMED reply, once.
+ *
+ * A judge that returns prose instead of JSON discards the ~12-minute agent run that preceded it --
+ * the expensive half thrown away because the cheap half stuttered. Observed once in three runs,
+ * which at ~90% of a usage cap per batch is not affordable.
+ *
+ * Only a PARSE failure is retried. A quota outage is not retried (the next call fails identically
+ * and burns budget proving it), and neither is a non-zero exit for any other reason.
+ */
+export function judge(taskSpec, evidence, opts = {}) {
+  const first = judgeOnce(taskSpec, evidence, opts);
+  if (first.ok || first.quota) return first;
+  // Distinguish "the model replied, badly" from "the call failed". Only the former can improve.
+  const malformed = /not valid JSON|no JSON object|no criteria array|malformed criterion/.test(first.error ?? '');
+  if (!malformed) return first;
+  const second = judgeOnce(taskSpec, evidence, { ...opts, retry: true });
+  return second.ok ? { ...second, retried: true } : { ...first, retried: true, secondError: second.error };
+}
+
+function judgeOnce(taskSpec, evidence, { model = DEFAULT_JUDGE_MODEL, timeoutMs = 900_000, retry = false } = {}) {
   const prompt = [
     JUDGE_PREAMBLE,
+    retry ? '\nYour previous reply was not parseable. Return ONLY the JSON object, with no prose,\nno explanation, and no code fence.\n' : '',
     '\n## Task specification (the criteria are numbered under "Pass criteria")\n',
     taskSpec,
     '\n## Evidence from the run\n',

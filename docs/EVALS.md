@@ -129,6 +129,30 @@ definition sets live in one run, and reading them from the working tree would ma
 depend on which branch happened to be checked out. A path source records `sha: null` rather than
 implying a commit it cannot reproduce.
 
+### Budget reality: plan in single runs, not batches
+
+Measured over four batches: **one batch of five runs consumes roughly 90% of a usage cap.** In
+practice that means **2–3 completed runs per quota window**, not five.
+
+The arithmetic that follows is unwelcome but it is the arithmetic:
+
+| | draws | windows at ~2.5/window |
+|---|---|---|
+| task 01 alone, N=20 | 20 | **~8** |
+| full corpus, N=20 × 3 | 60 | **~24** |
+| a trim comparison (2 arms) | 120 | **~48** |
+
+A 48-window certification is not a gate anyone runs before a trim; it is a research project. Three
+consequences, all of which should be decided before more budget is spent:
+
+1. **`--batch 2` is the honest batch size.** Larger values do not fail safely — they fail *late*,
+   after the earlier runs have already been paid for.
+2. **N=20 across three tasks is likely out of reach** on this budget. The pooled gate can be run
+   over fewer tasks (task 01 alone is 5 of the 13 task-dimensions), or N reduced with the
+   consequent loss of discriminating power stated explicitly rather than absorbed.
+3. **Every executed criterion is worth more than it looks.** It removes a judge call *and* a
+   source of variance, and variance is what forces N up in the first place.
+
 ### The real constraint is quota, not wall clock
 
 Measured the hard way. A 5-run batch produced four `exit 1` runs whose transcripts read

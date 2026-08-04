@@ -331,6 +331,17 @@ check "a touched source file is caught, and named" \
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
 
+# --- a malformed judge reply must not discard the agent run that preceded it -------------------
+# Observed once in three runs: the judge returned unparseable JSON and a ~12-minute agent run was
+# thrown away. At ~90% of a usage cap per batch that is not affordable. Only a PARSE failure is
+# retried -- a quota outage is not, since the next call fails identically and burns budget proving
+# it. Asserted on the classifier, not by spawning a CLI.
+mal() { j "process.stdout.write(String(/not valid JSON|no JSON object|no criteria array|malformed criterion/.test('$1')))"; }
+check "an unparseable reply is retryable"        "$(mal 'judge reply is not valid JSON: x')" "true"
+check "a missing criteria array is retryable"    "$(mal 'judge reply has no criteria array')" "true"
+check "a quota outage is NOT retryable"          "$(mal 'quota exhausted')"                   "false"
+check "a generic exit is NOT retryable"          "$(mal 'judge exited 1')"                    "false"
+
 # --- rescore reads the CURRENT scorer, not the pinned one --------------------------------------
 # Two sources, and conflating them makes rescore silently do nothing. The DEFINITION SET is pinned
 # by the sha (that is what was measured); the TASK SPEC is the SCORER, and the whole reason to
