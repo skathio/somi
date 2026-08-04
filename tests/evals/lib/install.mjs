@@ -65,7 +65,11 @@ export function installSomi(sourceDir, workDir) {
  * point (it becomes a failure for every dimension the task declares), not an exception that
  * should abort the other nineteen runs.
  */
-export function invokeCommand(workDir, prompt, { timeoutMs = 900_000, model = null, allowedTools = null } = {}) {
+// 900s (15 min) was too tight and cost a completed draw. Measured agent runs span 3.4 to 13
+// minutes, so 15 left almost no headroom -- and a timeout is the most expensive possible outcome:
+// the full run is paid for and nothing is recorded. 30 minutes is well clear of the observed
+// spread while still bounding a genuinely hung run.
+export function invokeCommand(workDir, prompt, { timeoutMs = 1_800_000, model = null, allowedTools = null } = {}) {
   const args = ['--print', '--permission-mode', 'bypassPermissions'];
   if (model) args.push('--model', model);
   if (allowedTools) args.push('--allowed-tools', allowedTools);

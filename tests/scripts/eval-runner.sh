@@ -331,6 +331,17 @@ check "a touched source file is caught, and named" \
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
 
+# --- the agent timeout must clear the observed spread ------------------------------------------
+# A timeout is the most expensive possible outcome: the run is fully paid for and nothing is
+# recorded. 900s cost a draw when observed runs already reached 13 minutes.
+check "the agent timeout leaves headroom over the observed 13-minute maximum" \
+  "$(j "
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('$ROOT/tests/evals/lib/install.mjs','utf8');
+    const m = src.match(/timeoutMs = ([0-9_]+)/);
+    process.stdout.write(String(Number(m[1].replace(/_/g,'')) >= 1500000));
+  ")" "true"
+
 # --- scoped certification: a smaller gate is a WEAKER gate, and says so ------------------------
 # Budgets are DERIVED per scope from the same binomial analysis as the 260-draw gate, not scaled
 # by hand: proportional scaling gives 1.9 for 100 draws and the nearest integer is the wrong one.
