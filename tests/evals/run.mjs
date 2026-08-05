@@ -421,6 +421,22 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     const command = (taskSpec.match(/Command under test: `\/(\w[\w-]*)`/) ?? [])[1];
     const run = invokeCommand(work, `/${command} ${prompt}`, { model });
     const tree = workingTreeDiff(work);
+    // Capture the ARTIFACT, not just the transcript. agents/planner.md mandates a structured
+    // DECISIONS-NEEDED block; commands/plan.md relays it to the user, and in --print mode that
+    // relay is narrative prose -- measured, zero of four runs emitted the fenced block. The
+    // structure survives on disk in decisions.md, which is what makes these criteria executable
+    // at all. Stored in the shard so --rescore can re-run structural checks without re-running
+    // the agent.
+    let decisionsMd = null;
+    try {
+      const plans = join(work, '.somi', 'plans');
+      if (existsSync(plans)) {
+        for (const slug of execFileSync('ls', [plans], { encoding: 'utf8' }).split('\n').filter(Boolean)) {
+          const f = join(plans, slug, 'decisions.md');
+          if (existsSync(f)) { decisionsMd = readFileSync(f, 'utf8'); break; }
+        }
+      }
+    } catch { /* absent is a data point, not an error */ }
     uninstallSomi(work);
 
     if (!run.ok) {
@@ -456,6 +472,26 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     // ("the cited case must genuinely fail"), and judging it asks a model to do arithmetic it can
     // get wrong in the same direction the candidate did. Overrides the judge's verdict only when
     // a date was actually extractable -- otherwise it returns null and the judge's verdict stands.
+    // Task 01: overlay every verdict that can be decided from the ARTIFACT.
+    //
+    // This is the answer to why certification failed. Executed criteria scored 4/4 and semantic
+    // judged ones 3/4, 3/4, 2/4 -- a model judge cannot deliver the >=99% consistency the error
+    // budget assumes, and no amount of sharpening prose fixes that. `null` means "not decidable
+    // structurally", and those keep the judged verdict rather than guessing.
+    if (verdict.ok && taskId === '01' && decisionsMd !== null) {
+      try {
+        const { executedVerdicts } = await import('./lib/score-task01.mjs');
+        for (const [n, v] of Object.entries(executedVerdicts(decisionsMd))) {
+          if (v === null) continue;
+          const c = verdict.criteria.find((x) => x.n === Number(n));
+          if (!c) continue;
+          c.verdict = v ? 'pass' : 'fail';
+          c.evidence = `EXECUTED against decisions.md: ${v ? 'satisfied' : 'not satisfied'} (not judged)`;
+          c.executed = true;
+        }
+      } catch { /* fall back to the judged verdicts */ }
+    }
+
     // Task 01 criterion 6 is a file-list check against an allowlist -- mechanical, and it should
     // never have been judged. Found by two judges disagreeing on it.
     if (verdict.ok && taskId === '01') {
@@ -500,6 +536,7 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
       dimensions: toDimensions(verdict.criteria, criterionTags(taskSpec)),
       criteria: verdict.criteria,
       transcript: run.stdout,
+      decisionsMd,
       error: null,
     };
   } finally {

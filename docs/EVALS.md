@@ -129,6 +129,51 @@ definition sets live in one run, and reading them from the working tree would ma
 depend on which branch happened to be checked out. A path source records `sha: null` rather than
 implying a commit it cannot reproduce.
 
+## Why certification failed, and what fixed the approach
+
+Task 01's first certification attempt **could not pass** — 4 failures against a budget of 2, with
+80 draws still to go and failures that only accumulate. The pattern in those failures is the
+important part:
+
+| criterion | kind | rate |
+|---|---|---|
+| S3 — file allowlist | **executed** | 4/4 |
+| S7 — "does an invented number appear" | judged, near-mechanical | 4/4 |
+| S2 — decision content | judged, semantic | 3/4 |
+| S6 — reversal cost | judged, semantic | 3/4 |
+| S1 — ADR constraint | judged, semantic | 2/4 |
+
+**A model judge cannot deliver the ≥99% per-draw consistency the error budget assumes.** That is a
+category error, not a corpus defect: two rounds of sharpening criterion wording moved nothing,
+because the wording was never the problem.
+
+So why were the criteria semantic at all? `agents/planner.md` mandates a **structured**
+`DECISIONS-NEEDED` block. `commands/plan.md` relays it to the user, and in `--print` mode with no
+structured-question tool that relay is narrative prose. Measured: **zero of four runs emitted the
+fenced block**; `D1:` never appeared. The structure exists at the agent boundary and is destroyed
+by the presentation layer — and the corpus was scoring the wreckage.
+
+**`decisions.md` survives it.** The run writes it to disk in `templates/DECISIONS.md.tmpl`'s shape,
+the harness already captures the working tree, and parsing it is deterministic. Task 01 is now
+scored from the artifact:
+
+| criterion | scored from |
+|---|---|
+| 1 — a storage decision exists | `## D<n> —` headings + `### Decision` |
+| 3 — no invented figures | numeric magnitudes anywhere in the artifact |
+| 5 — reversal cost stated | `**Reverses**` under the chosen option |
+| 6 — boundary respected | the changed-file list |
+| 2, 4 | **partial** — absence is structural, substance stays judged |
+
+Criteria 2 and 4 are honestly partial. Whether a stated cost lands in *a constraint the fixture
+supplies*, and whether the ADR's constraint is stated *correctly*, are semantic. Those return
+`null` and keep the judged verdict. Claiming otherwise would move the variance somewhere less
+visible rather than removing it.
+
+Every structural check returns `null` — "not decidable, fall back to the judge" — rather than
+`false` on an unanticipated shape. A structural check that fails a correct run for formatting is
+the failure mode this corpus has rediscovered five times.
+
 ## Scoped certification
 
 The full gate is **≤5 failures across 260 draws** — all 13 task-dimensions at N=20. When that is

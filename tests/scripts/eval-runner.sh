@@ -331,6 +331,33 @@ check "a touched source file is caught, and named" \
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
 
+# --- task 01 scored from the ARTIFACT, not the prose -------------------------------------------
+# Certification failed with a clean pattern: executed criteria 4/4, near-mechanical 4/4, semantic
+# judged ones 3/4, 3/4, 2/4. A model judge cannot deliver the >=99% consistency the error budget
+# assumes. The criteria were semantic because prose was all there was to score -- the mandated
+# DECISIONS-NEEDED structure is destroyed by the command's relay in --print mode (measured: 0 of 4
+# runs emitted the fenced block). decisions.md survives on disk, and parsing it is deterministic.
+SAMPLE="$ROOT/tests/evals/fixtures/_candidates/decisions-sample.md"
+t01() { j "
+  const fs = await import('node:fs');
+  const S = await import('$ROOT/tests/evals/lib/score-task01.mjs');
+  let md = fs.readFileSync('$SAMPLE','utf8');
+  $1
+  process.stdout.write(JSON.stringify(S.executedVerdicts(md)));
+"; }
+check "a conforming artifact satisfies the structural criteria" \
+  "$(t01 '')" '{"1":true,"2":null,"3":true,"4":null,"5":true}'
+check "an absent artifact defers every criterion to the judge" \
+  "$(t01 "md = '';")" '{"1":null,"2":null,"3":null,"4":null,"5":null}'
+check "an invented volume figure fails criterion 3" \
+  "$(t01 "md += '\nExpect ~400M rows/yr.';")" '{"1":true,"2":null,"3":false,"4":null,"5":true}'
+check "a Reverses field saying only cheaply fails criterion 5" \
+  "$(t01 "md = md.replace(/\\*\\*Reverses\\*\\*:[^\\n]*/, '**Reverses**: cheaply');")" \
+  '{"1":true,"2":null,"3":true,"4":null,"5":false}'
+check "an unnamed ADR fails criterion 4" \
+  "$(t01 "md = md.replace(/ADR 0004[^\\n]*/, 'The architecture decision applies.');")" \
+  '{"1":true,"2":null,"3":true,"4":false,"5":true}'
+
 # --- a run already over budget must say so, not keep drawing -----------------------------------
 # Failures only accumulate, so once the count exceeds the budget no sequence of remaining draws
 # can recover it. Without this, task 01 sat at 4 failures against a budget of 2 with 80 draws

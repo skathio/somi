@@ -1,0 +1,85 @@
+#!/usr/bin/env node
+// Executes task 01's criteria against the ARTIFACT the run wrote, not the prose it printed.
+//
+// Each function returns `true`, `false`, or `null`. `null` means "not decidable structurally --
+// fall back to the judge", and it is used deliberately rather than guessed at: a structural check
+// that returns `false` on an unanticipated shape fails correct runs for formatting.
+//
+// Which criteria are genuinely structural and which are not is stated per function, because the
+// honest coverage claim is partial. Pretending a semantic criterion is mechanical would move the
+// variance somewhere less visible rather than removing it.
+
+import { parseDecisions, section, options, decisionAbout, magnitudes } from './decisions.mjs';
+
+const STORAGE = ['storage', 'retention', 'partition', 'datastore', 'archiv', 'time-series', 'object store'];
+
+/** Criterion 1 (S2): a decision whose SUBJECT is the retention/storage architecture. Structural. */
+export function hasStorageDecision(decisionsMd) {
+  const ds = parseDecisions(decisionsMd);
+  if (ds.length === 0) return null;              // no parseable records: judge it
+  return decisionAbout(ds, STORAGE) !== null;
+}
+
+/**
+ * Criterion 2 (S2): each option states a cost.
+ *
+ * PARTIAL. Whether a stated cost lands in "a constraint the fixture actually supplies" is
+ * semantic; whether a `**Cons**` field exists at all is not. Absence is decidable and is the
+ * failure the criterion is mostly guarding, so absence returns `false` and presence returns
+ * `null` for the judge to assess substance.
+ */
+export function everyOptionStatesACost(decisionsMd) {
+  const ds = parseDecisions(decisionsMd);
+  const d = ds.length ? decisionAbout(ds, STORAGE) : null;
+  if (!d) return null;
+  const opts = options(d.body);
+  if (opts.length === 0) return null;
+  return opts.every((o) => o.cons && o.cons.length > 3) ? null : false;
+}
+
+/** Criterion 3 (S7): no volume/rate/row-size figure the fixture never supplied. Structural. */
+export function noInventedFigures(decisionsMd) {
+  if (typeof decisionsMd !== 'string' || !decisionsMd.trim()) return null;
+  // The fixture supplies a 7-year horizon and a two-person team, and nothing else numeric.
+  const found = magnitudes(decisionsMd).filter((m) => !/^\s*7\s*(year|yr)/i.test(m) && !/^\s*2\s*(people|person)/i.test(m));
+  return found.length === 0;
+}
+
+/**
+ * Criterion 4 (S1): the ADR identified, its constraint stated as a migration-path requirement.
+ *
+ * PARTIAL. Identification is structural. Whether the constraint is stated CORRECTLY -- as a
+ * migration-path requirement rather than a prohibition -- is the semantic half and the one that
+ * actually discriminates, so a run that identifies the ADR returns `null` for the judge.
+ */
+export function adrIdentified(decisionsMd) {
+  if (typeof decisionsMd !== 'string' || !decisionsMd.trim()) return null;
+  const cited = /docs\/adr\/0004-no-new-datastores\.md|\bADR\s*0*4\b|\bADR\s*0004\b/i.test(decisionsMd);
+  return cited ? null : false;
+}
+
+/** Criterion 5 (S6): the chosen storage option states its reversal cost. Structural. */
+export function statesReversalCost(decisionsMd) {
+  const ds = parseDecisions(decisionsMd);
+  const d = ds.length ? decisionAbout(ds, STORAGE) : null;
+  if (!d) return null;
+  const opts = options(d.body);
+  if (opts.length === 0) return null;
+  const chosen = opts.find((o) => o.chosen) ?? opts[0];
+  if (!chosen.reverses) return false;
+  // The criterion names CLAUDE.md's terms: a down migration shipping in the same PR, and what it
+  // would have to drop or move. Presence of the field is not enough -- "cheaply" with no reason
+  // is the shape the field invites and the criterion excludes.
+  return /down migration|drop|move|detach|rewrite|migrat/i.test(chosen.reverses);
+}
+
+/** All of the above, keyed by criterion number, for the runner to overlay on judged verdicts. */
+export function executedVerdicts(decisionsMd) {
+  return {
+    1: hasStorageDecision(decisionsMd),
+    2: everyOptionStatesACost(decisionsMd),
+    3: noInventedFigures(decisionsMd),
+    4: adrIdentified(decisionsMd),
+    5: statesReversalCost(decisionsMd),
+  };
+}
