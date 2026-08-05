@@ -331,6 +331,20 @@ check "a touched source file is caught, and named" \
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
 
+# --- a run already over budget must say so, not keep drawing -----------------------------------
+# Failures only accumulate, so once the count exceeds the budget no sequence of remaining draws
+# can recover it. Without this, task 01 sat at 4 failures against a budget of 2 with 80 draws
+# left -- about seven quota windows -- to confirm an outcome the arithmetic had already fixed.
+over() { j "
+  const tasks = { '01': [] };
+  for (let i = 0; i < $1; i++) tasks['01'].push({ index: i, dimensions: { S1: i >= $2 } });
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: $1 }), { scope: 'task01' });
+  process.stdout.write([c.cannotCertify, c.failures, c.maxFailures].join('|'));
+"; }
+check "3 failures against a budget of 2 is unrecoverable"  "$(over 10 3)" "true|3|2"
+check "2 failures against a budget of 2 is still open"     "$(over 10 2)" "false|2|2"
+check "0 failures is still open"                           "$(over 10 0)" "false|0|2"
+
 # --- the agent timeout must clear the observed spread ------------------------------------------
 # A timeout is the most expensive possible outcome: the run is fully paid for and nothing is
 # recorded. 900s cost a draw when observed runs already reached 13 minutes.

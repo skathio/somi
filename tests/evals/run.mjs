@@ -151,6 +151,10 @@ export function certify(result, { scope = 'full', maxFailures = null } = {}) {
   return {
     scope,
     scopeCovers: sc.covers,
+    // Already over budget: no sequence of remaining draws can bring the total back under it,
+    // because failures only accumulate. Detected explicitly so nobody spends 80 more draws --
+    // roughly seven quota windows -- confirming an outcome the arithmetic already fixed.
+    cannotCertify: failures > budget,
     powerGood: sc.powerGood,
     powerSoft: sc.powerSoft,
     certified: enough && failures <= budget,
@@ -706,6 +710,12 @@ async function main(argv) {
       `  certified:       ${c.certified}${c.certified ? '' : `  (needs ${c.requiredDraws} draws AND <=${c.maxFailures} failures)`}\n` +
       `  enough draws:    ${c.sufficientDraws}${c.sufficientDraws ? '' : `  (need ${c.requiredDraws}, have ${c.draws})`}\n` +
       `  on track:        ${c.onTrack}  (this rate projects to ${c.projectedFailures} failures per ${c.requiredDraws})\n` +
+      (c.cannotCertify
+        ? `  CANNOT CERTIFY:  ${c.failures} failures already exceed the budget of ${c.maxFailures}.\n` +
+          `                   Failures only accumulate, so the remaining ${Math.max(0, c.requiredDraws - c.draws)} draw(s) cannot\n` +
+          `                   change this. Stop drawing. Per 4.1's acceptance a soft dimension is a\n` +
+          `                   TASK DEFECT, returned to 3.3 for sharpening before 4.2 begins.\n`
+        : '') +
       c.dimensions.map((d) => `  ${d.task} ${d.dim}: ${d.passes}/${d.n}`).join('\n') + '\n');
     // Exit 0 even when uncertified: "the corpus is not sharp enough yet" is a RESULT, and a
     // non-zero exit would make a batch script treat it as a crash and retry it forever.
