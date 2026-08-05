@@ -345,6 +345,14 @@ t01() { j "
   $1
   process.stdout.write(JSON.stringify(S.executedVerdicts(md)));
 "; }
+# THE case that invalidated artifact scoring for this task. Task 01 scores the RESEARCH pass,
+# which halts before anything is verified, so decisions.md is scaffolded from the template and
+# correctly left empty. Reading placeholders as content returned FALSE and manufactured failures
+# on runs that did nothing wrong -- observed live: the run with a scaffold scored S2- S1-, the run
+# with no artifact deferred to the judge and scored S1+.
+check "an unfilled template defers every criterion instead of failing them" \
+  "$(t01 "md = '# Decisions — <work item name>\n\n## D1 — <decision title in noun form>\n\n### Decision\n\n<one sentence>\n';")" \
+  '{"1":null,"2":null,"3":null,"4":null,"5":null}'
 check "a conforming artifact satisfies the structural criteria" \
   "$(t01 '')" '{"1":true,"2":null,"3":true,"4":null,"5":true}'
 check "an absent artifact defers every criterion to the judge" \

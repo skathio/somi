@@ -11,6 +11,28 @@
 
 import { parseDecisions, section, options, decisionAbout, magnitudes } from './decisions.mjs';
 
+/**
+ * Is this decisions.md the UNFILLED TEMPLATE?
+ *
+ * It usually is, and that invalidates artifact scoring for this task. Task 01 scores the RESEARCH
+ * pass, which halts at DECISIONS-NEEDED *before* anything is verified -- so `commands/plan.md`
+ * scaffolds decisions.md from the template and the run correctly leaves it empty. Measured: the
+ * artifact came back 3556 chars of `## D1 — <decision title in noun form>` and `<YYYY-MM-DD>`.
+ *
+ * Without this guard the parser treats placeholders as content, finds no storage decision in
+ * `<decision title in noun form>`, and returns FALSE -- manufacturing failures on runs that did
+ * nothing wrong. Observed directly: the run with a scaffolded artifact scored S2- S1-, while the
+ * run with no artifact at all fell back to the judge and scored S1+.
+ *
+ * This is the fail-safe the rest of this file claims and this path did not have.
+ */
+export function isUnfilledTemplate(md) {
+  if (typeof md !== 'string') return true;
+  // Angle-bracket placeholders are the template's own notation and never survive real authoring.
+  const placeholders = (md.match(/<[a-z][^>\n]{2,60}>/gi) ?? []).length;
+  return placeholders >= 3;
+}
+
 const STORAGE = ['storage', 'retention', 'partition', 'datastore', 'archiv', 'time-series', 'object store'];
 
 /** Criterion 1 (S2): a decision whose SUBJECT is the retention/storage architecture. Structural. */
@@ -75,6 +97,9 @@ export function statesReversalCost(decisionsMd) {
 
 /** All of the above, keyed by criterion number, for the runner to overlay on judged verdicts. */
 export function executedVerdicts(decisionsMd) {
+  // An unfilled scaffold carries no evidence either way. Defer everything to the judge rather
+  // than reading placeholder text as a failed criterion.
+  if (isUnfilledTemplate(decisionsMd)) return { 1: null, 2: null, 3: null, 4: null, 5: null };
   return {
     1: hasStorageDecision(decisionsMd),
     2: everyOptionStatesACost(decisionsMd),
