@@ -10,6 +10,42 @@
 // variance somewhere less visible rather than removing it.
 
 import { parseDecisions, section, options, decisionAbout, magnitudes } from './decisions.mjs';
+import { parseBlock, decisionAbout as blockDecisionAbout } from './decisions-block.mjs';
+
+/**
+ * Score the criteria against the FENCED BLOCK the run emitted.
+ *
+ * Preferred over decisions.md, which is a scaffold in the pass this task measures. The block is
+ * the planner's own structured output, relayed verbatim by `commands/plan.md` — the structure was
+ * always there and was simply being flattened to prose before anyone could read it.
+ *
+ * Returns all-null when no fence is present, so a run predating the relay change, or one that
+ * omits it, falls back to the judge rather than being failed for a format it was never given.
+ */
+export function blockVerdicts(output) {
+  const ds = parseBlock(output);
+  if (ds === null || ds.length === 0) return { 1: null, 2: null, 3: null, 4: null, 5: null };
+  const storage = blockDecisionAbout(ds, STORAGE);
+  const opts = storage?.options ?? [];
+  const text = String(output ?? '');
+  return {
+    // 1 (S2): a decision whose subject IS the storage architecture. Fully structural.
+    1: storage !== null,
+    // 2 (S2): every option states a cost. Absence is structural; substance stays judged.
+    2: opts.length === 0 ? null : (opts.every((o) => o.cons && o.cons.length > 3) ? null : false),
+    // 3 (S7): no invented magnitude. Structural over the whole output.
+    3: magnitudes(text).filter((m) => !/^\s*7\s*(year|yr)/i.test(m) && !/^\s*2\s*(people|person)/i.test(m)).length === 0,
+    // 4 (S1): the ADR named. Identification structural; whether its constraint is stated
+    //         CORRECTLY is the semantic half and the one that discriminates, so it stays judged.
+    4: /docs\/adr\/0004-no-new-datastores\.md|\bADR\s*0*4\b|\bADR\s*0004\b/i.test(text) ? null : false,
+    // 5 (S6): the recommended storage option states a reversal cost, in reversal terms.
+    5: opts.length === 0 ? null : (() => {
+      const chosen = opts.find((o) => o.recommended) ?? opts[0];
+      if (!chosen.reverses) return false;
+      return /down migration|drop|move|detach|rewrite|migrat|export|reload/i.test(chosen.reverses);
+    })(),
+  };
+}
 
 /**
  * Is this decisions.md the UNFILLED TEMPLATE?

@@ -366,6 +366,32 @@ check "an unnamed ADR fails criterion 4" \
   "$(t01 "md = md.replace(/ADR 0004[^\\n]*/, 'The architecture decision applies.');")" \
   '{"1":true,"2":null,"3":true,"4":false,"5":true}'
 
+# --- task 01 scored from the FENCED BLOCK, the third target tried ------------------------------
+# 1. the prose relay -- semantic, so judged, so 2/4-3/4 against a >=99% bar
+# 2. decisions.md    -- structured but EMPTY in the research pass; parsing it manufactured failures
+# 3. the fence       -- the planner's own block, relayed verbatim, present in every run
+blk() { j "
+  const S = await import('$ROOT/tests/evals/lib/score-task01.mjs');
+  const body = 'D1: Audit-trail storage architecture\\n  Decides: where 7 years of rows live\\n  Option A — Partitioned Postgres — RECOMMENDED\\n    Pros: no new store\\n    Cons: partition maintenance for a two-person team\\n    Reverses: detach partitions; the down migration ships in the same PR\\n';
+  let out = 'prose\\n\\n\\u0060\\u0060\\u0060decisions-needed\\n' + body + '\\u0060\\u0060\\u0060\\n ADR 0004 requires a migration path.';
+  $1
+  process.stdout.write(JSON.stringify(S.blockVerdicts(out)));
+"; }
+check "a conforming fence scores the structural criteria" \
+  "$(blk '')" '{"1":true,"2":null,"3":true,"4":null,"5":true}'
+# A run predating the relay change, or one that omits the fence, must DEFER -- not be failed for a
+# format it was never given. Same fail-safe the scaffold case needed.
+check "no fence defers every criterion to the judge" \
+  "$(blk "out = 'just prose';")" '{"1":null,"2":null,"3":null,"4":null,"5":null}'
+check "a missing Reverses field fails criterion 5" \
+  "$(blk "out = out.replace(/    Reverses:[^\\n]*\\n/, '');")" \
+  '{"1":true,"2":null,"3":true,"4":null,"5":false}'
+check "an invented magnitude fails criterion 3" \
+  "$(blk "out += ' Expect ~400M rows/yr.';")" '{"1":true,"2":null,"3":false,"4":null,"5":true}'
+check "an unnamed ADR fails criterion 4" \
+  "$(blk "out = out.replace(/ADR 0004[^\\n]*/, 'the architecture decision');")" \
+  '{"1":true,"2":null,"3":true,"4":false,"5":true}'
+
 # --- a run already over budget must say so, not keep drawing -----------------------------------
 # Failures only accumulate, so once the count exceeds the budget no sequence of remaining draws
 # can recover it. Without this, task 01 sat at 4 failures against a budget of 2 with 80 draws

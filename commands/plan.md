@@ -159,6 +159,29 @@ converse with the user, so verification is a **batch round-trip owned by this co
      time, stating what each answer favors, until one option clearly fits or the user is ready
      to choose.
    Do not editorialize the agent's options, drop any, or invent new ones.
+
+   **Also emit the block verbatim, in a fenced `decisions-needed` code block, after the
+   presentation.** The prose relay is for the human; the fence is the contract. Two different
+   readers need two different things and collapsing them loses one of them:
+
+   ~~~
+   ```decisions-needed
+   D1: <title>
+     Decides: …
+     Option A — <name> — RECOMMENDED because …
+       Pros: …
+       Cons: …
+       Reverses: …
+   ```
+   ~~~
+
+   > **Added after measurement.** The planner emits a structured block and this step renders it as
+   > narrative prose — which is right for a chat host, and destroys the structure for every other
+   > consumer. Measured across live runs: **zero** emitted the fence, and `D1:` never appeared in
+   > the output at all. Anything downstream that wants to render the decisions in a different UI,
+   > diff two planning runs against each other, log which decisions were surfaced, or check that
+   > the mandated fields were actually present has nothing to read. The human-readable relay stays
+   > exactly as it is; the fence is additive.
 3. **Second Task — authoring mode.** Re-invoke the planner with the same briefing **plus a
    `VERIFIED-DECISIONS` block appended at the end** (append-only, so the stable prefix keeps the
    prompt cache warm). The planner records each entry in `decisions.md` with

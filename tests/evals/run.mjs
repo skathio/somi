@@ -478,10 +478,17 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     // judged ones 3/4, 3/4, 2/4 -- a model judge cannot deliver the >=99% consistency the error
     // budget assumes, and no amount of sharpening prose fixes that. `null` means "not decidable
     // structurally", and those keep the judged verdict rather than guessing.
-    if (verdict.ok && taskId === '01' && decisionsMd !== null) {
+    if (verdict.ok && taskId === '01') {
       try {
-        const { executedVerdicts } = await import('./lib/score-task01.mjs');
-        for (const [n, v] of Object.entries(executedVerdicts(decisionsMd))) {
+        const { executedVerdicts, blockVerdicts } = await import('./lib/score-task01.mjs');
+        // The FENCE first -- it is the planner's own structure, present in the pass this task
+        // scores. decisions.md is a scaffold here and contributes nothing; it is kept as a
+        // fallback for any future task that scores a completed plan.
+        const fromBlock = blockVerdicts(run.stdout);
+        const fromArtifact = decisionsMd === null ? {} : executedVerdicts(decisionsMd);
+        const merged = { ...fromArtifact };
+        for (const [n, v] of Object.entries(fromBlock)) if (v !== null) merged[n] = v;
+        for (const [n, v] of Object.entries(merged)) {
           if (v === null) continue;
           const c = verdict.criteria.find((x) => x.n === Number(n));
           if (!c) continue;
