@@ -343,7 +343,8 @@ t01() { j "
   const S = await import('$ROOT/tests/evals/lib/score-task01.mjs');
   let md = fs.readFileSync('$SAMPLE','utf8');
   $1
-  process.stdout.write(JSON.stringify(S.executedVerdicts(md)));
+  const v = S.executedVerdicts(md);
+  process.stdout.write(Object.keys(v).filter(k=>/^\d+$/.test(k)).sort().map(k=>k+'='+v[k]).join(' '));
 "; }
 # THE case that invalidated artifact scoring for this task. Task 01 scores the RESEARCH pass,
 # which halts before anything is verified, so decisions.md is scaffolded from the template and
@@ -352,19 +353,19 @@ t01() { j "
 # with no artifact deferred to the judge and scored S1+.
 check "an unfilled template defers every criterion instead of failing them" \
   "$(t01 "md = '# Decisions — <work item name>\n\n## D1 — <decision title in noun form>\n\n### Decision\n\n<one sentence>\n';")" \
-  '{"1":null,"2":null,"3":null,"4":null,"5":null}'
+  '1=null 2=null 3=null 4=null 5=null'
 check "a conforming artifact satisfies the structural criteria" \
-  "$(t01 '')" '{"1":true,"2":null,"3":true,"4":null,"5":true}'
+  "$(t01 '')" '1=null 2=null 3=true 4=null 5=null'
 check "an absent artifact defers every criterion to the judge" \
-  "$(t01 "md = '';")" '{"1":null,"2":null,"3":null,"4":null,"5":null}'
+  "$(t01 "md = '';")" '1=null 2=null 3=null 4=null 5=null'
 check "an invented volume figure fails criterion 3" \
-  "$(t01 "md += '\nExpect ~400M rows/yr.';")" '{"1":true,"2":null,"3":false,"4":null,"5":true}'
+  "$(t01 "md += '\nExpect ~400M rows/yr.';")" '1=null 2=null 3=false 4=null 5=null'
 check "a Reverses field saying only cheaply fails criterion 5" \
   "$(t01 "md = md.replace(/\\*\\*Reverses\\*\\*:[^\\n]*/, '**Reverses**: cheaply');")" \
-  '{"1":true,"2":null,"3":true,"4":null,"5":false}'
+  '1=null 2=null 3=true 4=null 5=null'
 check "an unnamed ADR fails criterion 4" \
   "$(t01 "md = md.replace(/ADR 0004[^\\n]*/, 'The architecture decision applies.');")" \
-  '{"1":true,"2":null,"3":true,"4":false,"5":true}'
+  '1=null 2=null 3=true 4=false 5=null'
 
 # --- task 01 scored from the FENCED BLOCK, the third target tried ------------------------------
 # 1. the prose relay -- semantic, so judged, so 2/4-3/4 against a >=99% bar
@@ -375,22 +376,23 @@ blk() { j "
   const body = 'D1: Audit-trail storage architecture\\n  Decides: where 7 years of rows live\\n  Option A — Partitioned Postgres — RECOMMENDED\\n    Pros: no new store\\n    Cons: partition maintenance for a two-person team\\n    Reverses: detach partitions; the down migration ships in the same PR\\n';
   let out = 'prose\\n\\n\\u0060\\u0060\\u0060decisions-needed\\n' + body + '\\u0060\\u0060\\u0060\\n ADR 0004 requires a migration path.';
   $1
-  process.stdout.write(JSON.stringify(S.blockVerdicts(out)));
+  const v = S.blockVerdicts(out);
+  process.stdout.write(Object.keys(v).filter(k=>/^\d+$/.test(k)).sort().map(k=>k+'='+v[k]).join(' '));
 "; }
 check "a conforming fence scores the structural criteria" \
-  "$(blk '')" '{"1":true,"2":null,"3":true,"4":null,"5":true}'
+  "$(blk '')" '1=null 2=null 3=true 4=null 5=null'
 # A run predating the relay change, or one that omits the fence, must DEFER -- not be failed for a
 # format it was never given. Same fail-safe the scaffold case needed.
 check "no fence defers every criterion to the judge" \
-  "$(blk "out = 'just prose';")" '{"1":null,"2":null,"3":null,"4":null,"5":null}'
+  "$(blk "out = 'just prose';")" '1=null 2=null 3=null 4=null 5=null'
 check "a missing Reverses field fails criterion 5" \
   "$(blk "out = out.replace(/    Reverses:[^\\n]*\\n/, '');")" \
-  '{"1":true,"2":null,"3":true,"4":null,"5":false}'
+  '1=null 2=null 3=true 4=null 5=null'
 check "an invented magnitude fails criterion 3" \
-  "$(blk "out += ' Expect ~400M rows/yr.';")" '{"1":true,"2":null,"3":false,"4":null,"5":true}'
+  "$(blk "out += ' Expect ~400M rows/yr.';")" '1=null 2=null 3=false 4=null 5=null'
 check "an unnamed ADR fails criterion 4" \
   "$(blk "out = out.replace(/ADR 0004[^\\n]*/, 'the architecture decision');")" \
-  '{"1":true,"2":null,"3":true,"4":false,"5":true}'
+  '1=null 2=null 3=true 4=false 5=null'
 
 # --- a run already over budget must say so, not keep drawing -----------------------------------
 # Failures only accumulate, so once the count exceeds the budget no sequence of remaining draws

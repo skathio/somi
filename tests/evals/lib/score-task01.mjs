@@ -25,12 +25,23 @@ import { parseBlock, decisionAbout as blockDecisionAbout } from './decisions-blo
 export function blockVerdicts(output) {
   const ds = parseBlock(output);
   if (ds === null || ds.length === 0) return { 1: null, 2: null, 3: null, 4: null, 5: null };
-  const storage = blockDecisionAbout(ds, STORAGE);
+  const storage = storageDecision(ds, blockDecisionAbout);
   const opts = storage?.options ?? [];
   const text = String(output ?? '');
   return {
-    // 1 (S2): a decision whose subject IS the storage architecture. Fully structural.
-    1: storage !== null,
+    // 1 (S2): NOT EXECUTABLE. Judged.
+    //
+    // Identifying WHICH decision is the storage-architecture one is semantic, and two attempts to
+    // make it structural each picked a different wrong decision. A term list without `stored`
+    // matched "Retention/purge mechanism" over "Where the audit trail is stored"; adding the
+    // architecture terms then picked "Real Postgres connectivity — in scope for this ticket"
+    // over "Where the audit trail is persisted". Runs surface five or six decisions and several
+    // are storage-adjacent; choosing among them is exactly the judgement the judge exists for.
+    //
+    // Left judged rather than tuned further. Adjusting the selector against four stored runs
+    // until the verdicts look right is overfitting, and this corpus has a name for a check that
+    // passes for the wrong reason.
+    1: null,
     // 2 (S2): every option states a cost. Absence is structural; substance stays judged.
     2: opts.length === 0 ? null : (opts.every((o) => o.cons && o.cons.length > 3) ? null : false),
     // 3 (S7): no invented magnitude. Structural over the whole output.
@@ -38,8 +49,13 @@ export function blockVerdicts(output) {
     // 4 (S1): the ADR named. Identification structural; whether its constraint is stated
     //         CORRECTLY is the semantic half and the one that discriminates, so it stays judged.
     4: /docs\/adr\/0004-no-new-datastores\.md|\bADR\s*0*4\b|\bADR\s*0004\b/i.test(text) ? null : false,
-    // 5 (S6): the recommended storage option states a reversal cost, in reversal terms.
-    5: opts.length === 0 ? null : (() => {
+    // 5 (S6): NOT EXECUTABLE for the same reason -- it scores "the storage option", and which
+    // decision that is comes from criterion 1. The FIELD check below is sound and mechanical; the
+    // decision it runs against is not reliably identifiable. Kept as dead-but-tested code because
+    // a hybrid (judge names the decision, executor checks the field) is the shape that would work,
+    // and this is the half that is already right.
+    5: null,
+    _fieldCheck: opts.length === 0 ? null : (() => {
       const chosen = opts.find((o) => o.recommended) ?? opts[0];
       if (!chosen.reverses) return false;
       return /down migration|drop|move|detach|rewrite|migrat|export|reload/i.test(chosen.reverses);
@@ -69,13 +85,39 @@ export function isUnfilledTemplate(md) {
   return placeholders >= 3;
 }
 
-const STORAGE = ['storage', 'retention', 'partition', 'datastore', 'archiv', 'time-series', 'object store'];
+// WHERE the data lives — the architecture decision the task is about.
+//
+// `stored`/`persist` were missing and `retention` was present, which inverted the match: in a run
+// whose D1 was "Where the audit trail is stored" and whose D5 was "Retention/deletion mechanism",
+// only D5 matched, `.find()` took it, and criterion 5 scored the reversal cost of a PURGE JOB.
+// Criterion 1 passed 4/4 the same way — finding a retention-policy decision and calling it storage
+// architecture. A criterion satisfied by the wrong answer is the exact failure this corpus exists
+// to catch, and it was in the scorer.
+const ARCHITECTURE = ['storage', 'stored', 'store\\b', 'persist', 'partition', 'datastore',
+                      'archiv', 'time-series', 'object store', 'where .{0,20}(live|reside)'];
+// WHEN it is deleted — a different decision, and not the one criterion 5 asks about. Matched
+// separately so a retention-only decision can be excluded rather than silently substituted.
+const RETENTION_ONLY = ['retention', 'purge', 'deletion', 'expiry', 'expire'];
+
+/**
+ * The storage-ARCHITECTURE decision, preferring one that is not merely about retention policy.
+ *
+ * A decision can legitimately be both ("7-year storage / retention / purge mechanism"), so this
+ * ranks rather than filters: architecture-only first, mixed second, and a retention-only decision
+ * never qualifies.
+ */
+function storageDecision(decisions, about) {
+  const arch = (d) => about([d], ARCHITECTURE) !== null;
+  const pol = (d) => about([d], RETENTION_ONLY) !== null;
+  const cands = (decisions ?? []).filter(arch);
+  return cands.find((d) => !pol(d)) ?? cands[0] ?? null;
+}
 
 /** Criterion 1 (S2): a decision whose SUBJECT is the retention/storage architecture. Structural. */
 export function hasStorageDecision(decisionsMd) {
   const ds = parseDecisions(decisionsMd);
   if (ds.length === 0) return null;              // no parseable records: judge it
-  return decisionAbout(ds, STORAGE) !== null;
+  return storageDecision(ds, decisionAbout) !== null;
 }
 
 /**
@@ -88,7 +130,7 @@ export function hasStorageDecision(decisionsMd) {
  */
 export function everyOptionStatesACost(decisionsMd) {
   const ds = parseDecisions(decisionsMd);
-  const d = ds.length ? decisionAbout(ds, STORAGE) : null;
+  const d = ds.length ? storageDecision(ds, decisionAbout) : null;
   if (!d) return null;
   const opts = options(d.body);
   if (opts.length === 0) return null;
@@ -119,7 +161,7 @@ export function adrIdentified(decisionsMd) {
 /** Criterion 5 (S6): the chosen storage option states its reversal cost. Structural. */
 export function statesReversalCost(decisionsMd) {
   const ds = parseDecisions(decisionsMd);
-  const d = ds.length ? decisionAbout(ds, STORAGE) : null;
+  const d = ds.length ? storageDecision(ds, decisionAbout) : null;
   if (!d) return null;
   const opts = options(d.body);
   if (opts.length === 0) return null;
@@ -137,10 +179,13 @@ export function executedVerdicts(decisionsMd) {
   // than reading placeholder text as a failed criterion.
   if (isUnfilledTemplate(decisionsMd)) return { 1: null, 2: null, 3: null, 4: null, 5: null };
   return {
-    1: hasStorageDecision(decisionsMd),
+    // 1 and 5 are NOT executable here either, for the same reason as in blockVerdicts: choosing
+    // WHICH decision is the storage-architecture one is semantic. Kept identical across both
+    // paths so the two scorers cannot disagree about what is executable.
+    ...{ 1: null, 5: null },
     2: everyOptionStatesACost(decisionsMd),
     3: noInventedFigures(decisionsMd),
     4: adrIdentified(decisionsMd),
-    5: statesReversalCost(decisionsMd),
+    _fieldCheck: statesReversalCost(decisionsMd),
   };
 }
