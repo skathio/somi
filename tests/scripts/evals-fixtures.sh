@@ -268,6 +268,42 @@ cp -r "$F/task02-code/." "$R"/
 tracked=$( cd "$R" && git ls-files | grep -c '^\.somi/plans/expired-token/' )
 check "reconstructed task02 tracks its plan tree in the baseline commit" "$tracked" "4"
 
+# --- class 3, one layer down: run.mjs's copy SOURCE, not just the shipped tree's placement -----
+# The reference-implementation and review.patch checks above guard class 3 (a fixture-readable
+# file stating an invariant it shouldn't see) at the file-PLACEMENT level. This file's own
+# "Invariants worth not breaking" section has a second exposure: it lives one level above the
+# copied tree and reaches $WORK only if the LIVE copy step (tests/evals/run.mjs, not the shell
+# contract above) is ever broadened from the resolved per-task directory to the fixtures root --
+# the same shape as the $WORK-must-be-outside-the-checkout leak fixtures/README.md:47-51 already
+# names ("the bug and the leak were the same character").
+# Nothing above inspects run.mjs. This narrows that gap with two greps -- existential facts about
+# the source text, not a parse of it -- plus a pinned occurrence count. Two greps alone would pass
+# an ADDED, broader copy sitting right next to an untouched anchor line (both greps still match),
+# which is the silent case: the per-task copy still lands correctly, the run behaves normally, and
+# the candidate additionally gets the fixtures root -- including this section's own trap table --
+# at a path the leak keyword denylist above never scans. run.mjs has exactly four `cpSync(`
+# occurrences today; pinning the occurrence count (not a line count -- `grep -c` would miss a
+# second occurrence appended to an already-matching line) turns an added `cpSync(` call red,
+# same line or a new one, without needing an AST. This is a tripwire on a known substring, not a
+# closed enumeration over copy operations -- a call reached via `copyFileSync`, `execFileSync('cp',
+# ...)`, or an alias would not move this count.
+# NOT covered: a change to what the `fixtureDir` argument resolves to BEFORE it reaches this
+# function (run.mjs's CLI driver, ~line 820, calls `fixtureFor(id, source.dir)` once) -- the count
+# below stays 4 either way. That variant nests every task file one level deep and never renames
+# `_somi` to `.somi`. The fixtures root still leaks into $WORK either way (the copy call itself is
+# untouched); what's inferred, not confirmed, is that the accompanying tree-shape mismatch breaks
+# the run visibly enough downstream that a corrupted measurement would be noticed rather than
+# scored (not confirmed by an actual live run: that needs a model invocation, out of reach for
+# this hermetic script) -- so it is a named, accepted residual, not a second assertion.
+n_cp=$(grep -o 'cpSync(' tests/evals/run.mjs | wc -l | tr -d ' ')
+check "run.mjs's cpSync( occurrence count is unchanged (4)" "$n_cp" "4"
+if grep -qF 'cpSync(fixtureDir, work' tests/evals/run.mjs \
+   && grep -qF 'startsWith(`task${id}-`)' tests/evals/run.mjs; then
+  ok "run.mjs's live reconstruction copies the resolved per-task dir, not the fixtures root"
+else
+  bad "run.mjs's live reconstruction copies the resolved per-task dir, not the fixtures root"
+fi
+
 # --- task01: the absence criterion 3 scores ----------------------------------------------
 # `kb` was missing and row size is one of the three things criterion 3 forbids; spelled-out
 # magnitudes ("half a billion") slipped because the alternation required an adjacent digit.

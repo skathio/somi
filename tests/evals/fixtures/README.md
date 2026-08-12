@@ -184,3 +184,102 @@ it asks. Verified: `pass 3, fail 1`, `AssertionError`.
 control and red on the mutant** cancels every non-expiry difference, because the two files differ
 only there. The same cheating test is red on the control, so the run is rejected before the
 mutant is consulted.
+
+## R5 conformance audit (phase 1, iteration 1.1)
+
+`spec.md`'s R5 — "fixtures carry a real suite and a real defect, so pass conditions are
+mechanical" — checked against the fixture files themselves, not restated from the plan that
+proposed the answer:
+
+- **`task01-plan/`** — **R5 not applicable in its suite-and-defect form**: `/plan` produces a
+  design decision, not code to test. Checkable directly, not hand-counted: no file under
+  `task01-plan/` is named `package.json`, and none matches a test-file pattern (`*.test.*`,
+  `*.spec.*`, or a `tests/` directory) — there is nothing for a "real suite" requirement to attach
+  to. The tree is `CLAUDE.md`, one ADR, and four files under `src/` (`auth/api-key.mjs`,
+  `db/client.mjs`, `db/schema.sql`, `ingest/handler.mjs`) — three `.mjs` sources and one `.sql`
+  schema, six files total. Inherent to the task shape, not a gap. R5's *purpose* — mechanical pass
+  conditions — is still met for task01 by a different mechanism: `decisions.md#d11` settles
+  task01's S3 (the file-boundary check) as one of the corpus's three gating dimensions.
+- **`task02-code/`** — **meets R5**: `tests/auth/token.test.mjs` is exactly three named tests —
+  `accepts a validly-signed token`, `rejects a tampered signature`, `rejects malformed input` —
+  and reading all three directly confirms none asserts anything about expiry. (`evals-fixtures.sh`'s
+  `grep -ncE '\bexp\b|expir'` assertion also returns 0, but that is a regression tripwire on a
+  known phrasing, not proof of absence: a test such as `assert.throws(() =>
+  verifyToken(mintToken('u', 1)))` would cover expiry while tripping neither pattern. The
+  enumeration above is the sound evidence; the grep is corroborating, not load-bearing.) The
+  defect is real: the shipped `src/auth/token.mjs`'s `verifyToken()` has no expiry branch at all —
+  it parses and returns the payload unconditionally — the same absence the mutant
+  (`task02-code-mutant.mjs`) deliberately preserves. (The mutant is not a byte-for-byte freeze of
+  the shipped file: it takes a second parameter, `verifyToken(token, nowMs = Date.now())`, so that
+  mutant and control present an identical seam; R4 fixes that parameter's *shape* if a clock is
+  injected at all, and explicitly permits reading `Date.now()` directly instead
+  (`task02-code/_somi/plans/expired-token/spec.md:13-15`) — it does not require accepting one.
+  `evals-fixtures.sh`'s "mutant and control export the same surface as token.mjs" assertion checks
+  export-key parity between the two, not arity, so nothing enforces the stronger "freeze" reading.)
+  `evals-fixtures.sh`'s "shipped token.mjs accepts an expired token" assertion exercises the claim
+  directly against the shipped file, not the mutant.
+- **`task03-review/`** — **meets R5**: the suite is green both before and after `review.patch`
+  applies (`evals-fixtures.sh`'s two `3/0` assertions), and the defect is a genuine one-line
+  semantic change in the patch (`daysInMonth(changeDate)` → `Math.min(daysInMonth(changeDate),
+  30)`), invisible against every 30-day-month date the suite exercises (April 16, June 1,
+  September 30) and already measured against real 31-day inputs in "Why 43 lines is still a trap"
+  above.
+
+**One genuine gap surfaced, on re-examination of this section's own first draft.**
+`evals-fixtures.sh` closes leak classes 1 and 2 in full — a comment hinting at a pass criterion
+(the keyword denylist, `:158-165`, plus the manifest tripwire, `:126-141`), and a stale manifest
+masking a real change (the manifest-currency count check, `:142-151`). Class 3 — a
+fixture-readable file stating an invariant it shouldn't see — is closed **at the file-placement
+level** by two real assertions written for exactly this bite: no reference implementation lives
+inside `task02-code/` (`:167-172`), and `review.patch` is NOT inside `task03-review/` (`:178-180`).
+But this document's own "Invariants worth not breaking" section reaching `$WORK` was, until this
+pass, guarded by nothing but a filesystem-layout fact, not an assertion: it lives one level above
+the copied tree, and the live reconstruction (`tests/evals/run.mjs`, `mkdtempSync` +
+`cpSync(fixtureDir, work)` around line 406) only ever copies the resolved per-task directory.
+`evals-fixtures.sh` did not read `run.mjs` at all before this pass — that property was true but
+unasserted. A future change to the copy step (the same shape as the `$WORK`-must-be-outside-the-
+checkout leak this document already names above, "the bug and the leak were the same character")
+would pass every assertion that existed before this pass, none of which inspects `run.mjs`, while
+shipping this section's own trap table and invariant list to a candidate.
+
+**Narrowed this pass** (revised from an earlier draft of this note that claimed "closed" —
+correcting the same mistake it was written to fix): the original fix was two presence greps over
+`run.mjs`'s source, which cannot establish the universal that earlier draft claimed ("never a
+broader one") — they show two facts are present, not that a third, unrelated one is absent. Staged
+proof, against that two-grep-only version: an *added* line right after the existing copy call,
+`cpSync(join(fixtureDir, '..'), join(work, 'shared'), …)`, left both greps' anchors untouched and
+the gate stayed **47/0 green**. That variant is the silent one — the per-task copy still lands
+correctly, the run behaves normally, and the candidate additionally gets the fixtures root,
+including this section's own trap table, at a path (`$WORK/shared/`) the leak keyword denylist
+above never scans. `run.mjs` has exactly four `cpSync(` occurrences; pinning that count — via
+`grep -o 'cpSync(' | wc -l`, not `grep -c`, which counts matching *lines* and would miss a second
+occurrence appended to the already-matching copy line — is **bidirectional** (D11's first test: it
+independently fails on both an added and a removed occurrence), which the two presence greps above
+are not. It is **not** a closed enumeration under D11's soundness test: `decisions.md#d11` requires
+complete enumeration over a closed input, and a literal-substring grep over an arbitrary,
+freely-editable source file is exactly the pattern-search case that rule excludes — a call reached
+via `copyFileSync`, `execFileSync('cp', …)`, or an alias would not move this count. Same register as
+the `\bexp\b|expir` grep above (`:206-209`): a regression tripwire on a known substring, not proof
+of absence. So this dimension does not become D11-gating-grade; the pin narrows the seam rather
+than closing it — a real, sufficient improvement over the presence greps by bidirectionality alone.
+Staged proof against the 48-assertion suite: an added occurrence on a *new* line gives
+**47 passed, 1 failed**; the identical addition appended to the *end of* the existing copy line —
+the variant a line-counting `grep -c` would have missed, and did miss in an earlier draft of this
+pin — also gives **47 passed, 1 failed**; reverting either gives **48/0** again. **Named rather than
+left silent**: the count pin does not cover a change to what
+the `fixtureDir` *argument* resolves to before it reaches the copy (the CLI driver's single
+`fixtureFor(id, source.dir)` call, `run.mjs` ~line 820) — the count stays four either way,
+verified by staging both `dirname(fixtureFor(id, source.dir))` and a resolver bypass
+(`join(source.dir, 'tests', 'evals', 'fixtures')`) against the 48-assertion suite and observing
+**48/0 green** on each. Both variants still copy the fixtures root into `$WORK` — the leak occurs
+either way, since neither touches the copy call itself, only what `fixtureDir` resolves to before
+it. What is inferred, not confirmed, is that the accompanying tree-shape mismatch (every task file
+one level deep, `_somi` never renamed) breaks the run visibly enough downstream that a corrupted
+measurement would be noticed rather than scored; confirming that needs a live model invocation, out
+of reach for this audit — so this residual is accepted here rather than closed with a second
+assertion. See
+`tests/scripts/evals-fixtures.sh` for the check itself and its comment for the full reasoning.
+This qualified as the conditional step's trigger (a genuine gap resembling a leak class already
+fixed in this corpus's history — the same class, reopened one layer down at the reconstruction
+path rather than the shipped tree), not a new leak class, so it is recorded here rather than as a
+fourth bullet above.
