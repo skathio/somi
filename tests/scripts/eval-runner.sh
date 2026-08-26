@@ -213,6 +213,145 @@ check "scoring leaves the candidate tree untouched" \
      process.stdout.write(String(fs.readFileSync(p, 'utf8') === before));
    ")" "true"
 
+# --- 2.1: task 02's merged S5 criterion, overlaid from scoreExpiryGuard()'s VERDICT, not OBSERVED -
+# The Blocker this closes: an `observed`-based derivation leaves `observed` unset on the own-step
+# failure branch (scoreExpiryGuard's real return shape there carries no `observed` field at all),
+# so a candidate genuinely red on its own source would map to `null` and get silently discarded
+# instead of counted as the fail it is. Each case below pins one branch of `overlayExpiryGuardVerdict`
+# end to end -- through toDimensions and buildResult -- so a regression to the observed-based
+# derivation is caught at the same layer certify() reads, not just at the overlay function's return
+# value.
+overlay() { j "
+  const S = await import('$ROOT/tests/evals/lib/score.mjs');
+  const crit = [{ n: 1, verdict: '$2', evidence: '-' }, { n: 2, verdict: 'pass', evidence: 'judge: untouched' }];
+  M.overlayExpiryGuardVerdict(crit, $1);
+  const dims = S.toDimensions(crit, { 1: ['S5'], 2: ['S3'] });
+  const res = M.buildResult({ source: { ref: 'x', sha: 'd' }, tasks: { '02': [{ index: 0, dimensions: dims }] }, runs: 1 });
+  const d = res.tasks['02'].dimensions.S5;
+  process.stdout.write(crit[0].verdict + '|' + (crit[0].executed ?? 'undefined') + '|' + JSON.stringify(dims.S5) + '|' + d.n + '/' + d.passes);
+"; }
+# THE case that proves the Blocker is closed: an own-step failure has NO `observed` field (matching
+# scoreExpiryGuard's real branch at run.mjs -- verified by reading the source, not assumed), so a
+# derivation reading `observed` would see `undefined`, map to `null`, and leave criterion 1's
+# pre-existing 'pass' verdict untouched -- exactly the discarded-draw bug. Seeding criterion 1 at
+# 'pass' beforehand makes that failure mode visible: if the fix regresses to observed-based
+# derivation, this case reads 'pass|undefined|...' instead of 'fail|true|...'.
+check "own-fail scores the merged criterion FAIL and counts toward draws (not discarded)" \
+  "$(overlay "{ verdict: 'fail', step: 'own', reason: 'not green on its own source' }" pass)" \
+  "fail|true|false|1/0"
+check "control-fail (non-load, per classifyRed) scores FAIL" \
+  "$(overlay "{ verdict: 'fail', step: 'control', reason: 'red on the control', observed: 'assertion' }" fail)" \
+  "fail|true|false|1/0"
+check "mutant-assertion scores PASS" \
+  "$(overlay "{ verdict: 'pass', step: 'mutant', observed: 'assertion' }" fail)" \
+  "pass|true|true|1/1"
+check "mutant-green scores FAIL (the guard did not guard)" \
+  "$(overlay "{ verdict: 'fail', step: 'mutant', reason: 'the new test passes against the mutant', observed: 'green' }" pass)" \
+  "fail|true|false|1/0"
+
+# Minor, review pass 2: a judge reply omitting criterion 1 must not drop the observation silently.
+check "a judge reply missing criterion 1 marks the anomaly on eg, rather than dropping it silently" \
+  "$(j "
+    const crit = [{ n: 2, verdict: 'pass', evidence: '-' }];
+    const eg = { verdict: 'pass', step: 'mutant', observed: 'assertion' };
+    M.overlayExpiryGuardVerdict(crit, eg);
+    process.stdout.write(eg.overlaySkipped ?? 'MISSING');
+  ")" "criterion 1 absent from the judge reply"
+
+# --- non-attributable: settled 2026-08-12 as ABSENT and RECORDED, not "null/defer" ---------------
+# The prior "null/defer" wording let a judge-authored `pass` decide gating dimension S5 (review
+# pass 1, Blocker F-42 -- decisions.md#d11's 2026-08-12 correction). The fix removes criterion 1
+# from the array entirely on this branch, so toDimensions() -- which maps every criterion it is
+# GIVEN, judge-authored or not -- never sees it. Seeded at 'pass' below (opposite of a fail-safe
+# default): a regression back to "defer" shows up as an S5 key reappearing in `dims`.
+nonattr() { j "
+  const S = await import('$ROOT/tests/evals/lib/score.mjs');
+  const crit = [{ n: 1, verdict: '$2', evidence: '-' }, { n: 2, verdict: 'pass', evidence: 'judge: untouched' }];
+  M.overlayExpiryGuardVerdict(crit, $1);
+  process.stdout.write(String(crit.some((c) => c.n === 1)) + '|' + JSON.stringify(S.toDimensions(crit, { 1: ['S5'], 2: ['S3'] })));
+"; }
+check "control-fail (a LOAD failure) is EXCLUDED: criterion 1 removed, S5 never reaches dims" \
+  "$(nonattr "{ verdict: 'non-attributable', step: 'control', reason: 'the control could not load (import-error)', observed: 'import-error' }" pass)" \
+  'false|{"S3":true}'
+check "mutant-non-attributable is EXCLUDED: criterion 1 removed, S5 never reaches dims" \
+  "$(nonattr "{ verdict: 'non-attributable', step: 'mutant', reason: 'red on the mutant, but from type-error', observed: 'type-error' }" fail)" \
+  'false|{"S3":true}'
+
+# F-47/F-48 (review pass 2): exclusion is a first-class OUTCOME, not `perRun.length - n`, which
+# vanished S5 at 100% exclusion (F-47) and charged harness faults against every dim (F-48).
+check "a dimension excluded on every draw still emits a row (0/0), not silence (F-47)" \
+  "$(j "
+    const res = M.buildResult({ source: { ref: 'x', sha: 'd' }, tasks: { '02': [
+      { index: 0, dimensions: { S5: 'excluded', S3: true } },
+      { index: 1, dimensions: { S5: 'excluded', S3: true } },
+      { index: 2, dimensions: { S5: 'excluded', S3: true } },
+    ] }, runs: 3 });
+    const s5 = res.tasks['02'].dimensions.S5;
+    process.stdout.write(s5.n + '/' + s5.passes + '/' + s5.excluded + '/' + s5.grade);
+  ")" "0/0/3/null"
+check "a mixed batch counts the excluded draw toward S3 but not S5, and reports the exclusion" \
+  "$(j "
+    const res = M.buildResult({ source: { ref: 'x', sha: 'd' }, tasks: { '02': [
+      { index: 0, dimensions: { S5: 'excluded', S3: true } },
+      { index: 1, dimensions: { S5: true, S3: true } },
+    ] }, runs: 2 });
+    const s5 = res.tasks['02'].dimensions.S5, s3 = res.tasks['02'].dimensions.S3;
+    process.stdout.write(s5.n + '/' + s5.passes + '/' + s5.excluded + '|' + s3.n + '/' + s3.passes + '/' + s3.excluded);
+  ")" "1/1/1|2/2/0"
+check "a harness-faulted (empty-dimensions) draw does NOT inflate excluded on unrelated dims (F-48)" \
+  "$(j "
+    const res = M.buildResult({ source: { ref: 'x', sha: 'd' }, tasks: { '02': [
+      { index: 0, dimensions: { S5: true, S3: true } },
+      { index: 1, dimensions: {} },
+    ] }, runs: 2 });
+    const s5 = res.tasks['02'].dimensions.S5, s3 = res.tasks['02'].dimensions.S3;
+    process.stdout.write(s5.n + '/' + s5.passes + '/' + s5.excluded + '|' + s3.n + '/' + s3.passes + '/' + s3.excluded);
+  ")" "1/1/0|1/1/0"
+
+# F-50: `'excluded'` is truthy, so the pre-fix `v ? '+' : '-'` printed an unmeasured gating
+# dimension as `S5+` -- identical to a pass. Mutation: reverting the ternary turns this red.
+check "the live progress line marks an excluded dimension as neither pass nor fail (F-50)" \
+  "$(j "process.stdout.write(M.renderDimensions({ S5: 'excluded', S3: true, S1: false, S6: true }))")" \
+  "S5~ S3+ S1- S6+"
+
+# --- F-49 (review pass 2): scoreExpiryGuard()'s catch must fail CLOSED, not silently return S5
+# to the judge. The throw is real -- a --source ref predating the mutant/control fixtures throws.
+check "scoreExpiryGuard throws when the mutant/control fixtures do not exist (the catch's real precondition)" \
+  "$(j "
+    try {
+      M.scoreExpiryGuard('$FX/_candidates/correct-guard',
+        { mutant: '/nonexistent/task02-code-mutant.mjs', control: '/nonexistent/task02-code-control.mjs' });
+      process.stdout.write('NO THROW');
+    } catch (e) { process.stdout.write('threw'); }
+  ")" "threw"
+check "a harness-fault disposition (step: 'harness') is removed from criteria exactly like any other non-attributable verdict" \
+  "$(j "
+    const crit = [{ n: 1, verdict: 'pass', evidence: '-' }, { n: 2, verdict: 'pass', evidence: '-' }];
+    M.overlayExpiryGuardVerdict(crit, { verdict: 'non-attributable', step: 'harness', reason: 'scoreExpiryGuard threw: ENOENT', observed: null });
+    process.stdout.write(String(crit.some((c) => c.n === 1)));
+  ")" "false"
+
+# session.mjs (criterion 2, S3) must never be touched by ANY task 02 overlay -- report-only, per
+# decisions.md#d11's correction. Proven by running the SAME overlay call used above (which only
+# ever looks up criterion n===1) and confirming criterion 2 is byte-identical to what the judge
+# said going in, regardless of what scoreExpiryGuard returned.
+check "session.mjs's criterion is untouched by the expiry-guard overlay (report-only, not gating)" \
+  "$(j "
+    const crit = [{ n: 1, verdict: 'pass', evidence: '-' }, { n: 2, verdict: 'fail', evidence: 'judge: touched, no reason given' }];
+    M.overlayExpiryGuardVerdict(crit, { verdict: 'pass', step: 'mutant', observed: 'assertion' });
+    process.stdout.write(crit[1].verdict + '|' + (crit[1].executed ?? 'undefined') + '|' + crit[1].evidence);
+  ")" \
+  "fail|undefined|judge: touched, no reason given"
+# ...and directly: sessionUntouched()'s own verdict, in the direction a naive gating overlay would
+# have flipped, must still not appear anywhere near a criterion's `.verdict` -- exercised through
+# boundary.mjs's actual exported function, both directions.
+check "sessionUntouched: untouched" \
+  "$(j "const B = await import('$ROOT/tests/evals/lib/boundary.mjs'); const r = B.sessionUntouched([{status:'M',path:'src/auth/token.mjs'}]); process.stdout.write(r.ok + '|' + r.touched)")" \
+  "true|false"
+check "sessionUntouched: touched" \
+  "$(j "const B = await import('$ROOT/tests/evals/lib/boundary.mjs'); const r = B.sessionUntouched([{status:'M',path:'src/auth/session.mjs'}]); process.stdout.write(r.ok + '|' + r.touched)")" \
+  "false|true"
+
 # --- 4.1: the pooled certification gate --------------------------------------------------------
 # Synthetic result files, so the gate is tested without 260 model runs.
 mk() { j "
@@ -330,6 +469,42 @@ check "a touched source file is caught, and named" \
   "$(bnd "[{path:'src/ingest/handler.mjs'}]")" "false:src/ingest/handler.mjs"
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
+
+# --- 2.1: boundaryRespected's `slug` parameter, wired through (was accepted and never used) -----
+bnd_slug() { j "
+  const B = await import('$ROOT/tests/evals/lib/boundary.mjs');
+  const r = B.boundaryRespected($1, { slug: $2 });
+  process.stdout.write(r.ok + (r.offenders.length ? ':' + r.offenders.join(',') : ''));
+"; }
+# boundaryRespected is called only from the taskId === '01' block (run.mjs), so its slug is always
+# TASK-01-SHAPED -- `ingest-audit-trail` is a real slug from a stored task-01 shard
+# (results/4ff4da62.../01-000.json), used here rather than task02-code's fixture slug (Nit, review
+# pass 1: the prior comment named a call that does not exist). A write into a DIFFERENT slug's plan
+# directory must be rejected -- unreachable before this fix, since the old unscoped allowlist
+# matched any .somi/plans/ path.
+check "boundaryRespected REJECTS a write into a different slug's plan directory" \
+  "$(bnd_slug "[{path:'.somi/plans/other-slug/spec.md'}]" "'ingest-audit-trail'")" \
+  "false:.somi/plans/other-slug/spec.md"
+# Bidirectional: the same slug-scoped allowlist must still accept the running draw's OWN directory.
+check "boundaryRespected ACCEPTS a write into the running draw's own slug directory" \
+  "$(bnd_slug "[{path:'.somi/plans/ingest-audit-trail/progress.md'}]" "'ingest-audit-trail'")" "true"
+# The sole fallback path: slug discovery came back null (no plan directory was ever created for
+# this draw) -- boundaryRespected must fall back to the broad prefix and ACCEPT, never reject.
+# A false `fail` on 1 of 3 gating dimensions is worse than the over-permissiveness this replaces.
+check "boundaryRespected: null slug falls back to the broad prefix and ACCEPTS, does not reject" \
+  "$(bnd_slug "[{path:'.somi/plans/other-slug/spec.md'}]" "null")" "true"
+
+# --- F-44: a slug with regex metacharacters behaves as a plain prefix, not a pattern -------------
+# Verified (review pass 1) that the OLD `new RegExp` version threw on `fix(auth`, false-failed the
+# draw's own write on `plan[1]`, and over-matched `a.b` against `aXb`. These pin all three
+# directions as a measurement, not a claim.
+check "a slug with regex metacharacters does not throw and accepts the draw's own write" \
+  "$(bnd_slug "[{path:'.somi/plans/fix(auth/spec.md'}]" "'fix(auth'")" "true"
+check "a slug with a character-class metacharacter does not false-fail the draw's own write" \
+  "$(bnd_slug "[{path:'.somi/plans/plan[1]/spec.md'}]" "'plan[1]'")" "true"
+check "a slug with a '.' does not over-match a different, similarly-named slug's directory" \
+  "$(bnd_slug "[{path:'.somi/plans/aXb/spec.md'}]" "'a.b'")" \
+  "false:.somi/plans/aXb/spec.md"
 
 # --- task 01 scored from the ARTIFACT, not the prose -------------------------------------------
 # Certification failed with a clean pattern: executed criteria 4/4, near-mechanical 4/4, semantic

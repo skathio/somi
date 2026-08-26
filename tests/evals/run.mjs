@@ -136,7 +136,7 @@ export function certify(result, { scope = 'full', maxFailures = null } = {}) {
       const missed = d.n - d.passes;
       failures += missed;
       draws += d.n;
-      dimensions.push({ task, dim, passes: d.passes, n: d.n, rate: d.n ? d.passes / d.n : null, failures: missed });
+      dimensions.push({ task, dim, passes: d.passes, n: d.n, rate: d.n ? d.passes / d.n : null, failures: missed, excluded: d.excluded ?? 0 });
     }
   }
   dimensions.sort((a, b) => a.rate - b.rate || a.task.localeCompare(b.task));
@@ -245,7 +245,10 @@ export function buildResult({ source, tasks, runs, dryRun = false, now = new Dat
         // `n-a` dimensions are declared by the task and never counted — a task that does not
         // exercise a dimension must not drag its grade.
         if (outcome === 'n-a') continue;
-        dims[dim] ??= { passes: 0, n: 0 };
+        // Created even for an all-excluded dim (F-47); `excluded` is a first-class OUTCOME, not
+        // `perRun.length - n` (F-48) -- that charged every harness-faulted draw against every dim.
+        dims[dim] ??= { passes: 0, n: 0, excluded: 0 };
+        if (outcome === 'excluded') { dims[dim].excluded += 1; continue; }
         dims[dim].n += 1;
         if (outcome === true || outcome === 'pass') dims[dim].passes += 1;
       }
@@ -261,9 +264,18 @@ export function buildResult({ source, tasks, runs, dryRun = false, now = new Dat
         criteria: r.criteria ?? null,
         error: r.error ?? null,
         transcript: r.transcript ?? null,
+        // `scoreExpiryGuard()`'s own step/reason/observed, parseable independently of `criteria` --
+        // task 02's merged S5 criterion is REMOVED from `criteria` on a non-attributable draw (see
+        // `overlayExpiryGuardVerdict`), so this is the only place that disposition survives.
+        expiryGuard: r.expiryGuard ?? null,
       })),
       dimensions: Object.fromEntries(
-        Object.entries(dims).map(([dim, { passes, n }]) => [dim, { passes, n, grade: grade(passes, n) }]),
+        Object.entries(dims).map(([dim, { passes, n, excluded }]) => [dim, {
+          passes, n,
+          // grade() throws on n<=0; an all-excluded dim reports `null`, not a vacuous "0/0 pass".
+          grade: n ? grade(passes, n) : null,
+          excluded, // decisions.md#d11: "S5's denominator becomes an observable". Not a pass/fail.
+        }]),
       ),
     };
   }
@@ -379,6 +391,48 @@ export function scoreExpiryGuard(candidateDir, { mutant, control, target = 'src/
   }
 }
 
+/**
+ * Overlay task 02's merged S5 criterion (criterion 1, post-2.1-merge) from `scoreExpiryGuard()`'s
+ * own `verdict` field -- never from `observed` (corrected 2026-08-09, `decisions.md#d11`: the
+ * `observed`-based derivation of a since-deleted second criterion left a null-hole on the own-step
+ * failure branch, where `scoreExpiryGuard` never sets `observed` at all -- a candidate genuinely
+ * red on its own source scored `null` there and was discarded as a harness fault, the most
+ * dangerous possible bias direction for a regression gate).
+ *
+ * Every branch of `scoreExpiryGuard`'s actual return shape is covered: `pass` -> pass; `fail` at
+ * ANY step (own, control, or mutant -- all three are genuine, code-execution-verified failures, and
+ * all count) -> fail; `non-attributable` -> ABSENT (corrected 2026-08-12, `decisions.md#d11`'s
+ * further correction: "null/defer" left the judge free to decide a gating dimension -- review pass
+ * 1 Blocker F-42). Criterion 1 is REMOVED from the array on this branch, so no downstream consumer
+ * (`toDimensions()` above all) can ever read a judge-originated verdict for it. The disposition
+ * itself (`eg`'s step/reason/observed) is recorded by the CALLER, on the run record's `expiryGuard`
+ * field -- a spliced array cannot carry it, since JSON.stringify drops non-index array properties.
+ *
+ * The CALLER marks the exclusion itself after this returns (F-47/F-48: `dimensions[dim] =
+ * 'excluded'`), so removal here survives as an observation, not a silent absence.
+ */
+export function overlayExpiryGuardVerdict(criteria, eg) {
+  const i = criteria.findIndex((x) => x.n === 1);
+  if (i === -1) {
+    // Loud, not silently dropped (Minor, review pass 2): a judge reply omitting criterion 1.
+    eg.overlaySkipped = 'criterion 1 absent from the judge reply';
+    return criteria;
+  }
+  if (eg.verdict === 'pass') {
+    criteria[i].verdict = 'pass';
+    criteria[i].evidence = `EXECUTED: scoreExpiryGuard passed at the mutant step, attributable (${eg.observed}) (not judged)`;
+    criteria[i].executed = true;
+  } else if (eg.verdict === 'fail') {
+    criteria[i].verdict = 'fail';
+    criteria[i].evidence = `EXECUTED: scoreExpiryGuard failed at step '${eg.step}' (${eg.reason}) (not judged)`;
+    criteria[i].executed = true;
+  } else {
+    // 'non-attributable': absent, not deferred. S5 gets no observation for this draw at all.
+    criteria.splice(i, 1);
+  }
+  return criteria;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Live scoring (iteration 4.1's execution path)
 // ---------------------------------------------------------------------------------------------
@@ -428,12 +482,23 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     // at all. Stored in the shard so --rescore can re-run structural checks without re-running
     // the agent.
     let decisionsMd = null;
+    // The plan slug THIS draw created: the SOLE directory under `.somi/plans/` in the post-run
+    // tree, independent of whether `decisions.md` exists there (corrected 2026-08-12, review pass
+    // 1 Blocker F-43 -- keying on `decisions.md`'s presence left `slug` null on the conforming
+    // DECISIONS-NEEDED pause `agents/planner.md` mandates, and on 1 of the 4 task-01 draws already
+    // measured; `task01-plan/` ships no `.somi/` at all, so any directory found here is this draw's
+    // own). `null` on zero OR more than one directory (absent, or ambiguous); callers fall back to
+    // their own broad-match behaviour on `null` rather than being handed a directory that isn't
+    // clearly this draw's.
+    let slug = null;
     try {
       const plans = join(work, '.somi', 'plans');
       if (existsSync(plans)) {
-        for (const slug of execFileSync('ls', [plans], { encoding: 'utf8' }).split('\n').filter(Boolean)) {
+        const dirs = execFileSync('ls', [plans], { encoding: 'utf8' }).split('\n').filter(Boolean);
+        if (dirs.length === 1) {
+          slug = dirs[0];
           const f = join(plans, slug, 'decisions.md');
-          if (existsSync(f)) { decisionsMd = readFileSync(f, 'utf8'); break; }
+          if (existsSync(f)) decisionsMd = readFileSync(f, 'utf8');
         }
       }
     } catch { /* absent is a data point, not an error */ }
@@ -464,9 +529,20 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
       '\n### Files the run created or modified\n',
       tree.changed.map((c) => `${c.status} ${c.path}`).join('\n') || '(none)',
       '\n### Diff against the baseline commit\n', (tree.diff || '(empty)').slice(0, 20000),
-    ].join('\n');
+    ];
+    // Computed BEFORE judge() runs, not appended after (corrected 2026-08-12, review pass 1 Major
+    // F-45): task 02 criterion 2 (S3, session.mjs) is judged and needs this fact to weigh its
+    // "touched with a stated reason" escape clause, which is impossible once the judge has already
+    // returned a verdict.
+    if (taskId === '02') {
+      const { sessionUntouched } = await import('./lib/boundary.mjs');
+      const s = sessionUntouched(tree.changed);
+      // Minor, review pass 2: "not itself a criterion" reads as "not scored" to a model judge --
+      // the opposite of what this evidence is for. Criterion 2 IS the session.mjs criterion.
+      evidence.push('\n### src/auth/session.mjs touch status (mechanical fact -- weigh it under criterion 2; this line is not itself a verdict)\n', s.ok ? 'untouched' : 'touched');
+    }
 
-    const verdict = judge(taskSpec, evidence, { model: judgeModel });
+    const verdict = judge(taskSpec, evidence.join('\n'), { model: judgeModel });
 
     // Task 03 criterion 3 is EXECUTED, not judged: it already reads as an executable assertion
     // ("the cited case must genuinely fail"), and judging it asks a model to do arithmetic it can
@@ -504,16 +580,42 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     if (verdict.ok && taskId === '01') {
       try {
         const { boundaryRespected } = await import('./lib/boundary.mjs');
-        const b = boundaryRespected(tree.changed);
+        const b = boundaryRespected(tree.changed, { slug });
         const c = verdict.criteria.find((x) => x.n === 6);
         if (c) {
+          // The regime is stated in the evidence (Minor, review pass 1): a stored `pass` is
+          // otherwise ambiguous between "checked against this draw's own slug" and "checked
+          // against the broad .somi/plans/ prefix" fallback.
+          const regime = slug ? `slug-scoped: ${slug}` : 'none - broad .somi/plans/ prefix';
           c.verdict = b.ok ? 'pass' : 'fail';
           c.evidence = b.ok
-            ? 'EXECUTED: every changed path is inside the allowlist (not judged)'
-            : `EXECUTED: paths outside the allowlist: ${b.offenders.join(', ')}`;
+            ? `EXECUTED: every changed path is inside the allowlist (${regime}) (not judged)`
+            : `EXECUTED: paths outside the allowlist (${regime}): ${b.offenders.join(', ')}`;
           c.executed = true;
         }
       } catch { /* fall back to the judged verdict */ }
+    }
+
+    // Task 02's merged S5 criterion (criterion 1, closes gap 1 of context.md §2.4): built and
+    // mutation-tested, but never called from the live path until this iteration. Every live task
+    // 02 draw was scored entirely by the judge before this. Criterion 2 (S3, session.mjs) stays
+    // report-only -- its evidence is already folded into `evidence` above, before `judge()` ran, so
+    // there is nothing to overlay here.
+    let expiryGuard = null;
+    if (verdict.ok && taskId === '02') {
+      try {
+        const mutant = join(sourceDir, 'tests', 'evals', 'fixtures', 'task02-code-mutant.mjs');
+        const control = join(sourceDir, 'tests', 'evals', 'fixtures', 'task02-code-control.mjs');
+        const eg = scoreExpiryGuard(work, { mutant, control });
+        overlayExpiryGuardVerdict(verdict.criteria, eg);
+        expiryGuard = eg;
+      } catch (err) {
+        // Fail CLOSED (F-49): a harness fault here (ENOSPC on the cpSync copies, a --source ref
+        // predating the mutant/control fixtures) must not leave the judge's criterion 1 verdict
+        // standing -- F-42's leak through a second door. `step: 'harness'` distinguishes the cause.
+        expiryGuard = { verdict: 'non-attributable', step: 'harness', reason: `scoreExpiryGuard threw: ${err.message}`, observed: null };
+        overlayExpiryGuardVerdict(verdict.criteria, expiryGuard);
+      }
     }
 
     if (verdict.ok && taskId === '03') {
@@ -538,10 +640,17 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
       return { index, error: `judge: ${verdict.error}`, dimensions: {}, transcript: run.stdout.slice(-4000), harnessFault: true };
     }
 
+    const dimensions = toDimensions(verdict.criteria, criterionTags(taskSpec));
+    // The exclusion is a datum, not an absence (F-47): S5 would otherwise vanish from the report
+    // at a 100% exclusion rate. Marked explicitly so `buildResult()` can count it, not lose it.
+    if (expiryGuard?.verdict === 'non-attributable') {
+      for (const dim of criterionTags(taskSpec)[1] ?? []) dimensions[dim] = 'excluded';
+    }
     return {
       index,
-      dimensions: toDimensions(verdict.criteria, criterionTags(taskSpec)),
+      dimensions,
       criteria: verdict.criteria,
+      expiryGuard,
       transcript: run.stdout,
       decisionsMd,
       error: null,
@@ -760,7 +869,7 @@ async function main(argv) {
           `                   change this. Stop drawing. Per 4.1's acceptance a soft dimension is a\n` +
           `                   TASK DEFECT, returned to 3.3 for sharpening before 4.2 begins.\n`
         : '') +
-      c.dimensions.map((d) => `  ${d.task} ${d.dim}: ${d.passes}/${d.n}`).join('\n') + '\n');
+      c.dimensions.map((d) => `  ${d.task} ${d.dim}: ${d.passes}/${d.n}${d.excluded ? ` (${d.excluded} excluded)` : ''}`).join('\n') + '\n');
     // Exit 0 even when uncertified: "the corpus is not sharp enough yet" is a RESULT, and a
     // non-zero exit would make a batch script treat it as a crash and retry it forever.
     return 0;
@@ -819,7 +928,7 @@ async function main(argv) {
           const spec = readFileSync(taskFile(id, source.dir), 'utf8');
           const fixture = fixtureFor(id, source.dir);
           const r = await runOnce({ taskId: id, taskSpec: spec, fixtureDir: fixture, sourceDir: source.dir, index: i, model: args.model, judgeModel: args.judgeModel });
-          process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: ${r.error ? 'ERROR ' + r.error : Object.entries(r.dimensions).map(([k, v]) => k + (v ? '+' : '-')).join(' ')}\n`);
+          process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: ${r.error ? 'ERROR ' + r.error : renderDimensions(r.dimensions)}\n`);
           // Written BEFORE anything else can fail. Everything after this point is bookkeeping.
           //
           // Harness faults are NOT persisted: a shard means "this draw was scored", and resume
@@ -855,6 +964,11 @@ async function main(argv) {
   } finally {
     source.cleanup();
   }
+}
+
+/** Render one draw's dimensions for the live progress line. `excluded` is neither pass nor fail. */
+export function renderDimensions(dimensions) {
+  return Object.entries(dimensions).map(([k, v]) => k + (v === 'excluded' ? '~' : v ? '+' : '-')).join(' ');
 }
 
 /** Read the dimensions a task declares from its spec's header line. */
