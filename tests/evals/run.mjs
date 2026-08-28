@@ -433,6 +433,44 @@ export function overlayExpiryGuardVerdict(criteria, eg) {
   return criteria;
 }
 
+/**
+ * Overlay task 02's S1 criterion (criterion 3, `.somi/audit.log` — closes gap 2, decisions.md#d11)
+ * from `scoreTestInvocation()`'s own verdict when one exists — never from the judge's read of the
+ * run's final message, the fabrication this criterion exists to catch.
+ *
+ * REPORT-ONLY (decisions.md#d11's 2026-08-28 correction): `testRan === null` now leaves the
+ * judge's own verdict standing rather than removing criterion 3 — there is no gating dimension
+ * left to protect from judge authorship. A judge reply OMITTING criterion 3 still doesn't stay
+ * silent: a non-null verdict is APPENDED, not skipped.
+ */
+export function overlayTestInvocationVerdict(criteria, testRan) {
+  if (testRan === null) return criteria;
+  const i = criteria.findIndex((x) => x.n === 3);
+  const evidence = testRan === 'pass'
+    ? 'EXECUTED: .somi/audit.log shows a Bash entry matching the test-invocation alias set (not judged)'
+    : 'EXECUTED: .somi/audit.log shows no Bash entry matching the test-invocation alias set (not judged)';
+  if (i === -1) {
+    criteria.push({ n: 3, verdict: testRan, evidence, executed: true });
+  } else {
+    criteria[i].verdict = testRan;
+    criteria[i].evidence = evidence;
+    criteria[i].executed = true;
+  }
+  return criteria;
+}
+
+/**
+ * Mark every dimension a criterion tags as an EXCLUDED observation for this draw, rather than a
+ * counted pass/fail — the datum-not-absence rule F-47 established for S5, extended to every
+ * gating dimension (decisions.md#d11). Extracted (Major F-63) so the marking is directly
+ * testable: the bare inline loop it replaces was unexercised by any test — deleting it left the
+ * gate green, the `F-53`/`F-55` shape the phase file's own 2.3 section warns about.
+ */
+export function markDimensionsExcluded(dimensions, dims) {
+  for (const dim of dims) dimensions[dim] = 'excluded';
+  return dimensions;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Live scoring (iteration 4.1's execution path)
 // ---------------------------------------------------------------------------------------------
@@ -456,6 +494,7 @@ export function taskPrompt(taskSpec) {
 export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, model, judgeModel }) {
   const { installSomi, invokeCommand, workingTreeDiff, uninstallSomi } = await import('./lib/install.mjs');
   const { judge, toDimensions, criterionTags } = await import('./lib/score.mjs');
+  const { readAuditLog } = await import('./lib/audit-log.mjs');
 
   const work = mkdtempSync(join(tmpdir(), `somi-eval-${taskId}-`));
   try {
@@ -475,6 +514,12 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     const command = (taskSpec.match(/Command under test: `\/(\w[\w-]*)`/) ?? [])[1];
     const run = invokeCommand(work, `/${command} ${prompt}`, { model });
     const tree = workingTreeDiff(work);
+    // Read at the SAME lifecycle point as workingTreeDiff() -- before uninstallSomi() -- so it
+    // reflects the run exactly as it happened. Closes gap 2 (context.md §2.4): rubric.md
+    // documents `.somi/audit.log` as scored evidence for "was this actually run", and it was
+    // never captured. null (absent or malformed) is a harness fault for THIS observation only,
+    // handled per-criterion below -- it does not, by itself, fail the whole draw.
+    const auditLog = readAuditLog(work);
     // Capture the ARTIFACT, not just the transcript. agents/planner.md mandates a structured
     // DECISIONS-NEEDED block; commands/plan.md relays it to the user, and in --print mode that
     // relay is narrative prose -- measured, zero of four runs emitted the fenced block. The
@@ -529,6 +574,12 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
       '\n### Files the run created or modified\n',
       tree.changed.map((c) => `${c.status} ${c.path}`).join('\n') || '(none)',
       '\n### Diff against the baseline commit\n', (tree.diff || '(empty)').slice(0, 20000),
+      // rubric.md: ".somi/audit.log ... the evidence source for any criterion about whether
+      // something was actually run" -- closes gap 2 (context.md §2.4). Weigh this over the run's
+      // own final message above: the log is what the PostToolUse hook recorded, not what the
+      // agent claims.
+      '\n### .somi/audit.log (every tool call the hook recorded)\n',
+      auditLog ? auditLog.text.slice(0, 20000) : '(absent or unparseable -- no hook-recorded tool-call evidence for this run)',
     ];
     // Computed BEFORE judge() runs, not appended after (corrected 2026-08-12, review pass 1 Major
     // F-45): task 02 criterion 2 (S3, session.mjs) is judged and needs this fact to weigh its
@@ -618,6 +669,16 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
       }
     }
 
+    // Task 02's S1 criterion (criterion 3, closes gap 2 of context.md §2.4): the audit log
+    // records what the agent ACTUALLY ran. REPORT-ONLY (decisions.md#d11's 2026-08-28 correction)
+    // -- a harness fault (log absent/malformed, or the matcher throwing) falls back to the judge.
+    if (verdict.ok && taskId === '02') {
+      try {
+        const { scoreTestInvocation } = await import('./lib/audit-log.mjs');
+        overlayTestInvocationVerdict(verdict.criteria, scoreTestInvocation(auditLog));
+      } catch { /* fall back to the judged verdict */ }
+    }
+
     if (verdict.ok && taskId === '03') {
       try {
         const { reproduces } = await import('./lib/reproduce.mjs');
@@ -643,8 +704,10 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     const dimensions = toDimensions(verdict.criteria, criterionTags(taskSpec));
     // The exclusion is a datum, not an absence (F-47): S5 would otherwise vanish from the report
     // at a 100% exclusion rate. Marked explicitly so `buildResult()` can count it, not lose it.
+    // S1's own call here is retired (report-only, decisions.md#d11's 2026-08-28 correction) --
+    // see the S1 block above.
     if (expiryGuard?.verdict === 'non-attributable') {
-      for (const dim of criterionTags(taskSpec)[1] ?? []) dimensions[dim] = 'excluded';
+      markDimensionsExcluded(dimensions, criterionTags(taskSpec)[1] ?? []);
     }
     return {
       index,

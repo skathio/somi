@@ -352,6 +352,265 @@ check "sessionUntouched: touched" \
   "$(j "const B = await import('$ROOT/tests/evals/lib/boundary.mjs'); const r = B.sessionUntouched([{status:'M',path:'src/auth/session.mjs'}]); process.stdout.write(r.ok + '|' + r.touched)")" \
   "false|true"
 
+# --- 2.2: capture .somi/audit.log, wire task 02's S1 criterion (closes gap 2) -------------------
+# The load-bearing claim (decisions.md#d11): this fixture is npm-only, which is what confines the
+# invocation space to npm's own CLI forms. Checked directly against the fixture, not assumed.
+PKG02="$ROOT/tests/evals/fixtures/task02-code/package.json"
+if grep -q '"packageManager"' "$PKG02"; then
+  bad "task02-code/package.json carries no packageManager field (the closure premise)"
+else
+  ok "task02-code/package.json carries no packageManager field (the closure premise)"
+fi
+lockhits=$(find "$ROOT/tests/evals/fixtures/task02-code" \( -iname 'yarn.lock' -o -iname 'pnpm-lock.yaml' \) 2>/dev/null)
+check "task02-code carries no yarn.lock/pnpm-lock.yaml (confirms an npm-only fixture)" \
+  "${lockhits:-NONE}" "NONE"
+check "task02-code/package.json's declared test script is exactly 'node --test'" \
+  "$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('$PKG02','utf8')).scripts.test)")" \
+  "node --test"
+
+# The fifteen aliases, each pinned individually -- a regression to any ONE is caught by name, not
+# absorbed into a single "some alias matched" assertion.
+alm() { j "const A = await import('$ROOT/tests/evals/lib/audit-log.mjs'); process.stdout.write(String(A.matchesTestInvocation($1)))"; }
+check "npm test matches"                                       "$(alm "'npm test'")" "true"
+check "npm run test matches"                                   "$(alm "'npm run test'")" "true"
+check "npm run-script test matches (npm run's canonical form)" "$(alm "'npm run-script test'")" "true"
+check "npm t matches (word-bounded shorthand)"                 "$(alm "'npm t'")" "true"
+check "node --test matches"                                    "$(alm "'node --test'")" "true"
+check "node --test with a trailing path still matches"         "$(alm "'node --test tests/auth/token.test.mjs'")" "true"
+check "bare node <test file>, no --test flag at all, matches"  "$(alm "'node tests/auth/token.test.mjs'")" "true"
+check "an incidental flag does not produce a false negative"   "$(alm "'npm test -- --test-reporter=tap'")" "true"
+
+# Blocker F-57: `npm help test`/`npm help run-script`'s OWN documented aliases and interposed npm
+# global flags -- confirmed by execution to genuinely run the suite and score `false` pre-fix.
+check "npm tst matches (npm test's own documented alias)"       "$(alm "'npm tst'")" "true"
+check "npm rum test matches (npm run's own documented alias)"   "$(alm "'npm rum test'")" "true"
+check "npm urn test matches (npm run's own documented alias)"   "$(alm "'npm urn test'")" "true"
+check "npm --silent test matches (interposed global flag)"      "$(alm "'npm --silent test'")" "true"
+check "npm -s test matches (interposed short global flag)"      "$(alm "'npm -s test'")" "true"
+check "npm run --silent test matches (flag between run and test)" "$(alm "'npm run --silent test'")" "true"
+check "node --experimental-test-coverage --test matches (interposed node flag)" \
+  "$(alm "'node --experimental-test-coverage --test'")" "true"
+
+# The false-POSITIVE side: each is a REAL, different command this fixture's agent could
+# plausibly type, and none of them runs the declared test script.
+check "npm typecheck does NOT match npm t" \
+  "$(alm "'npm typecheck'")" "false"
+check "npm test-only does NOT match npm test (hyphen continuation is a different script name)" \
+  "$(alm "'npm test-only'")" "false"
+check "npm run test-only does NOT match npm run test (hyphen continuation, run form)" \
+  "$(alm "'npm run test-only'")" "false"
+check "node --test-name-pattern=foo does NOT match node --test (hyphen continuation is a different flag)" \
+  "$(alm "'node --test-name-pattern=foo'")" "false"
+check "pnpm test does NOT match npm test (a different package manager)" \
+  "$(alm "'pnpm test'")" "false"
+check "a non-matching command fails cleanly" \
+  "$(alm "'echo build complete'")" "false"
+check "node on a non-test file does NOT match the bare-node form" \
+  "$(alm "'node scripts/build.mjs'")" "false"
+
+# Major F-59: a CLAIM about running the suite (prose, a commit message) must not match, or this
+# criterion passes the exact fabrication it exists to catch. Confirmed `true` (wrongly) pre-fix.
+check "a prose claim mentioning npm test does NOT match (F-59)" \
+  "$(alm "'echo \"remember to run npm test later\"'")" "false"
+check "a commit message claiming npm test ran does NOT match (F-59)" \
+  "$(alm "'git commit -m \"ran npm test, all green\"'")" "false"
+# ...but the command-position anchor must not reject a REAL compound command using the same words.
+check "cd /repo && npm test still matches (compound command, not a claim)" \
+  "$(alm "'cd /repo && npm test'")" "true"
+
+# Blocker F-61: F-57's anchor fix was unmeasured in the false-negative direction -- each of these
+# genuinely runs the fixture's suite (verified by execution) and scored `false` before this fix.
+check "CI=1 npm test matches (variable-assignment prefix)"          "$(alm "'CI=1 npm test'")" "true"
+check "NODE_ENV=test npm test matches (variable-assignment prefix)" "$(alm "'NODE_ENV=test npm test'")" "true"
+check "time npm test matches (keyword position)"                    "$(alm "'time npm test'")" "true"
+check "if true; then npm test; fi matches (keyword position)"       "$(alm "'if true; then npm test; fi'")" "true"
+check "for f in a b; do npm test; done matches (keyword position)"  "$(alm "'for f in a b; do npm test; done'")" "true"
+check "cd /tmp/x && CI=1 npm test matches (separator + assignment, composed)" "$(alm "'cd /tmp/x && CI=1 npm test'")" "true"
+# Named residual (F-61): adding \`(\` to the separator class closes this but breaks the prose case
+# below -- verified worse, so it stays open.
+check "(npm test) does NOT match -- named residual, not silently left (F-61)" "$(alm "'(npm test)'")" "false"
+check "the residual's own reason for staying open: a paren separator would break prose" "$(alm "'echo \"see (npm test) output\"'")" "false"
+
+# Blocker F-62: re-enumerated from npm's whole command surface (\`npm help\`), not the two
+# pages the F-57 miss was on. \`npm it\` confirmed by execution: runs all 3 tests, exit 0.
+check "npm it matches (npm install-test's own documented alias)"            "$(alm "'npm it'")" "true"
+check "npm install-test matches"                                            "$(alm "'npm install-test'")" "true"
+check "npm cit matches (npm install-ci-test's own documented alias)"        "$(alm "'npm cit'")" "true"
+check "npm sit matches (npm install-ci-test's own documented alias)"        "$(alm "'npm sit'")" "true"
+check "npm clean-install-test matches (documented alias)"                   "$(alm "'npm clean-install-test'")" "true"
+check "npm install-ci-test matches"                                         "$(alm "'npm install-ci-test'")" "true"
+# The rest of npm's command surface (read in full via \`npm help\`) does NOT run the declared
+# test script -- these stay negative.
+check "npm install does NOT match (no test alias)"  "$(alm "'npm install'")" "false"
+check "npm i does NOT match (no test alias)"        "$(alm "'npm i'")" "false"
+check "npm ci does NOT match (ci alone, not install-ci-test)" "$(alm "'npm ci'")" "false"
+check "npm init does NOT match (no test alias)"     "$(alm "'npm init'")" "false"
+
+check "TEST_INVOCATION_ALIASES: every documented alias actually matches (ties the doc to the code)" \
+  "$(j "
+    const A = await import('$ROOT/tests/evals/lib/audit-log.mjs');
+    process.stdout.write(A.TEST_INVOCATION_ALIASES.every((c) => A.matchesTestInvocation(c)) + '|' + A.TEST_INVOCATION_ALIASES.length);
+  ")" "true|15"
+
+# --- audit-log line parsing: tolerant of a bad line, intolerant of pure garbage -----------------
+alp() { j "
+  const A = await import('$ROOT/tests/evals/lib/audit-log.mjs');
+  const text = $1;
+  const e = A.parseAuditLog(text);
+  process.stdout.write(e === null ? 'null' : e.length + ':' + JSON.stringify(e.map(x => [x.tool, x.command])));
+"; }
+check "a well-formed Bash cmd line parses, command extracted" \
+  "$(alp '`2026-08-26T12:00:00Z\tCALL\tBash\tcmd=\"npm test\"`')" \
+  '1:[["Bash","npm test"]]'
+check "a non-Bash entry parses with command null" \
+  "$(alp '`2026-08-26T12:00:00Z\tCALL\tWrite\tpath=\"src/x.mjs\"`')" \
+  '1:[["Write",null]]'
+check "empty content is malformed (null), not an empty pass" \
+  "$(alp "''")" "null"
+check "garbage with no tab-delimited structure at all is malformed (null)" \
+  "$(alp "'not an audit log at all'")" "null"
+# Corrected (Major F-64): isUnterminatedBash() no longer trusts a trailing quote as a termination
+# signal, so this now folds rather than drops -- count stays 1, command still matches (below).
+check "one unparseable line among good ones folds in (not dropped) -- count and match still hold" \
+  "$(alp '`2026-08-26T12:00:00Z\tCALL\tBash\tcmd=\"npm test\"\nthis line has no tabs at all`')" \
+  '1:[["Bash","npm test\"\nthis line has no tabs at all"]]'
+# A literal embedded tab INSIDE the command (the header comment's own documented, unescaped case)
+# must stay inside `command`, not be read as a 4th field separator -- manual 3-way splitting
+# (not a naive split('\t')) is what this pins.
+check "an embedded literal tab inside the command stays inside command, not a false field split" \
+  "$(alp '`2026-08-26T12:00:00Z\tCALL\tBash\tcmd=\"npm test\t--silent\"`')" \
+  '1:[["Bash","npm test\t--silent"]]'
+# Major F-58: an embedded, unescaped NEWLINE fragments a multi-line Bash command across two
+# physical log lines -- traced through the real hook, the pre-fix parser dropped the fragment
+# carrying the invocation and a genuine `npm test` run scored `fail`. The fold recombines it.
+check "a multi-line Bash command (embedded newline) folds into ONE entry, invocation preserved (F-58)" \
+  "$(alp '`2026-08-26T12:00:00Z\tCALL\tBash\tcmd=\"cd /tmp/fixture\nnpm test\"`')" \
+  '1:[["Bash","cd /tmp/fixture\nnpm test"]]'
+check "the folded multi-line command is recognized as a real test invocation" \
+  "$(j "
+    const A = await import('$ROOT/tests/evals/lib/audit-log.mjs');
+    const e = A.parseAuditLog('2026-08-26T12:00:00Z\tCALL\tBash\tcmd=\"cd /tmp/fixture\nnpm test\"');
+    process.stdout.write(String(A.matchesTestInvocation(e[0].command)));
+  ")" "true"
+
+# Major F-64: a multi-line command whose FIRST line ends in a literal quote (an ordinary git
+# commit message before npm test) used to read as already-terminated -- traced through the real
+# hook, this dropped the invocation and scored a genuine run FAIL, F-58's own defect reopened.
+check "a quoted first line does NOT falsely read as terminated -- invocation preserved (F-64)" \
+  "$(alp '`2026-08-27T00:00:00Z\tCALL\tBash\tcmd=\"git commit -m \"fix: reject expired tokens\"\nnpm test\"`')" \
+  '1:[["Bash","git commit -m \"fix: reject expired tokens\"\nnpm test"]]'
+check "the recovered quoted-first-line command is recognized as a real test invocation (F-64)" \
+  "$(j "
+    const A = await import('$ROOT/tests/evals/lib/audit-log.mjs');
+    const e = A.parseAuditLog('2026-08-27T00:00:00Z\tCALL\tBash\tcmd=\"git commit -m \"fix: reject expired tokens\"\nnpm test\"');
+    process.stdout.write(String(A.matchesTestInvocation(e[0].command)));
+  ")" "true"
+# Proves dropping the quote check is safe: every line tries as a new entry FIRST, so a genuine
+# second command is never mistaken for a continuation of the first.
+check "two separate, complete Bash commands back to back stay two entries, not folded into one (F-64)" \
+  "$(alp '`2026-08-27T00:00:00Z\tCALL\tBash\tcmd=\"npm test\"\n2026-08-27T00:00:01Z\tCALL\tBash\tcmd=\"git status\"`')" \
+  '2:[["Bash","npm test"],["Bash","git status"]]'
+
+# --- reading the log from a real working tree: absent vs. malformed vs. well-formed -------------
+alwd=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+check "readAuditLog: no .somi/audit.log at all -> null (absent)" \
+  "$(j "const A = await import('$ROOT/tests/evals/lib/audit-log.mjs'); process.stdout.write(String(A.readAuditLog('$alwd')))")" \
+  "null"
+mkdir -p "$alwd/.somi"
+printf 'garbage, no tabs, no structure\n' > "$alwd/.somi/audit.log"
+check "readAuditLog: content with no tab-delimited lines -> null (malformed)" \
+  "$(j "const A = await import('$ROOT/tests/evals/lib/audit-log.mjs'); process.stdout.write(String(A.readAuditLog('$alwd')))")" \
+  "null"
+printf '2026-08-26T12:00:00Z\tCALL\tBash\tcmd="npm test"\n' > "$alwd/.somi/audit.log"
+check "readAuditLog + scoreTestInvocation: a well-formed log with a matching entry scores PASS" \
+  "$(j "
+    const A = await import('$ROOT/tests/evals/lib/audit-log.mjs');
+    process.stdout.write(String(A.scoreTestInvocation(A.readAuditLog('$alwd'))));
+  ")" "pass"
+printf '2026-08-26T12:00:00Z\tCALL\tBash\tcmd="npm run lint"\n' > "$alwd/.somi/audit.log"
+check "scoreTestInvocation: log exists and shows NO matching invocation -> FAIL, not a defer" \
+  "$(j "
+    const A = await import('$ROOT/tests/evals/lib/audit-log.mjs');
+    process.stdout.write(String(A.scoreTestInvocation(A.readAuditLog('$alwd'))));
+  ")" "fail"
+check "scoreTestInvocation: a null auditLog (absent/malformed) -> null, never fail" \
+  "$(j "const A = await import('$ROOT/tests/evals/lib/audit-log.mjs'); process.stdout.write(String(A.scoreTestInvocation(null)))")" \
+  "null"
+rm -rf "$alwd"
+
+# --- overlay: EXECUTED overrides the judge whenever the log is readable; null falls back to the
+# judge (REPORT-ONLY, decisions.md#d11's 2026-08-28 correction -- supersedes F-56's "EXCLUDES") --
+otv() { j "
+  const crit = [{ n: 3, verdict: '$1', evidence: 'judge: prose' }];
+  M.overlayTestInvocationVerdict(crit, $2);
+  process.stdout.write(crit[0].verdict + '|' + (crit[0].executed ?? 'undefined') + '|' + crit[0].evidence);
+"; }
+check "log shows a match: overlays PASS even though the judge (reading prose) said fail" \
+  "$(otv fail "'pass'")" \
+  "pass|true|EXECUTED: .somi/audit.log shows a Bash entry matching the test-invocation alias set (not judged)"
+# THE case named in the phase file: a final message that CLAIMS tests ran, with a judge fooled by
+# the prose into 'pass' -- the audit log overrules it.
+check "log shows no match: overlays FAIL even though the judge (fooled by a claim in the prose) said pass" \
+  "$(otv pass "'fail'")" \
+  "fail|true|EXECUTED: .somi/audit.log shows no Bash entry matching the test-invocation alias set (not judged)"
+# Mutation check: reverting to the pre-correction "splice criterion 3 out on null" would leave
+# crit.length at 0, exactly what this assertion catches.
+check "null (absent/malformed log): the judge's own verdict stands, report-only (supersedes F-56)" \
+  "$(j "
+    const crit = [{ n: 3, verdict: 'pass', evidence: 'judge: prose' }];
+    M.overlayTestInvocationVerdict(crit, null);
+    process.stdout.write(String(crit.length) + '|' + crit[0].verdict + '|' + (crit[0].executed ?? 'undefined'));
+  ")" "1|pass|undefined"
+check "null with criterion 3 absent from the judge reply is also a no-op, not a throw" \
+  "$(j "
+    const crit = [{ n: 1, verdict: 'pass', evidence: '-' }];
+    M.overlayTestInvocationVerdict(crit, null);
+    process.stdout.write(String(crit.length) + '|' + crit[0].verdict);
+  ")" "1|pass"
+# Minor: a judge reply OMITTING criterion 3 no longer stays silent -- a decided (non-null) verdict
+# is APPENDED, so the executed verdict does not depend on the judge having emitted it at all.
+check "a judge reply missing criterion 3 appends the executed verdict rather than staying silent" \
+  "$(j "
+    const crit = [{ n: 1, verdict: 'pass', evidence: '-' }];
+    M.overlayTestInvocationVerdict(crit, 'fail');
+    process.stdout.write(String(crit.length) + '|' + crit[0].verdict + '|' + crit[1].n + '|' + crit[1].verdict + '|' + crit[1].executed);
+  ")" "2|pass|3|fail|true"
+
+# Major F-63: the marking was entirely unpinned -- deleting it left the gate green. Pinned here as
+# the generic function it is (S1's own end-to-end pin retired with the report-only demotion above).
+check "markDimensionsExcluded marks every named dimension excluded, leaves the rest untouched (F-63)" \
+  "$(j "
+    const dims = { S3: true, S6: false };
+    M.markDimensionsExcluded(dims, ['S5', 'S1']);
+    process.stdout.write(JSON.stringify(dims));
+  ")" '{"S3":true,"S6":false,"S5":"excluded","S1":"excluded"}'
+
+# --- installSomi() now registers the audit-log hook ---------------------------------------------
+# Without this, `.somi/audit.log` is never written on a live run (installSomi() excluded every
+# hook until this fix). Functional: the registered command is invoked as Claude Code would.
+instw=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+hookcmd=$( j "
+  const I = await import('$ROOT/tests/evals/lib/install.mjs');
+  I.installSomi('$ROOT', '$instw');
+  const fs = await import('node:fs');
+  const settings = JSON.parse(fs.readFileSync('$instw/.claude/settings.json', 'utf8'));
+  process.stdout.write(settings.hooks?.PostToolUse?.[0]?.hooks?.[0]?.command ?? '');
+")
+# Quoted (Nit): the registered command is `node "<path>"`, not `node <path>` -- strip the
+# literal `node "` prefix and the trailing `"`, not just `node `.
+hookpath="${hookcmd#node \"}"
+hookpath="${hookpath%\"}"
+if [ -n "$hookcmd" ] && [ -f "$hookpath" ]; then
+  ok "installSomi() registers the audit-log hook, at a path that exists"
+else
+  bad "installSomi() registers the audit-log hook, at a path that exists (got: '$hookcmd')"
+fi
+echo '{"tool_name":"Bash","tool_input":{"command":"npm test"}}' | \
+  env CLAUDE_PROJECT_DIR="$instw" node "$hookpath" >/dev/null 2>&1
+check "the registered hook, invoked as Claude Code would invoke it, writes a matching audit.log entry" \
+  "$(grep -c 'Bash.*cmd="npm test"' "$instw/.somi/audit.log" 2>/dev/null || echo 0)" "1"
+rm -rf "$instw"
+
 # --- 4.1: the pooled certification gate --------------------------------------------------------
 # Synthetic result files, so the gate is tested without 260 model runs.
 mk() { j "

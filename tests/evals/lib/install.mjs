@@ -28,12 +28,12 @@ export const DEFINITION_DIRS = ['commands', 'agents', 'skills', 'rules'];
 /**
  * Copy a definition set into `workDir` at the locations Claude Code discovers natively.
  *
- * Hooks are deliberately NOT installed. They write `.somi/audit.log` and `.somi/somi-state/**`
- * every turn, which task 01 criterion 6 allowlists precisely because they are unavoidable — but
- * they also read `SOMI_VENDOR_ROOT` and would resolve against the eval harness rather than the
- * definition set under test. Excluding them keeps the measured surface equal to the trimmed
- * surface. The criterion's allowlist stays correct either way: it permits those paths, it does
- * not require them.
+ * Every OTHER hook stays deliberately NOT installed (they read `SOMI_VENDOR_ROOT`/gate on live
+ * policy and would resolve against the eval harness, not the definition set under test); task 01
+ * criterion 6's allowlist permits `.somi/audit.log`/`.somi/somi-state/**` by category regardless.
+ * **2.2 correction** (`decisions.md#d11`): the PostToolUse audit-log hook ALONE is installed, by
+ * absolute path -- without it `.somi/audit.log` is never written live, so task 02's S1 criterion
+ * could never produce a `pass`. Safe unconditionally: it only appends a log line, unlike the rest.
  */
 export function installSomi(sourceDir, workDir) {
   const dest = join(workDir, '.claude');
@@ -50,7 +50,12 @@ export function installSomi(sourceDir, workDir) {
   if (existsSync(rules) && !existsSync(join(workDir, 'CLAUDE.md'))) {
     cpSync(rules, join(workDir, 'CLAUDE.md'));
   }
-  writeFileSync(join(dest, 'settings.json'), JSON.stringify({ permissions: { allow: [] } }, null, 2) + '\n');
+  const settings = { permissions: { allow: [] } };
+  const auditLogHook = join(sourceDir, 'hooks', 'post-tool', 'audit-log.mjs');
+  // Quoted (Nit, 2026-08-27): `sourceDir` is a `git worktree add` path or an operator-supplied
+  // `--source` path -- a space anywhere in it broke the registration silently, unquoted.
+  if (existsSync(auditLogHook)) settings.hooks = { PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${auditLogHook}"` }] }] };
+  writeFileSync(join(dest, 'settings.json'), JSON.stringify(settings, null, 2) + '\n');
   return installed;
 }
 

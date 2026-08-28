@@ -37,7 +37,7 @@ export function boundaryRespected(changed, { slug = null } = {}) {
   const allowed = [
     /^\.somi\/README\.md$/,             // commands/plan.md writes it when absent
     /^\.somi\/audit\.log$/,             // PostToolUse, every turn
-    /^\.somi\/somi-state\//,            // UserPromptSubmit, every turn
+    /^\.somi\/somi-state\//,            // UserPromptSubmit; permitted by category, not written under the eval install (F-60)
     /^\.claude\//,                      // the installed definition set, not candidate output
   ];
   const offenders = changed

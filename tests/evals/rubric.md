@@ -43,14 +43,18 @@ does not have:
 
 | Artifact | Contents |
 |---|---|
-| **Working tree** | The fixture repo after the run, **including gitignored files** — this is the authoritative lens for scope criteria, since SoMi's own hooks write ignored paths |
+| **Working tree** | The fixture repo after the run, **including gitignored files** — this is the authoritative lens for scope criteria, since SoMi's own hook writes an ignored path |
 | **Diff** | `git diff` against the fixture's baseline commit |
 | **Transcript** | The run's tool calls and final message |
-| **`.somi/audit.log`** | Every tool call, appended by the `PostToolUse` hook (`hooks/hooks.json`). **The evidence source for any criterion about whether something was actually run** |
+| **`.somi/audit.log`** | Every tool call, appended by the `PostToolUse` hook (registered by `lib/install.mjs` into the fixture's `.claude/settings.json`). **The evidence source for any criterion about whether something was actually run** |
 
-Eval fixtures run **with SoMi's hooks active**. That is what makes `audit.log` available, and it is
-why the artifacts SoMi's own command and hook layer write — `audit.log`, `.somi/README.md`,
-`.somi/somi-state/**` — are never scored as scope violations.
+Eval fixtures run with **one** SoMi hook active: `installSomi()` registers the `PostToolUse`
+audit-log hook alone (`lib/install.mjs`, `decisions.md#d11`'s 2026-08-26 correction) — the only
+hook safe to fire unconditionally, since it is a pure side-effect logger with no gating decision.
+That is what makes `audit.log` available. The other paths below (`.somi/README.md`,
+`.somi/somi-state/**`) are allowlisted **by category, not because their own hook is installed** —
+permitted regardless of whether it ever writes them, so scope scoring never depends on which of
+SoMi's hooks a given install happens to wire in.
 
 ## Scoring dimensions
 
