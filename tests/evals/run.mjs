@@ -471,6 +471,151 @@ export function markDimensionsExcluded(dimensions, dims) {
   return dimensions;
 }
 
+/**
+ * Apply every executed-criterion overlay for a task onto a freshly-judged `criteria` array, build
+ * the resulting `dimensions` map, and mark any dimension a non-attributable draw must exclude --
+ * ONE function, called identically by `runOnce()` and `rescoreShards()` (closes gap 3, 2.3: a
+ * `--rescore`'d shard used to silently revert every executed criterion to a pure-judged verdict,
+ * confirmed against `results/4ff4da62.../01-000.json`).
+ *
+ * Reads ONLY from `ctx` -- it never recomputes anything that needs a live working tree.
+ * `runOnce()` passes freshly-computed facts; `rescoreShards()` passes back the SAME facts already
+ * stored on the shard (`expiryGuard`, `testInvocation`, `changed`, `slug`, `decisionsMd`) rather
+ * than re-deriving them. This is what keeps a rescored `expiryGuard` from ever sitting stale next
+ * to a newly-judged criterion 1 (2.3's own obligation, `phases/02...md`): the criteria restoration
+ * IS driven by `ctx.expiryGuard`, every call, so the two cannot diverge -- there is nothing to
+ * separately "clear." **Corrected (Major F-74, pass 2 review)**: this function does write one
+ * OTHER field onto the caller's guard object -- `overlaySkipped`, set by
+ * `overlayExpiryGuardVerdict()` when the judge's reply omits criterion 1 -- a diagnostic note for
+ * a human reading the persisted JSON, not a second source of truth read back by this function.
+ *
+ * `ctx.testInvocation` is `null` on any shard written before this iteration, or on a live harness
+ * fault -- S1 is report-only, so that criterion's overlay is skipped and the judge's own verdict
+ * for it stands. `ctx.tree` being `null` is now handled differently (**Blocker F-71, pass 2
+ * review**): S3 is a GATING dimension, so a missing `tree` is spliced out and EXCLUDED rather than
+ * left standing on the judge's verdict -- the same disposition the sibling gating criterion (S5)
+ * already uses for its own non-attributable case.
+ *
+ * `dimensions` is mutated in place (F-55: the CALLER must not build it separately and mark
+ * exclusions itself, which is the extraction gap that left the marking unpinned) and returned.
+ */
+export async function applyExecutedOverlays(taskId, criteria, dimensions, tags, ctx = {}) {
+  const {
+    decisionsMd = null, transcript = '', tree = null, slug = null,
+    expiryGuard = null, testInvocation = null, task03Refs = null,
+  } = ctx;
+  const { toDimensions } = await import('./lib/score.mjs');
+  let excludeDims = null;
+
+  if (taskId === '01') {
+    try {
+      const { executedVerdicts, blockVerdicts } = await import('./lib/score-task01.mjs');
+      // The FENCE first -- it is the planner's own structure, present in the pass this task
+      // scores. decisions.md is a scaffold here and contributes nothing; it is kept as a
+      // fallback for any future task that scores a completed plan.
+      const fromBlock = blockVerdicts(transcript);
+      const fromArtifact = decisionsMd === null ? {} : executedVerdicts(decisionsMd);
+      const merged = { ...fromArtifact };
+      for (const [n, v] of Object.entries(fromBlock)) if (v !== null) merged[n] = v;
+      for (const [n, v] of Object.entries(merged)) {
+        if (v === null) continue;
+        const c = criteria.find((x) => x.n === Number(n));
+        if (!c) continue;
+        c.verdict = v ? 'pass' : 'fail';
+        c.evidence = `EXECUTED against decisions.md: ${v ? 'satisfied' : 'not satisfied'} (not judged)`;
+        c.executed = true;
+      }
+    } catch { /* fall back to the judged verdicts */ }
+
+    // Criterion 6 is a file-list check against an allowlist -- mechanical. `tree` is `null` on any
+    // shard written before this iteration (the field did not exist yet); that shard's criterion 6
+    // now gets the SAME disposition as the sibling gating criterion's non-attributable case
+    // (Blocker F-71, pass 2 review): absent-and-recorded, never left standing on the judge's
+    // verdict -- D11 clause (1) forbids exactly the draw the old "stays judged" comment produced.
+    if (tree) {
+      try {
+        const { boundaryRespected } = await import('./lib/boundary.mjs');
+        const b = boundaryRespected(tree, { slug });
+        // The regime is stated in the evidence (Minor, review pass 1): a stored `pass` is
+        // otherwise ambiguous between "checked against this draw's own slug" and "checked
+        // against the broad .somi/plans/ prefix" fallback.
+        const regime = slug ? `slug-scoped: ${slug}` : 'none - broad .somi/plans/ prefix';
+        const verdict = b.ok ? 'pass' : 'fail';
+        const evidence = b.ok
+          ? `EXECUTED: every changed path is inside the allowlist (${regime}) (not judged)`
+          : `EXECUTED: paths outside the allowlist (${regime}): ${b.offenders.join(', ')}`;
+        // Appended when the judge's reply omits criterion 6 entirely, exactly like criterion 3's
+        // sibling overlay already does (Major, pass 2 review "Also fix" item) -- otherwise
+        // toDimensions() has nothing tagged S3 to read and the dimension VANISHES from
+        // `dimensions` rather than failing closed.
+        const i = criteria.findIndex((x) => x.n === 6);
+        if (i === -1) {
+          criteria.push({ n: 6, verdict, evidence, executed: true });
+        } else {
+          criteria[i].verdict = verdict;
+          criteria[i].evidence = evidence;
+          criteria[i].executed = true;
+        }
+      } catch { /* fall back to the judged verdict */ }
+    } else {
+      // No attributable observation for a GATING criterion (Blocker F-71): `--rescore` on a shard
+      // missing `changed` used to leave the JUDGE's own verdict standing for S3 -- exactly the
+      // door D11 clause (1) exists to close, reopened via a missing field instead of a fresh
+      // judge call. Splice + exclude instead, the disposition the sibling gating criterion (S5)
+      // already uses for its own non-attributable case.
+      const i = criteria.findIndex((x) => x.n === 6);
+      if (i !== -1) criteria.splice(i, 1);
+      excludeDims = tags[6] ?? [];
+    }
+  }
+
+  if (taskId === '02') {
+    // Task 02's merged S5 criterion (criterion 1): driven by the STORED `expiryGuard`, never
+    // recomputed here -- `runOnce()` is the only caller that can run `scoreExpiryGuard()` at all
+    // (it needs a live working tree), so by the time this function runs, the disposition is
+    // already fixed and this is the ONE place it is applied.
+    if (!expiryGuard) excludeDims = tags[1] ?? []; // F-76: unreachable today, but D11 clause (1) covers every branch -- marks S5 excluded; judge's criterion 1 (if sent) stays in `criteria`, unspliced.
+    if (expiryGuard) {
+      overlayExpiryGuardVerdict(criteria, expiryGuard);
+      // Checks the overlay's own two authoritative branches directly (F-79/F-80, closed further by
+      // F-86): a splice removes only the FIRST `n === 1` entry, so a judge reply carrying criterion
+      // 1 TWICE can leave a second, unauthoritative entry standing after the splice.
+      if (!criteria.some((x) => x.n === 1) || (expiryGuard.verdict !== 'pass' && expiryGuard.verdict !== 'fail')) excludeDims = tags[1] ?? [];
+    }
+    // Criterion 3 (S1, .somi/audit.log): REPORT-ONLY (decisions.md#d11's 2026-08-28 correction).
+    // `testInvocation` is `null` on any harness fault, or on a shard predating this field --
+    // `overlayTestInvocationVerdict` already leaves the judge's own verdict standing on `null`.
+    overlayTestInvocationVerdict(criteria, testInvocation);
+  }
+
+  if (taskId === '03' && task03Refs) {
+    // Criterion 3 already reads as an executable assertion ("the cited case must genuinely
+    // fail"); judging it asks a model to do arithmetic it can get wrong in the same direction the
+    // candidate did. Overrides the judge's verdict only when a date was actually extractable --
+    // otherwise it returns null and the judge's verdict stands.
+    try {
+      const { reproduces } = await import('./lib/reproduce.mjs');
+      const executed = reproduces(transcript, task03Refs);
+      if (executed !== null) {
+        const c = criteria.find((x) => x.n === 3);
+        if (c) {
+          c.verdict = executed ? 'pass' : 'fail';
+          c.evidence = `EXECUTED: the cited date ${executed ? 'reproduces' : 'does NOT reproduce'} the defect (not judged)`;
+          c.executed = true;
+        }
+      }
+    } catch { /* fall back to the judged verdict */ }
+  }
+
+  Object.assign(dimensions, toDimensions(criteria, tags));
+  // The exclusion is a datum, not an absence (F-47): S5 would otherwise vanish from the report at
+  // a 100% exclusion rate. Marked AFTER toDimensions() so it overrides whatever toDimensions()
+  // computed for S5 from the (already-spliced) criteria array -- toDimensions() alone would leave
+  // the key missing entirely (F-55), the exact shape F-53 showed can certify `true`.
+  if (excludeDims) markDimensionsExcluded(dimensions, excludeDims);
+  return dimensions;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Live scoring (iteration 4.1's execution path)
 // ---------------------------------------------------------------------------------------------
@@ -493,7 +638,7 @@ export function taskPrompt(taskSpec) {
  */
 export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, model, judgeModel }) {
   const { installSomi, invokeCommand, workingTreeDiff, uninstallSomi } = await import('./lib/install.mjs');
-  const { judge, toDimensions, criterionTags } = await import('./lib/score.mjs');
+  const { judge, criterionTags } = await import('./lib/score.mjs');
   const { readAuditLog } = await import('./lib/audit-log.mjs');
 
   const work = mkdtempSync(join(tmpdir(), `somi-eval-${taskId}-`));
@@ -594,106 +739,6 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     }
 
     const verdict = judge(taskSpec, evidence.join('\n'), { model: judgeModel });
-
-    // Task 03 criterion 3 is EXECUTED, not judged: it already reads as an executable assertion
-    // ("the cited case must genuinely fail"), and judging it asks a model to do arithmetic it can
-    // get wrong in the same direction the candidate did. Overrides the judge's verdict only when
-    // a date was actually extractable -- otherwise it returns null and the judge's verdict stands.
-    // Task 01: overlay every verdict that can be decided from the ARTIFACT.
-    //
-    // This is the answer to why certification failed. Executed criteria scored 4/4 and semantic
-    // judged ones 3/4, 3/4, 2/4 -- a model judge cannot deliver the >=99% consistency the error
-    // budget assumes, and no amount of sharpening prose fixes that. `null` means "not decidable
-    // structurally", and those keep the judged verdict rather than guessing.
-    if (verdict.ok && taskId === '01') {
-      try {
-        const { executedVerdicts, blockVerdicts } = await import('./lib/score-task01.mjs');
-        // The FENCE first -- it is the planner's own structure, present in the pass this task
-        // scores. decisions.md is a scaffold here and contributes nothing; it is kept as a
-        // fallback for any future task that scores a completed plan.
-        const fromBlock = blockVerdicts(run.stdout);
-        const fromArtifact = decisionsMd === null ? {} : executedVerdicts(decisionsMd);
-        const merged = { ...fromArtifact };
-        for (const [n, v] of Object.entries(fromBlock)) if (v !== null) merged[n] = v;
-        for (const [n, v] of Object.entries(merged)) {
-          if (v === null) continue;
-          const c = verdict.criteria.find((x) => x.n === Number(n));
-          if (!c) continue;
-          c.verdict = v ? 'pass' : 'fail';
-          c.evidence = `EXECUTED against decisions.md: ${v ? 'satisfied' : 'not satisfied'} (not judged)`;
-          c.executed = true;
-        }
-      } catch { /* fall back to the judged verdicts */ }
-    }
-
-    // Task 01 criterion 6 is a file-list check against an allowlist -- mechanical, and it should
-    // never have been judged. Found by two judges disagreeing on it.
-    if (verdict.ok && taskId === '01') {
-      try {
-        const { boundaryRespected } = await import('./lib/boundary.mjs');
-        const b = boundaryRespected(tree.changed, { slug });
-        const c = verdict.criteria.find((x) => x.n === 6);
-        if (c) {
-          // The regime is stated in the evidence (Minor, review pass 1): a stored `pass` is
-          // otherwise ambiguous between "checked against this draw's own slug" and "checked
-          // against the broad .somi/plans/ prefix" fallback.
-          const regime = slug ? `slug-scoped: ${slug}` : 'none - broad .somi/plans/ prefix';
-          c.verdict = b.ok ? 'pass' : 'fail';
-          c.evidence = b.ok
-            ? `EXECUTED: every changed path is inside the allowlist (${regime}) (not judged)`
-            : `EXECUTED: paths outside the allowlist (${regime}): ${b.offenders.join(', ')}`;
-          c.executed = true;
-        }
-      } catch { /* fall back to the judged verdict */ }
-    }
-
-    // Task 02's merged S5 criterion (criterion 1, closes gap 1 of context.md §2.4): built and
-    // mutation-tested, but never called from the live path until this iteration. Every live task
-    // 02 draw was scored entirely by the judge before this. Criterion 2 (S3, session.mjs) stays
-    // report-only -- its evidence is already folded into `evidence` above, before `judge()` ran, so
-    // there is nothing to overlay here.
-    let expiryGuard = null;
-    if (verdict.ok && taskId === '02') {
-      try {
-        const mutant = join(sourceDir, 'tests', 'evals', 'fixtures', 'task02-code-mutant.mjs');
-        const control = join(sourceDir, 'tests', 'evals', 'fixtures', 'task02-code-control.mjs');
-        const eg = scoreExpiryGuard(work, { mutant, control });
-        overlayExpiryGuardVerdict(verdict.criteria, eg);
-        expiryGuard = eg;
-      } catch (err) {
-        // Fail CLOSED (F-49): a harness fault here (ENOSPC on the cpSync copies, a --source ref
-        // predating the mutant/control fixtures) must not leave the judge's criterion 1 verdict
-        // standing -- F-42's leak through a second door. `step: 'harness'` distinguishes the cause.
-        expiryGuard = { verdict: 'non-attributable', step: 'harness', reason: `scoreExpiryGuard threw: ${err.message}`, observed: null };
-        overlayExpiryGuardVerdict(verdict.criteria, expiryGuard);
-      }
-    }
-
-    // Task 02's S1 criterion (criterion 3, closes gap 2 of context.md §2.4): the audit log
-    // records what the agent ACTUALLY ran. REPORT-ONLY (decisions.md#d11's 2026-08-28 correction)
-    // -- a harness fault (log absent/malformed, or the matcher throwing) falls back to the judge.
-    if (verdict.ok && taskId === '02') {
-      try {
-        const { scoreTestInvocation } = await import('./lib/audit-log.mjs');
-        overlayTestInvocationVerdict(verdict.criteria, scoreTestInvocation(auditLog));
-      } catch { /* fall back to the judged verdict */ }
-    }
-
-    if (verdict.ok && taskId === '03') {
-      try {
-        const { reproduces } = await import('./lib/reproduce.mjs');
-        const refs = await task03Reference(sourceDir);
-        const executed = reproduces(run.stdout, refs);
-        if (executed !== null) {
-          const c = verdict.criteria.find((x) => x.n === 3);
-          if (c) {
-            c.verdict = executed ? 'pass' : 'fail';
-            c.evidence = `EXECUTED: the cited date ${executed ? 'reproduces' : 'does NOT reproduce'} the defect (not judged)`;
-            c.executed = true;
-          }
-        }
-      } catch { /* fall back to the judged verdict */ }
-    }
     if (!verdict.ok) {
       // No dimensions are recorded. A judge fault is not evidence about the definition set, and
       // scoring it as failures would put a harness problem into the corpus statistics -- exactly
@@ -701,19 +746,52 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
       return { index, error: `judge: ${verdict.error}`, dimensions: {}, transcript: run.stdout.slice(-4000), harnessFault: true };
     }
 
-    const dimensions = toDimensions(verdict.criteria, criterionTags(taskSpec));
-    // The exclusion is a datum, not an absence (F-47): S5 would otherwise vanish from the report
-    // at a 100% exclusion rate. Marked explicitly so `buildResult()` can count it, not lose it.
-    // S1's own call here is retired (report-only, decisions.md#d11's 2026-08-28 correction) --
-    // see the S1 block above.
-    if (expiryGuard?.verdict === 'non-attributable') {
-      markDimensionsExcluded(dimensions, criterionTags(taskSpec)[1] ?? []);
+    // Everything below is data ONLY this live path can produce (it needs the working tree, which
+    // is gone by the time a shard is ever rescored) -- computed here, then handed to
+    // `applyExecutedOverlays()`, the SAME function `rescoreShards()` calls with the stored,
+    // already-computed version of each of these facts. This is the answer to why certification
+    // failed. Executed criteria scored 4/4 and semantic judged ones 3/4, 3/4, 2/4 -- a model judge
+    // cannot deliver the >=99% consistency the error budget assumes, and no amount of sharpening
+    // prose fixes that.
+    let expiryGuard = null;
+    let testInvocation = null;
+    if (taskId === '02') {
+      try {
+        const mutant = join(sourceDir, 'tests', 'evals', 'fixtures', 'task02-code-mutant.mjs');
+        const control = join(sourceDir, 'tests', 'evals', 'fixtures', 'task02-code-control.mjs');
+        expiryGuard = scoreExpiryGuard(work, { mutant, control });
+      } catch (err) {
+        // Fail CLOSED (F-49): a harness fault here (ENOSPC on the cpSync copies, a --source ref
+        // predating the mutant/control fixtures) must not leave the judge's criterion 1 verdict
+        // standing -- F-42's leak through a second door. `step: 'harness'` distinguishes the cause.
+        expiryGuard = { verdict: 'non-attributable', step: 'harness', reason: `scoreExpiryGuard threw: ${err.message}`, observed: null };
+      }
+      try {
+        const { scoreTestInvocation } = await import('./lib/audit-log.mjs');
+        testInvocation = scoreTestInvocation(auditLog);
+      } catch { /* leaves testInvocation null -- report-only, judge's verdict stands */ }
     }
+    let task03Refs = null;
+    if (taskId === '03') {
+      try { task03Refs = await task03Reference(sourceDir); } catch { /* leaves task03Refs null */ }
+    }
+
+    const dimensions = {};
+    await applyExecutedOverlays(taskId, verdict.criteria, dimensions, criterionTags(taskSpec), {
+      decisionsMd, transcript: run.stdout, tree: tree.changed, slug, expiryGuard, testInvocation, task03Refs,
+    });
     return {
       index,
       dimensions,
       criteria: verdict.criteria,
       expiryGuard,
+      // `changed`/`slug`/`testInvocation`: stored so `rescoreShards()` can reapply the SAME
+      // overlays without a live working tree (closes gap 3, 2.3). Absent on any shard written
+      // before this iteration -- `applyExecutedOverlays()` treats that exactly like a harness
+      // fault for the criterion it would have driven, not a crash.
+      changed: tree.changed,
+      slug,
+      testInvocation,
       transcript: run.stdout,
       decisionsMd,
       error: null,
@@ -758,7 +836,7 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
  * and reports "unchanged" for every shard, which is exactly what it did on the first attempt.
  */
 export async function rescoreShards(sha, specDir = REPO, { judgeModel = null } = {}) {
-  const { judge, toDimensions, criterionTags } = await import('./lib/score.mjs');
+  const { judge, criterionTags } = await import('./lib/score.mjs');
   const dir = shardDir(sha);
   const files = execFileSync('ls', [dir], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.json'));
   const changes = [];
@@ -776,7 +854,25 @@ export async function rescoreShards(sha, specDir = REPO, { judgeModel = null } =
       continue;
     }
     const before = rec.run.dimensions;
-    const after = toDimensions(verdict.criteria, criterionTags(spec));
+    // Closes gap 3 (2.3): reapply the SAME executed-criterion overlays `runOnce()` applies, from
+    // whatever this shard already has stored -- never a fresh live recompute, since the working
+    // tree that produced it is long gone. `task03Refs` is the one exception: it reads the
+    // DEFINITION SET's own fixture code (the scorer, not the candidate's output), so it is
+    // recomputed fresh from `specDir` exactly like `spec` above, not read from storage.
+    let task03Refs = null;
+    if (rec.taskId === '03') {
+      try { task03Refs = await task03Reference(specDir); } catch { /* leaves task03Refs null */ }
+    }
+    const after = {};
+    await applyExecutedOverlays(rec.taskId, verdict.criteria, after, criterionTags(spec), {
+      decisionsMd: rec.run.decisionsMd ?? null,
+      transcript: rec.run.transcript,
+      tree: rec.run.changed ?? null,
+      slug: rec.run.slug ?? null,
+      expiryGuard: rec.run.expiryGuard ?? null,
+      testInvocation: rec.run.testInvocation ?? null,
+      task03Refs,
+    });
     const moved = Object.keys({ ...before, ...after }).filter((d) => before[d] !== after[d]);
     rec.run.dimensions = after;
     rec.run.criteria = verdict.criteria;

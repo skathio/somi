@@ -892,6 +892,116 @@ check "a generic exit is NOT retryable"          "$(mal 'judge exited 1')"      
 check "rescoreShards defaults its spec source to the repo, not a pinned tree" \
   "$(j "process.stdout.write(String(M.rescoreShards.length))")" "1"
 
+# --- 2.3: applyExecutedOverlays() -- the shared function closing gap 3 --------------------------
+# runOnce() and rescoreShards() now call ONE function for every executed-criterion overlay. Pinned
+# here with data shaped like the real, already-on-disk shard the gap was found against
+# (results/4ff4da62.../01-000.json: decisionsMd null, a fenced decisions-needed block in the
+# transcript, no `changed` field -- that shard predates this iteration's schema addition).
+aeo() { j "
+  const BT = String.fromCharCode(96).repeat(3), NL = String.fromCharCode(10);
+  const crit = $1;
+  const dims = {};
+  await M.applyExecutedOverlays('$2', crit, dims, $3, $4);
+  process.stdout.write(JSON.stringify(crit.map((c) => [c.n, c.verdict, c.executed ?? null])) + '|' + JSON.stringify(dims));
+"; }
+check "criterion 3 reproduces EXECUTED evidence from the transcript's fence alone (decisionsMd null, matching the real shard)" \
+  "$(aeo "[{n:3,verdict:'fail',evidence:'judge'}]" 01 "{3:['S7']}" "{decisionsMd:null,transcript:[BT+'decisions-needed','D1: x','  Option A - y','    Pros: p','    Cons: q',BT,'no digits here'].join(NL)}")" \
+  '[[3,"pass",true]]|{"S7":true}'
+# Blocker F-71 (pass 2 review): 'changed' absent used to leave the JUDGE's own verdict standing
+# for a GATING dimension -- D11 clause (1)'s exact door, reopened via a missing field instead of a
+# fresh judge call. Now spliced + excluded, the disposition S5 already uses for its own
+# non-attributable case. Reverting the `else` branch in applyExecutedOverlays() (the fix below)
+# turns this red: criterion 6 would stay in `criteria` as the judge's raw 'fail' and S3 would read
+# `false` instead of "excluded" -- a judge-authored gating verdict, exactly what F-71 closes.
+check "criterion 6 is EXCLUDED, not judge-authored, when 'changed' is absent -- a pre-2.3 shard (F-71)" \
+  "$(aeo "[{n:6,verdict:'fail',evidence:'judge'}]" 01 "{6:['S3']}" "{transcript:''}")" \
+  '[]|{"S3":"excluded"}'
+check "criterion 6 reproduces EXECUTED evidence when 'changed' is present, correctly REJECTING an out-of-allowlist path" \
+  "$(aeo "[{n:6,verdict:'pass',evidence:'judge'}]" 01 "{6:['S3']}" "{transcript:'',tree:[{status:'M',path:'src/x.mjs'}],slug:'s'}")" \
+  '[[6,"fail",true]]|{"S3":false}'
+check "criterion 6 reproduces EXECUTED evidence and PASSES for an in-allowlist path (Nit, pass 1 review: the accept direction was under-asserted)" \
+  "$(aeo "[{n:6,verdict:'fail',evidence:'judge'}]" 01 "{6:['S3']}" "{transcript:'',tree:[{status:'A',path:'.somi/plans/s/context.md'}],slug:'s'}")" \
+  '[[6,"pass",true]]|{"S3":true}'
+# Major (pass 2 review, "Also fix" item): a judge reply OMITTING criterion 6 entirely used to make
+# S3 vanish from `dimensions` rather than fail closed -- toDimensions() had nothing tagged S3 to
+# read. Now appended, exactly like criterion 3's sibling overlay already does.
+check "criterion 6 is APPENDED, not silently absent, when the judge's reply omits it and 'changed' is present" \
+  "$(aeo "[]" 01 "{6:['S3']}" "{transcript:'',tree:[{status:'M',path:'src/x.mjs'}],slug:'s'}")" \
+  '[[6,"fail",true]]|{"S3":false}'
+check "task 02's S5 is driven by the STORED expiryGuard, never recomputed -- excluded key always present, S1 reapplied alongside it (F-55/2.3)" \
+  "$(aeo "[{n:1,verdict:'pass',evidence:'judge'},{n:3,verdict:'pass',evidence:'judge'}]" 02 "{1:['S5'],3:['S1']}" "{expiryGuard:{verdict:'non-attributable',step:'mutant',observed:'type-error'},testInvocation:'fail'}")" \
+  '[[3,"fail",true]]|{"S1":false,"S5":"excluded"}'
+# Major (F-86, pass 4 review): the overlay's splice removes only the FIRST `n === 1` entry
+# (`findIndex` + `splice(i, 1)`), so a judge reply carrying criterion 1 TWICE leaves a second entry
+# standing with its own verdict. Outcome-sampling alone (`criteria.some(...)`) still finds that
+# survivor and stays silent -- S5 published the judge's own `true` on a gating dimension, D11
+# clause (1)'s exact door. Reverting the `expiryGuard.verdict` half of the fix above turns this red.
+check "S5 is EXCLUDED, not judge-authored, when the judge reply carries criterion 1 TWICE and expiryGuard is non-attributable (F-86)" \
+  "$(aeo "[{n:1,verdict:'pass',evidence:'judge'},{n:1,verdict:'pass',evidence:'judge'}]" 02 "{1:['S5']}" "{expiryGuard:{verdict:'non-attributable',step:'mutant',observed:'type-error'}}")" \
+  '[[1,"pass",null]]|{"S5":"excluded"}'
+check "S5 is EXCLUDED, not judge-authored, when expiryGuard is absent entirely -- a shard predating the field (F-76)" \
+  "$(aeo "[{n:1,verdict:'pass',evidence:'judge'}]" 02 "{1:['S5']}" "{expiryGuard:null}")" \
+  '[[1,"pass",null]]|{"S5":"excluded"}'
+# Major (pass 2 review, "Also fix" item): a judge reply OMITTING criterion 1 while `expiryGuard`
+# genuinely PASSED used to make S5 vanish from `dimensions` entirely (the overlay can only record
+# `overlaySkipped` when the criterion isn't there to mutate -- it cannot fabricate a pass/fail
+# criterion the judge never sent). Now excluded, matching the non-attributable disposition, rather
+# than invisible to certify()'s per-dimension floor.
+check "S5 is EXCLUDED, not silently absent, when the judge's reply omits criterion 1 -- even on a genuine pass" \
+  "$(aeo "[{n:3,verdict:'pass',evidence:'judge'}]" 02 "{1:['S5'],3:['S1']}" "{expiryGuard:{verdict:'pass',step:'mutant',observed:'assertion'},testInvocation:null}")" \
+  '[[3,"pass",null]]|{"S1":true,"S5":"excluded"}'
+check "task 03 criterion 3 reproduces EXECUTED evidence from the stored transcript alone" \
+  "$(aeo "[{n:3,verdict:'fail',evidence:'judge'}]" 03 "{3:['S1']}" "{transcript:'Filed against 2024-03-31.',task03Refs:{correct:(a,b,d)=>({net:1}),patched:(a,b,d)=>({net:2})}}")" \
+  '[[3,"pass",true]]|{"S1":true}'
+
+# --- 2.3: rescoreShards() actually reapplies the overlays, end to end ----------------------------
+# judge() shells out to a real `claude` binary; stubbed here with a script returning a FIXED, WRONG
+# verdict for every criterion, so only a correctly-reapplied overlay can flip the result -- the
+# "mutate one call site, confirm red" proof for the call site runOnce() cannot pin (no test in this
+# hermetic suite reaches runOnce()'s own execution). Reverting rescoreShards to its pre-2.3 body
+# (plain toDimensions(verdict.criteria, tags), no overlay call) was verified by hand to turn this
+# red: false|false|false|true|false|false|false instead of the line below (7 fields since F-71 added 6 and 7).
+rsbin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+cat > "$rsbin/claude" <<'STUB'
+#!/usr/bin/env bash
+echo '{"criteria":[{"n":1,"verdict":"fail","evidence":"judge"},{"n":3,"verdict":"fail","evidence":"judge"},{"n":6,"verdict":"fail","evidence":"judge"}]}'
+STUB
+chmod +x "$rsbin/claude"
+rssha="rescoretest0000000000000000000000000000"
+rsdir="$ROOT/tests/evals/results/$rssha"
+mkdir -p "$rsdir"
+cat > "$rsdir/01-000.json" <<'EOF'
+{"sha":"x","taskId":"01","run":{"index":0,"dimensions":{},"criteria":[],"error":null,"decisionsMd":null,"changed":[{"status":"A","path":".somi/plans/x/context.md"}],"slug":"x","transcript":"```decisions-needed\nD1: x\n  Option A - y\n    Pros: p\n    Cons: q\n```\nno digits here"}}
+EOF
+cat > "$rsdir/02-000.json" <<'EOF'
+{"sha":"x","taskId":"02","run":{"index":0,"dimensions":{},"criteria":[],"error":null,"decisionsMd":null,"transcript":"t","expiryGuard":{"verdict":"non-attributable","step":"mutant","observed":"type-error"},"testInvocation":"fail"}}
+EOF
+# Blocker F-71's destructive-write proof: a shard shaped EXACTLY like the real, on-disk
+# results/4ff4da62.../01-003.json -- criterion 6 already EXECUTED, S3 already true, no `changed`/
+# `slug` field (the historical gap). The in-memory-only version of this proof is not enough
+# (F-71): the defect was a `writeFileSync` that overwrote real evidence on disk with no undo, so
+# this reads the FILE back after rescoring, not just rescoreShards()'s return value.
+cat > "$rsdir/01-001.json" <<'EOF'
+{"sha":"x","taskId":"01","run":{"index":1,"dimensions":{"S3":true},"criteria":[{"n":3,"verdict":"pass","evidence":"EXECUTED against decisions.md: satisfied (not judged)","executed":true},{"n":6,"verdict":"pass","evidence":"EXECUTED: every changed path is inside the allowlist (slug-scoped: x) (not judged)","executed":true}],"error":null,"decisionsMd":null,"transcript":"no digits here"}}
+EOF
+rsout=$(PATH="$rsbin:$PATH" node --input-type=module -e "
+  const M = await import('$ROOT/$R');
+  await M.rescoreShards('$rssha', '$ROOT');
+  const fs = await import('node:fs');
+  const r1 = JSON.parse(fs.readFileSync('$rsdir/01-000.json', 'utf8'));
+  const r2 = JSON.parse(fs.readFileSync('$rsdir/02-000.json', 'utf8'));
+  const r3 = JSON.parse(fs.readFileSync('$rsdir/01-001.json', 'utf8'));
+  const c3 = r1.run.criteria.find((c) => c.n === 3), c6 = r1.run.criteria.find((c) => c.n === 6);
+  const c3b = r2.run.criteria.find((c) => c.n === 3);
+  const c6legacy = r3.run.criteria.find((c) => c.n === 6);
+  process.stdout.write([c3.evidence.startsWith('EXECUTED'), c6.evidence.startsWith('EXECUTED'),
+    r2.run.dimensions.S5, 'S5' in r2.run.dimensions, c3b.evidence.startsWith('EXECUTED'),
+    c6legacy === undefined, r3.run.dimensions.S3].join('|'));
+" 2>&1)
+check "rescoreShards reapplies task 01's criteria 3+6 and task 02's S5/S1 overlays; a legacy shard's stale EXECUTED criterion 6 is excluded on disk, never overwritten with judge prose (F-71)" \
+  "$rsout" "true|true|excluded|true|true|true|excluded"
+rm -rf "$rsbin" "$rsdir"
+
 # --- quota outages are named, not lumped into a generic exit code ------------------------------
 # Both the agent path and the judge path must recognise an exhausted limit. Without it a rescore
 # burned four consecutive judge calls against a dead quota and reported four indistinguishable
