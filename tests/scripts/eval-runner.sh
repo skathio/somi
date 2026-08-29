@@ -48,8 +48,12 @@ done
 
 # --- the comparison rule phase 4 gates on ------------------------------------------------------
 cmp_case() {
-  j "const r = M.compare($2, $3); process.stdout.write(String(r.accepted) + ':' + r.regressions.length);" \
-    | { read -r got; check "$1" "$got" "$4"; }
+  # NOT `j ... | { read -r got; check ...; }` -- a pipeline runs its right side in a SUBSHELL, so
+  # check()'s increments to pass/fail were discarded and all 8 cases below printed FAIL while the
+  # suite still reported 0 failed and exited 0. These are the compare() rule phase 4 gates on.
+  local got
+  got=$(j "const r = M.compare($2, $3); process.stdout.write(String(r.accepted) + ':' + r.regressions.length);")
+  check "$1" "$got" "$4"
 }
 cmp_case "identical grades are accepted" \
   "{t1:{S1:'pass',S2:'pass'}}" "{t1:{S1:'pass',S2:'pass'}}" "true:0"
