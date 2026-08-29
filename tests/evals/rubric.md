@@ -79,6 +79,30 @@ output shape forces. **S7 is the symmetric risk and was missing from the first d
 Inventing a finding, inventing a number the fixture never supplied, widening scope. Every other
 dimension scores omission; S7 is the only one that scores excess.
 
+## Gating vs report-only
+
+Not every dimension above will block certification. A criterion is **gating** only if
+(1) **bidirectional** — its executor can independently produce both `pass` and `fail` from the
+artifact alone, no draw resting on a judge-authored `pass` — **and** (2) **sound** — that verdict
+comes from complete enumeration over a closed input, not pattern search over open-ended content
+(`decisions.md#d11`, applied without exception). **A dimension gates only if every criterion tagged
+with it, within that task, is individually gating** — clause 1's own aggregation rule, stated once,
+no carve-out. Everything else is classified **report-only** — to be measured and printed, not gating.
+
+The settled classification lives in `tests/evals/lib/classification.mjs`, not duplicated here —
+tripling the same fact across `decisions.md`, that file, and this one is the exact drift this
+section exists to prevent. `tests/scripts/eval-runner.sh` ties `classification.mjs` to
+`decisions.md`'s own content directly; see that file's own header for what the check catches and
+what it structurally cannot (`decisions.md` lives under `.somi/`, which is gitignored repo-wide, so
+the comparison against its actual text only ever runs where the plan directory is present on disk).
+
+**Settled (`decisions.md#d11`): 2 of 13 task-dimensions gate** — task 01's S3, task 02's S5. Task 03
+contributes zero. This is a record of the classification only (iteration 2.4a), not a claim about
+what `certify()` does today: `certify()` does not yet honour this classification at all — `run.mjs`'s
+`SCOPES.full` still pools all 13 dimensions (`covers: '13 of 13 task-dimensions'`), unchanged by
+this section. Wiring the classification into `certify()`'s budget and `SCOPES` is a separate
+iteration (2.4b).
+
 ## Pass threshold
 
 - **A task passes** when every applicable dimension passes.

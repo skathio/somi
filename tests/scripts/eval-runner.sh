@@ -1042,6 +1042,171 @@ else
   ok "validate.sh does not execute the eval runner"
 fi
 
+# --- classification.mjs: the diff mechanism itself, unconditional (2.4a) -----------------------
+# These need no file on disk -- they prove `diffClassification` can actually detect a changed
+# verdict and a missing row, and that it reports no difference for two copies of the same table.
+# That is necessary for the decisions.md comparison below to mean anything, but it is NOT the
+# drift check itself: these three run against synthetic tables built from CLASSIFICATION alone and
+# would stay green even if CLASSIFICATION had drifted from decisions.md#d11 completely.
+check "classification.mjs: 15 criteria, no duplicate (task, criterion) pairs" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const keys = C.CLASSIFICATION.map((r) => r.task + ':' + r.criterion);
+    process.stdout.write(String(C.CLASSIFICATION.length) + '|' + String(new Set(keys).size));
+  ")" "15|15"
+check "classification.mjs: 2 of 13 task-dimensions gate (task 01's S3, task 02's S5; task 03 zero)" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const dims = C.taskDimensions();
+    const gating = dims.filter((d) => d.verdict === 'gating').map((d) => d.task + '/' + d.dim).sort();
+    process.stdout.write(dims.length + '|' + gating.join(','));
+  ")" "13|01/S3,02/S5"
+check "diffClassification: identical tables match" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    process.stdout.write(String(C.diffClassification(C.CLASSIFICATION, C.CLASSIFICATION)));
+  ")" "null"
+check "diffClassification: a changed verdict is caught (mutation self-check)" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const mutated = C.CLASSIFICATION.map((r) => (r.task === '02' && r.criterion === 3) ? { ...r, verdict: 'gating' } : r);
+    process.stdout.write(String(C.diffClassification(mutated, C.CLASSIFICATION)));
+  ")" "mismatch:02:3:got=S1/gating:want=S1/report-only"
+check "diffClassification: a missing row is caught" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const truncated = C.CLASSIFICATION.filter((r) => !(r.task === '01' && r.criterion === 6));
+    process.stdout.write(String(C.diffClassification(truncated, C.CLASSIFICATION)));
+  ")" "missing:01:6"
+
+# --- decisionsMdClassification's multi-table, append-order mechanism, unconditional (2.4a pass 2,
+# F-84/F-85; pass 4 adds a third case pinning F-88's verdict-cell throw) ---------------------------
+# D11's five corrections to date have every one of them been APPENDED as a new dated section, never
+# an edit to prior text in place. These three cases pin that the parser actually behaves that way on
+# a synthetic (no file involved) D11-shaped span, not merely against today's decisions.md content.
+check "decisionsMdClassification: a later table's copy of a shared row wins over an earlier table's (F-85 -- was reversed)" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const text = [
+      '## D11 -- synthetic',
+      '',
+      '| task | crit | dim | mechanism | bidirectional? | sound? | verdict |',
+      '|---|---|---|---|---|---|---|',
+      '| 01 | 6 | S3 | x | yes | yes | GATING |',
+      '| 03 | 1 | S4 | x | no | -- | report-only |',
+      '',
+      'prose sitting between the two tables',
+      '',
+      '| task | criterion | dimension | executor | verdict |',
+      '|---|---|---|---|---|',
+      '| 01 | 6 | S3 | x | report-only |',
+      '',
+      '## Superseded entries',
+    ].join('\n');
+    const derived = C.decisionsMdClassification(text);
+    process.stdout.write(derived.find((r) => r.task === '01' && r.criterion === 6).verdict);
+  ")" "report-only"
+check "decisionsMdClassification: a table appended after the settled resolution overrides it, not invisible (F-84)" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const settled = [
+      '## D11 -- synthetic',
+      '',
+      '| task | crit | dim | mechanism | bidirectional? | sound? | verdict |',
+      '|---|---|---|---|---|---|---|',
+      '| 01 | 6 | S3 | x | yes | yes | GATING |',
+      '',
+      'prose',
+      '',
+      '| task | criterion | dimension | executor | verdict |',
+      '|---|---|---|---|---|',
+      '| 01 | 6 | S3 | x | GATING |',
+      '',
+    ].join('\n');
+    const withLaterCorrection = settled + [
+      'a still later, appended correction',
+      '',
+      '| task | criterion | dimension | executor | verdict |',
+      '|---|---|---|---|---|',
+      '| 01 | 6 | S3 | x | report-only |',
+      '',
+      '## Superseded entries',
+    ].join('\n');
+    const derived = C.decisionsMdClassification(withLaterCorrection);
+    process.stdout.write(derived.find((r) => r.task === '01' && r.criterion === 6).verdict);
+  ")" "report-only"
+check "decisionsMdClassification: an off-convention verdict spelling throws, not silently dropped (F-88)" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const text = ['## D11 -- synthetic', '', '| 01 | 6 | S3 | x | GATING |', '', 'p', '',
+      '| 01 | 6 | S3 | x | GATING |', '| 03 | 1 | S4 | x | \`report-only\` |', '', '## End'].join('\n');
+    try { C.decisionsMdClassification(text); process.stdout.write('NO THROW'); }
+    catch (e) { process.stdout.write(/unrecognized verdict cell/.test(e.message) ? 'threw' : 'wrong:' + e.message); }
+  ")" "threw"
+
+# --- classification.mjs vs the live task specs: criterionTags(), tracked everywhere (2.4a pass 2,
+# F-87) -----------------------------------------------------------------------------------------
+# tests/evals/tasks/*.md are TRACKED (unlike decisions.md), so this runs in CI and in a fresh
+# checkout -- three of CLASSIFICATION's four columns (task, criterion, dim) covered everywhere,
+# strictly more reach than the decisions.md-conditional check below can ever have. `verdict` stays
+# decisions.md-only; nothing here asserts gating/report-only, only that the (task, criterion, dim)
+# triples themselves haven't drifted from what the live spec actually tags.
+check "classification.mjs's (task, criterion, dim) triples match the live task specs' criterionTags()" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const S = await import('$ROOT/tests/evals/lib/score.mjs');
+    const fs = await import('node:fs');
+    const dir = '$ROOT/tests/evals/tasks';
+    const rows = [];
+    for (const f of fs.readdirSync(dir).filter((f) => /^\d\d-.*\.md\$/.test(f))) {
+      const task = f.slice(0, 2);
+      const tags = S.criterionTags(fs.readFileSync(dir + '/' + f, 'utf8'));
+      for (const [n, dims] of Object.entries(tags)) {
+        if (dims.length !== 1) { process.stdout.write('multi-tag:' + task + ':' + n); process.exit(0); }
+        rows.push(task + ':' + n + ':' + dims[0]);
+      }
+    }
+    const actual = rows.sort().join(',');
+    const expected = C.CLASSIFICATION.map((r) => r.task + ':' + r.criterion + ':' + r.dim).sort().join(',');
+    process.stdout.write(actual === expected ? 'match' : 'actual=' + actual + '|expected=' + expected);
+  ")" "match"
+
+# --- classification.mjs vs decisions.md#d11's actual content: the real drift check (2.4a) -------
+# `.somi/` is gitignored repo-wide (scripts/check-links.mjs's own header: "`git ls-files` can never
+# produce a path inside it") -- decisions.md exists only on a machine actively working this plan,
+# never in a clean checkout or in CI. So this runs in one of two modes, never a third: present, or
+# loudly skipped when the plan directory itself is absent. There is no silent-pass path, and an
+# absent decisions.md next to a PRESENT plan directory is not the expected-skip case -- that is a
+# real gap (a renamed/moved/deleted file on a machine this check is supposed to protect) and fails
+# loudly rather than reading identically to the honest CI skip. When present, it is genuinely
+# bidirectional -- verified by hand this pass (and pass 1): flipping one row's verdict in
+# CLASSIFICATION with decisions.md untouched, and separately flipping the same row's verdict in
+# decisions.md with CLASSIFICATION untouched, each independently produced the `mismatch:...` line
+# the check below would print, in the opposite direction (got/want swapped) each time, then
+# reverted. Also verified this pass (F-84/F-85): appending a synthetic dated correction demoting
+# `01|6` reds the check; flipping the SETTLED table's own copy of `01|6` reds it; flipping only the
+# ORIGINAL table's copy (now correctly superseded) does not. Neither direction is covered when
+# decisions.md is absent -- that gap is real and is not claimed to be closed by the checks above.
+D11_PLAN_DIR="$ROOT/.somi/plans/eval-corpus-rebuild"
+D11_DECISIONS="$D11_PLAN_DIR/decisions.md"
+if [ -f "$D11_DECISIONS" ]; then
+  drift=$(j "
+    const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+    const fs = await import('node:fs');
+    const text = fs.readFileSync('$D11_DECISIONS', 'utf8');
+    let expected;
+    try { expected = C.decisionsMdClassification(text); }
+    catch (e) { process.stdout.write('throw:' + e.message); process.exit(0); }
+    process.stdout.write(String(C.diffClassification(C.CLASSIFICATION, expected)));
+  ")
+  check "classification.mjs matches decisions.md#d11's settled table exactly (task, criterion, dimension, verdict)" \
+    "$drift" "null"
+elif [ -d "$D11_PLAN_DIR" ]; then
+  bad "decisions.md#d11 drift check: $D11_PLAN_DIR exists but decisions.md is missing -- a real gap, not the expected CI/fresh-checkout absence"
+else
+  echo "  (skipped: $D11_PLAN_DIR not present -- .somi/ is gitignored, this check only runs where the plan directory is on disk)"
+fi
+
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
