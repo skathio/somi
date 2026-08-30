@@ -8,6 +8,16 @@
 // Which criteria are genuinely structural and which are not is stated per function, because the
 // honest coverage claim is partial. Pretending a semantic criterion is mechanical would move the
 // variance somewhere less visible rather than removing it.
+//
+// GATING STATUS (decisions.md#d11, tests/evals/lib/classification.mjs): every criterion this file
+// scores (1, 2, 3, 4, 5/`_fieldCheck` -- dimensions S2, S1, S6) is REPORT-ONLY. `noInventedFigures`
+// (criterion 3, S7) genuinely returns a boolean, but is disqualified by D11's soundness clause --
+// its regex is pattern search over open-ended English magnitude expressions, not enumeration over
+// a closed input, so it stays report-only alongside the criteria that are `null` by construction
+// (1, 5) or asymmetric (2, 4, only ever mechanically REJECT). Task 01's one gating dimension (S3,
+// `boundaryRespected`) is scored elsewhere (`run.mjs`'s `applyExecutedOverlays`, via
+// `lib/boundary.mjs`), not in this file. Nothing here needs to change for that split -- a
+// report-only criterion is exactly what every function below already returns.
 
 import { parseDecisions, section, options, decisionAbout, magnitudes } from './decisions.mjs';
 import { parseBlock, decisionAbout as blockDecisionAbout } from './decisions-block.mjs';

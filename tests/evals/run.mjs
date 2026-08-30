@@ -18,11 +18,14 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { CLASSIFICATION, dimensionVerdict, taskDimensions } from './lib/classification.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
 
-export const SCHEMA_VERSION = 1;
+// Bumped 2.4b: `buildResult()`'s per-task shape changed -- `dimensions` is now filtered to GATING
+// only (decisions.md#d11/classification.mjs), with a new sibling `reportOnly` map for the rest.
+export const SCHEMA_VERSION = 2;
 
 // ---------------------------------------------------------------------------------------------
 // Grading
@@ -85,71 +88,76 @@ export function compare(baseline, candidate) {
 }
 
 /**
- * Iteration 4.1's gate: certify the assumption the whole error budget rests on -- a working
- * dimension passes >=99% of runs.
+ * `SCOPES.full`'s draw-count multiplier -- separate from `BANDS.n` (which stays governing
+ * `grade()`/`compare()`'s routine trim draws; raising it would quadruple every trim's cost, not
+ * just the rarer certification).
  *
- * POOLED, not per-dimension, and that is the whole point. A `>=19/20` per-dimension gate clears a
- * true-0.95 dimension 73.6% of the time -- exactly the case that then makes `unstable` fire on
- * something in 64% of every later 120-run comparison -- and bounces a perfectly sharp corpus 19.8%
- * of the time, because all 13 dimensions must clear independently. Pooled at <=5/260:
+ * Re-derived here (2.4b), NOT rescaled, after `decisions.md#d11`'s 2026-08-28 resolution narrowed
+ * the gating count 3 -> 2 (task 02's S1 demoted). Same binomial method as D2/D7/D11's own: at a
+ * candidate per-dimension draw count N, the smallest `maxFailures` clearing a true-99% corpus
+ * >=95% of the time. Reproduced the prior 3-dimension row exactly (N=80/dim, 240 draws, budget 5
+ * -> 96.51%/1.81%, matching `decisions.md#d11` to 2 decimals) before trusting this at 2.
  *
- *   true rate 0.99 -> clears 95.2%      true rate 0.95 -> clears 0.9%
- *
- * Near-total separation, at zero extra cost: the same 20 runs, read pooled instead of per-dimension.
- * Per-dimension rates are still reported, because pooling decides but only the per-dimension view
- * says WHICH task to sharpen.
- *
- * A soft dimension is a TASK DEFECT, returned to 3.3 for sharpening before 4.2 begins. It is never
- * absorbed by widening the band -- that would be the corpus certifying itself.
+ * At 2 dimensions the SAME sub-2% target is reached at N=120/dim, not 80: the pooled false-accept
+ * rate depends only on TOTAL draws, not how many dimensions share them, so fewer dimensions each
+ * carry more. Total draws is unchanged at 240 -- still under the 260-draw prior reference.
  */
-export const CERTIFY = { maxFailures: 5, draws: 260 };
+export const CERTIFY_N = 120;
 
 /**
- * Scoped gates, for when the full corpus is out of budget.
- *
- * Each budget is DERIVED from the same binomial analysis as the 260-draw gate, not scaled by hand
- * -- proportional scaling would have given 1.9 for 100 draws, and the nearest integer is the wrong
- * one. Power is recorded for every scope because a smaller gate is a WEAKER gate and the number
- * that quantifies how much weaker belongs next to the number it qualifies.
- *
- *   scope        budget   clears at p=0.99   clears at p=0.95
- *   full (260)     <=5          95.2%              0.9%
- *   task01 (100)   <=2          92.1%             11.8%
- *
- * The task01 scope accepts a genuinely-soft corpus 11.8% of the time against 0.9% for the full
- * one. That is the price of certifying 5 of 13 task-dimensions instead of all 13, and it is a
- * price, not a technicality: roughly one soft corpus in eight would clear this gate.
+ * The certification gate -- a single scope, `full` (`SCOPES.task01`, a 1-gating-dimension scope
+ * that cleared a soft corpus 73.58% of the time, is removed rather than relabeled). Derived from
+ * `CERTIFY_N`, not scaled by hand: 2 dims, 240 draws, budget 5 -> clears a sound corpus 96.51% of
+ * the time, a soft one 1.81% -- near the 13-dimension original's 0.94%, at fewer total draws.
  */
 export const SCOPES = {
-  full:   { draws: 260, maxFailures: 5, powerGood: 0.952, powerSoft: 0.009, covers: '13 of 13 task-dimensions' },
-  task01: { draws: 100, maxFailures: 2, powerGood: 0.921, powerSoft: 0.118, covers: '5 of 13 task-dimensions (task 01 only)' },
+  full: { draws: 2 * CERTIFY_N, maxFailures: 5, powerGood: 0.9651, powerSoft: 0.0181, covers: '2 of 13 task-dimensions' },
 };
 
-export function certify(result, { scope = 'full', maxFailures = null } = {}) {
-  const sc = SCOPES[scope] ?? SCOPES.full;
+// Every (task, dim) pair the settled classification marks GATING, computed once. certify()'s
+// per-dimension floor walks this list directly, not only the pairs a result happens to contain --
+// a pair this list names but the result omits must still fail the floor (`underFloor` below).
+const GATING_PAIRS = taskDimensions(CLASSIFICATION).filter((d) => d.verdict === 'gating');
+
+export function certify(result, { maxFailures = null } = {}) {
+  const sc = SCOPES.full;
   const budget = maxFailures ?? sc.maxFailures;
   const dimensions = [];
+  const reportOnly = [];
   let failures = 0;
   let draws = 0;
+  let harnessFaults = 0;
   for (const [task, t] of Object.entries(result.tasks ?? {})) {
+    harnessFaults += t.harnessFaults ?? 0;
     for (const [dim, d] of Object.entries(t.dimensions ?? {})) {
       const missed = d.n - d.passes;
       failures += missed;
       draws += d.n;
       dimensions.push({ task, dim, passes: d.passes, n: d.n, rate: d.n ? d.passes / d.n : null, failures: missed, excluded: d.excluded ?? 0 });
     }
+    for (const [dim, d] of Object.entries(t.reportOnly ?? {})) {
+      reportOnly.push({ task, dim, passes: d.passes, n: d.n, rate: d.n ? d.passes / d.n : null, excluded: d.excluded ?? 0 });
+    }
   }
   dimensions.sort((a, b) => a.rate - b.rate || a.task.localeCompare(b.task));
+
+  // Per-dimension floor (decisions.md#d11, Blocker F-46): pooled `draws >= sc.draws` alone says
+  // nothing about any ONE gating dimension's own share of that pool -- one dimension's exclusion
+  // rate can rise to 100%, backfilled by drawing more of the survivor, and the pooled failure
+  // count stays flat. Every `GATING_PAIRS` entry must individually clear `CERTIFY_N`; `?? 0` makes
+  // a dimension ABSENT FROM THE MAP ENTIRELY (every draw returned `dimensions: {}`, or the task
+  // never ran) fail exactly like one present as `{n: 0, excluded: N}` -- one floor, not two.
+  const underFloor = GATING_PAIRS
+    .map(({ task, dim }) => ({ task, dim, n: result.tasks?.[task]?.dimensions?.[dim]?.n ?? 0 }))
+    .filter((x) => x.n < CERTIFY_N);
+
   // `certified` REQUIRES the full draw count. Reading a raw failure count against a budget
-  // defined for 260 draws is a vacuous pass: 3 failures in 25 draws cleared "<=5" and printed
-  // `certified: true` while scaling to ~31 per 260 -- six times over budget and plainly not on
-  // track. A partial run cannot certify, and saying so in the flag is safer than saying it in a
-  // second flag the reader has to remember to check.
+  // defined for 240 draws is a vacuous pass at a short run -- see `onTrack`/`projectedFailures`.
   const enough = draws >= sc.draws;
   // Rate against the budget, so a partial run still says whether it is TRENDING to certify.
   const projected = draws ? (failures / draws) * sc.draws : null;
   return {
-    scope,
+    scope: 'full',
     scopeCovers: sc.covers,
     // Already over budget: no sequence of remaining draws can bring the total back under it,
     // because failures only accumulate. Detected explicitly so nobody spends 80 more draws --
@@ -157,7 +165,7 @@ export function certify(result, { scope = 'full', maxFailures = null } = {}) {
     cannotCertify: failures > budget,
     powerGood: sc.powerGood,
     powerSoft: sc.powerSoft,
-    certified: enough && failures <= budget,
+    certified: enough && underFloor.length === 0 && failures <= budget,
     onTrack: projected === null ? null : projected <= budget,
     projectedFailures: projected === null ? null : Math.round(projected * 10) / 10,
     failures,
@@ -165,9 +173,14 @@ export function certify(result, { scope = 'full', maxFailures = null } = {}) {
     maxFailures: budget,
     requiredDraws: sc.draws,
     // Named separately from `certified` so a caller cannot read "few failures" as "enough runs".
-    // A corpus that failed 0 of 20 draws is not certified; it is barely started.
+    // A corpus that failed 0 of 20 draws is not certified; it is barely started. Pooled only --
+    // the per-dimension floor is reported separately (`underFloor`) so this keeps meaning exactly
+    // what its own printed message says ("need X, have Y"), never "and some dimension went empty".
     sufficientDraws: enough,
+    harnessFaults,
+    underFloor,
     dimensions,
+    reportOnly,
     softest: dimensions.slice(0, 3),
   };
 }
@@ -253,6 +266,22 @@ export function buildResult({ source, tasks, runs, dryRun = false, now = new Dat
         if (outcome === true || outcome === 'pass') dims[dim].passes += 1;
       }
     }
+    // Split into GATING (certify()/compare() read exclusively from this) and REPORT-ONLY (measured
+    // and printed, never gates) per decisions.md#d11's settled classification
+    // (tests/evals/lib/classification.mjs). A pair the table doesn't name falls to report-only too
+    // -- fail-safe: an unclassified criterion must never earn gating status through a table gap.
+    const dimensions = {};
+    const reportOnly = {};
+    for (const [dim, { passes, n, excluded }] of Object.entries(dims)) {
+      const entry = {
+        passes, n,
+        // grade() throws on n<=0; an all-excluded dim reports `null`, not a vacuous "0/0 pass".
+        grade: n ? grade(passes, n) : null,
+        excluded, // decisions.md#d11: "S5's denominator becomes an observable". Not a pass/fail.
+      };
+      if (dimensionVerdict(taskId, dim) === 'gating') dimensions[dim] = entry;
+      else reportOnly[dim] = entry;
+    }
     out.tasks[taskId] = {
       // Per-criterion verdicts and the evidence quoted for each are kept, not just the rolled-up
       // dimensions. A dimension that reads `fail` is only actionable if you can see WHICH
@@ -269,14 +298,12 @@ export function buildResult({ source, tasks, runs, dryRun = false, now = new Dat
         // `overlayExpiryGuardVerdict`), so this is the only place that disposition survives.
         expiryGuard: r.expiryGuard ?? null,
       })),
-      dimensions: Object.fromEntries(
-        Object.entries(dims).map(([dim, { passes, n, excluded }]) => [dim, {
-          passes, n,
-          // grade() throws on n<=0; an all-excluded dim reports `null`, not a vacuous "0/0 pass".
-          grade: n ? grade(passes, n) : null,
-          excluded, // decisions.md#d11: "S5's denominator becomes an observable". Not a pass/fail.
-        }]),
-      ),
+      dimensions,
+      reportOnly,
+      // A run that never executed or hit a judge fault (`dimensions: {}`, `error` set -- the same
+      // two paths in `runOnce()`) is a harness fault, not a definition-set signal. Reported so the
+      // rate becomes observable (spec.md §11's stated open unknown) rather than assumed zero.
+      harnessFaults: perRun.filter((r) => r.error != null).length,
     };
   }
   return out;
@@ -933,7 +960,7 @@ export function fixtureFor(id, dir) {
 
 function parseArgs(argv) {
   const a = { source: 'HEAD', tasks: null, runs: BANDS.n, dryRun: false, out: null, model: null,
-              judgeModel: null, merge: null, certifySha: null, rescore: null, scope: 'full', batch: Infinity };
+              judgeModel: null, merge: null, certifySha: null, rescore: null, batch: Infinity };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === '--source') a.source = argv[++i];
@@ -946,7 +973,8 @@ function parseArgs(argv) {
     else if (k === '--merge') a.merge = argv[++i];
     else if (k === '--certify') a.certifySha = argv[++i];
     else if (k === '--rescore') a.rescore = argv[++i];
-    else if (k === '--scope') a.scope = argv[++i];
+    // `--scope` removed, not left dead (decisions.md#d11): `SCOPES.task01` is gone, so there is
+    // exactly one scope -- falls through to the `unknown argument` throw below instead.
     else if (k === '--batch') a.batch = Number(argv[++i]);
     else if (k === '--help' || k === '-h') a.help = true;
     else throw new Error(`unknown argument: ${k}`);
@@ -1014,21 +1042,33 @@ async function main(argv) {
     const merged = mergeShards(sha, { runs: args.runs });
     if (args.out) { mkdirSync(dirname(resolve(process.cwd(), args.out)), { recursive: true });
       writeFileSync(resolve(process.cwd(), args.out), JSON.stringify(merged, null, 2) + '\n'); }
-    const c = certify(merged, { scope: args.scope });
+    const c = certify(merged);
     process.stdout.write(
       `${sha.slice(0, 12)}: ${c.failures} failure(s) across ${c.draws} draw(s)\n` +
       `  scope:           ${c.scope} — ${c.scopeCovers}\n` +
-      `  power:           clears a sound corpus ${(c.powerGood * 100).toFixed(1)}%, a SOFT one ${(c.powerSoft * 100).toFixed(1)}%\n` +
-      `  certified:       ${c.certified}${c.certified ? '' : `  (needs ${c.requiredDraws} draws AND <=${c.maxFailures} failures)`}\n` +
-      `  enough draws:    ${c.sufficientDraws}${c.sufficientDraws ? '' : `  (need ${c.requiredDraws}, have ${c.draws})`}\n` +
+      // Gating-dimension count and false-accept rate on the SAME line as `certified`.
+      `  certified:       ${c.certified}  (${c.dimensions.length} gating dimension(s) measured, false-accept ${(c.powerSoft * 100).toFixed(2)}%)${c.certified ? '' : `  (needs ${c.requiredDraws} draws AND <=${c.maxFailures} failures, every gating dimension >= ${CERTIFY_N})`}\n` +
+      // `--certify` returns before any drawing loop, so a flag-dependent `runs` default can never
+      // reach the invocation that actually draws -- the guidance is appended to the message
+      // instead, built from CERTIFY_N so it cannot drift out of sync.
+      `  enough draws:    ${c.sufficientDraws}${c.sufficientDraws ? '' : `  (need ${c.requiredDraws}, have ${c.draws}) — draw with --runs ${CERTIFY_N}`}\n` +
       `  on track:        ${c.onTrack}  (this rate projects to ${c.projectedFailures} failures per ${c.requiredDraws})\n` +
+      `  harness faults:  ${c.harnessFaults}  (persisted draws that errored with no observation -- on this merged --certify view, only a missing-prompt task-spec defect reaches here; quota, timeout, and judge faults are never persisted as shards, so this count omits them entirely; not in the draw count above, and a per-dimension EXCLUDED count is separate, see below)\n` +
+      (c.underFloor.length
+        ? `  UNDER FLOOR:     ${c.underFloor.map((x) => `${x.task}/${x.dim} (${x.n}/${CERTIFY_N})`).join(', ')}\n` +
+          `                   Each gating dimension needs >= ${CERTIFY_N} of its OWN observations -- a soft\n` +
+          `                   one cannot be masked by drawing more of another (decisions.md#d11, F-46).\n`
+        : '') +
       (c.cannotCertify
         ? `  CANNOT CERTIFY:  ${c.failures} failures already exceed the budget of ${c.maxFailures}.\n` +
           `                   Failures only accumulate, so the remaining ${Math.max(0, c.requiredDraws - c.draws)} draw(s) cannot\n` +
           `                   change this. Stop drawing. Per 4.1's acceptance a soft dimension is a\n` +
           `                   TASK DEFECT, returned to 3.3 for sharpening before 4.2 begins.\n`
         : '') +
-      c.dimensions.map((d) => `  ${d.task} ${d.dim}: ${d.passes}/${d.n}${d.excluded ? ` (${d.excluded} excluded)` : ''}`).join('\n') + '\n');
+      c.dimensions.map((d) => `  ${d.task} ${d.dim}: ${d.passes}/${d.n}${d.excluded ? ` (${d.excluded} excluded)` : ''}`).join('\n') + '\n' +
+      // report-only, never gating (decisions.md#d11) -- printed too: pooling decides, but only the
+      // per-dimension view says WHICH task to sharpen, and that applies here as it does above.
+      (c.reportOnly.length ? c.reportOnly.map((d) => `  report-only ${d.task} ${d.dim}: ${d.passes}/${d.n}${d.excluded ? ` (${d.excluded} excluded)` : ''}`).join('\n') + '\n' : ''));
     // Exit 0 even when uncertified: "the corpus is not sharp enough yet" is a RESULT, and a
     // non-zero exit would make a batch script treat it as a crash and retry it forever.
     return 0;

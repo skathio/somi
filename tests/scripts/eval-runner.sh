@@ -76,25 +76,30 @@ cmp_case "a dimension missing from the candidate is a regression" \
 cmp_case "two regressions are both reported" \
   "{t1:{S1:'pass',S2:'pass'}}" "{t1:{S1:'fail',S2:'unstable'}}" "false:2"
 
-# --- result-file shape: the contract phase 4 consumes ------------------------------------------
+# --- result-file shape: the contract phase 4 consumes -------------------------------------------
+# S3 is task 01's only GATING dimension (decisions.md#d11); S1/S2 are report-only, so this also
+# pins the split buildResult() now performs (2.4b) -- a report-only dimension must still be
+# measured and graded, just under `reportOnly`, never under `dimensions`.
 shape=$( j "
   const src = { ref: 'HEAD', sha: 'abc123def456' };
   const tasks = { '01': [
-    { index: 0, dimensions: { S1: true,  S2: false, S4: 'n-a' } },
-    { index: 1, dimensions: { S1: true,  S2: true,  S4: 'n-a' } },
+    { index: 0, dimensions: { S1: true,  S2: false, S3: true, S4: 'n-a' } },
+    { index: 1, dimensions: { S1: true,  S2: true,  S3: true, S4: 'n-a' } },
   ] };
   const r = M.buildResult({ source: src, tasks, runs: 2, dryRun: true, now: new Date('2026-08-01T00:00:00Z') });
-  const d = r.tasks['01'].dimensions;
+  const d = r.tasks['01'].dimensions, ro = r.tasks['01'].reportOnly;
   process.stdout.write([
     r.schema, r.dryRun, r.source.sha, r.runsRequested, r.generated.slice(0,10),
     r.tasks['01'].runs.length,
-    d.S1.passes + '/' + d.S1.n + ':' + d.S1.grade,
-    d.S2.passes + '/' + d.S2.n + ':' + d.S2.grade,
-    ('S4' in d) ? 'S4-COUNTED' : 'S4-excluded',
+    d.S3.passes + '/' + d.S3.n + ':' + d.S3.grade,
+    ro.S1.passes + '/' + ro.S1.n + ':' + ro.S1.grade,
+    ro.S2.passes + '/' + ro.S2.n + ':' + ro.S2.grade,
+    ('S4' in d || 'S4' in ro) ? 'S4-COUNTED' : 'S4-excluded',
+    ('S1' in d) ? 'S1-GATES' : 'S1-report-only',
   ].join('|'));
 ")
-check "result shape carries schema, sha, run index, and per-dimension grades" \
-  "$shape" "1|true|abc123def456|2|2026-08-01|2|2/2:pass|1/2:fail|S4-excluded"
+check "result shape carries schema, sha, run index, and splits gating from report-only dims" \
+  "$shape" "2|true|abc123def456|2|2026-08-01|2|2/2:pass|2/2:pass|1/2:fail|S4-excluded|S1-report-only"
 
 # An `n-a` dimension must not be counted at all. A task that does not exercise a dimension
 # dragging its grade toward fail would make the corpus report regressions that never happened.
@@ -293,13 +298,13 @@ check "a dimension excluded on every draw still emits a row (0/0), not silence (
     const s5 = res.tasks['02'].dimensions.S5;
     process.stdout.write(s5.n + '/' + s5.passes + '/' + s5.excluded + '/' + s5.grade);
   ")" "0/0/3/null"
-check "a mixed batch counts the excluded draw toward S3 but not S5, and reports the exclusion" \
+check "a mixed batch counts the excluded draw toward S3 but not S5, and reports the exclusion (S3 is task 02's report-only dim, decisions.md#d11)" \
   "$(j "
     const res = M.buildResult({ source: { ref: 'x', sha: 'd' }, tasks: { '02': [
       { index: 0, dimensions: { S5: 'excluded', S3: true } },
       { index: 1, dimensions: { S5: true, S3: true } },
     ] }, runs: 2 });
-    const s5 = res.tasks['02'].dimensions.S5, s3 = res.tasks['02'].dimensions.S3;
+    const s5 = res.tasks['02'].dimensions.S5, s3 = res.tasks['02'].reportOnly.S3;
     process.stdout.write(s5.n + '/' + s5.passes + '/' + s5.excluded + '|' + s3.n + '/' + s3.passes + '/' + s3.excluded);
   ")" "1/1/1|2/2/0"
 check "a harness-faulted (empty-dimensions) draw does NOT inflate excluded on unrelated dims (F-48)" \
@@ -308,7 +313,7 @@ check "a harness-faulted (empty-dimensions) draw does NOT inflate excluded on un
       { index: 0, dimensions: { S5: true, S3: true } },
       { index: 1, dimensions: {} },
     ] }, runs: 2 });
-    const s5 = res.tasks['02'].dimensions.S5, s3 = res.tasks['02'].dimensions.S3;
+    const s5 = res.tasks['02'].dimensions.S5, s3 = res.tasks['02'].reportOnly.S3;
     process.stdout.write(s5.n + '/' + s5.passes + '/' + s5.excluded + '|' + s3.n + '/' + s3.passes + '/' + s3.excluded);
   ")" "1/1/0|1/1/0"
 
@@ -615,56 +620,97 @@ check "the registered hook, invoked as Claude Code would invoke it, writes a mat
   "$(grep -c 'Bash.*cmd="npm test"' "$instw/.somi/audit.log" 2>/dev/null || echo 0)" "1"
 rm -rf "$instw"
 
-# --- 4.1: the pooled certification gate --------------------------------------------------------
-# Synthetic result files, so the gate is tested without 260 model runs.
+# --- 2.4b: the pooled certification gate, on the SETTLED 2-dimension corpus --------------------
+# Real task ids and their real GATING dim (task 01's S3, task 02's S5, decisions.md#d11) -- not the
+# pre-2.4b synthetic 13-dimension pool, which certify()'s new gating-only filter would ignore.
 mk() { j "
-  const tasks = {};
-  const [nDims, n, passes] = [$1, $2, $3];
-  for (let i = 0; i < nDims; i++) {
-    tasks['t' + i] = [];
-    for (let r = 0; r < n; r++) tasks['t' + i].push({ index: r, dimensions: { S1: r < passes } });
-  }
-  const res = M.buildResult({ source: { ref: 'x', sha: 'deadbeef' }, tasks, runs: n });
+  const tasks = { '01': [], '02': [] };
+  for (let r = 0; r < $2; r++) tasks['01'].push({ index: r, dimensions: { S3: r < $1 } });
+  for (let r = 0; r < $4; r++) tasks['02'].push({ index: r, dimensions: { S5: r < $3 } });
+  const res = M.buildResult({ source: { ref: 'x', sha: 'deadbeef' }, tasks, runs: Math.max($2, $4) });
   const c = M.certify(res);
   process.stdout.write([c.certified, c.failures, c.draws, c.sufficientDraws].join('|'));
 "; }
-# 13 dimensions x 20 runs = 260 draws. A perfect corpus and a corpus at exactly the bar both pass.
-check "13 dims x 20/20 certifies"                  "$(mk 13 20 20)" "true|0|260|true"
-# A short run reports honestly instead of certifying -- see the partial-run case below.
-check "5 failures across 260 draws certifies (at the bar)" "$(mk 13 20 20 | true; j "
-  const tasks = {}; for (let i = 0; i < 13; i++) { tasks['t'+i] = [];
-    for (let r = 0; r < 20; r++) tasks['t'+i].push({ index: r, dimensions: { S1: !(i < 5 && r === 0) } }); }
-  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 20 }));
-  process.stdout.write([c.certified, c.failures, c.draws].join('|'));")" "true|5|260"
-check "6 failures across 260 draws does NOT certify" "$(j "
-  const tasks = {}; for (let i = 0; i < 13; i++) { tasks['t'+i] = [];
-    for (let r = 0; r < 20; r++) tasks['t'+i].push({ index: r, dimensions: { S1: !(i < 6 && r === 0) } }); }
-  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 20 }));
-  process.stdout.write([c.certified, c.failures, c.draws].join('|'));")" "false|6|260"
+# 2 gating dims x CERTIFY_N (120) each = 240 draws. A perfect corpus and one at exactly the
+# budget both certify. Args: passes01 n01 passes02 n02.
+check "2 gating dims x 120/120 each certifies"              "$(mk 120 120 120 120)" "true|0|240|true"
+check "5 failures across 240 draws certifies (at the bar)"  "$(mk 115 120 120 120)" "true|5|240|true"
+check "6 failures across 240 draws does NOT certify"        "$(mk 114 120 120 120)" "false|6|240|true"
 
-# The case the gate exists for: ONE dimension secretly at 0.90 while the rest hold. Per-dimension
-# `>=19/20` would clear it 73.6% of the time; pooled catches it, because 2 failures from one
-# dimension plus the corpus's own noise crosses the budget.
-check "one dimension at 18/20 with 12 clean is caught by the pooled budget" "$(j "
-  const tasks = {}; for (let i = 0; i < 13; i++) { tasks['t'+i] = [];
-    for (let r = 0; r < 20; r++) tasks['t'+i].push({ index: r, dimensions: { S1: !(i === 0 && r < 6) } }); }
-  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 20 }));
-  process.stdout.write([c.certified, c.failures, c.softest[0].task, c.softest[0].rate.toFixed(2)].join('|'));")"   "false|6|t0|0.70"
+# The case the gate exists for: ONE dimension secretly at 0.90 while the other holds. grade()'s
+# own per-dimension band (>=18/20, scaled to >=108/120) would call this dimension PASS on its own;
+# pooled catches it, because 12 failures from one dimension alone crosses the budget of 5.
+check "task 01's S3 quietly at 90% (would grade PASS alone) is caught by the pooled budget" "$(j "
+  const tasks = { '01': [], '02': [] };
+  for (let r = 0; r < 120; r++) tasks['01'].push({ index: r, dimensions: { S3: r < 108 } });
+  for (let r = 0; r < 120; r++) tasks['02'].push({ index: r, dimensions: { S5: true } });
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 120 }));
+  process.stdout.write([c.certified, c.failures, c.softest[0].task, c.softest[0].rate.toFixed(2)].join('|'));")" \
+  "false|12|01|0.90"
 
 # A short run must not read as certified. 0 failures out of 20 draws is not a sharp corpus; it is
 # a corpus that has barely been sampled.
-check "a 20-draw run cannot certify, however clean" "$(mk 1 20 20)" "false|0|20|false"
+mk1() { j "
+  const tasks = { '01': [] };
+  for (let r = 0; r < $2; r++) tasks['01'].push({ index: r, dimensions: { S3: r < $1 } });
+  const c = M.certify(M.buildResult({ source: { ref: 'x', sha: 'deadbeef' }, tasks, runs: $2 }));
+  process.stdout.write([c.certified, c.failures, c.draws, c.sufficientDraws].join('|'));
+"; }
+check "a 20-draw run cannot certify, however clean" "$(mk1 20 20)" "false|0|20|false"
+
+# --- 2.4b acceptance point 2: both directions, at the derived draw count ------------------------
+check "a fully-conforming corpus at 240 draws (99.6% pass) certifies"    "$(mk 119 120 120 120)" "true|1|240|true"
+check "a soft corpus at 240 draws (95% pass) does NOT certify"          "$(mk 114 120 114 120)" "false|12|240|true"
+
+# --- 2.4b acceptance point 1: a report-only dimension never reaches `dimensions` -----------------
+check "a report-only dimension appears in reportOnly, absent from dimensions" "$(j "
+  const r = M.buildResult({ source: {ref:'x',sha:'d'}, tasks: { '01': [{ index: 0, dimensions: { S3: true, S1: true } }] }, runs: 1 });
+  const d = r.tasks['01'];
+  process.stdout.write(('S1' in d.dimensions) + '|' + ('S1' in d.reportOnly) + '|' + ('S3' in d.dimensions));
+")" "false|true|true"
+
+# --- 2.4b acceptance point 4: the drift-guard checks buildResult()'s REAL output, not the table
+# a second time -- a table-to-constant comparison alone cannot see a document-vs-code gap.
+check "SCOPES.full.draws equals (gating dims buildResult() actually emits for a synthetic full run) x CERTIFY_N" "$(j "
+  const tasks = { '01': [{ index: 0, dimensions: { S3: true } }], '02': [{ index: 0, dimensions: { S5: true } }] };
+  const r = M.buildResult({ source: { ref: 'x', sha: 'd' }, tasks, runs: 1 });
+  let n = 0; for (const t of Object.values(r.tasks)) n += Object.keys(t.dimensions).length;
+  process.stdout.write(String(M.SCOPES.full.draws === n * M.CERTIFY_N) + '|' + n + '|' + M.CERTIFY_N + '|' + M.SCOPES.full.draws);
+")" "true|2|120|240"
+
+# --- 2.4b acceptance points 7 and 8 (Blocker F-46): the per-dimension floor, both shapes a missing
+# observation takes, through the SAME mechanism. In both, pooled draws/failures look clean --
+# only the per-dimension floor (`d.n >= CERTIFY_N` for EVERY gating dim) can catch this.
+check "S5 present as {n:0, excluded:N} (100% exclusion) fails the floor though pooled draws/failures look clean" "$(j "
+  const tasks = { '01': [], '02': [] };
+  for (let r = 0; r < 240; r++) tasks['01'].push({ index: r, dimensions: { S3: true } });
+  for (let r = 0; r < 240; r++) tasks['02'].push({ index: r, dimensions: { S5: 'excluded' } });
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 240 }));
+  process.stdout.write([c.certified, c.draws, c.failures, c.underFloor.length, c.underFloor[0]?.task + '/' + c.underFloor[0]?.dim].join('|'));
+")" "false|240|0|1|02/S5"
+check "S5 absent from dimensions entirely (every task-02 draw returned no observation) fails the SAME floor, not a second mechanism" "$(j "
+  const tasks = { '01': [], '02': [] };
+  for (let r = 0; r < 240; r++) tasks['01'].push({ index: r, dimensions: { S3: true } });
+  for (let r = 0; r < 240; r++) tasks['02'].push({ index: r, dimensions: {} });
+  const r2 = M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 240 });
+  const c = M.certify(r2);
+  process.stdout.write([c.certified, c.draws, c.failures, ('S5' in r2.tasks['02'].dimensions), c.underFloor.length, c.underFloor[0]?.task + '/' + c.underFloor[0]?.dim].join('|'));
+")" "false|240|0|false|1|02/S5"
 
 # --- sharding, resume and merge: what makes a 260-draw certification batchable ------------------
 # Certification is hours of wall clock. Each run is persisted the moment it finishes so a crash at
 # run 19 does not discard eighteen paid-for runs, and a later invocation skips what is already on
 # disk. Tested by writing shards directly -- no model, no network.
 SHARD_SHA="testsha$(date +%s)"
+# Each task's shard uses its own real GATING dim (task 01's S3, task 02's S5, decisions.md#d11) --
+# certify() reads exclusively from `dimensions`, so a shard tagged with any other dim would never
+# reach it.
 mk_shard() { j "
   const fs = await import('node:fs');
+  const dim = '$1' === '01' ? 'S3' : 'S5';
   const p = M.shardPath('$SHARD_SHA', '$1', $2);
   fs.mkdirSync(p.replace(/\/[^/]+\$/, ''), { recursive: true });
-  fs.writeFileSync(p, JSON.stringify({ sha: '$SHARD_SHA', taskId: '$1', run: { index: $2, dimensions: { S1: $3 }, criteria: null, error: null } }));
+  fs.writeFileSync(p, JSON.stringify({ sha: '$SHARD_SHA', taskId: '$1', run: { index: $2, dimensions: { [dim]: $3 }, criteria: null, error: null } }));
   process.stdout.write('ok');
 "; }
 mk_shard 01 0 true  >/dev/null; mk_shard 01 1 true  >/dev/null
@@ -677,7 +723,7 @@ check "an unwritten index is not reported complete" \
 
 merged=$( j "
   const r = M.mergeShards('$SHARD_SHA', { runs: 3 });
-  const d = r.tasks['01'].dimensions.S1;
+  const d = r.tasks['01'].dimensions.S3;
   process.stdout.write([Object.keys(r.tasks).sort().join('+'), r.tasks['01'].runs.length, d.passes + '/' + d.n, r.source.sha].join('|'));
 ")
 check "mergeShards folds every shard, per task, in index order" "$merged" "01+02|3|2/3|$SHARD_SHA"
@@ -838,13 +884,13 @@ check "an unnamed ADR fails criterion 4" \
 # left -- about seven quota windows -- to confirm an outcome the arithmetic had already fixed.
 over() { j "
   const tasks = { '01': [] };
-  for (let i = 0; i < $1; i++) tasks['01'].push({ index: i, dimensions: { S1: i >= $2 } });
-  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: $1 }), { scope: 'task01' });
+  for (let i = 0; i < $1; i++) tasks['01'].push({ index: i, dimensions: { S3: i >= $2 } });
+  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: $1 }));
   process.stdout.write([c.cannotCertify, c.failures, c.maxFailures].join('|'));
 "; }
-check "3 failures against a budget of 2 is unrecoverable"  "$(over 10 3)" "true|3|2"
-check "2 failures against a budget of 2 is still open"     "$(over 10 2)" "false|2|2"
-check "0 failures is still open"                           "$(over 10 0)" "false|0|2"
+check "6 failures against a budget of 5 is unrecoverable"  "$(over 10 6)" "true|6|5"
+check "5 failures against a budget of 5 is still open"     "$(over 10 5)" "false|5|5"
+check "0 failures is still open"                           "$(over 10 0)" "false|0|5"
 
 # --- the agent timeout must clear the observed spread ------------------------------------------
 # A timeout is the most expensive possible outcome: the run is fully paid for and nothing is
@@ -857,24 +903,69 @@ check "the agent timeout leaves headroom over the observed 13-minute maximum" \
     process.stdout.write(String(Number(m[1].replace(/_/g,'')) >= 1500000));
   ")" "true"
 
-# --- scoped certification: a smaller gate is a WEAKER gate, and says so ------------------------
-# Budgets are DERIVED per scope from the same binomial analysis as the 260-draw gate, not scaled
-# by hand: proportional scaling gives 1.9 for 100 draws and the nearest integer is the wrong one.
-sc() { j "
-  const tasks = { '01': [] };
-  for (let i = 0; i < $2; i++) tasks['01'].push({ index: i, dimensions: { S1: i >= $3, S2: true, S3: true, S6: true, S7: true } });
-  const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: $2 }), { scope: '$1' });
-  process.stdout.write([c.certified, c.failures, c.draws, c.maxFailures, c.requiredDraws].join('|'));
-"; }
-check "task01 scope: 100 draws, 2 failures certifies (at the bar)" "$(sc task01 20 2)" "true|2|100|2|100"
-check "task01 scope: 3 failures does NOT certify"                  "$(sc task01 20 3)" "false|3|100|2|100"
-check "the full scope still needs 260 draws"                       "$(sc full 20 0)"   "false|0|100|5|260"
-check "power is reported for the scope in use" \
-  "$(j "const c = M.certify({tasks:{}}, {scope:'task01'}); process.stdout.write(c.powerGood + '/' + c.powerSoft)")" "0.921/0.118"
-# The derived budgets, pinned. If someone edits SCOPES, the analysis behind it must be redone --
-# these numbers are not preferences.
-check "derived budgets are 5/260 and 2/100" \
-  "$(j "process.stdout.write([M.SCOPES.full.maxFailures, M.SCOPES.full.draws, M.SCOPES.task01.maxFailures, M.SCOPES.task01.draws].join('/'))")" "5/260/2/100"
+# --- 2.4b: SCOPES.task01 is REMOVED, not relabeled; SCOPES.full re-derived from CERTIFY_N -------
+# decisions.md#d11: at 1 gating dimension (S3 alone) the best available budget clears a
+# genuinely-soft corpus 73.58% of the time -- worse than not gating -- so `task01` is gone
+# entirely, and there is exactly one scope left.
+check "SCOPES.task01 no longer exists (removed, not merely relabeled)" \
+  "$(j "process.stdout.write(String('task01' in M.SCOPES))")" "false"
+check "CERTIFY_N is a distinct constant from BANDS.n (raising it must not touch routine trim draws)" \
+  "$(j "process.stdout.write(M.CERTIFY_N + '|' + M.BANDS.n)")" "120|20"
+# The derived budget, pinned -- not a preference. Re-derived (not scaled) at 2 gating dimensions
+# (decisions.md#d11's 2026-08-28 demotion of task 02's S1): the same method lands on CERTIFY_N=120,
+# more per dimension than the prior 3-dimension figure (80), since the pooled false-accept target
+# is reached at the same total draw count (240) regardless of how many dimensions share it.
+check "SCOPES.full is derived from CERTIFY_N x 2 gating dimensions: 240 draws, budget 5, ~96.5%/~1.8% power" \
+  "$(j "const s = M.SCOPES.full; process.stdout.write([s.draws, s.maxFailures, s.powerGood.toFixed(4), s.powerSoft.toFixed(4), s.covers].join('|'))")" \
+  "240|5|0.9651|0.0181|2 of 13 task-dimensions"
+check "power is reported on certify()'s own return value" \
+  "$(j "const c = M.certify({tasks:{}}); process.stdout.write(c.powerGood + '/' + c.powerSoft)")" "0.9651/0.0181"
+
+# --- 2.4b acceptance point 6: --scope is fully removed, not silently falling back to full --------
+scopeout=$(node "$R" --scope task01 --dry-run --source HEAD --tasks 01 --runs 1 2>&1; echo "EXIT:$?")
+case "$scopeout" in
+  *"unknown argument: --scope"*"EXIT:1") ok "--scope is not a recognized flag (removed outright)" ;;
+  *) bad "--scope is not a recognized flag (removed outright) (got: ${scopeout:0:160})" ;;
+esac
+
+# --- 2.4b acceptance point 5: the exact --runs guidance, appended to certify()'s own message ------
+CERT_SHA="certtest$(date +%s)"
+j "
+  const fs = await import('node:fs');
+  const p = M.shardPath('$CERT_SHA', '01', 0);
+  fs.mkdirSync(p.replace(/\/[^/]+\$/, ''), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify({ sha: '$CERT_SHA', taskId: '01', run: { index: 0, dimensions: { S3: false, S1: false }, criteria: null, error: null } }));
+" >/dev/null
+certout=$(node "$R" --certify "$CERT_SHA" 2>&1)
+case "$certout" in
+  *"enough draws:    false  (need 240, have 1) — draw with --runs 120"*)
+    ok "certify()'s 'enough draws: false' message names --runs \$CERTIFY_N exactly, derived from the same constant" ;;
+  *)
+    bad "certify()'s 'enough draws: false' message names --runs \$CERTIFY_N exactly (got: ${certout:0:300})" ;;
+esac
+
+# --- F-112: certified-line parenthetical, UNDER FLOOR block, harnessFaults -- each left 215/0 ----
+case "$certout" in
+  *"certified:       false  (1 gating dimension(s) measured, false-accept 1.81%)"*) ok "certify()'s 'certified:' line states the gating-dimension count and false-accept rate" ;;
+  *) bad "certify()'s 'certified:' line states the gating-dimension count/false-accept rate (got: ${certout:0:300})" ;;
+esac
+case "$certout" in
+  *"UNDER FLOOR:     01/S3 (1/120), 02/S5 (0/120)"*) ok "certify()'s UNDER FLOOR block names each under-floor gating dimension" ;;
+  *) bad "certify()'s UNDER FLOOR block names each under-floor gating dimension (got: ${certout:0:400})" ;;
+esac
+case "$certout" in
+  *"1 failure(s) across 1 draw(s)"*"  01 S3: 0/1"*"report-only 01 S1: 0/1"*) ok "certify()'s summary pools ONLY the gating row, and prints the report-only row after it" ;;
+  *) bad "certify()'s summary pools ONLY the gating row, and prints the report-only row after it (got: ${certout:0:400})" ;;
+esac
+# F-114: {error:'timeout'} (the shape this check used to write) is not a shape a shard can ever
+# carry -- runOnce()'s timeout/quota/judge-fault path always sets harnessFault:true, which the
+# drawing loop's write guard never persists. The one error a shard CAN carry unflagged is :680's.
+j "const fs = await import('node:fs'); fs.writeFileSync(M.shardPath('$CERT_SHA','01',1), JSON.stringify({sha:'$CERT_SHA',taskId:'01',run:{index:1,dimensions:{},criteria:null,error:'no prompt found in the task spec'}}));" >/dev/null
+case "$(node "$R" --certify "$CERT_SHA" 2>&1)" in
+  *"harness faults:  1"*) ok "certify()'s harnessFaults count reflects a persistable error-bearing run, not a hardcoded 0" ;;
+  *) bad "certify()'s harnessFaults count reflects a persistable error-bearing run" ;;
+esac
+rm -rf "$ROOT/tests/evals/results/$CERT_SHA"
 
 # --- a malformed judge reply must not discard the agent run that preceded it -------------------
 # Observed once in three runs: the judge returned unparseable JSON and a ~12-minute agent run was
@@ -1027,11 +1118,11 @@ check "an ordinary judge failure is NOT classified as quota" \
 # time in the check that decides whether every other check passed.
 partial=$( j "
   const tasks = { '01': [] };
-  for (let i = 0; i < 5; i++) tasks['01'].push({ index: i, dimensions: { S1: i < 2, S2: true } });
+  for (let i = 0; i < 5; i++) tasks['01'].push({ index: i, dimensions: { S3: i < 2 } });
   const c = M.certify(M.buildResult({ source: {ref:'x',sha:'d'}, tasks, runs: 5 }));
   process.stdout.write([c.certified, c.onTrack, c.projectedFailures, c.sufficientDraws].join('|'));
 ")
-check "a partial run cannot certify, and reports its projection" "$partial" "false|false|78|false"
+check "a partial run cannot certify, and reports its projection" "$partial" "false|false|144|false"
 
 # --- npm test must not invoke this runner ------------------------------------------------------
 # Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is

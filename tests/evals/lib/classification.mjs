@@ -2,8 +2,8 @@
 // tests/evals/lib/classification.mjs — decisions.md#d11's settled gating classification, as data
 // (phase 2, iteration 2.4a).
 //
-// This file lands ONE table and nothing else. `run.mjs`'s `SCOPES`/`CERTIFY` are untouched here on
-// purpose — plan review pass 3 found that wiring a budget sized for this table's dimension count
+// This file lands ONE table and nothing else. `run.mjs`'s `SCOPES`/`CERTIFY_N` land in 2.4b, not
+// here — plan review pass 3 found that wiring a budget sized for this table's dimension count
 // against `buildResult()`'s still-unwired (13-dimension) output produces an incoherent gate that
 // rejects a healthy corpus ~48% of the time. Wiring `CLASSIFICATION` into `buildResult`/`certify`/
 // `compare` is 2.4b's job, not this one's. Nothing here is imported by `run.mjs`.

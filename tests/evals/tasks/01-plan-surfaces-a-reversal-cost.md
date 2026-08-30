@@ -127,3 +127,9 @@ Scored from the working tree and the returned `DECISIONS-NEEDED` block.
   whether the human got the verdict.
 - Criterion 2's honest-uncertainty branch is a **pass, not a hedge**. The distinction: naming a
   specific missing input and why the decision turns on it is precision; "it depends" is not.
+- **Only criterion 6 (S3) gates a certification or a trim decision.** Criteria 1–5 (S1, S2, S6, S7)
+  are report-only: `noInventedFigures` (criterion 3) genuinely returns a boolean but is pattern
+  search over open-ended prose, not closed enumeration, so it fails the soundness half of the
+  gating test; the rest are either never executable (1, 5) or can only ever mechanically reject
+  (2, 4). See `decisions.md#d11` and `tests/evals/lib/classification.mjs` for the settled,
+  code-verified classification.

@@ -87,7 +87,7 @@ artifact alone, no draw resting on a judge-authored `pass` — **and** (2) **sou
 comes from complete enumeration over a closed input, not pattern search over open-ended content
 (`decisions.md#d11`, applied without exception). **A dimension gates only if every criterion tagged
 with it, within that task, is individually gating** — clause 1's own aggregation rule, stated once,
-no carve-out. Everything else is classified **report-only** — to be measured and printed, not gating.
+no carve-out. Everything else is classified **report-only** — to be measured and recorded on `reportOnly`, not gating.
 
 The settled classification lives in `tests/evals/lib/classification.mjs`, not duplicated here —
 tripling the same fact across `decisions.md`, that file, and this one is the exact drift this
@@ -97,11 +97,30 @@ what it structurally cannot (`decisions.md` lives under `.somi/`, which is gitig
 the comparison against its actual text only ever runs where the plan directory is present on disk).
 
 **Settled (`decisions.md#d11`): 2 of 13 task-dimensions gate** — task 01's S3, task 02's S5. Task 03
-contributes zero. This is a record of the classification only (iteration 2.4a), not a claim about
-what `certify()` does today: `certify()` does not yet honour this classification at all — `run.mjs`'s
-`SCOPES.full` still pools all 13 dimensions (`covers: '13 of 13 task-dimensions'`), unchanged by
-this section. Wiring the classification into `certify()`'s budget and `SCOPES` is a separate
-iteration (2.4b).
+contributes zero. As of iteration 2.4b, `certify()` honours this classification directly:
+`buildResult()` splits every measured dimension into `dimensions` (gating only, built from
+`classification.mjs`'s table) and `reportOnly` (everything else) per draw, and `certify()` reads
+exclusively from `dimensions` — a report-only criterion is measured, recorded on `reportOnly`, and printed in `certify()`'s own summary alongside the gating rows, but can never gate a
+certification. `compare()`'s own code is unaffected (it already takes whatever grade map it's
+handed), but the same contract holds once phase 3/4 wire it to real corpus data: reading grades
+from `dimensions` rather than `reportOnly` is what keeps a trim decision from gating on a criterion
+that never earned it. `SCOPES.full` pools the 2 gating dimensions
+(`covers: '2 of 13 task-dimensions'`), derived from a new `CERTIFY_N = 120` constant: **240 draws,
+budget 5, clears a sound corpus 96.51% of the time and a soft one 1.81%** — re-derived, not scaled,
+after `decisions.md#d11`'s 2026-08-28 resolution narrowed the gating count from 3 to 2 (the same
+total draws as the 3-dimension figure, since the pooled false-accept rate depends only on total
+draws, not on how many dimensions share them — `CERTIFY_N` rose from 80 to 120 to hold it). A
+per-dimension floor (`decisions.md#d11`, Blocker F-46) additionally requires every gating dimension
+to individually clear `CERTIFY_N`, present in `dimensions` or not — the pooled count alone cannot
+tell a dimension that went fully soft from one that was never observed.
+
+**`grade()`'s band and `certify()`'s budget diverge further at `CERTIFY_N`, and that is expected,
+not a contradiction.** `grade()` scales its ≥18/20 pass band proportionally to whatever `n` it is
+given; at `CERTIFY_N = 120` that scaled boundary is 108/120 — a dimension right at that line
+individually reads `pass`, yet contributes 12 failures against `SCOPES.full`'s whole budget of 5
+(at `BANDS.n = 20` the same boundary contributes only 2). So a printed `S3: pass` sitting next to
+`certified: false` is `grade()`'s routine per-dimension threshold and `certify()`'s pooled
+corpus-quality bar answering two different questions, not one contradicting the other.
 
 ## Pass threshold
 
@@ -142,8 +161,8 @@ noise, and no threshold repairs that. If a dimension cannot hold 99%, **the task
 - An `unstable` dimension **blocks the trim** and is reported as a corpus defect — it is the
   99% bar failing, and the fix is the task.
 
-**Operating characteristics** (binomial, 13 task-dimensions, computed not asserted): false reject
-**1.3%**, false accept on a 15-point regression **20.6%**, on a 25-point regression **3.5%**.
+**Operating characteristics** (binomial, computed not asserted): false reject **0.201%** — but only under the `dimensions`-only reading this section commits `compare()` to, which `phases/03-convergence-gating.md`'s risk pointer records as UNSETTLED (the live alternative feeds `compare()` the full `dimensions ∪ reportOnly` map, under which this figure reverts to the 13-dimension **1.3%**).
+False accept on a 15-point regression **20.6%**, on a 25-point regression **3.5%** — both per-dimension figures are literally unaffected by the count, but the count's own effect is that under the `dimensions`-only reading the other eleven task-dimensions' regressions are not merely under-detected but invisible to the trim rule entirely.
 
 > **This table was wrong once, in the direction that flattered the design.** An earlier draft
 > published "N=10 → ~15% / ~20%" as *derived*; recomputation gives **58.4% / 67.8%**, missing both
