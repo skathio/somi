@@ -4,8 +4,10 @@
 // The criterion is a file-list check against an allowlist -- purely mechanical, and it should
 // never have been a judged criterion. It became one only because everything in task 01 was.
 //
-// It was found by disagreement: judge-agreement.mjs put sonnet and haiku on opposite sides of it
-// for the same run. Adjudicating from the stored evidence, haiku was right -- every path it
+// It was found by disagreement: judge-agreement.mjs (deleted 2.4c, decisions.md#d7 -- nothing
+// judged can gate any more, so a cross-model judge swap has no gating verdict left to validate)
+// put sonnet and haiku on opposite sides of it for the same run. Adjudicating from the stored
+// evidence, haiku was right -- every path it
 // enumerated (.somi/README.md, audit.log, somi-state/**, .somi/plans/<slug>/**) is explicitly
 // allowlisted and the diff was empty. A criterion two models read differently is a criterion that
 // should not be read at all.

@@ -25,6 +25,14 @@ const REPO = resolve(HERE, '../..');
 
 // Bumped 2.4b: `buildResult()`'s per-task shape changed -- `dimensions` is now filtered to GATING
 // only (decisions.md#d11/classification.mjs), with a new sibling `reportOnly` map for the rest.
+//
+// Purely documentary until 2.4c: nothing read it back, so nothing could ever reject an old shape.
+// 2.4c gives it a real job -- every SHARD `main()`/`rescoreShards()` write now stamps its own
+// `schema` (a field individual shards never had before), and `mergeShards()` skips one that
+// doesn't match (decisions.md#d7's Correction). `results/4ff4da62.../01-000.json` -- real, on
+// disk, no `schema` field at all -- is exactly the case this guards: it predates the mechanical
+// overlay guarantee 2.1-2.3 built, so merging it today could silently accept a judge-authored
+// verdict for a pair this version treats as mechanically-gated only.
 export const SCHEMA_VERSION = 2;
 
 // ---------------------------------------------------------------------------------------------
@@ -663,7 +671,7 @@ export function taskPrompt(taskSpec) {
  * run N, and the whole N=20 design assumes independent draws -- a shared tree would produce
  * correlated outcomes that the binomial thresholds are not valid for.
  */
-export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, model, judgeModel }) {
+export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, model }) {
   const { installSomi, invokeCommand, workingTreeDiff, uninstallSomi } = await import('./lib/install.mjs');
   const { judge, criterionTags } = await import('./lib/score.mjs');
   const { readAuditLog } = await import('./lib/audit-log.mjs');
@@ -765,7 +773,7 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
       evidence.push('\n### src/auth/session.mjs touch status (mechanical fact -- weigh it under criterion 2; this line is not itself a verdict)\n', s.ok ? 'untouched' : 'touched');
     }
 
-    const verdict = judge(taskSpec, evidence.join('\n'), { model: judgeModel });
+    const verdict = judge(taskSpec, evidence.join('\n'));
     if (!verdict.ok) {
       // No dimensions are recorded. A judge fault is not evidence about the definition set, and
       // scoring it as failures would put a harness problem into the corpus statistics -- exactly
@@ -862,7 +870,7 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
  * default. Passing the pinned worktree for both re-judges against the criterion you just replaced
  * and reports "unchanged" for every shard, which is exactly what it did on the first attempt.
  */
-export async function rescoreShards(sha, specDir = REPO, { judgeModel = null } = {}) {
+export async function rescoreShards(sha, specDir = REPO) {
   const { judge, criterionTags } = await import('./lib/score.mjs');
   const dir = shardDir(sha);
   const files = execFileSync('ls', [dir], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.json'));
@@ -872,7 +880,7 @@ export async function rescoreShards(sha, specDir = REPO, { judgeModel = null } =
     const rec = JSON.parse(readFileSync(path, 'utf8'));
     if (!rec.run.transcript || rec.run.error) continue;
     const spec = readFileSync(taskFile(rec.taskId, specDir), 'utf8');
-    const verdict = judge(spec, `### What the run returned\n\n${rec.run.transcript}`, { model: judgeModel });
+    const verdict = judge(spec, `### What the run returned\n\n${rec.run.transcript}`);
     if (!verdict.ok) {
       changes.push({ f, error: verdict.error });
       // Same rule as the run loop: once quota is gone every remaining call fails identically, and
@@ -902,12 +910,99 @@ export async function rescoreShards(sha, specDir = REPO, { judgeModel = null } =
     });
     const moved = Object.keys({ ...before, ...after }).filter((d) => before[d] !== after[d]);
     rec.run.dimensions = after;
+    // INVARIANT (stated nowhere else in code -- only in phases/02-executable-criteria-gate.md's
+    // 2.4c section): `expiryGuard` and `criteria` are written together or not at all. A rescore
+    // that updated one without the other would assert two incompatible things about the same draw.
     rec.run.criteria = verdict.criteria;
     rec.run.rescored = true;
+    // Stamped even on a shard that never had one (e.g. a real pre-2.4c shard): the overlays just
+    // applied above are the CURRENT ones, so the rewritten shard genuinely conforms now, and must
+    // not be permanently skipped by `mergeShards()`'s schema check going forward.
+    rec.schema = SCHEMA_VERSION;
     writeFileSync(path, JSON.stringify(rec, null, 2) + '\n');
     changes.push({ f, moved, before, after });
   }
   return changes;
+}
+
+/**
+ * Judge every REPORT-ONLY criterion for a SHA already on disk, as a separate, opt-in pass
+ * (decisions.md#d7, Option C) -- no new agent draws, reusing whatever gating shards already exist
+ * for this SHA exactly as `rescoreShards()` reuses their stored transcripts. "Its own N" (the
+ * decision `decisions.md#d7` left open for this iteration to settle) is the `runs` cap: judges only
+ * shards whose stored `run.index` is below it, defaulting to `BANDS.n` -- a real, independent
+ * parameter, not a value that reaches the result shape while every shard on disk gets judged
+ * regardless (2.4c pass 1's own defect, F-129/F-132: `--runs` was accepted and threaded into
+ * `buildResult()`'s `runsRequested` field while this pass judged every shard on disk, so a
+ * maintainer with 240 certification shards paid 240 judge calls with no way to ask for fewer).
+ *
+ * Writes to `results/<sha>/report/<file>`, NEVER `results/<sha>/<file>` -- structurally invisible
+ * to `mergeShards()`/`completedIndices()`, both of which only ever build or glob a path directly
+ * under `shardDir(sha)`. Re-verified by hand for this iteration, not merely inherited: `ls` on a
+ * directory containing a `report/` subdirectory lists `report` as one bare entry, which does not
+ * end in `.json` and is filtered out before any `readFileSync` is attempted; `shardPath()` never
+ * constructs a path through `report/` at all, so `completedIndices()`'s `existsSync` calls can
+ * never resolve into it either way.
+ *
+ * `task03Refs` is computed exactly like `rescoreShards()` does (F-129, pass 1 fix): task 03 has
+ * ZERO gating criteria (`decisions.md#d11`'s settled table) -- criterion 3 maps to S1, which is
+ * REPORT-ONLY, exactly what this pass prints. Omitting the overlay here (pass 1's shipped version)
+ * left `--report` printing the judge's raw verdict for S1 while `--rescore` printed the mechanical
+ * one for the same shard, opposite answers to the one question both passes claim to answer.
+ */
+export async function reportShards(sha, specDir = REPO, { runs = BANDS.n } = {}) {
+  const { judge, criterionTags } = await import('./lib/score.mjs');
+  const dir = shardDir(sha);
+  // Guarded like mergeShards() (Nit, pass 1 review): an unknown SHA used to throw the raw
+  // `Command failed: ls` a bare execFileSync produces -- pre-existing shape in rescoreShards(),
+  // newly duplicated here.
+  if (!existsSync(dir)) throw new Error(`no shards for ${sha} at ${dir}`);
+  const reportDir = join(dir, 'report');
+  const files = execFileSync('ls', [dir], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.json'));
+  const results = [];
+  for (const f of files.sort()) {
+    // Read raw, not through readShard() (F-138): re-derives every dimension fresh below, so a
+    // prior-schema input is not a leak here, unlike a gating read.
+    const rec = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    if (!rec.run.transcript || rec.run.error) continue;
+    if (rec.run.index >= runs) continue; // F-132: --runs is a real cap, not shape-only
+    const spec = readFileSync(taskFile(rec.taskId, specDir), 'utf8');
+    const verdict = judge(spec, `### What the run returned\n\n${rec.run.transcript}`);
+    if (!verdict.ok) {
+      results.push({ f, error: verdict.error });
+      if (verdict.quota) { results.push({ f: '(stopped)', error: 'quota exhausted - re-run after reset' }); break; }
+      continue;
+    }
+    // Recomputed fresh from `specDir` exactly like `spec` above (the DEFINITION SET's own fixture
+    // code, not the candidate's stored output) -- same exception `rescoreShards()` already makes.
+    let task03Refs = null;
+    if (rec.taskId === '03') {
+      try { task03Refs = await task03Reference(specDir); } catch { /* leaves task03Refs null */ }
+    }
+    const dimensions = {};
+    await applyExecutedOverlays(rec.taskId, verdict.criteria, dimensions, criterionTags(spec), {
+      decisionsMd: rec.run.decisionsMd ?? null,
+      transcript: rec.run.transcript,
+      tree: rec.run.changed ?? null,
+      slug: rec.run.slug ?? null,
+      expiryGuard: rec.run.expiryGuard ?? null,
+      testInvocation: rec.run.testInvocation ?? null,
+      task03Refs,
+    });
+    // Filtered to the report-only half before it ever touches disk (Minor, pass 1 review):
+    // `applyExecutedOverlays()` writes every tagged dimension, gating included, so an unfiltered
+    // write would carry a GATING dimension's value (e.g. task 02's S5) under this pass's `schema: 2`
+    // stamp -- the same stamp a real gating shard carries, but a different, incompatible record
+    // shape (no `criteria`/`transcript`/`expiryGuard`/`error`). Latent today (never read by
+    // `mergeShards()`), but `schema: 2` should not mean two shapes -- `kind: 'report'` (F-139) below fixes that.
+    const reportOnlyDims = Object.fromEntries(
+      Object.entries(dimensions).filter(([dim]) => dimensionVerdict(rec.taskId, dim) !== 'gating'));
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(join(reportDir, f),
+      JSON.stringify({ sha, taskId: rec.taskId, schema: SCHEMA_VERSION, kind: 'report', run: { index: rec.run.index, dimensions: reportOnlyDims } }, null, 2) + '\n');
+    results.push({ f, taskId: rec.taskId, index: rec.run.index, dimensions: reportOnlyDims });
+  }
+  return results;
 }
 
 export function shardDir(sha) {
@@ -916,6 +1011,30 @@ export function shardDir(sha) {
 
 export function shardPath(sha, taskId, index) {
   return join(shardDir(sha), `${taskId}-${String(index).padStart(3, '0')}.json`);
+}
+
+/**
+ * The on-disk shape of one GATING shard -- shared by the production writer (`main()`'s drawing
+ * loop) and the fixtures that build a gating shard from a result, NOT "every fixture" (F-133,
+ * narrowed F-136). The production call site is pinned structurally, not behaviorally -- no test
+ * here reaches `runOnce()`'s own execution.
+ */
+export function shardRecord(sha, taskId, run) {
+  return { sha, taskId, schema: SCHEMA_VERSION, run };
+}
+
+/**
+ * Read one shard file, off ONE definition of "current schema" (F-131) -- `mergeShards()`'s fold and
+ * `main()`'s resume-read used to apply the check at one site and skip it at the other, so a stale
+ * shard silently resumed with judge-authored dimensions on the path that skipped it (a real,
+ * on-disk pre-2.4c shard, resumed this way, read back `{"S2":true,"S7":true,"S1":true,"S6":true,
+ * "S3":true}` -- `S3:true` judge-authored from before 2.1 wired `boundaryRespected`). Returns
+ * `null` for a shard whose schema does not match `SCHEMA_VERSION`; every caller must treat that
+ * exactly like an absent shard, not a present-but-degraded one.
+ */
+export function readShard(path) {
+  const rec = JSON.parse(readFileSync(path, 'utf8'));
+  return rec.schema === SCHEMA_VERSION ? rec : null;
 }
 
 /** Which run indices for this task are already on disk. */
@@ -931,12 +1050,33 @@ export function mergeShards(sha, { runs = BANDS.n } = {}) {
   if (!existsSync(dir)) throw new Error(`no shards for ${sha} at ${dir}`);
   const files = execFileSync('ls', [dir], { encoding: 'utf8' }).split('\n').filter((f) => f.endsWith('.json'));
   const tasks = {};
+  const skipped = [];
   for (const f of files.sort()) {
-    const rec = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    // A shard's OWN schema (2.4c), not the merged result's -- these are stamped at different
+    // times. A shard from a prior schema (every real shard on disk before this iteration,
+    // including one with NO `schema` field at all) is skipped rather than merged: 2.4b changed
+    // what a GATING pair's boolean means, and an old shard's may be judge-authored under
+    // semantics this version no longer honours for that pair.
+    const rec = readShard(join(dir, f));
+    if (!rec) { skipped.push(f); continue; }
     (tasks[rec.taskId] ??= []).push(rec.run);
   }
   for (const id of Object.keys(tasks)) tasks[id].sort((a, b) => a.index - b.index);
-  return buildResult({ source: { ref: sha, sha }, tasks, runs });
+  if (skipped.length) {
+    // The remedy named explicitly, not blanket (Minor, 2.4c pass 1 review): `--rescore` re-stamps
+    // the schema and reapplies today's overlays, but a shard missing the fields an overlay needs
+    // (e.g. `changed` on a pre-2.1 shard) still recovers only an EXCLUDED draw for the dimension
+    // that field drives, not a counted one -- rescoring 240 such shards would spend 240 judge calls
+    // to recover zero gating draws.
+    process.stderr.write(`  mergeShards: skipped ${skipped.length} shard(s) from a schema other than ${SCHEMA_VERSION} (re-run --rescore to upgrade them -- recovers a counted draw only for dimensions whose overlay fields the shard still has; a pre-2.1 shard missing e.g. \`changed\` still excludes S3 after rescoring): ${skipped.join(', ')}\n`);
+  }
+  const merged = buildResult({ source: { ref: sha, sha }, tasks, runs });
+  // Surfaced on the RETURN VALUE too, not only on stderr (Nit, pass 1 review): `--certify sha >
+  // cert.txt` redirects stdout only, so a caller reading just the file used to see `draws: 0` with
+  // no explanation anywhere in it. `main()`'s certify branch prints a one-line pointer to stdout
+  // when this is non-empty; the filenames themselves stay on stderr, unduplicated.
+  merged.skippedShards = skipped;
+  return merged;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -960,7 +1100,7 @@ export function fixtureFor(id, dir) {
 
 function parseArgs(argv) {
   const a = { source: 'HEAD', tasks: null, runs: BANDS.n, dryRun: false, out: null, model: null,
-              judgeModel: null, merge: null, certifySha: null, rescore: null, batch: Infinity };
+              merge: null, certifySha: null, rescore: null, report: null, batch: Infinity };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === '--source') a.source = argv[++i];
@@ -968,11 +1108,11 @@ function parseArgs(argv) {
     else if (k === '--runs') a.runs = Number(argv[++i]);
     else if (k === '--out') a.out = argv[++i];
     else if (k === '--model') a.model = argv[++i];
-    else if (k === '--judge-model') a.judgeModel = argv[++i];
     else if (k === '--dry-run') a.dryRun = true;
     else if (k === '--merge') a.merge = argv[++i];
     else if (k === '--certify') a.certifySha = argv[++i];
     else if (k === '--rescore') a.rescore = argv[++i];
+    else if (k === '--report') a.report = argv[++i];
     // `--scope` removed, not left dead (decisions.md#d11): `SCOPES.task01` is gone, so there is
     // exactly one scope -- falls through to the `unknown argument` throw below instead.
     else if (k === '--batch') a.batch = Number(argv[++i]);
@@ -995,6 +1135,9 @@ const USAGE = `somi eval runner
                        disk are reused, so repeated invocations converge on --runs.
   --rescore <sha>      re-judge stored transcripts against the CURRENT task specs, in place. Use
                        after a criterion changes: it redoes only the cheap half of each draw.
+  --report <sha>       judge every REPORT-ONLY criterion from stored transcripts, opt-in and
+                       structurally separate: writes to results/<sha>/report/, never the gating
+                       shard space, so its output can never change --certify's verdict for <sha>.
   --merge <sha>        fold results/<sha>/*.json into one result file and report certification
   --certify <sha>      same as --merge (certification is just the merged view)
   --dry-run            build the result shape without invoking a model. No network, no credential.
@@ -1029,10 +1172,31 @@ async function main(argv) {
   if (args.rescore) {
     // Specs come from the WORKING TREE, not from the pinned definition set. See rescoreShards.
     process.stdout.write(`  re-judging against the task specs in ${REPO} (the current scorer)\n`);
-    const changes = await rescoreShards(args.rescore, REPO, { judgeModel: args.judgeModel });
+    const changes = await rescoreShards(args.rescore, REPO);
     for (const c of changes) {
       if (c.error) { process.stdout.write(`  ${c.f}: JUDGE ERROR ${c.error}\n`); continue; }
       process.stdout.write(`  ${c.f}: ${c.moved.length ? c.moved.map((d) => `${d} ${c.before[d]}->${c.after[d]}`).join(', ') : 'unchanged'}\n`);
+    }
+    return 0;
+  }
+
+  if (args.report) {
+    // Same scorer-source rule as --rescore: the CURRENT task specs, not the pinned definition set.
+    process.stdout.write(`  judging report-only criteria against the task specs in ${REPO}\n`);
+    const results = await reportShards(args.report, REPO, { runs: args.runs });
+    const tasks = {};
+    for (const r of results) {
+      if (r.error) { process.stdout.write(`  ${r.f}: JUDGE ERROR ${r.error}\n`); continue; }
+      (tasks[r.taskId] ??= []).push({ index: r.index, dimensions: r.dimensions });
+    }
+    // buildResult() is reused for its grading/classification, not because this pass gates on
+    // anything -- only `.reportOnly` is ever read from its output below.
+    const merged = buildResult({ source: { ref: args.report, sha: args.report }, tasks, runs: args.runs });
+    process.stdout.write('report-only:\n');
+    for (const [taskId, t] of Object.entries(merged.tasks)) {
+      for (const [dim, d] of Object.entries(t.reportOnly)) {
+        process.stdout.write(`  report-only ${taskId} ${dim}: ${d.passes}/${d.n}${d.excluded ? ` (${d.excluded} excluded)` : ''}\n`);
+      }
     }
     return 0;
   }
@@ -1069,6 +1233,12 @@ async function main(argv) {
       // report-only, never gating (decisions.md#d11) -- printed too: pooling decides, but only the
       // per-dimension view says WHICH task to sharpen, and that applies here as it does above.
       (c.reportOnly.length ? c.reportOnly.map((d) => `  report-only ${d.task} ${d.dim}: ${d.passes}/${d.n}${d.excluded ? ` (${d.excluded} excluded)` : ''}`).join('\n') + '\n' : ''));
+    // On stdout too, not just the stderr warning mergeShards() already wrote (Nit, pass 1 review):
+    // `--certify sha > cert.txt` redirects stdout only, and the file used to say `draws: 0` with no
+    // pointer to why. Filenames stay on stderr, unduplicated -- this is a pointer, not a repeat.
+    if (merged.skippedShards?.length) {
+      process.stdout.write(`  (skipped ${merged.skippedShards.length} shard(s) from a prior schema -- see stderr, or re-run --rescore to upgrade them)\n`);
+    }
     // Exit 0 even when uncertified: "the corpus is not sharp enough yet" is a RESULT, and a
     // non-zero exit would make a batch script treat it as a crash and retry it forever.
     return 0;
@@ -1118,15 +1288,28 @@ async function main(argv) {
         } else {
           const shard = shardPath(source.sha, id, i);
           if (existsSync(shard)) {
+            const rec = readShard(shard);
+            if (!rec) {
+              // Skip-and-warn, matching mergeShards() (F-131/decisions.md#d7) -- NOT a redraw.
+              // A stale-schema shard's own dimensions may be judge-authored under semantics this
+              // version no longer honours; resuming from it would silently reintroduce exactly the
+              // leak this iteration's schema guard exists to close. Redrawing automatically was
+              // considered and rejected: a redraw costs ~10 minutes of a live agent run, and that
+              // is the maintainer's call to make, not this loop's to make for them. "Skipped", not
+              // "excluded" (Nit) -- D11 reserves `excluded` for a per-dimension outcome on a
+              // COUNTED draw; this draw is absent, not counted.
+              process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: skipped -- ${shard} is a prior schema, not resumed or redrawn (re-run --rescore to upgrade it, or delete it to draw fresh)\n`);
+              continue;
+            }
             // Already scored in an earlier batch. Read it back rather than re-running: the point
             // of sharding is that a paid-for run is never paid for twice.
-            tasks[id].push(JSON.parse(readFileSync(shard, 'utf8')).run);
+            tasks[id].push(rec.run);
             process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: (already done)\n`);
             continue;
           }
           const spec = readFileSync(taskFile(id, source.dir), 'utf8');
           const fixture = fixtureFor(id, source.dir);
-          const r = await runOnce({ taskId: id, taskSpec: spec, fixtureDir: fixture, sourceDir: source.dir, index: i, model: args.model, judgeModel: args.judgeModel });
+          const r = await runOnce({ taskId: id, taskSpec: spec, fixtureDir: fixture, sourceDir: source.dir, index: i, model: args.model });
           process.stderr.write(`  ${id} run ${i + 1}/${args.runs}: ${r.error ? 'ERROR ' + r.error : renderDimensions(r.dimensions)}\n`);
           // Written BEFORE anything else can fail. Everything after this point is bookkeeping.
           //
@@ -1135,7 +1318,7 @@ async function main(argv) {
           // result that no re-run ever revisits.
           if (!r.harnessFault) {
             mkdirSync(dirname(shard), { recursive: true });
-            writeFileSync(shard, JSON.stringify({ sha: source.sha, taskId: id, run: r }, null, 2) + '\n');
+            writeFileSync(shard, JSON.stringify(shardRecord(source.sha, id, r), null, 2) + '\n');
           }
           tasks[id].push(r);
           executed += 1;

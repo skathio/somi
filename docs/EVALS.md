@@ -233,13 +233,14 @@ latency is the bottleneck, and here it is not.
 
 **Implemented so far** (savings that carry no correctness risk):
 
-- **A cheaper judge was tried and REVERTED.** It is ~half of every run's wall clock, so the saving
-  was real — but `tests/evals/judge-agreement.mjs`, which re-scores shards already on disk with two
-  judge models, disagreed on **1 of 6** criterion verdicts on the very first shard. A scorer that
-  grades *differently* is not a saving: at N=20 one flipped verdict in twenty moves a dimension a
-  full grade, and phase 4 would read that as a definition-set regression when only the scorer
-  changed. Revisit once more criteria are executed and agreement has been measured across ~20
-  shards rather than one.
+- **A cheaper judge was tried and reverted.** It is ~half of every run's wall clock, so the saving
+  was real — but `judge-agreement.mjs`, which re-scored shards already on disk with two judge
+  models, disagreed on **1 of 6** criterion verdicts on the very first shard. A scorer that grades
+  *differently* is not a saving: at N=20 one flipped verdict in twenty moves a dimension a full
+  grade, and phase 4 would read that as a definition-set regression when only the scorer changed.
+  **Settled, not merely deferred**: once nothing judged can gate (`decisions.md#d7`, phase 2.4),
+  a cross-model judge swap has no gating verdict left to validate, so there is nothing left to
+  revisit — `judge-agreement.mjs` and the `--judge-model` flag were removed outright (2.4c).
 
   The disagreement paid for itself anyway — see below.
 - **Task 01 criterion 6 is executed, not judged.** It is a file-list check against an allowlist —

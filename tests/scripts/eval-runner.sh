@@ -705,16 +705,27 @@ SHARD_SHA="testsha$(date +%s)"
 # Each task's shard uses its own real GATING dim (task 01's S3, task 02's S5, decisions.md#d11) --
 # certify() reads exclusively from `dimensions`, so a shard tagged with any other dim would never
 # reach it.
+# Built through M.shardRecord() -- the SAME function main()'s drawing loop is meant to write
+# through (F-133) -- not a hand-built literal checked against a hand-built expectation.
 mk_shard() { j "
   const fs = await import('node:fs');
   const dim = '$1' === '01' ? 'S3' : 'S5';
   const p = M.shardPath('$SHARD_SHA', '$1', $2);
   fs.mkdirSync(p.replace(/\/[^/]+\$/, ''), { recursive: true });
-  fs.writeFileSync(p, JSON.stringify({ sha: '$SHARD_SHA', taskId: '$1', run: { index: $2, dimensions: { [dim]: $3 }, criteria: null, error: null } }));
+  fs.writeFileSync(p, JSON.stringify(M.shardRecord('$SHARD_SHA', '$1', { index: $2, dimensions: { [dim]: $3 }, criteria: null, error: null })));
   process.stdout.write('ok');
 "; }
 mk_shard 01 0 true  >/dev/null; mk_shard 01 1 true  >/dev/null
 mk_shard 01 2 false >/dev/null; mk_shard 02 0 true  >/dev/null
+
+check "shardRecord() produces the shape both the production writer and this fixture share (F-133)" \
+  "$(j "process.stdout.write(JSON.stringify(M.shardRecord('s','01',{index:0})))")" \
+  '{"sha":"s","taskId":"01","schema":2,"run":{"index":0}}'
+# F-136: the check above pins shardRecord()'s OWN shape, not that the live-agent-gated production
+# write reaches it -- no test does. Pinned structurally: grepping the FULL `writeFileSync(shard,
+# ...)` prefix, not just `shardRecord(...)` alone, which used to also match the docstring's prose.
+check "main()'s drawing loop writes the shard through shardRecord(), not a parallel literal (F-136)" \
+  "$(grep -c 'writeFileSync(shard, JSON.stringify(shardRecord(source\.sha, id, r)' "$ROOT/$R")" "1"
 
 check "completedIndices sees the shards already on disk" \
   "$(j "process.stdout.write([...M.completedIndices('$SHARD_SHA','01',5)].join(','))")" "0,1,2"
@@ -747,6 +758,91 @@ check "shard directory is removable and merge then fails loudly" \
   "$(j "try { M.mergeShards('$SHARD_SHA'); process.stdout.write('MERGED'); } catch { process.stdout.write('threw'); }")" \
   "threw"
 
+# --- 2.4c: mergeShards() skips a shard from a prior schema, with a clear message ----------------
+# SCHEMA_VERSION was bumped 1 -> 2 in 2.4b but nothing read it back -- this is the pass that gives
+# it a job. The REAL shard decisions.md#d7's Correction names by path (no `schema` field at all,
+# predates the mechanical-overlay guarantee 2.1-2.3 built) is copied into a throwaway SHA -- never
+# the original on disk, never mutated in place.
+legacysha="legacytest$(date +%s)"
+legacydir="$ROOT/tests/evals/results/$legacysha"
+mkdir -p "$legacydir"
+cp "$ROOT/tests/evals/results/4ff4da62caff23248f9d057c6bc9046a8a22ecf6/01-000.json" "$legacydir/01-000.json"
+legacyerrfile=$(mktemp)
+legacyout=$(node --input-type=module -e "
+  const M = await import('$ROOT/$R');
+  process.stdout.write(String(M.certify(M.mergeShards('$legacysha')).draws));
+" 2>"$legacyerrfile")
+legacyerr=$(cat "$legacyerrfile"); rm -f "$legacyerrfile"
+check "mergeShards() skips a real, schema-less legacy shard rather than merging it" "$legacyout" "0"
+case "$legacyerr" in
+  *"schema"*"01-000.json"*) ok "mergeShards() names the skipped shard and the reason in a clear message" ;;
+  *) bad "mergeShards() names the skipped shard and the reason in a clear message (got: ${legacyerr:0:200})" ;;
+esac
+# The guard is per-shard, not "give up on the whole directory": a CURRENT-schema shard alongside
+# the skipped legacy one must still merge normally. stdout only (stderr carries the warning above
+# and `j()` merges the two, which would corrupt this numeric comparison).
+j "
+  const fs = await import('node:fs');
+  fs.writeFileSync(M.shardPath('$legacysha','01',1), JSON.stringify({ sha: '$legacysha', taskId: '01', schema: M.SCHEMA_VERSION, run: { index: 1, dimensions: { S3: true }, criteria: null, error: null } }));
+" >/dev/null
+check "a current-schema shard alongside a skipped legacy one still merges" \
+  "$(node --input-type=module -e "const M = await import('$ROOT/$R'); process.stdout.write(String(M.certify(M.mergeShards('$legacysha')).draws));" 2>/dev/null)" "1"
+# F-143: the pass-1 Nit's fix was two halves -- stderr (pinned above via $legacyerr) and stdout,
+# the half that actually survives `--certify sha > cert.txt`. stdout only (2>/dev/null): a caller
+# reading just the redirected file must still see the pointer.
+legacycertout=$(node "$R" --certify "$legacysha" 2>/dev/null)
+case "$legacycertout" in
+  *"(skipped 1 shard(s) from a prior schema -- see stderr, or re-run --rescore to upgrade them)"*)
+    ok "certify()'s skipped-shard pointer survives a stdout-only redirect (F-143)" ;;
+  *) bad "certify()'s skipped-shard pointer survives a stdout-only redirect (got: ${legacycertout: -300})" ;;
+esac
+rm -rf "$legacydir"
+
+# --- 2.4c (fixed pass 2): the resume-read in main()'s drawing loop applies the SAME schema check
+# as mergeShards(), via the shared readShard() (F-131). A stale-schema shard used to be resumed
+# from silently, carrying judge-authored dimensions from before this version's semantics -- measured
+# on a copy of the same real legacy shard above, read back {"S2":true,...,"S3":true} with S3
+# judge-authored from before 2.1 wired boundaryRespected. Fixed: excluded and warned about, NOT
+# redrawn automatically (decisions.md#d7's settled answer -- a redraw is ~10 minutes of a live agent
+# run, the maintainer's call, not this loop's). Both indices below are already shard-backed, so the
+# drawing loop never falls through to a live agent or judge call; the `claude` stub only satisfies
+# preflight()'s `command -v` check.
+resumebin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+cat > "$resumebin/claude" <<'STUB'
+#!/usr/bin/env bash
+echo 'unused -- every requested index is already shard-backed'
+STUB
+chmod +x "$resumebin/claude"
+resumedir="$ROOT/tests/evals/results/unversioned"
+# F-135: NOT a scratch namespace like every other shard test's $(date +%s) sha -- shardPath(null,
+# ...) always resolves here, and a real, quota-paid draw can genuinely live at this path. Move it
+# aside and restore it; an unconditional rm -rf would silently unpay a real run and report green.
+resumedir_backup=""
+if [ -d "$resumedir" ]; then
+  resumedir_backup="$(mktemp -d)/unversioned"
+  # F-144: unchecked, a failed mv (e.g. TMPDIR full) leaves the real directory in place while the
+  # rest of this block proceeds to write fixtures into it and rm -rf it below -- fail loud instead.
+  mv "$resumedir" "$resumedir_backup" || { bad "F-135: could not move aside real results/unversioned -- refusing to proceed"; exit 1; }
+  echo "  (moved aside real results/unversioned to $resumedir_backup for restore)"
+fi
+mkdir -p "$resumedir"
+j "
+  const fs = await import('node:fs');
+  fs.writeFileSync(M.shardPath(null,'01',0), JSON.stringify(M.shardRecord(null,'01',{ index: 0, dimensions: { S3: true }, criteria: null, error: null })));
+" >/dev/null
+cp "$ROOT/tests/evals/results/4ff4da62caff23248f9d057c6bc9046a8a22ecf6/01-000.json" "$resumedir/01-001.json"
+resumeout=$(ANTHROPIC_API_KEY=test-stub-key PATH="$resumebin:$PATH" node "$R" --source . --tasks 01 --runs 2 --out "$(mktemp)" 2>&1)
+case "$resumeout" in
+  *"skipped"*"01-001.json"*) ok "the resume-read skips a stale-schema shard rather than resuming from it (F-131)" ;;
+  *) bad "the resume-read skips a stale-schema shard rather than resuming from it (got: ${resumeout:0:400})" ;;
+esac
+case "$resumeout" in
+  *"01 run 1/2: (already done)"*) ok "a current-schema shard alongside the skipped one still resumes normally" ;;
+  *) bad "a current-schema shard alongside the skipped one still resumes normally (got: ${resumeout:0:400})" ;;
+esac
+rm -rf "$resumebin" "$resumedir"
+[ -n "$resumedir_backup" ] && mv "$resumedir_backup" "$resumedir"
+
 # --- executed criterion: task 03 criterion 3, scored by running it rather than judging it -------
 rep() { j "
   const R = await import('$ROOT/tests/evals/lib/reproduce.mjs');
@@ -766,6 +862,30 @@ check "a hedge with no date returns null (judge fallback)" "$(rep 'the proration
 # the CLI defaults to" -- the larger model -- not "unset by accident".
 check "the judge does NOT default to a cheaper model" \
   "$(j "process.stdout.write(String((await import('$ROOT/tests/evals/lib/score.mjs')).DEFAULT_JUDGE_MODEL))")" "null"
+
+# --- 2.4c: judge-agreement.mjs and --judge-model, D7's disposition finally executed -------------
+check "judge-agreement.mjs no longer exists" \
+  "$(j "process.stdout.write(String((await import('node:fs')).existsSync('$ROOT/tests/evals/judge-agreement.mjs')))")" "false"
+case "$(node "$R" --judge-model sonnet --dry-run --source HEAD --tasks 01 --runs 1 2>&1; echo "EXIT:$?")" in
+  *"unknown argument: --judge-model"*"EXIT:1") ok "--judge-model is not a recognized flag (removed outright)" ;;
+  *) bad "--judge-model is not a recognized flag (removed outright)" ;;
+esac
+
+# --- 2.4c: parseVerdict() rejects a judge reply with duplicate n --------------------------------
+# `criteria` is keyed by n, not positional (decisions.md#d11) -- a duplicate n is not a shape any
+# downstream consumer (toDimensions, the splice-based overlays) can safely reduce over. Mutated
+# from a genuinely well-formed reply, not hand-built already-broken, so a reversion of the check
+# below is provably what turns this red.
+pv() { j "
+  const S = await import('$ROOT/tests/evals/lib/score.mjs');
+  const v = S.parseVerdict($1);
+  process.stdout.write(v.ok ? 'ok' : v.error);
+"; }
+check "a well-formed reply with distinct n parses ok" \
+  "$(pv "'{\"criteria\":[{\"n\":1,\"verdict\":\"pass\"},{\"n\":2,\"verdict\":\"fail\"}]}'")" "ok"
+check "a duplicate n is rejected, not silently accepted" \
+  "$(pv "'{\"criteria\":[{\"n\":1,\"verdict\":\"pass\"},{\"n\":1,\"verdict\":\"fail\"}]}'")" \
+  "duplicate criterion n=1 in judge reply"
 
 bnd() { j "
   const B = await import('$ROOT/tests/evals/lib/boundary.mjs');
@@ -934,7 +1054,7 @@ j "
   const fs = await import('node:fs');
   const p = M.shardPath('$CERT_SHA', '01', 0);
   fs.mkdirSync(p.replace(/\/[^/]+\$/, ''), { recursive: true });
-  fs.writeFileSync(p, JSON.stringify({ sha: '$CERT_SHA', taskId: '01', run: { index: 0, dimensions: { S3: false, S1: false }, criteria: null, error: null } }));
+  fs.writeFileSync(p, JSON.stringify({ sha: '$CERT_SHA', taskId: '01', schema: M.SCHEMA_VERSION, run: { index: 0, dimensions: { S3: false, S1: false }, criteria: null, error: null } }));
 " >/dev/null
 certout=$(node "$R" --certify "$CERT_SHA" 2>&1)
 case "$certout" in
@@ -960,7 +1080,7 @@ esac
 # F-114: {error:'timeout'} (the shape this check used to write) is not a shape a shard can ever
 # carry -- runOnce()'s timeout/quota/judge-fault path always sets harnessFault:true, which the
 # drawing loop's write guard never persists. The one error a shard CAN carry unflagged is :680's.
-j "const fs = await import('node:fs'); fs.writeFileSync(M.shardPath('$CERT_SHA','01',1), JSON.stringify({sha:'$CERT_SHA',taskId:'01',run:{index:1,dimensions:{},criteria:null,error:'no prompt found in the task spec'}}));" >/dev/null
+j "const fs = await import('node:fs'); fs.writeFileSync(M.shardPath('$CERT_SHA','01',1), JSON.stringify({sha:'$CERT_SHA',taskId:'01',schema:M.SCHEMA_VERSION,run:{index:1,dimensions:{},criteria:null,error:'no prompt found in the task spec'}}));" >/dev/null
 case "$(node "$R" --certify "$CERT_SHA" 2>&1)" in
   *"harness faults:  1"*) ok "certify()'s harnessFaults count reflects a persistable error-bearing run, not a hardcoded 0" ;;
   *) bad "certify()'s harnessFaults count reflects a persistable error-bearing run" ;;
@@ -971,12 +1091,39 @@ rm -rf "$ROOT/tests/evals/results/$CERT_SHA"
 # Observed once in three runs: the judge returned unparseable JSON and a ~12-minute agent run was
 # thrown away. At ~90% of a usage cap per batch that is not affordable. Only a PARSE failure is
 # retried -- a quota outage is not, since the next call fails identically and burns budget proving
-# it. Asserted on the classifier, not by spawning a CLI.
-mal() { j "process.stdout.write(String(/not valid JSON|no JSON object|no criteria array|malformed criterion/.test('$1')))"; }
+# it. Asserted on the REAL classifier, exported as `isRetryableJudgeError` -- a hand-copied regex
+# literal here could not fail (F-137, closing the gap F-130 found).
+mal() { node --input-type=module -e "
+  const S = await import('$ROOT/tests/evals/lib/score.mjs');
+  process.stdout.write(String(S.isRetryableJudgeError('$1')));
+" 2>&1; }
 check "an unparseable reply is retryable"        "$(mal 'judge reply is not valid JSON: x')" "true"
 check "a missing criteria array is retryable"    "$(mal 'judge reply has no criteria array')" "true"
 check "a quota outage is NOT retryable"          "$(mal 'quota exhausted')"                   "false"
 check "a generic exit is NOT retryable"          "$(mal 'judge exited 1')"                    "false"
+# F-130: asserted against the REAL `judge()`, spawning a stubbed `claude` end to end -- the only
+# check here that would catch a break in `judgeOnce()`'s own retry wiring, not just in the
+# classifier `mal()` now shares with it (F-137). Stub replies duplicate-n on the FIRST call,
+# well-formed on the SECOND; `judge()` must retry and return the second's verdict.
+dupbin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+cat > "$dupbin/claude" <<STUB
+#!/usr/bin/env bash
+if [ -e "$dupbin/.hit" ]; then
+  echo '{"criteria":[{"n":1,"verdict":"pass","evidence":"e"}]}'
+else
+  touch "$dupbin/.hit"
+  echo '{"criteria":[{"n":1,"verdict":"pass","evidence":"e"},{"n":1,"verdict":"pass","evidence":"e"}]}'
+fi
+STUB
+chmod +x "$dupbin/claude"
+dupout=$(PATH="$dupbin:$PATH" node --input-type=module -e "
+  const S = await import('$ROOT/tests/evals/lib/score.mjs');
+  const v = S.judge('spec text', 'evidence text');
+  process.stdout.write(v.ok + '|' + (v.retried ?? false));
+" 2>&1)
+check "a duplicate-n reply is retried against the real judge(), not treated as an unrecoverable harness fault (F-130)" \
+  "$dupout" "true|true"
+rm -rf "$dupbin"
 
 # --- rescore reads the CURRENT scorer, not the pinned one --------------------------------------
 # Two sources, and conflating them makes rescore silently do nothing. The DEFINITION SET is pinned
@@ -1096,6 +1243,125 @@ rsout=$(PATH="$rsbin:$PATH" node --input-type=module -e "
 check "rescoreShards reapplies task 01's criteria 3+6 and task 02's S5/S1 overlays; a legacy shard's stale EXECUTED criterion 6 is excluded on disk, never overwritten with judge prose (F-71)" \
   "$rsout" "true|true|excluded|true|true|true|excluded"
 rm -rf "$rsbin" "$rsdir"
+
+# --- 2.4c acceptance: "no judged criterion can gate", re-checked at mergeShards()'s output for
+# the --rescore PATH specifically (previously pinned only at the individual-shard/applyExecutedOverlays
+# level, never end to end through mergeShards()+certify()) -------------------------------------
+rs2bin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+cat > "$rs2bin/claude" <<'STUB'
+#!/usr/bin/env bash
+echo '{"criteria":[{"n":1,"verdict":"pass","evidence":"e"},{"n":2,"verdict":"pass","evidence":"e"},{"n":3,"verdict":"pass","evidence":"e"},{"n":4,"verdict":"pass","evidence":"e"}]}'
+STUB
+chmod +x "$rs2bin/claude"
+rs2sha="rescoretest2$(date +%s)"
+rs2dir="$ROOT/tests/evals/results/$rs2sha"
+mkdir -p "$rs2dir"
+# The stub judge says criterion 1 (S5, GATING) PASSES. The stored expiryGuard -- the mechanical
+# fact -- says it FAILED. If the overlay were bypassed on this path, S5 would read pass/1 below.
+j "
+  const fs = await import('node:fs');
+  fs.writeFileSync(M.shardPath('$rs2sha','02',0), JSON.stringify({ sha: '$rs2sha', taskId: '02', schema: M.SCHEMA_VERSION, run: { index: 0, dimensions: {}, criteria: [], error: null, transcript: 't', expiryGuard: { verdict: 'fail', step: 'mutant', reason: 'r', observed: 'assertion' }, testInvocation: 'pass' } }));
+" >/dev/null
+PATH="$rs2bin:$PATH" node --input-type=module -e "const M = await import('$ROOT/$R'); await M.rescoreShards('$rs2sha', '$ROOT');" >/dev/null 2>&1
+rs2merge=$(j "
+  const c = M.certify(M.mergeShards('$rs2sha'));
+  const s5 = c.dimensions.find((d) => d.task === '02' && d.dim === 'S5');
+  process.stdout.write(s5 ? s5.passes + '/' + s5.n : 'MISSING');
+")
+check "mergeShards()+certify() after --rescore reflects the MECHANICAL expiryGuard verdict (fail) on gating dimension S5, never the stub judge's own 'pass'" \
+  "$rs2merge" "0/1"
+rm -rf "$rs2bin" "$rs2dir"
+
+# --- 2.4c acceptance: --report is a separate, opt-in pass; its shard cannot change certify() -----
+rptbin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+cat > "$rptbin/claude" <<'STUB'
+#!/usr/bin/env bash
+echo '{"criteria":[{"n":1,"verdict":"pass","evidence":"e"},{"n":2,"verdict":"pass","evidence":"e"},{"n":3,"verdict":"pass","evidence":"e"},{"n":4,"verdict":"pass","evidence":"e"}]}'
+STUB
+chmod +x "$rptbin/claude"
+rptsha="reporttest$(date +%s)"
+rptdir="$ROOT/tests/evals/results/$rptsha"
+mkdir -p "$rptdir"
+# The STORED gating dimensions are all false; the mechanical facts (expiryGuard/testInvocation)
+# and the stub judge would, if freshly recomputed, produce all true -- deliberately mismatched
+# from what is on disk, so a report-pass leak into the gating namespace is NOT masked by the two
+# computations coincidentally agreeing (mutation-verified: writing report output into the gating
+# namespace directly turns this check red, where a same-valued fixture would not have).
+j "
+  const fs = await import('node:fs');
+  fs.writeFileSync(M.shardPath('$rptsha','02',0), JSON.stringify({ sha: '$rptsha', taskId: '02', schema: M.SCHEMA_VERSION, run: { index: 0, dimensions: { S5: false, S3: false, S1: false, S6: false }, criteria: [], error: null, transcript: 't', expiryGuard: { verdict: 'pass', step: 'mutant', observed: 'assertion' }, testInvocation: 'pass' } }));
+" >/dev/null
+before=$(j "process.stdout.write(JSON.stringify(M.certify(M.mergeShards('$rptsha'))))")
+rptout=$(PATH="$rptbin:$PATH" node "$R" --report "$rptsha" 2>&1)
+after=$(j "process.stdout.write(JSON.stringify(M.certify(M.mergeShards('$rptsha'))))")
+check "a --report shard present under a SHA does not change that SHA's certify() output" "$after" "$before"
+case "$rptout" in
+  *"report-only:"*"report-only 02 S3: 1/1"*) ok "--report prints a report-only: summary line" ;;
+  *) bad "--report prints a report-only: summary line (got: ${rptout:0:300})" ;;
+esac
+check "a --report shard lands under results/<sha>/report/, structurally separate from the gating namespace mergeShards()/completedIndices() glob" \
+  "$(j "process.stdout.write(String((await import('node:fs')).existsSync('$rptdir/report/02-000.json')))")" "true"
+# Minor (pass 1 review): the written report record is filtered to the report-only half before it
+# touches disk -- applyExecutedOverlays() writes every TAGGED dimension, gating included, so an
+# unfiltered write would carry a GATING dimension's value (S5, here genuinely true) under this
+# pass's `schema: 2` stamp, the same stamp a real gating shard carries but a different, incompatible
+# record shape.
+check "the written report shard excludes the gating dimension (S5), keeping only report-only ones under the gating schema stamp" \
+  "$(j "process.stdout.write(String('S5' in JSON.parse((await import('node:fs')).readFileSync('$rptdir/report/02-000.json','utf8')).run.dimensions))")" \
+  "false"
+# F-139: `schema: 2` alone still means two incompatible shapes -- readShard() would accept a
+# report record as current if anything ever pointed it at `report/`. `kind: 'report'` fixes that.
+check "the written report shard is discriminated from a gating shard by kind: 'report'" \
+  "$(j "process.stdout.write(String(JSON.parse((await import('node:fs')).readFileSync('$rptdir/report/02-000.json','utf8')).kind))")" \
+  "report"
+
+# --- 2.4c (fixed pass 2): --report honors --runs as a real cap on which shards it judges, not a
+# value that reaches the result shape while every shard on disk gets judged regardless (F-132,
+# decisions.md#d7's settled answer for the report pass's own N). Two more gating shards are added
+# for indices 1 and 2; `--runs 1` must judge only index 0 (already report-shard-backed above) and
+# leave 1/2 untouched -- no report/02-001.json, no report/02-002.json.
+j "
+  const fs = await import('node:fs');
+  fs.writeFileSync(M.shardPath('$rptsha','02',1), JSON.stringify({ sha: '$rptsha', taskId: '02', schema: M.SCHEMA_VERSION, run: { index: 1, dimensions: {}, criteria: [], error: null, transcript: 't1' } }));
+  fs.writeFileSync(M.shardPath('$rptsha','02',2), JSON.stringify({ sha: '$rptsha', taskId: '02', schema: M.SCHEMA_VERSION, run: { index: 2, dimensions: {}, criteria: [], error: null, transcript: 't2' } }));
+" >/dev/null
+PATH="$rptbin:$PATH" node "$R" --report "$rptsha" --runs 1 >/dev/null 2>&1
+check "--report honors --runs as a cap on which shards it judges (F-132)" \
+  "$(ls "$rptdir/report" | wc -l | tr -d ' ')" "1"
+rm -rf "$rptbin" "$rptdir"
+
+# --- 2.4c (fixed pass 2): --report threads task03Refs exactly like --rescore does, so both print
+# the SAME EXECUTED verdict for task 03's one report-only dimension (S1) rather than opposite ones
+# (F-129). The stub judge says criterion 3 PASSES; the cited date is a 30-day month, so the
+# EXECUTED overlay must override it to FAIL on both paths -- a stub-agreeing fixture would not
+# discriminate a leaked docstring claim from a real fix.
+t3bin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+cat > "$t3bin/claude" <<'STUB'
+#!/usr/bin/env bash
+echo '{"criteria":[{"n":1,"verdict":"pass","evidence":"e"},{"n":2,"verdict":"pass","evidence":"e"},{"n":3,"verdict":"pass","evidence":"e"},{"n":4,"verdict":"pass","evidence":"e"},{"n":5,"verdict":"pass","evidence":"e"}]}'
+STUB
+chmod +x "$t3bin/claude"
+t3sha_a="task03refsA$(date +%s)"; t3sha_b="task03refsB$(date +%s)"
+for sha in "$t3sha_a" "$t3sha_b"; do
+  mkdir -p "$ROOT/tests/evals/results/$sha"
+  j "
+    const fs = await import('node:fs');
+    fs.writeFileSync(M.shardPath('$sha','03',0), JSON.stringify({ sha: '$sha', taskId: '03', schema: M.SCHEMA_VERSION, run: { index: 0, dimensions: {}, criteria: [], error: null, transcript: 'Filed against 2026-04-16.' } }));
+  " >/dev/null
+done
+PATH="$t3bin:$PATH" node --input-type=module -e "const M = await import('$ROOT/$R'); await M.rescoreShards('$t3sha_a', '$ROOT');" >/dev/null 2>&1
+PATH="$t3bin:$PATH" node "$R" --report "$t3sha_b" >/dev/null 2>&1
+rescoreS1=$(j "process.stdout.write(String(JSON.parse((await import('node:fs')).readFileSync('$ROOT/tests/evals/results/$t3sha_a/03-000.json','utf8')).run.dimensions.S1))")
+reportS1=$(j "process.stdout.write(String(JSON.parse((await import('node:fs')).readFileSync('$ROOT/tests/evals/results/$t3sha_b/report/03-000.json','utf8')).run.dimensions.S1))")
+check "--report's task-03 S1 matches --rescore's EXECUTED verdict on the same shard content (F-129)" "$reportS1" "$rescoreS1"
+check "and both are the mechanical 'fail' the citation produces, not the stub judge's raw 'pass'" "$reportS1" "false"
+rm -rf "$t3bin" "$ROOT/tests/evals/results/$t3sha_a" "$ROOT/tests/evals/results/$t3sha_b"
+
+# --- Nit (pass 1 review): reportShards() on an unknown SHA throws a clear error, matching
+# mergeShards()'s existsSync guard, not the raw "Command failed: ls" a bare execFileSync produces.
+check "reportShards() on an unknown SHA throws loudly, not with a raw 'ls' failure" \
+  "$(j "try { await M.reportShards('${SHARD_SHA}-nope'); process.stdout.write('REPORTED'); } catch (e) { process.stdout.write(e.message); }")" \
+  "no shards for ${SHARD_SHA}-nope at $ROOT/tests/evals/results/${SHARD_SHA}-nope"
 
 # --- quota outages are named, not lumped into a generic exit code ------------------------------
 # Both the agent path and the judge path must recognise an exhausted limit. Without it a rescore

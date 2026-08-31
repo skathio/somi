@@ -48,17 +48,17 @@ Return ONLY a JSON object, no prose around it:
 // away too.
 // Defaults to a SMALL model. The judge is roughly half of every run's wall clock (300-400s of a
 // 611s run) and its job is structured extraction against criteria that are already written out --
-// not the open-ended reasoning the candidate does. Overridable with --judge-model, and
-// `tests/evals/judge-agreement.mjs` measures whether a swap changes any verdict before you trust
-// it. Do NOT change this on the strength of it being cheaper.
+// not the open-ended reasoning the candidate does.
 // REVERTED to the larger model. The first agreement check disagreed on 1 of 6 criterion verdicts
 // (task 01 criterion 6: sonnet=fail, haiku=pass -- haiku was the correct one, adjudicated from the
 // stored evidence). A cheaper scorer that grades DIFFERENTLY is not a saving; at N=20 one flipped
 // verdict in twenty moves a dimension a full grade, and phase 4 would read that as a
 // definition-set regression when only the scorer changed.
 //
-// Revisit once criteria 6 and 3 are executed rather than judged (that removes the criterion this
-// disagreement was on) and agreement has been re-measured across ~20 shards rather than one.
+// The CLI's `--judge-model` flag and `tests/evals/judge-agreement.mjs`, which measured whether a
+// swap changed any verdict, were both removed (2.4c, decisions.md#d7): once nothing judged can
+// gate, a cross-model swap has no gating verdict left to validate. `judge()`'s own `model` option
+// (below) is unchanged and still overridable by a caller in code.
 export const DEFAULT_JUDGE_MODEL = null;
 
 /**
@@ -75,10 +75,20 @@ export function judge(taskSpec, evidence, opts = {}) {
   const first = judgeOnce(taskSpec, evidence, opts);
   if (first.ok || first.quota) return first;
   // Distinguish "the model replied, badly" from "the call failed". Only the former can improve.
-  const malformed = /not valid JSON|no JSON object|no criteria array|malformed criterion/.test(first.error ?? '');
-  if (!malformed) return first;
+  // `duplicate criterion` (2.4c's own `parseVerdict()` rejection) is the canonical instance of the
+  // former -- a duplicate `n` is the model replying badly, not the call failing, and the retry
+  // prompt is the right remedy. Missed at 2.4c pass 1: the new rejection was added to
+  // `parseVerdict()` without extending the classifier that decides which errors are retryable, so
+  // one duplicated `n` discarded the expensive agent run that preceded it instead of retrying.
+  if (!isRetryableJudgeError(first.error)) return first;
   const second = judgeOnce(taskSpec, evidence, { ...opts, retry: true });
   return second.ok ? { ...second, retried: true } : { ...first, retried: true, secondError: second.error };
+}
+
+/** Malformed-reply classifier (F-137) -- exported so eval-runner.sh's guard tests the real
+ *  pattern, not a hand-copied regex that can silently drift from it. */
+export function isRetryableJudgeError(error) {
+  return /not valid JSON|no JSON object|no criteria array|malformed criterion|duplicate criterion/.test(error ?? '');
 }
 
 function judgeOnce(taskSpec, evidence, { model = DEFAULT_JUDGE_MODEL, timeoutMs = 900_000, retry = false } = {}) {
@@ -145,10 +155,21 @@ export function parseVerdict(text) {
   if (!Array.isArray(parsed.criteria) || parsed.criteria.length === 0) {
     return { ok: false, error: 'judge reply has no criteria array', raw: text.slice(0, 400) };
   }
+  const seen = new Set();
   for (const c of parsed.criteria) {
     if (!Number.isInteger(c.n) || (c.verdict !== 'pass' && c.verdict !== 'fail')) {
       return { ok: false, error: `malformed criterion entry: ${JSON.stringify(c).slice(0, 120)}`, raw: text.slice(0, 400) };
     }
+    // `criteria` is keyed by `n`, not positional (decisions.md#d11/2.4c) -- a duplicate `n` is not
+    // a shape any downstream consumer can safely reduce over. One-directional: `toDimensions()`
+    // (below) accumulates `dims[dim] = (dims[dim] ?? true) && verdict === 'pass'`, so a duplicate
+    // reply can co-author a published `S5: false`, never a `true` -- D11's wording is directional.
+    // `overlayExpiryGuardVerdict` splices only its 'non-attributable' branch (pass/fail overwrite
+    // in place); the caller's guard at run.mjs:618 excludes S5 unconditionally on that branch.
+    if (seen.has(c.n)) {
+      return { ok: false, error: `duplicate criterion n=${c.n} in judge reply`, raw: text.slice(0, 400) };
+    }
+    seen.add(c.n);
   }
   return { ok: true, criteria: parsed.criteria };
 }
