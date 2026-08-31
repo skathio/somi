@@ -1568,6 +1568,190 @@ else
   echo "  (skipped: $D11_PLAN_DIR not present -- .somi/ is gitignored, this check only runs where the plan directory is on disk)"
 fi
 
+# --- 2.5: smoke.mjs -- D8 Option C, frontmatter-driven, zero-model-call smoke check for the
+# commands this work item does not gate with a live-model corpus -------------------------------
+# The 4 genuinely gated commands: /plan, /code, /review (the rebuilt task gate, this phase) and
+# /code-loop (the convergence gate, phase 3/4). /ship-loop's own convergence gate is an explicit
+# deferred follow-up (D9) -- D8's Context originally described it as gated "per D9" before D9 had
+# decided that, leaving it with neither a gate nor a smoke check; corrected in `decisions.md#d8`,
+# so it now joins THIS tier. 24 commands on disk today, so 20 remain -- both counted below, not
+# assumed.
+check "24 commands on disk today (commands/*.md)" \
+  "$(ls "$ROOT"/commands/*.md | wc -l | tr -d ' ')" "24"
+
+check "discoverUngatedCommands() finds exactly the 20 D8 scopes this smoke check to" \
+  "$(j "
+    const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
+    const gated = new Set(['plan', 'code', 'review', 'code-loop']);
+    process.stdout.write(String(S.discoverUngatedCommands('$ROOT/commands', gated).length));
+  ")" "20"
+
+# The load-bearing negative constraint, made structural rather than trusted by intention (this
+# phase has twice needed a grep pin, not trust, to keep "no test reaches this site" honest --
+# 2.4a's F-136, 2.4c's judge-machinery deletion). Neither check names the model-invoking export in
+# this comment, on purpose -- a docstring quoting it as prose is exactly the false-positive shape
+# F-136 already caught once. Static, so neither survives a ROUTE change (a computed property name,
+# or a call from elsewhere) -- the behavioral pin further below covers that.
+check "smoke.mjs imports ONLY installSomi and DEFINITION_DIRS from install.mjs" \
+  "$(grep -c "from './install.mjs';" "$ROOT/tests/evals/lib/smoke.mjs")" "1"
+check "smoke.mjs never references install.mjs's model-invoking export, anywhere in the file" \
+  "$(grep -c 'invokeCommand' "$ROOT/tests/evals/lib/smoke.mjs")" "0"
+
+# Behavioral pin (F-147): a stub `claude` on PATH proves NO route reaches the model -- not just
+# that the two static greps above hold. Every un-gated command is run through smokeCheck() with
+# the stub in front of the real binary; the sentinel it touches must stay absent no matter how
+# smoke.mjs got to this point.
+stub_bin=$(mktemp -d)
+stub_sentinel="$stub_bin/touched"
+printf '#!/bin/sh\n%s "%s"\nexit 1\n' "$(command -v touch)" "$stub_sentinel" > "$stub_bin/claude"
+chmod +x "$stub_bin/claude"
+stub_iters=$(PATH="$stub_bin:$PATH" node --input-type=module -e "
+  const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
+  const gated = new Set(['plan', 'code', 'review', 'code-loop']);
+  const files = S.discoverUngatedCommands('$ROOT/commands', gated);
+  for (const f of files) S.smokeCheck(f); process.stdout.write(String(files.length));
+" 2>/dev/null)
+# F-156: proves the loop iterated its OWN gated set (:1585's copy is untouched by this mutation);
+# a throw before the final write also leaves this empty, subsuming the old exit-status check.
+check "the stub-claude loop iterated all 20 currently un-gated commands, so ABSENT below can't mean it never ran" \
+  "$stub_iters" "20"
+check "no smokeCheck() call reaches a stub claude on PATH (sentinel stays absent)" \
+  "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "ABSENT"
+
+# Positive control (F-155): proves the stub is reachable on PATH at all -- a bad mktemp/chmod would
+# otherwise leave ABSENT true for the wrong reason, with the check reading green regardless.
+PATH="$stub_bin" claude >/dev/null 2>&1
+check "positive control: claude invoked directly under the same stub touches the sentinel" \
+  "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "TOUCHED"
+rm -rf "$stub_bin"
+
+check "CLAUDE_CODE_TOOLS allowlist is non-empty (D3: a literal constant, not a dependency)" \
+  "$(j "const S = await import('$ROOT/tests/evals/lib/smoke.mjs'); process.stdout.write(String(S.CLAUDE_CODE_TOOLS.size > 0));")" "true"
+
+# The phase file's own acceptance criterion: smokeCheck() succeeds for every one of the 20
+# currently un-gated commands. Real commands are never mutated to make this pass (scope
+# discipline, stated in the coder's own brief) -- a real command failing here is a finding to
+# report, not a fixture to fix.
+allpass=$(j "
+  const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
+  const gated = new Set(['plan', 'code', 'review', 'code-loop']);
+  const files = S.discoverUngatedCommands('$ROOT/commands', gated);
+  const failed = files.map((f) => [f, S.smokeCheck(f)]).filter(([, r]) => !r.ok);
+  process.stdout.write(failed.length === 0 ? 'ALL PASS' : failed.map(([f, r]) => f + ':' + r.field + ':' + r.reason).join(' | '));
+")
+check "smokeCheck() succeeds for all 20 currently un-gated commands" "$allpass" "ALL PASS"
+
+# --- 2.5 acceptance: each of the four staged mutations fails with a SPECIFIC, ATTRIBUTABLE reason
+# -- named in the phase file's own acceptance criterion, not added at review. Staged against a
+# REAL, installed command file (pr.md, arbitrarily -- any un-gated command would do), never a
+# hand-built fixture (spec.md §7: "stage adversarial mutations against real, committed inputs").
+# `orig` is read once and held in memory -- copied aside, never `git checkout`'d -- and the mutant
+# lives only in a throwaway `installSomi()` temp dir that is removed at the end of every case;
+# `commands/pr.md` in the repo is never touched.
+smoke_mutation_case() {
+  local got
+  got=$(j "
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { installSomi } = await import('$ROOT/tests/evals/lib/install.mjs');
+    const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
+    const mutbin = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-smoke-mut-'));
+    installSomi('$ROOT', mutbin);
+    const target = path.join(mutbin, '.claude', 'commands', 'pr.md');
+    const orig = fs.readFileSync(target, 'utf8');
+    $2
+    fs.writeFileSync(target, mutated);
+    const r = S.smokeCheck(target);
+    fs.rmSync(mutbin, { recursive: true, force: true });
+    process.stdout.write(r.ok ? 'PASSED-BUT-SHOULD-FAIL' : r.field + ':' + r.reason);
+  ")
+  check "$1" "$got" "$3"
+}
+
+# Control first (spec.md §7: every gate's suite asserts a healthy input is NOT rejected, not only
+# that a degraded one is caught) -- proves the four failures below are attributable to each
+# specific mutation, not to something already wrong with the fixture itself.
+smoke_control=$(j "
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { installSomi } = await import('$ROOT/tests/evals/lib/install.mjs');
+  const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
+  const mutbin = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-smoke-mut-'));
+  installSomi('$ROOT', mutbin);
+  const target = path.join(mutbin, '.claude', 'commands', 'pr.md');
+  const r = S.smokeCheck(target);
+  fs.rmSync(mutbin, { recursive: true, force: true });
+  process.stdout.write(r.ok ? 'PASS' : 'field:' + r.field + ' reason:' + r.reason);
+")
+check "control: the real, unmutated pr.md passes smokeCheck()" "$smoke_control" "PASS"
+
+smoke_mutation_case "staged failure 1/4: a missing description fails, attributed to 'description'" \
+  "const mutated = orig.replace(/^description:.*\n/m, '');" \
+  "description:pr.md: frontmatter has no non-empty 'description'"
+
+smoke_mutation_case "staged failure 2/4: a non-existent allowed-tools entry fails, attributed to 'allowed-tools'" \
+  "const mutated = orig.replace(/^allowed-tools:.*\$/m, 'allowed-tools: Read, Grep, Glob, Bash, FrobnicateTool');" \
+  "allowed-tools:pr.md: 'FrobnicateTool' is not a Claude Code tool this repo recognizes (not in CLAUDE_CODE_TOOLS)"
+
+smoke_mutation_case "staged failure 3/4: an unrecognized model fails, attributed to 'model'" \
+  "const mutated = orig.replace(/^model:.*\$/m, 'model: gpt-5-turbo');" \
+  "model:pr.md: model 'gpt-5-turbo' is not one of this repo's tiers (opus, sonnet)"
+
+# F-148 fix, proven both ways: FrobnicateTool (not real, above) still fails; TodoWrite (real, but
+# declared by no command in this repo today) now passes -- via the allowlist, not popularity. The
+# old, corpus-only predicate false-failed this case (the check taxed the first adopter of anything).
+smoke_todowrite=$(j "
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { installSomi } = await import('$ROOT/tests/evals/lib/install.mjs');
+  const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
+  const mutbin = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-smoke-mut-'));
+  installSomi('$ROOT', mutbin);
+  const target = path.join(mutbin, '.claude', 'commands', 'pr.md');
+  const orig = fs.readFileSync(target, 'utf8');
+  const mutated = orig.replace(/^allowed-tools:.*\$/m, 'allowed-tools: Read, Grep, Glob, Bash, TodoWrite');
+  fs.writeFileSync(target, mutated);
+  const r = S.smokeCheck(target);
+  fs.rmSync(mutbin, { recursive: true, force: true });
+  process.stdout.write(r.ok ? 'PASS' : 'field:' + r.field + ' reason:' + r.reason);
+")
+check "TodoWrite -- real, but declared by no other command -- passes via the allowlist" \
+  "$smoke_todowrite" "PASS"
+
+# F-154: DEFINITION_DIRS pinned literally -- installSomi() and smokeCheck() both iterate this one
+# constant, so comparing the two sides against each other (as the mutation below does) can't catch
+# a dropped/renamed entry; only a pin against the literal value can.
+check "DEFINITION_DIRS is pinned literally" \
+  "$(j "const { DEFINITION_DIRS } = await import('$ROOT/tests/evals/lib/install.mjs'); process.stdout.write(JSON.stringify(DEFINITION_DIRS));")" \
+  '["commands","agents","skills","rules"]'
+
+# F-149's replacement: the path check no longer walks a command's body links (that duplicated
+# scripts/check-links.mjs and reintroduced the fence-blindness it was rewritten to remove). It now
+# asserts the installed tree contains every install.mjs DEFINITION_DIRS entry -- staged here by
+# deleting the installed 'skills' dir before smokeCheck() re-installs from it. The `all 20` check
+# alone is blind to dropping 'skills' from DEFINITION_DIRS (F-154, verified) -- both sides iterate
+# the same constant, so 0 of 20 go red there; staged failure 4/4 goes red on that drop too.
+smoke_missing_dir=$(j "
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { installSomi } = await import('$ROOT/tests/evals/lib/install.mjs');
+  const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
+  const mutbin = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-smoke-mut-'));
+  installSomi('$ROOT', mutbin);
+  fs.rmSync(path.join(mutbin, '.claude', 'skills'), { recursive: true, force: true });
+  const target = path.join(mutbin, '.claude', 'commands', 'pr.md');
+  const r = S.smokeCheck(target);
+  fs.rmSync(mutbin, { recursive: true, force: true });
+  const matched = !r.ok && r.field === 'install' && r.reason.includes(\"did not install the 'skills' directory\");
+  process.stdout.write(r.ok ? 'PASSED-BUT-SHOULD-FAIL' : (matched ? 'install:MATCH' : r.field + ':' + r.reason));
+")
+check "staged failure 4/4: the installed tree missing a DEFINITION_DIRS entry (skills/) fails, attributed to 'install'" \
+  "$smoke_missing_dir" "install:MATCH"
+
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
