@@ -1950,6 +1950,267 @@ check "the cross-check catches a wrong CODE number (SCOPES.full.draws mutated), 
     process.stdout.write(String(JSON.stringify(parsed) === JSON.stringify(expected)));
   ")" "false"
 
+# --- 3.1: convergence extractor -- reads /code-loop's loop-state JSON, classifies cap-breach ----
+# (R3). Two independent extractors -- passesToApprove() (a pure field read) and capBreached() (a
+# status classifier); neither calls the other, matching the phase file's own "3.1/3.2 are
+# code-disjoint" framing one level down, inside 3.1 itself.
+CONV=tests/evals/lib/convergence.mjs
+cj() { node --input-type=module -e "const M = await import('$ROOT/$CONV'); $1" 2>&1; }
+
+echo "== convergence extractor (3.1) =="
+
+# --- passesToApprove(): fails safe (null) on anything that isn't a finite non-negative integer --
+check "passesToApprove(null) is null"                    "$(cj "process.stdout.write(String(M.passesToApprove(null)));")" "null"
+check "passesToApprove(undefined) is null"                "$(cj "process.stdout.write(String(M.passesToApprove(undefined)));")" "null"
+check "passesToApprove({}) is null (no pass field)"       "$(cj "process.stdout.write(String(M.passesToApprove({})));")" "null"
+check "passesToApprove('raw json string') is null (not pre-parsed -- fails safe, not JSON.parse'd for you)" \
+  "$(cj "process.stdout.write(String(M.passesToApprove('{\"pass\":4}')));")" "null"
+check "passesToApprove({pass:'4'}) is null (string, not number)" "$(cj "process.stdout.write(String(M.passesToApprove({pass:'4'})));")" "null"
+check "passesToApprove({pass:-1}) is null (negative)"     "$(cj "process.stdout.write(String(M.passesToApprove({pass:-1})));")" "null"
+check "passesToApprove({pass:1.5}) is null (non-integer)" "$(cj "process.stdout.write(String(M.passesToApprove({pass:1.5})));")" "null"
+check "passesToApprove({pass:0}) is 0 (a real, valid boundary value -- not treated as falsy/missing)" \
+  "$(cj "process.stdout.write(String(M.passesToApprove({pass:0})));")" "0"
+check "passesToApprove({pass:4}) is 4 (the ordinary case)" "$(cj "process.stdout.write(String(M.passesToApprove({pass:4})));")" "4"
+# passesToApprove() is deliberately status-blind -- a RUNNING loop's provisional pass count comes
+# back as-is; the caller (3.3's driver, not yet built) must gate on status/capBreached() separately
+# before treating it as a completed draw. Synthetic, not tied to any real file's live status, so
+# this stays a permanent, deterministic pin of the contract rather than depending on ambient state
+# that changes the moment a real loop finishes (see the guarded block below for why).
+check "passesToApprove() is status-blind: returns a RUNNING loop's provisional pass count as-is" \
+  "$(cj "process.stdout.write(String(M.passesToApprove({status:'running', pass:1})));")" "1"
+
+# --- capBreached(): fails safe (null) on anything that isn't a recognised status string ----------
+check "capBreached(null) is null"                          "$(cj "process.stdout.write(String(M.capBreached(null)));")" "null"
+check "capBreached({}) is null (no status field)"           "$(cj "process.stdout.write(String(M.capBreached({})));")" "null"
+check "capBreached({status:123}) is null (not a string)"    "$(cj "process.stdout.write(String(M.capBreached({status:123})));")" "null"
+check "capBreached({status:'pending'}) is null (not a documented status at all)" \
+  "$(cj "process.stdout.write(String(M.capBreached({status:'pending'})));")" "null"
+check "capBreached({status:'diff-cap-exceded'}) is null (one-letter typo of a real breach status -- exact match, not fuzzy)" \
+  "$(cj "process.stdout.write(String(M.capBreached({status:'diff-cap-exceded'})));")" "null"
+# F-181: the typo case above REMOVES a letter, so a loosened matcher (substring/prefix/case-fold/
+# trim) also returns null on it and passes -- it does not test exactness at all. These seven are
+# near-misses a loosened matcher would wrongly accept: the first three kill substring/prefix
+# containment (each embeds or extends a real status), 'DONE' kills case-folding and 'done ' kills
+# trimming -- both on the `done` arm. F-186: those two alone left the *breach*-set lookup's own
+# case-fold/trim unmeasured -- `CAP_BREACH_STATUSES.has(status.toLowerCase())` and
+# `CAP_BREACH_STATUSES.has(status.trim())` both survived at 303/0, over-detecting a breach on
+# 'MAX-PASSES-EXCEEDED' where the module answers null. 'MAX-PASSES-EXCEEDED' kills case-folding and
+# 'max-passes-exceeded ' kills trimming on that arm specifically. Real module confirmed to answer
+# null on all seven before writing this.
+NEAR_MISS_STATUSES=('user-stopped' 'not-max-passes-exceeded' 'max-passes-exceeded-recovered' 'DONE' 'done ' 'MAX-PASSES-EXCEEDED' 'max-passes-exceeded ')
+for s in "${NEAR_MISS_STATUSES[@]}"; do
+  check "capBreached({status:'$s'}) is null (near-miss of a real status -- exact match, not fuzzy)" \
+    "$(cj "process.stdout.write(String(M.capBreached({status:'$s'})));")" "null"
+done
+check "capBreached({status:'done'}) is false"                "$(cj "process.stdout.write(String(M.capBreached({status:'done'})));")" "false"
+# Decision, made deliberately rather than defaulted into: a RUNNING loop is neither a confirmed
+# pass nor a confirmed breach. false would assert "confirmed clean" (not yet true); true would mark
+# a live loop as a cap failure it has not committed -- exactly the corpus-measuring-itself trap
+# named in this iteration's brief. null is the only answer that doesn't overclaim either way.
+check "capBreached({status:'running'}) is null, NOT false and NOT true (the deliberate 'not done != breached' decision)" \
+  "$(cj "process.stdout.write(String(M.capBreached({status:'running'})));")" "null"
+# Every documented terminal cap-breach status, individually -- catches an implementation that only
+# recognises one or two of the five (`commands/code-loop.md`'s enum), not just the first tried.
+# F-187: derived from the module's own exported CAP_BREACH_STATUSES, not retyped -- a status added,
+# renamed, or dropped there is reflected here without a second edit. F-190 (pass 3): reflection is
+# exactly why a RENAME went undetected -- `circuit-breaker` -> `circuit-breakers` passed 306/0,
+# because the loop derived both its subjects AND its only independent check (a count) from the same
+# constant under test. Pinned instead against `commands/code-loop.md`'s own enum -- a source of
+# truth outside the module that a rename cannot drag along with it -- via set-equality, which also
+# subsumes the count (an empty derivation compares "" against 5 real entries and fails loudly on
+# either side alone; F-196, pass 5: both sides empty at once -- un-export AND the doc anchor
+# renamed -- printed `ok` at 300/1 without the sentinel default on DOC_STATUSES below, which
+# breaks that symmetry). This is F-183's "vacuous zero-iteration pass" shape, closed here instead
+# of by counting. Matches this file's own precedent at ~1803: every other command name is read
+# live off `commands/*.md`, not retyped, so drift between the module and the doc shows up here too,
+# not just drift within the module. Filtered on an identifier-safe allowlist -- letters, digits,
+# underscore, hyphen -- rather than the doc's `[a-z-]` alphabet (F-195, pass 5): sharing that
+# alphabet as the filter was itself a blind spot -- a status outside it drops from both sides
+# symmetrically and set-equality still compares equal (measured: `quota-cap-2` added to the module
+# AND documented gives 306/0, the string asserted nowhere). An allowlist, not a denylist of just
+# whitespace/quote/backslash: measured on this un-export mutation's actual stderr, a bare
+# `file:///.../[eval1]:1` frame contains none of those three and would have slipped through as a
+# bogus status. The allowlist keeps F-192's actual concern -- stopping a failed import's stderr
+# from landing as a raw token inside the single-quoted JS literals below -- while still being
+# strictly wider than the doc's alphabet, so a real status outside `[a-z-]` surfaces as a
+# set-equality mismatch instead of vanishing from both sides. Also drops `mapfile` (F-190's Nit),
+# this script's only bash-4-only builtin.
+BREACH_STATUSES=()
+while IFS= read -r s; do
+  [[ "$s" =~ ^[A-Za-z0-9_-]+$ ]] && BREACH_STATUSES+=("$s")
+done < <(cj "for (const s of M.CAP_BREACH_STATUSES) process.stdout.write(s + '\n');")
+DOC_STATUSES="$(grep -A1 'Loop status:' "$ROOT/commands/code-loop.md" | grep -o '`[a-z-]*`' | tr -d '`' | grep -v '^done$' | sort)"
+check "the module's CAP_BREACH_STATUSES matches commands/code-loop.md's documented enum exactly (set-equality, not a count)" \
+  "$(printf '%s\n' ${BREACH_STATUSES[@]+"${BREACH_STATUSES[@]}"} | sort)" "${DOC_STATUSES:-<doc-derivation-empty>}"
+for s in "${BREACH_STATUSES[@]}"; do
+  check "capBreached({status:'$s'}) is true (documented breach terminal)" \
+    "$(cj "process.stdout.write(String(M.capBreached({status:'$s'})));")" "true"
+done
+# The phase file's own literal acceptance criterion: true against a synthetic file staged with
+# status:"max-passes-exceeded" -- restated once more here as its own named check, not only folded
+# into the loop above, so this specific acceptance point has its own visible pass/fail line.
+check "capBreached() on a synthetic file staged with status:\"max-passes-exceeded\" is true (phase 3.1's own acceptance wording)" \
+  "$(cj "process.stdout.write(String(M.capBreached({status:'max-passes-exceeded'})));")" "true"
+
+# --- Against the real population context.md §2.2 independently computed -------------------------
+# .somi/ is gitignored (confirmed: .gitignore lines 3-4/8/34) -- .somi/somi-state/loop/ will not
+# exist on a fresh checkout or in a from-scratch CI clone, same precondition the D11 classification
+# drift check above already handles. Guarded the same way, for the same reason.
+LOOPDIR="$ROOT/.somi/somi-state/loop"
+if [ -d "$LOOPDIR" ]; then
+  # NAMED EXPLICITLY, not globbed. .somi/somi-state/loop/*.json has grown to 34 files since
+  # context.md §2.2 computed its baseline from 21 -- 11 of the new ones are THIS work item's own
+  # loop-state files (created by the very loops that ran phases 1-2, one of them this iteration's
+  # own in-progress state file). A glob over *.json today would silently validate against a
+  # DIFFERENT, still-growing population, not the one §2.2 independently computed. This list is
+  # §2.2's population, identified by name: composition cross-checked against §2.2's own breakdown
+  # before trusting it (9 code + 1 plan under context-economy-overhaul, 4 code + 1 plan under
+  # reasoning-craft, 5 code + 1 plan under somi-orchestrator = 21) and its values reproduce §2.2's
+  # stated mean (2.142857...) and sample sd (1.236354...) exactly -- verified below, not assumed.
+  BASELINE_21=(
+    context-economy-overhaul.1.1 context-economy-overhaul.1.2 context-economy-overhaul.1.3
+    context-economy-overhaul.2.1 context-economy-overhaul.2.2 context-economy-overhaul.2.3
+    context-economy-overhaul.3.1 context-economy-overhaul.3.2 context-economy-overhaul.3.3
+    context-economy-overhaul
+    reasoning-craft.1.1 reasoning-craft.1.2 reasoning-craft.1.3 reasoning-craft.1.4
+    reasoning-craft
+    somi-orchestrator.1.1 somi-orchestrator.2.1 somi-orchestrator.3.1 somi-orchestrator.3.2 somi-orchestrator.4.1
+    somi-orchestrator
+  )
+  names_js="["
+  for n in "${BASELINE_21[@]}"; do names_js+="'$n',"; done
+  names_js+="]"
+
+  missing=""
+  for name in "${BASELINE_21[@]}"; do
+    [ -f "$LOOPDIR/$name.json" ] || missing="$missing $name"
+  done
+  if [ -z "$missing" ]; then
+    check "all 21 of context.md §2.2's named baseline files still exist on disk" "present" "present"
+  else
+    check "all 21 of context.md §2.2's named baseline files still exist on disk" "MISSING:$missing" "present"
+  fi
+
+  check "passesToApprove() reproduces exactly context.md §2.2's 21 values, by name not by glob" \
+    "$(cj "
+      const fs = await import('node:fs');
+      const names = $names_js;
+      const dir = '$LOOPDIR';
+      const got = names.map((n) => M.passesToApprove(JSON.parse(fs.readFileSync(dir + '/' + n + '.json', 'utf8'))));
+      process.stdout.write(JSON.stringify(got));
+    ")" \
+    "[4,4,5,2,3,2,3,3,3,3,1,1,1,1,2,1,1,1,1,1,2]"
+
+  check "the 21 extracted values' mean/sd match context.md §2.2 exactly (2.142857.../1.236354...)" \
+    "$(cj "
+      const fs = await import('node:fs');
+      const names = $names_js;
+      const dir = '$LOOPDIR';
+      const p = names.map((n) => M.passesToApprove(JSON.parse(fs.readFileSync(dir + '/' + n + '.json', 'utf8'))));
+      const mean = p.reduce((a, b) => a + b, 0) / p.length;
+      const sd = Math.sqrt(p.reduce((a, b) => a + (b - mean) ** 2, 0) / (p.length - 1));
+      process.stdout.write(mean.toFixed(6) + '/' + sd.toFixed(6));
+    ")" \
+    "2.142857/1.236354"
+
+  check "capBreached() is false for all 21 of context.md §2.2's named files (all real status:\"done\")" \
+    "$(cj "
+      const fs = await import('node:fs');
+      const names = $names_js;
+      const dir = '$LOOPDIR';
+      const got = names.map((n) => M.capBreached(JSON.parse(fs.readFileSync(dir + '/' + n + '.json', 'utf8'))));
+      process.stdout.write(String(got.every((b) => b === false)) + ':' + got.length);
+    ")" \
+    "true:21"
+
+  # The corpus grew a second way since §2.2: it now contains loop-state files that are neither
+  # done nor a cap-breach -- status:"running" (2 under context-economy-overhaul, plus this very
+  # iteration's own eval-corpus-rebuild.3.1.json). Discovered DYNAMICALLY, by count, rather than by
+  # naming these specific files: this iteration's own state file WILL flip to "done" the moment
+  # this loop finishes, so a check hardcoded to a fixed filename/count would go stale for a reason
+  # unrelated to correctness the moment this very iteration closes. The invariant under test
+  # (capBreached() is null for a real running file, never false or true) holds regardless of how
+  # many such files exist at any given moment, including zero.
+  running_check=$(cj "
+    const fs = await import('node:fs');
+    const files = fs.readdirSync('$LOOPDIR').filter((f) => f.endsWith('.json'));
+    const runningResults = [];
+    for (const f of files) {
+      const o = JSON.parse(fs.readFileSync('$LOOPDIR/' + f, 'utf8'));
+      if (o.status === 'running') runningResults.push(M.capBreached(o));
+    }
+    process.stdout.write(runningResults.length + ':' + runningResults.every((r) => r === null));
+  ")
+  running_count="${running_check%%:*}"
+  running_all_null="${running_check##*:}"
+  if [ "$running_count" = "0" ]; then
+    echo "  (skipped: no real status:\"running\" loop-state file on disk right now to check capBreached() against)"
+  else
+    check "capBreached() is null for every real loop-state file currently status:\"running\" ($running_count found right now)" \
+      "$running_all_null" "true"
+  fi
+
+  # F-183: the check above is SELF-SELECTING -- it discovers subjects by the exact string
+  # (o.status === 'running') it then asserts capBreached() classifies. If the schema renamed
+  # 'running' to something else, zero files would match, running_count would read 0, and the block
+  # above would print a skip rather than fail -- silent, not loud. Supplemented (not replaced) with
+  # a check that scans EVERY real file in $LOOPDIR and asserts its status is one of the documented
+  # ones, independent of which specific string it discovers first. This is what actually catches a
+  # status the module has never seen, and cannot silently skip -- an empty $LOOPDIR still passes
+  # vacuously (nothing to violate), but a non-empty one with an unrecognised status always fails.
+  # F-187: 'done'/'running' are the two non-breach terminals this module itself recognises; the
+  # five breach terminals come from M.CAP_BREACH_STATUSES directly, not a third hardcoded copy.
+  known_status_check=$(cj "
+    const fs = await import('node:fs');
+    const files = fs.readdirSync('$LOOPDIR').filter((f) => f.endsWith('.json'));
+    const known = new Set(['done', 'running', ...M.CAP_BREACH_STATUSES]);
+    const unknown = [];
+    for (const f of files) {
+      const o = JSON.parse(fs.readFileSync('$LOOPDIR/' + f, 'utf8'));
+      if (!known.has(o.status)) unknown.push(f + ':' + String(o.status));
+    }
+    process.stdout.write(unknown.length === 0 ? 'ALL_KNOWN' : unknown.join(','));
+  ")
+  check "every real loop-state file's status is in {done} ∪ CAP_BREACH_STATUSES ∪ {running} ($LOOPDIR)" \
+    "$known_status_check" "ALL_KNOWN"
+
+  # --- Mutation testing (spec.md §7): staged against COPIES of real, committed loop-state files --
+  # never against the files themselves, and never against inputs invented to be easy to pass.
+  scratch=$(mktemp -d)
+
+  MUT_BASE_PASS="$LOOPDIR/context-economy-overhaul.2.1.json"   # real: pass=2, status=done
+  check "mutation (wrong field name: pass -> passes) on a COPY of a real loop-state file is caught" \
+    "$(cj "
+      const fs = await import('node:fs');
+      const obj = JSON.parse(fs.readFileSync('$MUT_BASE_PASS', 'utf8'));
+      obj.passes = obj.pass; delete obj.pass;
+      fs.writeFileSync('$scratch/wrong-field.json', JSON.stringify(obj));
+      process.stdout.write(String(M.passesToApprove(JSON.parse(fs.readFileSync('$scratch/wrong-field.json', 'utf8')))));
+    ")" \
+    "null"
+  check "...the real file itself was never touched by that mutation -- passesToApprove() on the original still returns 2" \
+    "$(cj "const fs = await import('node:fs'); process.stdout.write(String(M.passesToApprove(JSON.parse(fs.readFileSync('$MUT_BASE_PASS', 'utf8')))));")" \
+    "2"
+
+  MUT_BASE_STATUS="$LOOPDIR/context-economy-overhaul.2.2.json"   # real: pass=3, status=done
+  check "mutation (swapped status string: done -> diff-cap-exceeded) on a COPY of a real loop-state file is caught" \
+    "$(cj "
+      const fs = await import('node:fs');
+      const obj = JSON.parse(fs.readFileSync('$MUT_BASE_STATUS', 'utf8'));
+      obj.status = 'diff-cap-exceeded';
+      fs.writeFileSync('$scratch/swapped-status.json', JSON.stringify(obj));
+      process.stdout.write(String(M.capBreached(JSON.parse(fs.readFileSync('$scratch/swapped-status.json', 'utf8')))));
+    ")" \
+    "true"
+  check "...the real file itself was never touched by that mutation -- capBreached() on the original still returns false" \
+    "$(cj "const fs = await import('node:fs'); process.stdout.write(String(M.capBreached(JSON.parse(fs.readFileSync('$MUT_BASE_STATUS', 'utf8')))));")" \
+    "false"
+
+  rm -rf "$scratch"
+else
+  echo "  (skipped: $LOOPDIR not present -- .somi/ is gitignored, this block only runs where real loop-state history is on disk)"
+fi
+
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
