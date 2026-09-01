@@ -1570,21 +1570,29 @@ fi
 
 # --- 2.5: smoke.mjs -- D8 Option C, frontmatter-driven, zero-model-call smoke check for the
 # commands this work item does not gate with a live-model corpus -------------------------------
-# The 4 genuinely gated commands: /plan, /code, /review (the rebuilt task gate, this phase) and
-# /code-loop (the convergence gate, phase 3/4). /ship-loop's own convergence gate is an explicit
-# deferred follow-up (D9) -- D8's Context originally described it as gated "per D9" before D9 had
-# decided that, leaving it with neither a gate nor a smoke check; corrected in `decisions.md#d8`,
-# so it now joins THIS tier. 24 commands on disk today, so 20 remain -- both counted below, not
-# assumed.
+# The 3 genuinely gated commands: /plan, /code, /review (the rebuilt task gate, this phase).
+# /code-loop's own convergence gate (D1-D5) isn't built yet (phase 3 not-started) -- labeling it
+# `gate` excluded it from smoke for a mechanism that does not exist (2.6 pass 1, Blocker F-163,
+# `phases/02-...md`'s 2.6 section carries the correction -- `decisions.md` untouched, out of this
+# pass's scope). It now joins THIS tier too, the same treatment `decisions.md#d8` already gives
+# /ship-loop for its own deferred (D9) gate. 24 commands on disk today, so 21 remain -- both
+# counted below, not assumed.
+#
+# F-162/F-167: this set used to be spelled independently at three sites (now three still --
+# GATED_COMMANDS_JS plus the two hardcoded expected.set('code-loop', ...)/('ship-loop', ...) rows
+# in 2.6's cross-check below, both deliberately NOT members of this set) -- one check widening its
+# own copy silently zeroed that check's coverage while the others stayed green (demonstrated in 2.5).
+GATED_COMMANDS_JS="new Set(['plan', 'code', 'review'])"
+
 check "24 commands on disk today (commands/*.md)" \
   "$(ls "$ROOT"/commands/*.md | wc -l | tr -d ' ')" "24"
 
-check "discoverUngatedCommands() finds exactly the 20 D8 scopes this smoke check to" \
+check "discoverUngatedCommands() finds exactly the 21 D8 scopes this smoke check to" \
   "$(j "
     const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
-    const gated = new Set(['plan', 'code', 'review', 'code-loop']);
+    const gated = $GATED_COMMANDS_JS;
     process.stdout.write(String(S.discoverUngatedCommands('$ROOT/commands', gated).length));
-  ")" "20"
+  ")" "21"
 
 # The load-bearing negative constraint, made structural rather than trusted by intention (this
 # phase has twice needed a grep pin, not trust, to keep "no test reaches this site" honest --
@@ -1607,14 +1615,15 @@ printf '#!/bin/sh\n%s "%s"\nexit 1\n' "$(command -v touch)" "$stub_sentinel" > "
 chmod +x "$stub_bin/claude"
 stub_iters=$(PATH="$stub_bin:$PATH" node --input-type=module -e "
   const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
-  const gated = new Set(['plan', 'code', 'review', 'code-loop']);
+  const gated = $GATED_COMMANDS_JS;
   const files = S.discoverUngatedCommands('$ROOT/commands', gated);
   for (const f of files) S.smokeCheck(f); process.stdout.write(String(files.length));
 " 2>/dev/null)
-# F-156: proves the loop iterated its OWN gated set (:1585's copy is untouched by this mutation);
-# a throw before the final write also leaves this empty, subsuming the old exit-status check.
-check "the stub-claude loop iterated all 20 currently un-gated commands, so ABSENT below can't mean it never ran" \
-  "$stub_iters" "20"
+# F-156: proves the loop iterated the shared gated-set constant for real (a throw before the final
+# write also leaves this empty, subsuming the old exit-status check) -- not a stale count reused
+# from a different check.
+check "the stub-claude loop iterated all 21 currently un-gated commands, so ABSENT below can't mean it never ran" \
+  "$stub_iters" "21"
 check "no smokeCheck() call reaches a stub claude on PATH (sentinel stays absent)" \
   "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "ABSENT"
 
@@ -1628,18 +1637,18 @@ rm -rf "$stub_bin"
 check "CLAUDE_CODE_TOOLS allowlist is non-empty (D3: a literal constant, not a dependency)" \
   "$(j "const S = await import('$ROOT/tests/evals/lib/smoke.mjs'); process.stdout.write(String(S.CLAUDE_CODE_TOOLS.size > 0));")" "true"
 
-# The phase file's own acceptance criterion: smokeCheck() succeeds for every one of the 20
+# The phase file's own acceptance criterion: smokeCheck() succeeds for every one of the 21
 # currently un-gated commands. Real commands are never mutated to make this pass (scope
 # discipline, stated in the coder's own brief) -- a real command failing here is a finding to
 # report, not a fixture to fix.
 allpass=$(j "
   const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
-  const gated = new Set(['plan', 'code', 'review', 'code-loop']);
+  const gated = $GATED_COMMANDS_JS;
   const files = S.discoverUngatedCommands('$ROOT/commands', gated);
   const failed = files.map((f) => [f, S.smokeCheck(f)]).filter(([, r]) => !r.ok);
   process.stdout.write(failed.length === 0 ? 'ALL PASS' : failed.map(([f, r]) => f + ':' + r.field + ':' + r.reason).join(' | '));
 ")
-check "smokeCheck() succeeds for all 20 currently un-gated commands" "$allpass" "ALL PASS"
+check "smokeCheck() succeeds for all 21 currently un-gated commands" "$allpass" "ALL PASS"
 
 # --- 2.5 acceptance: each of the four staged mutations fails with a SPECIFIC, ATTRIBUTABLE reason
 # -- named in the phase file's own acceptance criterion, not added at review. Staged against a
@@ -1731,9 +1740,9 @@ check "DEFINITION_DIRS is pinned literally" \
 # F-149's replacement: the path check no longer walks a command's body links (that duplicated
 # scripts/check-links.mjs and reintroduced the fence-blindness it was rewritten to remove). It now
 # asserts the installed tree contains every install.mjs DEFINITION_DIRS entry -- staged here by
-# deleting the installed 'skills' dir before smokeCheck() re-installs from it. The `all 20` check
+# deleting the installed 'skills' dir before smokeCheck() re-installs from it. The `all 21` check
 # alone is blind to dropping 'skills' from DEFINITION_DIRS (F-154, verified) -- both sides iterate
-# the same constant, so 0 of 20 go red there; staged failure 4/4 goes red on that drop too.
+# the same constant, so 0 of 21 go red there; staged failure 4/4 goes red on that drop too.
 smoke_missing_dir=$(j "
   const fs = await import('node:fs');
   const os = await import('node:os');
@@ -1751,6 +1760,195 @@ smoke_missing_dir=$(j "
 ")
 check "staged failure 4/4: the installed tree missing a DEFINITION_DIRS entry (skills/) fails, attributed to 'install'" \
   "$smoke_missing_dir" "install:MATCH"
+
+# --- 2.6: docs/EVALS.md's coverage table, cross-checked against classification.mjs and the live
+# SCOPES -- not against a second document. A document-to-document comparison cannot see a
+# document-vs-code gap (2.4a's own lesson, applied here to a new pair: the doc and the code it
+# describes, not two hand-authored copies of the same fact). --------------------------------------
+
+# D8's per-command floor rule, D11's zero-dimension supersession: zero gating dimensions reads
+# report-only, never partial (even though 0/total is also "fewer than half"); fewer than half reads
+# partial; half or more reads gate. The zero-dimension-label guard: a naive `< 0.5 -> partial` rule
+# with no zero branch would mislabel task 03 (0 of 4) as `partial`, implying gating capability it
+# does not have -- exactly the overstatement D11's supersession exists to forbid.
+check "coverage label floor rule: zero gating reads report-only, never partial (D11's zero-dimension guard); fewer-than-half reads partial; half-or-more reads gate" \
+  "$(j "
+    function labelFor(g, t) { if (g === 0) return 'report-only'; return (g / t) < 0.5 ? 'partial' : 'gate'; }
+    const cases = [[0, 4], [0, 1], [1, 4], [2, 4], [1, 2], [3, 4]];
+    process.stdout.write(cases.map(([g, t]) => labelFor(g, t)).join(','));
+  ")" "report-only,report-only,partial,gate,gate,gate"
+
+# The task->command mapping is derived from each task spec's own header line (the same
+# `Command under test: \`/name\`` idiom run.mjs's own taskPrompt() parses), not hand-typed --
+# a task file renamed to a different command would move this, not silently leave it stale.
+check "task-to-command mapping is derived from each task spec's own header, not hardcoded" \
+  "$(j "
+    const fs = await import('node:fs');
+    const dir = '$ROOT/tests/evals/tasks';
+    const map = {};
+    for (const f of fs.readdirSync(dir).filter((f) => /^\d\d-.*\.md\$/.test(f))) {
+      const text = fs.readFileSync(dir + '/' + f, 'utf8');
+      const m = text.match(/Command under test: \`\/(\w[\w-]*)\`/);
+      map[f.slice(0, 2)] = m ? m[1] : null;
+    }
+    process.stdout.write(JSON.stringify(map));
+  ")" '{"01":"plan","02":"code","03":"review"}'
+
+# The real check: parse docs/EVALS.md's actual coverage table (git-tracked, always present --
+# unlike decisions.md, this runs unconditionally, no CI-skip branch) and compare every row against
+# a label derived from classification.mjs's live CLASSIFICATION table, not from this comment or
+# from decisions.md's prose. /code-loop and /ship-loop sit outside classification.mjs's data model
+# (no task spec, no criteria -- D1-D5's convergence gate and D9's deferral respectively) and are
+# asserted directly for that stated reason, not derived from a table that was never built to cover
+# them; every other command name is read live off commands/*.md, so a 25th command or a rename
+# shows up as a missing/extra row rather than silently passing.
+coverage_check=$(j "
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const C = await import('$ROOT/tests/evals/lib/classification.mjs');
+  function labelFor(g, t) { if (g === 0) return 'report-only'; return (g / t) < 0.5 ? 'partial' : 'gate'; }
+
+  const tasksDir = '$ROOT/tests/evals/tasks';
+  const taskToCommand = {};
+  for (const f of fs.readdirSync(tasksDir).filter((f) => /^\d\d-.*\.md\$/.test(f))) {
+    const text = fs.readFileSync(path.join(tasksDir, f), 'utf8');
+    const m = text.match(/Command under test: \`\/(\w[\w-]*)\`/);
+    taskToCommand[f.slice(0, 2)] = m[1];
+  }
+  const byTask = {};
+  for (const d of C.taskDimensions()) {
+    byTask[d.task] ??= { gating: 0, total: 0 };
+    byTask[d.task].total += 1;
+    if (d.verdict === 'gating') byTask[d.task].gating += 1;
+  }
+  const expected = new Map();
+  for (const [task, command] of Object.entries(taskToCommand)) {
+    const { gating, total } = byTask[task];
+    expected.set(command, { label: labelFor(gating, total), ratio: gating + ' of ' + total });
+  }
+  // F-170: 'smoke'/'phase 3' is only true while phase 3's gate isn't wired. Flip the expectation
+  // once it lands, so this pin fails loudly on the transition instead of going stale through it --
+  // the exact way /code-loop's 'gate' label went stale the first time (F-163).
+  // F-175: keyed on 3.4's own artifact (tests/scripts/convergence-runner.sh), NOT on 3.3's
+  // tests/evals/convergence.mjs. 3.3's Files line creates only that module; the instruction to
+  // flip this label and move /code-loop into GATED_COMMANDS_JS lives solely in 3.4's Acceptance
+  // (phases/03-convergence-gating.md). Keying on 3.3's file would redden this pin the moment 3.3
+  // lands -- a full iteration before the fix instruction that explains it exists -- and the
+  // cheapest escape from an unexplained red suite is publishing 'gate' before the gate runs
+  // (F-163 a third time). \"being built in phase 3, not yet landed\" is still true at the end of
+  // 3.3, so the doc row isn't stale there; a pin that reddens before its own claim goes false
+  // teaches people to route around it.
+  const convergenceBuilt = fs.existsSync('$ROOT/tests/scripts/convergence-runner.sh');
+  expected.set('code-loop', convergenceBuilt
+    ? { label: 'gate' }
+    : { label: 'smoke', mustMention: 'phase 3' });
+  expected.set('ship-loop', { label: 'smoke', mustMention: 'deferred' });
+  for (const f of fs.readdirSync('$ROOT/commands').filter((f) => f.endsWith('.md'))) {
+    const name = f.slice(0, -3);
+    if (!expected.has(name)) expected.set(name, { label: 'smoke' });
+  }
+
+  function parseCoverageTable(text) {
+    // F-166: was \`(.+?)\s*\|\$\`, /m -- a lazy group anchored only at END OF LINE doesn't stop at
+    // an embedded \`|\`; a future 4th column would silently fold into \`detail\`, so a row could
+    // state the wrong ratio in its own cell and still pass on a substring match against the
+    // absorbed neighbour. Split into exactly 3 non-empty cells instead; a row with more or fewer
+    // fails to match at all (reported \`missing:<name>\`) rather than over-capturing.
+    const actual = new Map();
+    const re = /^\|([^|\n]*)\|([^|\n]*)\|([^|\n]*)\|\s*\$/gm;
+    let m;
+    while ((m = re.exec(text))) {
+      const nm = m[1].trim().match(/^\`\/([\w-]+)\`\$/);
+      const label = m[2].trim(), detail = m[3].trim();
+      if (nm && label && detail) {
+        if (actual.has(nm[1])) throw new Error('duplicate coverage row: ' + nm[1]);
+        actual.set(nm[1], { label, detail });
+      }
+    }
+    return actual;
+  }
+  function diff(actual, expected) {
+    const problems = [];
+    for (const [name, exp] of expected) {
+      const got = actual.get(name);
+      if (!got) { problems.push('missing:' + name); continue; }
+      if (got.label !== exp.label) problems.push('label:' + name + ':got=' + got.label + ':want=' + exp.label);
+      if (exp.ratio && !got.detail.includes(exp.ratio)) problems.push('ratio:' + name + ':want ' + exp.ratio + ' in \"' + got.detail + '\"');
+      if (exp.mustMention && !got.detail.toLowerCase().includes(exp.mustMention)) problems.push('mention:' + name + ':want \"' + exp.mustMention + '\" in \"' + got.detail + '\"');
+    }
+    for (const name of actual.keys()) if (!expected.has(name)) problems.push('extra:' + name);
+    return problems;
+  }
+
+  const docText = fs.readFileSync('$ROOT/docs/EVALS.md', 'utf8');
+  const actual = parseCoverageTable(docText);
+  const problems = diff(actual, expected);
+  process.stdout.write(problems.length === 0 ? 'MATCH:' + actual.size : problems.join(' | '));
+")
+check "docs/EVALS.md's coverage table (24 rows) matches labels derived from classification.mjs + D8's floor rule, live -- not copied from the plan" \
+  "$coverage_check" "MATCH:24"
+
+# The full-scope numeric row, same discipline: parsed off docs/EVALS.md's actual text, compared
+# against SCOPES.full imported live from run.mjs, formatted exactly as certify()'s own CLI output
+# formats it (toFixed(2)) so the doc and the printed run summary can never read differently.
+check "docs/EVALS.md's \`full\` scope row (draws, budget, both power figures, covers) matches SCOPES.full live -- 240 draws / 1.81% false-accept, not 60 / 41.74%" \
+  "$(j "
+    const fs = await import('node:fs');
+    function parseFullScopeRow(text) {
+      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
+      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], covers: m[5].trim() };
+    }
+    const parsed = parseFullScopeRow(fs.readFileSync('$ROOT/docs/EVALS.md', 'utf8'));
+    const sc = M.SCOPES.full;
+    const expected = { draws: sc.draws, maxFailures: sc.maxFailures, powerGood: (sc.powerGood * 100).toFixed(2), powerSoft: (sc.powerSoft * 100).toFixed(2), covers: sc.covers };
+    process.stdout.write(JSON.stringify(parsed) === JSON.stringify(expected) ? 'match' : 'parsed=' + JSON.stringify(parsed) + ' expected=' + JSON.stringify(expected));
+  ")" "match"
+
+# F-164: the doc restates SCOPES.full.draws again in its own prose sentence, 95 lines below the
+# pinned table above -- pin that copy too, or one number stays free to drift while the other is
+# checked (exactly how "260" survived next to a pinned "240").
+check "docs/EVALS.md's 'A full certification is N draws' sentence matches SCOPES.full.draws live" \
+  "$(j "
+    const fs = await import('node:fs');
+    const t = fs.readFileSync('$ROOT/docs/EVALS.md', 'utf8');
+    const m = t.match(/A full certification is (\d+) draws\./);
+    process.stdout.write(m ? String(Number(m[1]) === M.SCOPES.full.draws) : 'no-match');
+  ")" "true"
+
+# Both failure directions, shipped as permanent regression guards. Neither touches disk -- the
+# doc-direction case mutates a STRING copy of the real file's text in memory; the code-direction
+# case mutates a spread COPY of the real SCOPES.full object -- so neither risks corrupting a real
+# file if interrupted, per spec.md §7's "copy aside, never mutate in place" discipline applied to
+# a check's own fixtures. Also verified this pass against the real files on disk directly (mutate
+# docs/EVALS.md, confirm red, restore from a copy; mutate a copy of run.mjs's CERTIFY_N, confirm
+# red, restore) -- reported in this iteration's summary, not re-run on every suite invocation.
+check "the cross-check catches a wrong DOC number (240 -> 260), SCOPES held real" \
+  "$(j "
+    const fs = await import('node:fs');
+    function parseFullScopeRow(text) {
+      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
+      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], covers: m[5].trim() };
+    }
+    const real = fs.readFileSync('$ROOT/docs/EVALS.md', 'utf8');
+    const mutated = real.replace('| \`full\` | 240 |', '| \`full\` | 260 |');
+    const parsed = parseFullScopeRow(mutated);
+    const sc = M.SCOPES.full;
+    const expected = { draws: sc.draws, maxFailures: sc.maxFailures, powerGood: (sc.powerGood * 100).toFixed(2), powerSoft: (sc.powerSoft * 100).toFixed(2), covers: sc.covers };
+    process.stdout.write(String(JSON.stringify(parsed) === JSON.stringify(expected)));
+  ")" "false"
+check "the cross-check catches a wrong CODE number (SCOPES.full.draws mutated), doc held real" \
+  "$(j "
+    const fs = await import('node:fs');
+    function parseFullScopeRow(text) {
+      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
+      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], covers: m[5].trim() };
+    }
+    const real = fs.readFileSync('$ROOT/docs/EVALS.md', 'utf8');
+    const parsed = parseFullScopeRow(real);
+    const mutatedScopesFull = { ...M.SCOPES.full, draws: 200 };
+    const expected = { draws: mutatedScopesFull.draws, maxFailures: mutatedScopesFull.maxFailures, powerGood: (mutatedScopesFull.powerGood * 100).toFixed(2), powerSoft: (mutatedScopesFull.powerSoft * 100).toFixed(2), covers: mutatedScopesFull.covers };
+    process.stdout.write(String(JSON.stringify(parsed) === JSON.stringify(expected)));
+  ")" "false"
 
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"

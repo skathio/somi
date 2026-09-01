@@ -40,6 +40,92 @@ passes**. The unit of measurement is a *task-dimension* — task 01's S2, task 0
 | **S6** | Reasoning transparency | The tradeoff is stated, not implied |
 | **S7** | Over-production | Nothing is invented that the input did not supply |
 
+## Coverage across all 24 commands
+
+R4 sets three tiers: **gate a few, smoke the rest, structurally check all**. All 24 commands get
+the third tier unconditionally — `scripts/validate.sh` checks frontmatter presence and resolves
+every relative markdown link, on every `npm test` run. What differs is what a command gets *above*
+that floor.
+
+Three commands carry live-model corpus evidence: `/plan`, `/code`, and `/review` (the three task
+specs above). `/code-loop`'s own convergence gate (a Mann-Whitney comparison, `decisions.md#d1`–`#d5`,
+unrelated to task criteria) is this work item's own centrepiece but phase 3 hasn't landed it, so it
+joins smoke meanwhile — see "Two axes, not one" below. The other 21 get **smoke**:
+`tests/evals/lib/smoke.mjs` installs the definition set for real and validates the *installed*
+frontmatter and that the installed tree carries every `DEFINITION_DIRS` entry — **not** every
+referenced path; that's `scripts/check-links.mjs`'s job (`decisions.md#d8`'s 2026-08-31 correction)
+— at zero model calls (`decisions.md#d8`).
+
+Within these three corpus-tied commands, not every dimension a task scores can block a trim. A
+criterion is **gating** only if it is bidirectional (its executor can independently produce both
+`pass` and `fail`) *and* sound (closed enumeration, not pattern search over open-ended content) —
+`decisions.md#d11`'s settled classification, re-derived from `tests/evals/lib/classification.mjs`
+for this table, not copied from prose. A command with **fewer than half** its dimensions gating
+reads **partial**, not **gate** (`decisions.md#d8`'s floor rule); a command with **zero** gating
+dimensions reads **report-only** — a label distinct from `partial` because it implies no gating
+capability at all, not a smaller share of one (`decisions.md#d11`'s supersession).
+
+| Command | Coverage | Detail |
+|---|---|---|
+| `/plan` | partial | gate: S3 (1 of 5 dimensions, `boundaryRespected`); report-only: S1, S2, S6, S7 |
+| `/code` | partial | gate: S5 (1 of 4 dimensions, `scoreExpiryGuard`); report-only: S1, S3, S6 |
+| `/review` | report-only | report-only: S1, S4, S5, S7 (0 of 4 gating) |
+| `/code-loop` | smoke | frontmatter + install check; its own convergence gate (Mann-Whitney, D1–D5) is **being built in phase 3**, not yet landed — see "Two axes, not one" below |
+| `/ship-loop` | smoke | frontmatter + install check (below); its own convergence gate is **deferred**, not built — see "Two axes, not one" below |
+| `/adopt` | smoke | frontmatter + install check |
+| `/architecture-review` | smoke | frontmatter + install check |
+| `/atlas` | smoke | frontmatter + install check |
+| `/code-parallel` | smoke | frontmatter + install check |
+| `/debug` | smoke | frontmatter + install check |
+| `/design` | smoke | frontmatter + install check |
+| `/discover` | smoke | frontmatter + install check |
+| `/impact` | smoke | frontmatter + install check |
+| `/incident` | smoke | frontmatter + install check |
+| `/plan-loop` | smoke | frontmatter + install check |
+| `/pr` | smoke | frontmatter + install check |
+| `/refactor` | smoke | frontmatter + install check |
+| `/release-readiness` | smoke | frontmatter + install check |
+| `/review-panel` | smoke | frontmatter + install check |
+| `/security-review` | smoke | frontmatter + install check |
+| `/ship` | smoke | frontmatter + install check |
+| `/somi` | smoke | frontmatter + install check |
+| `/test-strategy` | smoke | frontmatter + install check |
+| `/upgrade` | smoke | frontmatter + install check |
+
+**`/code` reads `partial`, not `gate`.** At 2 of 4 dimensions it would sit exactly at D8's 50%
+floor and read `gate`; the user's 2026-08-28 demotion of task 02's audit-log criterion (S1) to
+report-only (`decisions.md#d11`'s Resolution — the matcher is a heuristic over open-ended shell
+text, not closed enumeration, however closed the alias *set* it draws from is) took it to 1 of 4.
+An earlier draft of this table stated `gate` at "2 of 4, exactly at the floor" and was caught
+before it shipped (`F-69`) — publishing `gate` at 25% coverage is the precise overstatement the
+floor rule exists to prevent.
+
+**Two axes, not one: `/ship-loop` is smoke-checked *and* its own gate is deferred.** D8's own
+Context originally counted `/ship-loop` among the gated commands while citing D9 — before D9 had
+actually decided anything (`decisions.md#d8`'s 2026-08-31 correction). D9's decision is
+"`/code-loop` only, in this work item"; `/ship-loop`'s real same-fixture baseline and live
+convergence gate are an explicit, tracked follow-up (`progress.md`'s "Deferred, not dropped"), not
+silently dropped and not silently absorbed into this work item's Definition of Done. Iteration 2.5
+closed the coverage hole this sequencing left — `/ship-loop` had **no coverage in either tier**
+until then. It is now smoke-checked exactly like any other un-gated command, and that is a
+different fact from the gate: the smoke check proves its frontmatter and install wiring are sound;
+it says nothing about convergence, and does not stand in for the deferred gate.
+
+**`/code-loop` had the identical hole, for a different reason.** Phase 3 — its own convergence-gate
+implementation (`decisions.md#d1`–`#d5`) — is `not-started`: no extractor, no rank procedure, no
+driver exists yet. Labeling it `gate` excluded it from smoke on the grounds it was already gated,
+for a mechanism that does not exist — the same defect this section exists to narrate about
+`/ship-loop`, one command over. It now smoke-checks too, but **the two are not the same case**:
+`/ship-loop`'s gate is deferred *indefinitely* (D9 — no work item currently owns it); `/code-loop`'s
+gate is this work item's own centrepiece, being built in phase 3, just not landed yet.
+
+**The smoke tier covers 21 commands, not 20.** Before 2.5, `/ship-loop` had coverage in neither
+tier; before this pass, `/code-loop` had the same gap for the reason above.
+`discoverUngatedCommands()` (`tests/evals/lib/smoke.mjs`) returns all 21 today;
+`tests/scripts/eval-runner.sh` pins the count and, separately, the exact set of command names this
+table claims, so a 22nd command or a renamed one fails the suite rather than only looking wrong
+here.
+
 ## Run counts and thresholds
 
 Each task runs **N = 20** times per definition set. A task-dimension is **`pass`** at ≥18/20,
@@ -174,28 +260,37 @@ Every structural check returns `null` — "not decidable, fall back to the judge
 `false` on an unanticipated shape. A structural check that fails a correct run for formatting is
 the failure mode this corpus has rediscovered five times.
 
-## Scoped certification
+## Certification
 
-The full gate is **≤5 failures across 260 draws** — all 13 task-dimensions at N=20. When that is
-out of budget, certify a **scope** instead, and say which one:
+`--certify` gates on a **single** scope, `full` — not a choice among several. An earlier design let
+a maintainer certify a cheaper, narrower scope instead (`--scope task01`); `decisions.md#d11`
+removed the flag outright once the classification narrowed enough that the only remaining narrower
+scope (`task01`, 1 gating dimension) cleared a genuinely-soft corpus **73.58%** of the time — worse
+than not gating at all, and not a defensible thing to call a certification target under any label.
 
 ```sh
-node tests/evals/run.mjs --certify "$SHA" --scope task01
+node tests/evals/run.mjs --certify "$SHA"
 ```
 
 | scope | draws | budget | clears a sound corpus | clears a **soft** one | covers |
 |---|---|---|---|---|---|
-| `full` | 260 | ≤5 | 95.2% | 0.9% | 13 of 13 task-dimensions |
-| `task01` | 100 | ≤2 | 92.1% | **11.8%** | 5 of 13 (task 01 only) |
+| `full` | 240 | ≤5 | 96.51% | **1.81%** | 2 of 13 task-dimensions |
 
-Budgets are **derived** per scope from the same binomial analysis as the full gate, not scaled by
-hand — proportional scaling gives 1.9 for 100 draws, and the nearest integer is the wrong one.
+**2 of 13 task-dimensions gate** — task 01's S3, task 02's S5 (see the coverage table above). Task
+03 contributes zero. The draw count comes from a constant kept **separate** from the routine
+trim-comparison band: `CERTIFY_N = 120` per gating dimension (`draws = 2 × CERTIFY_N`), not
+`BANDS.n = 20` — raising `BANDS.n` would quadruple the cost of every trim attempt, not just the
+occasional certification run.
 
-**A smaller gate is a weaker gate, and the number that says how much weaker belongs next to the
-number it qualifies.** The `task01` scope clears a genuinely-soft corpus **11.8%** of the time
-against 0.9% for the full gate — roughly one soft corpus in eight passes. That is the price of
-certifying 5 of 13 task-dimensions, and it is a price, not a technicality. The runner prints it on
-every scoped certification so it cannot be quoted without it.
+**The gating count fell from 3 to 2 without the total draw count changing.** `CERTIFY_N` rose from
+80 to 120 to hold the same 1.81% false-accept rate at one fewer gating dimension — the pooled
+binomial depends only on total draws, not on how many dimensions share them
+(`decisions.md#d11`, verified against every prior draw/dimension pairing before this one was
+trusted). What *did* change: one-soft-dimension clearance — the rate that actually reflects the
+gate doing its job — improved from 50.99% to **27.00%**, because the same 240 draws now
+concentrate on fewer, individually stronger dimensions. `tests/scripts/eval-runner.sh` reads this
+table's numbers directly off `SCOPES.full` (`tests/evals/run.mjs`) rather than comparing this
+file against another document — a stale figure here fails `npm test`.
 
 ### Budget reality: plan in single runs, not batches
 
@@ -215,9 +310,11 @@ consequences, all of which should be decided before more budget is spent:
 
 1. **`--batch 2` is the honest batch size.** Larger values do not fail safely — they fail *late*,
    after the earlier runs have already been paid for.
-2. **N=20 across three tasks is likely out of reach** on this budget. The pooled gate can be run
-   over fewer tasks (task 01 alone is 5 of the 13 task-dimensions), or N reduced with the
-   consequent loss of discriminating power stated explicitly rather than absorbed.
+2. **N=20 across three tasks is likely out of reach** on this budget, and there is no cheaper scope
+   left to fall back to for `--certify` — the `--scope task01` flag that once offered one was
+   removed (`decisions.md#d11`; task 01 alone can never clear the per-dimension floor on task 02's
+   own gating dimension). N reduced, with the consequent loss of discriminating power stated
+   explicitly rather than absorbed, is the only lever left.
 3. **Every executed criterion is worth more than it looks.** It removes a judge call *and* a
    source of variance, and variance is what forces N up in the first place.
 
@@ -274,10 +371,10 @@ Run the batches when quota is fresh, not at the end of a long session.
 
 ### Batching a certification run
 
-A full certification is 260 draws. Per-run time is **highly variable — observed 3.4 to 13
+A full certification is 240 draws. Per-run time is **highly variable — observed 3.4 to 13
 minutes** across timed runs, with a single isolated run measured at **10m 11s**. Budget ~10
-minutes and expect the spread; one definition set is on the order of **10 hours** and a trim
-comparison needs two.
+minutes and expect the spread; one definition set is on the order of **40 hours** — 240 agent runs,
+not 60 (`decisions.md#d11`'s 2026-08-29 correction) — and a trim comparison needs two.
 
 > Do not plan against a point estimate here, and do not take one from the fastest runs. The first
 > figure quoted for this — ~320 s — came from the two fastest pilots and was wrong by ~2×. Acting

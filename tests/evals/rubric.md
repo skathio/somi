@@ -114,6 +114,17 @@ per-dimension floor (`decisions.md#d11`, Blocker F-46) additionally requires eve
 to individually clear `CERTIFY_N`, present in `dimensions` or not — the pooled count alone cannot
 tell a dimension that went fully soft from one that was never observed.
 
+**This per-task classification is what `../docs/EVALS.md`'s coverage table labels per command**
+(`decisions.md#d8`'s floor rule, applied per task via the "Command under test" line each task spec
+names): a command with fewer than half its tagged dimensions gating reads `partial`; zero gating
+dimensions reads `report-only`, distinct from `partial` because it implies no gating capability at
+all, not a smaller share of one. `/code-loop`'s convergence gate (D1–D5) is a different mechanism
+entirely — a Mann-Whitney comparison, not a criterion count — and is unaffected by this floor. The
+command-level table is not repeated here: two documents both stating the same derived numbers is
+the exact drift this section's own history (D7 → D11, three narrowing passes) exists to warn
+against; `tests/scripts/eval-runner.sh` derives both from `classification.mjs`/`SCOPES` directly
+and cross-checks `docs/EVALS.md`'s table against that live derivation.
+
 **`grade()`'s band and `certify()`'s budget diverge further at `CERTIFY_N`, and that is expected,
 not a contradiction.** `grade()` scales its ≥18/20 pass band proportionally to whatever `n` it is
 given; at `CERTIFY_N = 120` that scaled boundary is 108/120 — a dimension right at that line
