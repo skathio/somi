@@ -2211,6 +2211,260 @@ else
   echo "  (skipped: $LOOPDIR not present -- .somi/ is gitignored, this block only runs where real loop-state history is on disk)"
 fi
 
+# --- 3.2: tie-conditional Mann-Whitney U via Monte Carlo, with a real oracle (D3, D5) -----------
+# Two independent oracles, both required (phases/03-convergence-gating.md iteration 3.2 -- this
+# iteration's own oracle was rewritten twice and deleted once; see the phase file's revision
+# history for why a self-referential check is not trusted here). Oracle 1: published small-n
+# worked examples on UNTIED data, where the tie-conditional distribution this module computes and
+# the classic exact distribution agree (sources cited below). Oracle 2: brute-force permutation
+# enumeration on small TIED data (n1=n2=5 over {1,2,3}, C(10,5)=252 splits -- exhaustive, not
+# sampled), computed HERE, independently of mannWhitneyU's own code.
+MW=tests/evals/lib/mann-whitney.mjs
+# F-202: optional 2nd arg overrides the import path (defaults to the real file) -- lets the
+# mutation section below import a scratch COPY instead, without touching every existing call site.
+mwj() { node --input-type=module -e "const M = await import('${2:-$ROOT/$MW}'); $1" 2>&1; }
+
+echo "== tie-conditional Mann-Whitney U (3.2) =="
+
+# --- input validation: throws, never guesses -- mirrors run.mjs's grade() "throws rather than
+# grading" precedent (this file, ~line 40) applied to the new module. ---
+for bad in "[], [1]" "[1], []" "[1,'a'], [1]" "[1], [NaN]" "[1], [Infinity]" "null, [1]" \
+           "[1], [1], {resamples:0}" "[1], [1], {resamples:-5}" "[1], [1], {resamples:1.5}" \
+           "[1], [1], {resamples:10000001}" "[1], [1], {rng: 5}"; do
+  got=$(mwj "try { M.mannWhitneyU($bad); process.stdout.write('NO THROW'); } catch (e) { process.stdout.write(e.constructor.name); }")
+  check "mannWhitneyU($bad) throws rather than guessing" "$got" "RangeError"
+done
+check "a valid, minimal call does not throw (the validation above doesn't also reject healthy input)" \
+  "$(mwj "try { M.mannWhitneyU([1],[2],{resamples:1000}); process.stdout.write('ok'); } catch (e) { process.stdout.write('THREW:'+e.constructor.name); }")" "ok"
+
+# --- the documented contract itself: resample count and its own stated MC-error formula ---
+check "DEFAULT_RESAMPLES is exported as exactly 200000 (the 'low hundred-thousands' figure this file's own docstring commits to and derives its worst-case SE from)" \
+  "$(mwj "process.stdout.write(String(M.DEFAULT_RESAMPLES));")" "200000"
+check "returned mcError matches sqrt(p*(1-p)/resamples) recomputed from the returned p -- the stated formula, not a different one" \
+  "$(mwj "
+    const r = M.mannWhitneyU([1,2,3,4,5], [2,3,4,5,6], {resamples: 20000});
+    const recomputed = Math.sqrt(r.p * (1 - r.p) / 20000);
+    process.stdout.write(String(Math.abs(r.mcError - recomputed) < 1e-12));
+  ")" "true"
+check "p is bounded away from exact 0 (F-200 add-one correction)" "$(mwj "const r = M.mannWhitneyU(Array(15).fill(1), Array(15).fill(5), {resamples: 20000}); process.stdout.write(String(r.p === 1/20001 && r.mcError > 0));")" "true"
+check "direction is one of the three documented states (A>B / B>A / tie)" \
+  "$(mwj "
+    const r = M.mannWhitneyU([1,2,3], [4,5,6], {resamples: 5000});
+    process.stdout.write(String(['A>B','B>A','tie'].includes(r.direction)));
+  ")" "true"
+check "F-203: two mannWhitneyU calls seeded with the same mulberry32(seed) reproduce the identical p (replayable from stored arms)" \
+  "$(mwj "
+    const a = M.mannWhitneyU([1,2,3,4,5], [3,4,5,6,7], {resamples: 5000, rng: M.mulberry32(7)});
+    const b = M.mannWhitneyU([1,2,3,4,5], [3,4,5,6,7], {resamples: 5000, rng: M.mulberry32(7)});
+    process.stdout.write(String(a.p === b.p && a.U === b.U));
+  ")" "true"
+
+# --- Oracle 1: published worked examples on UNTIED data (known U and exact p from OUTSIDE this
+# module). Tolerance is DERIVED from the resample count under test (D3/D5's own "stated tolerance"
+# requirement), never loosened to fit: the Monte Carlo standard error of a resampled proportion is
+# sqrt(p(1-p)/R); 5x that SE bounds a correct implementation's false-failure rate at ~5.7e-7
+# (two-sided z), tight enough that the 1.5-3.6x conservative bias this iteration exists to rule out
+# (D3/D5) would clear it by roughly two orders of magnitude, not a near-miss.
+ORACLE_RESAMPLES=200000
+
+# F-201: shared enumeration helpers -- u() the same rank-sum computation as rankSumU, combos() a
+# k-combination generator, enumeratedP() "what fraction of every C(n,k) index-split is >= U",
+# computed HERE, independently of mannWhitneyU. Oracle 2 originally defined its own copy of
+# u()/combos() inline; shared here so oracle 1a/1b's cited p becomes p enumerated the same way,
+# not a second (or third) off-machine number the acceptance checks below have to trust.
+# F-205: run_mw_oracles() below deliberately does NOT reuse MW_ENUM -- it keeps its own cited
+# trueP1/trueP2/0.5 so the mutation evidence stays independent of enumeratedP; the positive
+# control that follows it is what pins those three numbers correct.
+MW_ENUM='
+    function u(a,b){ let s=0; for (const bv of b) for (const av of a) { if (bv>av) s+=1; else if (bv===av) s+=0.5; } return s; }
+    function combos(n,k){ const res=[]; const idx=Array.from({length:k},(_,i)=>i); while (true) { res.push(idx.slice()); let i=k-1; while (i>=0 && idx[i]===n-k+i) i--; if (i<0) break; idx[i]++; for (let j=i+1;j<k;j++) idx[j]=idx[j-1]+1; } return res; }
+    function enumeratedP(a, b, observedU) {
+      const pool = a.concat(b), n1 = a.length, N = pool.length;
+      const subsets = combos(N, n1);
+      let extreme = 0;
+      for (const sub of subsets) {
+        const inA = new Set(sub);
+        const A = [], B = [];
+        for (let i = 0; i < N; i++) (inA.has(i) ? A : B).push(pool[i]);
+        if (u(A, B) >= observedU) extreme++;
+      }
+      return extreme / subsets.length;
+    }
+'
+
+# Example 1 -- Hollander & Wolfe (1973), "Nonparametric Statistical Methods", pp. 27-33 & 68-75:
+# permeability constants of the human chorioamnion, term (x) vs. 12-26wk gestation (y). This is
+# the canonical worked example in R's own stats::wilcox.test() documentation (Examples section);
+# the pooled 15 values are confirmed distinct (no ties). Exact U and one-sided p (x stochastically
+# greater than y) independently cross-checked via SciPy 1.17.1's
+# scipy.stats.mannwhitneyu(x, y, alternative='greater', method='exact') -- an unrelated,
+# independently-implemented realization of Mann & Whitney's (1947) own exact null-distribution
+# algorithm, not this module's code in any form: U=35, matching this module's own convention. Cited
+# below only as C(15,5)=3003; the exact p itself is now enumerated in-suite (F-201), not cited --
+# reusing MW_ENUM removes the only place this suite trusted an off-machine tool. armA is the
+# smaller (y) arm, armB the larger (x) arm, matching this module's tested direction (armB
+# stochastically greater than armA).
+check "C(15,5) = 3003 (oracle 1a's own denominator, verified, not assumed)" \
+  "$(node -e "let r=1; for (let i=0;i<5;i++) r=r*(15-i)/(i+1); process.stdout.write(String(Math.round(r)));")" "3003"
+check "oracle 1a (Hollander & Wolfe 1973 permeability data, untied): U matches exactly, p (enumerated over all C(15,5)=3003 splits, not cited) within 5x its own Monte Carlo SE" \
+  "$(mwj "$MW_ENUM
+    const armA = [1.15, 0.88, 0.90, 0.74, 1.21];
+    const armB = [0.80, 0.83, 1.89, 1.04, 1.45, 1.38, 1.91, 1.64, 0.73, 1.46];
+    const r = M.mannWhitneyU(armA, armB, {resamples: $ORACLE_RESAMPLES});
+    const pExact = enumeratedP(armA, armB, r.U);
+    const tol = 5 * Math.sqrt(pExact * (1 - pExact) / $ORACLE_RESAMPLES);
+    process.stdout.write(String(r.U === 35 && Math.abs(r.p - pExact) <= tol));
+  ")" "true"
+
+# Example 2 -- Wikipedia, "Mann-Whitney U test", the tortoise/hare illustration: finishing order
+# 'T H H H H H T T T T T H' (6 of each; a permutation of 1..12, no ties). Ascending finish-position
+# values (1 = first place); tortoise as armB, hare as armA, exercising the same B-relative-to-A
+# convention oracle 1a does. The article's own rank-sum arithmetic (32/46, its own reversed-rank
+# convention) reproduces exactly as armA/armB's complementary pair (U_A+U_B=n1*n2=36, confirmed
+# while sourcing this example). Exact one-sided p cross-checked the same way as example 1 (SciPy,
+# method='exact'): U=25 (matching this module's convention); p enumerated in-suite (F-201), not
+# cited -- see C(12,6)=924 below.
+check "C(12,6) = 924 (oracle 1b's own denominator, verified, not assumed)" \
+  "$(node -e "let r=1; for (let i=0;i<6;i++) r=r*(12-i)/(i+1); process.stdout.write(String(Math.round(r)));")" "924"
+check "oracle 1b (Wikipedia tortoise/hare, untied): U matches exactly, p (enumerated over all C(12,6)=924 splits, not cited) within 5x its own Monte Carlo SE" \
+  "$(mwj "$MW_ENUM
+    const armA = [2,3,4,5,6,12];
+    const armB = [1,7,8,9,10,11];
+    const r = M.mannWhitneyU(armA, armB, {resamples: $ORACLE_RESAMPLES});
+    const pExact = enumeratedP(armA, armB, r.U);
+    const tol = 5 * Math.sqrt(pExact * (1 - pExact) / $ORACLE_RESAMPLES);
+    process.stdout.write(String(r.U === 25 && Math.abs(r.p - pExact) <= tol));
+  ")" "true"
+
+# --- Oracle 2: brute-force permutation enumeration on small TIED data, computed OUTSIDE
+# mannWhitneyU entirely -- the real oracle for the tie case, sharing none of the implementation's
+# own assumptions. n1=n2=5 over {1,2,3}: C(10,5)=252, exhaustively enumerable (verified below, not
+# assumed). armA=[1,1,2,3,3], armB=[1,2,2,3,3] -- ties both within and across arms, the shape the
+# untied DP recursion (D3's rejected original method) cannot represent at all.
+check "C(10,5) = 252 (oracle 2's own denominator, verified, not assumed)" \
+  "$(node -e "let r=1; for (let i=0;i<5;i++) r=r*(10-i)/(i+1); process.stdout.write(String(Math.round(r)));")" "252"
+
+MW_ORACLE2_SNIPPET="$MW_ENUM"'
+    const armA = [1,1,2,3,3];
+    const armB = [1,2,2,3,3];
+    const observedU = u(armA, armB);
+    const r = M.mannWhitneyU(armA, armB, {resamples: '"$ORACLE_RESAMPLES"'});
+    const pExact = enumeratedP(armA, armB, observedU);
+    const tol = 5 * Math.sqrt(pExact * (1 - pExact) / '"$ORACLE_RESAMPLES"');
+    process.stdout.write(String(r.U === observedU && Math.abs(r.p - pExact) <= tol));
+'
+check "oracle 2 (brute-force enumeration, n1=n2=5 over {1,2,3}, all 252 splits): U matches exactly, p within 5x its own Monte Carlo SE of the enumerated exact p" \
+  "$(mwj "$MW_ORACLE2_SNIPPET")" "true"
+
+# --- Mutation testing (spec.md §7): staged against a COPY of mann-whitney.mjs, never the tracked
+# file itself (F-202, following 3.1's own precedent at :2176-2210 -- "staged against COPIES ...
+# never against the files themselves"). Both mutants named in the phase file's own acceptance
+# criterion, each confirmed caught by re-implementations of all three oracles above (F-205:
+# deliberately independent of MW_ENUM's enumeratedP), not by a case the implementation was written
+# to satisfy. mwj's optional path argument (above) is what makes this a one-line change per call
+# site: the scratch copy is mutated and imported directly, so the real file is never written.
+MW_SCRATCH_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+MW_SCRATCH="$MW_SCRATCH_DIR/mann-whitney.mjs"
+cp "$ROOT/$MW" "$MW_SCRATCH"
+trap 'rm -rf "$MW_SCRATCH_DIR"' EXIT
+
+run_mw_oracles() {
+  # F-199: returns 'ok1/ok2/ok3', not ok1&&ok2&&ok3 -- a conjunction can't tell "one oracle caught
+  # it" from "all three did", and 3.2's acceptance requires catching by more than a single check.
+  # $1 (optional): import path, forwarded to mwj -- defaults to the real, unmutated file.
+  mwj "
+    const armA1 = [1.15, 0.88, 0.90, 0.74, 1.21];
+    const armB1 = [0.80, 0.83, 1.89, 1.04, 1.45, 1.38, 1.91, 1.64, 0.73, 1.46];
+    const r1 = M.mannWhitneyU(armA1, armB1, {resamples: $ORACLE_RESAMPLES});
+    const trueP1 = 382 / 3003;
+    const ok1 = r1.U === 35 && Math.abs(r1.p - trueP1) <= 5 * Math.sqrt(trueP1 * (1 - trueP1) / $ORACLE_RESAMPLES);
+
+    const armA2 = [2,3,4,5,6,12];
+    const armB2 = [1,7,8,9,10,11];
+    const r2 = M.mannWhitneyU(armA2, armB2, {resamples: $ORACLE_RESAMPLES});
+    const trueP2 = 13 / 84;
+    const ok2 = r2.U === 25 && Math.abs(r2.p - trueP2) <= 5 * Math.sqrt(trueP2 * (1 - trueP2) / $ORACLE_RESAMPLES);
+
+    const armA3 = [1,1,2,3,3];
+    const armB3 = [1,2,2,3,3];
+    const r3 = M.mannWhitneyU(armA3, armB3, {resamples: $ORACLE_RESAMPLES});
+    const ok3 = r3.U === 14 && Math.abs(r3.p - 0.5) <= 5 * Math.sqrt(0.5 * 0.5 / $ORACLE_RESAMPLES);
+
+    process.stdout.write(ok1 + '/' + ok2 + '/' + ok3);
+  " "${1:-}"
+}
+
+# F-198: positive control -- without this, any harness failure (a drifted literal, a typo in
+# armA3, a changed default) would leave both mutant checks reading "false/false/false" and
+# passing, indistinguishable from a real catch.
+check "positive control: pristine mann-whitney.mjs passes all three oracles" "$(run_mw_oracles)" "true/true/true"
+
+# Mutant 1 -- off-by-one in the resampling logic: the B-side loop starts one index late, silently
+# dropping one pooled element from every resample's B side (a realistic single-character-shift
+# bug: 'n1' -> 'n1 + 1'). The resampled-A subset is still drawn correctly; only which indices count
+# toward B's side of U is wrong.
+node -e "
+  const fs = require('fs');
+  const p = '$MW_SCRATCH';
+  const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'for (let bi = n1; bi < N; bi++) {';
+  const TO   = 'for (let bi = n1 + 1; bi < N; bi++) {';
+  if (!s.includes(FROM)) throw new Error('mutant 1 pattern not found in $MW_SCRATCH -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant 1 (off-by-one: B-side resample loop starts at n1+1, dropping one element) fails all three oracles (ok1/ok2/ok3)" \
+  "$(run_mw_oracles "$MW_SCRATCH")" "false/false/false"
+cp "$ROOT/$MW" "$MW_SCRATCH"   # F-202: reset the scratch copy to pristine before mutant 2
+
+# Mutant 2 -- sampling WITH replacement instead of without: the exact defect this phase's own
+# history names (D3's correction; 3.3's pass-4 finding, 'a bootstrap-with-replacement resampler').
+# Breaks tie-conditioning entirely -- every comparison draws independently from the full pool,
+# rather than resampling a fixed n1/n2 split of the pool's actual indices.
+node -e "
+  const fs = require('fs');
+  const p = '$MW_SCRATCH';
+  const s = fs.readFileSync(p, 'utf8');
+  const FROM = [
+    '    for (let i = 0; i < n1; i++) {',
+    '      const j = i + Math.floor(rng() * (N - i));',
+    '      const tmp = idx[i]; idx[i] = idx[j]; idx[j] = tmp;',
+    '    }',
+    '    let uSample = 0;',
+    '    for (let bi = n1; bi < N; bi++) {',
+    '      const bv = pool[idx[bi]];',
+    '      for (let ai = 0; ai < n1; ai++) {',
+    '        const av = pool[idx[ai]];',
+    '        if (bv > av) uSample += 1;',
+    '        else if (bv === av) uSample += 0.5;',
+    '      }',
+    '    }',
+  ].join('\n');
+  const TO = [
+    '    let uSample = 0;',
+    '    for (let bi = 0; bi < n2; bi++) {',
+    '      const bv = pool[Math.floor(rng() * N)];',
+    '      for (let ai = 0; ai < n1; ai++) {',
+    '        const av = pool[Math.floor(rng() * N)];',
+    '        if (bv > av) uSample += 1;',
+    '        else if (bv === av) uSample += 0.5;',
+    '      }',
+    '    }',
+  ].join('\n');
+  if (!s.includes(FROM)) throw new Error('mutant 2 pattern not found in $MW_SCRATCH -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant 2 (sampling WITH replacement -- does not condition on the observed multiset) fails all three oracles (ok1/ok2/ok3)" \
+  "$(run_mw_oracles "$MW_SCRATCH")" "false/false/false"
+
+# F-209: repeat the positive control against the TRACKED file (no path arg -> mwj's default)
+# after both mutants -- closes the gap where a leaked write to the real file would silently
+# propagate through the next mutant's `cp` reset instead of being caught.
+check "positive control (after mutation): the tracked module is still pristine" "$(run_mw_oracles)" "true/true/true"
+
+# F-202: the check above is what pins "the real file was never written", not an argument for it;
+# only $MW_SCRATCH was ever mutated, and the EXIT trap removes it on any normal exit, including
+# SIGINT/SIGTERM (a SIGKILL bypasses any trap, leaking the scratch dir -- not the tracked file).
+
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
