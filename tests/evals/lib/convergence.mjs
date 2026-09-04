@@ -76,7 +76,19 @@ export function capBreached(loopStateJson) {
   if (loopStateJson === null || typeof loopStateJson !== 'object') return null;
   const { status } = loopStateJson;
   if (typeof status !== 'string') return null;
-  if (CAP_BREACH_STATUSES.has(status)) return true;
+  // F-235: commands/code-loop.md:136 documents `--status stopped-<reason>` as what the STOP path
+  // writes on finish -- CAP_BREACH_STATUSES above stays the bare <reason> forms (eval-runner.sh's
+  // own 3.1 assertions and this module's callers read it directly, so it is not widened to carry
+  // the prefix); strip a leading `stopped-` before matching instead. Without this, a cap-breach
+  // recorded through the DOCUMENTED path read null ("undetermined") here, not true -- discovered
+  // 2026-09-04 by the first status:"stopped-*" loop-state file this corpus ever produced (every
+  // real file before it was `done` or `running`, so nothing had ever exercised this branch on
+  // real data). classifyDraw() (tests/evals/convergence.mjs) calls capBreached() directly and
+  // inherited the same hole, which is why the fix lands here rather than in a second call site.
+  const reason = status.startsWith('stopped-') ? status.slice('stopped-'.length) : status;
+  if (CAP_BREACH_STATUSES.has(reason)) return true;
+  // Deliberately tests unstripped `status`, not `reason` (F-239): `done` is the SUCCESS terminal
+  // and never legitimately carries `stopped-`, so `stopped-done` must stay null, not fold in here.
   if (status === 'done') return false;
   return null;
 }

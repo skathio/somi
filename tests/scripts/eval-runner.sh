@@ -2167,7 +2167,9 @@ if [ -d "$LOOPDIR" ]; then
     const unknown = [];
     for (const f of files) {
       const o = JSON.parse(fs.readFileSync('$LOOPDIR/' + f, 'utf8'));
-      if (!known.has(o.status)) unknown.push(f + ':' + String(o.status));
+      // F-236: bare membership missed the documented stopped-<reason> form -- go through
+      // capBreached() itself (it strips the prefix) rather than a second un-prefixed spelling.
+      if (!known.has(o.status) && M.capBreached(o) !== true) unknown.push(f + ':' + String(o.status));
     }
     process.stdout.write(unknown.length === 0 ? 'ALL_KNOWN' : unknown.join(','));
   ")
@@ -2236,6 +2238,17 @@ for bad in "[], [1]" "[1], []" "[1,'a'], [1]" "[1], [NaN]" "[1], [Infinity]" "nu
 done
 check "a valid, minimal call does not throw (the validation above doesn't also reject healthy input)" \
   "$(mwj "try { M.mannWhitneyU([1],[2],{resamples:1000}); process.stdout.write('ok'); } catch (e) { process.stdout.write('THREW:'+e.constructor.name); }")" "ok"
+# F-216: every probe above sits on the REJECTING side of both thresholds, so neither accepting
+# edge (resamples===1, resamples===MAX_RESAMPLES) was ever exercised -- a >=-for-> slip and its
+# <=-for-< mirror both passed all 333 checks, measured. Reads M.MAX_RESAMPLES, not a literal, so
+# this can't drift if the cap is ever raised.
+check "mannWhitneyU accepts BOTH true accepting edges: resamples===1 and resamples===MAX_RESAMPLES (F-216)" \
+  "$(mwj "
+    let ok1 = false, ok2 = false;
+    try { M.mannWhitneyU([1],[2],{resamples:1}); ok1 = true; } catch {}
+    try { M.mannWhitneyU([1],[2],{resamples:M.MAX_RESAMPLES}); ok2 = true; } catch {}
+    process.stdout.write(String(ok1 && ok2));
+  ")" "true"
 
 # --- the documented contract itself: resample count and its own stated MC-error formula ---
 check "DEFAULT_RESAMPLES is exported as exactly 200000 (the 'low hundred-thousands' figure this file's own docstring commits to and derives its worst-case SE from)" \
@@ -2462,8 +2475,215 @@ check "mutant 2 (sampling WITH replacement -- does not condition on the observed
 check "positive control (after mutation): the tracked module is still pristine" "$(run_mw_oracles)" "true/true/true"
 
 # F-202: the check above is what pins "the real file was never written", not an argument for it;
-# only $MW_SCRATCH was ever mutated, and the EXIT trap removes it on any normal exit, including
-# SIGINT/SIGTERM (a SIGKILL bypasses any trap, leaking the scratch dir -- not the tracked file).
+# only $MW_SCRATCH was ever mutated. Cleanup: bash's `trap` for a signal REPLACES the handler, it
+# does not append (F-222, code-loop pass 1 review) -- so this registration alone would not survive
+# CVD_SCRATCH_DIR's own `trap` call below (:~2610), which is why THAT later registration names
+# BOTH scratch dirs rather than just its own, and is pinned by its own "names both" check right
+# after it. The combined trap removes both on any normal exit, including SIGINT/SIGTERM (a
+# SIGKILL bypasses any trap, leaking the scratch dir -- not the tracked file).
+
+# --- 3.3a: convergence gate DRIVER, classification + arm-filling carve -- classifyDraw, fillArm,
+# safeCleanup (D1-D5, R2/R3). 3.3's complete module was coded and reviewed twice as one iteration
+# (503 of 400, then 861 of a cap already raised to 510) and split along its own section divider
+# (phases/03-convergence-gating.md, split banner above iteration 3.3); this is the hermetic-core
+# carve, owning acceptance points 4 and 5 only. compareArms/estimatePower/runComparison and points
+# 1/2/3/6 (mutants C and D) carve back in with 3.3b; loopShardPath/resumeArm/prepareDrawDir/
+# startDraw/drawArmForSha and their tests carve back in with 3.3c. Hermetic throughout: every case
+# below is a direct function call against synthetic/injected input, never a live /code-loop
+# invocation (R6; phase 4 is where the full driver is run against the model for real).
+CVD=tests/evals/convergence.mjs
+cvj() { node --input-type=module -e "const M = await import('${2:-$ROOT/$CVD}'); $1" 2>&1; }
+
+echo "== convergence gate driver, classification + arm-filling (3.3a) =="
+
+# --- point 4 (first half): N_PER_ARM pinned as a literal, independent of any draw outcome -------
+check "N_PER_ARM is exactly 15 (D2)" "$(cvj "process.stdout.write(String(M.N_PER_ARM));")" "15"
+
+# --- point 5: classifyDraw distinguishes breach / done / running / malformed -- the two null
+# causes (F-184) told apart, not conflated under one null-means-skip catch-all --------------------
+check "classifyDraw: a documented breach status is 'breach'" \
+  "$(cvj "process.stdout.write(M.classifyDraw({status:'max-passes-exceeded', pass:6}).kind);")" "breach"
+check "classifyDraw: the SAME breach status written with commands/code-loop.md's documented 'stopped-<reason>' finish-path prefix is ALSO 'breach', not malformed/undetermined (F-235)" \
+  "$(cvj "process.stdout.write(M.classifyDraw({status:'stopped-max-passes-exceeded', pass:6}).kind);")" "breach"
+check "classifyDraw: status:done with a real pass field is 'done'" \
+  "$(cvj "process.stdout.write(M.classifyDraw({status:'done', pass:2}).kind);")" "done"
+check "classifyDraw: status:running is 'running' -- 'not done != breached', distinct from malformed" \
+  "$(cvj "process.stdout.write(M.classifyDraw({status:'running', pass:1}).kind);")" "running"
+check "classifyDraw: an unrecognised status is 'malformed', distinct from 'running' (closes F-184)" \
+  "$(cvj "process.stdout.write(M.classifyDraw({status:'pending'}).kind);")" "malformed"
+check "classifyDraw(null) is 'malformed'" "$(cvj "process.stdout.write(M.classifyDraw(null).kind);")" "malformed"
+check "classifyDraw: status:done with an unreadable pass field is 'malformed', never silently 'done'" \
+  "$(cvj "process.stdout.write(M.classifyDraw({status:'done', pass:'x'}).kind);")" "malformed"
+
+# --- F-235 (Major, found 2026-09-04 while closing 3.3's loop for the split): commands/code-loop.md
+# :136 documents `--status stopped-<reason>` as the STOP path's write; lib/convergence.mjs's
+# capBreached() matched only the bare <reason> forms, so a cap-breach recorded through the
+# DOCUMENTED path read null ("undetermined"), not true -- and classifyDraw() above inherited the
+# hole, since it calls capBreached() directly rather than re-matching status itself. Discovered by
+# the first status:"stopped-*" file this corpus ever produced: every real file before it was
+# `done` or `running`, so this branch had never fired against real data. The two checks above
+# already pin classifyDraw()'s own behaviour on the tracked module; this pins capBreached() itself,
+# mutation-verified, against a SCRATCH COPY of lib/convergence.mjs -- never the tracked file, and
+# never through the CVD_SCRATCH/lib symlink below (that symlink points at the REAL lib/ dir, so
+# mutating through it would mutate the repo's own source, not a copy).
+lib_conv_scratch=$(mktemp -d)
+cp "$ROOT/tests/evals/lib/convergence.mjs" "$lib_conv_scratch/convergence.mjs"
+libj() { node --input-type=module -e "const M = await import('$lib_conv_scratch/convergence.mjs'); $1" 2>&1; }
+check "capBreached: the bare reason and commands/code-loop.md's documented stopped-<reason> form both return true (F-235)" \
+  "$(libj "process.stdout.write(String(M.capBreached({status:'max-passes-exceeded'})) + '/' + String(M.capBreached({status:'stopped-max-passes-exceeded'})));")" \
+  "true/true"
+node -e "
+  const fs = require('fs'); const p = '$lib_conv_scratch/convergence.mjs'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = \"const reason = status.startsWith('stopped-') ? status.slice('stopped-'.length) : status;\n  if (CAP_BREACH_STATUSES.has(reason)) return true;\";
+  const TO = 'if (CAP_BREACH_STATUSES.has(status)) return true; // MUTANT (F-235): stopped- prefix stripping removed';
+  if (!s.includes(FROM)) throw new Error('F-235 mutant pattern not found in lib/convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant (F-235: stopped- prefix stripping removed) is caught -- the documented stopped-<reason> form reads null again, the bare form is unaffected" \
+  "$(libj "process.stdout.write(String(M.capBreached({status:'stopped-max-passes-exceeded'})) + '/' + String(M.capBreached({status:'max-passes-exceeded'})));")" \
+  "null/true"
+rm -rf "$lib_conv_scratch"
+
+LOOPDIR=".somi/somi-state/loop"
+if [ -d "$ROOT/$LOOPDIR" ]; then
+  running_real=$(cvj "
+    const fs = await import('node:fs');
+    const files = fs.readdirSync('$ROOT/$LOOPDIR').filter((f) => f.endsWith('.json'));
+    let found = '';
+    for (const f of files) {
+      const o = JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/' + f, 'utf8'));
+      if (o.status === 'running') { found = f; break; }
+    }
+    process.stdout.write(found);
+  ")
+  if [ -n "$running_real" ]; then
+    check "classifyDraw on a real, currently-running loop-state file is 'running' ($running_real)" \
+      "$(cvj "const fs = await import('node:fs'); process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/$running_real', 'utf8'))).kind);")" "running"
+  else
+    echo "  (skipped: no real status:\"running\" loop-state file on disk right now)"
+  fi
+  breach_real=$(cvj "
+    const fs = await import('node:fs');
+    process.stdout.write(fs.readdirSync('$ROOT/$LOOPDIR').filter((f) => f.endsWith('.json')).find((f) => M.classifyDraw(JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/' + f, 'utf8'))).kind === 'breach') || '');
+  ")
+  if [ -n "$breach_real" ]; then
+    check "classifyDraw on a real cap-breach loop-state file is 'breach' ($breach_real)" \
+      "$(cvj "const fs = await import('node:fs'); process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/$breach_real', 'utf8'))).kind);")" "breach"
+  else
+    check "a real cap-breach loop-state file exists for classifyDraw() to assert against (F-236/F-237)" "NONE_FOUND" "found"
+  fi
+  # Staged on a COPY of a real, committed loop-state file (spec.md §7's scorer discipline) --------
+  cvd_scratch=$(mktemp -d)
+  CVD_DONE_REAL="$LOOPDIR/eval-corpus-rebuild.3.2.json"   # real: status done, pass 3
+  check "mutation (status: done -> pemding, an unrecognised near-miss) on a COPY is malformed, not silently done" \
+    "$(cvj "
+      const fs = await import('node:fs');
+      const obj = JSON.parse(fs.readFileSync('$ROOT/$CVD_DONE_REAL', 'utf8'));
+      obj.status = 'pemding';
+      fs.writeFileSync('$cvd_scratch/typo-status.json', JSON.stringify(obj));
+      process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$cvd_scratch/typo-status.json', 'utf8'))).kind);
+    ")" "malformed"
+  check "...the real file itself was never touched -- classifyDraw on the original is still 'done'" \
+    "$(cvj "const fs = await import('node:fs'); process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$ROOT/$CVD_DONE_REAL', 'utf8'))).kind);")" "done"
+  rm -rf "$cvd_scratch"
+else
+  echo "  (skipped: $LOOPDIR not present)"
+fi
+
+# --- fillArm: draw policy (point 4, second half; point 5 at the arm level) -----------------------
+# seq[i] is the state sequence one draw handle steps through on successive retry()s; a fresh
+# newDraw() call advances to the next slot's sequence -- a REPLACEMENT, never a revisit.
+CVD_HELPERS='
+  function mkSeqDraw(seq) {
+    let i = 0;
+    return () => {
+      const states = seq[i++]; let idx = 0;
+      return { read: () => states[idx], retry: () => { idx = Math.min(idx + 1, states.length - 1); } };
+    };
+  }
+'
+check "fillArm: a running draw is waited on and RE-READ from the SAME handle (retry), never replaced" \
+  "$(cvj "$CVD_HELPERS
+    const r = M.fillArm(mkSeqDraw([[{status:'running'}, {status:'done', pass:3}]]), { n: 1, report: () => {} });
+    process.stdout.write(JSON.stringify({ arm: r.arm, stillRunning: r.stillRunning, replaced: r.replaced }));
+  ")" '{"arm":[3],"stillRunning":1,"replaced":0}'
+check "fillArm: a malformed draw is discarded and REPLACED with a fresh handle, reported loudly" \
+  "$(cvj "$CVD_HELPERS
+    let reports = 0;
+    const r = M.fillArm(mkSeqDraw([[{status:'bogus'}], [{status:'done', pass:2}]]), { n: 1, report: () => { reports++; } });
+    process.stdout.write(JSON.stringify({ arm: r.arm, replaced: r.replaced, reports }));
+  ")" '{"arm":[2],"replaced":1,"reports":1}'
+check "fillArm: exhausting the wait budget STOPS filling -- the slot is left unfilled, not topped up (F-194)" \
+  "$(cvj "$CVD_HELPERS
+    const seq = [[{status:'running'}, {status:'running'}, {status:'running'}], [{status:'done', pass:1}]];
+    const r = M.fillArm(mkSeqDraw(seq), { n: 2, maxWaitAttempts: 1, report: () => {} });
+    process.stdout.write(JSON.stringify({ breach: r.breach, arm: r.arm, waitExhausted: r.waitExhausted }));
+  ")" '{"breach":false,"arm":[],"waitExhausted":true}'
+check "fillArm: a breach fails the WHOLE arm outright, even after usable draws were already collected" \
+  "$(cvj "$CVD_HELPERS
+    const seq = [[{status:'done', pass:1}], [{status:'max-passes-exceeded', pass:6}]];
+    const r = M.fillArm(mkSeqDraw(seq), { n: 2, report: () => {} });
+    process.stdout.write(JSON.stringify({ breach: r.breach, arm: r.arm }));
+  ")" '{"breach":true,"arm":[1]}'
+
+# --- Mutation testing (spec.md §7): staged against a COPY of convergence.mjs, never the tracked
+# file, following 3.2's own MW_SCRATCH precedent -- one scratch dir, reset via `cp` between mutants.
+CVD_SCRATCH_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+CVD_SCRATCH="$CVD_SCRATCH_DIR/convergence.mjs"
+# F-222 (Major, code-loop pass 1 review): `trap ... EXIT` REPLACES the handler, it does not
+# append -- registering `rm -rf "$CVD_SCRATCH_DIR"' alone here would silently drop :2380's
+# MW_SCRATCH_DIR cleanup (measured: baseline d9421b3's runner cleans it, this one did not, until
+# this line named both). Name every scratch dir the suite has created so far, not just this one.
+trap 'rm -rf "$MW_SCRATCH_DIR" "$CVD_SCRATCH_DIR"' EXIT
+# `trap -p EXIT` prints the REGISTERED command text verbatim (single-quoted at registration, so
+# the variable REFERENCES are still literal `$MW_SCRATCH_DIR`/`$CVD_SCRATCH_DIR` text, not their
+# expanded paths) -- pin on the variable names, which is what proves both are named in the SAME
+# trap command, not on their runtime values.
+check "F-222: the EXIT trap names BOTH scratch dirs (trap REPLACES, not appends -- a registration naming only its own dir silently drops every earlier one)" \
+  "$(trap -p EXIT | grep -qF 'MW_SCRATCH_DIR' && trap -p EXIT | grep -qF 'CVD_SCRATCH_DIR' && echo true || echo false)" "true"
+# Symlinked, not copied: only convergence.mjs itself is ever mutated; its one relative import
+# (lib/convergence.mjs) resolves straight through to the real, pristine file -- same isolation
+# guarantee as MW_SCRATCH's single-file copy. 3.3a's carve imports nothing from run.mjs (that
+# import returns with 3.3c's shard mechanism), so no run.mjs symlink is needed here.
+ln -s "$ROOT/tests/evals/lib" "$CVD_SCRATCH_DIR/lib"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
+# Mutant A -- reintroduces F-182: collapses capBreached()'s null (running OR malformed) into the
+# non-breach/done branch -- the natural-but-wrong `if (!capBreached(o)) arm.push(...)` shape.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'if (breach === true) return { kind: \'breach\' };\n  if (breach === false) {';
+  const TO   = 'if (breach === true) return { kind: \'breach\' };\n  if (breach !== true) {';
+  if (!s.includes(FROM)) throw new Error('mutant A pattern not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant A (F-182: null collapsed into done) is caught -- a running loop's pass count reads as 'done', not 'running'" \
+  "$(cvj "process.stdout.write(M.classifyDraw({status:'running', pass:0}).kind);" "$CVD_SCRATCH")" "done"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
+# Mutant B -- reintroduces F-194: exhausting the wait budget re-draws a FRESH handle instead of
+# stopping, re-rolling exactly the censored draw and pulling the arm mean down.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'if (waitAttempts > maxWaitAttempts) {\n          safeCleanup(draw);\n          return { breach: false, arm, stillRunning, replaced, waitExhausted: true };\n        }';
+  const TO   = 'if (waitAttempts > maxWaitAttempts) {\n          safeCleanup(draw);\n          replaced++; break; // MUTANT: re-roll instead of stopping\n        }';
+  if (!s.includes(FROM)) throw new Error('mutant B pattern not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant B (F-194: wait-exhaustion re-rolls instead of stopping) is caught -- the censored slot gets topped up, not left short" \
+  "$(cvj "$CVD_HELPERS
+    const seq = [[{status:'running'}, {status:'running'}, {status:'running'}], [{status:'done', pass:1}]];
+    const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: 1, report: () => {} });
+    process.stdout.write(JSON.stringify({ arm: r.arm, waitExhausted: r.waitExhausted }));
+  " "$CVD_SCRATCH")" '{"arm":[1],"waitExhausted":false}'
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
+check "positive control: the tracked convergence.mjs is pristine after both mutants A and B -- classifyDraw and fillArm, the two seams they mutate (F-231's fillArm coverage, carried into 3.3a's carve)" \
+  "$(cvj "$CVD_HELPERS
+    const seq = [[{status:'running'}, {status:'running'}, {status:'running'}], [{status:'done', pass:1}]];
+    const fr = M.fillArm(mkSeqDraw(seq), { n: 2, maxWaitAttempts: 1, report: () => {} });
+    process.stdout.write(M.classifyDraw({status:'running', pass:0}).kind + '/' + JSON.stringify({ arm: fr.arm, waitExhausted: fr.waitExhausted }));
+  ")" 'running/{"arm":[],"waitExhausted":true}'
 
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
