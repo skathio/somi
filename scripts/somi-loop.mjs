@@ -10,6 +10,10 @@
 // State: .somi/somi-state/loop/<slug>[.<iteration>].json under the project
 // root (project-local, gitignored by SoMi's conventions). Never committed.
 //
+// Diff measurement covers tracked, staged AND untracked-but-not-ignored files.
+// The untracked half is deliberate: `git diff` alone cannot see a file git has
+// never been told about, so without it a new file costs nothing against the cap.
+//
 // Cap precedence (matches the gate tables): CLI flag > env var > .somi/config.json
 // > default. Diff measurement EXCLUDES .somi/ and .claude/ — artifact churn
 // (progress/diary updates every pass) must not eat the code diff budget.
@@ -102,18 +106,64 @@ function nowIso() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+// Untracked, non-ignored files as synthetic `--numstat` rows (all lines added).
+// `git diff` reads the index and the work tree, but a file git has never been
+// told about is in neither -- so a brand-new file counts ZERO until someone runs
+// `git add`. That made the cap under-measure by the entire size of every new
+// file an iteration introduced, silently, in the direction that lets work
+// through (F-220: measured 248 against a true 503 on this work item's own 3.3).
+// Enumerated separately and merged into the same stream rather than fixed with
+// `git add -N`, which would mutate the caller's index as a side effect of a
+// read-only query.
+function untrackedNumstat(root, pathspec) {
+  let listed = '';
+  try {
+    listed = execFileSync(
+      'git',
+      ['-C', root, 'ls-files', '--others', '--exclude-standard', '--', ...pathspec],
+      { encoding: 'utf8' },
+    );
+  } catch (e) {
+    listed = e.stdout ? e.stdout.toString() : '';
+  }
+  const rows = [];
+  for (const file of listed.split('\n')) {
+    if (file === '') continue;
+    let buf;
+    try {
+      buf = fs.readFileSync(path.join(root, file));
+    } catch {
+      continue; // raced away between listing and reading
+    }
+    // git calls a blob binary on a NUL in the first 8000 bytes and reports `-`.
+    if (buf.subarray(0, 8000).includes(0)) {
+      rows.push(`-\t-\t${file}`);
+      continue;
+    }
+    const text = buf.toString('utf8');
+    const added = text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+    rows.push(`${added}\t0\t${file}`);
+  }
+  return rows.join('\n');
+}
+
 // Weighted cumulative diff vs baseline. Out-of-scope lines count double.
+// Covers tracked changes, staged changes, AND untracked files (see above) --
+// the whole working tree, which is what the cap is meant to bound.
 function computeDiff(root, baseline, iterationFiles) {
+  const pathspec = ['.', ':(exclude).somi', ':(exclude).claude'];
   let output = '';
   try {
     output = execFileSync(
       'git',
-      ['-C', root, 'diff', '--numstat', baseline, '--', '.', ':(exclude).somi', ':(exclude).claude'],
+      ['-C', root, 'diff', '--numstat', baseline, '--', ...pathspec],
       { encoding: 'utf8' },
     );
   } catch (e) {
     output = e.stdout ? e.stdout.toString() : '';
   }
+  const untracked = untrackedNumstat(root, pathspec);
+  if (untracked !== '') output = output === '' ? untracked : `${output}\n${untracked}`;
   let total = 0;
   let weighted = 0;
   const outOfScope = [];

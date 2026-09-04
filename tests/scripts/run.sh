@@ -89,6 +89,25 @@ printf 'four\n' >> src/b.txt                     # weighted 8 > cap 6
 expect_exit "check-diff: over weighted cap exits 3" 3 \
   node "$LOOP" check-diff --slug demo --iteration 1.1
 
+# F-220: `git diff` reads the index and tracked work-tree paths, so a file git
+# has never been told about is in NEITHER -- a brand-new file counted zero until
+# someone ran `git add`, and the cap under-measured by the whole size of every
+# file an iteration introduced. Silently, and in the direction that lets work
+# through. Measured on the same tree before and after the file exists, rather
+# than asserted against a hardcoded total that would drift with the block above.
+node "$LOOP" init --force --slug untracked --loop code --iteration 1.1 \
+  --files "src/new.txt" --diff-cap 100 >/dev/null
+before="$(node "$LOOP" check-diff --slug untracked --iteration 1.1 | jq .diff_lines)"
+printf 'x\ny\nz\n' > src/new.txt               # untracked: never `git add`ed
+after="$(node "$LOOP" check-diff --slug untracked --iteration 1.1 | jq .diff_lines)"
+check "check-diff: an untracked file counts its lines (F-220)" \
+  "$([[ "$after" == "$((before + 3))" ]]; echo $?)"
+
+printf 'churn\n' > .somi/untracked-note.md       # excluded pathspec, must stay 0
+after2="$(node "$LOOP" check-diff --slug untracked --iteration 1.1 | jq .diff_lines)"
+check "check-diff: untracked .somi files stay excluded (F-220)" \
+  "$([[ "$after2" == "$after" ]]; echo $?)"
+
 # --- somi-loop: record/finish/resume (session-death recovery) -------------------
 node "$LOOP" record-pass --slug demo --iteration 1.1 --verdict request-changes --blockers 0 --majors 2 >/dev/null
 out="$(node "$LOOP" resume --slug demo --iteration 1.1)"
