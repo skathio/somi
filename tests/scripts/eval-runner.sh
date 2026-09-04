@@ -2173,45 +2173,51 @@ if [ -d "$LOOPDIR" ]; then
     }
     process.stdout.write(unknown.length === 0 ? 'ALL_KNOWN' : unknown.join(','));
   ")
-  check "every real loop-state file's status is in {done} ∪ CAP_BREACH_STATUSES ∪ {running} ($LOOPDIR)" \
+  check "every real loop-state file's status is in {done} ∪ CAP_BREACH_STATUSES ∪ {stopped-<reason> : reason ∈ CAP_BREACH_STATUSES} ∪ {running} ($LOOPDIR)" \
     "$known_status_check" "ALL_KNOWN"
-
-  # --- Mutation testing (spec.md §7): staged against COPIES of real, committed loop-state files --
-  # never against the files themselves, and never against inputs invented to be easy to pass.
-  scratch=$(mktemp -d)
-
-  MUT_BASE_PASS="$LOOPDIR/context-economy-overhaul.2.1.json"   # real: pass=2, status=done
-  check "mutation (wrong field name: pass -> passes) on a COPY of a real loop-state file is caught" \
-    "$(cj "
-      const fs = await import('node:fs');
-      const obj = JSON.parse(fs.readFileSync('$MUT_BASE_PASS', 'utf8'));
-      obj.passes = obj.pass; delete obj.pass;
-      fs.writeFileSync('$scratch/wrong-field.json', JSON.stringify(obj));
-      process.stdout.write(String(M.passesToApprove(JSON.parse(fs.readFileSync('$scratch/wrong-field.json', 'utf8')))));
-    ")" \
-    "null"
-  check "...the real file itself was never touched by that mutation -- passesToApprove() on the original still returns 2" \
-    "$(cj "const fs = await import('node:fs'); process.stdout.write(String(M.passesToApprove(JSON.parse(fs.readFileSync('$MUT_BASE_PASS', 'utf8')))));")" \
-    "2"
-
-  MUT_BASE_STATUS="$LOOPDIR/context-economy-overhaul.2.2.json"   # real: pass=3, status=done
-  check "mutation (swapped status string: done -> diff-cap-exceeded) on a COPY of a real loop-state file is caught" \
-    "$(cj "
-      const fs = await import('node:fs');
-      const obj = JSON.parse(fs.readFileSync('$MUT_BASE_STATUS', 'utf8'));
-      obj.status = 'diff-cap-exceeded';
-      fs.writeFileSync('$scratch/swapped-status.json', JSON.stringify(obj));
-      process.stdout.write(String(M.capBreached(JSON.parse(fs.readFileSync('$scratch/swapped-status.json', 'utf8')))));
-    ")" \
-    "true"
-  check "...the real file itself was never touched by that mutation -- capBreached() on the original still returns false" \
-    "$(cj "const fs = await import('node:fs'); process.stdout.write(String(M.capBreached(JSON.parse(fs.readFileSync('$MUT_BASE_STATUS', 'utf8')))));")" \
-    "false"
-
-  rm -rf "$scratch"
 else
   echo "  (skipped: $LOOPDIR not present -- .somi/ is gitignored, this block only runs where real loop-state history is on disk)"
 fi
+
+# --- Mutation testing (spec.md §7): staged against COPIES of a real, COMMITTED loop-state file --
+# never against the file itself, and never against inputs invented to be easy to pass. Runs
+# unconditionally -- unlike the block above, this one does NOT read $LOOPDIR (F-241, closed here
+# for 3.1's own mutation tests too: they used to read the same gitignored directory the 3.3a
+# review flagged, so this comment's "committed" claim was false the same way theirs was; a
+# contributor whose loop directory existed but lacked these two exact named files would also have
+# hit an unhandled read failure on this block, the same shape of machine-dependence, just not the
+# one the review happened to test). DONE_FIXTURE is `context-economy-overhaul.2.1.json`, committed
+# verbatim (pass=2, status=done).
+DONE_FIXTURE="$ROOT/tests/scripts/goldens/loop-state-done.json"
+scratch=$(mktemp -d)
+
+check "mutation (wrong field name: pass -> passes) on a COPY of a real, committed loop-state file is caught" \
+  "$(cj "
+    const fs = await import('node:fs');
+    const obj = JSON.parse(fs.readFileSync('$DONE_FIXTURE', 'utf8'));
+    obj.passes = obj.pass; delete obj.pass;
+    fs.writeFileSync('$scratch/wrong-field.json', JSON.stringify(obj));
+    process.stdout.write(String(M.passesToApprove(JSON.parse(fs.readFileSync('$scratch/wrong-field.json', 'utf8')))));
+  ")" \
+  "null"
+check "...the fixture itself was never touched by that mutation -- passesToApprove() on the original still returns 2" \
+  "$(cj "const fs = await import('node:fs'); process.stdout.write(String(M.passesToApprove(JSON.parse(fs.readFileSync('$DONE_FIXTURE', 'utf8')))));")" \
+  "2"
+
+check "mutation (swapped status string: done -> diff-cap-exceeded) on a COPY of a real, committed loop-state file is caught" \
+  "$(cj "
+    const fs = await import('node:fs');
+    const obj = JSON.parse(fs.readFileSync('$DONE_FIXTURE', 'utf8'));
+    obj.status = 'diff-cap-exceeded';
+    fs.writeFileSync('$scratch/swapped-status.json', JSON.stringify(obj));
+    process.stdout.write(String(M.capBreached(JSON.parse(fs.readFileSync('$scratch/swapped-status.json', 'utf8')))));
+  ")" \
+  "true"
+check "...the fixture itself was never touched by that mutation -- capBreached() on the original still returns false" \
+  "$(cj "const fs = await import('node:fs'); process.stdout.write(String(M.capBreached(JSON.parse(fs.readFileSync('$DONE_FIXTURE', 'utf8')))));")" \
+  "false"
+
+rm -rf "$scratch"
 
 # --- 3.2: tie-conditional Mann-Whitney U via Monte Carlo, with a real oracle (D3, D5) -----------
 # Two independent oracles, both required (phases/03-convergence-gating.md iteration 3.2 -- this
@@ -2482,19 +2488,20 @@ check "positive control (after mutation): the tracked module is still pristine" 
 # after it. The combined trap removes both on any normal exit, including SIGINT/SIGTERM (a
 # SIGKILL bypasses any trap, leaking the scratch dir -- not the tracked file).
 
-# --- 3.3a: convergence gate DRIVER, classification + arm-filling carve -- classifyDraw, fillArm,
-# safeCleanup (D1-D5, R2/R3). 3.3's complete module was coded and reviewed twice as one iteration
-# (503 of 400, then 861 of a cap already raised to 510) and split along its own section divider
-# (phases/03-convergence-gating.md, split banner above iteration 3.3); this is the hermetic-core
-# carve, owning acceptance points 4 and 5 only. compareArms/estimatePower/runComparison and points
-# 1/2/3/6 (mutants C and D) carve back in with 3.3b; loopShardPath/resumeArm/prepareDrawDir/
-# startDraw/drawArmForSha and their tests carve back in with 3.3c. Hermetic throughout: every case
-# below is a direct function call against synthetic/injected input, never a live /code-loop
-# invocation (R6; phase 4 is where the full driver is run against the model for real).
+# --- 3.3a+3.3b: convergence gate DRIVER, classification/arm-filling + comparison/verdict carve --
+# classifyDraw, fillArm, safeCleanup (3.3a, done) and compareArms, estimatePower, runComparison
+# (3.3b, this pass) -- D1-D5, R2/R3. 3.3's complete module was coded and reviewed twice as one
+# iteration (503 of 400, then 861 of a cap already raised to 510) and split along its own section
+# divider (phases/03-convergence-gating.md, split banner above iteration 3.3); 3.3a owned
+# acceptance points 4 and 5, 3.3b adds points 1, 2, 3 and 6. loopShardPath/resumeArm/
+# prepareDrawDir/startDraw/drawArmForSha and their tests carve back in with 3.3c. Hermetic
+# throughout: every case below is a direct function call against synthetic/injected input, never a
+# live /code-loop invocation (R6; phase 4 is where the full driver is run against the model for
+# real).
 CVD=tests/evals/convergence.mjs
 cvj() { node --input-type=module -e "const M = await import('${2:-$ROOT/$CVD}'); $1" 2>&1; }
 
-echo "== convergence gate driver, classification + arm-filling (3.3a) =="
+echo "== convergence gate driver, classification + arm-filling + comparison/verdict (3.3a+3.3b) =="
 
 # --- point 4 (first half): N_PER_ARM pinned as a literal, independent of any draw outcome -------
 check "N_PER_ARM is exactly 15 (D2)" "$(cvj "process.stdout.write(String(M.N_PER_ARM));")" "15"
@@ -2544,6 +2551,23 @@ check "mutant (F-235: stopped- prefix stripping removed) is caught -- the docume
   "null/true"
 rm -rf "$lib_conv_scratch"
 
+# --- F-241 (Major, 3.3a pass-2 review): staged against a COMMITTED fixture, not a live-directory
+# scan -- the scan below is now an opportunistic supplement, never this assertion's only subject.
+# BREACH_FIXTURE is eval-corpus-rebuild.3.3.json, committed verbatim (status:"stopped-user-stop",
+# the DOCUMENTED stop-path write form, closed to that form via the real `somi-loop.mjs finish`
+# command per 3.3a's diary, not a hand-edit). Runs unconditionally -- in CI and on every
+# contributor's machine, regardless of whether $LOOPDIR exists or holds a stopped-* file, which is
+# 36 of this repo's own 37. F-242: not self-selecting -- the subject is a FIXED committed file, not
+# one discovered by the predicate under test, and the raw `status` string is asserted alongside
+# `kind` rather than only the classifier's own output.
+BREACH_FIXTURE="$ROOT/tests/scripts/goldens/loop-state-breach.json"
+check "classifyDraw on the committed cap-breach fixture is 'breach', raw status is the documented stopped-<reason> form (F-241/F-242)" \
+  "$(cvj "
+    const fs = await import('node:fs');
+    const o = JSON.parse(fs.readFileSync('$BREACH_FIXTURE', 'utf8'));
+    process.stdout.write(M.classifyDraw(o).kind + '/' + o.status);
+  ")" "breach/stopped-user-stop"
+
 LOOPDIR=".somi/somi-state/loop"
 if [ -d "$ROOT/$LOOPDIR" ]; then
   running_real=$(cvj "
@@ -2562,6 +2586,11 @@ if [ -d "$ROOT/$LOOPDIR" ]; then
   else
     echo "  (skipped: no real status:\"running\" loop-state file on disk right now)"
   fi
+  # Opportunistic supplement to the committed fixture above, not a replacement for it (F-241).
+  # F-242: SELF-SELECTING, same shape running_real's own F-183 comment names above -- discovers by
+  # the exact predicate (classifyDraw(...).kind === 'breach') it then asserts. An over-admitting
+  # classifyDraw would pass this alone; the committed fixture's raw-status assertion is the one
+  # that cannot be fooled that way. Degrades gracefully (skips, never fails) when absent.
   breach_real=$(cvj "
     const fs = await import('node:fs');
     process.stdout.write(fs.readdirSync('$ROOT/$LOOPDIR').filter((f) => f.endsWith('.json')).find((f) => M.classifyDraw(JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/' + f, 'utf8'))).kind === 'breach') || '');
@@ -2570,25 +2599,27 @@ if [ -d "$ROOT/$LOOPDIR" ]; then
     check "classifyDraw on a real cap-breach loop-state file is 'breach' ($breach_real)" \
       "$(cvj "const fs = await import('node:fs'); process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/$breach_real', 'utf8'))).kind);")" "breach"
   else
-    check "a real cap-breach loop-state file exists for classifyDraw() to assert against (F-236/F-237)" "NONE_FOUND" "found"
+    echo "  (skipped: no real cap-breach loop-state file on disk right now -- the committed fixture above already covers this branch)"
   fi
-  # Staged on a COPY of a real, committed loop-state file (spec.md §7's scorer discipline) --------
-  cvd_scratch=$(mktemp -d)
-  CVD_DONE_REAL="$LOOPDIR/eval-corpus-rebuild.3.2.json"   # real: status done, pass 3
-  check "mutation (status: done -> pemding, an unrecognised near-miss) on a COPY is malformed, not silently done" \
-    "$(cvj "
-      const fs = await import('node:fs');
-      const obj = JSON.parse(fs.readFileSync('$ROOT/$CVD_DONE_REAL', 'utf8'));
-      obj.status = 'pemding';
-      fs.writeFileSync('$cvd_scratch/typo-status.json', JSON.stringify(obj));
-      process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$cvd_scratch/typo-status.json', 'utf8'))).kind);
-    ")" "malformed"
-  check "...the real file itself was never touched -- classifyDraw on the original is still 'done'" \
-    "$(cvj "const fs = await import('node:fs'); process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$ROOT/$CVD_DONE_REAL', 'utf8'))).kind);")" "done"
-  rm -rf "$cvd_scratch"
 else
   echo "  (skipped: $LOOPDIR not present)"
 fi
+
+# Staged on a COPY of a real, COMMITTED loop-state file (spec.md §7's scorer discipline) -- F-241,
+# unconditional for the same reason the 3.1 block's mutation tests above are (DONE_FIXTURE, set
+# there, is reused rather than redefined).
+cvd_scratch=$(mktemp -d)
+check "mutation (status: done -> pemding, an unrecognised near-miss) on a COPY is malformed, not silently done" \
+  "$(cvj "
+    const fs = await import('node:fs');
+    const obj = JSON.parse(fs.readFileSync('$DONE_FIXTURE', 'utf8'));
+    obj.status = 'pemding';
+    fs.writeFileSync('$cvd_scratch/typo-status.json', JSON.stringify(obj));
+    process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$cvd_scratch/typo-status.json', 'utf8'))).kind);
+  ")" "malformed"
+check "...the fixture itself was never touched -- classifyDraw on the original is still 'done'" \
+  "$(cvj "const fs = await import('node:fs'); process.stdout.write(M.classifyDraw(JSON.parse(fs.readFileSync('$DONE_FIXTURE', 'utf8'))).kind);")" "done"
+rm -rf "$cvd_scratch"
 
 # --- fillArm: draw policy (point 4, second half; point 5 at the arm level) -----------------------
 # seq[i] is the state sequence one draw handle steps through on successive retry()s; a fresh
@@ -2626,6 +2657,61 @@ check "fillArm: a breach fails the WHOLE arm outright, even after usable draws w
     process.stdout.write(JSON.stringify({ breach: r.breach, arm: r.arm }));
   ")" '{"breach":true,"arm":[1]}'
 
+# --- point 3: a cap-breach fails the WHOLE comparison outright, independent of the p-value -------
+check "runComparison: a breach in the CANDIDATE arm fails outright, regardless of the baseline's own values" \
+  "$(cvj "$CVD_HELPERS
+    const bl = [[{status:'done',pass:1}],[{status:'done',pass:1}],[{status:'done',pass:1}]];
+    const cd = [[{status:'done',pass:1}],[{status:'max-passes-exceeded',pass:6}]];
+    const r = M.runComparison(mkSeqDraw(bl), mkSeqDraw(cd), { n: 3, report: () => {} });
+    process.stdout.write(JSON.stringify({ verdict: r.verdict, breachArm: r.breachArm }));
+  ")" '{"verdict":"cap-breach","breachArm":"candidate"}'
+check "runComparison: a breach in the BASELINE arm fails outright -- the candidate is never even drawn" \
+  "$(cvj "$CVD_HELPERS
+    let candidateDrawn = false;
+    const newCandidate = () => { candidateDrawn = true; return mkSeqDraw([[{status:'done',pass:1}]])(); };
+    const r = M.runComparison(mkSeqDraw([[{status:'max-passes-exceeded',pass:6}]]), newCandidate, { n: 1, report: () => {} });
+    process.stdout.write(JSON.stringify({ verdict: r.verdict, breachArm: r.breachArm, candidateDrawn }));
+  ")" '{"verdict":"cap-breach","breachArm":"baseline","candidateDrawn":false}'
+check "runComparison: insufficient-draws (point 4) on a realized shortfall, measured on the actual array, not the requested count" \
+  "$(cvj "$CVD_HELPERS
+    const bl = [[{status:'running'},{status:'running'},{status:'running'}]];
+    const cd = [[{status:'done',pass:2}],[{status:'done',pass:2}]];
+    const r = M.runComparison(mkSeqDraw(bl), mkSeqDraw(cd), { n: 2, maxWaitAttempts: 1, report: () => {} });
+    process.stdout.write(JSON.stringify({ verdict: r.verdict, deficit: r.deficit }));
+  ")" '{"verdict":"insufficient-draws","deficit":{"baseline":2,"candidate":0}}'
+# --- point 6 (Blocker F-221, code-loop pass 1 review): every OTHER check in this suite bounds a
+# false ACCEPT; none bounded a false BLOCK. A one-line mutant (`verdict = 'inconclusive'` always)
+# passed points 1/2/4/5 AND the old membership assertion below, improving point 2 to 0.0000. Two
+# assertions close it -- the first is this rewritten check itself.
+check "point 6 (1/2) -- a healthy, well-filled comparison returns no-regression ITSELF, not merely membership in the verdict set (F-221: the old '['regression','no-regression','inconclusive'].includes(verdict)' assertion was true of every value compareArms() can return, including a gate that never accepts)" \
+  "$(cvj "$CVD_HELPERS
+    const arm = Array.from({length:15}, () => [{status:'done',pass:2}]);
+    const r = M.runComparison(mkSeqDraw(arm.slice()), mkSeqDraw(arm.slice()), { resamples: 5000, report: () => {} });
+    process.stdout.write(r.verdict);
+  ")" "no-regression"
+
+# --- F-223 (Major, code-loop pass 1 review): the power statement and the top-level censoring
+# counts, both this iteration's own Observability deliverable and a phase exit criterion.
+check "runComparison's healthy-input result carries a LIVE power estimate in [0,1] (F-223 -- computed from THIS run's own realized arms, not D2's static 71.6% citation)" \
+  "$(cvj "$CVD_HELPERS
+    const arm = Array.from({length:15}, () => [{status:'done',pass:2}]);
+    const r = M.runComparison(mkSeqDraw(arm.slice()), mkSeqDraw(arm.slice()), { resamples: 5000, report: () => {}, powerTrials: 30, powerResamples: 500 });
+    process.stdout.write(String(typeof r.power === 'number' && r.power >= 0 && r.power <= 1));
+  ")" "true"
+check "compareArms() does NOT compute power unless asked -- opt-in, so it never nests inside its own estimatePower() trial loop or points 1/2's T=600 mass-simulation loops below" \
+  "$(cvj "
+    const arm = Array.from({length:15}, () => 2);
+    const r = M.compareArms(arm, arm, { resamples: 2000 });
+    process.stdout.write(String('power' in r && r.power === undefined));
+  ")" "true"
+check "runComparison surfaces stillRunning/replaced at the TOP level on the SUCCESS path too (F-223, point 4's 'censoring stays visible even when the floor is satisfied' -- unmet on this path before)" \
+  "$(cvj "$CVD_HELPERS
+    const censored = [[{status:'running'}, {status:'done', pass:2}]];
+    const plain = Array.from({length:14}, () => [{status:'done',pass:2}]);
+    const r = M.runComparison(mkSeqDraw([...censored, ...plain]), mkSeqDraw(Array.from({length:15}, () => [{status:'done',pass:2}])), { resamples: 5000, report: () => {} });
+    process.stdout.write(JSON.stringify({ stillRunning: r.stillRunning, replaced: r.replaced }));
+  ")" '{"stillRunning":{"baseline":1,"candidate":0},"replaced":{"baseline":0,"candidate":0}}'
+
 # --- Mutation testing (spec.md §7): staged against a COPY of convergence.mjs, never the tracked
 # file, following 3.2's own MW_SCRATCH precedent -- one scratch dir, reset via `cp` between mutants.
 CVD_SCRATCH_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
@@ -2641,12 +2727,31 @@ trap 'rm -rf "$MW_SCRATCH_DIR" "$CVD_SCRATCH_DIR"' EXIT
 # trap command, not on their runtime values.
 check "F-222: the EXIT trap names BOTH scratch dirs (trap REPLACES, not appends -- a registration naming only its own dir silently drops every earlier one)" \
   "$(trap -p EXIT | grep -qF 'MW_SCRATCH_DIR' && trap -p EXIT | grep -qF 'CVD_SCRATCH_DIR' && echo true || echo false)" "true"
-# Symlinked, not copied: only convergence.mjs itself is ever mutated; its one relative import
-# (lib/convergence.mjs) resolves straight through to the real, pristine file -- same isolation
-# guarantee as MW_SCRATCH's single-file copy. 3.3a's carve imports nothing from run.mjs (that
-# import returns with 3.3c's shard mechanism), so no run.mjs symlink is needed here.
+# Symlinked, not copied: only convergence.mjs itself is ever mutated; its relative imports
+# (lib/convergence.mjs, lib/mann-whitney.mjs) resolve straight through to the real, pristine
+# files -- same isolation guarantee as MW_SCRATCH's single-file copy. This carve imports nothing
+# from run.mjs (that import returns with 3.3c's shard mechanism), so no run.mjs symlink is needed.
 ln -s "$ROOT/tests/evals/lib" "$CVD_SCRATCH_DIR/lib"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
+# CVD_SIM: shared population/trial-loop preamble for points 1, 2 and 6, and for mutant D's second
+# check below (all draw from D5's own tied historical histogram, {1:9,2:4,3:5,4:2,5:1}). Defined
+# here, before the mutation section, since mutant D needs it too.
+# F-233 (Nit, code-loop pass 1 review): TWO independent seeded streams, not one shared between arm
+# generation and the rank test's own resampling -- compareArms() short-circuits on p < alpha, so a
+# single shared stream let the number of rng() calls consumed per trial depend on that trial's own
+# outcome, and no single trial could be replayed in isolation. dataRng draws the synthetic arms;
+# testRng is the ONLY stream compareArms()/mannWhitneyU ever consumes.
+CVD_SIM='
+  const MWmod = await import("'"$ROOT"'/tests/evals/lib/mann-whitney.mjs");
+  const dataRng = MWmod.mulberry32(1234);
+  const testRng = MWmod.mulberry32(5678);
+  const weights = [[1,9],[2,4],[3,5],[4,2],[5,1]];
+  const total = weights.reduce((s,[,w]) => s + w, 0);
+  function drawOne() { let r = dataRng() * total; for (const [v,w] of weights) { if (r < w) return v; r -= w; } return weights.at(-1)[0]; }
+  function drawArm(n) { return Array.from({ length: n }, drawOne); }
+  const T = 600, RESAMPLES = 3000, N = 15;
+'
 
 # Mutant A -- reintroduces F-182: collapses capBreached()'s null (running OR malformed) into the
 # non-breach/done branch -- the natural-but-wrong `if (!capBreached(o)) arm.push(...)` shape.
@@ -2678,12 +2783,106 @@ check "mutant B (F-194: wait-exhaustion re-rolls instead of stopping) is caught 
   " "$CVD_SCRATCH")" '{"arm":[1],"waitExhausted":false}'
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
-check "positive control: the tracked convergence.mjs is pristine after both mutants A and B -- classifyDraw and fillArm, the two seams they mutate (F-231's fillArm coverage, carried into 3.3a's carve)" \
+# Mutant C -- reintroduces the collapsed-verdict bug points 1/2 exist to catch: no-regression
+# whenever p >= alpha (the exact "p >= alpha alone is no-regression" shape spec.md forbids). Arms
+# below are a real inconclusive pair under the PRISTINE module (primary.p=0.137, equiv.p=0.084,
+# both >= alpha -- found by simulation, not hand-picked to be easy), so the mutant's forced flip
+# to 'no-regression' is a visible change from the correct verdict, not masked by an earlier
+# primary-regression return.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = \"const shifted = candidateArm.map((v) => v - shift);\n  const equivalence = mannWhitneyU(shifted, baselineArm, mwOpts);\n  const verdict = equivalence.p < alpha ? 'no-regression' : 'inconclusive';\n  return { verdict, primary, equivalence, alpha, shift, power };\";
+  const TO = \"const verdict = 'no-regression'; // MUTANT\n  return { verdict, primary, alpha, shift, power };\";
+  if (!s.includes(FROM)) throw new Error('mutant C pattern not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant C ('p >= alpha alone is no-regression') is caught -- a real inconclusive pair now reads no-regression" \
+  "$(cvj "
+    const a = [1,3,2,3,1,3,1,1,1,3,1,1,1,3,1];
+    const b = [1,2,3,2,1,2,3,1,3,5,2,1,5,1,2];
+    process.stdout.write(M.compareArms(a, b, { resamples: 20000 }).verdict);
+  " "$CVD_SCRATCH")" "no-regression"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
+# Mutant D (F-221, Blocker, code-loop pass 1 review) -- reintroduces the NEVER-ACCEPTS direction:
+# a gate that can never return no-regression. Every other check in this suite bounds a false
+# ACCEPT; this is the direction only point 6 (below) bounds. Short-circuits compareArms() to a
+# hardcoded verdict -- the rest of the function body is then dead code, which is fine, this is a
+# staged mutant, not shipped source.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'export function compareArms(baselineArm, candidateArm, opts = {}) {';
+  const TO   = 'export function compareArms(baselineArm, candidateArm, opts = {}) { return { verdict: \'inconclusive\' }; // MUTANT (F-221): never accepts';
+  if (!s.includes(FROM)) throw new Error('mutant D pattern not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant D (F-221: verdict is always 'inconclusive') is caught by point 6's FIRST half -- a clean, healthy pair now reads inconclusive, not no-regression" \
   "$(cvj "$CVD_HELPERS
+    const arm = Array.from({length:15}, () => [{status:'done',pass:2}]);
+    const r = M.runComparison(mkSeqDraw(arm.slice()), mkSeqDraw(arm.slice()), { resamples: 5000, report: () => {} });
+    process.stdout.write(r.verdict);
+  " "$CVD_SCRATCH")" "inconclusive"
+check "mutant D is ALSO caught by point 6's SECOND half -- the no-regression rate on unshifted pairs collapses to 0, far below the D2-derived floor" \
+  "$(cvj "$CVD_SIM
+    process.stdout.write(String(M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES, trials: 50 })));
+  " "$CVD_SCRATCH")" "0"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
+check "positive control: the tracked convergence.mjs is pristine after all four mutants (F-231: now also exercises fillArm, the seam mutant B mutates -- reusing the n:2/maxWaitAttempts:1 case)" \
+  "$(cvj "$CVD_HELPERS
+    const a = [1,3,2,3,1,3,1,1,1,3,1,1,1,3,1];
+    const b = [1,2,3,2,1,2,3,1,3,5,2,1,5,1,2];
     const seq = [[{status:'running'}, {status:'running'}, {status:'running'}], [{status:'done', pass:1}]];
     const fr = M.fillArm(mkSeqDraw(seq), { n: 2, maxWaitAttempts: 1, report: () => {} });
-    process.stdout.write(M.classifyDraw({status:'running', pass:0}).kind + '/' + JSON.stringify({ arm: fr.arm, waitExhausted: fr.waitExhausted }));
-  ")" 'running/{"arm":[],"waitExhausted":true}'
+    process.stdout.write(M.classifyDraw({status:'running', pass:0}).kind + '/' + M.compareArms(a, b, { resamples: 20000 }).verdict + '/' + JSON.stringify({ arm: fr.arm, waitExhausted: fr.waitExhausted }));
+  ")" 'running/inconclusive/{"arm":[],"waitExhausted":true}'
+
+# --- points 1, 2 and 6: Monte-Carlo property bounds on the verdict logic built atop the already-
+# oracle-verified rank procedure (3.2 owns rank-procedure correctness; this does not re-check it).
+# All three draw from D5's own tied historical histogram ({1:9,2:4,3:5,4:2,5:1}) via CVD_SIM,
+# defined above (before the mutation section, since mutant D's second check needs it too). Trial/
+# resample counts are stated so every tolerance is derived, never loosened to fit (spec.md §7).
+POINT1=$(cvj "$CVD_SIM
+  let regressions = 0;
+  for (let t = 0; t < T; t++) {
+    const r = M.compareArms(drawArm(N), drawArm(N), { resamples: RESAMPLES, rng: testRng });
+    if (r.verdict === 'regression') regressions++;
+  }
+  const rate = regressions / T, bound = 0.05 + 5 * Math.sqrt(0.05 * 0.95 / T);
+  process.stdout.write(rate.toFixed(4) + '<=' + bound.toFixed(4) + ' ' + (rate <= bound));
+")
+echo "  (point 1 measured: $POINT1)"
+check "point 1 -- one-sided size bound: empirical regression rate on UNSHIFTED (null) pairs <= 0.05 + 5x its own Monte Carlo SE, T=600 (one-sided, not a tight two-sided interval)" \
+  "$(echo "$POINT1" | awk '{print $2}')" "true"
+
+POINT2=$(cvj "$CVD_SIM
+  let falseAccepts = 0;
+  for (let t = 0; t < T; t++) {
+    const r = M.compareArms(drawArm(N), drawArm(N).map((v) => v + 1), { resamples: RESAMPLES, rng: testRng });
+    if (r.verdict === 'no-regression') falseAccepts++;
+  }
+  const rate = falseAccepts / T, bound = 0.08 + 5 * Math.sqrt(0.08 * 0.92 / T);
+  process.stdout.write(rate.toFixed(4) + '<=' + bound.toFixed(4) + ' ' + (rate <= bound));
+")
+echo "  (point 2 measured: $POINT2)"
+check "point 2 -- bound the false no-regression rate on truly-shifted (+1 pass, degraded) arms: <= 0.08 + 5x its own Monte Carlo SE, T=600 -- the number the three-state verdict exists to control" \
+  "$(echo "$POINT2" | awk '{print $2}')" "true"
+
+# point 6's SECOND half (F-221, Blocker): a lower bound on the no-regression rate for UNSHIFTED
+# (healthy) pairs -- the direction NOTHING else in this suite bounds. Reuses estimatePower()
+# itself (built once inside convergence.mjs, F-223), not a hand-rolled reimplementation of the
+# same trial loop -- CVD_SIM's own `drawOne` is passed straight through. Floor derived inline from
+# D2's stated power at n=15 (decisions.md#d2, 71.6%) the same way points 1/2 derive their
+# tolerances -- never chosen to fit the measurement.
+POINT6=$(cvj "$CVD_SIM
+  const power = M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES, trials: T });
+  const predicted = 0.716; // D2's stated primary-test power at n=15 (decisions.md#d2)
+  const floor = predicted - 5 * Math.sqrt(predicted * (1 - predicted) / T);
+  process.stdout.write(power.toFixed(4) + '>=' + floor.toFixed(4) + ' ' + (power >= floor));
+")
+echo "  (point 6 measured: $POINT6)"
+check "point 6 (2/2) -- lower bound on the no-regression rate for UNSHIFTED (healthy) pairs, >= D2's stated power (0.716) minus 5x its own Monte Carlo SE, T=600 -- bounds the direction F-221 found unbounded" \
+  "$(echo "$POINT6" | awk '{print $2}')" "true"
 
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
