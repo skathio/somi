@@ -2488,20 +2488,21 @@ check "positive control (after mutation): the tracked module is still pristine" 
 # after it. The combined trap removes both on any normal exit, including SIGINT/SIGTERM (a
 # SIGKILL bypasses any trap, leaking the scratch dir -- not the tracked file).
 
-# --- 3.3a+3.3b: convergence gate DRIVER, classification/arm-filling + comparison/verdict carve --
-# classifyDraw, fillArm, safeCleanup (3.3a, done) and compareArms, estimatePower, runComparison
-# (3.3b, this pass) -- D1-D5, R2/R3. 3.3's complete module was coded and reviewed twice as one
-# iteration (503 of 400, then 861 of a cap already raised to 510) and split along its own section
-# divider (phases/03-convergence-gating.md, split banner above iteration 3.3); 3.3a owned
-# acceptance points 4 and 5, 3.3b adds points 1, 2, 3 and 6. loopShardPath/resumeArm/
-# prepareDrawDir/startDraw/drawArmForSha and their tests carve back in with 3.3c. Hermetic
-# throughout: every case below is a direct function call against synthetic/injected input, never a
-# live /code-loop invocation (R6; phase 4 is where the full driver is run against the model for
-# real).
+# --- 3.3a+3.3b+3.3c: convergence gate DRIVER, all three carves -- D1-D5, R2/R3. 3.3's complete
+# module was coded and reviewed twice as one iteration (503 of 400, then 861 of a cap already
+# raised to 510) and split along its own section divider (phases/03-convergence-gating.md, split
+# banner above iteration 3.3): classifyDraw, fillArm, safeCleanup (3.3a, done, points 4 and 5),
+# compareArms, estimatePower, runComparison (3.3b, done, points 1, 2, 3 and 6), and
+# loopShardPath/resumeArm/prepareDrawDir/startDraw/drawArmForSha -- the resume/namespace layer and
+# the live-draw mechanism (3.3c, this pass, none of the six numbered points -- the workDir-contract
+# and resume-gap checks recorded in the phase file's Scope amendment). The module is complete
+# after this carve. Hermetic throughout: every case below is a direct function call against
+# synthetic/injected input, or a setup-only seam (prepareDrawDir), never a live /code-loop
+# invocation (R6; phase 4 is where the full driver is run against the model for real).
 CVD=tests/evals/convergence.mjs
 cvj() { node --input-type=module -e "const M = await import('${2:-$ROOT/$CVD}'); $1" 2>&1; }
 
-echo "== convergence gate driver, classification + arm-filling + comparison/verdict (3.3a+3.3b) =="
+echo "== convergence gate driver, classification + arm-filling + comparison/verdict + shards/live-draw (3.3a+3.3b+3.3c) =="
 
 # --- point 4 (first half): N_PER_ARM pinned as a literal, independent of any draw outcome -------
 check "N_PER_ARM is exactly 15 (D2)" "$(cvj "process.stdout.write(String(M.N_PER_ARM));")" "15"
@@ -2557,9 +2558,17 @@ rm -rf "$lib_conv_scratch"
 # the DOCUMENTED stop-path write form, closed to that form via the real `somi-loop.mjs finish`
 # command per 3.3a's diary, not a hand-edit). Runs unconditionally -- in CI and on every
 # contributor's machine, regardless of whether $LOOPDIR exists or holds a stopped-* file, which is
-# 36 of this repo's own 37. F-242: not self-selecting -- the subject is a FIXED committed file, not
-# one discovered by the predicate under test, and the raw `status` string is asserted alongside
-# `kind` rather than only the classifier's own output.
+# almost none of them. F-247 (Minor, 3.3b pass-1 review, asked twice): anchored to a re-runnable
+# command rather than a snapshot count, since a snapshot goes stale as this corpus grows on its own
+# -- this line's earlier "36 of 37" (files NOT stopped-*) already read "37 of 38" one iteration
+# later. F-250 (pass-2): the command below reproduces the RARE side of that instead -- a stopped-*
+# file, which is 1 of this repo's own 39 today. Reproduce with:
+#   node -e "const fs=require('fs'),d='.somi/somi-state/loop';const f=fs.readdirSync(d)
+#     .filter(x=>x.endsWith('.json'));let n=0;for(const x of f){try{if(/^stopped-/.test(
+#     JSON.parse(fs.readFileSync(d+'/'+x,'utf8')).status))n++}catch{}}console.log(n+'/'+f.length)"
+# F-242: not self-selecting -- the subject is a FIXED committed file, not one discovered by the
+# predicate under test, and the raw `status` string is asserted alongside `kind` rather than only
+# the classifier's own output.
 BREACH_FIXTURE="$ROOT/tests/scripts/goldens/loop-state-breach.json"
 check "classifyDraw on the committed cap-breach fixture is 'breach', raw status is the documented stopped-<reason> form (F-241/F-242)" \
   "$(cvj "
@@ -2570,12 +2579,19 @@ check "classifyDraw on the committed cap-breach fixture is 'breach', raw status 
 
 LOOPDIR=".somi/somi-state/loop"
 if [ -d "$ROOT/$LOOPDIR" ]; then
+  # F-246 (Minor, 3.3b pass-1 review): the per-file parse below is wrapped in its OWN try/catch, not
+  # left to `cvj`'s outer 2>&1 capture -- one unparseable .json (a file killed mid-write) used to
+  # throw out of JSON.parse, and the captured stack trace (non-empty) then satisfied `[ -n "$var" ]`
+  # below, so the following check tried to read a FILE NAMED BY THE STACK TRACE and failed loudly on
+  # the wrong thing. A malformed file is skipped here exactly like an unreadable one -- this scan is
+  # an opportunistic supplement (F-241) and must degrade gracefully on corruption, not just absence.
   running_real=$(cvj "
     const fs = await import('node:fs');
     const files = fs.readdirSync('$ROOT/$LOOPDIR').filter((f) => f.endsWith('.json'));
     let found = '';
     for (const f of files) {
-      const o = JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/' + f, 'utf8'));
+      let o;
+      try { o = JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/' + f, 'utf8')); } catch { continue; }
       if (o.status === 'running') { found = f; break; }
     }
     process.stdout.write(found);
@@ -2590,10 +2606,19 @@ if [ -d "$ROOT/$LOOPDIR" ]; then
   # F-242: SELF-SELECTING, same shape running_real's own F-183 comment names above -- discovers by
   # the exact predicate (classifyDraw(...).kind === 'breach') it then asserts. An over-admitting
   # classifyDraw would pass this alone; the committed fixture's raw-status assertion is the one
-  # that cannot be fooled that way. Degrades gracefully (skips, never fails) when absent.
+  # that cannot be fooled that way. Degrades gracefully (skips, never fails) when absent OR
+  # malformed (F-246, same fix as running_real above -- the per-file parse gets its own try/catch
+  # rather than relying on `.find()`'s single expression to short-circuit on a thrown parse).
   breach_real=$(cvj "
     const fs = await import('node:fs');
-    process.stdout.write(fs.readdirSync('$ROOT/$LOOPDIR').filter((f) => f.endsWith('.json')).find((f) => M.classifyDraw(JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/' + f, 'utf8'))).kind === 'breach') || '');
+    const files = fs.readdirSync('$ROOT/$LOOPDIR').filter((f) => f.endsWith('.json'));
+    let found = '';
+    for (const f of files) {
+      let o;
+      try { o = JSON.parse(fs.readFileSync('$ROOT/$LOOPDIR/' + f, 'utf8')); } catch { continue; }
+      if (M.classifyDraw(o).kind === 'breach') { found = f; break; }
+    }
+    process.stdout.write(found);
   ")
   if [ -n "$breach_real" ]; then
     check "classifyDraw on a real cap-breach loop-state file is 'breach' ($breach_real)" \
@@ -2657,6 +2682,40 @@ check "fillArm: a breach fails the WHOLE arm outright, even after usable draws w
     process.stdout.write(JSON.stringify({ breach: r.breach, arm: r.arm }));
   ")" '{"breach":true,"arm":[1]}'
 
+# 3.3c: startDraw() is the FIRST real cleanup() a draw handle ever carries (mkSeqDraw above has
+# none, so safeCleanup()'s `draw.cleanup?.()` was a silent no-op in every fillArm test above --
+# none of them could have caught F-226 recurring). This is the seam that matters now that a real,
+# disk-touching cleanup exists to actually leave uncalled: 1.7 MB / 187 files per draw, ~51 MB per
+# certification (phase file, 3.3 pass-2 review). Verified on all four terminal paths a single draw
+# can end on, not just the two (done/malformed) the existing reports/replaced assertions above
+# already exercise indirectly.
+CVD_HELPERS_CLEANUP='
+  function mkTrackedDraw(seq) {
+    let i = 0; const calls = [];
+    const next = () => {
+      const states = seq[i]; let idx = 0; const mine = i; i++;
+      return { read: () => states[idx], retry: () => { idx = Math.min(idx + 1, states.length - 1); }, cleanup: () => calls.push(mine) };
+    };
+    next.calls = calls;
+    return next;
+  }
+'
+check "fillArm calls the draw handle's cleanup() on EVERY terminal path -- breach/done/malformed/wait-exhausted, not just the two the arm-content assertions above already imply (F-226, closed against a REAL cleanup() for the first time now that startDraw provides one)" \
+  "$(cvj "$CVD_HELPERS_CLEANUP
+    const breachDraw = mkTrackedDraw([[{status:'max-passes-exceeded', pass:6}]]);
+    M.fillArm(breachDraw, { n: 1, report: () => {} });
+    const doneDraw = mkTrackedDraw([[{status:'done', pass:2}]]);
+    M.fillArm(doneDraw, { n: 1, report: () => {} });
+    const malformedDraw = mkTrackedDraw([[{status:'bogus'}], [{status:'done', pass:2}]]);
+    M.fillArm(malformedDraw, { n: 1, report: () => {} });
+    const waitExhaustedDraw = mkTrackedDraw([[{status:'running'}, {status:'running'}]]);
+    M.fillArm(waitExhaustedDraw, { n: 1, maxWaitAttempts: 1, report: () => {} });
+    process.stdout.write(JSON.stringify({
+      breach: breachDraw.calls.length, done: doneDraw.calls.length,
+      malformed: malformedDraw.calls.length, waitExhausted: waitExhaustedDraw.calls.length,
+    }));
+  ")" '{"breach":1,"done":1,"malformed":2,"waitExhausted":1}'
+
 # --- point 3: a cap-breach fails the WHOLE comparison outright, independent of the p-value -------
 check "runComparison: a breach in the CANDIDATE arm fails outright, regardless of the baseline's own values" \
   "$(cvj "$CVD_HELPERS
@@ -2712,6 +2771,100 @@ check "runComparison surfaces stillRunning/replaced at the TOP level on the SUCC
     process.stdout.write(JSON.stringify({ stillRunning: r.stillRunning, replaced: r.replaced }));
   ")" '{"stillRunning":{"baseline":1,"candidate":0},"replaced":{"baseline":0,"candidate":0}}'
 
+# --- F-225 (Major, code-loop pass 1 review): convergence shards get their OWN namespace, OWN
+# schema, decoupled from run.mjs's SCHEMA_VERSION -- verified by execution, not merely by reading
+# the source, that the split actually removes the collision (the namespace-split option; see
+# convergence.mjs's own comment above LOOP_SCHEMA_VERSION for the "was schema:1 deliberate?"
+# answer: no, and it now is).
+check "convergence shards land under shardDir(sha)/convergence/ -- run.mjs's REAL mergeShards() (not a mimic of its listing) never sees them (F-249)" \
+  "$(cvj "
+    const fs = await import('node:fs'); const path = await import('node:path');
+    const runMod = await import('$ROOT/tests/evals/run.mjs');
+    const sha = 'f225ns' + Date.now();
+    const p = M.loopShardPath(sha, M.TASK_ID, 0);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify({ sha, taskId: M.TASK_ID, schema: M.LOOP_SCHEMA_VERSION, run: { index: 0, pass: 2 } }));
+    const dir = runMod.shardDir(sha);
+    const merged = runMod.mergeShards(sha, { runs: 3 });
+    fs.rmSync(dir, { recursive: true, force: true });
+    process.stdout.write(JSON.stringify([Object.keys(merged.tasks).length, merged.skippedShards.length]));
+  ")" "[0,0]"
+# --- F-230 (Minor): resumeArm's nextIndex targets the first genuinely MISSING slot, not
+# done.length -- shards {0,2} present must never overwrite shard 2 or leave 1 unwritten forever.
+check "resumeArm: shards {0,2} present -- resume holds both, nextIndex fills the GAP at 1, never targets 2 (F-230)" \
+  "$(cvj "
+    const fs = await import('node:fs'); const path = await import('node:path');
+    const sha = 'f230gap' + Date.now();
+    for (const i of [0, 2]) {
+      const p = M.loopShardPath(sha, M.TASK_ID, i);
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, JSON.stringify({ sha, taskId: M.TASK_ID, schema: M.LOOP_SCHEMA_VERSION, run: { index: i, pass: i + 10 } }));
+    }
+    const r = M.resumeArm(sha, M.TASK_ID, 3);
+    fs.rmSync(path.dirname(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))), { recursive: true, force: true });
+    process.stdout.write(JSON.stringify({ resume: r.resume, nextIndex: r.nextIndex, occupied: [...r.occupied].sort((a,b)=>a-b) }));
+  ")" '{"resume":[10,12],"nextIndex":1,"occupied":[0,2]}'
+# A corrupted shard (killed process mid-write) must not crash the read, must not silently push
+# garbage into an arm, and must not have its slot immediately overwritten either -- readShard's
+# own F-131 discipline, applied to THIS module's namespace, the third caller the pass-1 review
+# named as skipping it.
+check "resumeArm: a corrupted shard is treated as absent from resume, without crashing, and its slot stays occupied (not silently overwritten) (F-225)" \
+  "$(cvj "
+    const fs = await import('node:fs'); const path = await import('node:path');
+    const sha = 'f225corrupt' + Date.now();
+    const p = M.loopShardPath(sha, M.TASK_ID, 0);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, 'not json');
+    const r = M.resumeArm(sha, M.TASK_ID, 1);
+    fs.rmSync(path.dirname(path.dirname(p)), { recursive: true, force: true });
+    process.stdout.write(JSON.stringify({ resume: r.resume, nextIndex: r.nextIndex, occupied: [...r.occupied] }));
+  ")" '{"resume":[],"nextIndex":1,"occupied":[0]}'
+# F-248 (Major, pass-1 review): resumeArm's occupied set means nothing if the CONSUMER re-collides
+# with it -- writeNextShard is drawArmForSha's onDraw, exercised directly (no live draw, no quota).
+check "writeNextShard: n=5, shards {0,2} occupied, three sequential draws land exactly on the GAPS -- {1,3,4}, never re-touching 2 (F-248)" \
+  "$(cvj "
+    const fs = await import('node:fs'); const path = await import('node:path'); const sha = 'f248gap' + Date.now(); const occ = new Set([0, 2]); let i = 1; const w = []; for (let k = 0; k < 3; k++) { i = M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7) + 1; w.push(i - 1); } const onDisk = fs.readdirSync(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))).filter(f => f.endsWith('.json')).map(f => Number(f.match(/-(\d+)\.json\$/)[1])).sort((a,b)=>a-b); fs.rmSync(path.dirname(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))), { recursive: true, force: true }); process.stdout.write(JSON.stringify([w, onDisk]));
+  ")" "[[1,3,4],[1,3,4]]"
+check "writeNextShard: n=5, a corrupted-but-occupied shard 0 plus 1,2 valid -- the slot at n=5 throws instead of writing out of range where loopCompletedIndices() could never find it again (F-248)" \
+  "$(cvj "
+    const fs = await import('node:fs'); const path = await import('node:path'); const sha = 'f248oob' + Date.now(); const occ = new Set([0, 1, 2]); let i = 3; i = M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7) + 1; i = M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7) + 1; let threw = false; try { M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7); } catch (e) { threw = /no free shard slot/.test(e.message); } const onDisk = fs.readdirSync(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))).filter(f => f.endsWith('.json')).length; fs.rmSync(path.dirname(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))), { recursive: true, force: true }); process.stdout.write(JSON.stringify([threw, onDisk]));
+  ")" "[true,2]"
+
+# --- F-227/F-228 (Minors, code-loop pass 1 review): prepareDrawDir() is startDraw()'s setup ONLY
+# (no invocation), the injection seam neither disclosed deviation had coverage through before this
+# -- the seam that would have caught the missing scripts/ copy by evidence, not by reasoning.
+check "prepareDrawDir: workDir contains scripts/somi-loop.mjs and .claude/commands/, zero model calls (F-227)" \
+  "$(cvj "
+    const fs = await import('node:fs'); const path = await import('node:path');
+    const work = M.prepareDrawDir('$ROOT', '$ROOT/tests/evals/fixtures/task02-code');
+    const ok = fs.existsSync(path.join(work, 'scripts', 'somi-loop.mjs')) && fs.existsSync(path.join(work, '.claude', 'commands'));
+    fs.rmSync(work, { recursive: true, force: true });
+    process.stdout.write(String(ok));
+  ")" "true"
+check "prepareDrawDir: throws when scripts/ is missing at the source, named and immediate -- not silently skipped into six wasted model calls (F-228)" \
+  "$(cvj "
+    const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+    const emptySource = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-eval-nosource-'));
+    let threw = false;
+    try { M.prepareDrawDir(emptySource, '$ROOT/tests/evals/fixtures/task02-code'); } catch (e) { threw = /scripts.*missing/.test(e.message); }
+    fs.rmSync(emptySource, { recursive: true, force: true });
+    process.stdout.write(String(threw));
+  ")" "true"
+
+# --- F-229 (Minor): drawArmForSha() preflights before any work, matching run.mjs's own precedent
+# (:150-165 above) -- simulated the same way, by stripping PATH/HOME so neither the CLI nor a
+# credential resolves, never by mocking preflight() itself.
+NODE_BIN=$(command -v node)
+cvd_preflight=$(env -i "PATH=$(dirname "$NODE_BIN")" HOME=/nonexistent "$NODE_BIN" --input-type=module -e "
+  const M = await import('$ROOT/$CVD');
+  try { M.drawArmForSha('$ROOT', '$ROOT/tests/evals/fixtures/task02-code', 'f229preflight', { n: 1 }); process.stdout.write('no-throw'); }
+  catch (e) { process.stdout.write(e.message); }
+" 2>&1)
+case "$cvd_preflight" in
+  *"not ready to draw"*) ok "drawArmForSha preflights the CLI and credential before spending any quota (F-229)" ;;
+  *) bad "drawArmForSha preflights the CLI and credential before spending any quota (F-229) (got: ${cvd_preflight:0:80})" ;;
+esac
+
 # --- Mutation testing (spec.md §7): staged against a COPY of convergence.mjs, never the tracked
 # file, following 3.2's own MW_SCRATCH precedent -- one scratch dir, reset via `cp` between mutants.
 CVD_SCRATCH_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
@@ -2728,10 +2881,12 @@ trap 'rm -rf "$MW_SCRATCH_DIR" "$CVD_SCRATCH_DIR"' EXIT
 check "F-222: the EXIT trap names BOTH scratch dirs (trap REPLACES, not appends -- a registration naming only its own dir silently drops every earlier one)" \
   "$(trap -p EXIT | grep -qF 'MW_SCRATCH_DIR' && trap -p EXIT | grep -qF 'CVD_SCRATCH_DIR' && echo true || echo false)" "true"
 # Symlinked, not copied: only convergence.mjs itself is ever mutated; its relative imports
-# (lib/convergence.mjs, lib/mann-whitney.mjs) resolve straight through to the real, pristine
-# files -- same isolation guarantee as MW_SCRATCH's single-file copy. This carve imports nothing
-# from run.mjs (that import returns with 3.3c's shard mechanism), so no run.mjs symlink is needed.
+# (lib/, run.mjs) resolve straight through to the real, pristine files -- same isolation guarantee
+# as MW_SCRATCH's single-file copy, extended to a module with real sibling dependencies (3.3c adds
+# the top-level `import { shardDir } from './run.mjs'`, so the scratch copy needs run.mjs
+# resolvable too, not just lib/).
 ln -s "$ROOT/tests/evals/lib" "$CVD_SCRATCH_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$CVD_SCRATCH_DIR/run.mjs"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
 # CVD_SIM: shared population/trial-loop preamble for points 1, 2 and 6, and for mutant D's second

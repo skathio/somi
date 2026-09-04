@@ -1,15 +1,22 @@
 #!/usr/bin/env node
-// tests/evals/convergence.mjs -- classification, arm-filling, comparison and the three-state
-// verdict for the convergence gate DRIVER (phase 3, D1-D5, R2/R3). This is 3.3's preserved
-// pass-2 module (see the split banner above iteration 3.3 in phases/03-convergence-gating.md),
-// carved back in across 3.3a and 3.3b rather than re-implemented: pass 2 landed all six
-// acceptance points at 861 lines against a cap already raised once to 510, and was split along
-// the module's own section divider. **3.3a (done)** carved classifyDraw/fillArm/safeCleanup --
-// points 4 and 5, the classification and draw-policy layer. **This carve (3.3b)** adds
-// compareArms, estimatePower and runComparison -- points 1, 2, 3 and 6, the verdict layer, which
-// consumes 3.3a's already-filled arms and adds no new I/O. Still out:
-//   - loopShardPath, resumeArm, prepareDrawDir, startDraw, drawArmForSha -> 3.3c (the only part
-//     that spends quota or touches disk) -- this file makes no `claude` subprocess call.
+// tests/evals/convergence.mjs -- the convergence gate DRIVER (phase 3, D1-D5, R2/R3). A new
+// entrypoint, deliberately separate from run.mjs: no fixture-diff scoring, no judge, no
+// per-criterion verdicts -- folding this into run.mjs's CLI would blur both (phases/03, 3.3).
+//
+// Assembles 3.1's extractor (lib/convergence.mjs) and 3.2's rank test (lib/mann-whitney.mjs) into
+// a gate that drives /code-loop against task02-code (D9) via lib/install.mjs's installSomi/
+// invokeCommand/preflight, UNCHANGED -- no new subprocess pattern. The CLI (--source/--fixture/
+// --runs/--merge/--certify) is 3.4's job, not this iteration's; this module exports the pieces.
+//
+// This is 3.3's preserved pass-2 module (see the split banner above iteration 3.3 in
+// phases/03-convergence-gating.md), carved back in across three sub-iterations rather than
+// re-implemented: pass 2 landed all six acceptance points at 861 lines against a cap already
+// raised once to 510, and was split along the module's own section divider. **3.3a (done)**
+// carved classifyDraw/fillArm/safeCleanup -- points 4 and 5. **3.3b (done)** added compareArms/
+// estimatePower/runComparison -- points 1, 2, 3 and 6. **This carve (3.3c)** adds
+// loopShardPath/resumeArm/prepareDrawDir/startDraw/drawArmForSha -- the resume/namespace layer
+// and the live-draw mechanism, the only part that spends quota or touches disk. The module is
+// complete after this carve; nothing is left behind.
 //
 // Three traps this file exists specifically to not reintroduce (see phases/03-convergence-gating.md
 // iteration 3.3's revision history for the full reasoning):
@@ -26,8 +33,14 @@
 //     not itself different because of this -- it was already correct -- but the healthy-input
 //     case's own assertion (eval-runner.sh) had to stop being a membership check to bind it.
 
+import { mkdtempSync, rmSync, cpSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { installSomi, invokeCommand, preflight } from './lib/install.mjs';
 import { capBreached, passesToApprove } from './lib/convergence.mjs';
 import { mannWhitneyU, DEFAULT_RESAMPLES } from './lib/mann-whitney.mjs';
+import { shardDir } from './run.mjs';
 
 // D2: the floor at which an inconclusive result reads as inconclusive rather than an accepted
 // pass. Pinned as a literal -- acceptance point 4's first half asserts this exact value,
@@ -52,6 +65,73 @@ export const DEFAULT_MAX_WAIT_ATTEMPTS = 2;
 // silent infinite loop waiting to happen -- generous enough to absorb a rare flake, low enough
 // that a persistent one (a real harness bug) still hard-fails within one arm's draw.
 export const DEFAULT_MAX_REPLACEMENTS = 5;
+
+export const TASK_ID = 'loop-code-loop';
+// The only fixture shaped for a code+review loop (D9) -- its own committed plan tree already
+// declares this slug/iteration (tests/evals/fixtures/task02-code/_somi/plans/expired-token/).
+export const LOOP_SLUG = 'expired-token';
+export const LOOP_ITERATION = '1.1';
+
+// ---------------------------------------------------------------------------------------------
+// Convergence shard namespace -- OWN directory, OWN schema (F-225, code-loop pass 2 review).
+// The shipped shard silently reused run.mjs's SCHEMA_VERSION number space under `schema: 1`,
+// unexplained -- an accident, not a decision (answering the pass-1 review's question 2: no, it
+// was not deliberate). Namespacing under shardDir(sha)/convergence/ removes the coincidence
+// entirely rather than teaching mergeShards() a second exception: run.mjs's `ls`-based listing
+// never recurses into a subdirectory, so these files are structurally invisible to the task
+// corpus's mergeShards()/buildResult() -- verified below, not merely reasoned about. This is the
+// namespace-split option the review offered (over: stamp SCHEMA_VERSION, teach mergeShards() to
+// skip unrecognised taskIds, route every read through readShard()) -- chosen because it removes
+// the collision rather than adding a second component that has to know about it.
+export const LOOP_SCHEMA_VERSION = 1;
+
+function loopShardDir(sha) {
+  return join(shardDir(sha), 'convergence');
+}
+
+export function loopShardPath(sha, taskId, index) {
+  return join(loopShardDir(sha), `${taskId}-${String(index).padStart(3, '0')}.json`);
+}
+
+function loopCompletedIndices(sha, taskId, runs) {
+  const out = new Set();
+  for (let i = 0; i < runs; i++) if (existsSync(loopShardPath(sha, taskId, i))) out.add(i);
+  return out;
+}
+
+/**
+ * Schema-guarded shard read for THIS module's own namespace (mirrors run.mjs's readShard(), the
+ * F-131 discipline: a shard is either usable or absent, never a thrown SyntaxError out of a live
+ * draw). `null` for anything unreadable OR off-schema -- every caller must treat that exactly
+ * like an absent shard.
+ */
+function readLoopShard(path) {
+  let rec;
+  try { rec = JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
+  return rec?.schema === LOOP_SCHEMA_VERSION ? rec : null;
+}
+
+/**
+ * Read back whichever shards already exist for one arm's SHA (F-230, code-loop pass 2 review):
+ * `loopCompletedIndices()` returns a SET of indices whose files EXIST, not a promise of a
+ * contiguous prefix -- with shards {0,2} present, `done.length` as the next write index would
+ * silently OVERWRITE shard 2 and never write 1, and the arm's values would stop corresponding to
+ * their indices. The next write targets the first genuinely MISSING slot instead, self-healing
+ * the gap rather than perpetuating it. A shard that exists but fails its own schema/read guard
+ * (readLoopShard() -> null) is excluded from `resume` like any absent shard, but its slot still
+ * counts as occupied for `nextIndex` -- a corrupted shard is not silently overwritten either.
+ */
+export function resumeArm(sha, taskId, n) {
+  const done = [...loopCompletedIndices(sha, taskId, n)].sort((a, b) => a - b);
+  const resume = [];
+  for (const i of done) {
+    const rec = readLoopShard(loopShardPath(sha, taskId, i));
+    if (rec) resume.push(rec.run.pass);
+  }
+  let nextIndex = 0;
+  while (done.includes(nextIndex)) nextIndex++;
+  return { resume, nextIndex, occupied: new Set(done) };
+}
 
 /**
  * Classify one read-back loop-state draw (point 5, closing F-182/F-184). Three non-terminal-ok
@@ -272,4 +352,105 @@ export function runComparison(newBaselineDraw, newCandidateDraw, opts = {}) {
     };
   }
   return { ...compareArms(baseline.arm, candidate.arm, { ...opts, power: true }), stillRunning, replaced, baseline, candidate, n };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Live draw mechanism -- lib/install.mjs's installSomi/invokeCommand/preflight, UNCHANGED. Not
+// exercised by this iteration's tests beyond prepareDrawDir()'s own setup-only seam (R6: hermetic,
+// no model calls); phase 4 draws for real against it.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Build (or resume) one fixture workDir's file tree -- SETUP only, no invocation (F-227, code-loop
+ * pass 2 review). Split out of startDraw() so a hermetic test can assert the workDir's CONTENTS
+ * (scripts/somi-loop.mjs present, .claude/commands/ present) with no model call -- the seam that
+ * would have caught the missing `scripts/` copy by evidence, not by reasoning. Mirrors run.mjs's
+ * runOnce() fixture setup exactly (the `_somi` -> `.somi` rename, the git baseline commit) with
+ * one addition: `scripts/` is copied ALONGSIDE installSomi's own DEFINITION_DIRS copy (not on top
+ * of it -- the two land at disjoint workDir paths, `.claude/*` vs `scripts/`, nothing is layered),
+ * because /code-loop shells out to scripts/somi-loop.mjs and scripts/somi-findings.mjs at a path
+ * relative to cwd ("the SoMi install root") for its own caps/findings arithmetic -- outside
+ * installSomi's scope by design (DEFINITION_DIRS is commands/agents/skills/rules only; no other
+ * caller needs `scripts/`, since /plan and /code never shell out to either script).
+ */
+export function prepareDrawDir(sourceDir, fixtureDir) {
+  const work = mkdtempSync(join(tmpdir(), 'somi-eval-loop-code-loop-'));
+  try {
+    cpSync(fixtureDir, work, { recursive: true });
+    if (existsSync(join(work, '_somi'))) cpSync(join(work, '_somi'), join(work, '.somi'), { recursive: true });
+    rmSync(join(work, '_somi'), { recursive: true, force: true });
+    installSomi(sourceDir, work);
+    const scriptsDir = join(sourceDir, 'scripts');
+    // F-228: a HARD precondition for every live draw, not an optional convenience -- installSomi's
+    // own continue-on-missing is right for DEFINITION_DIRS (a definition set may legitimately lack
+    // skills/); it is wrong here, where an absence means six wasted model calls (five replacements
+    // plus the harness-fault throw) before the first legible failure.
+    if (!existsSync(scriptsDir)) {
+      throw new Error(`convergence: ${scriptsDir} is missing -- /code-loop shells out to scripts/somi-loop.mjs at a cwd-relative path and cannot run without it`);
+    }
+    cpSync(scriptsDir, join(work, 'scripts'), { recursive: true });
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: work });
+    execFileSync('git', ['config', 'user.email', 'eval@somi.invalid'], { cwd: work });
+    execFileSync('git', ['config', 'user.name', 'somi eval'], { cwd: work });
+    execFileSync('git', ['add', '-A'], { cwd: work });
+    execFileSync('git', ['commit', '-qm', 'baseline'], { cwd: work });
+    return work;
+  } catch (err) {
+    rmSync(work, { recursive: true, force: true }); // F-226: don't leak the partial tree on a setup failure either
+    throw err;
+  }
+}
+
+/** Start (or resume) one real /code-loop draw against task02-code in a fresh working tree. */
+export function startDraw(sourceDir, fixtureDir, { model = null } = {}) {
+  const work = prepareDrawDir(sourceDir, fixtureDir);
+  const statePath = join(work, '.somi', 'somi-state', 'loop', `${LOOP_SLUG}.${LOOP_ITERATION}.json`);
+  const read = () => {
+    if (!existsSync(statePath)) return null;
+    try { return JSON.parse(readFileSync(statePath, 'utf8')); } catch { return null; }
+  };
+  const retry = () => { invokeCommand(work, `/code-loop ${LOOP_SLUG} phase 1, iteration ${LOOP_ITERATION}`, { model }); };
+  retry();
+  return { read, retry, cleanup: () => rmSync(work, { recursive: true, force: true }) };
+}
+
+// Persist one usable draw at the next FREE slot >= fromIndex, not a blind nextIndex++ (F-248,
+// code-loop pass 2 review: nextIndex++ re-collided with resumeArm's own occupied set one call
+// later). Exported, not inlined into drawArmForSha, so this write path is testable quota-free;
+// MUTATES `occupied` in place, so a caller must thread ONE Set through a whole arm.
+export function writeNextShard(sha, taskId, n, occupied, fromIndex, pass) {
+  let idx = fromIndex;
+  while (occupied.has(idx)) idx++;
+  if (idx >= n) throw new Error(`convergence: no free shard slot below ${n} for ${sha}`);
+  occupied.add(idx);
+  const p = loopShardPath(sha, taskId, idx);
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, run: { index: idx, pass } }, null, 2) + '\n');
+  return idx;
+}
+
+/**
+ * Draw (or resume) one SHA's arm, persisting each newly-completed slot as a shard so a killed
+ * process resumes rather than re-drawing -- this module's OWN namespace (resumeArm/loopShardPath
+ * above, F-225), not run.mjs's shared one. `mergeShards()` is deliberately NOT reused here: its
+ * output shape (dimensions/reportOnly via buildResult()) is the S1-S7 task-grading system and does
+ * not fit a plain array of pass-counts, so folding shards for one arm is a five-line read here
+ * rather than a borrowed 20-line function built for a different shape.
+ *
+ * Preflights (F-229, code-loop pass 2 review) before any work: this is the first function in the
+ * module that can spend quota, and a run with no `claude` on PATH or no credential should fail
+ * once, loudly, named -- not thirty times, one abandoned work tree each.
+ */
+export function drawArmForSha(sourceDir, fixtureDir, sha, opts = {}) {
+  const pf = preflight();
+  if (!pf.ready) throw new Error(`convergence: not ready to draw -- ${pf.problems.join('; ')}`);
+  const n = opts.n ?? N_PER_ARM;
+  const { resume, nextIndex: startIndex, occupied } = resumeArm(sha, TASK_ID, n);
+  let nextIndex = startIndex;
+  return fillArm(() => startDraw(sourceDir, fixtureDir, opts), {
+    ...opts,
+    n,
+    resume,
+    onDraw(pass) { nextIndex = writeNextShard(sha, TASK_ID, n, occupied, nextIndex, pass) + 1; },
+  });
 }
