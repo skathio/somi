@@ -114,7 +114,7 @@ per-dimension floor (`decisions.md#d11`, Blocker F-46) additionally requires eve
 to individually clear `CERTIFY_N`, present in `dimensions` or not — the pooled count alone cannot
 tell a dimension that went fully soft from one that was never observed.
 
-**This per-task classification is what `../docs/EVALS.md`'s coverage table labels per command**
+**This per-task classification is what `../../docs/EVALS.md`'s coverage table labels per command**
 (`decisions.md#d8`'s floor rule, applied per task via the "Command under test" line each task spec
 names): a command with fewer than half its tagged dimensions gating reads `partial`; zero gating
 dimensions reads `report-only`, distinct from `partial` because it implies no gating capability at
@@ -123,7 +123,7 @@ entirely — a Mann-Whitney comparison, not a criterion count — and is unaffec
 command-level table is not repeated here: two documents both stating the same derived numbers is
 the exact drift this section's own history (D7 → D11, three narrowing passes) exists to warn
 against; `tests/scripts/eval-runner.sh` derives both from `classification.mjs`/`SCOPES` directly
-and cross-checks `docs/EVALS.md`'s table against that live derivation.
+and cross-checks `../../docs/EVALS.md`'s table against that live derivation.
 
 **`grade()`'s band and `certify()`'s budget diverge further at `CERTIFY_N`, and that is expected,
 not a contradiction.** `grade()` scales its ≥18/20 pass band proportionally to whatever `n` it is
@@ -188,6 +188,35 @@ False accept on a 15-point regression **20.6%**, on a 25-point regression **3.5%
 per trim comparison**; up to **360** for a surface exercised to phase 4's 3-attempt cap. If that is
 unaffordable, the honest levers are fewer trim attempts or a sharper corpus — **not a smaller N**,
 which buys affordability by making the gate lie.
+
+## The convergence gate's own pass/fail
+
+Everything above scores `/plan`, `/code`, and `/review` against fixed task criteria. `/code-loop`'s
+own gate (phase 3) is a different mechanism entirely — a **Mann-Whitney comparison** of two arms'
+passes-to-approve, not a criterion count — so it gets its own pass/fail semantics here rather than
+being forced into the task-dimension shape above.
+
+A cap-breach (`max-passes-exceeded`, `diff-cap-exceeded`, `scope-expansion`, `circuit-breaker`,
+`user-stop`) fails the comparison outright, independent of the statistical result. Short of a
+breach, the comparison reports exactly one of three states — never a bare pass/fail, and `p ≥ α`
+alone is never read as `no-regression`:
+
+| verdict | condition |
+|---|---|
+| `regression` | `p < α` |
+| `no-regression` | `p ≥ α` **and** the observed effect's upper confidence bound excludes the gate's sized shift (equivalence, not merely "not significant") |
+| `inconclusive` | everything else — reported and blocks, exactly like `cannotCertify` blocks the task corpus above |
+
+**N=15 draws per arm** is not a round number — it is the smallest N at which an `inconclusive`
+result reads as inconclusive rather than as a silently accepted pass, derived from a stated power
+target. Full derivation: `decisions.md#d2`.
+
+**The comparison itself is a tie-conditional permutation test (Monte Carlo), one-sided, α=0.05** —
+not the untied exact recursion, which assumes distinct values and is measurably wrong on data this
+heavily tied (convergence draws are small positive integers with heavy repeats). Full derivation
+and the rejected alternatives: `decisions.md#d5`.
+
+See `../../docs/EVALS.md`'s "The convergence gate" for how to run it.
 
 ## Recording a result
 

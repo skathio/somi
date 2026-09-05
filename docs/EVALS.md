@@ -48,9 +48,9 @@ every relative markdown link, on every `npm test` run. What differs is what a co
 that floor.
 
 Three commands carry live-model corpus evidence: `/plan`, `/code`, and `/review` (the three task
-specs above). `/code-loop`'s own convergence gate (a Mann-Whitney comparison, `decisions.md#d1`–`#d5`,
-unrelated to task criteria) is this work item's own centrepiece but phase 3 hasn't landed it, so it
-joins smoke meanwhile — see "Two axes, not one" below. The other 21 get **smoke**:
+specs above). `/code-loop` carries a fourth, structurally different gate: its own convergence gate
+(a Mann-Whitney comparison of passes-to-approve, `decisions.md#d1`–`#d5`, unrelated to task
+criteria — see "The convergence gate" below) landed in phase 3. The other 20 get **smoke**:
 `tests/evals/lib/smoke.mjs` installs the definition set for real and validates the *installed*
 frontmatter and that the installed tree carries every `DEFINITION_DIRS` entry — **not** every
 referenced path; that's `scripts/check-links.mjs`'s job (`decisions.md#d8`'s 2026-08-31 correction)
@@ -70,7 +70,7 @@ capability at all, not a smaller share of one (`decisions.md#d11`'s supersession
 | `/plan` | partial | gate: S3 (1 of 5 dimensions, `boundaryRespected`); report-only: S1, S2, S6, S7 |
 | `/code` | partial | gate: S5 (1 of 4 dimensions, `scoreExpiryGuard`); report-only: S1, S3, S6 |
 | `/review` | report-only | report-only: S1, S4, S5, S7 (0 of 4 gating) |
-| `/code-loop` | smoke | frontmatter + install check; its own convergence gate (Mann-Whitney, D1–D5) is **being built in phase 3**, not yet landed — see "Two axes, not one" below |
+| `/code-loop` | gate | convergence gate (Mann-Whitney, D1–D5): `regression`/`no-regression`/`inconclusive` on passes-to-approve, N=15/arm — not a task-dimension ratio, see "The convergence gate" below |
 | `/ship-loop` | smoke | frontmatter + install check (below); its own convergence gate is **deferred**, not built — see "Two axes, not one" below |
 | `/adopt` | smoke | frontmatter + install check |
 | `/architecture-review` | smoke | frontmatter + install check |
@@ -111,20 +111,24 @@ until then. It is now smoke-checked exactly like any other un-gated command, and
 different fact from the gate: the smoke check proves its frontmatter and install wiring are sound;
 it says nothing about convergence, and does not stand in for the deferred gate.
 
-**`/code-loop` had the identical hole, for a different reason.** Phase 3 — its own convergence-gate
-implementation (`decisions.md#d1`–`#d5`) — is `not-started`: no extractor, no rank procedure, no
-driver exists yet. Labeling it `gate` excluded it from smoke on the grounds it was already gated,
-for a mechanism that does not exist — the same defect this section exists to narrate about
-`/ship-loop`, one command over. It now smoke-checks too, but **the two are not the same case**:
-`/ship-loop`'s gate is deferred *indefinitely* (D9 — no work item currently owns it); `/code-loop`'s
-gate is this work item's own centrepiece, being built in phase 3, just not landed yet.
+**`/code-loop` had the identical hole once, for a different reason — now closed.** Before phase 3
+landed, its own convergence-gate implementation (`decisions.md#d1`–`#d5`) was `not-started`: no
+extractor, no rank procedure, no driver, no CLI. Labeling it `gate` then would have excluded it
+from smoke on the grounds it was already gated, for a mechanism that did not exist — the same
+defect this section exists to narrate about `/ship-loop`, one command over. Iterations 3.1–3.4 have
+since landed the extractor, the rank test, the driver, and a runnable CLI
+(`node tests/evals/convergence.mjs`, "The convergence gate" below), so `/code-loop` now reads
+`gate` on the strength of a real mechanism, not a promise. **The two commands are still not the
+same case**: `/ship-loop`'s gate is deferred *indefinitely* (D9 — no work item currently owns it,
+see `progress.md`'s "Deferred, not dropped"); `/code-loop`'s gate is this work item's own
+centrepiece, and it has landed.
 
-**The smoke tier covers 21 commands, not 20.** Before 2.5, `/ship-loop` had coverage in neither
-tier; before this pass, `/code-loop` had the same gap for the reason above.
-`discoverUngatedCommands()` (`tests/evals/lib/smoke.mjs`) returns all 21 today;
+**The smoke tier covers 20 commands, not 21.** `/code-loop` moved OUT of it this pass, the mirror
+of how `/ship-loop` moved INTO it **at 2.5** (before which it had coverage in neither tier).
+`discoverUngatedCommands()` (`tests/evals/lib/smoke.mjs`) returns all 20 today;
 `tests/scripts/eval-runner.sh` pins the count and, separately, the exact set of command names this
-table claims, so a 22nd command or a renamed one fails the suite rather than only looking wrong
-here.
+table claims, so a 21st command reappearing here, or a renamed one, fails the suite rather than
+only looking wrong here.
 
 ## Run counts and thresholds
 
@@ -425,6 +429,47 @@ and a non-zero exit would make a batch script treat it as a crash and retry fore
 Results land in `tests/evals/results/` carrying the definition-set SHA, the date, the run index,
 and pass/fail per task per dimension. Aggregates are derived from the per-run records rather than
 stored alongside them, so a result file cannot disagree with itself.
+
+## The convergence gate
+
+`/code-loop`'s own gate measures something different from everything above: not a task-dimension
+ratio, but a **Mann-Whitney comparison of passes-to-approve** (a run's own `pass` count, read
+straight off its loop-state JSON) between two definition sets, at **N=15 draws per arm**
+(`decisions.md#d2`) using a hand-rolled, **tie-conditional permutation test** — Monte Carlo
+resampled, conditioned on the observed tie pattern rather than assuming distinct values
+(`decisions.md#d5`; zero runtime dependencies, D3). `/ship-loop`'s own same-fixture baseline and
+live gate are an explicit, tracked follow-up, not built here — see `progress.md`'s "Deferred, not
+dropped" for the reasoning, not restated in this section.
+
+A cap-breach (`max-passes-exceeded`, `diff-cap-exceeded`, `scope-expansion`, `circuit-breaker`,
+`user-stop` — the terminal statuses `commands/code-loop.md` documents) fails the comparison
+outright, independent of the statistical result (R3): a loop that never converged is not evidence
+the definition set is fine. Short of a breach, the gate reports one of **three** verdicts, never a
+bare pass/fail:
+
+| verdict | meaning |
+|---|---|
+| `regression` | `p < α` (0.05, one-sided) — the candidate's passes-to-approve are stochastically worse than the baseline's |
+| `no-regression` | `p ≥ α` **and** the observed effect's upper confidence bound excludes the +1-pass shift the gate is sized to detect — an equivalence claim, not merely "not significantly different" |
+| `inconclusive` | everything else. Reported and blocks a trim, exactly like `cannotCertify` blocks the task corpus — `p ≥ α` alone is never read as `no-regression` |
+
+Every comparison prints its own **live** power estimate, computed from the realized (post-exclusion)
+arm sizes — never D2's static 71.6% cited as a constant, since that would state the power the gate
+was *sized* for rather than the power a given comparison actually *had*.
+
+```sh
+# Shape check, no model, no network. Safe anywhere.
+node tests/evals/convergence.mjs --dry-run --source HEAD
+
+# Draw one arm. Needs network + a credential. Each draw persists as its own shard the moment it
+# completes, so a killed or re-run invocation resumes rather than re-drawing.
+npm run eval:convergence -- --source main --runs 15
+npm run eval:convergence -- --source feat/trim-candidate --runs 15
+
+# Fold whatever shards already exist for a sha into an arm and report count/mean/sd.
+# Read-only: no draw, no credential needed.
+node tests/evals/convergence.mjs --merge "$SHA"
+```
 
 ## Adding a task
 

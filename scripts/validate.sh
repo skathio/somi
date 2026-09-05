@@ -68,6 +68,14 @@ echo "==> Eval runner unit tests..."
 # assertion that npm test cannot execute the runner lives inside eval-runner.sh itself.
 if [ -d tests/evals ]; then bash tests/scripts/eval-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
+echo "==> Convergence gate CLI unit tests..."
+# Guards tests/evals/convergence.mjs's CLI section (phase 3, iteration 3.4): argument parsing,
+# --dry-run's shape/zero-model-call contract, --merge/--certify's shard-fold report, and F-251's
+# sha boundary check. Mirrors eval-runner.sh's own pattern -- unit-tests the gate logic, never a
+# live run. The module's non-CLI logic (3.1-3.3) is already covered by eval-runner.sh; this file
+# is scoped to what 3.4 alone adds, so the two stay disjoint rather than duplicating each other.
+if [ -d tests/evals ]; then bash tests/scripts/convergence-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
+
 echo "==> Eval packaging & hermeticity..."
 # Phase 3's stated invariant risk lives here, and iteration 3.4c owns it alone: `npm test` never
 # invokes a model, reaches the network, or reads a credential -- and the eval corpus never ships

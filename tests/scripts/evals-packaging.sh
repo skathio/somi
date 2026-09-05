@@ -61,6 +61,21 @@ fi
 have=$(node -e "const s=require('./package.json').scripts; process.stdout.write(s['eval:behavioral'] ?? 'MISSING')")
 check "an explicit eval:behavioral script exists" "$have" "node tests/evals/run.mjs"
 
+# Same pair, extended to the new entrypoint (3.4): the invocation-level check must name the file
+# convergence.mjs actually is, not just repeat run.mjs's own assertion under a different label --
+# that would pass unconditionally regardless of whether this module is reachable from npm test.
+have2=$(node -e "const s=require('./package.json').scripts; process.stdout.write(s['eval:convergence'] ?? 'MISSING')")
+check "an explicit eval:convergence script exists" "$have2" "node tests/evals/convergence.mjs"
+reach2=$( { printf '%s\n' "$test_script"; cat scripts/validate.sh; } \
+  | grep -nE '(^|[^-])\b(node|bash|sh)[[:space:]]+[^|;&]*tests/evals/convergence\.mjs' | grep -v -- '--check')
+if [ -z "$reach2" ]; then
+  ok "no direct invocation of tests/evals/convergence.mjs from the test script or validate.sh"
+else
+  bad "no direct invocation of tests/evals/convergence.mjs from the test script or validate.sh"
+  printf '%s\n' "$reach2" | sed 's/^/       /'
+fi
+check "every node \"\$CVD\" invocation in convergence-runner.sh is read-only or a negative-argument test (F-256)" "$(grep -nF 'node "$CVD"' tests/scripts/convergence-runner.sh | grep -vcE -- '--dry-run|--merge|--certify|--help|echo \$\?')" "0"
+
 # --- npm test itself must not reach the network -------------------------------------------------
 # Tests INVOCATION, not substrings. A URL inside a string literal is not a network call:
 # check-links.sh builds `[a](https://e.com/x.md)` as a fixture, and eval-runner.sh's own

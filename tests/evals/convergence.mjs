@@ -5,8 +5,9 @@
 //
 // Assembles 3.1's extractor (lib/convergence.mjs) and 3.2's rank test (lib/mann-whitney.mjs) into
 // a gate that drives /code-loop against task02-code (D9) via lib/install.mjs's installSomi/
-// invokeCommand/preflight, UNCHANGED -- no new subprocess pattern. The CLI (--source/--fixture/
-// --runs/--merge/--certify) is 3.4's job, not this iteration's; this module exports the pieces.
+// invokeCommand/preflight, UNCHANGED -- no new subprocess pattern. The CLI section at the bottom
+// (3.4 -- --source/--fixture/--runs/--merge/--certify, mirroring run.mjs's own shape) is what
+// makes this runnable; everything above it is 3.1-3.3's already-reviewed module.
 //
 // This is 3.3's preserved pass-2 module (see the split banner above iteration 3.3 in
 // phases/03-convergence-gating.md), carved back in across three sub-iterations rather than
@@ -37,10 +38,11 @@ import { mkdtempSync, rmSync, cpSync, existsSync, readFileSync, writeFileSync, m
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { installSomi, invokeCommand, preflight } from './lib/install.mjs';
 import { capBreached, passesToApprove } from './lib/convergence.mjs';
 import { mannWhitneyU, DEFAULT_RESAMPLES } from './lib/mann-whitney.mjs';
-import { shardDir } from './run.mjs';
+import { shardDir, resolveSource, fixtureFor } from './run.mjs';
 
 // D2: the floor at which an inconclusive result reads as inconclusive rather than an accepted
 // pass. Pinned as a literal -- acceptance point 4's first half asserts this exact value,
@@ -453,4 +455,146 @@ export function drawArmForSha(sourceDir, fixtureDir, sha, opts = {}) {
     resume,
     onDraw(pass) { nextIndex = writeNextShard(sha, TASK_ID, n, occupied, nextIndex, pass) + 1; },
   });
+}
+
+// ---------------------------------------------------------------------------------------------
+// CLI (3.4) -- mirrors run.mjs's shape (--source/--fixture/--runs/--merge/--certify) and its
+// --dry-run contract (well-formed shape, zero model calls). A separate entrypoint by design (see
+// the module docstring); this section is what makes the module above runnable as a command.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * F-251 (3.3c pass-2 review, deferred here on the review's own instruction): `sha` reaches
+ * `join()` unvalidated inside loopShardPath()/loopShardDir(), so a value like `../../../foo`
+ * escapes `results/`. Not reachable from untrusted input before this CLI existed -- every prior
+ * caller passed either a git-resolved sha (resolveSource()) or a test-authored literal. THIS CLI
+ * is what makes `sha` a documented, human-typed input surface (--merge/--certify <sha>), which is
+ * where the boundary check belongs -- not inside loopShardPath()/loopShardDir() themselves, which
+ * this module's own test suite exercises throughout with synthetic, non-hex identifiers (e.g.
+ * 'f229preflight') that a library-level guard would break.
+ */
+export function validateSha(sha) {
+  if (typeof sha !== 'string' || !/^[0-9a-f]{7,40}$/.test(sha)) {
+    throw new Error(`not a valid sha (7-40 lowercase hex chars): ${JSON.stringify(sha)}`);
+  }
+  return sha;
+}
+
+function mean(xs) { return xs.reduce((a, b) => a + b, 0) / xs.length; }
+function sampleSd(xs) {
+  if (xs.length < 2) return null;
+  const m = mean(xs);
+  return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1));
+}
+
+function parseArgs(argv) {
+  const a = { source: 'HEAD', fixture: null, runs: N_PER_ARM, model: null, dryRun: false, merge: null, certify: null };
+  let i = 0;
+  // F-252/F-253/F-259/F-261/F-262: missing, empty, and flag-shaped operands are ALL "no value" -- an empty string is not `undefined`, and a single dash is still a flag, not a literal.
+  const val = (k) => { const v = argv[++i]; if (v === undefined || v === '' || /^-/.test(v)) throw new Error(`${k} requires a value`); return v; };
+  for (; i < argv.length; i++) {
+    const k = argv[i];
+    if (k === '--source') a.source = val(k);
+    else if (k === '--fixture') a.fixture = val(k);
+    else if (k === '--runs') a.runs = Number(val(k));
+    else if (k === '--model') a.model = val(k);
+    else if (k === '--dry-run') a.dryRun = true;
+    else if (k === '--merge') a.merge = val(k);
+    else if (k === '--certify') a.certify = val(k);
+    else if (k === '--help' || k === '-h') a.help = true;
+    else throw new Error(`unknown argument: ${k}`);
+  }
+  if (!Number.isInteger(a.runs) || a.runs <= 0) throw new Error(`--runs must be a positive integer`);
+  return a;
+}
+
+const USAGE = `somi convergence gate driver
+
+  node tests/evals/convergence.mjs --source <git-ref|path> [options]
+
+  --source <ref|path>  definition set to draw one arm for (default HEAD). Same resolution rule as
+                       run.mjs's --source: a git ref is checked out into a detached worktree and
+                       removed afterwards; a path is used in place (sha recorded as null).
+  --fixture <path>     fixture dir (default: task02-code, D9 -- the only fixture shaped for a
+                       code+review loop)
+  --runs N             target arm size (default ${N_PER_ARM}, D2)
+  --model NAME         model to invoke /code-loop with (default: the claude CLI's own default)
+  --merge <sha>        fold shards already on disk for <sha> into an arm; report count/mean/sd.
+                       No live draw, no credential needed.
+  --certify <sha>      same as --merge -- folding IS the report; there is no second, narrower
+                       scope here the way run.mjs's --certify differs from --merge.
+  --dry-run            build the result shape without invoking a model. No network, no credential.
+
+Requires network and an API credential unless --dry-run or --merge/--certify (both read-only).
+Each draw persists as its own shard the moment it completes (results/<sha>/convergence/), so a
+killed or re-run invocation resumes rather than re-drawing -- the same discipline run.mjs's own
+--batch/resume model established; re-invoke with the same --source and a --runs target to continue.`;
+
+/** `--merge`/`--certify`: read back whatever shards already exist for `sha`, no live draw. */
+function reportArm(sha, runs) {
+  const { resume: arm } = resumeArm(sha, TASK_ID, runs);
+  const m = arm.length ? mean(arm) : null;
+  const sd = sampleSd(arm);
+  process.stdout.write(
+    `${sha.slice(0, 12)}: ${arm.length}/${runs} usable draw(s) on disk\n` +
+    `  arm:  [${arm.join(', ')}]\n` +
+    `  mean: ${m === null ? 'n/a' : m.toFixed(4)}\n` +
+    `  sd:   ${sd === null ? 'n/a (need >= 2 draws)' : sd.toFixed(4)}\n`);
+  return { sha, taskId: TASK_ID, runs, arm, mean: m, sd };
+}
+
+async function main(argv) {
+  const args = parseArgs(argv);
+  if (args.help) { process.stdout.write(USAGE + '\n'); return 0; }
+
+  // Read-only, no draw: resolves neither --source nor a live invocation, so a sha typed straight
+  // off a prior run's stdout works with no network and no credential. F-259: `!== null`, not truthy.
+  if (args.merge !== null || args.certify !== null) {
+    reportArm(validateSha(args.merge ?? args.certify), args.runs);
+    return 0;
+  }
+
+  if (args.dryRun) {
+    // Shape only, mirroring run.mjs --dry-run's own contract: neither preflight() nor
+    // startDraw()/invokeCommand() is reached on this branch -- confirmed by a stub-`claude`-on-
+    // PATH sentinel test (tests/scripts/convergence-runner.sh), not merely by reading this code.
+    const source = resolveSource(args.source);
+    try {
+      const out = {
+        schema: LOOP_SCHEMA_VERSION, dryRun: true, taskId: TASK_ID,
+        source: { ref: source.ref, sha: source.sha }, fixture: args.fixture ?? fixtureFor('02', source.dir),
+        runsRequested: args.runs, arm: [], breach: false,
+      };
+      process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+      return 0;
+    } finally {
+      source.cleanup();
+    }
+  }
+
+  // Checked BEFORE resolveSource's worktree checkout, matching run.mjs's own "before any work"
+  // rule -- drawArmForSha() preflights too (F-229), but only after a live source is already
+  // resolved; failing here first avoids paying for a checkout this run cannot use anyway.
+  const pf = preflight();
+  if (!pf.ready) throw new Error(`not ready to draw -- ${pf.problems.join('; ')}. Use --dry-run for a shape check.`);
+  const source = resolveSource(args.source);
+  try {
+    const fixtureDir = args.fixture ?? fixtureFor('02', source.dir);
+    const result = drawArmForSha(source.dir, fixtureDir, source.sha, { n: args.runs, model: args.model });
+    process.stdout.write(
+      `${(source.sha ?? 'unversioned').slice(0, 12)}: ${result.breach ? 'CAP-BREACH' : `${result.arm.length}/${args.runs} usable draw(s)`}\n` +
+      `  arm:           [${result.arm.join(', ')}]\n` +
+      `  stillRunning:  ${result.stillRunning}\n` +
+      `  replaced:      ${result.replaced}\n` +
+      `  waitExhausted: ${result.waitExhausted}\n`);
+    return 0;
+  } finally {
+    source.cleanup();
+  }
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main(process.argv.slice(2))
+    .then((code) => process.exit(code))
+    .catch((err) => { process.stderr.write(`convergence: ${err.message}\n`); process.exit(1); });
 }

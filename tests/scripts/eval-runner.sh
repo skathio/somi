@@ -1575,24 +1575,30 @@ fi
 # `gate` excluded it from smoke for a mechanism that does not exist (2.6 pass 1, Blocker F-163,
 # `phases/02-...md`'s 2.6 section carries the correction -- `decisions.md` untouched, out of this
 # pass's scope). It now joins THIS tier too, the same treatment `decisions.md#d8` already gives
-# /ship-loop for its own deferred (D9) gate. 24 commands on disk today, so 21 remain -- both
+# /ship-loop for its own deferred (D9) gate. 24 commands on disk today, so 20 remain -- both
 # counted below, not assumed.
 #
 # F-162/F-167: this set used to be spelled independently at three sites (now three still --
 # GATED_COMMANDS_JS plus the two hardcoded expected.set('code-loop', ...)/('ship-loop', ...) rows
 # in 2.6's cross-check below, both deliberately NOT members of this set) -- one check widening its
 # own copy silently zeroed that check's coverage while the others stayed green (demonstrated in 2.5).
-GATED_COMMANDS_JS="new Set(['plan', 'code', 'review'])"
+#
+# 3.4: 'code-loop' MOVES INTO this set here -- its own convergence gate (D1-D5) now exists and has
+# a CLI (tests/evals/convergence.mjs), so it is no longer only frontmatter-and-install-checked. The
+# 2.6 cross-check below (F-170/F-175) flips its docs/EVALS.md label to `gate` the moment
+# tests/scripts/convergence-runner.sh exists -- keyed on THAT file rather than on this set, per its
+# own comment; this line is what actually removes it from the smoke tier's 20.
+GATED_COMMANDS_JS="new Set(['plan', 'code', 'review', 'code-loop'])"
 
 check "24 commands on disk today (commands/*.md)" \
   "$(ls "$ROOT"/commands/*.md | wc -l | tr -d ' ')" "24"
 
-check "discoverUngatedCommands() finds exactly the 21 D8 scopes this smoke check to" \
+check "discoverUngatedCommands() finds exactly the 20 D8 scopes this smoke check to (3.4: code-loop moved into GATED_COMMANDS_JS, 21 -> 20)" \
   "$(j "
     const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
     const gated = $GATED_COMMANDS_JS;
     process.stdout.write(String(S.discoverUngatedCommands('$ROOT/commands', gated).length));
-  ")" "21"
+  ")" "20"
 
 # The load-bearing negative constraint, made structural rather than trusted by intention (this
 # phase has twice needed a grep pin, not trust, to keep "no test reaches this site" honest --
@@ -1622,8 +1628,8 @@ stub_iters=$(PATH="$stub_bin:$PATH" node --input-type=module -e "
 # F-156: proves the loop iterated the shared gated-set constant for real (a throw before the final
 # write also leaves this empty, subsuming the old exit-status check) -- not a stale count reused
 # from a different check.
-check "the stub-claude loop iterated all 21 currently un-gated commands, so ABSENT below can't mean it never ran" \
-  "$stub_iters" "21"
+check "the stub-claude loop iterated all 20 currently un-gated commands, so ABSENT below can't mean it never ran" \
+  "$stub_iters" "20"
 check "no smokeCheck() call reaches a stub claude on PATH (sentinel stays absent)" \
   "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "ABSENT"
 
@@ -1637,7 +1643,7 @@ rm -rf "$stub_bin"
 check "CLAUDE_CODE_TOOLS allowlist is non-empty (D3: a literal constant, not a dependency)" \
   "$(j "const S = await import('$ROOT/tests/evals/lib/smoke.mjs'); process.stdout.write(String(S.CLAUDE_CODE_TOOLS.size > 0));")" "true"
 
-# The phase file's own acceptance criterion: smokeCheck() succeeds for every one of the 21
+# The phase file's own acceptance criterion: smokeCheck() succeeds for every one of the 20
 # currently un-gated commands. Real commands are never mutated to make this pass (scope
 # discipline, stated in the coder's own brief) -- a real command failing here is a finding to
 # report, not a fixture to fix.
@@ -1648,7 +1654,7 @@ allpass=$(j "
   const failed = files.map((f) => [f, S.smokeCheck(f)]).filter(([, r]) => !r.ok);
   process.stdout.write(failed.length === 0 ? 'ALL PASS' : failed.map(([f, r]) => f + ':' + r.field + ':' + r.reason).join(' | '));
 ")
-check "smokeCheck() succeeds for all 21 currently un-gated commands" "$allpass" "ALL PASS"
+check "smokeCheck() succeeds for all 20 currently un-gated commands" "$allpass" "ALL PASS"
 
 # --- 2.5 acceptance: each of the four staged mutations fails with a SPECIFIC, ATTRIBUTABLE reason
 # -- named in the phase file's own acceptance criterion, not added at review. Staged against a
