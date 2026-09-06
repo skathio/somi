@@ -34,9 +34,9 @@
 //     not itself different because of this -- it was already correct -- but the healthy-input
 //     case's own assertion (eval-runner.sh) had to stop being a membership check to bind it.
 
-import { mkdtempSync, rmSync, cpSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, cpSync, existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { installSomi, invokeCommand, preflight } from './lib/install.mjs';
@@ -117,17 +117,46 @@ export const LOOP_ITERATION = '1.1';
 // changed"; the same reading applies to `blockers`/`majors`.
 export const LOOP_SCHEMA_VERSION = 1;
 
+// Fixture identity in the shard namespace (F-284, phase 4 iteration 4.5). Before this, the
+// namespace above was (sha, taskId) alone -- TASK_ID is a fixed module constant and --fixture
+// never reached loopShardPath(), so two DIFFERENT fixtures drawn at the same sha wrote to the
+// SAME numbered slots and resumeArm() folded both as one arm, mixing two fixtures' draws into a
+// single mean/sd. loopShardPath()/resumeArm()/writeNextShard()/makeShardWriter() below all take an
+// optional `fixtureId` (the fixture directory's path RELATIVE to the resolved --source tree, e.g.
+// `tests/evals/fixtures/task02-code`) that nests the numbered shards one directory deeper --
+// structural separation, not a rule an operator has to remember to check.
+//
+// Legacy shards (every shard written before this iteration, including the five quota-paid ones
+// D12 rests on) carry NO fixture component in their path and no `fixture` key in their record.
+// Reading with fixtureId OMITTED (the default, `null`) targets exactly that original flat
+// location -- the "unknown fixture" bucket. A legacy shard's fixture is taken to mean UNKNOWN,
+// never assumed to be task02-code (D9's default) or any other fixture. `--merge`/`--certify` take
+// no --fixture flag and so always read this same unqualified bucket, preserving their behaviour
+// byte-for-byte (constraint 1); a per-fixture `--merge` is a real gap for future draws, flagged in
+// progress.md rather than built here.
+//
+// `fixture` is added to writeNextShard()'s/writeCensorRecord()'s records as a new top-level key,
+// the same "absent vs null vs present" convention `run.verdict`/`run.terminal` already established
+// (F-267/F-268): key ABSENT means pre-F-284 legacy (fixture truly unrecorded); `fixture: null`
+// means a caller that didn't thread an identity through; a real string means a live draw recorded
+// which fixture it was. LOOP_SCHEMA_VERSION stays 1, same trap as F-268: `fixture` is a backward-
+// compatible ADDITIVE field, not a shape change, and readLoopShard()'s strict `===` gate would
+// make the five quota-paid shards unreadable if bumped without a matching widen.
+
 function loopShardDir(sha) {
   return join(shardDir(sha), 'convergence');
 }
 
-export function loopShardPath(sha, taskId, index) {
-  return join(loopShardDir(sha), `${taskId}-${String(index).padStart(3, '0')}.json`);
+export function loopShardPath(sha, taskId, index, fixtureId = null) {
+  // Belt-and-braces (F-286): a falsy-but-non-null fixtureId would alias via join()'s no-op.
+  if (fixtureId !== null && !fixtureId) throw new Error(`convergence: fixtureId must be null or a non-empty string, not ${JSON.stringify(fixtureId)}`);
+  const dir = fixtureId == null ? loopShardDir(sha) : join(loopShardDir(sha), fixtureId);
+  return join(dir, `${taskId}-${String(index).padStart(3, '0')}.json`);
 }
 
-function loopCompletedIndices(sha, taskId, runs) {
+function loopCompletedIndices(sha, taskId, runs, fixtureId) {
   const out = new Set();
-  for (let i = 0; i < runs; i++) if (existsSync(loopShardPath(sha, taskId, i))) out.add(i);
+  for (let i = 0; i < runs; i++) if (existsSync(loopShardPath(sha, taskId, i, fixtureId))) out.add(i);
   return out;
 }
 
@@ -152,12 +181,15 @@ function readLoopShard(path) {
  * the gap rather than perpetuating it. A shard that exists but fails its own schema/read guard
  * (readLoopShard() -> null) is excluded from `resume` like any absent shard, but its slot still
  * counts as occupied for `nextIndex` -- a corrupted shard is not silently overwritten either.
+ *
+ * `fixtureId` (F-284) narrows this to one fixture's own slots; omitted (`null`) reads the flat
+ * legacy/"unknown fixture" bucket instead -- see the comment above LOOP_SCHEMA_VERSION.
  */
-export function resumeArm(sha, taskId, n) {
-  const done = [...loopCompletedIndices(sha, taskId, n)].sort((a, b) => a - b);
+export function resumeArm(sha, taskId, n, fixtureId = null) {
+  const done = [...loopCompletedIndices(sha, taskId, n, fixtureId)].sort((a, b) => a - b);
   const resume = [];
   for (const i of done) {
-    const rec = readLoopShard(loopShardPath(sha, taskId, i));
+    const rec = readLoopShard(loopShardPath(sha, taskId, i, fixtureId));
     if (rec) resume.push(rec.run.pass);
   }
   let nextIndex = 0;
@@ -487,14 +519,18 @@ export function startDraw(sourceDir, fixtureDir, { model = null } = {}) {
 // fields from one written record specifically so that kind of divergence fails loudly rather than
 // silently, not because divergence is structurally impossible. Same "always an explicit key"
 // reasoning as `verdict` above; defaults to `null`.
-export function writeNextShard(sha, taskId, n, occupied, fromIndex, pass, verdict = null, terminal = null) {
+//
+// `fixtureId` (F-284) is threaded into BOTH the path (via loopShardPath) and the record's own
+// `fixture` key -- same "always an explicit key" reasoning, defaults to `null` (see the comment
+// above LOOP_SCHEMA_VERSION for the three-state read of that field).
+export function writeNextShard(sha, taskId, n, occupied, fromIndex, pass, verdict = null, terminal = null, fixtureId = null) {
   let idx = fromIndex;
   while (occupied.has(idx)) idx++;
   if (idx >= n) throw new Error(`convergence: no free shard slot below ${n} for ${sha}`);
   occupied.add(idx);
-  const p = loopShardPath(sha, taskId, idx);
+  const p = loopShardPath(sha, taskId, idx, fixtureId);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, run: { index: idx, pass, verdict, terminal } }, null, 2) + '\n');
+  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, fixture: fixtureId, run: { index: idx, pass, verdict, terminal } }, null, 2) + '\n');
   return idx;
 }
 
@@ -525,13 +561,19 @@ export function censorRecordPath(sha, taskId, seq) {
  * namespace with its OWN counter -- a censor record never shares occupied/index bookkeeping with
  * the numbered shards, and there is no arm-position for it to correspond to (a censored draw was
  * never assigned one).
+ *
+ * `fixtureId` (F-284) is recorded alongside, same convention as writeNextShard() -- evidence of
+ * WHICH fixture a censored draw belongs to is worth as much as it is for a completed one, even
+ * though (unlike the numbered shards) the censored/ directory itself stays unqualified by fixture:
+ * nothing folds these back into an arm (F-283, open), so there is no mis-fold for a subdirectory
+ * to prevent here -- only the record's own honesty about which fixture it came from.
  */
-export function writeCensorRecord(sha, taskId, censor) {
+export function writeCensorRecord(sha, taskId, censor, fixtureId = null) {
   let seq = 0;
   while (existsSync(censorRecordPath(sha, taskId, seq))) seq++;
   const p = censorRecordPath(sha, taskId, seq);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, censor }, null, 2) + '\n');
+  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, fixture: fixtureId, censor }, null, 2) + '\n');
   return seq;
 }
 
@@ -567,9 +609,10 @@ export function writeCensorRecord(sha, taskId, censor) {
  * @param {number} n
  * @param {Set<number>} occupied  mutated in place by `writeNextShard()`, same contract as there.
  * @param {number} startIndex
+ * @param {string|null} [fixtureId]  F-284: threaded straight into every writeNextShard() call.
  * @returns {{newDraw: () => *, onDraw: (pass: number) => void}}
  */
-export function makeShardWriter(makeDraw, sha, taskId, n, occupied, startIndex) {
+export function makeShardWriter(makeDraw, sha, taskId, n, occupied, startIndex, fixtureId = null) {
   let current = null;
   let nextIndex = startIndex;
   return {
@@ -577,7 +620,7 @@ export function makeShardWriter(makeDraw, sha, taskId, n, occupied, startIndex) 
     onDraw(pass) {
       let state;
       try { state = current.read(); } catch { state = null; }
-      nextIndex = writeNextShard(sha, taskId, n, occupied, nextIndex, pass, terminalVerdict(state), terminalOutcome(state)) + 1;
+      nextIndex = writeNextShard(sha, taskId, n, occupied, nextIndex, pass, terminalVerdict(state), terminalOutcome(state), fixtureId) + 1;
     },
   };
 }
@@ -598,16 +641,63 @@ export function makeShardWriter(makeDraw, sha, taskId, n, occupied, startIndex) 
  * "build in fillArm(), persist here" split `writeNextShard()`/`makeShardWriter()` already use for
  * a completed draw's shard, so a censored draw's evidence survives on disk exactly like a
  * completed one's does, in its own namespace.
+ *
+ * Calls assertFixturePinned() (F-284) right after preflight -- after F-229's "before any work"
+ * ordering, so a DIRECT call into this function still fails "not ready to draw" before touching an
+ * unpinned fixture -- NOT (an earlier version of this comment's claim) to match
+ * convergence-runner.sh's "live mode preflights" case, which never reaches drawArmForSha() at all
+ * (main() preflights independently, before resolveSource()); and before anything else (resumeArm,
+ * a shard read) that would otherwise proceed against an unpinned fixture.
  */
 export function drawArmForSha(sourceDir, fixtureDir, sha, opts = {}) {
   const pf = preflight();
   if (!pf.ready) throw new Error(`convergence: not ready to draw -- ${pf.problems.join('; ')}`);
+  assertFixturePinned(sourceDir, fixtureDir, sha);
   const n = opts.n ?? N_PER_ARM;
-  const { resume, nextIndex: startIndex, occupied } = resumeArm(sha, TASK_ID, n);
-  const { newDraw, onDraw } = makeShardWriter(() => startDraw(sourceDir, fixtureDir, opts), sha, TASK_ID, n, occupied, startIndex);
+  const fixtureId = relative(sourceDir, fixtureDir);
+  const { resume, nextIndex: startIndex, occupied } = resumeArm(sha, TASK_ID, n, fixtureId);
+  const { newDraw, onDraw } = makeShardWriter(() => startDraw(sourceDir, fixtureDir, opts), sha, TASK_ID, n, occupied, startIndex, fixtureId);
   const result = fillArm(newDraw, { ...opts, n, resume, onDraw });
-  if (result.censor) writeCensorRecord(sha, TASK_ID, result.censor);
+  if (result.censor) writeCensorRecord(sha, TASK_ID, result.censor, fixtureId);
   return result;
+}
+
+/**
+ * F-284 (second defect): refuse a draw whose fixture cannot be shown to come from the drawn SHA,
+ * rather than warn. The DEFAULT fixture (`fixtureFor('02', source.dir)`) already resolves inside
+ * the checked-out worktree; an explicit `--fixture` previously did not -- main() passed it
+ * straight to cpSync(), which resolves a relative path against process.cwd() (the LIVE working
+ * tree at draw time), independent of `sourceDir`. Fixed at the call site too (main() below now
+ * resolves a relative --fixture against source.dir, not cwd); this is the STRUCTURAL backstop,
+ * callable independent of the CLI, that refuses anything that still escapes -- an absolute path
+ * elsewhere, or a `..` past sourceDir.
+ *
+ * Containment is the primary guarantee: a git worktree's checkout IS the SHA's content, and
+ * nothing in this module writes back into it before prepareDrawDir()'s cpSync reads the fixture
+ * out. The git-status check is a cheap, ASSERTED confirmation of that same claim rather than a
+ * comment saying so -- skipped for an unversioned source (`sha === null`), which resolveSource()
+ * already documents as non-reproducible; adding reproducibility semantics there is a wider change
+ * than this defect.
+ */
+// Shared by assertFixturePinned()/resolveFixtureId() (F-286/F-287): rel === '' aliases onto
+// baseDir via join()'s no-op; rel.startsWith('..') ALONE over-refused a sibling like `..scratch`.
+function fixtureRelativeId(baseDir, fixtureDir) {
+  const rel = relative(baseDir, fixtureDir);
+  if (rel === '' || rel === '..' || rel.startsWith('..' + sep)) {
+    throw new Error(`convergence: --fixture must resolve to a real subdirectory of ${baseDir}, not that directory itself or outside it; got ${fixtureDir}`);
+  }
+  return rel;
+}
+
+export function assertFixturePinned(sourceDir, fixtureDir, sha) {
+  fixtureRelativeId(sourceDir, fixtureDir);
+  if (!existsSync(fixtureDir)) throw new Error(`convergence: --fixture path does not exist: ${fixtureDir}`);
+  if (sha !== null) {
+    const status = execFileSync('git', ['status', '--porcelain', '--', fixtureDir], { cwd: sourceDir, encoding: 'utf8' });
+    if (status.trim() !== '') {
+      throw new Error(`convergence: --fixture is dirty relative to the drawn SHA ${sha}: ${fixtureDir}\n${status}`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -668,12 +758,15 @@ const USAGE = `somi convergence gate driver
   --source <ref|path>  definition set to draw one arm for (default HEAD). Same resolution rule as
                        run.mjs's --source: a git ref is checked out into a detached worktree and
                        removed afterwards; a path is used in place (sha recorded as null).
-  --fixture <path>     fixture dir (default: task02-code, D9 -- the only fixture shaped for a
-                       code+review loop)
+  --fixture <path>     fixture dir, RESOLVED AGAINST THE RESOLVED --source TREE, not this shell's
+                       cwd (F-284) -- give it as a path relative to that tree (e.g.
+                       tests/evals/fixtures/task02-code), or an absolute path already inside it.
+                       Refused, not warned, if it escapes that tree or is git-dirty there.
+                       (default: task02-code, D9 -- the only fixture shaped for a code+review loop)
   --runs N             target arm size (default ${N_PER_ARM}, D2)
   --model NAME         model to invoke /code-loop with (default: the claude CLI's own default)
   --merge <sha>        fold shards already on disk for <sha> into an arm; report count/mean/sd.
-                       No live draw, no credential needed.
+                       No live draw, no credential needed. --fixture (F-285) narrows the fold.
   --certify <sha>      same as --merge -- folding IS the report; there is no second, narrower
                        scope here the way run.mjs's --certify differs from --merge.
   --dry-run            build the result shape without invoking a model. No network, no credential.
@@ -683,17 +776,41 @@ Each draw persists as its own shard the moment it completes (results/<sha>/conve
 killed or re-run invocation resumes rather than re-drawing -- the same discipline run.mjs's own
 --batch/resume model established; re-invoke with the same --source and a --runs target to continue.`;
 
-/** `--merge`/`--certify`: read back whatever shards already exist for `sha`, no live draw. */
-function reportArm(sha, runs) {
-  const { resume: arm } = resumeArm(sha, TASK_ID, runs);
+// `--merge`/`--certify`: read back whatever shards exist for `sha`, no live draw. `--fixture`
+// omitted folds the unqualified/legacy bucket, unchanged (constraint 1); given, narrows to that
+// fixture's own arm (F-285 -- the read path had not moved with F-284's write-side namespacing).
+function reportArm(sha, runs, fixtureId = null) {
+  const { resume: arm } = resumeArm(sha, TASK_ID, runs, fixtureId);
   const m = arm.length ? mean(arm) : null;
   const sd = sampleSd(arm);
+  // F-285: warn, don't stay silent, when an unqualified read has a fixture-qualified sibling.
+  if (fixtureId == null) {
+    let entries = [];
+    try { entries = readdirSync(loopShardDir(sha), { withFileTypes: true }); } catch { /* sha never drawn */ }
+    const fixtureDirs = entries.filter((e) => e.isDirectory() && e.name !== 'censored').map((e) => e.name);
+    if (fixtureDirs.length) {
+      process.stderr.write(`convergence: ${sha.slice(0, 12)} also has fixture-qualified draws not counted above (pass --fixture to include): ${fixtureDirs.join(', ')}\n`);
+    }
+  }
   process.stdout.write(
     `${sha.slice(0, 12)}: ${arm.length}/${runs} usable draw(s) on disk\n` +
     `  arm:  [${arm.join(', ')}]\n` +
     `  mean: ${m === null ? 'n/a' : m.toFixed(4)}\n` +
     `  sd:   ${sd === null ? 'n/a (need >= 2 draws)' : sd.toFixed(4)}\n`);
   return { sha, taskId: TASK_ID, runs, arm, mean: m, sd };
+}
+
+// --merge/--certify's fixture identity (F-285): same containment check, minus the SHA-pin.
+function resolveFixtureId(fixtureArg) {
+  return fixtureArg == null ? null : fixtureRelativeId(process.cwd(), resolve(process.cwd(), fixtureArg));
+}
+
+/** Resolve --fixture against the drawn source's own tree, not process.cwd() (F-284's second
+ * defect) -- the default already did (fixtureFor() builds the path FROM source.dir); an explicit
+ * value now does too. assertFixturePinned() (called separately by each branch below) is what
+ * refuses one that still escapes. */
+function resolveFixtureDir(fixtureArg, source) {
+  return fixtureArg == null ? fixtureFor('02', source.dir) : resolve(source.dir, fixtureArg);
 }
 
 async function main(argv) {
@@ -703,7 +820,7 @@ async function main(argv) {
   // Read-only, no draw: resolves neither --source nor a live invocation, so a sha typed straight
   // off a prior run's stdout works with no network and no credential. F-259: `!== null`, not truthy.
   if (args.merge !== null || args.certify !== null) {
-    reportArm(validateSha(args.merge ?? args.certify), args.runs);
+    reportArm(validateSha(args.merge ?? args.certify), args.runs, resolveFixtureId(args.fixture));
     return 0;
   }
 
@@ -713,9 +830,13 @@ async function main(argv) {
     // PATH sentinel test (tests/scripts/convergence-runner.sh), not merely by reading this code.
     const source = resolveSource(args.source);
     try {
+      // F-284: resolved and pinned here too (drawArmForSha() is never reached on this branch), so
+      // --dry-run genuinely previews what a live draw would do, including a refusal.
+      const fixtureDir = resolveFixtureDir(args.fixture, source);
+      assertFixturePinned(source.dir, fixtureDir, source.sha);
       const out = {
         schema: LOOP_SCHEMA_VERSION, dryRun: true, taskId: TASK_ID,
-        source: { ref: source.ref, sha: source.sha }, fixture: args.fixture ?? fixtureFor('02', source.dir),
+        source: { ref: source.ref, sha: source.sha }, fixture: fixtureDir,
         runsRequested: args.runs, arm: [], breach: false,
       };
       process.stdout.write(JSON.stringify(out, null, 2) + '\n');
@@ -732,7 +853,7 @@ async function main(argv) {
   if (!pf.ready) throw new Error(`not ready to draw -- ${pf.problems.join('; ')}. Use --dry-run for a shape check.`);
   const source = resolveSource(args.source);
   try {
-    const fixtureDir = args.fixture ?? fixtureFor('02', source.dir);
+    const fixtureDir = resolveFixtureDir(args.fixture, source); // F-284: pinned by drawArmForSha() below
     const result = drawArmForSha(source.dir, fixtureDir, source.sha, { n: args.runs, model: args.model });
     process.stdout.write(
       `${(source.sha ?? 'unversioned').slice(0, 12)}: ${result.breach ? 'CAP-BREACH' : `${result.arm.length}/${args.runs} usable draw(s)`}\n` +

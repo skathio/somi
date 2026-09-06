@@ -562,6 +562,244 @@ check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the muta
 rm -rf "$F263_MUT_DIR"
 trap - EXIT
 
+# --- F-284 (first defect): the shard namespace carries no fixture identity, phase 4 iteration 4.5.
+# Before this, loopShardPath() took no fixture component at all -- task02's draw 0 and a NEW
+# fixture's draw 0 landed at the byte-identical path, and resumeArm() folded both as one arm,
+# mixing two fixtures' draws into a single mean/sd. Demonstrated below by construction, then by a
+# mutation that reproduces the exact collision.
+F284_SHA="f284ns$(date +%s)"
+check "loopShardPath: two DIFFERENT fixtureIds at the SAME sha/index now resolve to DIFFERENT paths -- the collision is gone" \
+  "$(cj "process.stdout.write(String(M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code') !== M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code-degraded')));")" \
+  "true"
+check "loopShardPath: fixtureId OMITTED still reads the flat path -- unchanged from every shard on disk before this iteration (constraint 1)" \
+  "$(cj "process.stdout.write(String(M.loopShardPath('$F284_SHA', M.TASK_ID, 0) === M.loopShardPath('$F284_SHA', M.TASK_ID, 0, null)));")" \
+  "true"
+
+# resumeArm folds STRICTLY per fixtureId -- two fixtures' shards written at the SAME index of the
+# SAME sha never merge into one arm.
+cj "
+  const occA = new Set(); M.writeNextShard('$F284_SHA', M.TASK_ID, 5, occA, 0, 3, null, null, 'task02-code');
+  const occB = new Set(); M.writeNextShard('$F284_SHA', M.TASK_ID, 5, occB, 0, 9, null, null, 'task02-code-degraded');
+" >/dev/null
+check "resumeArm(sha, taskId, n, 'task02-code') folds only its OWN fixture's shard, [3] -- not the OTHER fixture's [9] written at the same index" \
+  "$(cj "process.stdout.write(JSON.stringify(M.resumeArm('$F284_SHA', M.TASK_ID, 5, 'task02-code').resume));")" "[3]"
+check "resumeArm(sha, taskId, n, 'task02-code-degraded') folds only [9], not [3]" \
+  "$(cj "process.stdout.write(JSON.stringify(M.resumeArm('$F284_SHA', M.TASK_ID, 5, 'task02-code-degraded').resume));")" "[9]"
+check "writeNextShard: the record itself carries fixture identity (F-284), not only the path -- rec.fixture" \
+  "$(cj "const fs = await import('node:fs'); const rec = JSON.parse(fs.readFileSync(M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code'), 'utf8')); process.stdout.write(rec.fixture);")" \
+  "task02-code"
+rm -rf "$ROOT/tests/evals/results/$F284_SHA"
+
+# makeShardWriter()/writeNextShard(): fixtureId threads through the EXACT assembly drawArmForSha()
+# uses, without a live draw -- same style as the F-267/F-268 wiring checks above.
+F284_WIRING_SHA="f284wiring$(date +%s)"
+check "the exact assembly drawArmForSha() uses threads fixtureId into both the shard's path and its record" \
+  "$(cj "
+    const fs = await import('node:fs');
+    const makeDraw = () => ({ read: () => ({ status: 'done', pass: 2 }), retry() {}, cleanup() {} });
+    const occ = new Set();
+    const { newDraw, onDraw } = M.makeShardWriter(makeDraw, '$F284_WIRING_SHA', M.TASK_ID, 1, occ, 0, 'task02-code');
+    M.fillArm(newDraw, { n: 1, onDraw });
+    const p = M.loopShardPath('$F284_WIRING_SHA', M.TASK_ID, 0, 'task02-code');
+    process.stdout.write(JSON.stringify({ shardAtFixturePath: fs.existsSync(p), recordFixture: JSON.parse(fs.readFileSync(p, 'utf8')).fixture }));
+  ")" '{"shardAtFixturePath":true,"recordFixture":"task02-code"}'
+rm -rf "$ROOT/tests/evals/results/$F284_WIRING_SHA"
+
+# writeCensorRecord() also records fixture identity (F-284) -- the censored/ evidence stream gets
+# the same honesty about which fixture it came from, even though (unlike numbered shards) it stays
+# unqualified by directory, since nothing folds censor records back into an arm (F-283, open).
+F284_CENSOR_SHA="f284censor$(date +%s)"
+check "writeCensorRecord(..., fixtureId) persists it alongside the censor payload" \
+  "$(cj "
+    const fs = await import('node:fs');
+    const seq = M.writeCensorRecord('$F284_CENSOR_SHA', M.TASK_ID, { elapsedMs: 1, waitAttempts: 1, lastState: { status: 'running', historyEmpty: true, stateReadable: true } }, 'task02-code');
+    process.stdout.write(JSON.parse(fs.readFileSync(M.censorRecordPath('$F284_CENSOR_SHA', M.TASK_ID, seq), 'utf8')).fixture);
+  ")" "task02-code"
+rm -rf "$ROOT/tests/evals/results/$F284_CENSOR_SHA"
+
+# Legacy shards (every shard written before this iteration, including the five quota-paid ones
+# D12 rests on) carry NO fixture key at all -- taken to mean UNKNOWN, never assumed to be
+# task02-code (D9's default) or any other fixture. Staged as a synthetic legacy shard so this stays
+# hermetic and portable across clones/CI that don't carry the real, gitignored quota-paid data.
+F284_LEGACY_SHA="f284legacy$(date +%s)"
+cj "
+  const fs = await import('node:fs'); const path = await import('node:path');
+  const p = M.loopShardPath('$F284_LEGACY_SHA', M.TASK_ID, 0);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify({ sha: '$F284_LEGACY_SHA', taskId: M.TASK_ID, schema: M.LOOP_SCHEMA_VERSION, run: { index: 0, pass: 1 } }) + '\n');
+" >/dev/null
+check "a legacy shard (no fixture key at all) still folds via resumeArm() with fixtureId OMITTED -- the unqualified/unknown bucket" \
+  "$(cj "process.stdout.write(JSON.stringify(M.resumeArm('$F284_LEGACY_SHA', M.TASK_ID, 1).resume));")" "[1]"
+check "the SAME legacy shard is invisible when a REAL fixtureId is asked for -- 'unknown' is never silently treated as 'task02-code'" \
+  "$(cj "process.stdout.write(JSON.stringify(M.resumeArm('$F284_LEGACY_SHA', M.TASK_ID, 1, 'task02-code').resume));")" "[]"
+rm -rf "$ROOT/tests/evals/results/$F284_LEGACY_SHA"
+
+# Mutation: revert loopShardPath() to its pre-fix shape (fixtureId accepted but ignored) and
+# reproduce the EXACT collision the phase file demonstrates by hand -- two different fixtures'
+# draw 0 landing at the byte-identical path. Staged on a scratch copy, never the tracked file.
+# Occurrence count asserted, not just presence (standing discipline): this exact anchor is unique
+# in the file, unlike e.g. `mkdirSync(dirname(p), { recursive: true });`, which occurs twice and
+# would select the wrong one positionally under a plain .replace().
+F284_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F284_MUT_DIR"' EXIT
+F284_MUT="$F284_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F284_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F284_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F284_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F284_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const dir = fixtureId == null ? loopShardDir(sha) : join(loopShardDir(sha), fixtureId);';
+  const TO = 'const dir = loopShardDir(sha); // MUTANT (F-284): fixtureId accepted but ignored, the pre-fix shape';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-284 mutant anchor occurs ' + count + ' time(s), not exactly 1 -- update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_collision=$(node --input-type=module -e "
+  const M = await import('$F284_MUT');
+  process.stdout.write(String(M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code') === M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code-degraded')));
+")
+check "mutant (F-284: fixtureId ignored, the pre-fix shape) reproduces the EXACT collision the phase file demonstrates by hand -- task02's draw 0 and a NEW fixture's draw 0 land at the SAME path" \
+  "$mutant_collision" "true"
+pristine_collision=$(cj "process.stdout.write(String(M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code') === M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code-degraded')));")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) no longer collides" \
+  "$pristine_collision" "false"
+rm -rf "$F284_MUT_DIR"
+trap - EXIT
+
+# --- F-285 (Blocker): --merge/--certify ignored --fixture entirely, so a fixture-qualified arm on
+# disk silently underreported as 0/N through the unqualified read -- disjoint from the write side.
+F285_SHA="f285$(date +%s)"
+cj "const occ = new Set(); M.writeNextShard('$F285_SHA', M.TASK_ID, 5, occ, 0, 4, null, null, 'tests/evals/fixtures/task02-code');" >/dev/null
+check "--merge --fixture <id> folds that fixture's own arm, [4] -- the read side now agrees with the write side (F-285)" \
+  "$(node "$CVD" --merge "$F285_SHA" --fixture tests/evals/fixtures/task02-code --runs 5 | grep -c 'arm:  \[4\]')" "1"
+check "--merge WITHOUT --fixture on the SAME sha now WARNS a fixture-qualified sibling exists, instead of silently reading 0/N (F-285)" \
+  "$(node "$CVD" --merge "$F285_SHA" --runs 5 2>&1 >/dev/null | grep -c 'also has fixture-qualified draws')" "1"
+
+# Mutation: drop --fixture from reportArm()'s call site, reproducing F-285's disjoint read.
+F285_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F285_MUT_DIR"' EXIT
+F285_MUT="$F285_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F285_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F285_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F285_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F285_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'reportArm(validateSha(args.merge ?? args.certify), args.runs, resolveFixtureId(args.fixture));';
+  const TO = 'reportArm(validateSha(args.merge ?? args.certify), args.runs); // MUTANT (F-285): --fixture never threaded';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-285 mutant anchor occurs ' + count + ' time(s), not exactly 1 -- update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_merge=$(node "$F285_MUT" --merge "$F285_SHA" --fixture tests/evals/fixtures/task02-code --runs 5 | grep -c 'arm:  \[4\]')
+check "mutant (F-285: --fixture dropped before reportArm) can no longer see the fixture-qualified arm -- 0, not 1" \
+  "$mutant_merge" "0"
+pristine_merge=$(node "$CVD" --merge "$F285_SHA" --fixture tests/evals/fixtures/task02-code --runs 5 | grep -c 'arm:  \[4\]')
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) sees it again, 1" \
+  "$pristine_merge" "1"
+rm -rf "$F285_MUT_DIR"
+trap - EXIT
+rm -rf "$ROOT/tests/evals/results/$F285_SHA"
+
+# --- F-284 (second defect): --fixture is now pinned to the drawn SHA's own worktree, refused (not
+# warned) if it escapes that tree or is git-dirty there. assertFixturePinned() is the guard;
+# resolveFixtureDir()/drawArmForSha() are its call sites.
+PIN_SRC=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$PIN_SRC"' EXIT
+mkdir -p "$PIN_SRC/fixtures/task02-code"
+echo hello > "$PIN_SRC/fixtures/task02-code/a.txt"
+check "assertFixturePinned: a fixture path INSIDE sourceDir is accepted (unversioned source, sha null -- no git-dirty check applies)" \
+  "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC/fixtures/task02-code', null); process.stdout.write('ok'); } catch (e) { process.stdout.write('threw: ' + e.message); }")" \
+  "ok"
+PIN_OUTSIDE=$(mktemp -d)
+check "assertFixturePinned: a fixture path OUTSIDE sourceDir is refused, not silently accepted" \
+  "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_OUTSIDE', null); process.stdout.write('NO THROW'); } catch { process.stdout.write('threw'); }")" \
+  "threw"
+rm -rf "$PIN_OUTSIDE"
+
+# The git-dirty half needs a REAL repo (git status is the assertion, not a comment claiming
+# nothing touches the worktree) -- built and torn down here, never the tracked repo.
+(cd "$PIN_SRC" && git init -q -b main && git config user.email x@x.invalid && git config user.name x && git add -A && git commit -qm baseline) >/dev/null 2>&1
+check "assertFixturePinned: a CLEAN worktree (freshly committed, nothing touched since) passes even with a real sha" \
+  "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC/fixtures/task02-code', 'deadbeef'); process.stdout.write('ok'); } catch (e) { process.stdout.write('threw: ' + e.message); }")" \
+  "ok"
+echo modified > "$PIN_SRC/fixtures/task02-code/a.txt"
+check "assertFixturePinned: an uncommitted edit to the fixture inside the worktree is refused as DIRTY relative to the drawn SHA" \
+  "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC/fixtures/task02-code', 'deadbeef'); process.stdout.write('NO THROW'); } catch (e) { process.stdout.write(/dirty/.test(e.message) ? 'threw-dirty' : 'threw-other: ' + e.message); }")" \
+  "threw-dirty"
+check "assertFixturePinned: the SAME dirty worktree is NOT checked when the source is unversioned (sha null) -- resolveSource() already documents that case as non-reproducible" \
+  "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC/fixtures/task02-code', null); process.stdout.write('ok'); } catch (e) { process.stdout.write('threw: ' + e.message); }")" \
+  "ok"
+
+# F-286: --fixture IS sourceDir -- relative() returns '', join()'s no-op aliases onto the bucket.
+check "assertFixturePinned: --fixture . (rel === '') is refused, not aliased onto the unqualified bucket (F-286)" \
+  "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC', null); process.stdout.write('NO THROW'); } catch { process.stdout.write('threw'); }")" \
+  "threw"
+mkdir -p "$PIN_SRC/..scratch" # F-287: a CONTAINED sibling merely named like a parent ref
+check "assertFixturePinned: a CONTAINED dir named ..scratch is accepted, not falsely refused as an escape (F-287)" \
+  "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC/..scratch', null); process.stdout.write('ok'); } catch (e) { process.stdout.write('threw: ' + e.message); }")" \
+  "ok"
+rm -rf "$PIN_SRC"
+trap - EXIT
+
+# CLI integration: an explicit --fixture given as a path RELATIVE TO THE SOURCE TREE resolves
+# inside the checked-out worktree (not this shell's cwd) -- the SHA-pin actually takes effect, not
+# merely accepted.
+dryrun_pinned=$(node "$CVD" --dry-run --source HEAD --fixture tests/evals/fixtures/task02-code)
+dryrun_pinned_fixture=$(printf '%s' "$dryrun_pinned" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(JSON.parse(s).fixture))")
+check "--dry-run --fixture <source-relative path> resolves to a path INSIDE the checked-out worktree, not \$ROOT (F-284 actually took effect, not merely accepted)" \
+  "$(case "$dryrun_pinned_fixture" in "$ROOT"/*) echo "still-rooted-at-ROOT" ;; *task02-code) echo "inside-worktree" ;; *) echo "unexpected: $dryrun_pinned_fixture" ;; esac)" \
+  "inside-worktree"
+# F-288: assert the MESSAGE -- git itself refuses an out-of-worktree pathspec independent of our
+# guard, so exit 1 alone can't attribute the refusal (neutering the check below still exits 1).
+escape_head_out=$(node "$CVD" --dry-run --source HEAD --fixture /tmp 2>&1 >/dev/null)
+check "--dry-run --fixture <path escaping the resolved source tree> is refused BY OUR OWN GUARD, not merely exit 1 (F-288)" \
+  "$(printf '%s' "$escape_head_out" | grep -c 'must resolve to a real subdirectory')" "1"
+
+# Mutation: neuter assertFixturePinned()'s containment check and confirm the escape above is no
+# longer refused -- the guard is load-bearing, not decorative.
+F284_PIN_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F284_PIN_MUT_DIR"' EXIT
+F284_PIN_MUT="$F284_PIN_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F284_PIN_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F284_PIN_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F284_PIN_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F284_PIN_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = \"if (rel === '' || rel === '..' || rel.startsWith('..' + sep)) {\";
+  const TO = 'if (false) { // MUTANT (F-284/F-286/F-287): the containment check never fires';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-284 pin mutant anchor occurs ' + count + ' time(s), not exactly 1 -- update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+# Unversioned source (--source ., sha null) so the git-dirty defense-in-depth check (which itself
+# refuses a path outside the repo, git's own error, not this module's) is out of the picture --
+# containment is the ONLY guard standing, isolating exactly what this mutation tests.
+mutant_pin_exit=$(node "$F284_PIN_MUT" --dry-run --source . --fixture /tmp >/dev/null 2>&1; echo $?)
+check "mutant (F-284/F-286/F-287: assertFixturePinned's containment check neutered) lets --fixture /tmp through -- confirming the guard above currently depends on this exact check" \
+  "$mutant_pin_exit" "0"
+pristine_pin_exit=$(node "$CVD" --dry-run --source . --fixture /tmp >/dev/null 2>&1; echo $?)
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still refuses --fixture /tmp" \
+  "$pristine_pin_exit" "1"
+rm -rf "$F284_PIN_MUT_DIR"
+trap - EXIT
+
+# --- F-289: committed hash baseline for the five quota-paid shards D12 rests on (results/ is
+# gitignored, so a git-diff check there is vacuously empty) -- MANIFEST.sha256 (`git add -f`'d past
+# the ignore) is verified when present, skipped VISIBLY when absent (F-237), never silently.
+CONV_DIR="$ROOT/tests/evals/results/39411eb4d2785c47e1491e0b6c54be174a3ac753/convergence"
+conv_n=$(ls "$CONV_DIR"/loop-code-loop-*.json 2>/dev/null | wc -l | tr -d ' ')
+if [ "$conv_n" = "5" ]; then
+  (cd "$CONV_DIR" && sha256sum -c --status MANIFEST.sha256)
+  check "F-289: the five quota-paid shards match the committed MANIFEST.sha256 baseline" "$?" "0"
+elif [ "$conv_n" = "0" ]; then
+  echo "  (skipped: $CONV_DIR's shards not present -- results/ is gitignored except MANIFEST.sha256, expected on a fresh clone/CI)"
+else
+  bad "F-289: $CONV_DIR has $conv_n of 5 quota-paid shards on disk -- a real gap, not the expected all-or-nothing fresh-clone absence"
+fi
+# Guard shown to fail: verified BY HAND against a mktemp -d copy of the real shards, never the
+# tracked files (sha256sum -c is external, already battle-tested, not re-proven here) -- corrupt
+# flips OK to FAILED, restore flips back; real shards hashed identical before/after. Coder's report.
+
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
