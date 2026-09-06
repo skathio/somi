@@ -118,6 +118,169 @@ out="$(node "$LOOP" stats --slug demo --iteration 1.1)"
 check "finish: status recorded for the run ledger" \
   "$(jq -e '.status == "stopped-diff-cap"' <<<"$out" >/dev/null; echo $?)"
 
+# --- somi-loop: mid-loop cap re-resolution without --force (F-29) ---------------
+# commands/code-loop.md's documented remedy for a fired gate: "the user adjusts the
+# env var explicitly and re-runs — the loop does not 'decide' to widen its own
+# bounds." Before this fix, caps were resolved only at `init` and frozen into state:
+# setting the env var and re-running `pass`/`check-diff` changed nothing, and the
+# only path that DID re-resolve (`init --force`) discarded pass history — the one
+# thing a mid-loop raise must not do. This block is the regression guard: it fails
+# red against the pre-fix scripts/somi-loop.mjs (verified by hand, not committed —
+# see the coder's summary) and asserts the remedy now actually works, on the SAME
+# subcommand, without losing baseline/history, with the raise persisted for audit.
+#
+# Runs against ITS OWN throwaway repo — $REPO above has, by this point, accumulated
+# scenario-specific mutations to src/a.txt and src/b.txt plus an untracked src/new.txt
+# from earlier sections; none are in capfix's iteration_files, so every one of them
+# would count double against its narrow 4-line cap. Same reasoning as the golden
+# section further down, which isolates itself for exactly this reason.
+F29_REPO="$TMP/f29-repo"
+mkdir -p "$F29_REPO/src" "$F29_REPO/.somi"
+(
+  cd "$F29_REPO"
+  git init -q -b main
+  git config user.email t@t && git config user.name t
+  printf 'one\n' > src/a.txt
+  git add -A && git commit -qm init
+)
+export CLAUDE_PROJECT_DIR="$F29_REPO"
+cd "$F29_REPO"
+unset SOMI_CODE_LOOP_MAX_PASSES SOMI_CODE_LOOP_DIFF_CAP 2>/dev/null || true
+
+node "$LOOP" init --slug capfix --loop code --iteration 1.1 \
+  --files "src/capfix.txt" --max-passes 1 --diff-cap 4 >/dev/null
+baseline_before="$(node "$LOOP" stats --slug capfix --iteration 1.1 | jq -r .baseline_sha)"
+
+node "$LOOP" pass --slug capfix --iteration 1.1 >/dev/null                      # pass 1 of 1 — ok
+node "$LOOP" record-pass --slug capfix --iteration 1.1 \
+  --verdict request-changes --blockers 0 --majors 1 >/dev/null
+expect_exit "F-29: pass beyond max_passes still gates before any override" 2 \
+  node "$LOOP" pass --slug capfix --iteration 1.1
+
+# `|| true` below: under `set -euo pipefail`, a bare `var=$(cmd)` that exits
+# non-zero aborts the WHOLE suite right here with no test name and every check
+# below unreported — reproduced by hand against the pre-fix script (exit 2,
+# "max-passes-exceeded: pass 2 > cap 1"). `|| true` keeps a regression a reported
+# `check` failure instead of a silent suite death.
+out="$(SOMI_CODE_LOOP_MAX_PASSES=5 node "$LOOP" pass --slug capfix --iteration 1.1)" || true
+check "F-29: env var re-run of the SAME subcommand (no --force) honours the raised cap" \
+  "$(jq -e '.max_passes == 5 and .pass == 2' <<<"$out" >/dev/null; echo $?)"
+unset SOMI_CODE_LOOP_MAX_PASSES 2>/dev/null || true
+
+out="$(node "$LOOP" stats --slug capfix --iteration 1.1)"
+check "F-29: baseline_sha untouched by the override" \
+  "$([[ "$(jq -r .baseline_sha <<<"$out")" == "$baseline_before" ]]; echo $?)"
+check "F-29: pass history from before the override survives (still 1 entry)" \
+  "$(jq -e '(.history | length) == 1 and .history[0].verdict == "request-changes"' <<<"$out" >/dev/null; echo $?)"
+check "F-29: the raise is persisted as an auditable cap_overrides entry, after_pass recorded pre-increment" \
+  "$(jq -e '.cap_overrides | length == 1 and .[0].field == "max_passes" and .[0].from == 1 and .[0].to == 5 and .[0].source == "env" and .[0].after_pass == 1' <<<"$out" >/dev/null; echo $?)"
+
+# Same shape for diff_cap_lines, via the CLI flag instead of the env var (the other
+# documented-precedence entry point — see commands/code-loop.md).
+printf 'one\ntwo\nthree\n' > src/capfix.txt                # untracked, in-scope: +3 lines, under cap 4
+out="$(node "$LOOP" check-diff --slug capfix --iteration 1.1)"
+check "F-29: check-diff under the original cap needs no override" \
+  "$(jq -e '.cap == 4 and .weighted_lines == 3' <<<"$out" >/dev/null; echo $?)"
+
+printf 'four\nfive\n' >> src/capfix.txt                    # now +5 lines, weighted 5 > cap 4
+expect_exit "F-29: check-diff over the original cap still gates before any override" 3 \
+  node "$LOOP" check-diff --slug capfix --iteration 1.1
+
+# Same `|| true` reasoning as the env-var re-run above — this bare substitution
+# would exit 3 (diff-cap-exceeded) against the pre-fix script and abort the suite.
+out="$(node "$LOOP" check-diff --slug capfix --iteration 1.1 --diff-cap 10)" || true
+check "F-29: --diff-cap flag re-run of the SAME subcommand (no --force) honours the raised cap" \
+  "$(jq -e '.cap == 10 and .weighted_lines == 5' <<<"$out" >/dev/null; echo $?)"
+
+out="$(node "$LOOP" stats --slug capfix --iteration 1.1)"
+check "F-29: pass/history/baseline still untouched after the diff-cap override too" \
+  "$(jq -e '.pass == 2 and (.history | length) == 1' <<<"$out" >/dev/null; echo $?)"
+check "F-29: baseline_sha still untouched after the diff-cap override" \
+  "$([[ "$(jq -r .baseline_sha <<<"$out")" == "$baseline_before" ]]; echo $?)"
+check "F-29: both overrides are recorded, in order, in cap_overrides, after_pass recorded correctly" \
+  "$(jq -e '.cap_overrides | length == 2 and .[1].field == "diff_cap_lines" and .[1].from == 4 and .[1].to == 10 and .[1].source == "cli" and .[1].after_pass == 2' <<<"$out" >/dev/null; echo $?)"
+
+# --- malformed cap values must be rejected, not silently coerced to NaN/null ----
+# `Number()` on "1,000"/"unlimited"/"none" yields NaN, which is FALSE against BOTH
+# gate comparisons (`cur + 1 > max`, `weighted > cap`) — the gate goes fail-open —
+# and `JSON.stringify` then persists that NaN as `null`, which the next bare call
+# falls through past (via firstDefined) to re-arm at the DEFAULT, with no
+# cap_overrides entry recording the reversion. validateCap() rejects (exit 64)
+# rather than coerces. Verified on both gates, both entry points (env AND flag).
+before="$(node "$LOOP" stats --slug capfix --iteration 1.1)"
+
+expect_exit "F-29: malformed SOMI_CODE_LOOP_MAX_PASSES env var is rejected (64), not silently disabled" 64 \
+  env SOMI_CODE_LOOP_MAX_PASSES=unlimited node "$LOOP" pass --slug capfix --iteration 1.1
+expect_exit "F-29: malformed --max-passes flag is rejected (64), not silently disabled" 64 \
+  node "$LOOP" pass --slug capfix --iteration 1.1 --max-passes '1,000'
+expect_exit "F-29: malformed SOMI_CODE_LOOP_DIFF_CAP env var is rejected (64), not silently disabled" 64 \
+  env SOMI_CODE_LOOP_DIFF_CAP=unlimited node "$LOOP" check-diff --slug capfix --iteration 1.1
+expect_exit "F-29: malformed --diff-cap flag is rejected (64), not silently disabled" 64 \
+  node "$LOOP" check-diff --slug capfix --iteration 1.1 --diff-cap none
+
+after="$(node "$LOOP" stats --slug capfix --iteration 1.1)"
+check "F-29: every rejected malformed value left caps/cap_overrides/pass/history byte-identical" \
+  "$([[ "$before" == "$after" ]]; echo $?)"
+
+out="$(node "$LOOP" finish --slug capfix --iteration 1.1 --status stopped-max-passes-exceeded)"
+check "F-29: finish's stdout surfaces cap_overrides too, not just the gitignored state file" \
+  "$(jq -e '.cap_overrides | length == 2' <<<"$out" >/dev/null; echo $?)"
+# Deliberately NOT "stopped-diff-cap" (the pre-existing spelling two blocks up, at
+# line 116) — that bare reason matches neither CAP_BREACH_STATUSES
+# (tests/evals/lib/convergence.mjs) nor commands/code-loop.md's documented status
+# list; a separate open item, not to be copied here.
+
+# --- somi-loop (plan): mirrors the code-loop F-29 block above for `--loop plan` -
+# Plan loops have exactly one hard gate (`max_passes`); `diff_cap_lines` always
+# short-circuits to 0 for the plan family in reresolveCap()/resolveInitCap(), so
+# `--diff-cap` must be provably inert regardless of what's passed — asserted below
+# rather than only "verified by hand" as pass 1's review left it.
+PLAN29_REPO="$TMP/plan29-repo"
+mkdir -p "$PLAN29_REPO/src" "$PLAN29_REPO/.somi"
+(
+  cd "$PLAN29_REPO"
+  git init -q -b main
+  git config user.email t@t && git config user.name t
+  printf 'one\n' > src/a.txt
+  git add -A && git commit -qm init
+)
+export CLAUDE_PROJECT_DIR="$PLAN29_REPO"
+cd "$PLAN29_REPO"
+unset SOMI_PLAN_LOOP_MAX_PASSES 2>/dev/null || true
+
+node "$LOOP" init --slug planfix --loop plan --max-passes 1 >/dev/null
+plan_baseline_before="$(node "$LOOP" stats --slug planfix | jq -r .baseline_sha)"
+
+node "$LOOP" pass --slug planfix >/dev/null                       # pass 1 of 1 — ok
+expect_exit "F-29 (plan): pass beyond max_passes still gates before any override" 2 \
+  node "$LOOP" pass --slug planfix
+
+out="$(SOMI_PLAN_LOOP_MAX_PASSES=5 node "$LOOP" pass --slug planfix)" || true
+check "F-29 (plan): env var re-run of the SAME subcommand (no --force) honours the raised cap" \
+  "$(jq -e '.max_passes == 5 and .pass == 2' <<<"$out" >/dev/null; echo $?)"
+unset SOMI_PLAN_LOOP_MAX_PASSES 2>/dev/null || true
+
+out="$(node "$LOOP" stats --slug planfix)"
+check "F-29 (plan): baseline_sha untouched by the override" \
+  "$([[ "$(jq -r .baseline_sha <<<"$out")" == "$plan_baseline_before" ]]; echo $?)"
+check "F-29 (plan): the raise is persisted as an auditable cap_overrides entry" \
+  "$(jq -e '.cap_overrides | length == 1 and .[0].field == "max_passes" and .[0].from == 1 and .[0].to == 5 and .[0].source == "env" and .[0].after_pass == 1' <<<"$out" >/dev/null; echo $?)"
+
+out="$(node "$LOOP" check-diff --slug planfix --diff-cap 999999)"
+check "F-29 (plan): --diff-cap is inert on a plan loop — cap stays 0 regardless" \
+  "$(jq -e '.cap == 0' <<<"$out" >/dev/null; echo $?)"
+out="$(node "$LOOP" stats --slug planfix)"
+check "F-29 (plan): the inert --diff-cap flag records no cap_overrides entry" \
+  "$(jq -e '.cap_overrides | length == 1' <<<"$out" >/dev/null; echo $?)"
+
+out="$(node "$LOOP" finish --slug planfix --status stopped-max-passes-exceeded)"
+check "F-29 (plan): finish's stdout surfaces cap_overrides too" \
+  "$(jq -e '.cap_overrides | length == 1' <<<"$out" >/dev/null; echo $?)"
+
+# Restore the shared $REPO context for every section below.
+export CLAUDE_PROJECT_DIR="$REPO"
+cd "$REPO"
+
 # --- somi-findings: identity + breaker semantics --------------------------------
 F1='[{"file":"src/a.txt","symbol":"HandleWebhook","title":"Missing rate limit on retry path","severity":"Major","confidence":"High"}]'
 

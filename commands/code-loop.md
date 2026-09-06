@@ -33,10 +33,27 @@ so it isn't biased by the coder's reasoning.
 | `REVIEW_MODE` — `single` (Task `reviewer`) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens) | `single` | `SOMI_CODE_LOOP_REVIEW` (`panel`) |
 | `HUMAN_CHECKPOINT` — pause between passes if user reply `stop` is detected | always on | (n/a) |
 
-**Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
-keys `code_loop.max_passes`, `code_loop.severity_floor`, `code_loop.diff_cap_lines`,
+**Precedence:** CLI flag (`--max-passes`, `--diff-cap`) > env var (session override) >
+`.somi/config.json` (committed project policy — keys
+`code_loop.max_passes`, `code_loop.severity_floor`, `code_loop.diff_cap_lines`,
 `code_loop.review_mode`) > the defaults above. Read both at the start of the run; record the
 effective values in the first diary entry of the loop.
+
+`MAX_PASSES` and `DIFF_CAP_LINES` are **re-resolved on every `pass` / `check-diff` call**, not
+frozen at `init` — the fired-gate remedy below only works because of this. Absent an explicit CLI
+flag or env var *this invocation*, the cap already in force for the loop stands unchanged (a
+`.somi/config.json` edit made mid-loop cannot silently reopen an already-resolved gate). When the
+CLI flag or env var this invocation does differ from the value already in force, the new value
+takes effect immediately (same subcommand, **no** `init --force`, and `baseline_sha` / `started` /
+`pass` / `history` are untouched) and the change is appended to the loop state's `cap_overrides`
+array (`field`, `from`, `to`, `source`, `after_pass`, `at`) — durable after the shell that set the
+env var has exited, and returned in `finish`'s stdout JSON too, so a raise is as visible after the
+fact as it was easy in the moment (§4/§5 below fold any entries into the closing diary entry, which
+*is* committed). A malformed value (`--max-passes unlimited`, a non-numeric env var) is rejected
+with a clear error rather than silently disabling the gate. `SEVERITY_FLOOR` and
+`REVIEW_MODE` are still resolved once at `init` — neither is a hard gate `somi-loop.mjs` enforces
+via exit code, so F-29's defect (a gate resolved once and never revisited) doesn't apply to them;
+adjusting either mid-loop still means starting a fresh loop.
 
 ## What to do
 
@@ -125,18 +142,24 @@ while true:
 
 ### 4. On DONE (clean exit)
 
-- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status done`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status done` — its
+  stdout includes `cap_overrides`; if non-empty, list each entry (field, from, to, source,
+  after_pass) in the diary entry below rather than leaving the record only in the gitignored
+  state file.
 - Mark iteration `done` in `phases/<NN>-*.md`.
 - Update `progress.md` (phase row, "Last activity").
-- Append a diary entry (category `note`): `code-loop done at pass <P>; verdict <V>`.
+- Append a diary entry (category `note`): `code-loop done at pass <P>; verdict <V>`, plus any
+  `cap_overrides` entries from `finish`'s stdout.
 - Summarise (see §6).
 
 ### 5. On STOP (gate hit)
 
-- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status stopped-<reason>`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status stopped-<reason>`
+  — same `cap_overrides` note as §4.
 - Do **not** mark iteration `done`.
 - Append a diary entry (category `blocker` or `plan-change`): which gate fired, what's
-  outstanding, what the user needs to decide.
+  outstanding, what the user needs to decide, plus any `cap_overrides` entries from `finish`'s
+  stdout.
 - Write remaining ≥Major findings as `progress.md` follow-ups **by ledger id** (`F-3: <title>`)
   so they aren't lost and the next review can assert their resolution.
 - Summarise with explicit next step (usually: human review of the partial work, then a
@@ -156,7 +179,9 @@ while true:
 ## Guardrails
 
 - **Never silently bypass a gate.** If a gate is wrong for this work item, the user adjusts the
-  env var explicitly and re-runs — the loop does not "decide" to widen its own bounds.
+  env var (or `--max-passes` / `--diff-cap`) explicitly and re-runs the **same** `pass` /
+  `check-diff` call — the loop does not "decide" to widen its own bounds, and the raise is
+  recorded in `cap_overrides`, not just left in a shell that may since have exited.
 - **The user can reply `stop` between passes.** Honour it immediately, treat it as the
   `user-stop` exit.
 - **Plan-change protocol still applies.** If the coder discovers a planning gap mid-pass, it

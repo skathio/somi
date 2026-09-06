@@ -36,9 +36,20 @@ it isn't biased by the planner's reasoning.
 | `DIVERGENCE_DETECTOR` — stop if `spec.md §1` / `decisions.md` keeps churning across passes without finding-count dropping | always on | (n/a) |
 | `HUMAN_CHECKPOINT` — pause if user replies `stop` between passes | always on | (n/a) |
 
-**Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
-keys `plan_loop.max_passes`, `plan_loop.severity_floor`) > the defaults above. Read both at the
-start of the run; record the effective values in the first diary entry of the loop.
+**Precedence:** CLI flag (`--max-passes`) > env var (session override) > `.somi/config.json`
+(committed project policy — keys `plan_loop.max_passes`, `plan_loop.severity_floor`) > the
+defaults above. Read both at the start of the run; record the effective values in the first diary
+entry of the loop.
+
+`MAX_PASSES` is **re-resolved on every `pass` call**, not frozen at `init` (F-29, same fix as
+[`/code-loop`](./code-loop.md)). Absent an explicit CLI flag or env var *this invocation*, the cap
+already in force stands unchanged; when one does differ, it takes effect immediately, on the same
+subcommand, without discarding `pass`/`history`, and is appended to the loop state's
+`cap_overrides` array (`field`, `from`, `to`, `source`, `after_pass`, `at`) — also returned in
+`finish`'s stdout JSON — so the raise is auditable after the fact. A malformed value is rejected
+with a clear error rather than silently disabling the gate. `SEVERITY_FLOOR` is still resolved once
+at `init` — it isn't a hard gate `somi-loop.mjs` enforces, so adjusting it mid-loop still means
+starting a fresh loop. Plan loops have no diff cap; `--diff-cap` is inert for a plan loop.
 
 ## What to do
 
@@ -117,18 +128,23 @@ while true:
 
 ### 4. On DONE (clean exit)
 
-- `node scripts/somi-loop.mjs finish --slug <slug> --status done`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --status done` — its stdout includes
+  `cap_overrides`; if non-empty, list each entry (field, from, to, source, after_pass) in the
+  diary entry below.
 - Set `progress.md` status to `awaiting-approval`.
-- Append a diary entry (category `note`): `plan-loop done at pass <P>; verdict <V>`.
+- Append a diary entry (category `note`): `plan-loop done at pass <P>; verdict <V>`, plus any
+  `cap_overrides` entries from `finish`'s stdout.
 - Summarise (see §6) — explicitly call out that the user still owns the final go/no-go on the
   plan even though it passed the bounded review.
 
 ### 5. On STOP (gate hit)
 
-- `node scripts/somi-loop.mjs finish --slug <slug> --status stopped-<reason>`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --status stopped-<reason>` — same
+  `cap_overrides` note as §4.
 - Leave `progress.md` status as `planning`.
 - Append a diary entry (category `plan-change` or `blocker`): which gate fired, what's
-  outstanding, what the user needs to decide.
+  outstanding, what the user needs to decide, plus any `cap_overrides` entries from `finish`'s
+  stdout.
 - Summarise with the current best plan and the open findings.
 
 ### 6. Summarise back
@@ -148,7 +164,9 @@ while true:
   §5): a `DECISIONS-NEEDED` return from the planner **pauses the loop for the user's verdicts**
   (it is not a review pass and never counts toward `MAX_PASSES` or the divergence detector) —
   the loop does not silently pick on the user's behalf.
-- **Never silently bypass a gate.** Adjust via env vars explicitly and re-run.
+- **Never silently bypass a gate.** Adjust via `--max-passes` or the env var explicitly and
+  re-run the same `pass` call — the raise is recorded in `cap_overrides`, not just left in a
+  shell that may since have exited.
 - **The user can reply `stop` between passes.** Honour it immediately.
 - **Divergence is information.** When the plan oscillates, the human disagreement between
   planner and reviewer is the signal — surface it, don't paper over.

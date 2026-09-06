@@ -148,7 +148,7 @@
       "stopped-diff-cap"
     ],
     "exit": 0,
-    "stdout": "{\"status\":\"stopped-diff-cap\",\"pass\":2,\"history\":1}",
+    "stdout": "{\"status\":\"stopped-diff-cap\",\"pass\":2,\"history\":1,\"cap_overrides\":[]}",
     "stderr": ""
   },
   {

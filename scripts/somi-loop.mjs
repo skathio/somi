@@ -15,8 +15,16 @@
 // never been told about, so without it a new file costs nothing against the cap.
 //
 // Cap precedence (matches the gate tables): CLI flag > env var > .somi/config.json
-// > default. Diff measurement EXCLUDES .somi/ and .claude/ — artifact churn
-// (progress/diary updates every pass) must not eat the code diff budget.
+// > default. `init` resolves once from that chain and freezes the result into state.
+// `pass`/`check-diff` re-resolve their own cap on every call (F-29 — the documented
+// remedy for a fired gate, "adjust the env var and re-run", used to be inert): absent
+// an explicit CLI flag or env var THIS invocation, the cap already in force for the
+// loop stands unchanged (a `.somi/config.json` edit made mid-loop cannot silently
+// reopen an already-resolved gate); see reresolveCap() below. Every cap value, at
+// `init` and on re-resolution alike, is validated as a non-negative integer before
+// use and rejected otherwise — a malformed value must not silently disable a gate.
+// Diff measurement EXCLUDES .somi/ and .claude/ — artifact churn (progress/diary
+// updates every pass) must not eat the code diff budget.
 //
 // Exit codes (callers branch on these — do not repurpose):
 //   0  ok
@@ -196,6 +204,103 @@ function computeDiff(root, baseline, iterationFiles) {
   return { total, weighted, outOfScope };
 }
 
+// --- mid-loop cap re-resolution (F-29) --------------------------------------------
+// `init` resolves caps once (CLI flag > env var > .somi/config.json > default) and
+// freezes them into state -- deliberately, so the diff baseline and pass history stay
+// stable across a whole loop. But commands/code-loop.md's Guardrails document a
+// remedy for a gate that's wrong for this work item: "the user adjusts the env var
+// explicitly and re-runs -- the loop does not 'decide' to widen its own bounds." That
+// remedy needs a path that re-reads the override on the SAME subcommand (`pass`,
+// `check-diff`), without `init --force` (which discards `pass`/`history`).
+//
+// `pass` and `check-diff` call reresolveCap() below before their gate check.
+// Precedence matches what's documented: CLI flag > env var > .somi/config.json >
+// default -- an explicit CLI flag or env var THIS invocation is the only thing that
+// can move the cap; absent one, the cap already in force for the loop stands (a
+// `.somi/config.json` edit made while a loop is running must NOT silently reopen an
+// already-resolved gate). A resolved value that differs from what's stored is
+// persisted into `caps` immediately, with an entry appended to a `cap_overrides`
+// audit trail (field, from, to, source, after_pass, at) -- the after-the-fact record
+// the documented remedy needs, since the env var itself lives only in a shell that
+// may since have exited. `cap_overrides` is created lazily, only on the first real
+// override, so a loop that never overrides anything keeps exactly today's state
+// shape (no golden-fixture regeneration forced by this fix). `baseline_sha`,
+// `started`, `pass`, and `history` are never touched here.
+//
+// Every value that reaches `Number()` on this path is user input (a CLI flag, an env
+// var, or a config value) and is validated before use: `Number()` on a malformed
+// string (`"1,000"`, `"unlimited"`) yields NaN, which is false against BOTH gate
+// comparisons (`cur + 1 > max`, `weighted > cap`) -- silently switching the gate off
+// -- and `JSON.stringify` then persists that NaN as `null`, which the next bare call
+// falls through past (via `firstDefined`) to re-arm at the default, with no
+// `cap_overrides` entry recording the reversion. `validateCap()` rejects rather than
+// coerces, so a malformed value dies loudly instead of disabling a gate.
+const CAP_ENV = {
+  code: { max_passes: 'SOMI_CODE_LOOP_MAX_PASSES', diff_cap_lines: 'SOMI_CODE_LOOP_DIFF_CAP' },
+  plan: { max_passes: 'SOMI_PLAN_LOOP_MAX_PASSES' },
+};
+const CAP_FLAG = { max_passes: '--max-passes', diff_cap_lines: '--diff-cap' };
+const CAP_CONFIG_SECTION = { code: 'code_loop', plan: 'plan_loop' };
+const CAP_DEFAULT = { max_passes: 3, diff_cap_lines: 400 };
+
+// Rejects a malformed cap value rather than letting `Number()` coerce it to NaN.
+// `label` names the source in the error so `die()`'s message points at what to fix
+// (a specific flag, env var, or the generic field name at `init`, where the value
+// may have come from any of CLI/env/config).
+function validateCap(raw, label) {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    die(`${label}: expected a non-negative integer, got "${raw}"`);
+  }
+  return n;
+}
+
+// Resolves one cap at `init`, reading the same CAP_ENV / CAP_CONFIG_SECTION /
+// CAP_DEFAULT tables reresolveCap() uses, so the two paths cannot silently diverge
+// on an env var name, a config key, or a default value.
+function resolveInitCap(config, family, field, argVal) {
+  if (field === 'diff_cap_lines' && family === 'plan') return 0; // plan loops have no diff cap
+  const envVar = CAP_ENV[family][field];
+  const fromConfig = configVal(config, [CAP_CONFIG_SECTION[family], field]);
+  const picked = firstDefined(argVal, process.env[envVar], fromConfig, CAP_DEFAULT[field]);
+  return validateCap(picked, field);
+}
+
+function reresolveCap(state, field, argVal) {
+  const family = state.loop === 'plan' ? 'plan' : 'code';
+  if (field === 'diff_cap_lines' && family === 'plan') {
+    return { resolved: 0, override: null }; // plan loops have no diff cap (see `init`)
+  }
+  const envVar = CAP_ENV[family][field];
+  const stored = state.caps[field];
+  const explicit = firstDefined(argVal, process.env[envVar]);
+  const isCli = argVal !== undefined && argVal !== '';
+  const resolved = explicit === undefined
+    ? stored
+    : validateCap(explicit, isCli ? CAP_FLAG[field] : envVar);
+  let override = null;
+  if (explicit !== undefined && resolved !== stored) {
+    override = {
+      field,
+      from: stored,
+      to: resolved,
+      source: isCli ? 'cli' : 'env',
+      after_pass: state.pass,
+      at: nowIso(),
+    };
+  }
+  return { resolved, override };
+}
+
+// Mutates `state.caps[field]` and appends the audit entry. Caller still owns calling
+// saveState() -- kept separate so `pass`/`check-diff` persist the override BEFORE
+// their gate check can throw, not only on the success path.
+function applyCapOverride(state, override) {
+  state.caps[override.field] = override.to;
+  if (!Array.isArray(state.cap_overrides)) state.cap_overrides = [];
+  state.cap_overrides.push(override);
+}
+
 function main() {
   requireGit();
 
@@ -276,23 +381,24 @@ function main() {
         }
       }
 
-      // Cap resolution: CLI > env > config > default (per loop type).
+      // Cap resolution: CLI > env > config > default (per loop type), through the
+      // same CAP_ENV / CAP_CONFIG_SECTION / CAP_DEFAULT tables reresolveCap() uses,
+      // and validated the same way -- a malformed value dies here rather than
+      // silently resolving to a fail-open NaN/null.
       const config = readConfig(root);
       let maxPasses;
       let diffCap;
       let sevFloor;
       if (LOOP === 'plan') {
-        maxPasses = firstDefined(ARG_MAX_PASSES, process.env.SOMI_PLAN_LOOP_MAX_PASSES, configVal(config, ['plan_loop', 'max_passes']));
+        maxPasses = resolveInitCap(config, 'plan', 'max_passes', ARG_MAX_PASSES);
         sevFloor = firstDefined(ARG_SEVERITY, process.env.SOMI_PLAN_LOOP_SEVERITY_FLOOR, configVal(config, ['plan_loop', 'severity_floor']));
         diffCap = 0; // plan loops have no diff cap
       } else {
-        maxPasses = firstDefined(ARG_MAX_PASSES, process.env.SOMI_CODE_LOOP_MAX_PASSES, configVal(config, ['code_loop', 'max_passes']));
+        maxPasses = resolveInitCap(config, 'code', 'max_passes', ARG_MAX_PASSES);
         sevFloor = firstDefined(ARG_SEVERITY, process.env.SOMI_CODE_LOOP_SEVERITY_FLOOR, configVal(config, ['code_loop', 'severity_floor']));
-        diffCap = firstDefined(ARG_DIFF_CAP, process.env.SOMI_CODE_LOOP_DIFF_CAP, configVal(config, ['code_loop', 'diff_cap_lines']));
+        diffCap = resolveInitCap(config, 'code', 'diff_cap_lines', ARG_DIFF_CAP);
       }
-      maxPasses = Number(firstDefined(maxPasses, 3));
       sevFloor = firstDefined(sevFloor, 'Major');
-      diffCap = Number(firstDefined(diffCap, 400));
 
       let baseline;
       try {
@@ -329,7 +435,11 @@ function main() {
     case 'pass': {
       requireState();
       const state = loadState();
-      const max = state.caps.max_passes;
+      const { resolved: max, override } = reresolveCap(state, 'max_passes', ARG_MAX_PASSES);
+      if (override) {
+        applyCapOverride(state, override);
+        saveState(state); // persist the raise even if the gate below still fails
+      }
       const cur = state.pass;
       if (cur + 1 > max) {
         fail(2, `max-passes-exceeded: pass ${cur + 1} > cap ${max}`);
@@ -343,8 +453,12 @@ function main() {
     case 'check-diff': {
       requireState();
       const state = loadState();
+      const { resolved: cap, override } = reresolveCap(state, 'diff_cap_lines', ARG_DIFF_CAP);
+      if (override) {
+        applyCapOverride(state, override);
+        saveState(state); // persist the raise even if the gate below still fails
+      }
       const { total, weighted, outOfScope } = computeDiff(root, state.baseline_sha, state.iteration_files);
-      const cap = state.caps.diff_cap_lines;
       console.log(JSON.stringify({ diff_lines: total, weighted_lines: weighted, cap, out_of_scope: outOfScope }));
       if (cap > 0 && weighted > cap) {
         fail(3, `diff-cap-exceeded: weighted ${weighted} > cap ${cap} (out-of-scope counts double)`);
@@ -378,7 +492,12 @@ function main() {
       state.status = STATUS;
       state.finished = nowIso();
       saveState(state);
-      console.log(JSON.stringify({ status: state.status, pass: state.pass, history: state.history.length }));
+      console.log(JSON.stringify({
+        status: state.status,
+        pass: state.pass,
+        history: state.history.length,
+        cap_overrides: state.cap_overrides || [],
+      }));
       break;
     }
 
