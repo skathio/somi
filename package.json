@@ -1,6 +1,6 @@
 {
   "name": "@skathio/somi",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "scripts": {
     "test": "bash scripts/validate.sh",
     "eval:behavioral": "node tests/evals/run.mjs",
@@ -9,7 +9,7 @@
   "bin": {
     "somi-check": "scripts/somi-check.mjs"
   },
-  "description": "SoMi \u2014 multi-agent engineering workflow system: plan, code, review \u2014 with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
+  "description": "SoMi — multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
     "workflow",
     "agents",

@@ -6,7 +6,51 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
-_Nothing yet._
+**Major — 3.0.0.** Breaking: `skills/test-strategy/` renamed to `skills/testing-playbook/`
+(the `/test-strategy` command is unchanged). Per `docs/VERSIONING.md`, a rename is MAJOR
+regardless of how narrow the observable break is.
+
+**Migration**: if you invoke the *skill* by name, use `somi:testing-playbook`. If you use the
+`/test-strategy` **command**, nothing changes.
+
+Two work items, both with full `.somi/` artifact sets.
+
+### `context-economy-overhaul` — deliver the ruleset, and stop the digest drifting
+
+- **Ruleset delivery into consuming projects** (`rules/CLAUDE.md`, `skills/rules/`,
+  `hooks/user-prompt-submit/inject-workflow-context.mjs`, `hooks/lib/common.mjs`) — the rules now
+  reach a session by a documented path rather than by assumption, and `docs/RULES.md` describes how.
+- **Digest drift made unrepresentable** (`scripts/generate-digest.mjs`, `scripts/check-links.mjs`,
+  `scripts/validate.sh`) — five new CI guards, plus version fan-out and dead-link checks.
+- **`/design` gains `WebSearch`** with a narrowed research boundary.
+- **Removed a false read-only claim** from the agent/rules surface.
+- **BREAKING** — `skills/test-strategy/` renamed to `skills/testing-playbook/`. The
+  `/test-strategy` **command** is unchanged and still works; only the skill directory moved.
+  Nothing in the repo references the old skill path.
+- Closed on a **negative result**, deliberately: its phase 4 established that a model judge cannot
+  deliver the ≥99% per-draw consistency its error budget assumed. That finding is what motivated
+  the work item below.
+
+### `eval-corpus-rebuild` — rebuild the corpus on executed criteria; add a convergence gate
+
+- **The judge machinery is deleted.** Gating now rests on complete enumeration over closed input,
+  never pattern search over open-ended content (**D11**). `judge()` survives only as an opt-in
+  `--report` pass (**D7**).
+- **New convergence gate for `/code-loop`** — `tests/evals/convergence.mjs` plus an
+  `eval:convergence` npm script. Loops are measured on **cost** (passes-to-approve), never outcome
+  (**D1**, **D10**): a three-way cap-breach extractor, a zero-dependency tie-conditional
+  Mann-Whitney (**D3**, **D5**), a four-state verdict, and a live-draw driver with resumable
+  per-draw sharding.
+- **Coverage tiering** (**D8**) — 4 gated commands, 20 in a zero-model-call smoke tier;
+  `docs/EVALS.md` states coverage for all 24, every derived number pinned to its source.
+- **`scripts/somi-loop.mjs`**: the diff cap now counts untracked files. It previously read 248
+  against a true 503, because `git diff` cannot see a file git has never been told about — so a
+  new file cost nothing against the cap until someone ran `git add`.
+- **New finding, `D12`**: `task02-code` cannot carry a convergence signal — five live draws
+  returned mean 1.0, sd 0.0, `d = 1/sd` undefined. The gate itself is sound and verified against
+  synthetic arms with real variance; what is missing is a fixture with room to vary.
+- `tests/scripts/eval-runner.sh` 46 → **379** checks; new `tests/scripts/convergence-runner.sh`
+  at **89**. Every acceptance point mutation-verified.
 
 ## [2.2.0] — 2026-07-23 — feat: `somi` front-door agent for GitHub Copilot + shared routing skill
 
