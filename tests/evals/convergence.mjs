@@ -40,7 +40,7 @@ import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { installSomi, invokeCommand, preflight } from './lib/install.mjs';
-import { capBreached, passesToApprove, terminalVerdict, terminalOutcome } from './lib/convergence.mjs';
+import { capBreached, passesToApprove, terminalVerdict, terminalOutcome, censoredDrawSnapshot } from './lib/convergence.mjs';
 import { mannWhitneyU, DEFAULT_RESAMPLES } from './lib/mann-whitney.mjs';
 import { shardDir, resolveSource, fixtureFor } from './run.mjs';
 
@@ -105,6 +105,16 @@ export const LOOP_ITERATION = '1.1';
 // not a verdict; (3) PRESENT: a real value from a completed terminal entry. Collapsing (1)/(2) is
 // wrong -- (1) is silence from before this diagnostic existed, (2) is it actively reporting it
 // could not determine an answer.
+//
+// For `run.terminal` specifically, state (3) RECURSES (F-274, code-loop pass 3 review): the
+// object being present says nothing about its own four fields, each of which is independently
+// `null` (`terminalOutcome()`'s own fail-safe contract, `lib/convergence.mjs`) -- reachable today,
+// not hypothetical: `terminalOutcome({history:[{verdict:'approve'}]})` returns
+// `{"verdict":"approve","blockers":null,"majors":null,"diffLines":null}`. A reader that treats
+// "present" as "trust every field" and then does `!diffLines`, `diffLines < 1`, or any arithmetic
+// on it collapses `null` into `0` -- and `diffLines: 0` is the exact do-nothing-approval signal
+// `run.terminal` exists to catch. `diffLines: null` means "not recorded", never "zero lines
+// changed"; the same reading applies to `blockers`/`majors`.
 export const LOOP_SCHEMA_VERSION = 1;
 
 function loopShardDir(sha) {
@@ -211,18 +221,24 @@ function safeCleanup(draw) {
  *   (commands/code-loop.md's own resume check picks up where it left off -- this IS the "wait",
  *   not a bare sleep-and-poll); `cleanup()` (optional) removes the handle's workDir.
  * @param {object} [opts]
- * @returns {{breach: boolean, arm: number[], stillRunning: number, replaced: number, waitExhausted: boolean}}
+ * @returns {{breach: boolean, arm: number[], stillRunning: number, replaced: number, waitExhausted: boolean, censor: {elapsedMs: number, waitAttempts: number, lastState: {status: string|null, historyEmpty: boolean|null, stateReadable: boolean}}|null}}
  */
 export function fillArm(newDraw, opts = {}) {
   const n = opts.n ?? N_PER_ARM;
   const maxWaitAttempts = opts.maxWaitAttempts ?? DEFAULT_MAX_WAIT_ATTEMPTS;
   const maxReplacements = opts.maxReplacements ?? DEFAULT_MAX_REPLACEMENTS;
   const report = opts.report ?? ((msg) => process.stderr.write(msg + '\n'));
+  const now = opts.now ?? Date.now;
 
   const arm = [...(opts.resume ?? [])];
   let stillRunning = 0;
   let replaced = 0;
   while (arm.length < n) {
+    // F-278 (code-loop pass 2 review): captured BEFORE newDraw(), not after -- newDraw() resolves
+    // to startDraw(), which ends with retry(), a spawnSync of the draw's entire first /code-loop
+    // invocation (up to 30 minutes) before ever returning a handle. Capturing the clock after
+    // newDraw() returns silently excluded that whole invocation from `elapsedMs` below.
+    const drawStartedAt = now();
     const draw = newDraw();
     let state = draw.read();
     let waitAttempts = 0;
@@ -230,7 +246,7 @@ export function fillArm(newDraw, opts = {}) {
       const c = classifyDraw(state);
       if (c.kind === 'breach') {
         safeCleanup(draw);
-        return { breach: true, arm, stillRunning, replaced, waitExhausted: false };
+        return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null };
       }
       if (c.kind === 'done') {
         arm.push(c.pass);
@@ -242,8 +258,17 @@ export function fillArm(newDraw, opts = {}) {
         stillRunning++;
         waitAttempts++;
         if (waitAttempts > maxWaitAttempts) {
+          // F-276: this draw is about to be discarded with no shard and a cleaned-up workDir --
+          // the ONLY thing that will ever distinguish "the loop was genuinely slow" from "the
+          // subprocess died in thirty seconds" is what gets recorded HERE, before safeCleanup()
+          // removes the evidence. Built from data this function already has (elapsed wall-clock
+          // since this draw's OWN newDraw() call, the wait-attempt count this loop already
+          // tracks, and the last state this same loop already read) -- nothing new is fetched,
+          // and nothing about WHEN a draw censors changes: still exactly `waitAttempts >
+          // maxWaitAttempts`, same as before this pass.
+          const censor = { elapsedMs: now() - drawStartedAt, waitAttempts, lastState: censoredDrawSnapshot(state) };
           safeCleanup(draw);
-          return { breach: false, arm, stillRunning, replaced, waitExhausted: true };
+          return { breach: false, arm, stillRunning, replaced, waitExhausted: true, censor };
         }
         draw.retry();
         state = draw.read();
@@ -261,7 +286,7 @@ export function fillArm(newDraw, opts = {}) {
       break; // this handle discarded; outer while retries the same still-open slot with a fresh newDraw()
     }
   }
-  return { breach: false, arm, stillRunning, replaced, waitExhausted: false };
+  return { breach: false, arm, stillRunning, replaced, waitExhausted: false, censor: null };
 }
 
 /**
@@ -452,8 +477,16 @@ export function startDraw(sourceDir, fixtureDir, { model = null } = {}) {
 //
 // `terminal` (F-268) widens `verdict` to the whole entry `terminalOutcome()` returns, persisted as
 // `run.terminal` alongside `run.pass`/`run.verdict` -- `run.verdict` stays too, since every value
-// `run.terminal.verdict` can express it already does, harmlessly (same read, so they can't
-// disagree). Same "always an explicit key" reasoning as `verdict` above; defaults to `null`.
+// `run.terminal.verdict` can express it already does. **Not because they share a read** (F-273,
+// code-loop pass 3 review, corrected wording): `terminalVerdict()` and `terminalOutcome()` are
+// deliberately non-calling (this module's own header) and each carries its own copy of the
+// history/"last entry" guards -- they agree because those guards are IDENTICAL, not because
+// either is derived from the other, and a mutation can make them disagree on the same shard (a
+// two-entry history where one extractor's copy of the guard was mutated to read `history[0]`
+// while the other's still reads the terminal entry). The committed wiring test below asserts both
+// fields from one written record specifically so that kind of divergence fails loudly rather than
+// silently, not because divergence is structurally impossible. Same "always an explicit key"
+// reasoning as `verdict` above; defaults to `null`.
 export function writeNextShard(sha, taskId, n, occupied, fromIndex, pass, verdict = null, terminal = null) {
   let idx = fromIndex;
   while (occupied.has(idx)) idx++;
@@ -463,6 +496,43 @@ export function writeNextShard(sha, taskId, n, occupied, fromIndex, pass, verdic
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, run: { index: idx, pass, verdict, terminal } }, null, 2) + '\n');
   return idx;
+}
+
+/**
+ * Where one CENSORED draw's retained record lives (F-276, phase 4 iteration 4.4) -- a SIBLING to
+ * the numbered shards, under its OWN `censored/` sub-directory so it can never collide with, or
+ * be mistaken for, a numbered shard: `loopCompletedIndices()`'s scan only ever tests
+ * `<taskId>-NNN.json` directly inside `loopShardDir(sha)`, never a subdirectory (the same
+ * structural-invisibility argument F-225 already established for this module's shard namespace
+ * against `run.mjs`'s `mergeShards()`), so a censored draw can NEVER occupy, or free up, a
+ * numbered slot -- this is purely additional evidence, not a change to what counts as a usable
+ * draw (constraint 1, phases/04-same-fixture-baseline.md's iteration 4.4).
+ */
+function censorRecordDir(sha) {
+  return join(loopShardDir(sha), 'censored');
+}
+
+export function censorRecordPath(sha, taskId, seq) {
+  return join(censorRecordDir(sha), `${taskId}-${String(seq).padStart(3, '0')}.json`);
+}
+
+/**
+ * Persist one censored draw's retained record (F-276): `fillArm()`'s wait-exhausted path builds
+ * and returns `censor` (elapsed wall-clock, wait attempts consumed, the last-seen
+ * `{status, historyEmpty}`) but writes nothing itself -- I/O is this module's concern, matching
+ * `writeNextShard()`'s own split between building a value and persisting it. Self-healing
+ * first-free-slot write, same idiom as `writeNextShard()`/`resumeArm()` above, but in its OWN
+ * namespace with its OWN counter -- a censor record never shares occupied/index bookkeeping with
+ * the numbered shards, and there is no arm-position for it to correspond to (a censored draw was
+ * never assigned one).
+ */
+export function writeCensorRecord(sha, taskId, censor) {
+  let seq = 0;
+  while (existsSync(censorRecordPath(sha, taskId, seq))) seq++;
+  const p = censorRecordPath(sha, taskId, seq);
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, censor }, null, 2) + '\n');
+  return seq;
 }
 
 /**
@@ -523,6 +593,11 @@ export function makeShardWriter(makeDraw, sha, taskId, n, occupied, startIndex) 
  * Preflights (F-229, code-loop pass 2 review) before any work: this is the first function in the
  * module that can spend quota, and a run with no `claude` on PATH or no credential should fail
  * once, loudly, named -- not thirty times, one abandoned work tree each.
+ *
+ * Persists `fillArm()`'s `censor` record (F-276) the moment it comes back non-`null` -- the same
+ * "build in fillArm(), persist here" split `writeNextShard()`/`makeShardWriter()` already use for
+ * a completed draw's shard, so a censored draw's evidence survives on disk exactly like a
+ * completed one's does, in its own namespace.
  */
 export function drawArmForSha(sourceDir, fixtureDir, sha, opts = {}) {
   const pf = preflight();
@@ -530,7 +605,9 @@ export function drawArmForSha(sourceDir, fixtureDir, sha, opts = {}) {
   const n = opts.n ?? N_PER_ARM;
   const { resume, nextIndex: startIndex, occupied } = resumeArm(sha, TASK_ID, n);
   const { newDraw, onDraw } = makeShardWriter(() => startDraw(sourceDir, fixtureDir, opts), sha, TASK_ID, n, occupied, startIndex);
-  return fillArm(newDraw, { ...opts, n, resume, onDraw });
+  const result = fillArm(newDraw, { ...opts, n, resume, onDraw });
+  if (result.censor) writeCensorRecord(sha, TASK_ID, result.censor);
+  return result;
 }
 
 // ---------------------------------------------------------------------------------------------

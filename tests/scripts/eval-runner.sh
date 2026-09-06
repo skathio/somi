@@ -2929,10 +2929,14 @@ cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
 # Mutant B -- reintroduces F-194: exhausting the wait budget re-draws a FRESH handle instead of
 # stopping, re-rolling exactly the censored draw and pulling the arm mean down.
+# Anchored on the return statement alone, not the surrounding block (F-276, phase 4 iteration 4.4,
+# added a diagnostic censor record and a comment ahead of this same return inside convergence.mjs's
+# own scope) -- narrowing the anchor here keeps this guard resilient to that kind of addition
+# without needing to track every line around it.
 node -e "
   const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
-  const FROM = 'if (waitAttempts > maxWaitAttempts) {\n          safeCleanup(draw);\n          return { breach: false, arm, stillRunning, replaced, waitExhausted: true };\n        }';
-  const TO   = 'if (waitAttempts > maxWaitAttempts) {\n          safeCleanup(draw);\n          replaced++; break; // MUTANT: re-roll instead of stopping\n        }';
+  const FROM = 'return { breach: false, arm, stillRunning, replaced, waitExhausted: true, censor };';
+  const TO   = 'replaced++; break; // MUTANT: re-roll instead of stopping';
   if (!s.includes(FROM)) throw new Error('mutant B pattern not found -- source moved');
   fs.writeFileSync(p, s.replace(FROM, TO));
 "

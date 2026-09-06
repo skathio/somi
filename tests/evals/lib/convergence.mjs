@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // Reads /code-loop's loop-state JSON (`.somi/somi-state/loop/<slug>.<iteration>.json`) for the
-// convergence gate (phase 3, D1-D5, R3). Four independent extractions -- 3.2's Mann-Whitney code
+// convergence gate (phase 3, D1-D5, R3). Five independent extractions -- 3.2's Mann-Whitney code
 // calls none of them, and no two of them call each other.
 //
-// FAILS SAFE. All four exports return `null` on a shape they don't recognise, never a guessed
-// boolean, number, or string -- "a parser that guesses `false` fails a conforming run" is this
-// corpus's own repeated lesson (`lib/reproduce.mjs`, `lib/boundary.mjs`'s `slug` fallback). A
-// `null` here means "the caller must decide", never "no".
+// FAILS SAFE. The first four exports return `null` on a shape they don't recognise, never a
+// guessed boolean, number, or string -- "a parser that guesses `false` fails a conforming run" is
+// this corpus's own repeated lesson (`lib/reproduce.mjs`, `lib/boundary.mjs`'s `slug` fallback). A
+// `null` here means "the caller must decide", never "no". `censoredDrawSnapshot()` (added F-276)
+// keeps the same never-guess posture at the FIELD level instead of the whole-return level -- see
+// its own docstring for why.
 //
 // `terminalVerdict()` added phase 4, iteration 4.1 (F-267): the first live draws showed
 // `task02-code` sitting at the pass-count floor (arm [1,1,1], mean 1.0, sd 0.0) with no retained
@@ -18,6 +20,12 @@
 // `terminalOutcome()` added phase 4, iteration 4.1 pass 3 (F-268): `terminalVerdict()` alone
 // can't distinguish a real coder/reviewer round trip from a loop that approved an untouched tree
 // -- see its own docstring below.
+//
+// `censoredDrawSnapshot()` added phase 4, iteration 4.4 (F-276): the two exports above read a
+// FINISHED draw's terminal history entry; this one reads a still-`running` (CENSORED) draw's
+// state instead -- the shape `fillArm()` (`tests/evals/convergence.mjs`) discards entirely once
+// its wait budget is exhausted, with nothing retained to tell "the loop was genuinely slow" apart
+// from "the subprocess died in thirty seconds". See its own docstring below.
 
 /**
  * Statuses `commands/code-loop.md` documents as terminal cap-breach outcomes -- a breach fails the
@@ -164,5 +172,66 @@ export function terminalOutcome(loopStateJson) {
     blockers: count(last.blockers),
     majors: count(last.majors),
     diffLines: count(last.diff_lines),
+  };
+}
+
+/**
+ * Last-seen snapshot of a CENSORED (still-`running`) draw's loop state -- the retained-evidence
+ * half of F-276 (phase 4, iteration 4.4). `fillArm()`'s wait-exhausted path (`fillArm()`'s own
+ * docstring, `tests/evals/convergence.mjs`) gives up on a draw that never leaves `running` and
+ * previously discarded its last-read state entirely -- no shard is written on that path, and
+ * `safeCleanup()` removes the workDir the instant the handle is done with, so "the loop was
+ * genuinely slow" (cost-correlated, biases an arm's upper tail away -- F-185) and "the subprocess
+ * died in thirty seconds" (uncorrelated with cost) were indistinguishable from any retained
+ * artifact. This snapshot, paired with `fillArm()`'s own elapsed-wall-clock and wait-attempt
+ * count, is what makes that distinguishable after the fact -- it does not decide which one
+ * happened, only records what the last read actually showed.
+ *
+ * Deliberately narrow, unlike `terminalVerdict()`/`terminalOutcome()` above: does NOT re-derive
+ * `capBreached()` -- the caller already knows this draw classified as `running` before ever
+ * reaching this function, so re-testing that would be redundant, not confirmatory. Three fields:
+ * `status` (should read `"running"` for a draw that reached this path at all, but read off the
+ * raw object rather than assumed, in case a malformed intermediate state slips through);
+ * `historyEmpty`; `stateReadable`.
+ *
+ * `historyEmpty`, corrected (F-277, code-loop pass 2 review): `scripts/somi-loop.mjs` appends to
+ * `history` in exactly one place (`record-pass`, gated on `--verdict`), which fires only once a
+ * review pass has COMPLETED -- `init` writes `history: []` and nothing touches it before then. So
+ * `historyEmpty: true` means only "no pass has completed yet"; it does NOT separate a loop
+ * genuinely grinding through pass 1 (which leaves no trace in `history` until a verdict lands)
+ * from one that died moments after `init` -- both read identically. `fillArm()`'s own `elapsedMs`
+ * is the field that actually discriminates those two hypotheses; `historyEmpty` is corroborating
+ * context, not proof.
+ *
+ * `stateReadable` (F-279, code-loop pass 2 review): `true` when `loopStateJson` is itself a
+ * non-null object (however malformed its fields), `false` when it is not -- the distinction
+ * flattening to `{status, historyEmpty}` alone had cost, since a garbled-but-parsed object
+ * (`{status: 7, history: 'nope'}`) and no object at all (`null`) previously produced the
+ * byte-identical record. Does NOT further split "the state file was never written" from "it
+ * existed but its JSON failed to parse" -- `startDraw()`'s own `read()` already collapses those
+ * two into the same `null` before this function ever sees the result; widening that contract is a
+ * separate change. On `fillArm()`'s own call site today `stateReadable` reads `true` on every
+ * real censor record (`classifyDraw(null)` routes to `'malformed'`, not `'running'`, so a `null`
+ * read never reaches this function that way) -- this field is this function's own general,
+ * exported contract, not a claim about what today's one caller currently produces.
+ *
+ * FAILS SAFE like every extractor above: an absent, wrongly-typed, or unrecognised field reads
+ * `null` ("undetermined"), never coerced or defaulted -- an object is always returned (never a
+ * top-level `null`) because the caller only ever invokes this once a censoring event is already
+ * known to have occurred; only `status`/`historyEmpty` may independently be unrecoverable --
+ * `stateReadable` is always a determinate boolean.
+ *
+ * @param {*} loopStateJson  a parsed loop-state object (see `passesToApprove`'s param doc), or
+ *   whatever the last `read()` returned -- including `null` if the read itself failed.
+ * @returns {{status: string|null, historyEmpty: boolean|null, stateReadable: boolean}}
+ */
+export function censoredDrawSnapshot(loopStateJson) {
+  const stateReadable = loopStateJson !== null && typeof loopStateJson === 'object';
+  if (!stateReadable) return { status: null, historyEmpty: null, stateReadable };
+  const { status, history } = loopStateJson;
+  return {
+    status: typeof status === 'string' ? status : null,
+    historyEmpty: Array.isArray(history) ? history.length === 0 : null,
+    stateReadable,
   };
 }

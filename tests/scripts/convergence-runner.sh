@@ -350,6 +350,163 @@ rm -rf "$F267_C1_DIR"
 trap - EXIT
 rm -rf "$ROOT/tests/evals/results/$F267_LEGACY_SHA"
 
+# --- F-276: a censored draw retains a diagnostic record (elapsed wall-clock, wait attempts, ------
+# last-seen loop state) -- phase 4 iteration 4.4. 4.1's own first live batch showed three draws
+# read back as still-`running`; once the wait budget is exhausted, fillArm() previously discarded
+# the last-read state entirely -- no shard is written and the workDir is cleaned up, so "the loop
+# was genuinely slow" (cost-correlated, F-185) and "the subprocess died in thirty seconds"
+# (uncorrelated with cost) were indistinguishable from any retained artifact. censoredDrawSnapshot()
+# (lib/convergence.mjs) is the read side; fillArm()'s new `censor` field and writeCensorRecord()
+# (this module) are the write side. Does NOT change what counts as a usable draw or the censoring
+# policy itself (still exactly `waitAttempts > maxWaitAttempts`) -- only what gets recorded.
+MK_SEQ_DRAW='
+  function mkSeqDraw(seq) {
+    let i = 0;
+    return () => {
+      const states = seq[i++]; let idx = 0;
+      return { read: () => states[idx], retry: () => { idx = Math.min(idx + 1, states.length - 1); } };
+    };
+  }
+'
+
+# censoredDrawSnapshot() fails safe, same posture as terminalVerdict()/terminalOutcome() above --
+# always an object (the caller only calls this once a censoring event is already known to have
+# happened); status/historyEmpty independently null on an unrecognised shape, stateReadable always
+# a determinate boolean (F-279, code-loop pass 2 review).
+check "censoredDrawSnapshot(null) is {status:null,historyEmpty:null,stateReadable:false} (fails safe)" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot(null)));")" \
+  '{"status":null,"historyEmpty":null,"stateReadable":false}'
+check "censoredDrawSnapshot(undefined) is the same" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot(undefined)));")" \
+  '{"status":null,"historyEmpty":null,"stateReadable":false}'
+check "censoredDrawSnapshot(42) is the same (non-object input, not coerced)" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot(42)));")" \
+  '{"status":null,"historyEmpty":null,"stateReadable":false}'
+check "censoredDrawSnapshot({}) -- stateReadable true (it IS an object), status/historyEmpty still null (no fields to read)" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({})));")" \
+  '{"status":null,"historyEmpty":null,"stateReadable":true}'
+check "censoredDrawSnapshot({status:'running'}) reports the status; historyEmpty null (no history field to read)" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running'})));")" \
+  '{"status":"running","historyEmpty":null,"stateReadable":true}'
+check "censoredDrawSnapshot({status:'running',history:[]}) -- empty history means no pass has COMPLETED yet (scripts/somi-loop.mjs init's own pre-work state), NOT proof the loop died immediately -- a stalled pass 1 reads identically (F-277, code-loop pass 2 review)" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',history:[]})));")" \
+  '{"status":"running","historyEmpty":true,"stateReadable":true}'
+check "censoredDrawSnapshot({status:'running',history:[{pass:1}]}) -- non-empty history is the 'at least one pass completed' shape" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',history:[{pass:1}]})));")" \
+  '{"status":"running","historyEmpty":false,"stateReadable":true}'
+check "censoredDrawSnapshot: wrong-typed status/history are not coerced -- null, not passed through; stateReadable still true (an object WAS read, however malformed its fields)" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:7,history:'nope'})));")" \
+  '{"status":null,"historyEmpty":null,"stateReadable":true}'
+check "F-279: stateReadable now separates 'no readable state at all' (null) from 'state read but malformed' ({status:7,...}) -- previously both collapsed to the identical {status:null,historyEmpty:null} record" \
+  "$(lj "process.stdout.write(JSON.stringify([L.censoredDrawSnapshot(null).stateReadable, L.censoredDrawSnapshot({status:7,history:'nope'}).stateReadable]));")" \
+  '[false,true]'
+
+# fillArm(): the `censor` field on the wait-exhausted path. `now` is injectable (defaults to
+# Date.now) so elapsedMs is deterministic under test, the same seam newDraw/report/resume already
+# are.
+check "fillArm: wait-exhaustion returns a real censor record -- elapsedMs from the injected clock, waitAttempts the loop's own count, lastState from the last-read (still-running) state" \
+  "$(cj "$MK_SEQ_DRAW
+    let t = 1000;
+    const now = () => (t += 1000);
+    const seq = [[{status:'running'}, {status:'running'}, {status:'running'}]];
+    const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: 2, report: () => {}, now });
+    process.stdout.write(JSON.stringify(r.censor));
+  ")" '{"elapsedMs":1000,"waitAttempts":3,"lastState":{"status":"running","historyEmpty":null,"stateReadable":true}}'
+check "fillArm: censor.lastState.historyEmpty is true when the last-read state's history is empty (no pass has completed yet -- not proof nothing started; see censoredDrawSnapshot()'s docstring, F-277)" \
+  "$(cj "$MK_SEQ_DRAW
+    const seq = [[{status:'running',history:[]}]];
+    const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: 0, report: () => {} });
+    process.stdout.write(JSON.stringify(r.censor.lastState));
+  ")" '{"status":"running","historyEmpty":true,"stateReadable":true}'
+check "fillArm: elapsedMs includes the span newDraw() itself consumes before returning a handle, not just the retries after it (F-278, code-loop pass 2 review -- mkSeqDraw above can't pin this, since its newDraw() never calls now() and is instantaneous either way)" \
+  "$(cj "
+    let f278t = 0;
+    const f278NewDraw = () => { f278t += 60000; return { read: () => ({ status: 'running' }), retry: () => {}, cleanup: () => {} }; };
+    const r = M.fillArm(f278NewDraw, { n: 1, maxWaitAttempts: 0, report: () => {}, now: () => f278t });
+    process.stdout.write(String(r.censor.elapsedMs));
+  ")" "60000"
+check "fillArm: censor is null on the breach path (only the wait-exhausted path retains anything)" \
+  "$(cj "$MK_SEQ_DRAW
+    const r = M.fillArm(mkSeqDraw([[{status:'max-passes-exceeded',pass:6}]]), { n: 1, report: () => {} });
+    process.stdout.write(String(r.censor));
+  ")" "null"
+check "fillArm: censor is null on the done path" \
+  "$(cj "$MK_SEQ_DRAW
+    const r = M.fillArm(mkSeqDraw([[{status:'done',pass:2}]]), { n: 1, report: () => {} });
+    process.stdout.write(String(r.censor));
+  ")" "null"
+
+# writeCensorRecord()/censorRecordPath(): persisting the record, own namespace, self-healing slot.
+F276_SHA="f276censor$(date +%s)"
+censor_written=$(cj "
+  const fs = await import('node:fs');
+  const seq = M.writeCensorRecord('$F276_SHA', M.TASK_ID, { elapsedMs: 278000, waitAttempts: 3, lastState: { status: 'running', historyEmpty: true } });
+  const p = M.censorRecordPath('$F276_SHA', M.TASK_ID, seq);
+  const rec = JSON.parse(fs.readFileSync(p, 'utf8'));
+  process.stdout.write(JSON.stringify({ seq, sha: rec.sha, taskId: rec.taskId, schema: rec.schema, censor: rec.censor }));
+")
+check "writeCensorRecord() persists the record at seq 0 with the module's schema, sha and taskId alongside it" \
+  "$censor_written" \
+  "{\"seq\":0,\"sha\":\"$F276_SHA\",\"taskId\":\"loop-code-loop\",\"schema\":1,\"censor\":{\"elapsedMs\":278000,\"waitAttempts\":3,\"lastState\":{\"status\":\"running\",\"historyEmpty\":true}}}"
+check "writeCensorRecord() called again for the same sha self-heals to the NEXT free slot (seq 1), never overwriting the first" \
+  "$(cj "
+    const seq = M.writeCensorRecord('$F276_SHA', M.TASK_ID, { elapsedMs: 1000, waitAttempts: 1, lastState: { status: 'running', historyEmpty: false } });
+    process.stdout.write(String(seq));
+  ")" "1"
+check "a censored draw's record lives OUTSIDE the numbered shard namespace -- resumeArm() sees no usable draw from it (F-276 does not change what counts as usable, constraint 1)" \
+  "$(cj "process.stdout.write(JSON.stringify(M.resumeArm('$F276_SHA', M.TASK_ID, 15).resume));")" \
+  "[]"
+rm -rf "$ROOT/tests/evals/results/$F276_SHA"
+
+# The exact assembly drawArmForSha() uses (fillArm's censor return, persisted via
+# writeCensorRecord()) -- without a live /code-loop invocation, no quota spent.
+F276_WIRING_SHA="f276wiring$(date +%s)"
+wiring_censor=$(cj "
+  const fs = await import('node:fs');
+  const makeDraw = () => ({ read: () => ({ status: 'running', history: [] }), retry() {}, cleanup() {} });
+  const occ = new Set();
+  const { newDraw, onDraw } = M.makeShardWriter(makeDraw, '$F276_WIRING_SHA', M.TASK_ID, 1, occ, 0);
+  const r = M.fillArm(newDraw, { n: 1, maxWaitAttempts: 1, onDraw, report: () => {} });
+  const seq = r.censor ? M.writeCensorRecord('$F276_WIRING_SHA', M.TASK_ID, r.censor) : null;
+  const rec = seq === null ? null : JSON.parse(fs.readFileSync(M.censorRecordPath('$F276_WIRING_SHA', M.TASK_ID, seq), 'utf8'));
+  process.stdout.write(JSON.stringify({ arm: r.arm, waitExhausted: r.waitExhausted, persisted: rec ? rec.censor.lastState : null }));
+")
+check "the exact assembly drawArmForSha() uses (fillArm's censor return + writeCensorRecord) persists a censored draw's evidence, without a live draw" \
+  "$wiring_censor" '{"arm":[],"waitExhausted":true,"persisted":{"status":"running","historyEmpty":true,"stateReadable":true}}'
+rm -rf "$ROOT/tests/evals/results/$F276_WIRING_SHA"
+
+# Mutation: prove the retained record can actually fail to be retained. Staged on a scratch copy,
+# never the tracked file.
+F276_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F276_MUT_DIR"' EXIT
+F276_MUT="$F276_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F276_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F276_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F276_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F276_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const censor = { elapsedMs: now() - drawStartedAt, waitAttempts, lastState: censoredDrawSnapshot(state) };';
+  const TO = 'const censor = null; // MUTANT (F-276): the censored draw retains nothing, same as before this pass';
+  if (!s.includes(FROM)) throw new Error('F-276 mutant pattern not found in convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_censor=$(node --input-type=module -e "
+  const M = await import('$F276_MUT');
+  $MK_SEQ_DRAW
+  const r = M.fillArm(mkSeqDraw([[{status:'running'}, {status:'running'}, {status:'running'}]]), { n: 1, maxWaitAttempts: 2, report: () => {} });
+  process.stdout.write(String(r.censor));
+")
+check "mutant (F-276: censor forced to null) reproduces the exact pre-fix gap -- a censored draw retains nothing, catching the regression the tests above exist for" \
+  "$mutant_censor" "null"
+pristine_censor=$(cj "$MK_SEQ_DRAW
+  const r = M.fillArm(mkSeqDraw([[{status:'running'}, {status:'running'}, {status:'running'}]]), { n: 1, maxWaitAttempts: 2, report: () => {} });
+  process.stdout.write(String(r.censor !== null));
+")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still retains a real censor record" \
+  "$pristine_censor" "true"
+rm -rf "$F276_MUT_DIR"
+trap - EXIT
+
 # --- argument parsing ----------------------------------------------------------------------------
 help_out=$(node "$CVD" --help)
 help_flags_present=true
@@ -362,6 +519,14 @@ check "--runs 0 is rejected (must be a positive integer)" "$(node "$CVD" --dry-r
 check "--runs -1 is rejected" "$(node "$CVD" --dry-run --runs -1 >/dev/null 2>&1; echo $?)" "1"
 for flag in --source --fixture --runs --model --merge --certify; do check "$flag with no operand is rejected, not silently defaulted (F-252/F-253)" "$(node "$CVD" "$flag" >/dev/null 2>&1; echo $?)" "1"; done
 for flag in --merge --certify; do check "$flag with an empty operand is rejected (F-259)" "$(node "$CVD" "$flag" "" >/dev/null 2>&1; echo $?)" "1"; done
+
+# --- F-263: --fixture/--source/--model have exactly ONE defender (val()'s own `v === ''` clause),
+# no downstream validator the way --merge/--certify have (val() + the `!== null` guard +
+# validateSha()) -- so this case, unlike F-259's, had no committed test at all before this pass.
+for flag in --source --fixture --model; do check "$flag with an empty operand is rejected (F-261)" "$(node "$CVD" --dry-run "$flag" "" >/dev/null 2>&1; echo $?)" "1"; done
+check "--fixture -h is rejected as a flag-shaped operand, not silently accepted as a literal value (F-262)" \
+  "$(node "$CVD" --dry-run --fixture -h >/dev/null 2>&1; echo $?)" "1"
+
 stub_bin=$(mktemp -d)
 stub_sentinel="$stub_bin/touched"
 printf '#!/bin/sh\n%s "%s"\nexit 1\n' "$(command -v touch)" "$stub_sentinel" > "$stub_bin/claude"
@@ -371,6 +536,31 @@ check "F-259: --merge with an empty operand no longer reaches a stub claude on P
 PATH="$stub_bin" claude >/dev/null 2>&1
 check "positive control: same stub still reachable (F-259 re-confirmation)" "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "TOUCHED"
 rm -rf "$stub_bin"
+
+# Mutation: prove the F-261 cases above actually depend on val()'s `v === ''` clause -- the
+# reviewer's own measurement was that today they would NOT redden if it were removed. Staged on a
+# scratch copy, never the tracked file.
+F263_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F263_MUT_DIR"' EXIT
+F263_MUT="$F263_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F263_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F263_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F263_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F263_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = \"v === undefined || v === '' || /^-/.test(v)\";
+  const TO = \"v === undefined || /^-/.test(v)\"; // MUTANT (F-263): empty-string operand no longer rejected
+  if (!s.includes(FROM)) throw new Error('F-263 mutant pattern not found in convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_exit=$(node "$F263_MUT" --dry-run --source "" >/dev/null 2>&1; echo $?)
+check "mutant (F-263: val()'s v === '' clause removed) lets --source \"\" through -- the F-261 case above would now go GREEN on a broken guard, confirming it currently depends on this exact clause" \
+  "$mutant_exit" "0"
+pristine_exit=$(node "$CVD" --dry-run --source "" >/dev/null 2>&1; echo $?)
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still rejects --source \"\"" \
+  "$pristine_exit" "1"
+rm -rf "$F263_MUT_DIR"
+trap - EXIT
 
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
