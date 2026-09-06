@@ -8,6 +8,13 @@
 # live /code-loop draw. eval-runner.sh already covers 3.1-3.3's non-CLI logic (the extractor, the
 # rank test, classifyDraw/fillArm/compareArms/the shard/resume layer); this file is scoped to what
 # 3.4 alone adds, so the two stay disjoint rather than duplicating each other.
+#
+# Exception (phase 4, iteration 4.1 pass 2, F-267): terminalVerdict()/writeNextShard()'s new
+# `verdict` param/makeShardWriter() are shard/resume-layer additions, eval-runner.sh's stated home
+# -- pinned here instead because this pass's own scope is exactly these three files, not
+# eval-runner.sh. Still fully hermetic (synthetic loop-state objects and scratch shas only, per
+# this pass's own instruction not to spend a live draw), so it belongs with everything else in
+# this file that shares that property, disjointness convention notwithstanding.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -172,6 +179,176 @@ check "--merge on a sha with zero shards on disk reports 0/N, mean/sd n/a rather
 
 check "--merge with an invalid sha is rejected before anything is read (F-251, at the CLI itself)" \
   "$(node "$CVD" --merge '../../../etc/passwd' >/dev/null 2>&1; echo $?)" "1"
+
+# --- F-267: shards carry the loop's terminal verdict alongside its pass count -------------------
+# Phase 4 iteration 4.1's first live batch (diary.md, 2026-09-05) showed task02-code sitting at
+# the pass-count floor (arm [1,1,1], mean 1.0, sd 0.0) with no retained artifact able to say WHY
+# -- the shard carried only `pass`, and cleanup() (F-226) correctly destroys the workDir the
+# instant a draw completes. terminalVerdict() (lib/convergence.mjs) is the read side;
+# writeNextShard()'s new `verdict` param and makeShardWriter() (this module) are the write side
+# that threads it into the shard.
+LCONV=tests/evals/lib/convergence.mjs
+lj() { node --input-type=module -e "const L = await import('$ROOT/$LCONV'); $1" 2>&1; }
+
+# terminalVerdict() fails safe, same posture as passesToApprove()/capBreached() -- those two's own
+# extractor-level tests live in eval-runner.sh's "3.1" section; terminalVerdict() is pinned here
+# instead per this file's own F-267 exception above.
+check "terminalVerdict(null) is null (fails safe)" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict(null)));")" "null"
+check "terminalVerdict(undefined) is null" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict(undefined)));")" "null"
+check "terminalVerdict(42) is null (non-object input, not coerced)" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict(42)));")" "null"
+check "terminalVerdict({}) is null (no history field at all -- the three real F-266 shards' own shape, pre-F-267)" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict({})));")" "null"
+check "terminalVerdict({history:[]}) is null (empty history)" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict({history:[]})));")" "null"
+check "terminalVerdict({history:'nope'}) is null (history not an array, not coerced)" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict({history:'nope'})));")" "null"
+check "terminalVerdict({history:[{pass:1}]}) is null (entry present, no verdict field)" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict({history:[{pass:1}]})));")" "null"
+check "terminalVerdict({history:[{verdict:7}]}) is null (verdict not a string, not coerced)" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict({history:[{verdict:7}]})));")" "null"
+check "terminalVerdict on a single-pass history returns that pass's verdict" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict({history:[{pass:1,verdict:'approve'}]})));")" "approve"
+check "terminalVerdict on a two-pass history returns the LAST entry's verdict, not the first -- 'terminal', not 'initial'" \
+  "$(lj "process.stdout.write(String(L.terminalVerdict({history:[{pass:1,verdict:'request-changes'},{pass:2,verdict:'approve'}]})));")" "approve"
+
+# Mutation: prove the "LAST, not first" assertion above can actually fail. Staged on a scratch
+# copy (mktemp -d), never the tracked file.
+F267_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F267_MUT_DIR"' EXIT
+F267_MUT="$F267_MUT_DIR/convergence.mjs"
+cp "$ROOT/$LCONV" "$F267_MUT"
+node -e "
+  const fs = require('fs'); const p = '$F267_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const last = history[history.length - 1];';
+  const TO = 'const last = history[0]; // MUTANT (F-267): reads the FIRST pass, not the terminal one';
+  if (!s.includes(FROM)) throw new Error('F-267 mutant pattern not found in lib/convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_verdict=$(node --input-type=module -e "
+  const L = await import('$F267_MUT');
+  process.stdout.write(String(L.terminalVerdict({history:[{pass:1,verdict:'request-changes'},{pass:2,verdict:'approve'}]})));
+")
+check "mutant (F-267: terminalVerdict reads history[0]) returns the FIRST verdict ('request-changes'), catching the exact regression the 'LAST, not first' test above exists for" \
+  "$mutant_verdict" "request-changes"
+pristine_verdict=$(lj "process.stdout.write(String(L.terminalVerdict({history:[{pass:1,verdict:'request-changes'},{pass:2,verdict:'approve'}]})));")
+check "pristine lib/convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still returns the terminal verdict ('approve')" \
+  "$pristine_verdict" "approve"
+rm -rf "$F267_MUT_DIR"
+trap - EXIT
+
+# --- F-268: terminalVerdict() alone can't tell a real coder/reviewer round trip from a loop that
+# approved an untouched tree ({pass:1, verdict:'approve'} is exactly what a do-nothing loop would
+# also write) -- terminalOutcome() widens the extraction to the whole terminal entry. Same
+# fail-safe posture, each field independently null -- a missing count reads as "unknown", not 0.
+check "terminalOutcome(null) is null (fails safe)" \
+  "$(lj "process.stdout.write(String(L.terminalOutcome(null)));")" "null"
+check "terminalOutcome({}) is null (no history -- the three real F-266 shards' own shape)" \
+  "$(lj "process.stdout.write(String(L.terminalOutcome({})));")" "null"
+check "terminalOutcome({history:[]}) is null (empty history)" \
+  "$(lj "process.stdout.write(String(L.terminalOutcome({history:[]})));")" "null"
+check "terminalOutcome extracts all four fields from the TERMINAL (not first) entry" \
+  "$(lj "process.stdout.write(JSON.stringify(L.terminalOutcome({history:[{pass:1,verdict:'request-changes',blockers:2,majors:1,diff_lines:40},{pass:2,verdict:'approve',blockers:0,majors:0,diff_lines:58}]})));")" \
+  '{"verdict":"approve","blockers":0,"majors":0,"diffLines":58}'
+check "terminalOutcome: entry missing blockers/majors/diff_lines -- each independently null, not defaulted to 0" \
+  "$(lj "process.stdout.write(JSON.stringify(L.terminalOutcome({history:[{verdict:'approve'}]})));")" \
+  '{"verdict":"approve","blockers":null,"majors":null,"diffLines":null}'
+check "terminalOutcome: wrong-typed/negative counts are not coerced -- null, not passed through" \
+  "$(lj "process.stdout.write(JSON.stringify(L.terminalOutcome({history:[{verdict:'approve',blockers:'2',majors:-1,diff_lines:1.5}]})));")" \
+  '{"verdict":"approve","blockers":null,"majors":null,"diffLines":null}'
+
+# --- writeNextShard(): the new `verdict` parameter, and backward compatibility for every
+# pre-F-267 6-arg call site (this file's own MERGE_SHA writes above, eval-runner.sh's F-248 tests) -
+F267_SHA1="f267verdict$(date +%s)"
+verdict_written=$(cj "
+  const fs = await import('node:fs');
+  const occ = new Set();
+  const idx = M.writeNextShard('$F267_SHA1', M.TASK_ID, 5, occ, 0, 2, 'approve');
+  const rec = JSON.parse(fs.readFileSync(M.loopShardPath('$F267_SHA1', M.TASK_ID, idx), 'utf8'));
+  process.stdout.write(JSON.stringify(rec.run));
+")
+check "writeNextShard(..., verdict) writes it into run.verdict (run.terminal an explicit null, F-268, when not passed)" \
+  "$verdict_written" '{"index":0,"pass":2,"verdict":"approve","terminal":null}'
+rm -rf "$ROOT/tests/evals/results/$F267_SHA1"
+
+F267_SHA2="f267noverdict$(date +%s)"
+verdict_defaulted=$(cj "
+  const fs = await import('node:fs');
+  const occ = new Set();
+  const idx = M.writeNextShard('$F267_SHA2', M.TASK_ID, 5, occ, 0, 3);
+  const rec = JSON.parse(fs.readFileSync(M.loopShardPath('$F267_SHA2', M.TASK_ID, idx), 'utf8'));
+  process.stdout.write(JSON.stringify(rec.run) + '|' + ('verdict' in rec.run) + '|' + ('terminal' in rec.run));
+")
+check "writeNextShard called with NO verdict/terminal arg (every pre-F-267 call site's own shape) still writes both as explicit null keys, not omitted ones" \
+  "$verdict_defaulted" '{"index":0,"pass":3,"verdict":null,"terminal":null}|true|true'
+rm -rf "$ROOT/tests/evals/results/$F267_SHA2"
+
+# --- makeShardWriter(): the real onDraw wiring drawArmForSha() uses, driven through the REAL
+# fillArm() with a synthetic (non-live) draw handle -- no /code-loop invocation, no quota spent ---
+F267_SHA3="f267wiring$(date +%s)"
+wiring_check=$(cj "
+  const fs = await import('node:fs');
+  const state = { status: 'done', pass: 2, history: [{ pass: 1, verdict: 'request-changes' }, { pass: 2, verdict: 'approve', blockers: 0, majors: 0, diff_lines: 58 }] };
+  const makeDraw = () => ({ read: () => state, retry() {}, cleanup() {} });
+  const occ = new Set();
+  const { newDraw, onDraw } = M.makeShardWriter(makeDraw, '$F267_SHA3', M.TASK_ID, 1, occ, 0);
+  const r = M.fillArm(newDraw, { n: 1, onDraw });
+  const rec = JSON.parse(fs.readFileSync(M.loopShardPath('$F267_SHA3', M.TASK_ID, 0), 'utf8'));
+  process.stdout.write(JSON.stringify({ arm: r.arm, verdict: rec.run.verdict, terminal: rec.run.terminal }));
+")
+check "makeShardWriter()'s onDraw, driven for real through fillArm(), writes the TERMINAL verdict AND the widened terminal object (F-268) from a two-entry history -- the exact assembly drawArmForSha() uses, without a live draw" \
+  "$wiring_check" '{"arm":[2],"verdict":"approve","terminal":{"verdict":"approve","blockers":0,"majors":0,"diffLines":58}}'
+rm -rf "$ROOT/tests/evals/results/$F267_SHA3"
+
+# --- constraint 1: a shard with NO run.verdict key at all (the real, pre-fix shape -- see
+# diary.md, 2026-09-05; independently checked by hand against the actual quota-paid shards at
+# tests/evals/results/39411eb.../convergence/, gitignored and session-specific, so NOT reproduced
+# here as a committed dependency -- see the coder's own report) must still fold as a usable draw:
+# never discarded, never an error. Staged as a synthetic legacy shard so this guard stays hermetic
+# and portable across clones/CI that don't carry that local, gitignored quota-paid data.
+F267_LEGACY_SHA="f267legacy$(date +%s)"
+cj "
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const p = M.loopShardPath('$F267_LEGACY_SHA', M.TASK_ID, 0);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify({ sha: '$F267_LEGACY_SHA', taskId: M.TASK_ID, schema: M.LOOP_SCHEMA_VERSION, run: { index: 0, pass: 1 } }) + '\n');
+" >/dev/null
+legacy_resume() { cj "process.stdout.write(JSON.stringify(M.resumeArm('$F267_LEGACY_SHA', M.TASK_ID, 1).resume));"; }
+check "F-267/constraint 1: a shard with NO run.verdict key at all (the real, pre-fix shape) still folds as a usable draw" \
+  "$(legacy_resume)" "[1]"
+
+# Mutation: prove the guard above can actually fail. readLoopShard()'s schema gate is mutated to
+# ALSO require a verdict -- the exact shape of regression constraint 1 forbids -- staged on a
+# scratch copy, read against the SAME on-disk legacy shard (read-only; confirmed untouched by the
+# final re-check below).
+F267_C1_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F267_C1_DIR"' EXIT
+F267_C1="$F267_C1_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F267_C1"
+ln -s "$ROOT/tests/evals/lib" "$F267_C1_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F267_C1_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F267_C1'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'return rec?.schema === LOOP_SCHEMA_VERSION ? rec : null;';
+  const TO = 'return rec?.schema === LOOP_SCHEMA_VERSION \&\& rec.run?.verdict != null ? rec : null; // MUTANT (F-267): wrongly requires a verdict to fold';
+  if (!s.includes(FROM)) throw new Error('F-267 constraint-1 mutant pattern not found in convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_resume=$(node --input-type=module -e "
+  const M = await import('$F267_C1');
+  process.stdout.write(JSON.stringify(M.resumeArm('$F267_LEGACY_SHA', M.TASK_ID, 1).resume));
+")
+check "mutant (F-267: readLoopShard wrongly requires a verdict) discards the legacy shard -- [] not [1], catching the exact regression constraint 1 forbids" \
+  "$mutant_resume" "[]"
+pristine_resume=$(legacy_resume)
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still folds the legacy shard, [1]" \
+  "$pristine_resume" "[1]"
+rm -rf "$F267_C1_DIR"
+trap - EXIT
+rm -rf "$ROOT/tests/evals/results/$F267_LEGACY_SHA"
 
 # --- argument parsing ----------------------------------------------------------------------------
 help_out=$(node "$CVD" --help)

@@ -40,7 +40,7 @@ import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { installSomi, invokeCommand, preflight } from './lib/install.mjs';
-import { capBreached, passesToApprove } from './lib/convergence.mjs';
+import { capBreached, passesToApprove, terminalVerdict, terminalOutcome } from './lib/convergence.mjs';
 import { mannWhitneyU, DEFAULT_RESAMPLES } from './lib/mann-whitney.mjs';
 import { shardDir, resolveSource, fixtureFor } from './run.mjs';
 
@@ -85,6 +85,26 @@ export const LOOP_ITERATION = '1.1';
 // namespace-split option the review offered (over: stamp SCHEMA_VERSION, teach mergeShards() to
 // skip unrecognised taskIds, route every read through readShard()) -- chosen because it removes
 // the collision rather than adding a second component that has to know about it.
+//
+// Stays 1, not bumped, when `run.verdict` was added (phase 4, F-267) and widened to `run.terminal`
+// (F-268): both are backward-compatible fields, not shape changes -- no reader keys off either,
+// and the three real shards on disk before either field existed remain valid records of the same
+// schema.
+//
+// The trade, named honestly rather than as "buys nothing" (F-269, code-loop pass 3 review): a
+// bump PAIRED WITH a widened read gate WOULD buy one real thing -- unambiguous shape
+// disambiguation via the version field itself. Not bumping trades that for an equally reliable
+// disambiguator, key presence (`'verdict' in rec.run`), matching `run.mjs`'s own "absent, and
+// recorded" convention, with none of a bump's risk: `readLoopShard()`'s schema gate below is a
+// strict `===` match, so a bump the read path didn't also widen in lockstep would make the three
+// quota-paid shards unreadable -- the exact outcome constraint 1 forbids.
+//
+// Reader contract (4.2's report is the first reader of either field): THREE states, not two --
+// (1) key ABSENT: pre-F-267 legacy shape, exactly the three quota-paid shards F-266 concerns,
+// never a malformed shard; (2) `null`: the key is present but undetermined at write time, still
+// not a verdict; (3) PRESENT: a real value from a completed terminal entry. Collapsing (1)/(2) is
+// wrong -- (1) is silence from before this diagnostic existed, (2) is it actively reporting it
+// could not determine an answer.
 export const LOOP_SCHEMA_VERSION = 1;
 
 function loopShardDir(sha) {
@@ -420,15 +440,76 @@ export function startDraw(sourceDir, fixtureDir, { model = null } = {}) {
 // code-loop pass 2 review: nextIndex++ re-collided with resumeArm's own occupied set one call
 // later). Exported, not inlined into drawArmForSha, so this write path is testable quota-free;
 // MUTATES `occupied` in place, so a caller must thread ONE Set through a whole arm.
-export function writeNextShard(sha, taskId, n, occupied, fromIndex, pass) {
+//
+// `verdict` (F-267, phase 4 iteration 4.1) defaults to `null`, not left `undefined` -- every
+// existing call site (this module's own tests, `drawArmForSha` before this iteration) passes only
+// six positional args, and `JSON.stringify` DROPS an `undefined` property outright, which would
+// make old and new shards differ in which KEYS are present rather than merely in the verdict's
+// value. Defaulting to `null` keeps `run.verdict` an always-present key -- explicit "undetermined"
+// recorded on disk, the same "absent, and recorded" convention `run.mjs` already uses for its own
+// optional fields (`error`, `transcript`, `expiryGuard`, ...), not a key a future reader has to
+// remember to check for.
+//
+// `terminal` (F-268) widens `verdict` to the whole entry `terminalOutcome()` returns, persisted as
+// `run.terminal` alongside `run.pass`/`run.verdict` -- `run.verdict` stays too, since every value
+// `run.terminal.verdict` can express it already does, harmlessly (same read, so they can't
+// disagree). Same "always an explicit key" reasoning as `verdict` above; defaults to `null`.
+export function writeNextShard(sha, taskId, n, occupied, fromIndex, pass, verdict = null, terminal = null) {
   let idx = fromIndex;
   while (occupied.has(idx)) idx++;
   if (idx >= n) throw new Error(`convergence: no free shard slot below ${n} for ${sha}`);
   occupied.add(idx);
   const p = loopShardPath(sha, taskId, idx);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, run: { index: idx, pass } }, null, 2) + '\n');
+  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, run: { index: idx, pass, verdict, terminal } }, null, 2) + '\n');
   return idx;
+}
+
+/**
+ * Build the `{newDraw, onDraw}` pair `drawArmForSha()` threads into `fillArm()` (F-267, phase 4
+ * iteration 4.1 pass 2 -- closing the "a floor result can't be diagnosed from any retained
+ * artifact" gap). `newDraw` wraps the underlying draw factory and remembers the most recently
+ * created handle in a closure; `onDraw` re-reads that SAME handle -- `startDraw()`'s `read()` has
+ * no side effect, and `fillArm()` calls `onDraw` strictly before its own cleanup, so the state
+ * file is still on disk -- to extract `terminalVerdict()` AND `terminalOutcome()` (F-268, pass 3:
+ * a verdict string alone can't tell a real round trip from a do-nothing approval -- see
+ * `terminalOutcome()`'s own docstring) independently of `classifyDraw()`'s return value, threading
+ * both into the same `writeNextShard()` call that already persists `pass`. Only one handle is ever
+ * "current" at a time: `fillArm()` fills one arm strictly sequentially (one `newDraw()` call per
+ * slot attempt, no concurrency), so the closure can never point at a stale handle.
+ *
+ * The re-read is guarded (F-270, pass 3): `onDraw` sits in the same post-collection position
+ * `safeCleanup()` exists to protect, which swallows by design (F-226: "never let a cleanup FAILURE
+ * lose an arm already collected"). A throwing `read()` isn't reachable through `startDraw()`
+ * today, but `makeShardWriter()` takes an arbitrary `makeDraw` -- a thrown re-read now degrades the
+ * shard's terminal fields to `null` instead of losing the arm.
+ *
+ * Exported so this assembly is testable against a synthetic draw factory and the REAL
+ * `writeNextShard()`/`terminalVerdict()`/`terminalOutcome()` -- without a live `/code-loop`
+ * invocation and without touching `fillArm()` itself, which stays exactly as 3.3a's points 4/5 and
+ * 3.3c pass 2's F-226/F-232/F-248 left it. `drawArmForSha()` below is now a thin assembly of
+ * already-tested pieces.
+ *
+ * @param {() => {read: () => *, retry: () => void, cleanup?: () => void}} makeDraw  the underlying
+ *   draw factory (`() => startDraw(...)` in `drawArmForSha()`; a synthetic stand-in in tests).
+ * @param {string} sha
+ * @param {string} taskId
+ * @param {number} n
+ * @param {Set<number>} occupied  mutated in place by `writeNextShard()`, same contract as there.
+ * @param {number} startIndex
+ * @returns {{newDraw: () => *, onDraw: (pass: number) => void}}
+ */
+export function makeShardWriter(makeDraw, sha, taskId, n, occupied, startIndex) {
+  let current = null;
+  let nextIndex = startIndex;
+  return {
+    newDraw() { current = makeDraw(); return current; },
+    onDraw(pass) {
+      let state;
+      try { state = current.read(); } catch { state = null; }
+      nextIndex = writeNextShard(sha, taskId, n, occupied, nextIndex, pass, terminalVerdict(state), terminalOutcome(state)) + 1;
+    },
+  };
 }
 
 /**
@@ -448,13 +529,8 @@ export function drawArmForSha(sourceDir, fixtureDir, sha, opts = {}) {
   if (!pf.ready) throw new Error(`convergence: not ready to draw -- ${pf.problems.join('; ')}`);
   const n = opts.n ?? N_PER_ARM;
   const { resume, nextIndex: startIndex, occupied } = resumeArm(sha, TASK_ID, n);
-  let nextIndex = startIndex;
-  return fillArm(() => startDraw(sourceDir, fixtureDir, opts), {
-    ...opts,
-    n,
-    resume,
-    onDraw(pass) { nextIndex = writeNextShard(sha, TASK_ID, n, occupied, nextIndex, pass) + 1; },
-  });
+  const { newDraw, onDraw } = makeShardWriter(() => startDraw(sourceDir, fixtureDir, opts), sha, TASK_ID, n, occupied, startIndex);
+  return fillArm(newDraw, { ...opts, n, resume, onDraw });
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -1,12 +1,23 @@
 #!/usr/bin/env node
 // Reads /code-loop's loop-state JSON (`.somi/somi-state/loop/<slug>.<iteration>.json`) for the
-// convergence gate (phase 3, D1-D5, R3). Two independent extractions -- 3.2's Mann-Whitney code
-// calls neither of them, and neither calls the other.
+// convergence gate (phase 3, D1-D5, R3). Four independent extractions -- 3.2's Mann-Whitney code
+// calls none of them, and no two of them call each other.
 //
-// FAILS SAFE. Both exports return `null` on a shape they don't recognise, never a guessed boolean
-// or number -- "a parser that guesses `false` fails a conforming run" is this corpus's own
-// repeated lesson (`lib/reproduce.mjs`, `lib/boundary.mjs`'s `slug` fallback). A `null` here means
-// "the caller must decide", never "no".
+// FAILS SAFE. All four exports return `null` on a shape they don't recognise, never a guessed
+// boolean, number, or string -- "a parser that guesses `false` fails a conforming run" is this
+// corpus's own repeated lesson (`lib/reproduce.mjs`, `lib/boundary.mjs`'s `slug` fallback). A
+// `null` here means "the caller must decide", never "no".
+//
+// `terminalVerdict()` added phase 4, iteration 4.1 (F-267): the first live draws showed
+// `task02-code` sitting at the pass-count floor (arm [1,1,1], mean 1.0, sd 0.0) with no retained
+// artifact able to say WHY -- `run.mjs`'s shard carried only `pass`, and `cleanup()` (F-226)
+// correctly destroys the workDir the instant a draw completes. This extractor is the fix's read
+// side; `tests/evals/convergence.mjs`'s `writeNextShard()`/`makeShardWriter()` are the write side
+// that threads its result into the shard alongside `pass`.
+//
+// `terminalOutcome()` added phase 4, iteration 4.1 pass 3 (F-268): `terminalVerdict()` alone
+// can't distinguish a real coder/reviewer round trip from a loop that approved an untouched tree
+// -- see its own docstring below.
 
 /**
  * Statuses `commands/code-loop.md` documents as terminal cap-breach outcomes -- a breach fails the
@@ -91,4 +102,67 @@ export function capBreached(loopStateJson) {
   // and never legitimately carries `stopped-`, so `stopped-done` must stay null, not fold in here.
   if (status === 'done') return false;
   return null;
+}
+
+/**
+ * Terminal verdict for one loop draw -- diagnostic only (F-267), never a gating input. Per
+ * `commands/code-loop.md`/`scripts/somi-loop.mjs record-pass --verdict`, the state file's
+ * `history[]` is an ordered array of per-pass `{pass, verdict, ...}` entries; the loop's terminal
+ * verdict is the LAST one, the same way `passesToApprove()`'s `pass` is the top-level field D10
+ * already established as the single scalar this design's whole apparatus assumes per draw.
+ *
+ * FAILS SAFE, same posture as `passesToApprove()`/`capBreached()` above, and for the same reason
+ * named directly in the constraint that motivated this export: the three shards phase 4 already
+ * paid ~23 minutes of real quota for were written before this field existed and carry no
+ * `run.verdict` at all -- an absent or unrecognised shape must read as `null` ("undetermined"),
+ * never coerced into a guessed string, and must never make an otherwise-usable draw look
+ * malformed. Nothing in this module (or its caller) treats a `null` verdict as disqualifying --
+ * that would silently re-introduce the exact defect this export exists to avoid.
+ *
+ * @param {*} loopStateJson  a parsed loop-state object (see `passesToApprove`'s param doc).
+ * @returns {string|null} the last `history[]` entry's `verdict`, or `null` on any unrecognised
+ *   shape -- no `history`, an empty or non-array `history`, or a last entry whose `verdict` isn't
+ *   a string.
+ */
+export function terminalVerdict(loopStateJson) {
+  if (loopStateJson === null || typeof loopStateJson !== 'object') return null;
+  const { history } = loopStateJson;
+  if (!Array.isArray(history) || history.length === 0) return null;
+  const last = history[history.length - 1];
+  if (last === null || typeof last !== 'object' || typeof last.verdict !== 'string') return null;
+  return last.verdict;
+}
+
+/**
+ * Whole terminal-entry evidence for one loop draw -- diagnostic only (F-268), never a gating
+ * input. Widens `terminalVerdict()`: `{pass: 1, verdict: "approve"}` is exactly what a loop that
+ * approved an untouched tree would also write, so a verdict string alone can't tell a real
+ * coder/reviewer round trip apart from a null one. `record-pass` (`scripts/somi-loop.mjs`) builds
+ * each history entry as `{pass, verdict, blockers, majors, diff_lines, at}`; `diffLines` separates
+ * a real round trip from an empty-diff approval, `blockers`/`majors` a real review from an absent
+ * one.
+ *
+ * FAILS SAFE like every extractor above: `null` on any unrecognised shape, and EACH field
+ * independently `null` (never defaulted to 0/false) so an absent count can't read as "zero found".
+ * Duplicates the "last, not first" step rather than calling `terminalVerdict()` -- this module's
+ * own header states no two extractors call each other.
+ *
+ * @param {*} loopStateJson  a parsed loop-state object (see `passesToApprove`'s param doc).
+ * @returns {{verdict: string|null, blockers: number|null, majors: number|null, diffLines: number|null}|null}
+ *   `null` on any unrecognised shape; otherwise every field independently `null` unless present
+ *   and (for the three counts) a non-negative integer.
+ */
+export function terminalOutcome(loopStateJson) {
+  if (loopStateJson === null || typeof loopStateJson !== 'object') return null;
+  const { history } = loopStateJson;
+  if (!Array.isArray(history) || history.length === 0) return null;
+  const last = history[history.length - 1];
+  if (last === null || typeof last !== 'object') return null;
+  const count = (v) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null);
+  return {
+    verdict: typeof last.verdict === 'string' ? last.verdict : null,
+    blockers: count(last.blockers),
+    majors: count(last.majors),
+    diffLines: count(last.diff_lines),
+  };
 }
