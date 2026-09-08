@@ -51,6 +51,22 @@ export const CAP_BREACH_STATUSES = new Set([
 ]);
 
 /**
+ * Strip the documented `stopped-<reason>` finish-form prefix (F-235, `commands/code-loop.md:136`)
+ * down to the bare `<reason>`; returns `status` unchanged if it doesn't carry the prefix.
+ * Extracted (F-46, pass-2 review) so `capBreached()` and `breachReason()` share ONE copy of this
+ * one-line strip instead of two independent copies that could silently drift apart if F-235's
+ * convention ever widens (e.g. a second prefix added to one copy and not the other) -- both
+ * existing test loops (`eval-runner.sh`) only ever probe `$s` and `stopped-$s`, so a divergence
+ * here would read as a green suite reporting a WRONG reason, not a safe `null`.
+ *
+ * @param {string} status
+ * @returns {string}
+ */
+function stripStoppedPrefix(status) {
+  return status.startsWith('stopped-') ? status.slice('stopped-'.length) : status;
+}
+
+/**
  * Passes-to-approve for one loop draw -- the top-level `pass` field `context.md` §2.5 confirms is
  * exactly the value D2's own baseline arithmetic used (D10, which supersedes D4 on the same
  * conclusion).
@@ -104,12 +120,39 @@ export function capBreached(loopStateJson) {
   // real file before it was `done` or `running`, so nothing had ever exercised this branch on
   // real data). classifyDraw() (tests/evals/convergence.mjs) calls capBreached() directly and
   // inherited the same hole, which is why the fix lands here rather than in a second call site.
-  const reason = status.startsWith('stopped-') ? status.slice('stopped-'.length) : status;
+  const reason = stripStoppedPrefix(status);
   if (CAP_BREACH_STATUSES.has(reason)) return true;
   // Deliberately tests unstripped `status`, not `reason` (F-239): `done` is the SUCCESS terminal
   // and never legitimately carries `stopped-`, so `stopped-done` must stay null, not fold in here.
   if (status === 'done') return false;
   return null;
+}
+
+/**
+ * The SPECIFIC cap-breach reason for one loop draw (D6, phase 2 iteration 2.4 --
+ * `tests/evals/convergence.mjs`'s `fillArm()` breach branch, D5's own Blocker-2 gap: a breach was
+ * detectable via `capBreached()` but not diagnosable -- `max-passes-exceeded` and
+ * `diff-cap-exceeded` call for different corrections and previously read identically as
+ * `{breach: true}`).
+ *
+ * Gates on `capBreached(loopStateJson) === true` -- reusing that already-tested five-status
+ * membership check rather than re-matching `CAP_BREACH_STATUSES` a second time here -- then
+ * strips the same `stopped-<reason>` prefix `capBreached()` strips internally (F-235), via the
+ * shared `stripStoppedPrefix()` helper both functions call (F-46, pass-2 review: the original
+ * shipped shape duplicated this one-line strip in each function independently, which a later
+ * widening of F-235's convention could silently desync -- see that helper's own docstring).
+ *
+ * @param {*} loopStateJson  a parsed loop-state object (see `passesToApprove`'s param doc).
+ * @returns {string|null} the bare `<reason>` form (e.g. `'max-passes-exceeded'`), true for
+ *   BOTH the bare and the documented `stopped-<reason>` write form (F-235) -- identically to
+ *   `capBreached()`'s own true/false/null split, so a caller never needs to re-derive that gate;
+ *   `null` whenever `capBreached()` would return anything other than `true` (not a breach, or
+ *   undetermined) -- fails safe, same convention as every extractor above, never a guessed reason.
+ */
+export function breachReason(loopStateJson) {
+  if (capBreached(loopStateJson) !== true) return null;
+  const { status } = loopStateJson;
+  return stripStoppedPrefix(status);
 }
 
 /**

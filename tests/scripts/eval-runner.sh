@@ -2058,6 +2058,36 @@ done
 check "capBreached() on a synthetic file staged with status:\"max-passes-exceeded\" is true (phase 3.1's own acceptance wording)" \
   "$(cj "process.stdout.write(String(M.capBreached({status:'max-passes-exceeded'})));")" "true"
 
+# --- breachReason() (D6, phase 2 iteration 2.4): the SPECIFIC cap-breach reason, not merely the
+# boolean capBreached() already returns -- gates on capBreached() === true and strips the same
+# stopped-<reason> prefix (F-235) capBreached() already strips internally but never exposes.
+# multipass-fixture's own driver fix (tests/evals/convergence.mjs's fillArm()) threads THIS
+# function's return through the breach branch; these are the extractor's own direct tests, same
+# split as capBreached()/classifyDraw() above (the extractor is tested here; the driver call site
+# is tested in the 3.3 section below via fillArm() directly).
+check "breachReason(null) is null"                                     "$(cj "process.stdout.write(String(M.breachReason(null)));")" "null"
+check "breachReason({}) is null (no status field)"                     "$(cj "process.stdout.write(String(M.breachReason({})));")" "null"
+check "breachReason({status:123}) is null (not a string)"              "$(cj "process.stdout.write(String(M.breachReason({status:123})));")" "null"
+check "breachReason({status:'done'}) is null (the success terminal, not a breach)" \
+  "$(cj "process.stdout.write(String(M.breachReason({status:'done'})));")" "null"
+check "breachReason({status:'stopped-done'}) is null (F-239's own guard: never legitimately stopped-, and breachReason gates through capBreached() so it inherits that)" \
+  "$(cj "process.stdout.write(String(M.breachReason({status:'stopped-done'})));")" "null"
+check "breachReason({status:'running'}) is null (neither converged nor breached yet)" \
+  "$(cj "process.stdout.write(String(M.breachReason({status:'running'})));")" "null"
+check "breachReason({status:'pending'}) is null (undocumented status, not a near-miss guess)" \
+  "$(cj "process.stdout.write(String(M.breachReason({status:'pending'})));")" "null"
+# Every documented terminal cap-breach status, individually, in BOTH the bare and the documented
+# stopped-<reason> finish-path form (F-235) -- reuses BREACH_STATUSES (derived above, F-187/F-190,
+# from the module's own exported CAP_BREACH_STATUSES, not retyped), so all five are covered, not
+# just the two the phase file names by example, and a status added/renamed/dropped there is
+# reflected here without a second edit.
+for s in "${BREACH_STATUSES[@]}"; do
+  check "breachReason({status:'$s'}) is '$s' (bare form)" \
+    "$(cj "process.stdout.write(String(M.breachReason({status:'$s'})));")" "$s"
+  check "breachReason({status:'stopped-$s'}) is '$s', the BARE reason -- not the prefixed string (documented stopped-<reason> finish form, F-235)" \
+    "$(cj "process.stdout.write(String(M.breachReason({status:'stopped-$s'})));")" "$s"
+done
+
 # --- Against the real population context.md §2.2 independently computed -------------------------
 # .somi/ is gitignored (confirmed: .gitignore lines 3-4/8/34) -- .somi/somi-state/loop/ will not
 # exist on a fresh checkout or in a from-scratch CI clone, same precondition the D11 classification
@@ -2546,11 +2576,18 @@ libj() { node --input-type=module -e "const M = await import('$lib_conv_scratch/
 check "capBreached: the bare reason and commands/code-loop.md's documented stopped-<reason> form both return true (F-235)" \
   "$(libj "process.stdout.write(String(M.capBreached({status:'max-passes-exceeded'})) + '/' + String(M.capBreached({status:'stopped-max-passes-exceeded'})));")" \
   "true/true"
+# Anchor text updated (F-46, pass-2 review): the strip this mutant targets moved into its own
+# `stripStoppedPrefix()` helper, shared with breachReason() -- the anchor's own resilience covers a
+# change to lines AROUND it, not a change WITHIN the exact line it matches, so this needed a manual
+# update (the SAME "additive field collided with an existing anchor" shape D6's own Mutant B
+# already hit once in this iteration -- caught here by running the suite, not by inspection).
+# Occurrence-count guard adopted while already touching this anchor (F-49, pass-1 review).
 node -e "
   const fs = require('fs'); const p = '$lib_conv_scratch/convergence.mjs'; const s = fs.readFileSync(p, 'utf8');
-  const FROM = \"const reason = status.startsWith('stopped-') ? status.slice('stopped-'.length) : status;\n  if (CAP_BREACH_STATUSES.has(reason)) return true;\";
-  const TO = 'if (CAP_BREACH_STATUSES.has(status)) return true; // MUTANT (F-235): stopped- prefix stripping removed';
-  if (!s.includes(FROM)) throw new Error('F-235 mutant pattern not found in lib/convergence.mjs -- source moved, update this mutation');
+  const FROM = 'const reason = stripStoppedPrefix(status);\n  if (CAP_BREACH_STATUSES.has(reason)) return true;';
+  const TO = 'const reason = status; // MUTANT (F-235): stopped- prefix stripping removed\n  if (CAP_BREACH_STATUSES.has(reason)) return true;';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-235 mutant anchor occurs ' + count + ' time(s), not exactly 1 in lib/convergence.mjs -- source moved, update this mutation');
   fs.writeFileSync(p, s.replace(FROM, TO));
 "
 check "mutant (F-235: stopped- prefix stripping removed) is caught -- the documented stopped-<reason> form reads null again, the bare form is unaffected" \
@@ -2687,6 +2724,75 @@ check "fillArm: a breach fails the WHOLE arm outright, even after usable draws w
     const r = M.fillArm(mkSeqDraw(seq), { n: 2, report: () => {} });
     process.stdout.write(JSON.stringify({ breach: r.breach, arm: r.arm }));
   ")" '{"breach":true,"arm":[1]}'
+
+# --- D6 (phase 2, iteration 2.4): fillArm()'s breach branch threads the SPECIFIC cap-breach
+# reason, not just the boolean above -- before this iteration, all five CAP_BREACH_STATUSES read
+# identically as {breach:true}, undiagnosable at phase 3/4. The phase file's own literal acceptance
+# wording, restated as its own named check: a stubbed loop-state carrying the documented
+# stopped-<reason> finish form (F-235) surfaces the BARE reason on fillArm()'s return.
+check "fillArm: breachReason is threaded through on a breach -- stopped-max-passes-exceeded surfaces as the bare 'max-passes-exceeded' (D6, phase file's own acceptance wording)" \
+  "$(cvj "$CVD_HELPERS
+    const r = M.fillArm(mkSeqDraw([[{status:'stopped-max-passes-exceeded', pass:6}]]), { n: 1, report: () => {} });
+    process.stdout.write(String(r.breachReason));
+  ")" "max-passes-exceeded"
+check "fillArm: same, for diff-cap-exceeded (the phase file's second named example)" \
+  "$(cvj "$CVD_HELPERS
+    const r = M.fillArm(mkSeqDraw([[{status:'stopped-diff-cap-exceeded', pass:2}]]), { n: 1, report: () => {} });
+    process.stdout.write(String(r.breachReason));
+  ")" "diff-cap-exceeded"
+# All five, not just the two the phase file names by example (the gap this work item has spent all
+# week finding) -- both the bare and the documented stopped-<reason> form, driven end-to-end
+# through fillArm() itself, not just the lib extractor tested above. Reuses BREACH_STATUSES,
+# derived earlier from the module's own CAP_BREACH_STATUSES (F-187/F-190).
+for s in "${BREACH_STATUSES[@]}"; do
+  check "fillArm: breachReason is '$s' on a bare '$s' breach status" \
+    "$(cvj "$CVD_HELPERS
+      const r = M.fillArm(mkSeqDraw([[{status:'$s', pass:9}]]), { n: 1, report: () => {} });
+      process.stdout.write(String(r.breachReason));
+    ")" "$s"
+  check "fillArm: breachReason is the bare '$s' on a stopped-$s breach status (F-235 finish form)" \
+    "$(cvj "$CVD_HELPERS
+      const r = M.fillArm(mkSeqDraw([[{status:'stopped-$s', pass:9}]]), { n: 1, report: () => {} });
+      process.stdout.write(String(r.breachReason));
+    ")" "$s"
+done
+# Additive field, always present (same "absent vs null vs present" convention run.verdict/
+# run.terminal/fixture already established) -- breachReason reads null, not absent/undefined, on
+# every NON-breach terminal path, so a caller never needs an `in` check before reading it.
+check "fillArm: breachReason is null (not absent/undefined) on the wait-exhausted path -- additive field, always present" \
+  "$(cvj "$CVD_HELPERS
+    const seq = [[{status:'running'}, {status:'running'}], [{status:'done', pass:1}]];
+    const r = M.fillArm(mkSeqDraw(seq), { n: 2, maxWaitAttempts: 1, report: () => {} });
+    process.stdout.write(JSON.stringify({ has: 'breachReason' in r, value: r.breachReason }));
+  ")" '{"has":true,"value":null}'
+check "fillArm: breachReason is null on a clean, fully-filled successful arm" \
+  "$(cvj "$CVD_HELPERS
+    const r = M.fillArm(mkSeqDraw([[{status:'done', pass:2}]]), { n: 1, report: () => {} });
+    process.stdout.write(JSON.stringify({ has: 'breachReason' in r, value: r.breachReason }));
+  ")" '{"has":true,"value":null}'
+# --- Ordering: this handle's read() THROWS if ever called again after cleanup() -- if a future
+# edit recomputed breachReason from a fresh draw.read() post-cleanup instead of the already-in-
+# memory `state` local, THIS check fails loudly (an uncaught throw corrupts cvj's captured stdout,
+# which then fails to match), not silently. Detects exactly ONE failure mode -- a fresh read()
+# issued after cleanup() -- not a reorder that still uses the cached `state` local with no read()
+# call at all; nothing in fillArm() itself makes that second reorder impossible (F-45, pass-1
+# review: the prior name here claimed "by construction", a guarantee the mechanism doesn't
+# deliver). Mutant F below stages that exact reorder against a REAL startDraw()-shaped handle and
+# is the strongest available check for it short of a refactor.
+check "fillArm: breachReason is derived from the ALREADY-READ state, never a fresh read() issued after cleanup() -- the reason is never read from a spent handle: a post-cleanup read() throws" \
+  "$(cvj "
+    function mkOrderedBreachDraw(status) {
+      let cleaned = false;
+      const state = { status, pass: 4 };
+      return () => ({
+        read: () => { if (cleaned) throw new Error('read() called after cleanup() -- ordering violated'); return state; },
+        retry: () => {},
+        cleanup: () => { cleaned = true; },
+      });
+    }
+    const r = M.fillArm(mkOrderedBreachDraw('circuit-breaker'), { n: 1, report: () => {} });
+    process.stdout.write(String(r.breachReason));
+  ")" "circuit-breaker"
 
 # 3.3c: startDraw() is the FIRST real cleanup() a draw handle ever carries (mkSeqDraw above has
 # none, so safeCleanup()'s `draw.cleanup?.()` was a silent no-op in every fillArm test above --
@@ -2836,6 +2942,99 @@ check "writeNextShard: n=5, a corrupted-but-occupied shard 0 plus 1,2 valid -- t
     const fs = await import('node:fs'); const path = await import('node:path'); const sha = 'f248oob' + Date.now(); const occ = new Set([0, 1, 2]); let i = 3; i = M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7) + 1; i = M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7) + 1; let threw = false; try { M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7); } catch (e) { threw = /no free shard slot/.test(e.message); } const onDisk = fs.readdirSync(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))).filter(f => f.endsWith('.json')).length; fs.rmSync(path.dirname(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))), { recursive: true, force: true }); process.stdout.write(JSON.stringify([threw, onDisk]));
   ")" "[true,2]"
 
+# --- writeBreachRecord/breachRecordPath (D6, phase 2 iteration 2.4): persists fillArm()'s
+# breachReason alongside the fixture-namespaced shard directory, generalizing writeCensorRecord's
+# existing per-fixture convention -- exercised directly (no live draw, no quota), same idiom as
+# writeNextShard's own F-248 tests just above.
+check "breachRecordPath: a real fixtureId lands INSIDE that fixture's own shard directory, as a breach/ sibling to the numbered shards (not the flat legacy bucket)" \
+  "$(cvj "
+    const path = await import('node:path');
+    const sha = 'd6ns' + Date.now();
+    const bp = M.breachRecordPath(sha, M.TASK_ID, 0, 'fixtureA');
+    const shardDirForFixtureA = path.dirname(M.loopShardPath(sha, M.TASK_ID, 0, 'fixtureA'));
+    process.stdout.write(JSON.stringify({ underShardDir: path.dirname(bp) === path.join(shardDirForFixtureA, 'breach'), basename: path.basename(bp) }));
+  ")" '{"underShardDir":true,"basename":"loop-code-loop-000.json"}'
+check "writeBreachRecord: fixtureId='fixA' writes under fixA's own namespace, as a breach/ sibling to the numbered shards -- what THIS proves is the write side lands in the right place; no read path exists yet to close the F-284/F-285 write-moved/read-didn't class against (F-44 -- the class stays deferred, not closed, until phases/04 reads a breach record). Cleanup anchored on run.mjs's OWN shardDir(sha) (F-225's precedent below), not hand-counted dirname() calls -- a hand-counted depth is exactly the kind of arithmetic that is easy to get wrong without leaving evidence (verified against this test's own first draft, which did)." \
+  "$(cvj "
+    const fs = await import('node:fs');
+    const runMod = await import('$ROOT/tests/evals/run.mjs');
+    const sha = 'd6iso' + Date.now();
+    M.writeBreachRecord(sha, M.TASK_ID, 'max-passes-exceeded', 'fixA');
+    const fixAHasIt = fs.existsSync(M.breachRecordPath(sha, M.TASK_ID, 0, 'fixA'));
+    fs.rmSync(runMod.shardDir(sha), { recursive: true, force: true });
+    process.stdout.write(JSON.stringify({ fixAHasIt }));
+  ")" '{"fixAHasIt":true}'
+check "writeBreachRecord: two DIFFERENT fixtures under the SAME sha never collide -- independent seq counters, each starting at 0" \
+  "$(cvj "
+    const fs = await import('node:fs');
+    const runMod = await import('$ROOT/tests/evals/run.mjs');
+    const sha = 'd6two' + Date.now();
+    const seqA = M.writeBreachRecord(sha, M.TASK_ID, 'diff-cap-exceeded', 'fixA');
+    const seqB = M.writeBreachRecord(sha, M.TASK_ID, 'scope-expansion', 'fixB');
+    const contentA = JSON.parse(fs.readFileSync(M.breachRecordPath(sha, M.TASK_ID, 0, 'fixA'), 'utf8'));
+    const contentB = JSON.parse(fs.readFileSync(M.breachRecordPath(sha, M.TASK_ID, 0, 'fixB'), 'utf8'));
+    fs.rmSync(runMod.shardDir(sha), { recursive: true, force: true });
+    process.stdout.write(JSON.stringify({ seqA, seqB, reasonA: contentA.breachReason, reasonB: contentB.breachReason, fixtureA: contentA.fixture, fixtureB: contentB.fixture }));
+  ")" '{"seqA":0,"seqB":0,"reasonA":"diff-cap-exceeded","reasonB":"scope-expansion","fixtureA":"fixA","fixtureB":"fixB"}'
+check "writeBreachRecord: self-healing first-free-slot write, same idiom as writeCensorRecord/writeNextShard -- a second call to the SAME fixture advances to seq 1, never overwrites seq 0" \
+  "$(cvj "
+    const fs = await import('node:fs');
+    const runMod = await import('$ROOT/tests/evals/run.mjs');
+    const sha = 'd6seq' + Date.now();
+    const seq0 = M.writeBreachRecord(sha, M.TASK_ID, 'circuit-breaker', 'fixA');
+    const seq1 = M.writeBreachRecord(sha, M.TASK_ID, 'user-stop', 'fixA');
+    const first = JSON.parse(fs.readFileSync(M.breachRecordPath(sha, M.TASK_ID, 0, 'fixA'), 'utf8'));
+    fs.rmSync(runMod.shardDir(sha), { recursive: true, force: true });
+    process.stdout.write(JSON.stringify({ seq0, seq1, firstUntouched: first.breachReason === 'circuit-breaker' }));
+  ")" '{"seq0":0,"seq1":1,"firstUntouched":true}'
+# F-42 (Major, pass-1 review): unlike writeNextShard()/writeCensorRecord(), breach records are NEW
+# in this iteration -- there is no pre-F-284 legacy data sitting in a flat bucket for a defaulted
+# fixtureId to stay compatible with, so an omitted/null fixtureId is never a legitimate "unknown
+# fixture" read here. The prior version of this check entrenched exactly the F-285 hazard the
+# reviewer measured (a qualified write, an unqualified default-arg read, silently landing in a
+# DIFFERENT directory with no error) -- replaced with the throw that closes it: a loud TypeError
+# at the call site instead of a quiet empty read at whatever future reader (phases/04) queries the
+# wrong path.
+check "writeBreachRecord: fixtureId omitted throws -- no flat legacy bucket for breach records to fall back to (F-42)" \
+  "$(cvj "
+    let threw = false, isTypeError = false, mentionsFixtureId = false;
+    try { M.writeBreachRecord('d6nofix' + Date.now(), M.TASK_ID, 'max-passes-exceeded'); }
+    catch (e) { threw = true; isTypeError = e instanceof TypeError; mentionsFixtureId = /fixtureId/.test(e.message); }
+    process.stdout.write(JSON.stringify({ threw, isTypeError, mentionsFixtureId }));
+  ")" '{"threw":true,"isTypeError":true,"mentionsFixtureId":true}'
+check "writeBreachRecord: fixtureId explicitly null (not merely omitted) throws the same way -- 'not a real fixture' has exactly one spelling here, not two" \
+  "$(cvj "
+    let threw = false;
+    try { M.writeBreachRecord('d6nofix2' + Date.now(), M.TASK_ID, 'max-passes-exceeded', null); }
+    catch (e) { threw = e instanceof TypeError; }
+    process.stdout.write(String(threw));
+  ")" "true"
+check "breachRecordPath: fixtureId omitted throws too -- same guard, reachable directly, not only through writeBreachRecord's own call into it" \
+  "$(cvj "
+    let threw = false;
+    try { M.breachRecordPath('d6nofix3' + Date.now(), M.TASK_ID, 0); } catch (e) { threw = e instanceof TypeError; }
+    process.stdout.write(String(threw));
+  ")" "true"
+
+# F-43 (Major, pass-1 review): the fillArm() -> writeBreachRecord() ASSEMBLY drawArmForSha() uses,
+# driven for real through fillArm() with a synthetic (non-live) draw handle -- no /code-loop
+# invocation, no quota spent. Mirrors convergence-runner.sh:461-476's identical censor-assembly
+# precedent (and :301/:596's own "the exact assembly drawArmForSha() uses" wiring tests) -- the
+# precedent this iteration's own pass-1 review found was checkably wrong to cite as untestable:
+# that precedent tests exactly this shape of composition, hermetically, so this does too, threading
+# the REAL r.breachReason (not a literal) into the REAL writer at the REAL namespace.
+check "the exact assembly drawArmForSha() uses (fillArm's breach return + writeBreachRecord) persists a breached draw's specific reason, without a live draw (F-43)" \
+  "$(cvj "$CVD_HELPERS
+    const fs = await import('node:fs');
+    const runMod = await import('$ROOT/tests/evals/run.mjs');
+    const sha = 'd6wiring' + Date.now();
+    const r = M.fillArm(mkSeqDraw([[{status:'stopped-diff-cap-exceeded', pass:6}]]), { n: 1, report: () => {} });
+    const seq = r.breach ? M.writeBreachRecord(sha, M.TASK_ID, r.breachReason, 'fixW') : null;
+    const rec = seq === null ? null : JSON.parse(fs.readFileSync(M.breachRecordPath(sha, M.TASK_ID, seq, 'fixW'), 'utf8'));
+    fs.rmSync(runMod.shardDir(sha), { recursive: true, force: true });
+    process.stdout.write(JSON.stringify({ breach: r.breach, persistedReason: rec ? rec.breachReason : null }));
+  ")" '{"breach":true,"persistedReason":"diff-cap-exceeded"}'
+
 # --- F-227/F-228 (Minors, code-loop pass 1 review): prepareDrawDir() is startDraw()'s setup ONLY
 # (no invocation), the injection seam neither disclosed deviation had coverage through before this
 # -- the seam that would have caught the missing scripts/ copy by evidence, not by reasoning.
@@ -2932,12 +3131,21 @@ cp "$ROOT/$CVD" "$CVD_SCRATCH"
 # Anchored on the return statement alone, not the surrounding block (F-276, phase 4 iteration 4.4,
 # added a diagnostic censor record and a comment ahead of this same return inside convergence.mjs's
 # own scope) -- narrowing the anchor here keeps this guard resilient to that kind of addition
-# without needing to track every line around it.
+# without needing to track every line around it. Anchor text updated (D6, phase 2 iteration 2.4)
+# for the additive `breachReason: null` field this same return statement now also carries -- the
+# anchor's OWN resilience covers a change to lines AROUND it, not a change WITHIN the exact
+# return statement it matches, so this one line's text needed a manual update; what the check
+# below asserts (arm/waitExhausted) is unchanged.
+# Occurrence count asserted, not just presence (F-49, pass-1 review): this iteration's own anchor
+# edit (above) demonstrated a bare .includes() guard can silently match the wrong thing once a
+# nearby line changes -- adopting the same discipline the F-284/F-285 anchors already use
+# (convergence-runner.sh:653/689/770), not just a presence check.
 node -e "
   const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
-  const FROM = 'return { breach: false, arm, stillRunning, replaced, waitExhausted: true, censor };';
+  const FROM = 'return { breach: false, arm, stillRunning, replaced, waitExhausted: true, censor, breachReason: null };';
   const TO   = 'replaced++; break; // MUTANT: re-roll instead of stopping';
-  if (!s.includes(FROM)) throw new Error('mutant B pattern not found -- source moved');
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('mutant B pattern occurs ' + count + ' time(s), not exactly 1 -- source moved, update this mutation');
   fs.writeFileSync(p, s.replace(FROM, TO));
 "
 check "mutant B (F-194: wait-exhaustion re-rolls instead of stopping) is caught -- the censored slot gets topped up, not left short" \
@@ -3001,6 +3209,74 @@ check "positive control: the tracked convergence.mjs is pristine after all four 
     const fr = M.fillArm(mkSeqDraw(seq), { n: 2, maxWaitAttempts: 1, report: () => {} });
     process.stdout.write(M.classifyDraw({status:'running', pass:0}).kind + '/' + M.compareArms(a, b, { resamples: 20000 }).verdict + '/' + JSON.stringify({ arm: fr.arm, waitExhausted: fr.waitExhausted }));
   ")" 'running/inconclusive/{"arm":[],"waitExhausted":true}'
+
+# Mutant E (D6, phase 2 iteration 2.4) -- the literal PRE-FIX code path: fillArm()'s breach branch
+# reverted to dropping breachReason entirely, exactly as it read before this iteration
+# (`return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null };`,
+# quoted verbatim in the phase file's own Scope). R12's own "shown to fail, shown to pass"
+# discipline, applied here as a genuine mutation-test rather than only the direct checks above.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null, breachReason: reason };';
+  const TO   = 'return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null }; // MUTANT (D6): pre-fix -- breachReason dropped entirely';
+  if (!s.includes(FROM)) throw new Error('mutant E pattern not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant E (D6 pre-fix: breachReason dropped from the breach return) is caught -- a documented breach status no longer surfaces its specific reason" \
+  "$(cvj "$CVD_HELPERS
+    const r = M.fillArm(mkSeqDraw([[{status:'stopped-max-passes-exceeded', pass:6}]]), { n: 1, report: () => {} });
+    process.stdout.write(String(r.breachReason));
+  " "$CVD_SCRATCH")" "undefined"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+check "mutant E reverted -- the tracked convergence.mjs's breach branch threads breachReason again" \
+  "$(cvj "$CVD_HELPERS
+    const r = M.fillArm(mkSeqDraw([[{status:'stopped-max-passes-exceeded', pass:6}]]), { n: 1, report: () => {} });
+    process.stdout.write(String(r.breachReason));
+  " "$CVD_SCRATCH")" "max-passes-exceeded"
+
+# Mutant F -- an INTENTIONALLY-BROKEN threading, distinct from mutant E's plain omission: reads
+# the reason via a FRESH draw.read() issued AFTER safeCleanup(draw), instead of the
+# already-captured `state` local -- the exact ordering mistake the phase file's own "Watch for"
+# warns against (a naive re-read after the workDir is gone). startDraw()'s real read() returns
+# `null` once statePath no longer exists (existsSync guard), so this mutant's breachReason
+# collapses to null on every real breach -- caught by the SAME direct check already used for the
+# stopped-<reason> case above, no new assertion shape needed.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const reason = breachReason(state);\n        safeCleanup(draw);\n        return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null, breachReason: reason };';
+  const TO   = 'safeCleanup(draw);\n        const reason = breachReason(draw.read()); // MUTANT (D6): re-read AFTER cleanup, not the cached state\n        return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null, breachReason: reason };';
+  if (!s.includes(FROM)) throw new Error('mutant F pattern not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant F (D6: reason re-read from draw.read() AFTER safeCleanup, not the cached state) is caught -- against a REAL startDraw()-shaped handle whose read() returns null once the workDir is gone, this reads null instead of the real reason" \
+  "$(cvj "
+    function mkPostCleanupNullDraw(status) {
+      let cleaned = false;
+      const state = { status, pass: 6 };
+      return () => ({
+        read: () => (cleaned ? null : state), // mirrors startDraw()'s own read(): null once the statePath is gone
+        retry: () => {},
+        cleanup: () => { cleaned = true; },
+      });
+    }
+    const r = M.fillArm(mkPostCleanupNullDraw('stopped-max-passes-exceeded'), { n: 1, report: () => {} });
+    process.stdout.write(String(r.breachReason));
+  " "$CVD_SCRATCH")" "null"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+check "mutant F reverted -- the same post-cleanup-null handle now correctly reads the reason from the state captured BEFORE cleanup" \
+  "$(cvj "
+    function mkPostCleanupNullDraw(status) {
+      let cleaned = false;
+      const state = { status, pass: 6 };
+      return () => ({
+        read: () => (cleaned ? null : state),
+        retry: () => {},
+        cleanup: () => { cleaned = true; },
+      });
+    }
+    const r = M.fillArm(mkPostCleanupNullDraw('stopped-max-passes-exceeded'), { n: 1, report: () => {} });
+    process.stdout.write(String(r.breachReason));
+  " "$CVD_SCRATCH")" "max-passes-exceeded"
 
 # --- points 1, 2 and 6: Monte-Carlo property bounds on the verdict logic built atop the already-
 # oracle-verified rank procedure (3.2 owns rank-procedure correctness; this does not re-check it).

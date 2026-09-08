@@ -40,7 +40,7 @@ import { join, dirname, relative, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { installSomi, invokeCommand, preflight } from './lib/install.mjs';
-import { capBreached, passesToApprove, terminalVerdict, terminalOutcome, censoredDrawSnapshot } from './lib/convergence.mjs';
+import { capBreached, passesToApprove, terminalVerdict, terminalOutcome, censoredDrawSnapshot, breachReason } from './lib/convergence.mjs';
 import { mannWhitneyU, DEFAULT_RESAMPLES } from './lib/mann-whitney.mjs';
 import { shardDir, resolveSource, fixtureFor } from './run.mjs';
 
@@ -253,7 +253,7 @@ function safeCleanup(draw) {
  *   (commands/code-loop.md's own resume check picks up where it left off -- this IS the "wait",
  *   not a bare sleep-and-poll); `cleanup()` (optional) removes the handle's workDir.
  * @param {object} [opts]
- * @returns {{breach: boolean, arm: number[], stillRunning: number, replaced: number, waitExhausted: boolean, censor: {elapsedMs: number, waitAttempts: number, lastState: {status: string|null, historyEmpty: boolean|null, stateReadable: boolean}}|null}}
+ * @returns {{breach: boolean, arm: number[], stillRunning: number, replaced: number, waitExhausted: boolean, censor: {elapsedMs: number, waitAttempts: number, lastState: {status: string|null, historyEmpty: boolean|null, stateReadable: boolean}}|null, breachReason: string|null}}
  */
 export function fillArm(newDraw, opts = {}) {
   const n = opts.n ?? N_PER_ARM;
@@ -277,8 +277,14 @@ export function fillArm(newDraw, opts = {}) {
     for (;;) {
       const c = classifyDraw(state);
       if (c.kind === 'breach') {
+        // D6 (phase 2, iteration 2.4): captured from the already-in-memory `state` BEFORE
+        // safeCleanup(draw) runs, mirroring the censor object's own build-then-cleanup order
+        // below -- not because safeCleanup() touches `state` itself (it only removes the workDir
+        // `state` was already read out of), but so this branch reads identically to that
+        // precedent and never grows a second, later read of `draw` once the handle is spent.
+        const reason = breachReason(state);
         safeCleanup(draw);
-        return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null };
+        return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null, breachReason: reason };
       }
       if (c.kind === 'done') {
         arm.push(c.pass);
@@ -300,7 +306,7 @@ export function fillArm(newDraw, opts = {}) {
           // maxWaitAttempts`, same as before this pass.
           const censor = { elapsedMs: now() - drawStartedAt, waitAttempts, lastState: censoredDrawSnapshot(state) };
           safeCleanup(draw);
-          return { breach: false, arm, stillRunning, replaced, waitExhausted: true, censor };
+          return { breach: false, arm, stillRunning, replaced, waitExhausted: true, censor, breachReason: null };
         }
         draw.retry();
         state = draw.read();
@@ -318,7 +324,7 @@ export function fillArm(newDraw, opts = {}) {
       break; // this handle discarded; outer while retries the same still-open slot with a fresh newDraw()
     }
   }
-  return { breach: false, arm, stillRunning, replaced, waitExhausted: false, censor: null };
+  return { breach: false, arm, stillRunning, replaced, waitExhausted: false, censor: null, breachReason: null };
 }
 
 /**
@@ -578,6 +584,80 @@ export function writeCensorRecord(sha, taskId, censor, fixtureId = null) {
 }
 
 /**
+ * Where one BREACHED draw's retained record lives (D6, phase 2 iteration 2.4). Generalizes
+ * `censorRecordDir()`'s pattern one step further, deliberately: `censorRecordDir()` above is NOT
+ * itself namespaced by fixture in the ON-DISK PATH -- only `fixture` inside the written record is
+ * (its own docstring names this explicitly: "there is no mis-fold for a subdirectory to prevent
+ * here" -- true only because nothing yet folds censor records back into an arm, F-283, open).
+ * That reasoning does not extend to breach records: R14/D6 route a breach directly into phase 4's
+ * diagnosis step, a REAL future reader. So this directory IS namespaced in the path itself, one
+ * level deeper than censorRecordDir() -- mirroring loopShardPath()'s own directory-per-fixture
+ * scheme (`join(loopShardDir(sha), fixtureId)`) instead of copying censorRecordDir()'s flatter
+ * one, closing the exact write/read namespace-mismatch class F-284/F-285 found and fixed for the
+ * numbered shards at the point of construction, rather than leaving a second latent gap beside the
+ * one already open. `breach/` sits as a sibling to the numbered shards WITHIN the fixture's own
+ * directory -- "alongside the fixture-namespaced shard directory" per this iteration's own scope.
+ *
+ * `fixtureId` is REQUIRED here, unlike `loopShardPath()`/`censorRecordDir()` (F-42, pass-2
+ * review): those two default it to `null` and fall back to a flat bucket because pre-F-284
+ * on-disk data already lives there and must stay readable. Breach records are new in this
+ * iteration -- no legacy flat bucket exists for them to support, so an omitted `fixtureId` here is
+ * never a legitimate "unknown fixture" read, only a caller that skipped `drawArmForSha()`'s own
+ * `fixtureId = relative(sourceDir, fixtureDir)` (never null). Defaulting it anyway would recreate
+ * F-285's exact write-moved/read-didn't shape with no legacy data to excuse it, so it throws
+ * instead (`breachRecordPath()` below), turning a silent empty read into a loud `TypeError` at the
+ * call site.
+ *
+ * Derived from `loopShardPath()` itself (a real shard's dirname, `breach/` appended), not a
+ * second copy of its `fixtureId == null ? loopShardDir(sha) : join(loopShardDir(sha), fixtureId)`
+ * directory-selection expression -- a literal duplicate collided with `convergence-runner.sh`'s
+ * own F-284 mutation anchor, which pins that exact line to occur exactly once (caught by running
+ * this iteration's own required suites, not by inspection). Reuse, not a cosmetic rename, so there
+ * is only ONE place this selection logic can ever drift. Takes `taskId` (F-48, pass-2 review):
+ * `loopShardPath()`'s directory component never actually depends on the `taskId` passed to it
+ * (only the filename does, stripped by `dirname()` here), so hardcoding the module's own
+ * `TASK_ID` was inert either way -- but ignoring the caller's own `taskId` argument in favor of a
+ * hardcoded constant was a latent trap for a future caller with a different task id, not an
+ * intentional narrowing.
+ */
+function breachRecordDir(sha, taskId, fixtureId) {
+  return join(dirname(loopShardPath(sha, taskId, 0, fixtureId)), 'breach');
+}
+
+export function breachRecordPath(sha, taskId, seq, fixtureId) {
+  if (fixtureId == null) {
+    throw new TypeError('convergence: breachRecordPath requires a non-null fixtureId -- breach records have no flat legacy bucket to fall back to (F-42)');
+  }
+  return join(breachRecordDir(sha, taskId, fixtureId), `${taskId}-${String(seq).padStart(3, '0')}.json`);
+}
+
+/**
+ * Persist one breached draw's specific reason (D6): `fillArm()`'s breach branch builds and
+ * returns `breachReason` but writes nothing itself -- same split as `writeCensorRecord()`/
+ * `writeNextShard()` above, building a value in `fillArm()` and persisting it here, in this
+ * function's OWN namespace with its OWN counter (a breach record never shares occupied/index
+ * bookkeeping with the numbered shards, and there is no arm-position for it to correspond to --
+ * `fillArm()` returns the instant a breach is seen, so the breached slot itself is never written
+ * as a numbered shard at all).
+ *
+ * The existence check that finds the next free `seq` and the write itself both resolve through
+ * `breachRecordPath()` with the SAME `fixtureId` argument -- there is no second, differently-
+ * anchored path this function could drift from (unlike `resolveFixtureId()`'s cwd-anchored read
+ * vs. `drawArmForSha()`'s source-tree-anchored write, F-291) -- both directions of this one
+ * function agree by construction, not by convention. `fixtureId` is REQUIRED (no default, F-42):
+ * the very first call below is `breachRecordPath()`'s own existence check, so an omitted
+ * `fixtureId` throws there before this function ever computes a path of its own.
+ */
+export function writeBreachRecord(sha, taskId, breachReasonValue, fixtureId) {
+  let seq = 0;
+  while (existsSync(breachRecordPath(sha, taskId, seq, fixtureId))) seq++;
+  const p = breachRecordPath(sha, taskId, seq, fixtureId);
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify({ sha, taskId, schema: LOOP_SCHEMA_VERSION, fixture: fixtureId, breachReason: breachReasonValue }, null, 2) + '\n');
+  return seq;
+}
+
+/**
  * Build the `{newDraw, onDraw}` pair `drawArmForSha()` threads into `fillArm()` (F-267, phase 4
  * iteration 4.1 pass 2 -- closing the "a floor result can't be diagnosed from any retained
  * artifact" gap). `newDraw` wraps the underlying draw factory and remembers the most recently
@@ -637,10 +717,11 @@ export function makeShardWriter(makeDraw, sha, taskId, n, occupied, startIndex, 
  * module that can spend quota, and a run with no `claude` on PATH or no credential should fail
  * once, loudly, named -- not thirty times, one abandoned work tree each.
  *
- * Persists `fillArm()`'s `censor` record (F-276) the moment it comes back non-`null` -- the same
- * "build in fillArm(), persist here" split `writeNextShard()`/`makeShardWriter()` already use for
- * a completed draw's shard, so a censored draw's evidence survives on disk exactly like a
- * completed one's does, in its own namespace.
+ * Persists `fillArm()`'s `censor` record (F-276) the moment it comes back non-`null`, and
+ * `fillArm()`'s `breachReason` (D6) the moment `result.breach` is `true` -- the same "build in
+ * fillArm(), persist here" split `writeNextShard()`/`makeShardWriter()` already use for a
+ * completed draw's shard, so both a censored draw's and a breached draw's evidence survive on
+ * disk exactly like a completed one's does, each in its own namespace.
  *
  * Calls assertFixturePinned() (F-284) right after preflight -- after F-229's "before any work"
  * ordering, so a DIRECT call into this function still fails "not ready to draw" before touching an
@@ -659,6 +740,7 @@ export function drawArmForSha(sourceDir, fixtureDir, sha, opts = {}) {
   const { newDraw, onDraw } = makeShardWriter(() => startDraw(sourceDir, fixtureDir, opts), sha, TASK_ID, n, occupied, startIndex, fixtureId);
   const result = fillArm(newDraw, { ...opts, n, resume, onDraw });
   if (result.censor) writeCensorRecord(sha, TASK_ID, result.censor, fixtureId);
+  if (result.breach) writeBreachRecord(sha, TASK_ID, result.breachReason, fixtureId);
   return result;
 }
 
