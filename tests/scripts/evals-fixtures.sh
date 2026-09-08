@@ -16,8 +16,8 @@ check(){ if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (want '$3', got '$2')"; 
 
 # Pre-declared and trapped once, so a temp dir created after the trap is still cleaned up
 # on an early exit. Previously $R leaked on one path and $RB was never trapped at all.
-W=""; R=""; RB=""
-trap 'rm -rf "$W" "$R" "$RB"' EXIT
+W=""; R=""; RB=""; RM=""
+trap 'rm -rf "$W" "$R" "$RB" "$RM"' EXIT
 
 echo "== eval fixtures =="
 
@@ -30,11 +30,14 @@ echo "== eval fixtures =="
 # four. `--no-index` asks the question the assertion's name claims to ask.
 # Floor first: every "no bad files found" assertion below passes vacuously against an empty
 # tree, so establish that the tree is actually populated before trusting any of them.
+# Bumped 24 -> 35 (phase 2, 2.3) for multipass-code's own 11 files (8 under multipass-code/ plus
+# the 3 sibling scorer-side reference files) -- a floor with real headroom below the live count,
+# not a re-pin to it, so the tree can keep growing without needing another bump every time.
 n_files=$(find "$F" -type f | wc -l | tr -d ' ')
-if [ "$n_files" -ge 24 ]; then
+if [ "$n_files" -ge 35 ]; then
   ok "fixture tree is populated ($n_files files)"
 else
-  bad "fixture tree is populated (want >=24, got $n_files)"
+  bad "fixture tree is populated (want >=35, got $n_files)"
 fi
 
 ignored=$(find "$F" -type f -print0 | xargs -0 git check-ignore --no-index 2>/dev/null)
@@ -69,7 +72,14 @@ done
 # Scorer-side files that belong in the manifest even though they sit outside the three fixture
 # directories. Declared ONCE: the generator, the count assertion, and the presence loop all read
 # this array, so adding a file here cannot leave the arithmetic 40 lines away out of step.
-EXTRA_MANIFEST=("$F/task03-review.patch" "$F/make-review-patch.mjs")
+# multipass-code's own three reference files added here (phase 2, 2.3, decisions.md#d2
+# Implementation notes) -- multipass-code/ itself is added to the manifest's `find` calls
+# directly (below), kept as its own find argument rather than folded into the SAME list as
+# task01/02/03 (R9: this fixture stays visibly standalone, never merged into the rubric-graded
+# corpus's own tree, even though both are hashed into the one shared MANIFEST.sha256 file).
+EXTRA_MANIFEST=("$F/task03-review.patch" "$F/make-review-patch.mjs" \
+                "$F/multipass-code-mutant-a.mjs" "$F/multipass-code-mutant-b.mjs" \
+                "$F/multipass-code-control.mjs")
 SCORER_SIDE=(README.md MANIFEST.sha256 make-review-patch.mjs task03-review.patch \
              task02-code-mutant.mjs task02-code-control.mjs \
              multipass-code-mutant-a.mjs multipass-code-mutant-b.mjs multipass-code-control.mjs)
@@ -114,7 +124,7 @@ if [ "${1:-}" = "--update-manifest" ]; then
     echo "# An edit failing here is not a bug: re-read fixtures/README.md's invariant list, confirm"
     echo "# the change states no pass criterion, then regenerate. A keyword denylist cannot make"
     echo "# this promise -- it only catches phrasings someone already thought of."
-    { find "$F/task01-plan" "$F/task02-code" "$F/task03-review" -type f
+    { find "$F/task01-plan" "$F/task02-code" "$F/task03-review" "$F/multipass-code" -type f
       printf '%s\n' "${EXTRA_MANIFEST[@]}"; } \
       | LC_ALL=C sort | xargs sha256sum
   } > "$F/MANIFEST.sha256"
@@ -142,7 +152,7 @@ elif [ -f "$F/MANIFEST.sha256" ]; then
   fi
   # The manifest must also cover the tree exactly -- a NEW file is invisible to sha256sum -c.
   man_n=$(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256")
-  live_n=$(( $(find "$F/task01-plan" "$F/task02-code" "$F/task03-review" -type f | wc -l) + ${#EXTRA_MANIFEST[@]} ))
+  live_n=$(( $(find "$F/task01-plan" "$F/task02-code" "$F/task03-review" "$F/multipass-code" -type f | wc -l) + ${#EXTRA_MANIFEST[@]} ))
   # Argument order matters here: the MANIFEST is the stale value when these disagree, so it goes
   # in the "got" slot. The previous order framed the live tree as wrong.
   if [ "$man_n" = "$live_n" ]; then
@@ -264,10 +274,34 @@ R=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
 : "${R:?mktemp -d returned empty}"
 cp -r "$F/task02-code/." "$R"/
 [ -d "$R/_somi" ] && mv "$R/_somi" "$R/.somi"
-( cd "$R" && git init -q -b main && git config user.email t@somi.invalid && git config user.name t \
-  && git add -A && git commit -qm baseline ) >/dev/null 2>&1
-tracked=$( cd "$R" && git ls-files | grep -c '^\.somi/plans/expired-token/' )
-check "reconstructed task02 tracks its plan tree in the baseline commit" "$tracked" "4"
+# F-33 (multipass-fixture review pass 2 on 2.3, reviewer's question 2 -- same defect, same file,
+# task02's own inherited instance): the git init/commit subshell's status used to be discarded by
+# a blanket `2>&1` into /dev/null, so a failing `git commit` was invisible; and the check read
+# `git ls-files` (the INDEX, which `git add -A` alone already populates -- no commit required) not
+# `git ls-tree ... HEAD` (the BASELINE COMMIT the check's own name promises). Both fixed here.
+recon_log=$(mktemp) || { bad "mktemp failed"; exit 1; }
+if ( cd "$R" && git init -q -b main && git config user.email t@somi.invalid && git config user.name t \
+     && git add -A && git commit -qm baseline ) >"$recon_log" 2>&1; then
+  tracked_list=$( cd "$R" && git ls-tree -r --name-only HEAD | grep '^\.somi/plans/expired-token/' | sort )
+else
+  bad "task02's reconstruction baseline commit succeeded"
+  sed 's/^/       /' "$recon_log"
+  tracked_list="__git_commit_failed__"
+fi
+rm -f "$recon_log"
+# Compares the actual path SET (F-34), not a count -- a count alone can't distinguish a renamed
+# file from a missing one (renaming diary.md to notes.md keeps the count at 4); a set mismatch
+# names the file that moved.
+expected_tracked='.somi/plans/expired-token/diary.md
+.somi/plans/expired-token/phases/01-reject-expired.md
+.somi/plans/expired-token/progress.md
+.somi/plans/expired-token/spec.md'
+if [ "$tracked_list" = "$expected_tracked" ]; then
+  ok "reconstructed task02 tracks its plan tree in the baseline commit"
+else
+  bad "reconstructed task02 tracks its plan tree in the baseline commit"
+  diff <(printf '%s\n' "$expected_tracked") <(printf '%s\n' "$tracked_list") | sed 's/^/       /'
+fi
 
 # --- class 3, one layer down: run.mjs's copy SOURCE, not just the shipped tree's placement -----
 # The reference-implementation and review.patch checks above guard class 3 (a fixture-readable
@@ -557,6 +591,12 @@ ident_mp=$( node "$ROOT/tests/scripts/lib/multipass-source-identity.mjs" \
               "$F/multipass-code-mutant-a.mjs" "$F/multipass-code-mutant-b.mjs" \
               "$F/multipass-code-control.mjs" 2>"$ident_mp_err" )
 field_ident(){ printf '%s\n' "$ident_mp" | sed -n "s/^$1=//p" | head -1; }
+# F-26 (multipass-fixture review pass 3): unanchoredBody used to strip a trailing $
+# unconditionally, silently corrupting any vocabulary not genuinely anchored ^...$ into a
+# valid-but-different regex -- and AB_VOCAB is the only thing constraining what control's two
+# hunks may contain. This asserts the guard's own self-check reports it CAN still fail, not
+# just that A_VOCAB/B_VOCAB currently happen to pass it.
+check "unanchoredBody rejects a malformed vocabulary (F-26 self-check)" "$(field_ident UNANCHORED_SELF_CHECK)" "ok"
 ident_a=$(field_ident MUTANT_A); ident_b=$(field_ident MUTANT_B); ident_ctl=$(field_ident CONTROL)
 check "mutant-a is shipped source plus EXACTLY A's fix, nothing else (source-identical)" "$ident_a" "ok"
 check "mutant-b is shipped source plus EXACTLY B's fix, nothing else (source-identical)" "$ident_b" "ok"
@@ -610,6 +650,114 @@ check "shipped vs control differ at exactly the boundary probes, nowhere else" "
 check "mutant-a vs control differ at exactly the boundary probes, nowhere else" "$ac" "$bp"
 check "the equality check's own harness detects a deliberately-broken mutant-b (proves it CAN fail)" "$(field HARNESS_SELF_CHECK)" "ok"
 check "no third shipped defect (bounded sweep: bad pageSize, bad cursor offset)" "$(field THIRD_DEFECT)" "none"
+
+# --- multipass-code: leak-scan extension + reconstruction contract (phase 2, 2.3) ---------------
+# Generic denylist, extended to this tree (same vocabulary as the task01/02/03 scan above).
+leak_mp=$(grep -rniE 'point of the task|declared file set|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|token-control|code-control|criterion [0-9]|dimension S[0-9]|graded|open book|trim comparison|you are measured|do not invent' \
+        "$MC" 2>/dev/null)
+if [ -z "$leak_mp" ]; then
+  ok "no multipass-code file trips the generic leak keyword list"
+else
+  bad "no multipass-code file trips the generic leak keyword list"
+  printf '%s\n' "$leak_mp" | sed 's/^/       /'
+fi
+
+# Chain-specific vocabulary (spec.md §11's "widened leak surface" risk): D7's enabler/gated
+# design admits a class of leak the generic list above cannot see -- phrasing that narrates "B
+# depends on A" or "there are exactly two things to find here", whether in abstract terms
+# (enabler, gated) or in this domain's own terms (the list shrinking is the ONLY scenario in
+# which A manifests, so naming it narrates the dependency just as plainly).
+CHAIN_LEAK='enabler|\bgated\b|unreachable until|dependent chain|depends on (a|b|it)|only reachable after|gameable|second (defect|bug)|exactly two (things|defects|bugs)|two things to find|\bshrinks?\b|\bshrunk\b'
+
+# Known collision, verified by hand ahead of this iteration (phases/02's 2026-09-07 amendment,
+# and re-verified directly above rather than trusted from that note): CHAIN_LEAK's shrink/shrunk
+# terms match the load-bearing comment at paginate.mjs -- the only place in the tree naming the
+# scenario that exposes A -- which that amendment requires be KEPT verbatim (removing it would
+# make the fixture read as sanitised, its own tell). Neither obvious response is right: failing
+# this guard on a line the amendment forbids touching, or editing the comment, which the
+# amendment also forbids. Decision recorded in decisions.md: a single, pinned exemption for that
+# exact line, not a vocabulary carve-out -- narrowing CHAIN_LEAK to drop shrink/shrunk would also
+# blind the scan to a FUTURE leak using that same domain word elsewhere in the tree, which this
+# pin does not.
+#
+# The pin is anchored to the comment's exact CONTENT, not its line number ("pattern not found --
+# source moved" discipline, mirrored from the A/B anchor checks above): if the line is edited,
+# reworded, or removed, the count below stops being exactly 1 and this fails loudly instead of
+# the exemption silently widening to cover whatever text now sits there.
+#
+# WHOLE-LINE pin (-x), not a substring match (F-31, multipass-fixture review pass 2 on 2.3): -F
+# alone is a substring match, so APPENDING leak text to this line (e.g. "... there is nothing
+# Bug two is gated on bug one.") leaves the pinned substring intact -- exempt_count stays 1, the
+# pin reports ok, and the appended "gated" text is then silently filtered out along with the rest
+# of the line by the exemption below, becoming a blind spot for the WHOLE chain vocabulary on the
+# one line an author has the most reason to edit. Reword and duplicate were staged and correctly
+# fail this pin; append was the direction that was not, and is exactly the one -F's substring
+# semantics miss. -x requires the line's four leading spaces to match too (line 28 sits indented
+# inside paginate.mjs's `if` block) -- deliberately whitespace-sensitive: a reindent of this block
+# fails the pin loudly and requires a human to reconfirm it, rather than silently continuing to
+# exempt whatever the line now reads. That is the intended tradeoff before a freeze.
+EXEMPT_TEXT='    // The list has shrunk since this cursor was issued (items removed) -- there is nothing'
+exempt_hits=$(grep -n -H -x -F "$EXEMPT_TEXT" "$MC/src/pagination/paginate.mjs" 2>/dev/null)
+exempt_count=$(printf '%s\n' "$exempt_hits" | grep -c . || true)
+if [ "$exempt_count" = "1" ]; then
+  ok "the amendment-kept comment's exact text is pinned (occurs exactly once)"
+  exempt_line="${exempt_hits%%:*}:$(printf '%s\n' "$exempt_hits" | cut -d: -f2)"
+else
+  bad "the amendment-kept comment's exact text is pinned (want exactly 1 occurrence, got ${exempt_count:-0} -- pattern not found or source moved)"
+  # A sentinel that matches no real grep line, so a failed pin exempts nothing rather than
+  # silently matching everything -- the scan below still runs, and fails loudly instead.
+  exempt_line="__no_such_line__"
+fi
+
+chain_hits=$(grep -rniE "$CHAIN_LEAK" "$MC" 2>/dev/null)
+# Anchored at line start (F-31): a plain `grep -vF "$exempt_line:"` matches the pin's path:line
+# prefix ANYWHERE in the line, so a future absolute path that happens to contain "$exempt_line:"
+# as a substring elsewhere in its own content would also be filtered -- needs a checkout-varying
+# absolute path to actually collide, so unreachable in practice, but anchoring costs nothing.
+# awk's index() is a literal substring search (no regex-metacharacter escaping needed for the
+# path), checked at position 1 only -- exactly "starts with", not "contains".
+chain_leak=$(printf '%s\n' "$chain_hits" | awk -v pin="${exempt_line}:" 'index($0, pin) != 1')
+if [ -z "$chain_leak" ]; then
+  ok "no multipass-code file trips the chain-specific leak vocabulary (one pinned, kept exemption)"
+else
+  bad "no multipass-code file trips the chain-specific leak vocabulary"
+  printf '%s\n' "$chain_leak" | sed 's/^/       /'
+fi
+
+# --- B1, one layer down, for multipass-code too: the RECONSTRUCTED repo, not just what ships ----
+# Mirrors task02's own reconstruction contract above: cp -> rename _somi to .somi -> git init +
+# commit -> assert the plan tree's four expected files (spec.md, progress.md, diary.md,
+# phases/01-backward-paging.md, R11) are tracked in the baseline commit.
+RM=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
+: "${RM:?mktemp -d returned empty}"
+cp -r "$MC/." "$RM"/
+[ -d "$RM/_somi" ] && mv "$RM/_somi" "$RM/.somi"
+# F-33/F-34 (multipass-fixture review pass 2 on 2.3): git ls-tree HEAD reads the BASELINE COMMIT
+# itself, not the index (`git ls-files`, which `git add -A` alone already populates); the commit
+# subshell's own status is captured instead of discarded, so a failing `git commit` names itself;
+# and the tracked-file SET is compared literally, not just its count, so a rename is caught by name
+# rather than passing at the same cardinality (task02's identical fix, above, has the full comment).
+recon_log_mp=$(mktemp) || { bad "mktemp failed"; exit 1; }
+if ( cd "$RM" && git init -q -b main && git config user.email t@somi.invalid && git config user.name t \
+     && git add -A && git commit -qm baseline ) >"$recon_log_mp" 2>&1; then
+  tracked_list_mp=$( cd "$RM" && git ls-tree -r --name-only HEAD | grep '^\.somi/plans/expired-token/' | sort )
+else
+  bad "multipass-code's reconstruction baseline commit succeeded"
+  sed 's/^/       /' "$recon_log_mp"
+  tracked_list_mp="__git_commit_failed__"
+fi
+rm -f "$recon_log_mp"
+expected_tracked_mp='.somi/plans/expired-token/diary.md
+.somi/plans/expired-token/phases/01-backward-paging.md
+.somi/plans/expired-token/progress.md
+.somi/plans/expired-token/spec.md'
+if [ "$tracked_list_mp" = "$expected_tracked_mp" ]; then
+  ok "reconstructed multipass-code tracks its plan tree in the baseline commit"
+else
+  bad "reconstructed multipass-code tracks its plan tree in the baseline commit"
+  diff <(printf '%s\n' "$expected_tracked_mp") <(printf '%s\n' "$tracked_list_mp") | sed 's/^/       /'
+fi
+rm -rf "$RM"; RM=""
 
 # --- runnable fixtures declare a test script ----------------------------------------------
 for d in task02-code task03-review; do

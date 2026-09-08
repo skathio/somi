@@ -4,6 +4,17 @@
 # the change states no pass criterion, then regenerate. A keyword denylist cannot make
 # this promise -- it only catches phrasings someone already thought of.
 efb8d9ea796674e4e1b65bd9970b113db83c2c0f3133a70ef293d1f446386e85  tests/evals/fixtures/make-review-patch.mjs
+0d7b52ebf5ff2d8cd0e9b1923c40e49a06fe2e4cb5a35506c0679e3d72171af0  tests/evals/fixtures/multipass-code-control.mjs
+8c2dc1da450fcff692cae86e8d93c5407ffd89051bc6908e94575bece733b446  tests/evals/fixtures/multipass-code-mutant-a.mjs
+80fe791cde7d7526493d8d888144a01a4994a0eea1204eece654ef0238b6ddbc  tests/evals/fixtures/multipass-code-mutant-b.mjs
+7eebccdd03392b6ab9e501e61897c049623343ff5b89b90fc4a271e407e667d3  tests/evals/fixtures/multipass-code/_somi/plans/expired-token/diary.md
+4494c98e4fae8abe955bfed791e7e827be28e210e565c63764fae63c7d2ee174  tests/evals/fixtures/multipass-code/_somi/plans/expired-token/phases/01-backward-paging.md
+a23b9267d03c79072ce20eda9466e5506891f9fb5dbb658dbe765293ea9e3656  tests/evals/fixtures/multipass-code/_somi/plans/expired-token/progress.md
+cf2d109ef69bb78b448e982072530ca8f89a5992856c1b346b0fd50f791366f5  tests/evals/fixtures/multipass-code/_somi/plans/expired-token/spec.md
+2d9548d23f599e7bd315de873cba513d8700b892c3c89bcbd20165accd659556  tests/evals/fixtures/multipass-code/package.json
+17267d8549fe886e7bb01f858dcb49a1ab39592ee2cd9ca0d173b805607a1361  tests/evals/fixtures/multipass-code/src/pagination/cursor.mjs
+590089c83fa3621f6c398f6f26e068efcd7704e0ef89781079b6eb4f7b1f1025  tests/evals/fixtures/multipass-code/src/pagination/paginate.mjs
+7afa23af92186cdeffc30c0bba9cc3e10719edf57af82862a1eeba340833161e  tests/evals/fixtures/multipass-code/tests/pagination/paginate.test.mjs
 4ff45771a457910e65df85581bcb920c6425885cd8af431cd0b24bad8580106e  tests/evals/fixtures/task01-plan/CLAUDE.md
 8760f32dabd6af73ea9a90ca608e8735eba076274bcb3e07d89c85a96ad540fc  tests/evals/fixtures/task01-plan/docs/adr/0004-no-new-datastores.md
 142b0468c3c1b067cdaf10033df506494d158b11e4032ad0d69e3418ce04c7cb  tests/evals/fixtures/task01-plan/src/auth/api-key.mjs

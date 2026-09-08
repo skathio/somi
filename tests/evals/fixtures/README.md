@@ -283,3 +283,72 @@ This qualified as the conditional step's trigger (a genuine gap resembling a lea
 fixed in this corpus's history — the same class, reopened one layer down at the reconstruction
 path rather than the shipped tree), not a new leak class, so it is recorded here rather than as a
 fourth bullet above.
+
+## `multipass-code/` — the convergence-gate fixture (`multipass-fixture` work item)
+
+**Not part of the table above, deliberately.** `multipass-code/` is reached only via
+`--fixture <path>` — never through `fixtureFor`'s `task${id}-` prefix matching, never scored by
+`run.mjs`'s S1–S7 rubric, and never folded into the `task01/02/03` corpus `MANIFEST.sha256` tracks
+(`multipass-fixture/decisions.md#d2`). Its only consumer is `tests/evals/convergence.mjs`, which
+reads nothing from a draw but the loop-state JSON's `pass` field — measuring how many `/code-loop`
+rounds a real coder+reviewer pair needs to converge, not grading the candidate's answer against a
+rubric. Both fixtures are still hashed into this one shared `MANIFEST.sha256` (`EXTRA_MANIFEST` and
+a separate `find` call keep the two trees visibly distinct rather than merging them).
+
+**The trap: an engineered two-link dependent chain, not a single defect.** The shipped feature is
+backward paging on an in-memory list (`src/pagination/`). A natural, unprescribed implementation of
+that feature tends to leave two boundary defects, gated one behind the other
+(`multipass-fixture/decisions.md#d7`):
+
+- **A** — `cursor.mjs`'s `decodeCursor` rejects an offset exactly equal to the list length
+  (`payload.offset >= total`) instead of only rejecting one *past* it, so a cursor issued right as
+  the list shrinks to that exact offset throws instead of resolving to "nothing left to page."
+- **B** — `paginate.mjs`'s `offset === items.length` branch re-mints a cursor
+  (`encodeCursor(offset)`) instead of returning `null`, so a caller who successfully reaches the end
+  keeps paging forever. **B is masked by A**: while A's bound rejects that exact offset outright, B's
+  branch is dead code — fixing A is what first makes B observable.
+
+The fixture's own `spec.md`/phase file state the feature request in ordinary functional terms only
+(no mention of a boundary, a masked branch, or "two defects") — the same discipline
+`task02-code`'s spec already follows for its own single defect, extended here to a chain precisely
+because naming the chain would leak it (`multipass-fixture/decisions.md#d7`'s Consequences,
+`spec.md` §11).
+
+**Reference files** (scorer-side, sibling to `multipass-code/`, same placement discipline as
+`task02-code-mutant.mjs`/`task02-code-control.mjs`): `multipass-code-mutant-a.mjs` (A fixed, B newly
+reachable), `multipass-code-mutant-b.mjs` (B "fixed" alone, A still broken — must behave **exactly**
+like the shipped source; this is the reachability proof itself, not a fourth distinguishable state),
+`multipass-code-control.mjs` (both fixed). `tests/scripts/lib/multipass-dependence.mjs` and
+`tests/scripts/lib/multipass-source-identity.mjs` hold the two-layer proof (behavioural sweep, then
+source-level vocabulary-constrained hunk check) that the gate is real and runs from A to B, not the
+reverse.
+
+**Reconstruction contract**: identical in shape to `task02-code`'s (above) — ships its plan tree as
+`_somi/plans/expired-token/`, renamed to `.somi/` at reconstruction time, `git init`+commit, then
+four tracked files asserted (`spec.md`, `progress.md`, `diary.md`,
+`phases/01-backward-paging.md`). **The slug is `expired-token` and the iteration is `1.1`, matching
+`task02-code`'s, despite the domain being pagination, not auth** — a deliberate, stated mismatch
+(`multipass-fixture/spec.md` §4's non-goal, R11): `convergence.mjs` hardcodes
+`LOOP_SLUG`/`LOOP_ITERATION` as those exact literals, so `--fixture` alone drives a real
+`/code-loop` invocation with zero change to the frozen driver's copy step.
+
+## Invariants worth not breaking (`multipass-code/`)
+
+- **The shipped source and tests must stay exactly as tested** — A and B are both real, but masked/
+  unreached until a real coder's own draw introduces A's fix. Editing the shipped source outside a
+  fully re-run mutation-test/freeze cycle invalidates every dependence proof above it.
+- **The comment at `src/pagination/paginate.mjs:28`** (naming the list-shrink scenario — the only
+  scenario in which A manifests) **must stay exactly as written.** Recorded as a decision, not an
+  oversight: it reads as ordinary code prose, its net effect on the chain's own probability mass is
+  favourable, and editing it toward something blander would make the fixture read as sanitised —
+  its own tell (`multipass-fixture/phases/02-hermetic-build-and-freeze.md`'s 2026-09-07 amendment).
+- **No file may narrate the chain** — "enabler", "gated", "unreachable until", "dependent chain", or
+  any phrasing pointing at "B depends on A" or "there are exactly two things to find here", in
+  either the generic sense or this fixture's own domain words. The one known, decided exception is
+  the `shrink`/`shrunk` comment above, exempted by exact pinned content, not by weakening the
+  vocabulary (`multipass-fixture/decisions.md#d8`) — a future leak reusing that same word elsewhere
+  in the tree still trips the scan.
+- **`multipass-code-mutant-a.mjs`, `multipass-code-mutant-b.mjs`, `multipass-code-control.mjs`**
+  must export the same surface as the shipped module (`cursor.mjs` + `paginate.mjs` combined) and
+  must differ from it, in source, by **exactly** the vocabulary-constrained hunk(s) their name
+  implies — one for `mutant-a`/`mutant-b`, two for `control` — nothing else.

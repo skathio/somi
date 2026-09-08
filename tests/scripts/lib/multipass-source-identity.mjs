@@ -150,7 +150,87 @@ export const B_VOCAB = /^return \{ items: \[\], nextCursor: (encodeCursor\(offse
 // Derived from A_VOCAB/B_VOCAB (stripping each one's own start/end anchors, then re-anchoring the
 // alternation as a whole) rather than restated as a fourth literal regex, so the two vocabularies
 // can never drift out of sync with the combined one if either is ever edited.
-const unanchoredBody = (re) => re.source.replace(/^\^/, '').replace(/\$$/, '');
+//
+// Guard, not a comment (F-26, multipass-fixture review pass 3,
+// .somi/reviews/multipass-fixture/2026-09-08-2.1-pass3-approve.md): the original one-line
+// `.replace(/^\^/, '').replace(/\$$/, '')` strips a trailing `$` unconditionally, so a vocabulary
+// not genuinely anchored `^...$` is silently corrupted into a valid-but-different regex instead
+// of failing loudly -- and this function's only two callers feed it AB_VOCAB's own inputs, the
+// sole constraint on what `control`'s two hunks may contain.
+//
+// The review offered two fixes and left the choice to this pass: a two-line
+// `!s.startsWith('^') || !s.endsWith('$')` check, or a five-line version whose end-anchor test
+// also rejects an escaped trailing dollar. Verified directly (both forms actually executed
+// against the review's own two demonstrated shapes, not assumed from the review's prose) before
+// choosing: `/^cost is \$/` -- source `"^cost is \\$"` -- literally ends in the character `$`,
+// so BOTH forms' naive `endsWith('$')` passes it; only a check for an UNESCAPED trailing `$`
+// (the five-line form's own regex) rejects it. `/^aaa$|^bbb$/` -- an alternation of two
+// independently-anchored halves, not one `^...$` pattern -- also literally starts with `^` and
+// ends with an unescaped `$`, so BOTH the two-line and five-line forms as written pass it
+// unchanged too; the review's own claim that the two-line form "covers the alternation case"
+// does not hold up under execution. Closing that gap needs a check neither proposed form makes:
+// after the outer anchors are confirmed and stripped, the remaining body must contain no
+// unescaped `^` or `$` of its own -- exactly what an independently-anchored alternative
+// (`^bbb$`) sitting inside the body would be.
+//
+// Known scope limit, stated so the claim above matches it (F-37, multipass-fixture review pass 2
+// on 2.3): a TOP-LEVEL alternation whose alternatives carry no inner anchors of their own
+// (`/^a|b$/` -> body `a|b`) passes this check even though it is not actually a single `^...$`
+// pattern -- `^` binds only to `a`, `$` only to `b` (it matches `axxx`, not only `a`). Contained,
+// not closed: every caller below wraps a vocabulary's stripped body in a non-capturing group
+// (`(?:...)`) before combining it into `AB_VOCAB`, so this kind of alternation precedence can
+// never corrupt the combined pattern regardless; reaching this gap requires hand-writing a
+// vocabulary that is already semantically broken on its own terms.
+const unanchoredBody = (re) => {
+  const s = re.source;
+  if (!s.startsWith('^')) {
+    throw new Error(`vocabulary is not anchored at the start (^) and cannot be safely combined: ${s}`);
+  }
+  // An unescaped `$` at the very end -- distinguishes a real end anchor from a literal `\$`
+  // that merely happens to be the last character (the `cost is \$` shape above).
+  if (!/(?:^|[^\\])(?:\\\\)*\$$/.test(s)) {
+    throw new Error(`vocabulary is not anchored at the end ($) and cannot be safely combined: ${s}`);
+  }
+  const body = s.slice(1, -1);
+  // Strip every escaped character first (`\X`) -- an escaped `\^`/`\$` inside the body is a
+  // literal character, not an anchor, and must not trip this check. Then strip every character
+  // CLASS span (`[...]`) too (F-32, multipass-fixture review pass 2 on 2.3): a `^` immediately
+  // after `[` negates the class rather than anchoring, and a `$` inside `[...]` is just the
+  // literal character -- `[^)]` and `[$]` are not anchors and must be ACCEPTED, not rejected.
+  // Without this, the check's own thrown message ("contains its own anchor") is a false
+  // diagnosis of a vocabulary that does not, in fact, contain one.
+  if (/[$^]/.test(body.replace(/\\./g, '').replace(/\[[^\]]*\]/g, ''))) {
+    throw new Error(`vocabulary body contains its own anchor and is not a single ^...$ pattern: ${s}`);
+  }
+  return body;
+};
+
+// Self-check (R12): proves the guard above CAN fail, not just that A_VOCAB/B_VOCAB currently
+// pass it. Exercises the two demonstrated hazard shapes (both must throw) plus the vocabularies
+// that must be ACCEPTED (neither must throw) -- the same shapes verified by hand in the comment
+// above, plus a negated character class (F-32) that a future field_ident vocabulary widening is
+// likely to reach for (e.g. `[^\s)]`).
+export function unanchoredBodySelfCheck() {
+  const mustThrow = [/^cost is \$/, /^aaa$|^bbb$/, /no leading anchor\$/];
+  for (const re of mustThrow) {
+    try {
+      unanchoredBody(re);
+      return `did not reject an unanchored vocabulary: ${re.source}`;
+    } catch {
+      // expected
+    }
+  }
+  const mustAccept = [A_VOCAB, B_VOCAB, /^f\(([^)]*)\)$/];
+  for (const re of mustAccept) {
+    try {
+      unanchoredBody(re);
+    } catch (e) {
+      return `rejected a genuinely well-formed vocabulary: ${e.message}`;
+    }
+  }
+  return 'ok';
+}
+
 export const AB_VOCAB = new RegExp(`^(?:${unanchoredBody(A_VOCAB)}|${unanchoredBody(B_VOCAB)})$`);
 
 // --- CLI entry ------------------------------------------------------------------------------
@@ -160,6 +240,7 @@ if (cursorPath && paginatePath && mutantAPath && mutantBPath && controlPath) {
   const mutantALines = readCodeLines([mutantAPath]);
   const mutantBLines = readCodeLines([mutantBPath]);
   const controlLines = readCodeLines([controlPath]);
+  console.log(`UNANCHORED_SELF_CHECK=${unanchoredBodySelfCheck()}`);
   console.log(`MUTANT_A=${assertVocabHunks(shippedLines, mutantALines, A_VOCAB, 1)}`);
   console.log(`MUTANT_B=${assertVocabHunks(shippedLines, mutantBLines, B_VOCAB, 1)}`);
   console.log(`CONTROL=${assertVocabHunks(shippedLines, controlLines, AB_VOCAB, 2)}`);
