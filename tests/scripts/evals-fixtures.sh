@@ -71,7 +71,8 @@ done
 # this array, so adding a file here cannot leave the arithmetic 40 lines away out of step.
 EXTRA_MANIFEST=("$F/task03-review.patch" "$F/make-review-patch.mjs")
 SCORER_SIDE=(README.md MANIFEST.sha256 make-review-patch.mjs task03-review.patch \
-             task02-code-mutant.mjs task02-code-control.mjs)
+             task02-code-mutant.mjs task02-code-control.mjs \
+             multipass-code-mutant-a.mjs multipass-code-mutant-b.mjs multipass-code-control.mjs)
 
 # --- D1: the scorer-side files exist. None is imported by anything here, so deletion is silent,
 # and fixtures/README.md is the reconstruction contract 3.4b is built from.
@@ -502,6 +503,113 @@ else
   bad "no node -e block contains a backtick or unescaped double quote"
   printf '%s\n' "$embed" | sed 's/^/       /'
 fi
+
+# --- multipass-code: reference-set export parity + dependence proof (phase 2, 2.1/2.2) ----------
+# Anchors for A (cursor.mjs's bound check) and B (paginate.mjs's shrink branch) on the SHIPPED
+# source, occurrence count asserted first -- "pattern not found -- source moved" discipline; this
+# repo has already been bitten by a pattern that occurs twice and gets selected positionally
+# (the $work-level cpSync( pin above is the same discipline).
+MC="$F/multipass-code"
+a_anchor=$(grep -o 'payload.offset >= total' "$MC/src/pagination/cursor.mjs" | wc -l | tr -d ' ')
+check "A's anchor (decodeCursor's >= bound) occurs exactly once in shipped cursor.mjs" "$a_anchor" "1"
+b_anchor=$(grep -o 'encodeCursor(offset)' "$MC/src/pagination/paginate.mjs" | wc -l | tr -d ' ')
+check "B's anchor (the shrink branch's re-minted cursor) occurs exactly once in shipped paginate.mjs" "$b_anchor" "1"
+
+# Export-key parity across all four states, generalizing the task02 mutant/control comparison
+# above to three reference files plus the shipped module's own combined surface (cursor.mjs +
+# paginate.mjs -- there is no single shipped file here, unlike token.mjs).
+# Diagnostic captured, not discarded (multipass-fixture review F-14): a parse/import error on
+# either side previously vanished behind `2>/dev/null`, leaving only "want 'ok', got ''" on screen.
+surf_mp_err=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
+surf_mp=$( node --input-type=module -e "
+const c = await import('$ROOT/$MC/src/pagination/cursor.mjs');
+const p = await import('$ROOT/$MC/src/pagination/paginate.mjs');
+const shipped = [...Object.keys(c), ...Object.keys(p)].sort().join(',');
+const a = Object.keys(await import('$ROOT/$F/multipass-code-mutant-a.mjs')).sort().join(',');
+const b = Object.keys(await import('$ROOT/$F/multipass-code-mutant-b.mjs')).sort().join(',');
+const ctl = Object.keys(await import('$ROOT/$F/multipass-code-control.mjs')).sort().join(',');
+process.stdout.write(shipped === a && a === b && b === ctl ? 'ok' : shipped+' | '+a+' | '+b+' | '+ctl);
+" 2>"$surf_mp_err" )
+if [ "$surf_mp" = "ok" ]; then
+  ok "control, mutant-a, mutant-b export the same surface as shipped (cursor.mjs + paginate.mjs)"
+else
+  bad "control, mutant-a, mutant-b export the same surface as shipped (cursor.mjs + paginate.mjs) (want 'ok', got '$surf_mp')"
+  [ -s "$surf_mp_err" ] && sed 's/^/       stderr: /' "$surf_mp_err"
+fi
+rm -f "$surf_mp_err"
+
+# The SOURCE layer (2.2, multipass-fixture review F-11): the behavioural equality/inequality sweeps
+# below can only see a difference SOME probed input exercises, so a hand-copy slip in a validation
+# branch no probe cursor trips (a neutered negative-offset guard, a neutered string/empty-cursor
+# guard, a neutered VERSION check) leaves the behaviour layer green. This asserts each reference
+# file's source is shipped's plus EXACTLY the expected vocabulary-constrained hunk(s) -- see
+# tests/scripts/lib/multipass-source-identity.mjs for the full mechanism (a real, bidirectional
+# diff generalizing reference-pair.mjs's insertion-only hunk walk to a replacement-shaped change).
+# Covers mutant-a and control too, not just mutant-b (multipass-fixture review pass 2, F-24): F-11's
+# own argument -- every probe cursor mint() produces is well-formed, so a validation branch no
+# probe exercises is permanently unchecked -- is a property of the shared probe set, not of any one
+# reference file, and mutant-a/control are the two states draws are actually scored against.
+# Diagnostic captured, not discarded (multipass-fixture review F-14/F-21: this call previously used
+# `2>/dev/null`, reintroducing exactly what F-14 fixed for surf_mp above -- same fix, same pattern).
+ident_mp_err=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
+ident_mp=$( node "$ROOT/tests/scripts/lib/multipass-source-identity.mjs" \
+              "$MC/src/pagination/cursor.mjs" "$MC/src/pagination/paginate.mjs" \
+              "$F/multipass-code-mutant-a.mjs" "$F/multipass-code-mutant-b.mjs" \
+              "$F/multipass-code-control.mjs" 2>"$ident_mp_err" )
+field_ident(){ printf '%s\n' "$ident_mp" | sed -n "s/^$1=//p" | head -1; }
+ident_a=$(field_ident MUTANT_A); ident_b=$(field_ident MUTANT_B); ident_ctl=$(field_ident CONTROL)
+check "mutant-a is shipped source plus EXACTLY A's fix, nothing else (source-identical)" "$ident_a" "ok"
+check "mutant-b is shipped source plus EXACTLY B's fix, nothing else (source-identical)" "$ident_b" "ok"
+check "control is shipped source plus EXACTLY A's fix and B's fix, nothing else (source-identical)" "$ident_ctl" "ok"
+if [ "$ident_a" != "ok" ] || [ "$ident_b" != "ok" ] || [ "$ident_ctl" != "ok" ]; then
+  [ -s "$ident_mp_err" ] && sed 's/^/       stderr: /' "$ident_mp_err"
+fi
+rm -f "$ident_mp_err"
+
+# The dependence proof itself (2.2): three observable states plus mutant-b's positive equality to
+# shipped, swept over ONE shared probed-input set (not a smaller one per state) -- see
+# tests/scripts/lib/multipass-dependence.mjs for the full mechanism and its own self-check.
+dep=$(node "$ROOT/tests/scripts/lib/multipass-dependence.mjs" "$ROOT" 2>&1)
+printf '%s\n' "$dep" | sed 's/^/       /'
+# Anchored at line start: multipass-dependence.mjs prints one field per line now (each line's
+# value running to end-of-line), so this can safely take the WHOLE rest of the line rather than
+# stopping at the first space -- the previous stop-at-space extraction silently truncated
+# THIRD_DEFECT's own (potentially multi-word) value (multipass-fixture review F-17).
+field(){ printf '%s\n' "$dep" | sed -n "s/^$1=//p" | head -1; }
+# Floor, not just a drift guard (multipass-fixture review pass 2, F-18): on an empty probe grid
+# (TOTALS=[]), PROBES=0, BOUNDARY_PROBES=0, every .every() on an empty array is vacuously true, and
+# every diffCount is 0 -- eleven of the twelve checks below would report green with zero probes
+# ever run, and F-12's own exact pins (0 == 0) would be exactly what let that through. This also
+# closes the crashed-harness case: if multipass-dependence.mjs throws before printing its report,
+# every field() call returns '', and an integer comparison against '' fails loudly here (2>/dev/null
+# on the `[ ... -ge N ]` swallows the "integer expression expected" error, so the check's own
+# "$(... && echo yes)" ends up empty, not "yes" -- reported as a clear FAIL, not a silent pass).
+# Floors, not equalities, so the grid can still grow.
+check "the probe grid is populated (floor, not vacuous)" "$( [ "$(field PROBES)" -ge 200 ] 2>/dev/null && echo yes )" "yes"
+check "shipped exhibits A (throws on the shrink boundary, every boundary probe)" "$(field SHIPPED_EXHIBITS_A)" "yes"
+check "shipped's B branch is unreached (identical to a no-B variant, all 225 probes)" "$(field SHIPPED_B_UNREACHED)" "yes"
+check "mutant-a exhibits B (newly reachable, every boundary probe) and not A" "$(field MUTANT_A_EXHIBITS_B)/$(field MUTANT_A_NOT_A)" "yes/yes"
+check "control exhibits neither defect (every boundary probe)" "$(field CONTROL_CLEAN)" "yes"
+check "mutant-b is EXACTLY equal to shipped across the full probed-input set (the reachability proof)" "$(field SHIPPED_VS_MUTANT_B_DIFF)" "0"
+# Pinned to BOUNDARY_PROBES exactly, not just "> 0" (multipass-fixture review F-12/F-h): all three
+# variants are hand-copies of the shipped two-file source into standalone files with no textual
+# sync guard. A loose `-gt 0` only proves the pair differs SOMEWHERE -- a variant that silently
+# acquired a third behavioural difference beyond A/B would still pass and would then contaminate
+# every draw scored against it. The design puts every difference at the boundary set and nowhere
+# else, so pinning to the boundary count exactly converts a liveness check into a real drift guard.
+bp=$(field BOUNDARY_PROBES)
+# Floor on the boundary subset specifically (F-18): the three pins immediately below compare
+# $sa/$sc/$ac against $bp itself -- a self-referencing expected value that passes 0==0 on a
+# crashed/empty grid just as readily as the PROBES floor above closes for the outer grid. Both
+# floors are needed: PROBES>=200 alone would not catch a grid with plenty of probes but zero at
+# the boundary (a hypothetical future change to boundaryIdxs's own selection, not just TOTALS=[]).
+check "the boundary probe set is populated (floor)" "$( [ "$bp" -ge 40 ] 2>/dev/null && echo yes )" "yes"
+sa=$(field SHIPPED_VS_MUTANT_A_DIFF); sc=$(field SHIPPED_VS_CONTROL_DIFF); ac=$(field MUTANT_A_VS_CONTROL_DIFF)
+check "shipped vs mutant-a differ at exactly the boundary probes, nowhere else" "$sa" "$bp"
+check "shipped vs control differ at exactly the boundary probes, nowhere else" "$sc" "$bp"
+check "mutant-a vs control differ at exactly the boundary probes, nowhere else" "$ac" "$bp"
+check "the equality check's own harness detects a deliberately-broken mutant-b (proves it CAN fail)" "$(field HARNESS_SELF_CHECK)" "ok"
+check "no third shipped defect (bounded sweep: bad pageSize, bad cursor offset)" "$(field THIRD_DEFECT)" "none"
 
 # --- runnable fixtures declare a test script ----------------------------------------------
 for d in task02-code task03-review; do
