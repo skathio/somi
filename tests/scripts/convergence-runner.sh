@@ -108,14 +108,47 @@ dryrun_check=$(printf '%s' "$dryrun_out" | node -e "
   let s=''; process.stdin.on('data', d=>s+=d).on('end', () => {
     const o = JSON.parse(s);
     const ok = o.dryRun === true && o.taskId === 'loop-code-loop' && Array.isArray(o.arm) && o.arm.length === 0
-      && o.breach === false && o.runsRequested === 15 && typeof o.source.sha === 'string' && o.source.sha.length === 40;
+      && o.breach === false && o.runsRequested === 15 && typeof o.source.sha === 'string' && o.source.sha.length === 40
+      && o.maxWaitAttempts === 2;
     process.stdout.write(String(ok));
   });
 ")
-check "--dry-run produces a well-formed shape (dryRun:true, empty arm, breach:false, a real resolved sha)" "$dryrun_check" "true"
+check "--dry-run produces a well-formed shape (dryRun:true, empty arm, breach:false, a real resolved sha, maxWaitAttempts echoing DEFAULT_MAX_WAIT_ATTEMPTS)" "$dryrun_check" "true"
 check "--dry-run --runs 5 threads the requested count through" \
   "$(node "$CVD" --dry-run --source HEAD --runs 5 | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).runsRequested)))")" \
   "5"
+
+# --- F-300: --dry-run echoes the wait budget a live draw would actually use -- previously silent
+# on it, so nothing confirmed a --max-wait-attempts value (or the implied default above) was the
+# one that would apply before spending quota on the real draw.
+check "--dry-run --max-wait-attempts 6 echoes the SUPPLIED value, not the default" \
+  "$(node "$CVD" --dry-run --source HEAD --max-wait-attempts 6 | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).maxWaitAttempts)))")" \
+  "6"
+
+# Mutation: prove the dry-run echo can actually fail to reflect the real value. Staged on a scratch
+# copy, never the tracked file. Unversioned source (--source ., sha null) so this stays hermetic
+# and quick, the same choice the F-284 pin mutation test below makes for the same reason.
+F300_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F300_MUT_DIR"' EXIT
+F300_MUT="$F300_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F300_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F300_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F300_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F300_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'maxWaitAttempts: args.maxWaitAttempts ?? DEFAULT_MAX_WAIT_ATTEMPTS,';
+  const TO = 'maxWaitAttempts: null, // MUTANT (F-300): dry-run no longer echoes the wait budget';
+  if (!s.includes(FROM)) throw new Error('F-300 mutant pattern not found in convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_dryrun_wait=$(node "$F300_MUT" --dry-run --source . --max-wait-attempts 6 | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).maxWaitAttempts)))")
+check "mutant (F-300: dry-run maxWaitAttempts forced null) no longer echoes the supplied --max-wait-attempts 6, catching the regression the checks above exist for" \
+  "$mutant_dryrun_wait" "null"
+pristine_dryrun_wait=$(node "$CVD" --dry-run --source . --max-wait-attempts 6 | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).maxWaitAttempts)))")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still echoes maxWaitAttempts:6" \
+  "$pristine_dryrun_wait" "6"
+rm -rf "$F300_MUT_DIR"
+trap - EXIT
 
 # --dry-run leaves no worktree behind (resolveSource's own cleanup, exercised through this CLI).
 wt_before=$(git worktree list | wc -l | tr -d ' ')
@@ -372,34 +405,132 @@ MK_SEQ_DRAW='
 # censoredDrawSnapshot() fails safe, same posture as terminalVerdict()/terminalOutcome() above --
 # always an object (the caller only calls this once a censoring event is already known to have
 # happened); status/historyEmpty independently null on an unrecognised shape, stateReadable always
-# a determinate boolean (F-279, code-loop pass 2 review).
-check "censoredDrawSnapshot(null) is {status:null,historyEmpty:null,stateReadable:false} (fails safe)" \
+# a determinate boolean (F-279, code-loop pass 2 review). `pass`/`lastVerdict` (F-294/F-295, phase
+# 4 iteration 4.6) added below, same fail-safe posture -- see the function's own docstring.
+# `completedPasses` (F-296, pass-1 review) added alongside: `pass` alone is the pass most recently
+# STARTED, possibly still in progress, never "the last completed pass" -- `completedPasses`
+# (`history.length`) is the disambiguator that says which pass `lastVerdict` actually belongs to.
+check "censoredDrawSnapshot(null) is {status:null,historyEmpty:null,stateReadable:false,pass:null,completedPasses:null,lastVerdict:null} (fails safe)" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot(null)));")" \
-  '{"status":null,"historyEmpty":null,"stateReadable":false}'
+  '{"status":null,"historyEmpty":null,"stateReadable":false,"pass":null,"completedPasses":null,"lastVerdict":null}'
 check "censoredDrawSnapshot(undefined) is the same" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot(undefined)));")" \
-  '{"status":null,"historyEmpty":null,"stateReadable":false}'
+  '{"status":null,"historyEmpty":null,"stateReadable":false,"pass":null,"completedPasses":null,"lastVerdict":null}'
 check "censoredDrawSnapshot(42) is the same (non-object input, not coerced)" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot(42)));")" \
-  '{"status":null,"historyEmpty":null,"stateReadable":false}'
-check "censoredDrawSnapshot({}) -- stateReadable true (it IS an object), status/historyEmpty still null (no fields to read)" \
+  '{"status":null,"historyEmpty":null,"stateReadable":false,"pass":null,"completedPasses":null,"lastVerdict":null}'
+check "censoredDrawSnapshot({}) -- stateReadable true (it IS an object), status/historyEmpty/pass/completedPasses/lastVerdict still null (no fields to read)" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({})));")" \
-  '{"status":null,"historyEmpty":null,"stateReadable":true}'
-check "censoredDrawSnapshot({status:'running'}) reports the status; historyEmpty null (no history field to read)" \
+  '{"status":null,"historyEmpty":null,"stateReadable":true,"pass":null,"completedPasses":null,"lastVerdict":null}'
+check "censoredDrawSnapshot({status:'running'}) reports the status; historyEmpty/pass/completedPasses/lastVerdict null (no history or pass field to read)" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running'})));")" \
-  '{"status":"running","historyEmpty":null,"stateReadable":true}'
-check "censoredDrawSnapshot({status:'running',history:[]}) -- empty history means no pass has COMPLETED yet (scripts/somi-loop.mjs init's own pre-work state), NOT proof the loop died immediately -- a stalled pass 1 reads identically (F-277, code-loop pass 2 review)" \
+  '{"status":"running","historyEmpty":null,"stateReadable":true,"pass":null,"completedPasses":null,"lastVerdict":null}'
+check "censoredDrawSnapshot({status:'running',history:[]}) -- empty history means no pass has COMPLETED yet (scripts/somi-loop.mjs init's own pre-work state), NOT proof the loop died immediately -- a stalled pass 1 reads identically (F-277, code-loop pass 2 review); completedPasses:0, the same 'no pass finished yet' fact historyEmpty already states, read off history.length directly" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',history:[]})));")" \
-  '{"status":"running","historyEmpty":true,"stateReadable":true}'
-check "censoredDrawSnapshot({status:'running',history:[{pass:1}]}) -- non-empty history is the 'at least one pass completed' shape" \
+  '{"status":"running","historyEmpty":true,"stateReadable":true,"pass":null,"completedPasses":0,"lastVerdict":null}'
+check "censoredDrawSnapshot({status:'running',history:[{pass:1}]}) -- non-empty history is the 'at least one pass completed' shape; pass stays null (the top-level pass field, not history[i].pass, is what passesToApprove() reads); completedPasses:1 (one history entry); lastVerdict stays null (the entry has no verdict field)" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',history:[{pass:1}]})));")" \
-  '{"status":"running","historyEmpty":false,"stateReadable":true}'
-check "censoredDrawSnapshot: wrong-typed status/history are not coerced -- null, not passed through; stateReadable still true (an object WAS read, however malformed its fields)" \
+  '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":null,"completedPasses":1,"lastVerdict":null}'
+check "censoredDrawSnapshot: wrong-typed status/history are not coerced -- null, not passed through; stateReadable still true (an object WAS read, however malformed its fields); completedPasses null too (history isn't a readable array)" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:7,history:'nope'})));")" \
-  '{"status":null,"historyEmpty":null,"stateReadable":true}'
+  '{"status":null,"historyEmpty":null,"stateReadable":true,"pass":null,"completedPasses":null,"lastVerdict":null}'
 check "F-279: stateReadable now separates 'no readable state at all' (null) from 'state read but malformed' ({status:7,...}) -- previously both collapsed to the identical {status:null,historyEmpty:null} record" \
   "$(lj "process.stdout.write(JSON.stringify([L.censoredDrawSnapshot(null).stateReadable, L.censoredDrawSnapshot({status:7,history:'nope'}).stateReadable]));")" \
   '[false,true]'
+# F-294/F-295: a draw that HAS iterated (a real top-level pass count, a real prior verdict in
+# history) surfaces the new fields with real, non-null values -- not merely a null-shaped
+# addition every case above would also pass if pass/lastVerdict were wired to always return null.
+# This case's history has exactly ONE entry (completedPasses:1), so `pass:2` reads as "mid-pass 2"
+# -- lastVerdict belongs to the ALREADY-completed pass 1, not to `pass` itself (F-296).
+check "censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'approve-with-comments'}]}) reports the real pass count and the real last verdict; completedPasses:1 -- pass 2 is still IN PROGRESS, one pass behind pass" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'approve-with-comments'}]})));")" \
+  '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":1,"lastVerdict":"approve-with-comments"}'
+# F-296/F-297: the OTHER ambiguous case `pass` alone cannot distinguish from the one above -- pass 2
+# has ALSO just been recorded (completedPasses:2 == pass), and lastVerdict is pass 2's OWN verdict,
+# not pass 1's. Two-entry history with DIFFERING verdicts also closes F-297 (a mutant reading
+# history[0] instead of the terminal entry would report 'request-changes', the FIRST verdict, not
+# 'approve-with-comments').
+check "censoredDrawSnapshot({status:'running',pass:2,history:[pass1,pass2]}) -- completedPasses:2 (pass 2 already recorded), lastVerdict is pass 2's OWN verdict (the LAST entry), not pass 1's -- the case F-296's disambiguation exists to distinguish from the completedPasses:1 case above" \
+  "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'request-changes'},{pass:2,verdict:'approve-with-comments'}]})));")" \
+  '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":2,"lastVerdict":"approve-with-comments"}'
+
+# Mutation: prove pass/lastVerdict can actually fail to be extracted, not merely present-as-null.
+# Staged on a scratch copy of lib/convergence.mjs, never the tracked file.
+F295_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F295_MUT_DIR"' EXIT
+F295_MUT="$F295_MUT_DIR/convergence.mjs"
+cp "$ROOT/$LCONV" "$F295_MUT"
+node -e "
+  const fs = require('fs'); const p = '$F295_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const pass = passesToApprove(loopStateJson);\n  const lastVerdict = terminalVerdict(loopStateJson);';
+  const TO = 'const pass = null; const lastVerdict = null; // MUTANT (F-295): forced null, reproducing the pre-fix gap';
+  if (!s.includes(FROM)) throw new Error('F-295 mutant pattern not found in lib/convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_pass_verdict=$(node --input-type=module -e "
+  const L = await import('$F295_MUT');
+  process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'approve-with-comments'}]})));
+")
+check "mutant (F-295: pass/lastVerdict forced null) reproduces the exact pre-fix gap -- a real pass 2/real verdict draw reads null,null, catching the regression the check above exists for" \
+  "$mutant_pass_verdict" '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":null,"completedPasses":1,"lastVerdict":null}'
+pristine_pass_verdict=$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'approve-with-comments'}]})));")
+check "pristine lib/convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still reports the real pass and verdict" \
+  "$pristine_pass_verdict" '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":1,"lastVerdict":"approve-with-comments"}'
+rm -rf "$F295_MUT_DIR"
+trap - EXIT
+
+# Mutation: prove completedPasses can actually fail to be extracted (F-296) -- forced null, the
+# exact ambiguity this field exists to resolve. Staged on a scratch copy, never the tracked file.
+F296_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F296_MUT_DIR"' EXIT
+F296_MUT="$F296_MUT_DIR/convergence.mjs"
+cp "$ROOT/$LCONV" "$F296_MUT"
+node -e "
+  const fs = require('fs'); const p = '$F296_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const completedPasses = Array.isArray(history) ? history.length : null;';
+  const TO = 'const completedPasses = null; // MUTANT (F-296): forced null, reproducing the pass-vs-completedPasses ambiguity this field exists to resolve';
+  if (!s.includes(FROM)) throw new Error('F-296 mutant pattern not found in lib/convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_completed_passes=$(node --input-type=module -e "
+  const L = await import('$F296_MUT');
+  process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'request-changes'},{pass:2,verdict:'approve-with-comments'}]})));
+")
+check "mutant (F-296: completedPasses forced null) reads completedPasses:null on a real 2-entry-history draw, reproducing the exact ambiguity ('pass:2' alone can't say whether pass 2 is in progress or already recorded) that this field exists to resolve -- historyEmpty also reads null, since it is defined in terms of completedPasses, not independently" \
+  "$mutant_completed_passes" '{"status":"running","historyEmpty":null,"stateReadable":true,"pass":2,"completedPasses":null,"lastVerdict":"approve-with-comments"}'
+pristine_completed_passes=$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'request-changes'},{pass:2,verdict:'approve-with-comments'}]})));")
+check "pristine lib/convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still reports completedPasses:2" \
+  "$pristine_completed_passes" '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":2,"lastVerdict":"approve-with-comments"}'
+rm -rf "$F296_MUT_DIR"
+trap - EXIT
+
+# Mutation: prove lastVerdict actually reads the TERMINAL entry, not the first one (F-297) -- every
+# censoredDrawSnapshot() case above the two-entry one has at most ONE history entry, so a mutant
+# that reads history[0] instead of the last entry is indistinguishable from the correct
+# implementation on all of them; only the differing-verdicts two-entry case above can tell them
+# apart. Staged on a scratch copy, never the tracked file.
+F297_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F297_MUT_DIR"' EXIT
+F297_MUT="$F297_MUT_DIR/convergence.mjs"
+cp "$ROOT/$LCONV" "$F297_MUT"
+node -e "
+  const fs = require('fs'); const p = '$F297_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const lastVerdict = terminalVerdict(loopStateJson);';
+  const TO = 'const lastVerdict = (stateReadable && Array.isArray(loopStateJson.history) && loopStateJson.history.length && typeof loopStateJson.history[0].verdict === \"string\") ? loopStateJson.history[0].verdict : null; // MUTANT (F-297): reads the FIRST entry, not the terminal one';
+  if (!s.includes(FROM)) throw new Error('F-297 mutant pattern not found in lib/convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_first_verdict=$(node --input-type=module -e "
+  const L = await import('$F297_MUT');
+  process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'request-changes'},{pass:2,verdict:'approve-with-comments'}]})));
+")
+check "mutant (F-297: lastVerdict reads history[0]) returns the FIRST verdict ('request-changes') on the differing-verdicts two-entry case, catching the exact regression that case exists for" \
+  "$mutant_first_verdict" '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":2,"lastVerdict":"request-changes"}'
+pristine_first_verdict=$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'request-changes'},{pass:2,verdict:'approve-with-comments'}]})));")
+check "pristine lib/convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still returns the terminal verdict ('approve-with-comments')" \
+  "$pristine_first_verdict" '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":2,"lastVerdict":"approve-with-comments"}'
+rm -rf "$F297_MUT_DIR"
+trap - EXIT
 
 # fillArm(): the `censor` field on the wait-exhausted path. `now` is injectable (defaults to
 # Date.now) so elapsedMs is deterministic under test, the same seam newDraw/report/resume already
@@ -411,13 +542,13 @@ check "fillArm: wait-exhaustion returns a real censor record -- elapsedMs from t
     const seq = [[{status:'running'}, {status:'running'}, {status:'running'}]];
     const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: 2, report: () => {}, now });
     process.stdout.write(JSON.stringify(r.censor));
-  ")" '{"elapsedMs":1000,"waitAttempts":3,"lastState":{"status":"running","historyEmpty":null,"stateReadable":true}}'
-check "fillArm: censor.lastState.historyEmpty is true when the last-read state's history is empty (no pass has completed yet -- not proof nothing started; see censoredDrawSnapshot()'s docstring, F-277)" \
+  ")" '{"elapsedMs":1000,"waitAttempts":3,"lastState":{"status":"running","historyEmpty":null,"stateReadable":true,"pass":null,"completedPasses":null,"lastVerdict":null}}'
+check "fillArm: censor.lastState.historyEmpty is true when the last-read state's history is empty (no pass has completed yet -- not proof nothing started; see censoredDrawSnapshot()'s docstring, F-277); completedPasses:0 for the same reason" \
   "$(cj "$MK_SEQ_DRAW
     const seq = [[{status:'running',history:[]}]];
     const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: 0, report: () => {} });
     process.stdout.write(JSON.stringify(r.censor.lastState));
-  ")" '{"status":"running","historyEmpty":true,"stateReadable":true}'
+  ")" '{"status":"running","historyEmpty":true,"stateReadable":true,"pass":null,"completedPasses":0,"lastVerdict":null}'
 check "fillArm: elapsedMs includes the span newDraw() itself consumes before returning a handle, not just the retries after it (F-278, code-loop pass 2 review -- mkSeqDraw above can't pin this, since its newDraw() never calls now() and is instantaneous either way)" \
   "$(cj "
     let f278t = 0;
@@ -472,8 +603,45 @@ wiring_censor=$(cj "
   process.stdout.write(JSON.stringify({ arm: r.arm, waitExhausted: r.waitExhausted, persisted: rec ? rec.censor.lastState : null }));
 ")
 check "the exact assembly drawArmForSha() uses (fillArm's censor return + writeCensorRecord) persists a censored draw's evidence, without a live draw" \
-  "$wiring_censor" '{"arm":[],"waitExhausted":true,"persisted":{"status":"running","historyEmpty":true,"stateReadable":true}}'
+  "$wiring_censor" '{"arm":[],"waitExhausted":true,"persisted":{"status":"running","historyEmpty":true,"stateReadable":true,"pass":null,"completedPasses":0,"lastVerdict":null}}'
 rm -rf "$ROOT/tests/evals/results/$F276_WIRING_SHA"
+
+# F-294/F-295: the SAME real assembly, but the synthetic draw HAS iterated (a real pass count, a
+# real prior verdict) -- proving pass/lastVerdict aren't just structurally present-and-null through
+# this path, they carry the REAL returned snapshot's values end to end.
+F295_WIRING_SHA="f295wiring$(date +%s)"
+wiring_pass_verdict=$(cj "
+  const fs = await import('node:fs');
+  const makeDraw = () => ({ read: () => ({ status: 'running', pass: 2, history: [{ pass: 1, verdict: 'approve-with-comments' }] }), retry() {}, cleanup() {} });
+  const occ = new Set();
+  const { newDraw, onDraw } = M.makeShardWriter(makeDraw, '$F295_WIRING_SHA', M.TASK_ID, 1, occ, 0);
+  const r = M.fillArm(newDraw, { n: 1, maxWaitAttempts: 1, onDraw, report: () => {} });
+  const seq = r.censor ? M.writeCensorRecord('$F295_WIRING_SHA', M.TASK_ID, r.censor) : null;
+  const rec = seq === null ? null : JSON.parse(fs.readFileSync(M.censorRecordPath('$F295_WIRING_SHA', M.TASK_ID, seq), 'utf8'));
+  process.stdout.write(JSON.stringify({ persisted: rec ? rec.censor.lastState : null }));
+")
+check "F-295: a censored draw that HAS iterated persists BOTH new fields with real values through the real makeShardWriter -> fillArm -> writeCensorRecord assembly, not a hand-typed literal; completedPasses:1 -- pass 2 still IN PROGRESS, one behind pass" \
+  "$wiring_pass_verdict" '{"persisted":{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":1,"lastVerdict":"approve-with-comments"}}'
+rm -rf "$ROOT/tests/evals/results/$F295_WIRING_SHA"
+
+# F-296: the SAME real assembly again, but with a two-entry history whose verdicts differ --
+# completedPasses:2 (pass 2 already recorded, not merely in progress) and lastVerdict is pass 2's
+# OWN verdict, distinguishing this real end-to-end case from the completedPasses:1 case above the
+# same way the two unit-level censoredDrawSnapshot() cases distinguish each other.
+F296_WIRING_SHA="f296wiring$(date +%s)"
+wiring_completed_passes=$(cj "
+  const fs = await import('node:fs');
+  const makeDraw = () => ({ read: () => ({ status: 'running', pass: 2, history: [{ pass: 1, verdict: 'request-changes' }, { pass: 2, verdict: 'approve-with-comments' }] }), retry() {}, cleanup() {} });
+  const occ = new Set();
+  const { newDraw, onDraw } = M.makeShardWriter(makeDraw, '$F296_WIRING_SHA', M.TASK_ID, 1, occ, 0);
+  const r = M.fillArm(newDraw, { n: 1, maxWaitAttempts: 1, onDraw, report: () => {} });
+  const seq = r.censor ? M.writeCensorRecord('$F296_WIRING_SHA', M.TASK_ID, r.censor) : null;
+  const rec = seq === null ? null : JSON.parse(fs.readFileSync(M.censorRecordPath('$F296_WIRING_SHA', M.TASK_ID, seq), 'utf8'));
+  process.stdout.write(JSON.stringify({ persisted: rec ? rec.censor.lastState : null }));
+")
+check "F-296: the real assembly with a two-entry, differing-verdicts history persists completedPasses:2 and pass 2's OWN verdict, not pass 1's" \
+  "$wiring_completed_passes" '{"persisted":{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":2,"lastVerdict":"approve-with-comments"}}'
+rm -rf "$ROOT/tests/evals/results/$F296_WIRING_SHA"
 
 # Mutation: prove the retained record can actually fail to be retained. Staged on a scratch copy,
 # never the tracked file.
@@ -510,14 +678,19 @@ trap - EXIT
 # --- argument parsing ----------------------------------------------------------------------------
 help_out=$(node "$CVD" --help)
 help_flags_present=true
-for flag in --source --fixture --runs --merge --certify --dry-run; do
+for flag in --source --fixture --runs --max-wait-attempts --merge --certify --dry-run; do
   printf '%s' "$help_out" | grep -qF -- "$flag" || help_flags_present=false
 done
 check "--help prints usage naming every documented flag" "$help_flags_present" "true"
 check "an unknown argument exits non-zero" "$(node "$CVD" --bogus >/dev/null 2>&1; echo $?)" "1"
 check "--runs 0 is rejected (must be a positive integer)" "$(node "$CVD" --dry-run --runs 0 >/dev/null 2>&1; echo $?)" "1"
 check "--runs -1 is rejected" "$(node "$CVD" --dry-run --runs -1 >/dev/null 2>&1; echo $?)" "1"
-for flag in --source --fixture --runs --model --merge --certify; do check "$flag with no operand is rejected, not silently defaulted (F-252/F-253)" "$(node "$CVD" "$flag" >/dev/null 2>&1; echo $?)" "1"; done
+# F-294: same validation SHAPE as --runs above, not a second hand-rolled check.
+check "--max-wait-attempts 0 is rejected (must be a positive integer)" "$(node "$CVD" --dry-run --max-wait-attempts 0 >/dev/null 2>&1; echo $?)" "1"
+check "--max-wait-attempts -1 is rejected" "$(node "$CVD" --dry-run --max-wait-attempts -1 >/dev/null 2>&1; echo $?)" "1"
+check "--max-wait-attempts 1.5 is rejected (not an integer)" "$(node "$CVD" --dry-run --max-wait-attempts 1.5 >/dev/null 2>&1; echo $?)" "1"
+check "--max-wait-attempts 3 is accepted" "$(node "$CVD" --dry-run --max-wait-attempts 3 >/dev/null 2>&1; echo $?)" "0"
+for flag in --source --fixture --runs --model --max-wait-attempts --merge --certify; do check "$flag with no operand is rejected, not silently defaulted (F-252/F-253)" "$(node "$CVD" "$flag" >/dev/null 2>&1; echo $?)" "1"; done
 for flag in --merge --certify; do check "$flag with an empty operand is rejected (F-259)" "$(node "$CVD" "$flag" "" >/dev/null 2>&1; echo $?)" "1"; done
 
 # --- F-263: --fixture/--source/--model have exactly ONE defender (val()'s own `v === ''` clause),
@@ -526,6 +699,10 @@ for flag in --merge --certify; do check "$flag with an empty operand is rejected
 for flag in --source --fixture --model; do check "$flag with an empty operand is rejected (F-261)" "$(node "$CVD" --dry-run "$flag" "" >/dev/null 2>&1; echo $?)" "1"; done
 check "--fixture -h is rejected as a flag-shaped operand, not silently accepted as a literal value (F-262)" \
   "$(node "$CVD" --dry-run --fixture -h >/dev/null 2>&1; echo $?)" "1"
+check "--max-wait-attempts with an empty operand is rejected (F-294, same val() layer as --runs)" \
+  "$(node "$CVD" --dry-run --max-wait-attempts "" >/dev/null 2>&1; echo $?)" "1"
+check "--max-wait-attempts -h is rejected as a flag-shaped operand, not silently accepted as a literal value" \
+  "$(node "$CVD" --dry-run --max-wait-attempts -h >/dev/null 2>&1; echo $?)" "1"
 
 stub_bin=$(mktemp -d)
 stub_sentinel="$stub_bin/touched"
@@ -560,6 +737,144 @@ pristine_exit=$(node "$CVD" --dry-run --source "" >/dev/null 2>&1; echo $?)
 check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still rejects --source \"\"" \
   "$pristine_exit" "1"
 rm -rf "$F263_MUT_DIR"
+trap - EXIT
+
+# --- F-294: --max-wait-attempts reaches fillArm(), not just parseArgs() -------------------------
+# "This repo has repeatedly had flags that parse correctly and do nothing" (phase 4 iteration
+# 4.6's own instruction) -- so this drives the REAL parseArgs() output into the REAL fillArm(),
+# rather than asserting only that parseArgs() produces the right field under the right key. A
+# synthetic single-slot arm reports 'running' three times before completing: at the DEFAULT budget
+# (DEFAULT_MAX_WAIT_ATTEMPTS = 2) it exhausts (waitAttempts 3 > 2); parsed through
+# --max-wait-attempts 5, the SAME draw completes -- proving the parsed value changed fillArm()'s
+# own control flow, not merely parseArgs()'s output.
+F294_SEQ='[[{status:"running"},{status:"running"},{status:"running"},{status:"done",pass:1}]]'
+check "no --max-wait-attempts (parses to null): fillArm falls through to its own DEFAULT_MAX_WAIT_ATTEMPTS (2) -- a draw needing 3 waits censors" \
+  "$(cj "$MK_SEQ_DRAW
+    const args = M.parseArgs(['--dry-run']);
+    const seq = $F294_SEQ;
+    const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: args.maxWaitAttempts, report: () => {} });
+    process.stdout.write(JSON.stringify({ waitExhausted: r.waitExhausted, arm: r.arm }));
+  ")" '{"waitExhausted":true,"arm":[]}'
+check "--max-wait-attempts 5 (parsed via the real parseArgs()): the SAME synthetic draw now completes" \
+  "$(cj "$MK_SEQ_DRAW
+    const args = M.parseArgs(['--dry-run', '--max-wait-attempts', '5']);
+    const seq = $F294_SEQ;
+    const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: args.maxWaitAttempts, report: () => {} });
+    process.stdout.write(JSON.stringify({ waitExhausted: r.waitExhausted, arm: r.arm }));
+  ")" '{"waitExhausted":false,"arm":[1]}'
+
+# --- F-298 (pass-1 review): the anchor above USED TO BE a `grep -c` for the literal substring
+# 'maxWaitAttempts: args.maxWaitAttempts' -- a substring match a mutant can satisfy while changing
+# what the code DOES: `args.maxWaitAttempts && 0` still contains that exact text (the review's own
+# measurement: this mutant survived the full 134/0 suite untouched) while silently collapsing any
+# real, truthy --max-wait-attempts value to 0, censoring every draw on its first `running` read.
+# Fixed by extracting the opts-building step into `liveDrawOpts()` (exported, same reasoning
+# `validateSha()`/`parseArgs()` were already exported for) so a test drives the REAL function and
+# checks the REAL value it returns, not a text pattern main() happens to still contain.
+check "liveDrawOpts() carries a real --max-wait-attempts value through unchanged" \
+  "$(cj "process.stdout.write(JSON.stringify(M.liveDrawOpts(M.parseArgs(['--dry-run', '--runs', '15', '--max-wait-attempts', '5']))));")" \
+  '{"n":15,"model":null,"maxWaitAttempts":5}'
+check "liveDrawOpts() carries null through when --max-wait-attempts is absent (fillArm's own default then applies)" \
+  "$(cj "process.stdout.write(JSON.stringify(M.liveDrawOpts(M.parseArgs(['--dry-run', '--runs', '15']))));")" \
+  '{"n":15,"model":null,"maxWaitAttempts":null}'
+
+# Mutation: `args.maxWaitAttempts && 0` -- the EXACT mutant the review found surviving the old
+# grep-anchored test. A real (truthy) value collapses to 0; parseArgs() itself never produces a
+# literal 0 (rejected by the positive-integer check), so this corruption is reachable ONLY through
+# a broken liveDrawOpts(), never through a value parseArgs() would emit on its own. Staged on a
+# scratch copy, never the tracked file.
+F298_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F298_MUT_DIR"' EXIT
+F298_MUT="$F298_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F298_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F298_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F298_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F298_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'return { n: args.runs, model: args.model, maxWaitAttempts: args.maxWaitAttempts };';
+  const TO = 'return { n: args.runs, model: args.model, maxWaitAttempts: args.maxWaitAttempts && 0 }; // MUTANT (F-298): a real value collapses to 0, censoring every draw on its first running read';
+  if (!s.includes(FROM)) throw new Error('F-298 mutant pattern not found in convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_livedrawopts=$(node --input-type=module -e "
+  const M = await import('$F298_MUT');
+  process.stdout.write(JSON.stringify(M.liveDrawOpts(M.parseArgs(['--dry-run', '--max-wait-attempts', '5']))));
+")
+check "mutant (F-298: args.maxWaitAttempts && 0) collapses a real --max-wait-attempts 5 down to 0, catching the exact regression a text anchor could not" \
+  "$mutant_livedrawopts" '{"n":15,"model":null,"maxWaitAttempts":0}'
+pristine_livedrawopts=$(cj "process.stdout.write(JSON.stringify(M.liveDrawOpts(M.parseArgs(['--dry-run', '--max-wait-attempts', '5']))));")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still carries maxWaitAttempts:5 through liveDrawOpts() unchanged" \
+  "$pristine_livedrawopts" '{"n":15,"model":null,"maxWaitAttempts":5}'
+rm -rf "$F298_MUT_DIR"
+trap - EXIT
+
+# The one link liveDrawOpts()'s own tests above still can't close by execution: whether main()'s
+# live-draw branch actually CALLS liveDrawOpts(args) and forwards its return value into
+# drawArmForSha() -- main() itself isn't exported and spends quota, so it can't be driven directly.
+# Pure argument-passing has no value transform left to mutate the way the opts VALUES above did, so
+# a source anchor on the exact call expression is the honest residual, not a value-changing gap: it
+# proves the wiring exists, not that liveDrawOpts()'s output is correct (that part is covered above).
+check "main()'s live-draw branch literally calls drawArmForSha(source.dir, fixtureDir, source.sha, liveDrawOpts(args))" \
+  "$(grep -c 'drawArmForSha(source.dir, fixtureDir, source.sha, liveDrawOpts(args))' "$ROOT/$CVD")" "1"
+
+# Mutation 1: prove --max-wait-attempts's positive-integer guard actually depends on the check
+# added this pass. Staged on a scratch copy, never the tracked file.
+F294_VALIDATE_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F294_VALIDATE_MUT_DIR"' EXIT
+F294_VALIDATE_MUT="$F294_VALIDATE_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F294_VALIDATE_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F294_VALIDATE_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F294_VALIDATE_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F294_VALIDATE_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'a.maxWaitAttempts !== null && (!Number.isInteger(a.maxWaitAttempts) || a.maxWaitAttempts <= 0)';
+  const TO = 'false /* MUTANT (F-294): positive-integer guard neutered */';
+  if (!s.includes(FROM)) throw new Error('F-294 validation mutant pattern not found in convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_validate_exit=$(node "$F294_VALIDATE_MUT" --dry-run --max-wait-attempts 0 >/dev/null 2>&1; echo $?)
+check "mutant (F-294: positive-integer guard neutered) lets --max-wait-attempts 0 through -- confirming the check above currently depends on it" \
+  "$mutant_validate_exit" "0"
+pristine_validate_exit=$(node "$CVD" --dry-run --max-wait-attempts 0 >/dev/null 2>&1; echo $?)
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still rejects --max-wait-attempts 0" \
+  "$pristine_validate_exit" "1"
+rm -rf "$F294_VALIDATE_MUT_DIR"
+trap - EXIT
+
+# Mutation 2: prove fillArm()'s own read of opts.maxWaitAttempts is what the "reaches fillArm()"
+# checks above depend on, not some other unrelated path to the same numbers.
+F294_WIRING_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F294_WIRING_MUT_DIR"' EXIT
+F294_WIRING_MUT="$F294_WIRING_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F294_WIRING_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F294_WIRING_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F294_WIRING_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F294_WIRING_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const maxWaitAttempts = opts.maxWaitAttempts ?? DEFAULT_MAX_WAIT_ATTEMPTS;';
+  const TO = 'const maxWaitAttempts = DEFAULT_MAX_WAIT_ATTEMPTS; // MUTANT (F-294): opts.maxWaitAttempts ignored entirely';
+  if (!s.includes(FROM)) throw new Error('F-294 wiring mutant pattern not found in convergence.mjs -- source moved, update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_wiring=$(node --input-type=module -e "
+  const M = await import('$F294_WIRING_MUT');
+  $MK_SEQ_DRAW
+  const args = M.parseArgs(['--dry-run', '--max-wait-attempts', '5']);
+  const seq = $F294_SEQ;
+  const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: args.maxWaitAttempts, report: () => {} });
+  process.stdout.write(JSON.stringify({ waitExhausted: r.waitExhausted, arm: r.arm }));
+")
+check "mutant (F-294: fillArm ignores opts.maxWaitAttempts) reproduces the exact pre-fix gap -- --max-wait-attempts 5 no longer prevents censoring, catching the regression the checks above exist for" \
+  "$mutant_wiring" '{"waitExhausted":true,"arm":[]}'
+pristine_wiring=$(cj "$MK_SEQ_DRAW
+  const args = M.parseArgs(['--dry-run', '--max-wait-attempts', '5']);
+  const seq = $F294_SEQ;
+  const r = M.fillArm(mkSeqDraw(seq), { n: 1, maxWaitAttempts: args.maxWaitAttempts, report: () => {} });
+  process.stdout.write(JSON.stringify({ waitExhausted: r.waitExhausted, arm: r.arm }));
+")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still lets --max-wait-attempts 5 prevent censoring" \
+  "$pristine_wiring" '{"waitExhausted":false,"arm":[1]}'
+rm -rf "$F294_WIRING_MUT_DIR"
 trap - EXIT
 
 # --- F-284 (first defect): the shard namespace carries no fixture identity, phase 4 iteration 4.5.

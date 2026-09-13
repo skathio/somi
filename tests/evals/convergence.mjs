@@ -62,6 +62,13 @@ export const REGRESSION_SHIFT = 1;
 // figure computed the way D2's own N=15 was. It is the parameter that decides how often a
 // slow-but-terminating draw becomes `insufficient-draws` -- worth re-deriving once phase 4
 // produces real wall-clock data, not before.
+//
+// Overridable per-run via `--max-wait-attempts` (F-294, phase 4 iteration 4.6): a lower
+// `SOMI_CODE_LOOP_SEVERITY_FLOOR` makes a multi-pass draw take longer BY CONSTRUCTION (each extra
+// pass is another coder+reviewer round), so a fixed budget calibrated on Major-floor draws
+// exhausts exactly on the draws whose variance a lower-floor arm exists to measure -- informative
+// censoring, `multipass-fixture`'s diary, 2026-09-13. This constant stays the DEFAULT for a
+// routine run; only the CLI flag's absence falls back to it.
 export const DEFAULT_MAX_WAIT_ATTEMPTS = 2;
 // Malformed shapes are uncorrelated with cost and may be replaced (F-194), but unboundedly is a
 // silent infinite loop waiting to happen -- generous enough to absorb a rare flake, low enough
@@ -253,7 +260,7 @@ function safeCleanup(draw) {
  *   (commands/code-loop.md's own resume check picks up where it left off -- this IS the "wait",
  *   not a bare sleep-and-poll); `cleanup()` (optional) removes the handle's workDir.
  * @param {object} [opts]
- * @returns {{breach: boolean, arm: number[], stillRunning: number, replaced: number, waitExhausted: boolean, censor: {elapsedMs: number, waitAttempts: number, lastState: {status: string|null, historyEmpty: boolean|null, stateReadable: boolean}}|null, breachReason: string|null}}
+ * @returns {{breach: boolean, arm: number[], stillRunning: number, replaced: number, waitExhausted: boolean, censor: {elapsedMs: number, waitAttempts: number, lastState: {status: string|null, historyEmpty: boolean|null, stateReadable: boolean, pass: number|null, completedPasses: number|null, lastVerdict: string|null}}|null, breachReason: string|null}}
  */
 export function fillArm(newDraw, opts = {}) {
   const n = opts.n ?? N_PER_ARM;
@@ -812,8 +819,12 @@ function sampleSd(xs) {
   return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1));
 }
 
-function parseArgs(argv) {
-  const a = { source: 'HEAD', fixture: null, runs: N_PER_ARM, model: null, dryRun: false, merge: null, certify: null };
+// Exported (F-294, phase 4 iteration 4.6) so a hermetic test can drive the REAL parsed value into
+// fillArm() directly -- `main()` itself isn't exported (it spends quota), so this is the seam that
+// lets "the flag reaches fillArm()" be proven by execution rather than by reading main()'s source,
+// the same reasoning `validateSha()` was already exported for.
+export function parseArgs(argv) {
+  const a = { source: 'HEAD', fixture: null, runs: N_PER_ARM, model: null, dryRun: false, merge: null, certify: null, maxWaitAttempts: null };
   let i = 0;
   // F-252/F-253/F-259/F-261/F-262: missing, empty, and flag-shaped operands are ALL "no value" -- an empty string is not `undefined`, and a single dash is still a flag, not a literal.
   const val = (k) => { const v = argv[++i]; if (v === undefined || v === '' || /^-/.test(v)) throw new Error(`${k} requires a value`); return v; };
@@ -823,6 +834,7 @@ function parseArgs(argv) {
     else if (k === '--fixture') a.fixture = val(k);
     else if (k === '--runs') a.runs = Number(val(k));
     else if (k === '--model') a.model = val(k);
+    else if (k === '--max-wait-attempts') a.maxWaitAttempts = Number(val(k));
     else if (k === '--dry-run') a.dryRun = true;
     else if (k === '--merge') a.merge = val(k);
     else if (k === '--certify') a.certify = val(k);
@@ -830,6 +842,12 @@ function parseArgs(argv) {
     else throw new Error(`unknown argument: ${k}`);
   }
   if (!Number.isInteger(a.runs) || a.runs <= 0) throw new Error(`--runs must be a positive integer`);
+  // F-294: same validation SHAPE as --runs above, not a second hand-rolled check -- absent (null)
+  // is valid and means "use fillArm()'s own DEFAULT_MAX_WAIT_ATTEMPTS", so this only fires once a
+  // value was actually supplied.
+  if (a.maxWaitAttempts !== null && (!Number.isInteger(a.maxWaitAttempts) || a.maxWaitAttempts <= 0)) {
+    throw new Error(`--max-wait-attempts must be a positive integer`);
+  }
   return a;
 }
 
@@ -847,6 +865,11 @@ const USAGE = `somi convergence gate driver
                        (default: task02-code, D9 -- the only fixture shaped for a code+review loop)
   --runs N             target arm size (default ${N_PER_ARM}, D2)
   --model NAME         model to invoke /code-loop with (default: the claude CLI's own default)
+  --max-wait-attempts N  retries a still-\`running\` draw is given before the arm gives up on that
+                       slot (default ${DEFAULT_MAX_WAIT_ATTEMPTS}). Raise this for a lower
+                       SOMI_CODE_LOOP_SEVERITY_FLOOR: a multi-pass draw takes longer by
+                       construction, so the default (calibrated on single-pass draws) censors
+                       exactly the draws a lower-floor arm exists to measure (F-294).
   --merge <sha>        fold shards already on disk for <sha> into an arm; report count/mean/sd.
                        No live draw, no credential needed. --fixture (F-285) narrows the fold.
   --certify <sha>      same as --merge -- folding IS the report; there is no second, narrower
@@ -895,6 +918,31 @@ function resolveFixtureDir(fixtureArg, source) {
   return fixtureArg == null ? fixtureFor('02', source.dir) : resolve(source.dir, fixtureArg);
 }
 
+/**
+ * Build `main()`'s live-draw opts object -- extracted (F-298, pass-1 review) because the anchor
+ * that previously stood in for this ("main() literally contains the substring
+ * `maxWaitAttempts: args.maxWaitAttempts`") is a substring match: a mutant that keeps the
+ * substring but changes its MEANING (`args.maxWaitAttempts && 0` -- a real, truthy value collapses
+ * to `0`, silently censoring every draw on its first `running` read) still contains the exact
+ * grepped text and survives untouched. `main()` itself still can't be driven hermetically (it
+ * spends quota), but this function can be -- exported so a test drives the REAL `parseArgs()`
+ * output through the REAL `liveDrawOpts()` and checks the VALUE that comes out, closing the gap a
+ * text anchor can only gesture at. The one link this still doesn't close by execution is whether
+ * `main()` actually calls this function and forwards its return value into `drawArmForSha()` --
+ * that residual is pure argument-passing (no value transform left to get wrong), checked below by
+ * a source anchor on the exact call expression, not by a substring on this object's field names.
+ *
+ * `n`/`model` pass through `args.runs`/`args.model` unchanged, same as before this extraction;
+ * `maxWaitAttempts` stays untouched (never defaulted here) -- `fillArm()`'s own `opts.maxWaitAttempts
+ * ?? DEFAULT_MAX_WAIT_ATTEMPTS` already treats an absent/`null` value identically to omission.
+ *
+ * @param {{runs: number, model: string|null, maxWaitAttempts: number|null}} args  parseArgs()'s output.
+ * @returns {{n: number, model: string|null, maxWaitAttempts: number|null}}
+ */
+export function liveDrawOpts(args) {
+  return { n: args.runs, model: args.model, maxWaitAttempts: args.maxWaitAttempts };
+}
+
 async function main(argv) {
   const args = parseArgs(argv);
   if (args.help) { process.stdout.write(USAGE + '\n'); return 0; }
@@ -919,7 +967,12 @@ async function main(argv) {
       const out = {
         schema: LOOP_SCHEMA_VERSION, dryRun: true, taskId: TASK_ID,
         source: { ref: source.ref, sha: source.sha }, fixture: fixtureDir,
-        runsRequested: args.runs, arm: [], breach: false,
+        runsRequested: args.runs,
+        // F-300: echo the wait budget a live draw would actually use -- `--dry-run` previously
+        // stayed silent on it, so nothing confirmed a `--max-wait-attempts` value (or the implied
+        // default) was the one that would apply before spending quota on the real draw.
+        maxWaitAttempts: args.maxWaitAttempts ?? DEFAULT_MAX_WAIT_ATTEMPTS,
+        arm: [], breach: false,
       };
       process.stdout.write(JSON.stringify(out, null, 2) + '\n');
       return 0;
@@ -936,13 +989,16 @@ async function main(argv) {
   const source = resolveSource(args.source);
   try {
     const fixtureDir = resolveFixtureDir(args.fixture, source); // F-284: pinned by drawArmForSha() below
-    const result = drawArmForSha(source.dir, fixtureDir, source.sha, { n: args.runs, model: args.model });
+    const result = drawArmForSha(source.dir, fixtureDir, source.sha, liveDrawOpts(args));
     process.stdout.write(
       `${(source.sha ?? 'unversioned').slice(0, 12)}: ${result.breach ? 'CAP-BREACH' : `${result.arm.length}/${args.runs} usable draw(s)`}\n` +
-      `  arm:           [${result.arm.join(', ')}]\n` +
-      `  stillRunning:  ${result.stillRunning}\n` +
-      `  replaced:      ${result.replaced}\n` +
-      `  waitExhausted: ${result.waitExhausted}\n`);
+      `  arm:            [${result.arm.join(', ')}]\n` +
+      `  stillRunning:   ${result.stillRunning}\n` +
+      `  replaced:       ${result.replaced}\n` +
+      `  waitExhausted:  ${result.waitExhausted}\n` +
+      // F-300: echo the wait budget that governed this draw -- previously only --dry-run's shape
+      // check and docs/EVALS.md's own worked example named it; the live summary said nothing.
+      `  maxWaitAttempts: ${args.maxWaitAttempts ?? DEFAULT_MAX_WAIT_ATTEMPTS}\n`);
     return 0;
   } finally {
     source.cleanup();

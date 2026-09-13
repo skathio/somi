@@ -453,6 +453,20 @@ bare pass/fail:
 | `no-regression` | `p ≥ α` **and** the observed effect's upper confidence bound excludes the +1-pass shift the gate is sized to detect — an equivalence claim, not merely "not significantly different" |
 | `inconclusive` | everything else. Reported and blocks a trim, exactly like `cannotCertify` blocks the task corpus — `p ≥ α` alone is never read as `no-regression` |
 
+A draw still `running` after its wait budget (`--max-wait-attempts`, default 2 full `/code-loop`
+resumes) is **censored**, not counted: the arm comes back short rather than topped up with a
+substitute draw, since re-rolling a censored slot would cancel the exact signal a slow, multi-pass
+loop provides. The default is sized for single-pass draws; a lower `SOMI_CODE_LOOP_SEVERITY_FLOOR`
+makes a converging loop take more passes **by construction**, so it needs a larger budget or it
+censors precisely the draws whose variance the run exists to measure (`multipass-fixture`'s diary,
+2026-09-13). A censored draw still leaves a retained record (`results/<sha>/convergence/censored/`)
+carrying the elapsed wall-clock, wait attempts consumed, and a snapshot of the last-read state —
+including its `pass` (the pass most recently **started**, possibly still in progress — the loop
+writes this counter *before* that pass's own coder/reviewer round trip runs, never after),
+`completedPasses` (how many passes have actually finished, the disambiguator `pass` alone can't
+provide), and `lastVerdict` (the verdict of pass `completedPasses`, when there is one — not of
+`pass` itself) — so a censored batch is diagnosable after the fact rather than merely a gap.
+
 Every comparison prints its own **live** power estimate, computed from the realized (post-exclusion)
 arm sizes — never D2's static 71.6% cited as a constant, since that would state the power the gate
 was *sized* for rather than the power a given comparison actually *had*.
@@ -465,6 +479,10 @@ node tests/evals/convergence.mjs --dry-run --source HEAD
 # completes, so a killed or re-run invocation resumes rather than re-drawing.
 npm run eval:convergence -- --source main --runs 15
 npm run eval:convergence -- --source feat/trim-candidate --runs 15
+
+# A lower severity floor makes converging draws take more passes -- raise the wait budget so a
+# still-running multi-pass draw isn't censored before it can finish (default 2 resumes).
+SOMI_CODE_LOOP_SEVERITY_FLOOR=Minor npm run eval:convergence -- --source main --runs 15 --max-wait-attempts 6
 
 # Fold whatever shards already exist for a sha into an arm and report count/mean/sd.
 # Read-only: no draw, no credential needed.

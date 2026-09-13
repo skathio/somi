@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 // Reads /code-loop's loop-state JSON (`.somi/somi-state/loop/<slug>.<iteration>.json`) for the
-// convergence gate (phase 3, D1-D5, R3). Five independent extractions -- 3.2's Mann-Whitney code
-// calls none of them, and no two of them call each other.
+// convergence gate (phase 3, D1-D5, R3). Six independent extractions -- 3.2's Mann-Whitney code
+// calls none of them. Some reuse each other's already-tested guard for ordinary DRY reasons
+// (`breachReason()` calls `capBreached()`; `censoredDrawSnapshot()`, F-295, calls both
+// `passesToApprove()` and `terminalVerdict()`) -- `terminalVerdict()`/`terminalOutcome()` are the
+// ONE pair that deliberately does NOT reuse each other, so two independently-coded copies of the
+// same "last history entry, guarded" logic over the SAME terminal draw can disagree under a
+// mutation and both be caught (see `terminalOutcome()`'s own docstring) -- a property duplication
+// buys only when there are two independent readings of the same underlying fact to cross-check,
+// which is not the case for the other reuses above.
 //
 // FAILS SAFE. The first four exports return `null` on a shape they don't recognise, never a
 // guessed boolean, number, or string -- "a parser that guesses `false` fails a conforming run" is
@@ -196,7 +203,9 @@ export function terminalVerdict(loopStateJson) {
  * FAILS SAFE like every extractor above: `null` on any unrecognised shape, and EACH field
  * independently `null` (never defaulted to 0/false) so an absent count can't read as "zero found".
  * Duplicates the "last, not first" step rather than calling `terminalVerdict()` -- this module's
- * own header states no two extractors call each other.
+ * own header names this pair specifically as the one that deliberately does not reuse each other's
+ * guard, so a mutation to one copy can disagree with the other over the SAME terminal draw and be
+ * caught, rather than one silently deferring to the other's (possibly mutated) answer.
  *
  * @param {*} loopStateJson  a parsed loop-state object (see `passesToApprove`'s param doc).
  * @returns {{verdict: string|null, blockers: number|null, majors: number|null, diffLines: number|null}|null}
@@ -232,10 +241,42 @@ export function terminalOutcome(loopStateJson) {
  *
  * Deliberately narrow, unlike `terminalVerdict()`/`terminalOutcome()` above: does NOT re-derive
  * `capBreached()` -- the caller already knows this draw classified as `running` before ever
- * reaching this function, so re-testing that would be redundant, not confirmatory. Three fields:
+ * reaching this function, so re-testing that would be redundant, not confirmatory. Six fields:
  * `status` (should read `"running"` for a draw that reached this path at all, but read off the
  * raw object rather than assumed, in case a malformed intermediate state slips through);
- * `historyEmpty`; `stateReadable`.
+ * `historyEmpty`; `stateReadable`; `pass`; `completedPasses`; `lastVerdict`.
+ *
+ * `pass` and `lastVerdict` (F-294/F-295, phase 4 iteration 4.6): a real censored draw
+ * (`multipass-fixture`'s diary, 2026-09-13) showed this snapshot could say a loop was `running`
+ * but not how far it had gotten -- exactly the fact that separates "iterating" (the floor took
+ * effect) from "slow" (no signal either way). `pass` reuses `passesToApprove()` directly: that
+ * function's own contract is "pure field extraction, deliberately blind to status" -- precisely a
+ * still-running draw's PROVISIONAL pass count, no re-derivation needed. `lastVerdict` calls
+ * `terminalVerdict()` directly, a DELIBERATE departure from the `terminalVerdict()`/
+ * `terminalOutcome()` non-calling convention this module's header states for THOSE two: that
+ * convention protects against two independent readings of the SAME finished draw silently
+ * disagreeing under a mutation (F-273/F-274) -- there is no second reading of a still-running
+ * draw's last verdict here to diverge from, so a second, driftable copy of `terminalVerdict()`'s
+ * four-line "last entry, guarded" logic would be redundant duplication, not a second instrument
+ * (the same reuse call `breachReason()` already makes into `capBreached()`, not a new pattern).
+ * Both fail safe via the callee's own guard -- `null` on any unrecognised shape, never re-derived
+ * or defaulted here.
+ *
+ * `completedPasses` (F-296, phase 4 iteration 4.6 pass-1 review): `pass` above is NOT "the last
+ * pass that finished" -- it is whatever `scripts/somi-loop.mjs pass` last wrote to `state.pass`,
+ * and that subcommand sets it BEFORE the pass's own coder/reviewer round trip begins
+ * (`state.pass = cur + 1`, then the work happens; `record-pass` only appends to `history` AFTER a
+ * verdict lands). So a `running` draw with `pass: 2` is genuinely ambiguous on `pass` alone between
+ * two different states: mid-pass-2 (`history.length === 1`, so `lastVerdict` belongs to pass 1, not
+ * 2) and just past pass 2's own `record-pass`, waiting on the next `pass` call (`history.length ===
+ * 2`, `lastVerdict` belongs to pass 2). Not hypothetical: this very iteration's own live loop state
+ * read `{pass: 1, history: []}` at the pass-1 review that raised this finding -- mid-pass 1,
+ * nothing completed, not "a slow pass 1 that already produced a verdict". `completedPasses` is
+ * `history.length` (or `null` if `history` isn't a readable array, the same fail-safe posture as
+ * every field here) -- the plain disambiguator: `lastVerdict`, when non-`null`, is always the
+ * verdict of pass `completedPasses`, never of `pass` itself. Read `pass` (here and in
+ * `docs/EVALS.md`'s censoring paragraph, corrected in this same pass) as "the pass most recently
+ * STARTED, possibly still in progress" -- never as "the last completed pass".
  *
  * `historyEmpty`, corrected (F-277, code-loop pass 2 review): `scripts/somi-loop.mjs` appends to
  * `history` in exactly one place (`record-pass`, gated on `--verdict`), which fires only once a
@@ -266,15 +307,31 @@ export function terminalOutcome(loopStateJson) {
  *
  * @param {*} loopStateJson  a parsed loop-state object (see `passesToApprove`'s param doc), or
  *   whatever the last `read()` returned -- including `null` if the read itself failed.
- * @returns {{status: string|null, historyEmpty: boolean|null, stateReadable: boolean}}
+ * @returns {{status: string|null, historyEmpty: boolean|null, stateReadable: boolean, pass: number|null, completedPasses: number|null, lastVerdict: string|null}}
  */
 export function censoredDrawSnapshot(loopStateJson) {
   const stateReadable = loopStateJson !== null && typeof loopStateJson === 'object';
-  if (!stateReadable) return { status: null, historyEmpty: null, stateReadable };
-  const { status, history } = loopStateJson;
+  // Both calls are safe on ANY input, including a non-object -- passesToApprove()/terminalVerdict()
+  // carry their own `loopStateJson === null || typeof ... !== 'object'` guard, so there is no need
+  // to gate these two calls behind `stateReadable` the way status/historyEmpty are gated below.
+  const pass = passesToApprove(loopStateJson);
+  const lastVerdict = terminalVerdict(loopStateJson);
+  // completedPasses (F-296): the plain `pass` vs `completedPasses` disambiguator -- see this
+  // function's own docstring. Read directly off `history.length` (not derived from `historyEmpty`
+  // below -- `historyEmpty` is defined in terms of THIS value, not the reverse, so the two can
+  // never silently drift apart).
+  const history = stateReadable ? loopStateJson.history : undefined;
+  const completedPasses = Array.isArray(history) ? history.length : null;
+  if (!stateReadable) {
+    return { status: null, historyEmpty: null, stateReadable, pass, completedPasses, lastVerdict };
+  }
+  const { status } = loopStateJson;
   return {
     status: typeof status === 'string' ? status : null,
-    historyEmpty: Array.isArray(history) ? history.length === 0 : null,
+    historyEmpty: completedPasses === null ? null : completedPasses === 0,
     stateReadable,
+    pass,
+    completedPasses,
+    lastVerdict,
   };
 }
