@@ -450,7 +450,7 @@ bare pass/fail:
 | verdict | meaning |
 |---|---|
 | `regression` | `p < α` (0.05, one-sided) — the candidate's passes-to-approve are stochastically worse than the baseline's |
-| `no-regression` | `p ≥ α` **and** the observed effect's upper confidence bound excludes the +1-pass shift the gate is sized to detect — an equivalence claim, not merely "not significantly different" |
+| `no-regression` | `p ≥ α` **and** the observed effect's upper confidence bound excludes `REGRESSION_SHIFT` (`decisions.md#d16` — tightened from a full pass once the real same-fixture baseline measured mean 1.53: one pass there is a ~65% increase, not the ~47% it was against the old 2.14 mixed-history mean) — an equivalence claim, not merely "not significantly different". On integer pass counts every margin strictly between 0 and 1 is identical (D16's addendum): the equivalence test **credits ties to the candidate and tolerates nothing beyond them** — the literal value 0.5 only matters in that it is less than a full pass, not as a "half-pass" tolerance in its own right |
 | `inconclusive` | everything else. Reported and blocks a trim, exactly like `cannotCertify` blocks the task corpus — `p ≥ α` alone is never read as `no-regression` |
 
 A draw still `running` after its wait budget (`--max-wait-attempts`, default 2 full `/code-loop`

@@ -49,9 +49,22 @@ import { shardDir, resolveSource, fixtureFor } from './run.mjs';
 // independent of any draw outcome (nothing else in this module is n-agnostic by accident).
 export const N_PER_ARM = 15;
 export const ALPHA = 0.05; // D5.
-// The +1-pass shift D2's own power analysis is sized to detect -- the equivalence boundary
-// no-regression must show the effect's upper confidence bound excludes.
-export const REGRESSION_SHIFT = 1;
+// D16: the equivalence boundary a candidate's pass counts must be shown to stay within before
+// `no-regression` is reported -- the effect's upper confidence bound has to exclude this shift.
+// Tightened from 1 (D2's original +1-pass framing, resting on the 21-loop mixed-history baseline)
+// to 0.5 once D15 measured the real same-fixture baseline at mean 1.5333, sd 0.5164: one whole
+// pass there is a ~65% increase in review rounds, not the ~47% it was against D2's 2.14 mean, so a
+// margin of a full pass was no longer a fair "meaningfully worse" line. N_PER_ARM stays 15 (D16).
+// D16 addendum (F-311, 2026-09-14 pass 2): on INTEGER pass counts, `c - s < b` is the same
+// condition as `c <= b` for every `s` strictly between 0 and 1 -- so this constant's only
+// FUNCTIONAL effect is crediting ties to the candidate and separating a full-pass margin (1) from
+// anything below it. It is not "a half-pass tolerance"; changing 0.5 to 0.25 or 0.75 would not
+// change a single verdict. The literal value 0.5 is preserved only because 1 was the prior value
+// and a value strictly below 1 is what the tightening required -- not because 0.5 itself, as
+// opposed to any other sub-1 value, is meaningful. Pinned as a literal anyway (eval-runner.sh,
+// point 4) so an accidental future edit is still caught, even though the functional behavior it
+// changes is coarser than the literal suggests.
+export const REGRESSION_SHIFT = 0.5;
 // Each retry is a FULL /code-loop re-invocation (resumed via commands/code-loop.md's own resume
 // check, up to invokeCommand's 30-minute subprocess timeout) -- this bounds cost, not polling
 // frequency. 2 gives a `running` draw two more full attempts to reach a terminal status before
@@ -374,8 +387,9 @@ export function estimatePower(drawOne, n, opts = {}) {
  * candidate arm DOWN by `shift` and re-run the SAME verified procedure with the comparison
  * reversed (candidateShifted vs baseline, testing "baseline stochastically greater"). A small
  * p there is evidence baseline > candidate - shift, i.e. candidate < baseline + shift -- the
- * observed effect's upper confidence bound excludes the +1-pass shift the gate is sized for. This
- * is the standard shift-inversion for a rank-test confidence bound, not a new statistical method.
+ * observed effect's upper confidence bound excludes `shift` (REGRESSION_SHIFT by default, 0.5
+ * per D16 -- was 1). This is the standard shift-inversion for a rank-test confidence bound, not a
+ * new statistical method.
  *
  * `power` (F-223) is OPT-IN via `opts.power` -- computed from THIS call's own arms (pooled, live),
  * never by default, so it never fires from inside estimatePower()'s own trial loop or from

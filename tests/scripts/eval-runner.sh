@@ -2542,6 +2542,10 @@ echo "== convergence gate driver, classification + arm-filling + comparison/verd
 
 # --- point 4 (first half): N_PER_ARM pinned as a literal, independent of any draw outcome -------
 check "N_PER_ARM is exactly 15 (D2)" "$(cvj "process.stdout.write(String(M.N_PER_ARM));")" "15"
+# D16: REGRESSION_SHIFT pinned as a literal too, same discipline -- the functional pin (does the
+# margin actually BITE at 0.5 and not at 1) lives further down, after the mutation-testing section,
+# since it needs $CVD_SCRATCH's revert-and-reassert idiom, not just a value read.
+check "REGRESSION_SHIFT is exactly 0.5 (D16)" "$(cvj "process.stdout.write(String(M.REGRESSION_SHIFT));")" "0.5"
 
 # --- point 5: classifyDraw distinguishes breach / done / running / malformed -- the two null
 # causes (F-184) told apart, not conflated under one null-means-skip catch-all --------------------
@@ -2854,6 +2858,11 @@ check "runComparison: insufficient-draws (point 4) on a realized shortfall, meas
 # false ACCEPT; none bounded a false BLOCK. A one-line mutant (`verdict = 'inconclusive'` always)
 # passed points 1/2/4/5 AND the old membership assertion below, improving point 2 to 0.0000. Two
 # assertions close it -- the first is this rewritten check itself.
+# D16 (REGRESSION_SHIFT 1 -> 0.5): checked, not assumed -- this arm is TWO constant arms (every
+# draw pass:2), so `shifted` is also constant, strictly less than `baseline` for ANY positive
+# shift; the tie-conditional rank test only sees a fully-separated ordering, which is identical at
+# shift=0.5 and shift=1 (verified directly: equivalence.p is bit-identical, 0.0002, at both). This
+# check is margin-INVARIANT by construction, not because it happens to still pass -- left as-is.
 check "point 6 (1/2) -- a healthy, well-filled comparison returns no-regression ITSELF, not merely membership in the verdict set (F-221: the old '['regression','no-regression','inconclusive'].includes(verdict)' assertion was true of every value compareArms() can return, including a gate that never accepts)" \
   "$(cvj "$CVD_HELPERS
     const arm = Array.from({length:15}, () => [{status:'done',pass:2}]);
@@ -3095,13 +3104,24 @@ ln -s "$ROOT/tests/evals/run.mjs" "$CVD_SCRATCH_DIR/run.mjs"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
 # CVD_SIM: shared population/trial-loop preamble for points 1, 2 and 6, and for mutant D's second
-# check below (all draw from D5's own tied historical histogram, {1:9,2:4,3:5,4:2,5:1}). Defined
-# here, before the mutation section, since mutant D needs it too.
+# check below (all draw from D5's own tied historical MIXED-HISTORY histogram,
+# {1:9,2:4,3:5,4:2,5:1}, sd~1.24). Defined here, before the mutation section, since mutant D needs
+# it too.
 # F-233 (Nit, code-loop pass 1 review): TWO independent seeded streams, not one shared between arm
 # generation and the rank test's own resampling -- compareArms() short-circuits on p < alpha, so a
 # single shared stream let the number of rng() calls consumed per trial depend on that trial's own
 # outcome, and no single trial could be replayed in isolation. dataRng draws the synthetic arms;
 # testRng is the ONLY stream compareArms()/mannWhitneyU ever consumes.
+#
+# F-309 (pass-2 review, 2026-09-14): D15 measured that this is NOT the population phase 4's real
+# /code-loop draws are shaped like -- D13's real baseline (decisions.md#d13) has sd 0.5164,
+# materially tighter than this histogram's ~1.24. Every target/floor computed under CVD_SIM below
+# is calibrated to THIS wider, tied-mixed-history population, and states how the verdict logic
+# behaves under HIGH VARIANCE -- a genuine, deliberately kept stress case -- not what the D16-gated
+# comparison the real gate runs actually accepts or rejects on real draws. Read a CVD_SIM
+# target/floor as "how the logic holds up under stress," never as a claim about the operative
+# gate's real accept rate; CVD_SIM_D13 below (bootstrapped from the real baseline) is what states
+# that instead.
 CVD_SIM='
   const MWmod = await import("'"$ROOT"'/tests/evals/lib/mann-whitney.mjs");
   const dataRng = MWmod.mulberry32(1234);
@@ -3109,6 +3129,34 @@ CVD_SIM='
   const weights = [[1,9],[2,4],[3,5],[4,2],[5,1]];
   const total = weights.reduce((s,[,w]) => s + w, 0);
   function drawOne() { let r = dataRng() * total; for (const [v,w] of weights) { if (r < w) return v; r -= w; } return weights.at(-1)[0]; }
+  function drawArm(n) { return Array.from({ length: n }, drawOne); }
+  const T = 600, RESAMPLES = 3000, N = 15;
+'
+
+# CVD_SIM_D13: same shared preamble SHAPE as CVD_SIM (F-233's two-independent-streams discipline),
+# but the population is bootstrap-resampled WITH REPLACEMENT from D13's real measured 15-draw
+# baseline arm (decisions.md#d13: [2,1,2,1,2,1,1,2,1,1,2,2,2,1,2], mean 1.5333, sd 0.5164) instead
+# of D5's mixed-history histogram -- the population the D16-gated /code-loop comparison actually
+# draws from (F-309). `dataRng` draws the bootstrap sample (both baseline's and candidate's shared
+# draws, same convention as CVD_SIM's `drawArm`); `bumpRng` is a THIRD independent stream, used only
+# by the point-2 analogue further down, for the "gains a pass with probability 0.5" degradation
+# model D15/D16's own resampling scripts used to report "+0.5 pass"
+# (runs/2026-09-14-4.2-power-resample*.mjs) -- kept separate from `dataRng` for the same reason
+# F-233 separates `dataRng` from `testRng`: no single stream's call count may depend on another
+# draw's own outcome. `testRng` is the ONLY stream compareArms()/mannWhitneyU ever consumes, same
+# as CVD_SIM. Independently derived by Monte Carlo, not copied from D15/D16's own scripts (which
+# share one rng stream where this suite's F-233 discipline keeps three -- a design difference, NOT
+# the reason the two readings differ; the point-2 analogue below carries the arithmetic, F-318), so
+# the two are expected to agree in magnitude, not to the decimal, as independent estimates -- checked: this harness's own CVD_SIM point-6-equivalent measurement of D16's already-
+# published 0.4250 (margin 0.5, D5 population) reproduces bit-for-bit (see point 6 below), which is
+# the cross-check that this harness is faithful to the real module before trusting new numbers from it.
+CVD_SIM_D13='
+  const MWmod = await import("'"$ROOT"'/tests/evals/lib/mann-whitney.mjs");
+  const D13_ARM = [2,1,2,1,2,1,1,2,1,1,2,2,2,1,2];
+  const dataRng = MWmod.mulberry32(1234);
+  const bumpRng = MWmod.mulberry32(4321);
+  const testRng = MWmod.mulberry32(5678);
+  function drawOne() { return D13_ARM[Math.floor(dataRng() * D13_ARM.length)]; }
   function drawArm(n) { return Array.from({ length: n }, drawOne); }
   const T = 600, RESAMPLES = 3000, N = 15;
 '
@@ -3158,10 +3206,20 @@ cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
 # Mutant C -- reintroduces the collapsed-verdict bug points 1/2 exist to catch: no-regression
 # whenever p >= alpha (the exact "p >= alpha alone is no-regression" shape spec.md forbids). Arms
-# below are a real inconclusive pair under the PRISTINE module (primary.p=0.137, equiv.p=0.084,
-# both >= alpha -- found by simulation, not hand-picked to be easy), so the mutant's forced flip
-# to 'no-regression' is a visible change from the correct verdict, not masked by an earlier
-# primary-regression return.
+# below are a real inconclusive pair under the PRISTINE module (primary.p=0.137, unaffected by
+# REGRESSION_SHIFT since `shift` is never read before the primary-test return; equiv.p=0.084 at
+# the pre-D16 margin of 1, re-measured at ~0.38 under D16's 0.5 -- both readings >= alpha, so this
+# is still a genuine inconclusive pair at the new margin, just less marginal -- found by
+# simulation, not hand-picked to be easy), so the mutant's forced flip to 'no-regression' is a
+# visible change from the correct verdict, not masked by an earlier primary-regression return.
+# F-313 (Nit, pass-2 review): the paragraph above ASSERTED the pristine premise only in prose --
+# closed with a direct check, against the tracked module, before the mutation below is applied.
+check "mutant C's pair is a genuine inconclusive pair UNDER THE UNMODIFIED module (F-313) -- the premise the mutation below is supposed to visibly change, checked directly rather than only claimed in a comment" \
+  "$(cvj "
+    const a = [1,3,2,3,1,3,1,1,1,3,1,1,1,3,1];
+    const b = [1,2,3,2,1,2,3,1,3,5,2,1,5,1,2];
+    process.stdout.write(M.compareArms(a, b, { resamples: 20000 }).verdict);
+  ")" "inconclusive"
 node -e "
   const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
   const FROM = \"const shifted = candidateArm.map((v) => v - shift);\n  const equivalence = mannWhitneyU(shifted, baselineArm, mwOpts);\n  const verdict = equivalence.p < alpha ? 'no-regression' : 'inconclusive';\n  return { verdict, primary, equivalence, alpha, shift, power };\";
@@ -3195,8 +3253,15 @@ check "mutant D (F-221: verdict is always 'inconclusive') is caught by point 6's
     const r = M.runComparison(mkSeqDraw(arm.slice()), mkSeqDraw(arm.slice()), { resamples: 5000, report: () => {} });
     process.stdout.write(r.verdict);
   " "$CVD_SCRATCH")" "inconclusive"
-check "mutant D is ALSO caught by point 6's SECOND half -- the no-regression rate on unshifted pairs collapses to 0, far below the D2-derived floor" \
+check "mutant D is ALSO caught by point 6's SECOND half -- the no-regression rate on unshifted pairs collapses to 0, far below point 6's floor (D16, re-derived below for REGRESSION_SHIFT=0.5)" \
   "$(cvj "$CVD_SIM
+    process.stdout.write(String(M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES, trials: 50 })));
+  " "$CVD_SCRATCH")" "0"
+# F-309 (pass-2 review): the never-accepting direction is caught the SAME way on the D13-population
+# analogue (defined below) -- staged here, on the SAME mutant, rather than re-mutating a second
+# scratch copy, since the mutation itself doesn't depend on which population later draws from it.
+check "mutant D is ALSO caught by the D13-population point 6 analogue (F-309) -- the healthy-pair no-regression rate collapses to 0 there too, independent of which population is used" \
+  "$(cvj "$CVD_SIM_D13
     process.stdout.write(String(M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES, trials: 50 })));
   " "$CVD_SCRATCH")" "0"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
@@ -3278,11 +3343,135 @@ check "mutant F reverted -- the same post-cleanup-null handle now correctly read
     process.stdout.write(String(r.breachReason));
   " "$CVD_SCRATCH")" "max-passes-exceeded"
 
+# --- D16 pin: the margin's EFFECT, not just its literal value -- a fixed baseline/candidate pair
+# that reads no-regression at shift=1 and reads something else at the DEFAULT shift (module's own
+# REGRESSION_SHIFT). `baseline` is D13's real measured 15-draw arm ([2,1,2,1,2,1,1,2,1,1,2,2,2,1,2],
+# decisions.md#d15); `candidate` bumps its first 4 draws by one pass each -- found by grid search
+# over "how many draws bumped" (0/2 draws: no-regression at both margins; 8+: regression at both,
+# shift never even read; 4 draws is the band between, verified stable across 5 independent rng
+# seeds before picking it). A fixed `rng` (mulberry32) makes this deterministic -- Math.random()
+# would make a boundary-straddling pair flaky across runs, unlike Mutant C's pair above, which only
+# needs a stable VERDICT under a mutant that ignores the data outright.
+# D16 addendum (F-311, 2026-09-14 pass 2): this pin's (1/2)-vs-(2/2) contrast only proves the
+# constant separates a margin of 1 from something strictly BELOW 1 -- on integer pass counts every
+# value in (0,1) is functionally identical (`c - s < b` <=> `c <= b`), so this pin cannot and does
+# not claim 0.5 itself is a meaningful tolerance; it would read identically if the module held 0.25
+# or 0.9 instead of 0.5. The exact literal 0.5 is pinned only by the separate "REGRESSION_SHIFT is
+# exactly 0.5" literal check (point 4's own discipline, above the classifyDraw section) -- that is
+# the ONLY check in this suite that would fail if 0.5 moved to another sub-1 value.
+CVD_PIN_DATA='
+  const baseline  = [2,1,2,1,2,1,1,2,1,1,2,2,2,1,2];
+  const candidate = [3,2,3,2,2,1,1,2,1,1,2,2,2,1,2];
+  const MWmod = await import("'"$ROOT"'/tests/evals/lib/mann-whitney.mjs");
+'
+check "D16 pin (1/2): explicit shift:1 on the constructed pair reads no-regression -- doesn't depend on the module constant at all (opts.shift passed explicitly)" \
+  "$(cvj "$CVD_PIN_DATA
+    const r = M.compareArms(baseline, candidate, { resamples: 20000, shift: 1, rng: MWmod.mulberry32(20260914) });
+    process.stdout.write(r.verdict);
+  ")" "no-regression"
+check "D16 pin (2/2): the SAME pair through the DEFAULT shift (no opts.shift -- reads REGRESSION_SHIFT off the module) reads inconclusive, not no-regression -- this is what actually proves the constant is 0.5, not 1" \
+  "$(cvj "$CVD_PIN_DATA
+    const r = M.compareArms(baseline, candidate, { resamples: 20000, rng: MWmod.mulberry32(20260914) });
+    process.stdout.write(r.verdict);
+  ")" "inconclusive"
+# Staged: revert REGRESSION_SHIFT to 1 (pre-D16) on the scratch copy and show pin (2/2) turns red --
+# once the constant is 1 again, the DEFAULT-shift call becomes identical to pin (1/2)'s explicit
+# shift:1 call, so it reads no-regression instead of the expected inconclusive.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'export const REGRESSION_SHIFT = 0.5;';
+  const TO   = 'export const REGRESSION_SHIFT = 1; // MUTANT (D16 reverted): pre-tightening margin';
+  if (!s.includes(FROM)) throw new Error('REGRESSION_SHIFT literal not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+check "mutant (REGRESSION_SHIFT reverted to 1) is caught -- pin (2/2) now reads no-regression, not the expected inconclusive, proving the pin is load-bearing on the actual constant" \
+  "$(cvj "$CVD_PIN_DATA
+    const r = M.compareArms(baseline, candidate, { resamples: 20000, rng: MWmod.mulberry32(20260914) });
+    process.stdout.write(r.verdict);
+  " "$CVD_SCRATCH")" "no-regression"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
+# --- F-310 (Minor, pass-2 review): confirm, by direct execution, that CVD_SIM's own point-6 floor
+# barely discriminates a moderately over-conservative gate -- mutating ALPHA (D5) to 0.025 on a
+# scratch copy and re-running CVD_SIM's own point-6 trial loop (unchanged T=600/RESAMPLES=3000,
+# committed seeds) below. The review's own report cited this mutant as "passing only by
+# floating-point rounding" (power 0.3000 read as >= a 0.30000000000000004 floor); reproduced here
+# EXACTLY on the two headline numbers (180/600 accepted, floor 0.30000000000000004), but the
+# STRICT comparison this suite's own `power >= floor` actually evaluates is the other way: 180/600
+# is 0.29999999999999998890 as a double, one ULP-scale hair BELOW the floor, not above it -- this
+# specific mutant is (barely) CAUGHT under the exact committed seeds, not a silent pass. The
+# underlying concern stands regardless of which side of that hair this run lands on: 181 accepted
+# trials instead of 180 (one trial out of 600) would flip `power >= floor` to true and let the
+# mutant through -- the floor has essentially ZERO real margin against this specific mutant either
+# way, which is the actual defect this comment records. Not staged as a `check` -- there is nothing
+# stable to gate on a margin this thin; the committed guard against the underlying weakness is the
+# D13-population mutant staged right after, which has a real (non-hair-width) margin instead.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'export const ALPHA = 0.05; // D5.';
+  const TO   = 'export const ALPHA = 0.025; // MUTANT (F-310 confirm): moderately over-conservative gate';
+  if (!s.includes(FROM)) throw new Error('ALPHA literal not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+F310_CONFIRM=$(cvj "$CVD_SIM
+  const power = M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES, trials: T });
+  const target = 0.40, floor = target - 5 * Math.sqrt(target * (1 - target) / T);
+  process.stdout.write(power.toPrecision(20) + ' >= ' + floor.toPrecision(20) + ' -> ' + (power >= floor));
+" "$CVD_SCRATCH")
+echo "  (F-310 confirm -- CVD_SIM point 6 under ALPHA=0.025 mutant: $F310_CONFIRM)"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
+# F-314 (Major, pass-2 review): the ALPHA=0.01 mutant staged here was reasoned about BACKWARDS --
+# "0.01 is stricter than F-310's own 0.025, so at least as hard a case" is wrong: a LOWER alpha
+# suppresses `equivalence.p < alpha` MORE, so the healthy-pair no-regression rate FALLS further,
+# which makes 0.01 the EASIER mutant to catch, not the harder one. Measured directly at the OLD
+# T=600/RESAMPLES=3000: pristine 0.8300, ALPHA=0.025 -> 0.7283 (passed the OLD 0.6954 floor -- NOT
+# caught), ALPHA=0.01 -> 0.6150 (caught). The case F-310 actually named -- 0.025 -- escaped this
+# guard exactly as it escaped CVD_SIM's own, and `progress.md` reported F-310 fixed regardless.
+#
+# The root cause is the floor's WIDTH, not its target: 5x its own Monte Carlo SE at T=600 is
+# +/-0.0846 around 0.78, ~8 SE below the true ~0.83 rate -- room enough for a moderately
+# over-conservative gate to hide inside it. Fixed by widening T/RESAMPLES for THIS check (and the
+# mutant staged against it) alone -- to T=3000/RESAMPLES=1500 (~2.5x wall cost, single-digit
+# seconds), not by moving the target: 5x SE shrinks to ~0.0378, floor ~0.7422. Re-derived by my own
+# scan (10 independent seed/resample/trial-count combinations, T in [1500,4000], resamples in
+# [1000,1800]): pristine range [0.7847, 0.8304] (committed seeds 0.8300, matching the old T=600
+# reading to 4 decimals -- expected, since raising T narrows precision, not the expected value);
+# ALPHA=0.025 mutant range [0.6700, 0.7228] across the SAME combinations, under the new 0.7422 floor
+# at every one (margin >=0.0194, >=58 trials at T=3000; committed seeds 0.7120, margin 0.0302, ~90
+# trials). ALPHA=0.01 is therefore SUBSUMED -- anything that catches 0.025 with real margin catches
+# every stricter (lower) alpha too -- and is dropped as the committed mutant; staging both would
+# test nothing 0.025 alone doesn't.
+node -e "
+  const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'export const ALPHA = 0.05; // D5.';
+  const TO   = 'export const ALPHA = 0.025; // MUTANT (F-314): the case F-310 named, moderately over-conservative';
+  if (!s.includes(FROM)) throw new Error('ALPHA literal not found -- source moved');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+D13_ALPHA025=$(cvj "$CVD_SIM_D13
+  const T6 = 3000, RESAMPLES6 = 1500; // F-314: trials raised 600 -> 3000 (resamples traded down 3000 -> 1500 to hold cost at ~2.5x); the floor's width depends on T alone. This check only.
+  const power = M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES6, trials: T6 });
+  const target = 0.78, floor = target - 5 * Math.sqrt(target * (1 - target) / T6);
+  process.stdout.write(power.toFixed(4) + '>=' + floor.toFixed(4) + ' ' + (power >= floor));
+" "$CVD_SCRATCH")
+echo "  (D13 point 6 analogue under ALPHA=0.025 mutant, T=3000/RESAMPLES=1500: $D13_ALPHA025)"
+check "ALPHA=0.025 mutant (F-310's own case; F-314) is caught by the D13-population point 6 analogue with real margin at the widened T -- not the easier ALPHA=0.01 substitute" \
+  "$(echo "$D13_ALPHA025" | awk '{print $2}')" "false"
+cp "$ROOT/$CVD" "$CVD_SCRATCH"
+
 # --- points 1, 2 and 6: Monte-Carlo property bounds on the verdict logic built atop the already-
 # oracle-verified rank procedure (3.2 owns rank-procedure correctness; this does not re-check it).
 # All three draw from D5's own tied historical histogram ({1:9,2:4,3:5,4:2,5:1}) via CVD_SIM,
 # defined above (before the mutation section, since mutant D's second check needs it too). Trial/
 # resample counts are stated so every tolerance is derived, never loosened to fit (spec.md §7).
+#
+# D16 (REGRESSION_SHIFT 1 -> 0.5): point 1's target is UNCHANGED -- `regression` is decided from
+# `primary.p < alpha` alone, before `compareArms()` ever reads `shift` (see the early return above
+# `shifted` is computed), so this rate is a function of ALPHA and D5's sigma only, never the margin.
+# Checked directly, not assumed: re-run against the tracked module with shift explicitly 1 and 0.5,
+# both gave 0.0367 to four decimals, same seeds. Left as-is; this is the D2-sigma case this
+# iteration's own instructions say to leave alone and note, not re-derive.
 POINT1=$(cvj "$CVD_SIM
   let regressions = 0;
   for (let t = 0; t < T; t++) {
@@ -3293,37 +3482,163 @@ POINT1=$(cvj "$CVD_SIM
   process.stdout.write(rate.toFixed(4) + '<=' + bound.toFixed(4) + ' ' + (rate <= bound));
 ")
 echo "  (point 1 measured: $POINT1)"
-check "point 1 -- one-sided size bound: empirical regression rate on UNSHIFTED (null) pairs <= 0.05 + 5x its own Monte Carlo SE, T=600 (one-sided, not a tight two-sided interval)" \
+check "point 1 -- one-sided size bound: empirical regression rate on UNSHIFTED (null) pairs <= 0.05 + 5x its own Monte Carlo SE, T=600 (one-sided, not a tight two-sided interval; margin-invariant, D16 -- see comment above)" \
   "$(echo "$POINT1" | awk '{print $2}')" "true"
 
+# D16: this bound DOES depend on the margin, and is re-derived, not left in place. The scenario is
+# unchanged (a genuinely +1-pass-degraded arm) but the margin no longer sits AT that effect size --
+# at REGRESSION_SHIFT=1 the shifted candidate reduces to a resample of the baseline's own
+# distribution (a null test, false-accept rate near ALPHA, which is why the old target was 0.08).
+# At 0.5 the shifted candidate is still elevated 0.5 passes over baseline, so equivalence rarely
+# reads significant. Re-measured (this exact CVD_SIM population/seeds, module REGRESSION_SHIFT=0.5):
+# 0.33% at T=600; independently reconfirmed across 5 other seed/resample/trial-count combinations
+# (T up to 6000) at 0.20%-0.33%, never above -- the range this target is drawn from, same method
+# phase 3 used to set the original 0.08 from its own "4.7-8% depending on resample count" scan.
+# Target 0.005 sits above every measured reading, not fitted to the committed run's own 0.33%.
 POINT2=$(cvj "$CVD_SIM
   let falseAccepts = 0;
   for (let t = 0; t < T; t++) {
     const r = M.compareArms(drawArm(N), drawArm(N).map((v) => v + 1), { resamples: RESAMPLES, rng: testRng });
     if (r.verdict === 'no-regression') falseAccepts++;
   }
-  const rate = falseAccepts / T, bound = 0.08 + 5 * Math.sqrt(0.08 * 0.92 / T);
+  const rate = falseAccepts / T, bound = 0.005 + 5 * Math.sqrt(0.005 * 0.995 / T);
   process.stdout.write(rate.toFixed(4) + '<=' + bound.toFixed(4) + ' ' + (rate <= bound));
 ")
 echo "  (point 2 measured: $POINT2)"
-check "point 2 -- bound the false no-regression rate on truly-shifted (+1 pass, degraded) arms: <= 0.08 + 5x its own Monte Carlo SE, T=600 -- the number the three-state verdict exists to control" \
+check "point 2 -- bound the false no-regression rate on truly-shifted (+1 pass, degraded) arms: <= 0.005 + 5x its own Monte Carlo SE, T=600 -- re-derived for D16's 0.5 margin (was 0.08 at margin 1; see comment above), the number the three-state verdict exists to control" \
   "$(echo "$POINT2" | awk '{print $2}')" "true"
 
 # point 6's SECOND half (F-221, Blocker): a lower bound on the no-regression rate for UNSHIFTED
 # (healthy) pairs -- the direction NOTHING else in this suite bounds. Reuses estimatePower()
 # itself (built once inside convergence.mjs, F-223), not a hand-rolled reimplementation of the
-# same trial loop -- CVD_SIM's own `drawOne` is passed straight through. Floor derived inline from
-# D2's stated power at n=15 (decisions.md#d2, 71.6%) the same way points 1/2 derive their
-# tolerances -- never chosen to fit the measurement.
+# same trial loop -- CVD_SIM's own `drawOne` is passed straight through.
+#
+# D16: the old floor was D2's own STATED normal-approximation power for a +1-pass shift (0.716),
+# which happened to sit within ~1 point of this test's own tie-conditional measurement (~0.72) at
+# margin 1 -- a coincidence of that specific margin, not a property of the method. At margin
+# 0.5 the same normal-approximation formula (d = 0.5/1.236354, n=15, decisions.md#d2's own
+# Phi(d*sqrt(n/2) - z_0.05)) predicts ~29.6% -- but the ACTUAL tie-conditional Monte Carlo rate
+# (the real, in-use test, D3/D5) measures materially higher: 39.8%-42.65% across 5 independent
+# seed/resample/trial-count combinations, including the committed seeds' own 42.5%. The normal
+# approximation is known invalid for this heavily-tied integer data (D3's own correction) -- more
+# so the smaller the effect, since ties dominate a smaller shift more. The floor below is derived
+# from the MEASURED range -- target 0.40 is CLOSE to that range, NOT below every reading in it (the
+# lowest scan, 39.8%, sits below 0.40 -- corrected here, F-312: an earlier pass-1 version of this
+# comment claimed the opposite, "sits at/below every reading," which was false by inspection of its
+# own cited numbers). The real safety margin is the floor's own 5x-Monte-Carlo-SE subtraction (0.40
+# -> 0.30), which every one of the 39.8%-42.65% readings clears comfortably; the target itself is
+# not, and does not need to be, a lower bound on the scan -- only the floor does that job.
+#
+# F-309/F-310 (pass-2 review): this is CVD_SIM's stress-case population (D5, sd~1.24) -- see the
+# relabeling comment at CVD_SIM's own definition above. This floor is also known WEAK against a
+# moderately over-conservative gate specifically: an ALPHA=0.025 mutant measures 180/600=0.3000
+# here, against a floor of 0.30000000000000004 -- one ULP-scale hair below it (verified above: this
+# specific committed run is barely CAUGHT, not a silent pass, but a single trial's outcome either
+# way, 179 or 181 of 600, would flip the verdict). Effectively zero real margin either direction,
+# which is the actual weakness -- not fixed here since CVD_SIM is the deliberate stress case (F-309).
+# The D13-population analogue below does not share this weakness -- staged against the SAME
+# ALPHA=0.025 mutant that nearly slipped past CVD_SIM's own floor here (F-314: not the easier
+# ALPHA=0.01 substitute this comment cited before), at a widened T=3000/RESAMPLES=1500 (the floor's
+# WIDTH, not its target, was the actual gap), it is caught with a real (non-hair-width) margin,
+# 0.7120 against a 0.7422 floor -- ~90 trials at T=3000, not a single-trial hair.
 POINT6=$(cvj "$CVD_SIM
   const power = M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES, trials: T });
-  const predicted = 0.716; // D2's stated primary-test power at n=15 (decisions.md#d2)
-  const floor = predicted - 5 * Math.sqrt(predicted * (1 - predicted) / T);
+  const target = 0.40; // measured tie-conditional floor at REGRESSION_SHIFT=0.5, D16 -- see comment above
+  const floor = target - 5 * Math.sqrt(target * (1 - target) / T);
   process.stdout.write(power.toFixed(4) + '>=' + floor.toFixed(4) + ' ' + (power >= floor));
 ")
 echo "  (point 6 measured: $POINT6)"
-check "point 6 (2/2) -- lower bound on the no-regression rate for UNSHIFTED (healthy) pairs, >= D2's stated power (0.716) minus 5x its own Monte Carlo SE, T=600 -- bounds the direction F-221 found unbounded" \
+check "point 6 (2/2) -- lower bound on the no-regression rate for UNSHIFTED (healthy) pairs, >= 0.40 (measured tie-conditional floor, D16 -- was D2's stated 0.716 at margin 1) minus 5x its own Monte Carlo SE, T=600 -- bounds the direction F-221 found unbounded" \
   "$(echo "$POINT6" | awk '{print $2}')" "true"
+
+# --- D13-population analogues (F-309, pass-2 review, 2026-09-14): D15 measured that D13's real
+# baseline (decisions.md#d13, [2,1,2,1,2,1,1,2,1,1,2,2,2,1,2], mean 1.5333, sd 0.5164) is the
+# population the D16-gated /code-loop comparison actually draws from, NOT D5's wider mixed-history
+# one CVD_SIM uses (point 2/6 above). Re-derived independently here by bootstrap resampling
+# (CVD_SIM_D13, defined near CVD_SIM above), own committed seeds. T differs per check (F-317,
+# pass-3 review): the point-2 analogue below runs at the preamble's own T=600/RESAMPLES=3000; the
+# point-6 analogue runs at T=3000/RESAMPLES=1500, widened by F-314 because the floor's width
+# depends on T alone. Not copied from D15/D16's own runs/2026-09-14-4.2-power-resample*.mjs scripts
+# (which share one rng stream where this suite's F-233 discipline keeps three -- a design
+# difference, NOT the reason the two readings differ; see the point-2 analogue's own note below),
+# so the two are expected to agree in MAGNITUDE, not to the decimal, as independent Monte Carlo
+# estimates of the same quantity.
+
+# D13 point 6 analogue: healthy-pair (no injected degradation) no-regression rate.
+#
+# F-314 (Major, pass-2 review): T/RESAMPLES for THIS check widened from the shared CVD_SIM_D13
+# preamble's T=600/RESAMPLES=3000 to T=3000/RESAMPLES=1500 -- trials raised, resamples traded down,
+# ~2.5x wall cost (single-digit seconds); the floor's width depends on T alone
+# -- the floor's WIDTH, not its target, was what let a moderately over-conservative gate
+# (ALPHA=0.025, F-310's own case) escape at T=600: 5x this floor's own Monte Carlo SE there is
+# 0.0846, ~8 SE below the true ~0.83 rate, room enough to hide a real weakening of the gate's own
+# strictness. At T=3000 the same 5x SE shrinks to ~0.0378 -- see the ALPHA mutant staged against
+# this exact check, in the mutation section above (F-314 for the full derivation and the
+# subsumption of the easier ALPHA=0.01 substitute).
+#
+# Re-scanned at the new T (my own scan, not pasted from the review): 10 independent
+# seed/resample/trial-count combinations, T in [1500,4000], resamples in [1000,1800]: range
+# [0.7847, 0.8304] (committed seeds 0.8300, unchanged from the old T=600 reading to 4 decimals --
+# expected, since a larger T narrows precision, not the expected value). Target stays 0.78. It sits
+# below every reading in THIS scan, but that is not relied on as a guaranteed property of the
+# population -- the "strictly below" framing this comment used to make is exactly the overclaim
+# `F-312`/`F-315` found elsewhere in this file (a wider scan can always turn up a lower reading, as
+# it did for the CVD_SIM point 6 target and for this same target at the old T=600 width). The real
+# safety margin is the floor's own 5x-Monte-Carlo-SE subtraction (0.78 -> ~0.7422 at T=3000), which
+# every one of the 10 readings above clears with real room (>=0.0425).
+D13_POINT6=$(cvj "$CVD_SIM_D13
+  const T6 = 3000, RESAMPLES6 = 1500; // F-314: widened from the shared T/RESAMPLES above, this check only
+  const power = M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES6, trials: T6 });
+  const target = 0.78; // measured floor, D13 population, F-309/F-314 -- see comment above
+  const floor = target - 5 * Math.sqrt(target * (1 - target) / T6);
+  process.stdout.write(power.toFixed(4) + '>=' + floor.toFixed(4) + ' ' + (power >= floor));
+")
+echo "  (D13 point 6 analogue measured, T=3000/RESAMPLES=1500: $D13_POINT6)"
+check "D13-population point 6 analogue -- lower bound on the no-regression rate for UNSHIFTED (healthy) pairs drawn from the REAL baseline population, >= 0.78 minus 5x its own Monte Carlo SE, T=3000 (F-309/F-314: this is what the operative D16 gate's real accept rate looks like, not CVD_SIM's stress-case figure)" \
+  "$(echo "$D13_POINT6" | awk '{print $2}')" "true"
+
+# D13 point 2 analogue: false no-regression rate under a genuinely +0.5-pass DEGRADED candidate --
+# the SAME "each draw gains a pass with probability 0.5" model D15/D16's own resampling used to
+# report "+0.5 pass" (distinct from points 1/2's own flat +1 CVD_SIM shift above, which models D2's
+# original H1). Scanned across 8 independent seed/resample/trial-count combinations: range measured
+# [0.0533, 0.0883] (committed seeds: 0.0767). Target set to 0.10, strictly ABOVE every reading in
+# that scan -- comfortably clear of D16's own cited ~5.3%.
+#
+# F-316 (Minor, pass-2 review): a prior version of this comment attributed the gap between this
+# harness's reading (0.0767) and D16's cited ~5.3% to rng-stream discipline (three independent
+# streams here vs. one shared stream in D15/D16's own script). Wrong on two counts, checked
+# directly rather than assumed. (1) The degradation model does NOT differ: both apply
+# `Bernoulli(0.5) + 1` to the same bootstrapped draw (`bumpRng() < 0.5 ? 1 : 0` here;
+# `rng() < 0.5 ? v+1 : v` in `runs/2026-09-14-4.2-power-resample.mjs` -- read side by side, not
+# just described). (2) Stream-sharing reads HIGHER than three streams, not lower -- the opposite
+# sign a "three streams understate it" story would need: an independent scan (shared-stream mean
+# 0.0700 across 10 seeds vs. three-stream mean 0.0680 across 10 combinations, both at
+# T=600/RESAMPLES=3000) shows no systematic direction from stream count at all.
+#
+# The gap is Monte Carlo noise, not methodology. D16's cited 5.3% is 16 of 300 trials at its own
+# script's defaults (SE = sqrt(0.053*0.947/300) ~= 1.3%); re-running that SAME script
+# (`runs/2026-09-14-4.2-power-resample.mjs`, unedited, its own defaults) just now gives **7.0%** --
+# about 1.3 SE from the recorded 5.3%, i.e. ordinary trial-to-trial noise at TRIALS=300, not a
+# discrepancy needing a cause. This harness's own three-stream committed reading is 0.0767; an
+# independent 10+10-seed scan combining both stream disciplines spans [0.0483, 0.0850]. All of this
+# sits well inside the target's own 0.10 bound. The three-independent-streams discipline itself
+# stays (F-233's own no-shared-call-count-dependency reasoning, restated at CVD_SIM_D13's
+# definition above) -- it is a design choice made for its own reason, not an explanation for a
+# discrepancy that turned out to be ordinary sampling noise.
+D13_POINT2=$(cvj "$CVD_SIM_D13
+  let falseAccepts = 0;
+  for (let t = 0; t < T; t++) {
+    const baseline = drawArm(N);
+    const candidate = drawArm(N).map((v) => v + (bumpRng() < 0.5 ? 1 : 0));
+    const r = M.compareArms(baseline, candidate, { resamples: RESAMPLES, rng: testRng });
+    if (r.verdict === 'no-regression') falseAccepts++;
+  }
+  const rate = falseAccepts / T, bound = 0.10 + 5 * Math.sqrt(0.10 * 0.90 / T);
+  process.stdout.write(rate.toFixed(4) + '<=' + bound.toFixed(4) + ' ' + (rate <= bound));
+")
+echo "  (D13 point 2 analogue measured: $D13_POINT2)"
+check "D13-population point 2 analogue -- bound the false no-regression rate on a truly +0.5-pass-degraded arm (Bernoulli model, D15/D16), drawn from the REAL baseline population: <= 0.10 + 5x its own Monte Carlo SE, T=600 (F-309)" \
+  "$(echo "$D13_POINT2" | awk '{print $2}')" "true"
 
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
