@@ -1069,6 +1069,14 @@ case "$certout" in
   *"certified:       false  (1 gating dimension(s) measured, false-accept 1.81%)"*) ok "certify()'s 'certified:' line states the gating-dimension count and false-accept rate" ;;
   *) bad "certify()'s 'certified:' line states the gating-dimension count/false-accept rate (got: ${certout:0:300})" ;;
 esac
+# spec.md §6 wants the gate's POWER printed on every run, not only its false-accept rate. The
+# figure is `SCOPES.full.powerGood`, the converse error to the 1.81% on the `certified:` line --
+# so this asserts both that it prints and that it is not a second copy of the false-accept rate.
+case "$certout" in
+  *"gate power:      96.51%"*) ok "certify() prints the gate's power (§6), distinct from its false-accept rate" ;;
+  *) bad "certify() prints the gate's power (§6) (got: ${certout:0:400})" ;;
+esac
+
 case "$certout" in
   *"UNDER FLOOR:     01/S3 (1/120), 02/S5 (0/120)"*) ok "certify()'s UNDER FLOOR block names each under-floor gating dimension" ;;
   *) bad "certify()'s UNDER FLOOR block names each under-floor gating dimension (got: ${certout:0:400})" ;;

@@ -1212,6 +1212,11 @@ async function main(argv) {
       `  scope:           ${c.scope} — ${c.scopeCovers}\n` +
       // Gating-dimension count and false-accept rate on the SAME line as `certified`.
       `  certified:       ${c.certified}  (${c.dimensions.length} gating dimension(s) measured, false-accept ${(c.powerSoft * 100).toFixed(2)}%)${c.certified ? '' : `  (needs ${c.requiredDraws} draws AND <=${c.maxFailures} failures, every gating dimension >= ${CERTIFY_N})`}\n` +
+      // §6 requires the gate's POWER as well as its false-accept rate on every run. `powerGood`
+      // reached the certify object (above) but was never printed -- the `certified:` line carries
+      // only `powerSoft`. Printed on its own line, deliberately: eval-runner.sh pins the
+      // `certified:` line's exact tail, and a gate's power is not a footnote to its error rate.
+      `  gate power:      ${(c.powerGood * 100).toFixed(2)}%  (this scope certifies a healthy corpus at this rate; false-accept above is the converse error)\n` +
       // `--certify` returns before any drawing loop, so a flag-dependent `runs` default can never
       // reach the invocation that actually draws -- the guidance is appended to the message
       // instead, built from CERTIFY_N so it cannot drift out of sync.
