@@ -1115,6 +1115,398 @@ fi
 # tracked files (sha256sum -c is external, already battle-tested, not re-proven here) -- corrupt
 # flips OK to FAILED, restore flips back; real shards hashed identical before/after. Coder's report.
 
+# --- F-308: a session-limit (or other hard-invocation-failure) exit must not be recorded as draw --
+# data. `startDraw()`'s `retry` used to discard `invokeCommand()`'s result outright, so a spawned
+# `claude` that hit the account's session limit read as `malformed` (before loop state existed) or
+# `running` (after) -- both a harness-EXTERNAL condition misrecorded as a fact about the definition
+# set. Hermetic throughout: every invocation below is a canned {ok,status,timedOut,stdout,stderr,
+# error} object or a stub `claude` binary that never reaches a model -- no live draw anywhere here.
+MK_INVOCATION_DRAW='
+  function mkInvocationDraw(steps) {
+    // steps[0] covers the OPENING invocation (mirrors startDraw()'"'"'s own eager retry() call);
+    // steps[i] covers the i-th LATER retry() call. An exhausted sequence repeats its last step.
+    return () => {
+      let i = 0;
+      let cur = steps[0];
+      return {
+        read: () => cur.state,
+        retry: () => { i = Math.min(i + 1, steps.length - 1); cur = steps[i]; },
+        cleanup() {},
+        lastInvocation: () => cur.invocation,
+      };
+    };
+  }
+'
+
+check "isHardInvocationFailure: undefined/null (every EXISTING synthetic handle in this suite -- none implement lastInvocation) reads as no info, never a failure" \
+  "$(cj "process.stdout.write(JSON.stringify([M.isHardInvocationFailure(undefined), M.isHardInvocationFailure(null)]));")" \
+  "[false,false]"
+
+check "isHardInvocationFailure({}): an invocation object with NO recognizable field actually set reads the same as no info (F-326 -- the docstring's promise, now true of the code: status must be genuinely present and non-zero to count, not merely undefined !== 0)" \
+  "$(cj "process.stdout.write(String(M.isHardInvocationFailure({})));")" "false"
+
+# Staged: revert the F-326 fix (invocation.status ?? 0 -> bare invocation.status) and confirm the
+# {} case above flips from false to true -- undefined !== 0 reads as a failure again.
+F326_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F326_MUT_DIR"' EXIT
+F326_MUT="$F326_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F326_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F326_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F326_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F326_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = \"if ((invocation.status ?? 0) !== 0 || Boolean(invocation.error)) return true;\";
+  const TO = 'if (invocation.status !== 0 || Boolean(invocation.error)) return true; // MUTANT (F-326): absent-status guard removed';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-326 mutant anchor occurs ' + count + ' time(s), not exactly 1 -- update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_326=$(node --input-type=module -e "
+  const M = await import('$F326_MUT');
+  process.stdout.write(String(M.isHardInvocationFailure({})));
+")
+check "mutant (F-326: absent-status guard reverted to bare !== 0) reintroduces the false positive -- isHardInvocationFailure({}) reads true again" \
+  "$mutant_326" "true"
+pristine_326=$(cj "process.stdout.write(String(M.isHardInvocationFailure({})));")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still reads false" \
+  "$pristine_326" "false"
+rm -rf "$F326_MUT_DIR"
+trap - EXIT
+
+check "fillArm: the OPENING invocation hitting the session-limit text throws HardInvocationFailureError immediately, distinguishable message, reason:'session-limit' (F-323)" \
+  "$(cj "$MK_INVOCATION_DRAW
+    const inv = { ok:false, status:0, timedOut:false, stdout: 'prefix ' + M.SESSION_LIMIT_SIGNATURE + ' suffix', stderr:'', error:null };
+    let caught = null;
+    try { M.fillArm(mkInvocationDraw([{ invocation: inv, state: null }]), { n: 1, report: () => {} }); } catch (e) { caught = e; }
+    process.stdout.write(JSON.stringify({ isHardFailure: caught instanceof M.HardInvocationFailureError, reason: caught ? caught.reason : null, message: caught ? caught.message : null }));
+  ")" \
+  '{"isHardFailure":true,"reason":"session-limit","message":"convergence: invocation hard-failed (account session limit) -- stopping the arm now; not recorded as a censored or malformed draw, and no replacement is drawn for it (F-308)"}'
+
+check "fillArm: a LATER retry() hitting the session-limit text (after one genuine 'running' read) also throws HardInvocationFailureError -- the same check, not just an opening-call special case" \
+  "$(cj "$MK_INVOCATION_DRAW
+    const okInv = { ok:true, status:0, timedOut:false, stdout:'', stderr:'', error:null };
+    const badInv = { ok:false, status:0, timedOut:false, stdout: M.SESSION_LIMIT_SIGNATURE, stderr:'', error:null };
+    const seq = [{ invocation: okInv, state: { status:'running' } }, { invocation: badInv, state: { status:'running' } }];
+    let caught = null;
+    try { M.fillArm(mkInvocationDraw(seq), { n: 1, maxWaitAttempts: 3, report: () => {} }); } catch (e) { caught = e; }
+    process.stdout.write(String(caught instanceof M.HardInvocationFailureError));
+  ")" "true"
+
+check "fillArm: a non-zero status with NO session-limit text is the SAME failure class, message names the status, reason:'nonzero-exit'" \
+  "$(cj "$MK_INVOCATION_DRAW
+    const inv = { ok:false, status:1, timedOut:false, stdout:'', stderr:'', error:null };
+    let caught = null;
+    try { M.fillArm(mkInvocationDraw([{ invocation: inv, state: null }]), { n: 1, report: () => {} }); } catch (e) { caught = e; }
+    process.stdout.write(JSON.stringify({ isHardFailure: caught instanceof M.HardInvocationFailureError, reason: caught ? caught.reason : null, namesStatus: /status 1/.test(caught ? caught.message : '') }));
+  ")" '{"isHardFailure":true,"reason":"nonzero-exit","namesStatus":true}'
+
+check "fillArm: a set spawn-level error with no text/status signal is ALSO the same failure class, message names it, reason:'spawn-error'" \
+  "$(cj "$MK_INVOCATION_DRAW
+    const inv = { ok:false, status:null, timedOut:false, stdout:'', stderr:'', error:'ENOENT' };
+    let caught = null;
+    try { M.fillArm(mkInvocationDraw([{ invocation: inv, state: null }]), { n: 1, report: () => {} }); } catch (e) { caught = e; }
+    process.stdout.write(JSON.stringify({ isHardFailure: caught instanceof M.HardInvocationFailureError, reason: caught ? caught.reason : null, namesError: /spawn error: ENOENT/.test(caught ? caught.message : '') }));
+  ")" '{"isHardFailure":true,"reason":"spawn-error","namesError":true}'
+
+check "isHardInvocationFailure: status GENUINELY omitted (undefined) but every other field present and normal reads as no failure, same as F-326's fully-empty {} -- (invocation.status ?? 0) !== 0 only neutralises an ABSENT status, it is not fooled into treating undefined as some nonzero value" \
+  "$(cj "process.stdout.write(String(M.isHardInvocationFailure({ ok:true, timedOut:false, stdout:'', stderr:'', error:null })));")" "false"
+
+# F-324b: the text branch alone is gated on the draw's OWN resulting state not already showing a
+# completed pass -- a healthy draw's own closing summary IS this invocation's stdout under
+# --print, and can echo SESSION_LIMIT_SIGNATURE as prose (about this very guard) without that
+# being the incident. status/error stay unconditional regardless of state, checked separately
+# above. Uses the committed `done` golden (tests/scripts/goldens/loop-state-done.json, F-241) --
+# real data, not a hand-typed shape that could drift from what classifyDraw() actually requires.
+F324_DONE_STATE=$(node -e "process.stdout.write(JSON.stringify(JSON.parse(require('fs').readFileSync('$ROOT/tests/scripts/goldens/loop-state-done.json','utf8'))))")
+check "isHardInvocationFailure: text match ALONE is suppressed when the resulting state already shows a completed draw (a real 'done' golden, pass 2) -- the false-positive surface F-324 exists to close" \
+  "$(cj "
+    const doneState = $F324_DONE_STATE;
+    const inv = { ok:false, status:0, timedOut:false, stdout: 'Done. Added a guard for the text \"' + M.SESSION_LIMIT_SIGNATURE + '\" per the plan.', stderr:'', error:null };
+    process.stdout.write(String(M.isHardInvocationFailure(inv, doneState)));
+  ")" "false"
+check "isHardInvocationFailure: the SAME text match is NOT suppressed when the resulting state is still running (not done) -- the gate narrows to completed draws only, it does not blunt the branch generally" \
+  "$(cj "
+    const inv = { ok:false, status:0, timedOut:false, stdout: M.SESSION_LIMIT_SIGNATURE, stderr:'', error:null };
+    process.stdout.write(String(M.isHardInvocationFailure(inv, { status:'running' })));
+  ")" "true"
+check "isHardInvocationFailure: a non-zero status is NOT suppressed by a completed state -- only the text branch is gated, status/error stay unconditional per the review's own instruction" \
+  "$(cj "
+    const doneState = $F324_DONE_STATE;
+    const inv = { ok:false, status:1, timedOut:false, stdout:'', stderr:'', error:null };
+    process.stdout.write(String(M.isHardInvocationFailure(inv, doneState)));
+  ")" "true"
+
+# Staged: revert the F-324b gate (text branch reads unconditionally again, the pre-fix shape) and
+# confirm the healthy-draw false positive above flips from suppressed to thrown.
+F324_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F324_MUT_DIR"' EXIT
+F324_MUT="$F324_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F324_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F324_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F324_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F324_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = \"if (loopStateJson != null && isTerminalDrawKind(classifyDraw(loopStateJson).kind)) return false;\";
+  const TO = 'if (false) return false; // MUTANT (F-324b): completion gate removed';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-324b gate mutant anchor occurs ' + count + ' time(s), not exactly 1 -- update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_324=$(node --input-type=module -e "
+  const M = await import('$F324_MUT');
+  const doneState = $F324_DONE_STATE;
+  const inv = { ok:false, status:0, timedOut:false, stdout: 'Done. Added a guard for the text \"' + M.SESSION_LIMIT_SIGNATURE + '\" per the plan.', stderr:'', error:null };
+  process.stdout.write(String(M.isHardInvocationFailure(inv, doneState)));
+")
+check "mutant (F-324b: completion gate removed) reintroduces the false positive -- a healthy, completed draw now reads as a hard failure again" \
+  "$mutant_324" "true"
+pristine_324=$(cj "
+  const doneState = $F324_DONE_STATE;
+  const inv = { ok:false, status:0, timedOut:false, stdout: 'Done. Added a guard for the text \"' + M.SESSION_LIMIT_SIGNATURE + '\" per the plan.', stderr:'', error:null };
+  process.stdout.write(String(M.isHardInvocationFailure(inv, doneState)));
+")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still suppresses it" \
+  "$pristine_324" "false"
+rm -rf "$F324_MUT_DIR"
+trap - EXIT
+
+check "fillArm: timedOut:true stays on the EXISTING running/censor path -- never this new outcome, even though a real timeout also sets its own error field" \
+  "$(cj "$MK_INVOCATION_DRAW
+    const inv = { ok:false, status:null, timedOut:true, stdout:'', stderr:'', error:'ETIMEDOUT' };
+    const r = M.fillArm(mkInvocationDraw([{ invocation: inv, state: { status:'running' } }]), { n: 1, maxWaitAttempts: 0, report: () => {} });
+    process.stdout.write(JSON.stringify({ waitExhausted: r.waitExhausted, censorPresent: r.censor !== null }));
+  ")" '{"waitExhausted":true,"censorPresent":true}'
+
+# The exact assembly drawArmForSha() uses (makeShardWriter -> fillArm -> conditional persistence),
+# same style as the F-267/F-276/F-284 wiring checks above: (a) the arm stops (throws), (b) no censor
+# record is written, (c) no replacement/shard slot is consumed -- resumeArm() sees nothing.
+F308_SHA="f308quota$(date +%s)"
+f308_assembly=$(node --input-type=module -e "
+  const M = await import('$ROOT/$CVD');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  $MK_INVOCATION_DRAW
+  const inv = { ok:false, status:0, timedOut:false, stdout: M.SESSION_LIMIT_SIGNATURE, stderr:'', error:null };
+  const makeDraw = mkInvocationDraw([{ invocation: inv, state: null }]);
+  const occ = new Set();
+  const { newDraw, onDraw } = M.makeShardWriter(makeDraw, '$F308_SHA', M.TASK_ID, 1, occ, 0);
+  let caught = null;
+  try {
+    const result = M.fillArm(newDraw, { n: 1, onDraw, report: () => {} });
+    if (result.censor) M.writeCensorRecord('$F308_SHA', M.TASK_ID, result.censor);
+    if (result.breach) M.writeBreachRecord('$F308_SHA', M.TASK_ID, result.breachReason);
+  } catch (e) { caught = e; }
+  const shardPath = M.loopShardPath('$F308_SHA', M.TASK_ID, 0);
+  const censorDir = path.join(path.dirname(shardPath), 'censored');
+  process.stdout.write(JSON.stringify({
+    threwHardFailure: caught instanceof M.HardInvocationFailureError,
+    shardExists: fs.existsSync(shardPath),
+    censorDirExists: fs.existsSync(censorDir),
+    resume: M.resumeArm('$F308_SHA', M.TASK_ID, 1).resume,
+  }));
+" 2>&1)
+check "the exact assembly drawArmForSha() uses: a quota-exhausted opening invocation throws, writes NO shard, NO censor record, and consumes NO replacement slot (resumeArm sees nothing)" \
+  "$f308_assembly" \
+  '{"threwHardFailure":true,"shardExists":false,"censorDirExists":false,"resume":[]}'
+rm -rf "$ROOT/tests/evals/results/$F308_SHA"
+
+# "The driver exits non-zero" (the phase file's own acceptance point d), proven WITHOUT a live-mode
+# CLI invocation of this file's own --source/--fixture/--runs shape -- evals-packaging.sh's F-256
+# check audits every CLI call in this file for a dry-run/merge/certify/help/negative-argument
+# exemption specifically so nothing here can reach a real model unnoticed, and a PATH-stubbed live
+# call would need a whole new exemption category to stay honestly covered by that audit. Proven two
+# cheaper ways instead, for a property this module already establishes structurally:
+check "letting a hard invocation failure escape fillArm() UNCAUGHT (exactly what main() below does -- it has no try/catch of its own around drawArmForSha()) makes the PROCESS exit non-zero, Node's own default for an uncaught exception" \
+  "$(node --input-type=module -e "
+    const M = await import('$ROOT/$CVD');
+    $MK_INVOCATION_DRAW
+    const inv = { ok:false, status:0, timedOut:false, stdout: 'prefix ' + M.SESSION_LIMIT_SIGNATURE + ' suffix', stderr:'', error:null };
+    M.fillArm(mkInvocationDraw([{ invocation: inv, state: null }]), { n: 1, report: () => {} });
+  " >/dev/null 2>&1; echo $?)" "1"
+F308_MAIN_CATCH='.catch((err) => { process.stderr.write(`convergence: ${err.message}\n`); process.exit(1); });'
+check "the module-level .catch(...) chain (below main()'s own closing brace) is present exactly once -- this alone is a PRESENCE fact, not proof that nothing upstream of it intercepts a hard-invocation-failure throw first (see F-320's absence checks below for that)" \
+  "$(grep -cF "$F308_MAIN_CATCH" "$ROOT/$CVD")" "1"
+
+# F-320 (4.8 pass-2 review): the presence check above was staged against wrapping main()'s own
+# drawArmForSha() call in `catch (e) { if (e instanceof HardInvocationFailureError) return 0; throw
+# e; }` -- exit 0 on a quota wall, violating acceptance (c)/(d) -- and stayed green: a PRESENCE count
+# cannot prove an ABSENCE. Fixed with absence assertions in the two places such a catch could be
+# added: drawArmForSha()'s own body, and main()'s live-draw branch (the only branch that calls it).
+# awk-extracted from the real function boundary (this file's own convention: every top-level
+# function/branch closes flush left; nothing nested does), not eyeballed off a line range that could
+# drift as the file changes.
+extract_fn_body() {
+  # $1 = file, $2 = a substring unique to the FIRST line of the body to extract. Prints from that
+  # line through the next column-0 '}' (inclusive) -- the same brace-flush-left convention this
+  # file's own mutation-staging code relies on elsewhere (e.g. the F-251 scratch-copy checks above).
+  awk -v pat="$2" 'index($0, pat) && !p {p=1} p{print} p && /^}/{exit}' "$1"
+}
+# F-328 (4.8 pass-2 review): extract_fn_body prints NOTHING when its anchor matches no line, and
+# `grep -c` over nothing is 0 -- which is exactly what the check below asserts, so a drifted anchor
+# (e.g. the signature gaining `async`) would pass green forever. Link C is already controlled by its
+# paired mutant check asserting 1; link A had nothing. Pin the extraction non-empty first.
+dafs_body=$(extract_fn_body "$ROOT/$CVD" 'export function drawArmForSha(')
+check "F-328: drawArmForSha()'s body actually extracted (sentinel present, so the 0-catch count below cannot pass on an empty extraction)" \
+  "$(printf '%s\n' "$dafs_body" | grep -c 'const pf = preflight();')" "1"
+dafs_catches=$(printf '%s\n' "$dafs_body" | grep -c 'catch')
+check "drawArmForSha()'s own body has zero catch clauses (awk-extracted, not eyeballed) -- nothing here could intercept fillArm()'s F-308 throw before it leaves this function (link A is closed structurally, not by a presence count)" \
+  "$dafs_catches" "0"
+main_live_catches=$(extract_fn_body "$ROOT/$CVD" "Checked BEFORE resolveSource's worktree checkout" | grep -c 'catch')
+check "main()'s live-draw branch (awk-extracted from its own preflight comment through main()'s closing brace) has zero catch clauses -- nothing here could intercept drawArmForSha()'s F-308 throw before it reaches the module-level .catch() above (link C, the gap F-320 named, is now closed structurally)" \
+  "$main_live_catches" "0"
+
+# Staged against the EXACT mutation F-320 named: wrap main()'s own drawArmForSha() call so a
+# HardInvocationFailureError exits 0 instead of propagating. The presence check above (re-run here
+# on the mutant) must stay green, unchanged -- reproducing why it was insensitive; the new
+# live-draw-branch absence check must go red.
+F320_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F320_MUT_DIR"' EXIT
+F320_MUT="$F320_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F320_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F320_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F320_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F320_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'const result = drawArmForSha(source.dir, fixtureDir, source.sha, liveDrawOpts(args));';
+  const TO = 'let result; try { result = drawArmForSha(source.dir, fixtureDir, source.sha, liveDrawOpts(args)); } catch (e) { if (e instanceof HardInvocationFailureError) return 0; throw e; } // MUTANT (F-320): exit 0 on a quota wall';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-320 mutant anchor occurs ' + count + ' time(s), not exactly 1 -- update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_320_presence=$(grep -cF "$F308_MAIN_CATCH" "$F320_MUT")
+mutant_320_live=$(extract_fn_body "$F320_MUT" "Checked BEFORE resolveSource's worktree checkout" | grep -c 'catch')
+check "mutant (F-320: main() swallows HardInvocationFailureError and returns 0 -- exit 0 on a quota wall) -- the OLD presence check stays green, unchanged (reproducing the exact insensitivity the review found)" \
+  "$mutant_320_presence" "1"
+check "mutant (F-320, same mutation): the NEW live-draw-branch absence check goes red -- a catch now exists where the review's own staged mutation put one" \
+  "$mutant_320_live" "1"
+rm -rf "$F320_MUT_DIR"
+trap - EXIT
+pristine_320_live=$(extract_fn_body "$ROOT/$CVD" "Checked BEFORE resolveSource's worktree checkout" | grep -c 'catch')
+check "pristine convergence.mjs (a fresh read of the tracked file, not the mutated scratch copy) still reads zero -- the mutation above never touched the tracked file" \
+  "$pristine_320_live" "0"
+
+# Mutation 1 (the load-bearing one): remove BOTH failOnHardInvocationFailure() call sites in
+# fillArm() -- reproduces the EXACT pre-fix bug this iteration exists to close: a session-limit
+# exit falls through to classifyDraw(null), reads 'malformed', and after maxReplacements is
+# exhausted throws the OLD generic harness-fault Error, not HardInvocationFailureError. Staged on a
+# scratch copy, never the tracked file.
+F308_GUARD_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F308_GUARD_MUT_DIR"' EXIT
+F308_GUARD_MUT="$F308_GUARD_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F308_GUARD_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F308_GUARD_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F308_GUARD_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F308_GUARD_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'failOnHardInvocationFailure(draw);';
+  const TO = '/* MUTANT (F-308): guard removed */;';
+  const count = s.split(FROM).length - 1;
+  if (count !== 2) throw new Error('F-308 guard mutant anchor occurs ' + count + ' time(s), not exactly 2 -- update this mutation');
+  fs.writeFileSync(p, s.split(FROM).join(TO));
+"
+mutant_guard=$(node --input-type=module -e "
+  const M = await import('$F308_GUARD_MUT');
+  $MK_INVOCATION_DRAW
+  const inv = { ok:false, status:0, timedOut:false, stdout: 'prefix ' + M.SESSION_LIMIT_SIGNATURE + ' suffix', stderr:'', error:null };
+  let caught = null;
+  try { M.fillArm(mkInvocationDraw([{ invocation: inv, state: null }]), { n: 1, report: () => {} }); } catch (e) { caught = e; }
+  process.stdout.write(JSON.stringify({ isHardFailure: caught instanceof M.HardInvocationFailureError, isOldHarnessFault: /malformed loop-state draws/.test(caught ? caught.message : '') }));
+")
+check "mutant (F-308: both failOnHardInvocationFailure() call sites removed) reproduces the EXACT pre-fix misclassification -- a session-limit exit becomes '6 malformed loop-state draws ... harness fault', not HardInvocationFailureError" \
+  "$mutant_guard" '{"isHardFailure":false,"isOldHarnessFault":true}'
+pristine_guard=$(cj "$MK_INVOCATION_DRAW
+  const inv = { ok:false, status:0, timedOut:false, stdout: 'prefix ' + M.SESSION_LIMIT_SIGNATURE + ' suffix', stderr:'', error:null };
+  let caught = null;
+  try { M.fillArm(mkInvocationDraw([{ invocation: inv, state: null }]), { n: 1, report: () => {} }); } catch (e) { caught = e; }
+  process.stdout.write(JSON.stringify({ isHardFailure: caught instanceof M.HardInvocationFailureError, isOldHarnessFault: /malformed loop-state draws/.test(caught ? caught.message : '') }));
+")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still throws HardInvocationFailureError on the very first attempt" \
+  "$pristine_guard" '{"isHardFailure":true,"isOldHarnessFault":false}'
+rm -rf "$F308_GUARD_MUT_DIR"
+trap - EXIT
+
+# Mutation 2: neuter isHardInvocationFailure()'s TEXT-match branch alone (status/error checks left
+# intact). Correction (4.8 pass-2 review): no observed session-limit incident records its exit
+# status through THIS harness's OWN invocation capture -- the pre-F-308 code discarded that value
+# outright, which is the defect F-308 exists to fix -- so the status:0/error:null pairing used
+# below is an ASSUMED test shape, not an evidenced one (a prior version of this comment claimed
+# otherwise). `run.mjs:733-740` records a real counter-example the other way: four session-limit
+# exits it caught arrived `ok:false` via its own `!run.ok` gate. The text branch is therefore the
+# UNPROVEN half of this detector, kept as defence in depth against a shape this harness has not
+# itself captured -- this mutation proves the branch is load-bearing for THAT assumed shape, not
+# that the shape is confirmed real.
+F308_TEXT_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F308_TEXT_MUT_DIR"' EXIT
+F308_TEXT_MUT="$F308_TEXT_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F308_TEXT_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F308_TEXT_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F308_TEXT_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F308_TEXT_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'if (text.includes(SESSION_LIMIT_SIGNATURE)) return true;';
+  const TO = 'if (false) return true; // MUTANT (F-308): text signature match disabled';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-308 text mutant anchor occurs ' + count + ' time(s), not exactly 1 -- update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_text=$(node --input-type=module -e "
+  const M = await import('$F308_TEXT_MUT');
+  $MK_INVOCATION_DRAW
+  const inv = { ok:false, status:0, timedOut:false, stdout: 'prefix ' + M.SESSION_LIMIT_SIGNATURE + ' suffix', stderr:'', error:null };
+  let caught = null;
+  try { M.fillArm(mkInvocationDraw([{ invocation: inv, state: null }]), { n: 1, report: () => {} }); } catch (e) { caught = e; }
+  process.stdout.write(String(caught instanceof M.HardInvocationFailureError));
+")
+check "mutant (F-308: text-signature branch disabled) misses an assumed status:0/error:null shape where only the text signals it (unproven, not evidenced -- see comment above) -- no longer throws HardInvocationFailureError" \
+  "$mutant_text" "false"
+pristine_text=$(cj "$MK_INVOCATION_DRAW
+  const inv = { ok:false, status:0, timedOut:false, stdout: 'prefix ' + M.SESSION_LIMIT_SIGNATURE + ' suffix', stderr:'', error:null };
+  let caught = null;
+  try { M.fillArm(mkInvocationDraw([{ invocation: inv, state: null }]), { n: 1, report: () => {} }); } catch (e) { caught = e; }
+  process.stdout.write(String(caught instanceof M.HardInvocationFailureError));
+")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still catches it" \
+  "$pristine_text" "true"
+rm -rf "$F308_TEXT_MUT_DIR"
+trap - EXIT
+
+# Mutation 3: remove the timedOut carve-out -- proves it is load-bearing, not decorative. A real
+# timeout also sets its own `error` field, so without this carve-out FIRST the status/error fallback
+# would wrongly promote a genuinely still-running (merely slow) draw into HardInvocationFailureError.
+F308_TIMEOUT_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
+trap 'rm -rf "$F308_TIMEOUT_MUT_DIR"' EXIT
+F308_TIMEOUT_MUT="$F308_TIMEOUT_MUT_DIR/convergence.mjs"
+cp "$ROOT/$CVD" "$F308_TIMEOUT_MUT"
+ln -s "$ROOT/tests/evals/lib" "$F308_TIMEOUT_MUT_DIR/lib"
+ln -s "$ROOT/tests/evals/run.mjs" "$F308_TIMEOUT_MUT_DIR/run.mjs"
+node -e "
+  const fs = require('fs'); const p = '$F308_TIMEOUT_MUT'; const s = fs.readFileSync(p, 'utf8');
+  const FROM = 'if (invocation == null || invocation.timedOut) return false;';
+  const TO = 'if (invocation == null) return false; // MUTANT (F-308): timedOut carve-out removed';
+  const count = s.split(FROM).length - 1;
+  if (count !== 1) throw new Error('F-308 timeout mutant anchor occurs ' + count + ' time(s), not exactly 1 -- update this mutation');
+  fs.writeFileSync(p, s.replace(FROM, TO));
+"
+mutant_timeout=$(node --input-type=module -e "
+  const M = await import('$F308_TIMEOUT_MUT');
+  $MK_INVOCATION_DRAW
+  const inv = { ok:false, status:null, timedOut:true, stdout:'', stderr:'', error:'ETIMEDOUT' };
+  let caught = null;
+  try { M.fillArm(mkInvocationDraw([{ invocation: inv, state: { status:'running' } }]), { n: 1, maxWaitAttempts: 0, report: () => {} }); } catch (e) { caught = e; }
+  process.stdout.write(String(caught instanceof M.HardInvocationFailureError));
+")
+check "mutant (F-308: timedOut carve-out removed) wrongly promotes a genuine timeout into HardInvocationFailureError, via the status/error fallback its own error field trips" \
+  "$mutant_timeout" "true"
+pristine_timeout=$(cj "$MK_INVOCATION_DRAW
+  const inv = { ok:false, status:null, timedOut:true, stdout:'', stderr:'', error:'ETIMEDOUT' };
+  const r = M.fillArm(mkInvocationDraw([{ invocation: inv, state: { status:'running' } }]), { n: 1, maxWaitAttempts: 0, report: () => {} });
+  process.stdout.write(JSON.stringify({ waitExhausted: r.waitExhausted, censorPresent: r.censor !== null }));
+")
+check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) still routes a genuine timeout through the normal censor path" \
+  "$pristine_timeout" '{"waitExhausted":true,"censorPresent":true}'
+rm -rf "$F308_TIMEOUT_MUT_DIR"
+trap - EXIT
+
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

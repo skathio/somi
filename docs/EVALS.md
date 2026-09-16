@@ -326,7 +326,8 @@ consequences, all of which should be decided before more budget is spent:
 
 Measured the hard way. A 5-run batch produced four `exit 1` runs whose transcripts read
 **`You've hit your session limit`** — the runner spends the *same* budget as an interactive
-session, and a long working session leaves little for it.
+session, and a long working session leaves little for it. The convergence gate below detects this
+signature directly and stops rather than silently recording it as draw data (F-308).
 
 This inverts the obvious optimisation. **Parallelism does not help a quota-bound workload** — it
 reaches the limit sooner and fails more runs on the way. Concurrency is the right lever only when
@@ -466,6 +467,24 @@ writes this counter *before* that pass's own coder/reviewer round trip runs, nev
 `completedPasses` (how many passes have actually finished, the disambiguator `pass` alone can't
 provide), and `lastVerdict` (the verdict of pass `completedPasses`, when there is one — not of
 `pass` itself) — so a censored batch is diagnosable after the fact rather than merely a gap.
+
+A spawned `claude` that hard-fails mid-draw is a THIRD outcome, distinct from both a censored draw
+(no wait budget was ever exhausted) and a malformed one (nothing about loop state itself is wrong)
+— detected from the invocation's own result and classified into one of three reasons
+(`HardInvocationFailureError`'s own `reason` field, F-323): **`session-limit`** (the text
+`You've hit your session limit` — matched only when the draw's OWN resulting state does not
+already show a completed pass; under `--print`, a healthy draw's own closing summary is this
+invocation's stdout, and it must not be misread as the incident just because its prose happens to
+mention the phrase, F-324); **`spawn-error`** (a set spawn-level error, e.g. the process never
+launched); **`nonzero-exit`** (any other non-zero exit). `timedOut` stays on the censoring path
+above, unaffected in all three cases. It stops the arm immediately: **no censor record, no
+replacement, and the driver exits non-zero** — a quota wall is an operator condition, not a datum
+(F-308). **What to do**, and it depends on the reason: for `session-limit`, wait for the reset the
+message names, then re-invoke with the same `--source`/`--fixture`/`--runs` — every
+already-completed draw is a shard already on disk and is skipped, so nothing already paid for is
+redrawn. For `spawn-error`/`nonzero-exit`, the account is not necessarily the cause (a missing
+`claude` binary, an OOM kill, a crashed shell) — check the environment before re-invoking blind,
+since there is no reset to wait for.
 
 Every comparison prints its own **live** power estimate, computed from the realized (post-exclusion)
 arm sizes — never D2's static 71.6% cited as a constant, since that would state the power the gate

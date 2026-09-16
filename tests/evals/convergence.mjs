@@ -33,6 +33,12 @@
 //     that none of points 1/2/4/5 catch (F-221, Blocker). compareArms()'s verdict logic below is
 //     not itself different because of this -- it was already correct -- but the healthy-input
 //     case's own assertion (eval-runner.sh) had to stop being a membership check to bind it.
+//  4. A spawned `claude` that exits on the account SESSION LIMIT is not draw data (F-308). Before
+//     this, `startDraw()`'s `retry` discarded `invokeCommand()`'s result entirely, so a session-limit
+//     exit read as `malformed` (no loop state yet) or `running` (state already existed) -- a harness-
+//     EXTERNAL condition recorded as though it were a fact about the definition set. fillArm() below
+//     checks every invocation's own result FIRST, before trusting anything classifyDraw() reads from
+//     the state that followed it.
 
 import { mkdtempSync, rmSync, cpSync, existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -235,6 +241,16 @@ export function resumeArm(sha, taskId, n, fixtureId = null) {
  * commands/code-loop.md's documented `stopped-<reason>` write form (F-235), so classifyDraw()
  * inherits that fix without a second match here.
  */
+/**
+ * Is this `classifyDraw()` kind a COMPLETED outcome -- one whose loop state is real data, whatever
+ * the invocation's prose happens to say? `done` and `breach` both are: `drawArmForSha()` persists a
+ * shard for the first and a breach record for the second. `running`/`malformed` are not, and are
+ * exactly the two shapes the real F-308 incident left behind. Shared by the text-branch gate in
+ * `isHardInvocationFailure()` and by `invocationFailureCode()` so the two cannot drift apart
+ * (F-327/F-329, 4.8 pass-2 review: the gate covered `done` only, and the code path never saw it).
+ */
+function isTerminalDrawKind(kind) { return kind === 'done' || kind === 'breach'; }
+
 export function classifyDraw(loopStateJson) {
   const breach = capBreached(loopStateJson);
   if (breach === true) return { kind: 'breach' };
@@ -254,6 +270,143 @@ function safeCleanup(draw) {
   try { draw.cleanup?.(); } catch { /* best-effort; the arm already collected matters more */ }
 }
 
+// F-308: a spawned `claude` invocation that hit the ACCOUNT'S SESSION LIMIT mid-draw -- confirmed
+// against the real transcripts (multipass-fixture's diary, 2026-09-13; the seven `-3DAM4A`
+// sessions among them; re-confirmed 2026-09-16 per F-324, ten occurrences across those
+// transcripts, ASCII apostrophe), every one of which ends on this EXACT synthetic assistant
+// message. Matched as a plain substring, not a regex -- a literal confirmed against real evidence,
+// not an invented pattern. Cited to the transcripts themselves, not `decisions.md#d11` (F-325: a
+// prior version of this comment cited that entry, which is the unrelated gating-classification
+// decision and carries no authority over a text match).
+export const SESSION_LIMIT_SIGNATURE = "You've hit your session limit";
+
+/**
+ * Did one real `invokeCommand()` result (`tests/evals/lib/install.mjs`) represent a HARD
+ * invocation failure -- the account session limit, or any other non-timeout hard failure (a spawn
+ * error, a non-zero exit)? F-308: `startDraw()`'s `retry` used to discard this result entirely, so
+ * a session-limit exit read as `malformed` (no loop state written yet) or `running` (stale state
+ * from before the limit hit) -- both misreadings of a harness-EXTERNAL condition as draw DATA.
+ *
+ * `timedOut` is carved out FIRST and always reads as "not a hard failure" here -- a timeout stays
+ * on classifyDraw()'s existing 'running'/censor path (F-191/F-194's wait/poll cap): a subprocess
+ * still alive but slow is exactly what that path exists to handle, unlike one that exited outright.
+ *
+ * `status`/`error` are checked UNCONDITIONALLY, ahead of the text branch and regardless of
+ * `loopStateJson` -- this is the only shape a real incident has actually been OBSERVED in end to
+ * end (`run.mjs:733-740`: four session-limit exits it caught arrived through its own `!run.ok`
+ * gate). The TEXT branch below is the unproven half of this detector -- no observed incident here
+ * records its exit status, since the pre-F-308 code discarded it, which is the defect this fixes --
+ * kept as defence in depth against a shape this harness has not itself captured, not because the
+ * status:0/error:null pairing it is tested against below is itself evidenced.
+ *
+ * The text branch alone is further gated (F-324b) on `loopStateJson` NOT already showing a
+ * completed draw (`classifyDraw(loopStateJson).kind === 'done'`): under `--print`, a HEALTHY
+ * draw's own closing summary IS this invocation's stdout, and it can echo
+ * SESSION_LIMIT_SIGNATURE as prose (about this very guard) without that being the incident --
+ * every real incident session had zero tool calls and no completed loop state, so this gate costs
+ * no true positive.
+ *
+ * `invocation` is `undefined`/`null` for every EXISTING synthetic test handle in this suite (none
+ * implement `lastInvocation()` or return a value from `retry()`) -- reads as "no info", never a
+ * failure. An invocation with no recognizable field actually set (F-326, e.g. `{}`) reads the same
+ * way: `status` must be genuinely present and non-zero to count, not merely `undefined !== 0`.
+ *
+ * @param {{ok: boolean, status: number|null, timedOut: boolean, stdout: string, stderr: string, error: string|null}|null|undefined} invocation
+ * @param {object|null} [loopStateJson] the state read from the SAME invocation this call is
+ *   judging (F-324b) -- consulted only by the text branch. Omit when none is available yet (the
+ *   opening invocation of a fresh handle has no prior read); every pre-F-324b caller/test that
+ *   passes only `invocation` keeps its exact old behaviour, since `loopStateJson` then reads as
+ *   absent and the gate is a no-op.
+ * @returns {boolean}
+ */
+export function isHardInvocationFailure(invocation, loopStateJson) {
+  if (invocation == null || invocation.timedOut) return false;
+  if ((invocation.status ?? 0) !== 0 || Boolean(invocation.error)) return true;
+  if (loopStateJson != null && isTerminalDrawKind(classifyDraw(loopStateJson).kind)) return false;
+  const text = `${invocation.stdout ?? ''}\n${invocation.stderr ?? ''}`;
+  if (text.includes(SESSION_LIMIT_SIGNATURE)) return true;
+  return false;
+}
+
+/** Machine-readable reason code for HardInvocationFailureError.reason (F-323) -- distinct from the
+ * human-readable message invocationFailureReason() builds below, so a caller (or docs/EVALS.md's
+ * operator guidance) can dispatch on WHICH of the three conditions fired without re-parsing prose.
+ * Same text-first priority as invocationFailureReason(); only ever called once
+ * isHardInvocationFailure() is already true, so a text match reaching here was never the gated
+ * (already-completed) case -- that already returned false before this is called. */
+function invocationFailureCode(invocation, loopStateJson) {
+  // F-327 (4.8 pass-2 review): this used to read the text FIRST and never received `loopStateJson`,
+  // so the completion gate `isHardInvocationFailure()` applies had no effect here -- a status-137 OOM
+  // kill or a spawn ENOENT whose output merely QUOTED the signature reported `session-limit`, and
+  // docs/EVALS.md then told an operator with no reset to wait for to wait for one. The text branch is
+  // the unproven half of the detector (see SESSION_LIMIT_SIGNATURE); `error` and a non-zero `status`
+  // are the evidenced halves, so they are consulted first and the text branch carries the same gate.
+  if (invocation.error) return 'spawn-error';
+  if ((invocation.status ?? 0) !== 0) return 'nonzero-exit';
+  const text = `${invocation.stdout ?? ''}\n${invocation.stderr ?? ''}`;
+  const terminal = loopStateJson != null && isTerminalDrawKind(classifyDraw(loopStateJson).kind);
+  if (!terminal && text.includes(SESSION_LIMIT_SIGNATURE)) return 'session-limit';
+  return 'nonzero-exit';
+}
+
+/** Human-readable cause for HardInvocationFailureError's own message, named specifically rather
+ * than "something went wrong" so an operator reading stderr knows which of `reason`'s three
+ * conditions actually matched. Only ever called once that predicate is already true. */
+function invocationFailureReason(invocation, code) {
+  switch (code) {
+    case 'session-limit': return 'account session limit';
+    case 'spawn-error': return `spawn error: ${invocation.error}`;
+    default: return `invocation exited with status ${invocation.status}`;
+  }
+}
+
+/**
+ * Thrown by fillArm() the instant isHardInvocationFailure() is true (F-308). A distinct class, not
+ * a plain Error distinguished only by its message text, so a caller (or a test) can tell this apart
+ * from every OTHER throw in this module -- notably the malformed-loop-state harness-fault Error in
+ * fillArm() below -- by `instanceof`, not by re-parsing wording a future edit could drift out from
+ * under. Uncaught, exactly like that harness-fault throw: propagates through drawArmForSha() and
+ * main() to the CLI's own top-level catch, which is what makes the driver exit non-zero -- the
+ * phase file's own instruction: "a quota wall is an operator condition, not a datum."
+ *
+ * `reason` (F-323 -- renamed from QuotaExhaustedError, which named only one of the three
+ * conditions it actually covers: a spawn ENOENT or an OOM kill threw it too) is one of
+ * `'session-limit' | 'spawn-error' | 'nonzero-exit'` (see invocationFailureCode() above), so a
+ * caller can act on WHICH condition fired -- docs/EVALS.md's operator guidance splits on it, since
+ * "wait for the reset" is right only for `session-limit`.
+ */
+export class HardInvocationFailureError extends Error {
+  constructor(message, reason) {
+    super(message);
+    this.name = 'HardInvocationFailureError';
+    this.reason = reason;
+  }
+}
+
+/** F-308: stop the arm the instant one draw's invocation hard-failed (see
+ * isHardInvocationFailure()/HardInvocationFailureError's own docstrings) -- BEFORE classifyDraw()
+ * ever gets a chance to read the stale or absent loop-state that followed it as real signal.
+ * Cleans up the handle first, the same "never leave a spent handle behind" discipline every other
+ * terminal branch in fillArm() below follows.
+ *
+ * Calls `draw.read()` itself (F-324b) to give isHardInvocationFailure()'s text-branch gate the
+ * state it needs. Redundant with fillArm()'s OWN subsequent `state = draw.read()` -- unchanged,
+ * still the very next statement at both call sites below -- but `read()` is documented pure and
+ * side-effect-free, so the extra call changes nothing observable and fillArm()'s own statement
+ * order stays untouched. Only paid for handles that implement `lastInvocation()`: every pre-F-308
+ * synthetic handle in this suite has `invocation == null` and never reaches it. */
+function failOnHardInvocationFailure(draw) {
+  const invocation = draw.lastInvocation?.();
+  const state = invocation == null ? undefined : draw.read();
+  if (!isHardInvocationFailure(invocation, state)) return;
+  const code = invocationFailureCode(invocation, state);
+  safeCleanup(draw);
+  throw new HardInvocationFailureError(
+    `convergence: invocation hard-failed (${invocationFailureReason(invocation, code)}) -- stopping the arm now; ` +
+    `not recorded as a censored or malformed draw, and no replacement is drawn for it (F-308)`,
+    code);
+}
+
 /**
  * Fill one arm to `n` usable convergence-cost draws, applying the settled remedy split by cause
  * (F-191/F-194): a `running` draw is waited on and RE-READ from the SAME handle (never
@@ -267,13 +420,23 @@ function safeCleanup(draw) {
  * function moves on (F-226) -- the only handle NEVER cleaned up mid-arm is one still being
  * retried, since retry() reuses the SAME workDir.
  *
- * @param {() => {read: () => *, retry: () => void, cleanup?: () => void}} newDraw  starts one
- *   fresh draw and returns a handle: `read()` re-reads that SAME draw's current loop-state (no
- *   side effect); `retry()` re-invokes the underlying command against the SAME workDir
- *   (commands/code-loop.md's own resume check picks up where it left off -- this IS the "wait",
- *   not a bare sleep-and-poll); `cleanup()` (optional) removes the handle's workDir.
+ * @param {() => {read: () => *, retry: () => void, cleanup?: () => void, lastInvocation?: () => *}} newDraw
+ *   starts one fresh draw and returns a handle: `read()` re-reads that SAME draw's current
+ *   loop-state (no side effect); `retry()` re-invokes the underlying command against the SAME
+ *   workDir (commands/code-loop.md's own resume check picks up where it left off -- this IS the
+ *   "wait", not a bare sleep-and-poll); `cleanup()` (optional) removes the handle's workDir;
+ *   `lastInvocation()` (optional, F-308) returns the most recent `invokeCommand()` result, checked
+ *   via `isHardInvocationFailure()` before any loop-state read that followed it is trusted -- a
+ *   handle that omits it (every synthetic handle in this suite) is read as "no info", never a
+ *   failure.
  * @param {object} [opts]
  * @returns {{breach: boolean, arm: number[], stillRunning: number, replaced: number, waitExhausted: boolean, censor: {elapsedMs: number, waitAttempts: number, lastState: {status: string|null, historyEmpty: boolean|null, stateReadable: boolean, pass: number|null, completedPasses: number|null, lastVerdict: string|null}}|null, breachReason: string|null}}
+ * @throws {HardInvocationFailureError} F-308: a hard invocation failure (the account session limit, or
+ *   any other non-timeout hard failure) on ANY handle -- checked before classifyDraw() ever reads
+ *   the loop-state that followed it, its own terminal outcome distinct from breach/done/censor/
+ *   malformed. No censor record and no replacement -- the arm just stops.
+ * @throws {Error} the pre-existing harness-fault throw when `maxReplacements` malformed draws are
+ *   exhausted (unrelated to F-308 -- see that branch below).
  */
 export function fillArm(newDraw, opts = {}) {
   const n = opts.n ?? N_PER_ARM;
@@ -292,6 +455,9 @@ export function fillArm(newDraw, opts = {}) {
     // newDraw() returns silently excluded that whole invocation from `elapsedMs` below.
     const drawStartedAt = now();
     const draw = newDraw();
+    // F-308: the arm's OPENING invocation happens inside newDraw() (startDraw()) itself, before
+    // this handle even exists -- checked here, first, before any loop-state read below is trusted.
+    failOnHardInvocationFailure(draw);
     let state = draw.read();
     let waitAttempts = 0;
     for (;;) {
@@ -329,6 +495,10 @@ export function fillArm(newDraw, opts = {}) {
           return { breach: false, arm, stillRunning, replaced, waitExhausted: true, censor, breachReason: null };
         }
         draw.retry();
+        // F-308: the SAME check as the opening invocation above -- a retry can hit the session
+        // limit exactly as the first attempt can, and the read below would otherwise still see
+        // 'running' (stale state from before this retry ran at all).
+        failOnHardInvocationFailure(draw);
         state = draw.read();
         continue;
       }
@@ -507,7 +677,16 @@ export function prepareDrawDir(sourceDir, fixtureDir) {
   }
 }
 
-/** Start (or resume) one real /code-loop draw against task02-code in a fresh working tree. */
+/**
+ * Start (or resume) one real /code-loop draw against task02-code in a fresh working tree.
+ *
+ * `lastInvocation()` (F-308): `retry` used to discard `invokeCommand()`'s `{ok, status, timedOut,
+ * stdout, stderr, error}` outright, so nothing about the arm's OPENING invocation (below) or any
+ * later resume (fillArm()'s own retry() calls) was ever visible past this function -- a session-limit
+ * exit was indistinguishable from a genuinely slow or absent loop state. Kept in a closure variable,
+ * updated by every `retry()` call (the eager one below included), and exposed read-only -- see
+ * isHardInvocationFailure()/failOnHardInvocationFailure() above for the consumer.
+ */
 export function startDraw(sourceDir, fixtureDir, { model = null } = {}) {
   const work = prepareDrawDir(sourceDir, fixtureDir);
   const statePath = join(work, '.somi', 'somi-state', 'loop', `${LOOP_SLUG}.${LOOP_ITERATION}.json`);
@@ -515,9 +694,10 @@ export function startDraw(sourceDir, fixtureDir, { model = null } = {}) {
     if (!existsSync(statePath)) return null;
     try { return JSON.parse(readFileSync(statePath, 'utf8')); } catch { return null; }
   };
-  const retry = () => { invokeCommand(work, `/code-loop ${LOOP_SLUG} phase 1, iteration ${LOOP_ITERATION}`, { model }); };
+  let lastInvocation = null;
+  const retry = () => { lastInvocation = invokeCommand(work, `/code-loop ${LOOP_SLUG} phase 1, iteration ${LOOP_ITERATION}`, { model }); return lastInvocation; };
   retry();
-  return { read, retry, cleanup: () => rmSync(work, { recursive: true, force: true }) };
+  return { read, retry, cleanup: () => rmSync(work, { recursive: true, force: true }), lastInvocation: () => lastInvocation };
 }
 
 // Persist one usable draw at the next FREE slot >= fromIndex, not a blind nextIndex++ (F-248,
@@ -750,6 +930,15 @@ export function makeShardWriter(makeDraw, sha, taskId, n, occupied, startIndex, 
  * convergence-runner.sh's "live mode preflights" case, which never reaches drawArmForSha() at all
  * (main() preflights independently, before resolveSource()); and before anything else (resumeArm,
  * a shard read) that would otherwise proceed against an unpinned fixture.
+ *
+ * `fillArm()`'s F-308 throw (`HardInvocationFailureError`, a hard invocation failure) is
+ * deliberately NOT caught here -- it propagates straight out, past both persistence lines above,
+ * so neither a censor nor a breach record is ever written for it (there is nothing to persist:
+ * `result` itself never comes back). Same uncaught-throw treatment as the pre-existing
+ * malformed-harness-fault Error; see main()'s own top-level catch for where it actually surfaces.
+ * This function's own body has no `catch` of any kind (F-320, convergence-runner.sh's own
+ * awk-extracted absence check pins this) -- it is not this function's job to decide what a hard
+ * invocation failure means, only main()'s single top-level handler's.
  */
 export function drawArmForSha(sourceDir, fixtureDir, sha, opts = {}) {
   const pf = preflight();
