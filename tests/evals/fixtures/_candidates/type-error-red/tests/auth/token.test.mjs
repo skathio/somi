@@ -32,5 +32,5 @@ function captureError(fn) {
 
 test('rejects a token whose exp has passed', () => {
   const err = captureError(() => verifyToken(mintToken('user-1', T0 - 1), T0 * 1000));
-  assert.equal(err.message, 'token expired');
+  assert.equal(err.message, 'expired token');
 });

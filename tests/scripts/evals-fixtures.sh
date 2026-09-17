@@ -182,6 +182,44 @@ else
   ok "no reference implementation inside task02-code/ (it lands in the candidate's repo)"
 fi
 
+# --- F-330: the control must speak the candidate's vocabulary ----------------------------------
+# The control is run against the CANDIDATE'S test. A candidate that asserts on an error message --
+# idiomatic, and what the shipped tests themselves do (/malformed token/, /bad signature/) -- passes
+# the control only if the control words its errors the way the candidate-visible code does.
+#
+# It did not. The control threw 'token expired' while the shipped token.mjs establishes
+# adjective-noun ('malformed token', 'bad signature'), and the control's own file used that style
+# three lines earlier. Every one of the first three real draws wrote a CORRECT expiry test, followed
+# the convention in front of it, asserted /expired token/, and was failed at the control step for
+# word order the task never specifies -- 3/3 on a gating dimension, which is what stopped the
+# certification campaign. Nothing compared the two vocabularies, so nothing caught it.
+ctl_msgs=$(grep -o "new Error('[^']*')" "$F/task02-code-control.mjs" | sed "s/new Error('//;s/')//" | LC_ALL=C sort -u)
+vis_msgs=$(grep -o "new Error('[^']*')" "$F/task02-code/src/auth/token.mjs" | sed "s/new Error('//;s/')//" | LC_ALL=C sort -u)
+
+# (a) every message the candidate can actually SEE must survive verbatim into the control, or a
+#     shipped test asserting it goes red on substitution through no fault of the candidate.
+missing=""
+while IFS= read -r m; do
+  [ -z "$m" ] && continue
+  printf '%s\n' "$ctl_msgs" | grep -qxF "$m" || missing="$missing '$m'"
+done <<EOF_VIS
+$vis_msgs
+EOF_VIS
+if [ -z "$missing" ]; then
+  ok "every candidate-visible error message survives verbatim into the control"
+else
+  bad "every candidate-visible error message survives verbatim into the control (absent:$missing)"
+fi
+
+# (b) the expiry message -- the one the candidate CANNOT see, and must therefore guess from the
+#     convention -- has to follow that same convention: '<adjective> token', not 'token <verb>'.
+exp_msg=$(printf '%s\n' "$ctl_msgs" | grep -i "expir" | head -1)
+case "$exp_msg" in
+  token\ *) bad "the control's expiry message follows the candidate-visible '<adjective> token' convention (got '$exp_msg', which reverses it -- F-330)" ;;
+  *\ token) ok "the control's expiry message follows the candidate-visible '<adjective> token' convention ('$exp_msg')" ;;
+  *) bad "the control's expiry message follows the candidate-visible '<adjective> token' convention (got '$exp_msg')" ;;
+esac
+
 # --- task03: patch, greenness, and the mis-billing delta ---------------------------------
 [ -f "$F/task03-review.patch" ] \
   && ok "review.patch lives outside the reviewed tree" \

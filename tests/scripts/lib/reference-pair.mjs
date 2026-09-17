@@ -24,7 +24,13 @@ const codeLines = (f) =>
     .split('\n')
     .filter((l) => { const t = l.trim(); return t && !t.startsWith('//') && !t.startsWith('*') && t !== '/**'; });
 
-const EXPIRY_VOCAB = /^(if \(typeof payload\.exp|throw new Error\('token expired'\);|\}|nowMs|&&)/;
+// 'expired token', adjective-noun, matching the candidate-visible house style the shipped
+// token.mjs establishes ('malformed token', 'bad signature') and its shipped tests assert on.
+// It read 'token expired' until 2026-09-17, alone against that convention and against the very
+// next line of its own file -- F-330: every one of the first three real draws wrote a correct
+// expiry test, asserted /expired token/ by following the convention in front of it, and was
+// failed at the control step for word order the task never specified.
+const EXPIRY_VOCAB = /^(if \(typeof payload\.exp|throw new Error\('expired token'\);|\}|nowMs|&&)/;
 
 const [mutFile, ctlFile] = process.argv.slice(2);
 const mut = codeLines(mutFile);

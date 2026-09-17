@@ -33,7 +33,7 @@ export function verifyToken(token, nowMs = Date.now()) {
     throw new Error('malformed token');
   }
 
-  if (typeof payload.exp === 'number' && nowMs >= payload.exp * 1000) throw new Error('token expired');
+  if (typeof payload.exp === 'number' && nowMs >= payload.exp * 1000) throw new Error('expired token');
   return payload;
 }
 

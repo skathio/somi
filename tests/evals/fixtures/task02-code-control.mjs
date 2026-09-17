@@ -48,7 +48,7 @@ export function verifyToken(token, nowMs = Date.now()) {
   }
 
   if (typeof payload.exp === 'number' && nowMs >= payload.exp * 1000) {
-    throw new Error('token expired');
+    throw new Error('expired token');
   }
 
   return payload;
