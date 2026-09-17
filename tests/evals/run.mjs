@@ -117,9 +117,22 @@ export const CERTIFY_N = 120;
  * that cleared a soft corpus 73.58% of the time, is removed rather than relabeled). Derived from
  * `CERTIFY_N`, not scaled by hand: 2 dims, 240 draws, budget 5 -> clears a sound corpus 96.51% of
  * the time, a soft one 1.81% -- near the 13-dimension original's 0.94%, at fewer total draws.
+ *
+ * `powerSoft` is the ALL-DIMENSIONS-SOFT case (every gating dimension at p=0.95 together). The
+ * likelier failure is ONE dimension going soft while the other stays healthy, and the gate is far
+ * weaker there: `powerSoftOne` = 27.00% at one dimension on 0.95 against 0.99 (44.29% at 0.96,
+ * 65.15% at 0.97). Both figures are exact binomial over the pooled failure count, re-derived
+ * 2026-09-17; that same derivation reproduced `powerGood`/`powerSoft` to six decimals
+ * (0.965112 / 0.018150), so the constants were right and only the reporting was incomplete.
+ *
+ * Carrying BOTH is the point: `context-economy-overhaul/phases/04-measured-trim.md` identified the
+ * single-soft-dimension blind spot at 13 dimensions ("the single-dimension case is the likely one
+ * and it is the one that slips") and it survived the reduction to 2 unexamined, because only the
+ * joint figure was ever printed. A reader calibrating trust off a bare "1.81%" is reading the
+ * wrong number for the likelier case.
  */
 export const SCOPES = {
-  full: { draws: 2 * CERTIFY_N, maxFailures: 5, powerGood: 0.9651, powerSoft: 0.0181, covers: '2 of 13 task-dimensions' },
+  full: { draws: 2 * CERTIFY_N, maxFailures: 5, powerGood: 0.9651, powerSoft: 0.0181, powerSoftOne: 0.2700, covers: '2 of 13 task-dimensions' },
 };
 
 // Every (task, dim) pair the settled classification marks GATING, computed once. certify()'s
@@ -173,6 +186,7 @@ export function certify(result, { maxFailures = null } = {}) {
     cannotCertify: failures > budget,
     powerGood: sc.powerGood,
     powerSoft: sc.powerSoft,
+    powerSoftOne: sc.powerSoftOne,
     certified: enough && underFloor.length === 0 && failures <= budget,
     onTrack: projected === null ? null : projected <= budget,
     projectedFailures: projected === null ? null : Math.round(projected * 10) / 10,
@@ -1211,7 +1225,11 @@ async function main(argv) {
       `${sha.slice(0, 12)}: ${c.failures} failure(s) across ${c.draws} draw(s)\n` +
       `  scope:           ${c.scope} — ${c.scopeCovers}\n` +
       // Gating-dimension count and false-accept rate on the SAME line as `certified`.
-      `  certified:       ${c.certified}  (${c.dimensions.length} gating dimension(s) measured, false-accept ${(c.powerSoft * 100).toFixed(2)}%)${c.certified ? '' : `  (needs ${c.requiredDraws} draws AND <=${c.maxFailures} failures, every gating dimension >= ${CERTIFY_N})`}\n` +
+      // Both false-accept figures, never the joint one alone. `powerSoft` assumes EVERY gating
+      // dimension is soft together; `powerSoftOne` is one soft against a healthy sibling, which is
+      // the likelier fault and ~15x more permissive. Printing only the first told the reader the
+      // wrong number for the more probable case -- see SCOPES' docstring.
+      `  certified:       ${c.certified}  (${c.dimensions.length} gating dimension(s) measured, false-accept ${(c.powerSoft * 100).toFixed(2)}% if all are soft, ${(c.powerSoftOne * 100).toFixed(2)}% if one alone)${c.certified ? '' : `  (needs ${c.requiredDraws} draws AND <=${c.maxFailures} failures, every gating dimension >= ${CERTIFY_N})`}\n` +
       // §6 requires the gate's POWER as well as its false-accept rate on every run. `powerGood`
       // reached the certify object (above) but was never printed -- the `certified:` line carries
       // only `powerSoft`. Printed on its own line, deliberately: eval-runner.sh pins the

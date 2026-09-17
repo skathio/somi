@@ -276,9 +276,15 @@ than not gating at all, and not a defensible thing to call a certification targe
 node tests/evals/run.mjs --certify "$SHA"
 ```
 
-| scope | draws | budget | clears a sound corpus | clears a **soft** one | covers |
-|---|---|---|---|---|---|
-| `full` | 240 | ≤5 | 96.51% | **1.81%** | 2 of 13 task-dimensions |
+| scope | draws | budget | clears a sound corpus | clears an **all-soft** one | clears **one soft** dim | covers |
+|---|---|---|---|---|---|---|
+| `full` | 240 | ≤5 | 96.51% | **1.81%** | **27.00%** | 2 of 13 task-dimensions |
+
+> **Read the last two columns together.** The 1.81% assumes *every* gating dimension is soft
+> (p=0.95) at once. The likelier fault is **one** dimension going soft while the other stays
+> healthy, and there the gate clears **27.00%** of the time — about fifteen times more permissive
+> (44.29% at p=0.96, 65.15% at p=0.97). Quoting 1.81% alone overstates how much a `certified: true`
+> is worth against the more probable failure.
 
 **2 of 13 task-dimensions gate** — task 01's S3, task 02's S5 (see the coverage table above). Task
 03 contributes zero. The draw count comes from a constant kept **separate** from the routine

@@ -1066,8 +1066,16 @@ esac
 
 # --- F-112: certified-line parenthetical, UNDER FLOOR block, harnessFaults -- each left 215/0 ----
 case "$certout" in
-  *"certified:       false  (1 gating dimension(s) measured, false-accept 1.81%)"*) ok "certify()'s 'certified:' line states the gating-dimension count and false-accept rate" ;;
-  *) bad "certify()'s 'certified:' line states the gating-dimension count/false-accept rate (got: ${certout:0:300})" ;;
+  *"certified:       false  (1 gating dimension(s) measured, false-accept 1.81% if all are soft, 27.00% if one alone)"*) ok "certify()'s 'certified:' line states the gating-dimension count and BOTH false-accept rates" ;;
+  *) bad "certify()'s 'certified:' line states the gating-dimension count/both false-accept rates (got: ${certout:0:300})" ;;
+esac
+# The single-soft figure is the one a reader actually needs and the one that was missing: a bare
+# 1.81% describes every gating dimension going soft together, while one soft against a healthy
+# sibling certifies 27.00% of the time. Asserted separately so deleting it cannot pass as a
+# reformat of the line above.
+case "$certout" in
+  *"27.00% if one alone"*) ok "certify() states the SINGLE-soft-dimension false-accept rate, not only the joint one" ;;
+  *) bad "certify() states the single-soft-dimension false-accept rate (got: ${certout:0:400})" ;;
 esac
 # spec.md §6 wants the gate's POWER printed on every run, not only its false-accept rate. The
 # figure is `SCOPES.full.powerGood`, the converse error to the 1.81% on the `certified:` line --
@@ -1905,16 +1913,16 @@ check "docs/EVALS.md's coverage table (24 rows) matches labels derived from clas
 # The full-scope numeric row, same discipline: parsed off docs/EVALS.md's actual text, compared
 # against SCOPES.full imported live from run.mjs, formatted exactly as certify()'s own CLI output
 # formats it (toFixed(2)) so the doc and the printed run summary can never read differently.
-check "docs/EVALS.md's \`full\` scope row (draws, budget, both power figures, covers) matches SCOPES.full live -- 240 draws / 1.81% false-accept, not 60 / 41.74%" \
+check "docs/EVALS.md's \`full\` scope row (draws, budget, all three power figures, covers) matches SCOPES.full live -- 240 draws / 1.81% all-soft / 27.00% one-soft" \
   "$(j "
     const fs = await import('node:fs');
     function parseFullScopeRow(text) {
-      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
-      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], covers: m[5].trim() };
+      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
+      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], powerSoftOne: m[5], covers: m[6].trim() };
     }
     const parsed = parseFullScopeRow(fs.readFileSync('$ROOT/docs/EVALS.md', 'utf8'));
     const sc = M.SCOPES.full;
-    const expected = { draws: sc.draws, maxFailures: sc.maxFailures, powerGood: (sc.powerGood * 100).toFixed(2), powerSoft: (sc.powerSoft * 100).toFixed(2), covers: sc.covers };
+    const expected = { draws: sc.draws, maxFailures: sc.maxFailures, powerGood: (sc.powerGood * 100).toFixed(2), powerSoft: (sc.powerSoft * 100).toFixed(2), powerSoftOne: (sc.powerSoftOne * 100).toFixed(2), covers: sc.covers };
     process.stdout.write(JSON.stringify(parsed) === JSON.stringify(expected) ? 'match' : 'parsed=' + JSON.stringify(parsed) + ' expected=' + JSON.stringify(expected));
   ")" "match"
 
@@ -1940,27 +1948,27 @@ check "the cross-check catches a wrong DOC number (240 -> 260), SCOPES held real
   "$(j "
     const fs = await import('node:fs');
     function parseFullScopeRow(text) {
-      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
-      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], covers: m[5].trim() };
+      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
+      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], powerSoftOne: m[5], covers: m[6].trim() };
     }
     const real = fs.readFileSync('$ROOT/docs/EVALS.md', 'utf8');
     const mutated = real.replace('| \`full\` | 240 |', '| \`full\` | 260 |');
     const parsed = parseFullScopeRow(mutated);
     const sc = M.SCOPES.full;
-    const expected = { draws: sc.draws, maxFailures: sc.maxFailures, powerGood: (sc.powerGood * 100).toFixed(2), powerSoft: (sc.powerSoft * 100).toFixed(2), covers: sc.covers };
+    const expected = { draws: sc.draws, maxFailures: sc.maxFailures, powerGood: (sc.powerGood * 100).toFixed(2), powerSoft: (sc.powerSoft * 100).toFixed(2), powerSoftOne: (sc.powerSoftOne * 100).toFixed(2), covers: sc.covers };
     process.stdout.write(String(JSON.stringify(parsed) === JSON.stringify(expected)));
   ")" "false"
 check "the cross-check catches a wrong CODE number (SCOPES.full.draws mutated), doc held real" \
   "$(j "
     const fs = await import('node:fs');
     function parseFullScopeRow(text) {
-      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
-      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], covers: m[5].trim() };
+      const m = text.match(/\|\s*\`full\`\s*\|\s*(\d+)\s*\|\s*≤(\d+)\s*\|\s*([\d.]+)%\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*\*{0,2}([\d.]+)%\*{0,2}\s*\|\s*([^|]+?)\s*\|/);
+      return m && { draws: Number(m[1]), maxFailures: Number(m[2]), powerGood: m[3], powerSoft: m[4], powerSoftOne: m[5], covers: m[6].trim() };
     }
     const real = fs.readFileSync('$ROOT/docs/EVALS.md', 'utf8');
     const parsed = parseFullScopeRow(real);
     const mutatedScopesFull = { ...M.SCOPES.full, draws: 200 };
-    const expected = { draws: mutatedScopesFull.draws, maxFailures: mutatedScopesFull.maxFailures, powerGood: (mutatedScopesFull.powerGood * 100).toFixed(2), powerSoft: (mutatedScopesFull.powerSoft * 100).toFixed(2), covers: mutatedScopesFull.covers };
+    const expected = { draws: mutatedScopesFull.draws, maxFailures: mutatedScopesFull.maxFailures, powerGood: (mutatedScopesFull.powerGood * 100).toFixed(2), powerSoft: (mutatedScopesFull.powerSoft * 100).toFixed(2), powerSoftOne: (mutatedScopesFull.powerSoftOne * 100).toFixed(2), covers: mutatedScopesFull.covers };
     process.stdout.write(String(JSON.stringify(parsed) === JSON.stringify(expected)));
   ")" "false"
 
