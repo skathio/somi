@@ -97,6 +97,55 @@ export function invokeCommand(workDir, prompt, { timeoutMs = 1_800_000, model = 
   };
 }
 
+/**
+ * The exact assistant message a session ending on the account limit closes with.
+ *
+ * A plain substring, not a regex: this literal was confirmed against real transcripts (ten
+ * occurrences; ASCII apostrophe), not invented. Lives here, beside `invokeCommand`, because it
+ * describes that function's output and both drivers judge it -- `run.mjs`'s draw loop and
+ * `convergence.mjs`'s `isHardInvocationFailure()`. Two copies drifted apart once already (F-322).
+ */
+export const SESSION_LIMIT_SIGNATURE = "You've hit your session limit";
+
+/**
+ * The broad quota pattern, used ONLY on an invocation that already failed. See `isQuotaExit()`.
+ */
+const QUOTA_TEXT = /session limit|rate limit|usage limit|quota/i;
+
+/**
+ * Did this invocation end on an account quota condition rather than on the task it was given?
+ *
+ * Deliberately ASYMMETRIC, because a false positive does not cost the same on both sides:
+ *
+ * - **Failed invocation** (`ok === false`) -- matched on the BROAD pattern. The run produced no
+ *   usable observation either way, so a false positive only relabels the error and stops the draw
+ *   loop early, which is the safe direction mid-outage. This is also the only shape observed end
+ *   to end: `run.mjs` caught four real session-limit exits through exactly this gate.
+ * - **Succeeded invocation** (`ok === true`) -- matched on the EXACT literal AND corroborated by
+ *   `didWork === false`. F-321: this branch was not checked at all, so an `ok:true` session-limit
+ *   exit was graded as draw data. But applying the broad pattern here would be WORSE than the bug
+ *   it fixes: these tasks run an agent against this very repo, whose own docs and plans discuss
+ *   quota and session limits constantly, so a healthy draw whose transcript contains "quota" is
+ *   ordinary rather than suspicious. Discarding those would silently delete good draws at ~644s
+ *   each. Every real incident did no work at all, so that is the corroboration required -- the
+ *   same discipline `convergence.mjs` applies via its completed-draw gate (F-324b).
+ *
+ * `timedOut` is never a quota exit: a subprocess killed at the wall clock is the wait-cap path's
+ * business, not an operator condition to wait out.
+ *
+ * @param {{ok: boolean, timedOut: boolean, stdout: string, stderr: string}|null|undefined} invocation
+ * @param {{didWork: boolean|null}} [corroboration] `didWork` is whether the run left ANY trace --
+ *   a changed file or a recorded tool call. `null`/omitted means "unknown", which never promotes
+ *   an `ok:true` run to a quota exit.
+ * @returns {boolean}
+ */
+export function isQuotaExit(invocation, { didWork = null } = {}) {
+  if (invocation == null || invocation.timedOut) return false;
+  const text = `${invocation.stdout ?? ''}\n${invocation.stderr ?? ''}`;
+  if (!invocation.ok) return QUOTA_TEXT.test(text);
+  return text.includes(SESSION_LIMIT_SIGNATURE) && didWork === false;
+}
+
 /** Files the run created or modified, relative to the baseline commit. Evidence for S3. */
 export function workingTreeDiff(workDir) {
   const git = (...a) => execFileSync('git', a, { cwd: workDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });

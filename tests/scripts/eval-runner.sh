@@ -595,6 +595,50 @@ check "markDimensionsExcluded marks every named dimension excluded, leaves the r
   ")" '{"S3":true,"S6":false,"S5":"excluded","S1":"excluded"}'
 
 # --- installSomi() now registers the audit-log hook ---------------------------------------------
+# --- F-321/F-322: one quota detector, deliberately asymmetric -----------------------------------
+# F-321: run.mjs's quota check sat INSIDE `if (!run.ok)`, so a session-limit exit arriving with
+# status 0 was graded as draw data -- the same defect class as F-308 on the convergence side, where
+# it was a Blocker. Hoisting the OLD broad regex would have been worse than the bug: these tasks run
+# an agent against this repo, whose docs discuss quota constantly, so every healthy draw would have
+# been discarded. The detector is therefore asymmetric, and these checks pin BOTH halves plus the
+# discrimination between them.
+q() { j "
+  const I = await import('$ROOT/tests/evals/lib/install.mjs');
+  process.stdout.write(String(I.isQuotaExit($1, $2)));
+"; }
+
+SIG="You've hit your session limit"
+
+check "failed run + broad quota text -> quota exit (the evidenced shape, four real incidents)" \
+  "$(q "{ok:false,timedOut:false,stdout:'fatal: usage limit reached',stderr:''}" "{didWork:false}")" "true"
+
+check "F-321: ok:true run carrying the EXACT signature, no work done -> quota exit (was graded as data)" \
+  "$(q "{ok:true,timedOut:false,stdout:\"$SIG\",stderr:''}" "{didWork:false}")" "true"
+
+# The case that makes the asymmetry necessary rather than decorative.
+check "ok:true run carrying the signature but which DID work -> NOT a quota exit (a healthy draw may quote it)" \
+  "$(q "{ok:true,timedOut:false,stdout:\"discussing $SIG in the docs\",stderr:''}" "{didWork:true}")" "false"
+
+# The regression the naive hoist would have caused: broad words must not reach an ok:true run.
+check "ok:true run merely containing the WORD quota -> NOT a quota exit (broad pattern is failed-runs-only)" \
+  "$(q "{ok:true,timedOut:false,stdout:'I checked the quota and rate limit docs',stderr:''}" "{didWork:false}")" "false"
+
+check "an unknown didWork never promotes an ok:true run to a quota exit" \
+  "$(q "{ok:true,timedOut:false,stdout:\"$SIG\",stderr:''}" "{}")" "false"
+
+check "a timeout is never a quota exit (it is the wait-cap path's business)" \
+  "$(q "{ok:false,timedOut:true,stdout:'session limit',stderr:''}" "{didWork:false}")" "false"
+
+# F-322: one literal, not two. convergence.mjs must SOURCE it, not redeclare it.
+check "F-322: convergence.mjs re-exports install.mjs's SESSION_LIMIT_SIGNATURE rather than declaring its own" \
+  "$(j "
+    const C = await import('$ROOT/tests/evals/convergence.mjs');
+    const I = await import('$ROOT/tests/evals/lib/install.mjs');
+    process.stdout.write(String(C.SESSION_LIMIT_SIGNATURE === I.SESSION_LIMIT_SIGNATURE && I.SESSION_LIMIT_SIGNATURE.length > 0));
+  ")" "true"
+check "F-322: convergence.mjs holds no second copy of the literal" \
+  "$(grep -c "= \"You've hit your session limit\"" "$ROOT/tests/evals/convergence.mjs")" "0"
+
 # Without this, `.somi/audit.log` is never written on a live run (installSomi() excluded every
 # hook until this fix). Functional: the registered command is invoked as Claude Code would.
 instw=$(mktemp -d) || { bad "mktemp failed"; exit 1; }

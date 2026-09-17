@@ -686,7 +686,7 @@ export function taskPrompt(taskSpec) {
  * correlated outcomes that the binomial thresholds are not valid for.
  */
 export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, model }) {
-  const { installSomi, invokeCommand, workingTreeDiff, uninstallSomi } = await import('./lib/install.mjs');
+  const { installSomi, invokeCommand, workingTreeDiff, uninstallSomi, isQuotaExit } = await import('./lib/install.mjs');
   const { judge, criterionTags } = await import('./lib/score.mjs');
   const { readAuditLog } = await import('./lib/audit-log.mjs');
 
@@ -743,6 +743,30 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     } catch { /* absent is a data point, not an error */ }
     uninstallSomi(work);
 
+    // Did this run leave ANY trace? A changed file, or a tool call the hook recorded. Every real
+    // session-limit incident left neither. This is what lets an `ok:true` exit carrying the
+    // signature be told apart from a healthy draw whose transcript merely quotes it (F-321).
+    const didWork = tree.changed.length > 0 || (auditLog?.entries?.length ?? 0) > 0;
+    const quota = isQuotaExit(run, { didWork });
+
+    // F-321: the quota check used to live INSIDE this branch, so a session-limit exit that
+    // happened to arrive with status 0 fell through and was graded as draw data -- the same class
+    // of defect as F-308 on the convergence side ("a session-limit exit is an operator condition,
+    // not draw data"), which was a Blocker there. Hoisted out so BOTH exit shapes are caught. The
+    // asymmetry that makes this safe (broad match only on an already-failed run) lives in
+    // isQuotaExit(), beside invokeCommand, which is also where the two divergent detectors were
+    // consolidated (F-322).
+    if (quota && run.ok) {
+      return {
+        index,
+        error: 'quota exhausted',
+        dimensions: {},
+        transcript: run.stdout.slice(-4000),
+        harnessFault: true,
+        quotaFault: true,
+      };
+    }
+
     if (!run.ok) {
       // NO dimensions recorded -- the same rule the judge-fault path already follows, and for the
       // same reason. An earlier version marked every declared dimension `false` here, reasoning
@@ -752,7 +776,6 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
       // presented as evidence about the definition set.
       //
       // A run that never executed is not a run that failed. It must not enter the denominator.
-      const quota = /session limit|rate limit|usage limit|quota/i.test(run.stdout + run.stderr);
       return {
         index,
         error: run.timedOut ? 'timed out' : (quota ? 'quota exhausted' : (run.error ?? `exit ${run.status}`)),

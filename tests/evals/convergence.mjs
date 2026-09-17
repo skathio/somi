@@ -45,7 +45,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, relative, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { installSomi, invokeCommand, preflight } from './lib/install.mjs';
+import { installSomi, invokeCommand, preflight, SESSION_LIMIT_SIGNATURE } from './lib/install.mjs';
 import { capBreached, passesToApprove, terminalVerdict, terminalOutcome, censoredDrawSnapshot, breachReason } from './lib/convergence.mjs';
 import { mannWhitneyU, DEFAULT_RESAMPLES } from './lib/mann-whitney.mjs';
 import { shardDir, resolveSource, fixtureFor } from './run.mjs';
@@ -278,7 +278,10 @@ function safeCleanup(draw) {
 // not an invented pattern. Cited to the transcripts themselves, not `decisions.md#d11` (F-325: a
 // prior version of this comment cited that entry, which is the unrelated gating-classification
 // decision and carries no authority over a text match).
-export const SESSION_LIMIT_SIGNATURE = "You've hit your session limit";
+// F-322: this literal now lives beside `invokeCommand` in lib/install.mjs -- the function whose
+// output both this module and run.mjs judge -- and is re-exported here so every existing importer
+// and test of this module keeps working. Two independently-maintained copies is what F-322 named.
+export { SESSION_LIMIT_SIGNATURE };
 
 /**
  * Did one real `invokeCommand()` result (`tests/evals/lib/install.mjs`) represent a HARD
