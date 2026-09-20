@@ -562,6 +562,26 @@ optional; omit anything you don't want to change:
 - `lockfiles.allow_edit: true` permits hand-editing lockfiles as project policy
   (`SOMI_ALLOW_LOCKFILES` still wins for a session, including `=0` to re-deny).
 
+## Cost tiers and model resolution
+
+Cost is declared with a `cost:` field in frontmatter, beside `model:` — the convention every
+`agents/*.md` and `commands/*.md` file will adopt. Conversion of the ~60 existing files hasn't
+landed yet, so today every file still carries only `model:`; once converted, multi-mode commands
+will declare more than one value. Three tiers, in the same vocabulary Copilot's own model picker
+already uses:
+
+- `low` — small, mechanical work.
+- `medium` — typical implementation and review work.
+- `high` — front-loaded reasoning: architecture, cross-cutting design, fresh-eyes review.
+
+A shipped mapping resolves `cost` and host to a concrete model at spawn time:
+[`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s `resolveModel(cost, host)`. Today
+the only way to override it is to edit that file directly, or pass a custom mapping as
+`resolveModel`'s third argument; a `.somi/config.json`-driven override is planned for a later
+iteration and not yet wired in. A host absent from the mapping gets no override — the caller omits
+the model argument and that host's own default applies. An unrecognized `cost` value, or a mapped
+host missing the requested tier, throws rather than silently resolving to the wrong model.
+
 ## Dependency additions
 
 Adding a new runtime dependency is a decision. The `gate-dep-install` hook denies

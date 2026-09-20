@@ -53,6 +53,9 @@ echo "==> Digest-generator tests..."
 # unit guard for the generator, not the drift gate.
 bash tests/scripts/generate-digest.sh
 
+echo "==> Cost model resolver tests..."
+bash tests/scripts/cost-model.sh
+
 echo "==> Eval fixture guards..."
 # Guards tests/evals/fixtures/. Two Blockers from iteration 3.3b live here: a plan tree shipped
 # under `.somi/` that .gitignore silently dropped from the package, and pass criteria
