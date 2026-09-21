@@ -58,5 +58,30 @@ check "the thrown error for a missing tier names the host and tier, not a generi
   "$(run 'try { M.resolveModel("high", "partial-host", { "partial-host": { "medium": "x" } }); } catch (e) { process.stdout.write(e.message); }')" \
   'cost-model: host "partial-host" has no "high" entry in its mapping'
 
+# --- mergeHostMapping: the config-driven-override seam resolveModel's third arg composes with ---
+check "a new host from the override is merged in" \
+  "$(run 'process.stdout.write(M.resolveModel("low", "extra-host", M.mergeHostMapping(M.HOST_MODELS, { "extra-host": { "low": "x" } })))')" \
+  "x"
+check "an override for an existing host replaces its whole tier map, not merged tier-by-tier" \
+  "$(run 'const merged = M.mergeHostMapping(M.HOST_MODELS, { "claude-code": { "low": "y" } }); process.stdout.write(String(merged["claude-code"].medium))')" \
+  "undefined"
+check "an unmapped host stays unmapped when the override does not name it" \
+  "$(run 'const merged = M.mergeHostMapping(M.HOST_MODELS, { "extra-host": { "low": "x" } }); process.stdout.write(String(merged["some-other-host"]))')" \
+  "undefined"
+check "no override at all returns the defaults unchanged" \
+  "$(run 'process.stdout.write(String(M.mergeHostMapping(M.HOST_MODELS, undefined) === M.HOST_MODELS))')" \
+  "true"
+expect_exit "a __proto__ key in a JSON.parse'd override is rejected, not silently absorbed" 1 \
+  'M.mergeHostMapping(M.HOST_MODELS, JSON.parse(`{"__proto__": {"low": "x"}}`))'
+check "rejecting a __proto__ key does not pollute Object.prototype" \
+  "$(run 'try { M.mergeHostMapping(M.HOST_MODELS, JSON.parse(`{"__proto__": {"low": "x"}}`)); } catch {} process.stdout.write(String(({}).low))')" \
+  "undefined"
+expect_exit "a non-object override is rejected" 1 \
+  'M.mergeHostMapping(M.HOST_MODELS, "not-an-object")'
+expect_exit "a non-object per-host value in the override is rejected, not passed through" 1 \
+  'M.mergeHostMapping(M.HOST_MODELS, { "h": "sonnet" })'
+expect_exit "a null per-host value in the override is rejected, not a bare TypeError later" 1 \
+  'M.mergeHostMapping(M.HOST_MODELS, { "h": null })'
+
 echo "cost model tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

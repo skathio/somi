@@ -494,6 +494,7 @@ several genuinely independent slices and you want smaller, more focused per-iter
 | `audit.log`                           | `.somi/audit.log`                                    | Append-only across sessions                       |
 | Context-injection state               | `.somi/somi-state/last-context-signature`            | Project-local, gitignored                         |
 | Loop state                            | `.somi/somi-state/loop/<slug>[.<N>.<M>].json`        | Project-local, gitignored; survives session death (loops resume) |
+| Cost ceiling state                    | `.somi/somi-state/ceiling.json`                      | Project-local, gitignored; one file for the whole session, not per slug |
 | Diff                                  | git                                                  | As long as the branch / history is kept           |
 
 All artifacts under `.somi/` should be committed to the repository. They're how the team and
@@ -549,7 +550,8 @@ optional; omit anything you don't want to change:
   "parallel":      { "max_parallel": 3 },
   "debug":         { "max_hypotheses": 5 },
   "dep_install":   { "allow": ["@types/", "eslint-"] },
-  "lockfiles":     { "allow_edit": false }
+  "lockfiles":     { "allow_edit": false },
+  "cost":          { "ceiling": "high", "mapping": {} }
 }
 ```
 
@@ -561,6 +563,10 @@ optional; omit anything you don't want to change:
   and every package in the command must match a prefix.
 - `lockfiles.allow_edit: true` permits hand-editing lockfiles as project policy
   (`SOMI_ALLOW_LOCKFILES` still wins for a session, including `=0` to re-deny).
+- `cost.ceiling` sets the session's maximum `cost` tier (`low`/`medium`/`high`, default `high` — no
+  restriction). `cost.mapping` overrides [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s
+  shipped per-host model mapping; a host named there replaces that host's whole tier map. See "Cost
+  tiers and model resolution" below for how the ceiling and the mapping override actually apply.
 
 ## Cost tiers and model resolution
 
@@ -575,12 +581,38 @@ already uses:
 - `high` — front-loaded reasoning: architecture, cross-cutting design, fresh-eyes review.
 
 A shipped mapping resolves `cost` and host to a concrete model at spawn time:
-[`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s `resolveModel(cost, host)`. Today
-the only way to override it is to edit that file directly, or pass a custom mapping as
-`resolveModel`'s third argument; a `.somi/config.json`-driven override is planned for a later
-iteration and not yet wired in. A host absent from the mapping gets no override — the caller omits
-the model argument and that host's own default applies. An unrecognized `cost` value, or a mapped
-host missing the requested tier, throws rather than silently resolving to the wrong model.
+[`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s `resolveModel(cost, host, mapping)`.
+`mapping` defaults to the shipped table; `.somi/config.json`'s `cost.mapping` overrides it —
+`mergeHostMapping(HOST_MODELS, config.cost.mapping)` builds the effective mapping to pass as
+`resolveModel`'s third argument, replacing a named host's whole tier map rather than merging it
+tier-by-tier. A host absent from the mapping gets no override — the caller omits the model argument
+and that host's own default applies. An unrecognized `cost` value, a mapped host missing the
+requested tier, or a mapping override shaped as anything but a plain object (including a `__proto__`
+key — `JSON.parse` can give one a genuine own property, unlike object-literal syntax) throws rather
+than silently resolving to the wrong model.
+
+### Session ceiling
+
+A session ceiling caps the `cost` tier a dispatch may cross without explicit sign-off:
+[`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root, arg)` and
+`decideDispatch(cost, ceiling, interactive)`. State lives at
+`.somi/somi-state/ceiling.json` — one file for the whole session, not per slug, since spend applies
+across whatever you're working on. Precedence for what can **move** a ceiling already in
+force: an explicit argument this call > `SOMI_COST_CEILING` this call > the ceiling already on
+disk; `.somi/config.json`'s `cost.ceiling` is read only once, when no state file exists yet — a
+bare config edit after that never silently reopens the ceiling, mirroring `/code-loop`'s cap
+precedent. Every move is recorded in `ceiling_overrides` as `{field, from, to, source, at}`.
+
+Over-ceiling dispatch has exactly three outcomes, never a fourth: **allow** (within ceiling),
+**ask** (over ceiling, interactive — names the cost, waits for sign-off), or **refuse** (over
+ceiling, non-interactive). No outcome substitutes a cheaper model — `decideDispatch`'s result
+always echoes the requested `cost` back unchanged; there is no silent-degrade path to leave out.
+A malformed ceiling value — from config, the env var, or an explicit argument — throws rather than
+disabling the ceiling. `modelForDispatch(decision, host, mapping)` is the sanctioned way to turn a
+decision into a model: it refuses outright unless `decision.action` is `allow`, so a decision that
+was not allowed cannot yield a model through it. `ceiling` is present and strictly cheaper on the
+ask/refuse branches, so reading it instead of `cost` does downgrade — nothing yet detects that, and
+`modelForDispatch` is what keeps the sanctioned path honest, not the shape of the result.
 
 ## Dependency additions
 
