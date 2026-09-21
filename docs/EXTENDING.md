@@ -53,6 +53,7 @@ multi-piece change:
 name: <name>
 description: When to invoke this agent (concrete trigger conditions, not topic). The model uses this to decide whether to call it.
 model: opus
+cost: high
 ---
 
 # <name>
@@ -64,10 +65,12 @@ quality bar, output shape, failure modes to avoid, escalation rules, examples.>
 Rules of thumb:
 
 - **`description`** is the single most important field. Get it right.
-- **`model`** follows the [MAX/ECO tiers](./AGENTS.md#economic-tiering-maxeco): `opus` for **MAX**
-  agents that front-load reasoning into a `brief.md` or do fresh-eyes review; `sonnet` for **ECO**
-  agents that execute against the brief. A new agent that compiles context is MAX; one that executes
-  it is ECO.
+- **`model` / `cost`** follow the [cost tiers](./AGENTS.md#cost-tiering): `cost: high` for
+  agents that front-load reasoning into a `brief.md` or do fresh-eyes review; `cost: medium` for
+  agents that execute against the brief. A new agent that compiles context is `cost: high`; one
+  that executes it is `cost: medium`. Keep `model:` beside it — set it to whichever concrete model
+  [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs) maps that `cost` value to for
+  `claude-code` today.
 - Omit `tools:` — SoMi's agents are trusted with full tool access by design; review-type agents are
   constrained by a **write-discipline contract in their own prompt**, not by platform restriction.
   This is a deliberate simplicity choice, **not** a compatibility requirement: both hosts support the
@@ -105,6 +108,7 @@ description: One-liner for / autocomplete.
 argument-hint: <how to phrase arguments>
 allowed-tools: Task, Read, ...
 model: opus
+cost: high
 ---
 
 # /<name> — Title

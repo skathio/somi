@@ -3,6 +3,7 @@ description: Bounded code → review → fix loop on a single iteration. Exits o
 argument-hint: <slug> [phase N, iteration M]
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 model: sonnet
+cost: medium
 ---
 
 # /code-loop — Bounded code↔review iteration
@@ -12,10 +13,10 @@ You are running the **bounded code↔review loop** of somi.
 The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, iteration M`).
 
 This command automates the manual `/code` → `/review` → `/code` cycle for a single iteration,
-with **hard gates** that ensure it terminates. This is an **ECO-tier** loop: the orchestrator and
-the `coder` it Tasks both run `sonnet` (executing against the work item's `brief.md` + plan), while
-the `reviewer` it Tasks stays `opus` — review is the fresh-eyes MAX judgment, run on a cold context
-so it isn't biased by the coder's reasoning.
+with **hard gates** that ensure it terminates. This is a **`cost: medium`** loop: the orchestrator
+and the `coder` it Tasks both run at `cost: medium` (executing against the work item's `brief.md` +
+plan), while the `reviewer` it Tasks stays at `cost: high` — review is the fresh-eyes high-cost
+judgment, run on a cold context so it isn't biased by the coder's reasoning.
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > `spec.md`, and the active `phases/<NN>-*.md` — in the **same order at the front** of each pass's

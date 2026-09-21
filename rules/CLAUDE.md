@@ -122,10 +122,11 @@ treats these as **context to respect**, not competition:
 - **Repo-local instructions WIN** over SOMI defaults where they conflict (the project's own
   `CLAUDE.md` already wins per the top of this file). Follow the repo's conventions for naming, error
   handling, testing, dependencies, and structure.
-- **Read them once, carry them forward.** MAX actions (`/discover`, `/design`, `/refactor` analysis,
-  and `/plan` on a cold start) distil the relevant conventions into the work item's `brief.md` /
-  `context.md` so the ECO tier (`/plan`, `/code`) inherits them **without re-reading** — this is part
-  of the MAX→ECO economy. The SessionStart hook surfaces which files exist.
+- **Read them once, carry them forward.** `cost: high` actions (`/discover`, `/design`, `/refactor`
+  analysis, and `/plan` on a cold start) distil the relevant conventions into the work item's
+  `brief.md` / `context.md` so `cost: medium` (`/plan`, `/code`) inherits them **without
+  re-reading** — this is part of the design→execution economy. The SessionStart hook surfaces which
+  files exist.
 - **Do NOT auto-invoke the repo's own agents.** Foreign subagents are unknown-quality and
   untrusted-by-default; surface that they exist and let the user opt into them. Never call them
   silently.
@@ -153,9 +154,9 @@ See [docs/HOOKS.md](../docs/HOOKS.md) for the full list and how to extend it.
 
 SOMI provides specialized agents in `agents/`. Use them when the work matches their description:
 
-- **`discovery-analyst`** — a new product / greenfield idea needing requirements engineering, competitive research, and high-level design *before* planning (writes `.somi/rd/<slug>/`). Optional and upstream; skip for incremental work with settled requirements. **MAX tier (`opus`).**
-- **`designer`** — a feature / user story on an existing codebase that is design-heavy (crosses modules, touches auth/crypto/PII, needs a migration or new contract, or the architecture is open). Compiles the design + the `brief.md` the ECO tier executes against. Use *before* `/plan` when the architecture isn't settled. **MAX tier (`opus`).**
-- **`planner`** — before writing non-trivial code, or whenever the user asks "how should we approach X". **ECO tier (`sonnet`)** — consumes the `brief.md` a MAX action left.
+- **`discovery-analyst`** — a new product / greenfield idea needing requirements engineering, competitive research, and high-level design *before* planning (writes `.somi/rd/<slug>/`). Optional and upstream; skip for incremental work with settled requirements. **`cost: high`.**
+- **`designer`** — a feature / user story on an existing codebase that is design-heavy (crosses modules, touches auth/crypto/PII, needs a migration or new contract, or the architecture is open). Compiles the design + the `brief.md` execution runs against. Use *before* `/plan` when the architecture isn't settled. **`cost: high`.**
+- **`planner`** — before writing non-trivial code, or whenever the user asks "how should we approach X". **`cost: medium`** — consumes the `brief.md` a `cost: high` action left.
 - **`coder`** — to execute against an approved plan or do a constrained implementation task.
 - **`reviewer`** — before declaring work done; before merging; whenever you want a skeptical second opinion.
 - **`security-reviewer`** — auth, crypto, input handling, third-party data, file uploads, anything touching secrets.

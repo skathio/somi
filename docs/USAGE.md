@@ -6,14 +6,14 @@ to type, what to expect, and where the artifacts go.
 ## The fundamental loop
 
 ```
-MAX tier (opus) — front-load reasoning into a dense brief.md:
+cost: high — front-load reasoning into a dense brief.md:
 /discover <idea>           →  .somi/rd/<slug>/ + brief.md     →  user reviews + approves
    ↓ (new product)           (research + BRD/SRS/FRD/SDD/TDD)
 /design <feature>          →  .somi/plans/<slug>/ + brief.md  →  user reviews + approves
    ↓ (brownfield, design-    (design.md + decisions + brief)
    ↓  heavy feature)
-─────────────────────────  MAX→ECO model switch  ─────────────────────────
-ECO tier (sonnet) — execute against the brief, cheaply:
+─────────────────────────  design→execution switch  ─────────────────────────
+cost: medium — execute against the brief, cheaply:
 /plan <problem|slug>       →  .somi/plans/<slug>/ created    →  user reviews + approves
    ↓                          (consumes brief.md as primary input)
 /code-loop <slug>           →  diff + tests + review files;  →  user inspects
@@ -23,14 +23,14 @@ ECO tier (sonnet) — execute against the brief, cheaply:
 (next iteration; or merge if done)
 ```
 
-The **MAX** front-loads (`/discover` for a new product, `/design` for a brownfield design-heavy
-feature) compile a dense `brief.md` so the **ECO** tier (`/plan`, `/code`) executes *without
-re-researching*. Incremental work with a settled design skips the front-load and starts at `/plan`;
-a cold design-heavy plan triggers `/plan`'s depth gate, which recommends `/design` first.
+The **`cost: high`** front-loads (`/discover` for a new product, `/design` for a brownfield
+design-heavy feature) compile a dense `brief.md` so **`cost: medium`** (`/plan`, `/code`) executes
+*without re-researching*. Incremental work with a settled design skips the front-load and starts at
+`/plan`; a cold design-heavy plan triggers `/plan`'s depth gate, which recommends `/design` first.
 
 `/code <slug>` runs a single coder pass without the review loop. `/code-loop` is the bounded
 code↔review cycle for a single iteration. `/ship` runs the whole pipeline with hard gates at every
-stage; `/ship-loop` runs it continuously, gating once at the MAX→ECO model switch.
+stage; `/ship-loop` runs it continuously, gating once at the design→execution switch.
 
 ---
 
@@ -51,8 +51,8 @@ planning.
 
 **Expect**:
 - SoMi proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
-- Runs on the **most capable model end-to-end** (the `/discover` command itself is `opus`, not just
-  the agent) — its output is the cornerstone of the project.
+- Runs on the **most capable model end-to-end** (the `/discover` command itself runs at
+  `cost: high`, not just the agent) — its output is the cornerstone of the project.
 - **Researches the competition extensively** — scans direct/indirect competitors, mines real user
   complaints and churn reasons, and surfaces recurring failure modes to design *away* from. Every
   non-obvious claim is cited; signal is distinguished from noise; nothing is fabricated.
@@ -203,7 +203,7 @@ machine", a stack trace pointing somewhere implausible. (Cause already known + t
   with what's missing; no hunch-fixes.
 - **Bounded isolation**: one falsifiable hypothesis at a time (default budget 5 — config
   `debug.max_hypotheses`, env `SOMI_DEBUG_MAX_HYPOTHESES`); when narrowing stalls, a
-  fresh-context MAX diagnosis pass (the `reviewer` on the evidence only) discriminates the
+  fresh-context high-cost diagnosis pass (the `reviewer` on the evidence only) discriminates the
   remaining candidates.
 - The **fix runs under `/code-loop`** with the repro test as acceptance — the usual caps apply,
   and a fix that blows the diff cap is treated as a signal the change is feature-sized (hand-off
@@ -295,10 +295,10 @@ loops. Global budget caps total passes. See [`commands/ship-loop.md`](../command
 
 ### `/atlas`
 
-Builds (or refreshes) the **Repo Atlas** at `.somi/atlas.md` — one MAX-tier deep read of the
+Builds (or refreshes) the **Repo Atlas** at `.somi/atlas.md` — one `cost: high` deep read of the
 codebase (module map, dependency rules, conventions digest, hotspots, test topology),
-SHA-stamped. Later MAX actions (`/design`, cold `/plan`, `/refactor` analysis, `/impact`) start
-from it and deep-read only the drift since its SHA, instead of re-reading the repo per work
+SHA-stamped. Later `cost: high` actions (`/design`, cold `/plan`, `/refactor` analysis, `/impact`)
+start from it and deep-read only the drift since its SHA, instead of re-reading the repo per work
 item. Worth running once on any repo you'll do repeated SoMi work in; refresh after structural
 changes. Commit it.
 
@@ -425,7 +425,7 @@ suggestions), and recommends a small calibration work item to run as `/ship` or 
 
 ### `/upgrade`
 
-Dependency upgrade validation, MAX→ECO shaped: cited changelog/breaking-change/CVE research →
+Dependency upgrade validation, design→execution shaped: cited changelog/breaking-change/CVE research →
 usage scan of the flagged APIs → mini-`brief.md` (which doubles as the dep-gate sign-off
 record) → human gate → migration under `/code-loop` with the full suite as acceptance.
 Patch/minor with nothing breaking documented → it says so and recommends the short path.
@@ -439,7 +439,7 @@ Patch/minor with nothing breaking documented → it says so and recommends the s
 
 The pre-release gate: a deterministic checklist over the artifacts (all iterations done? open
 Blocker/Major `F-<n>`s? DoD checkable? rollout/rollback real? interrupted loops?
-`somi-check --all` clean?) plus **one** MAX fresh-context review of the *cumulative* release
+`somi-check --all` clean?) plus **one** high-cost fresh-context review of the *cumulative* release
 diff — the integration surface per-iteration reviews never saw. Output: `ready` /
 `ready-with-conditions` / `not-ready` with evidence, and draft release notes generated from the
 work items' specs and diaries.
@@ -570,11 +570,21 @@ optional; omit anything you don't want to change:
 
 ## Cost tiers and model resolution
 
-Cost is declared with a `cost:` field in frontmatter, beside `model:` — the convention every
-`agents/*.md` and `commands/*.md` file will adopt. Conversion of the ~60 existing files hasn't
-landed yet, so today every file still carries only `model:`; once converted, multi-mode commands
-will declare more than one value. Three tiers, in the same vocabulary Copilot's own model picker
-already uses:
+Cost is declared with a `cost:` field in frontmatter, beside `model:` — every `agents/*.md` and
+`commands/*.md` file declares one, and `scripts/validate.sh` asserts presence and validity across
+all of them. **`cost:` states what that unit itself runs at — never what it Tasks.** A command
+Tasking a `cost: high` agent stays declared at its own tier (typically `medium`); the agent's own
+frontmatter is where `high` is truthfully declared, once. A command declares more than one value,
+comma-separated (`cost: medium, high`), only when that command's *own* orchestration genuinely runs
+at a different tier depending on which mode you invoke it in — for example, a hypothetical command
+whose default mode is a light orchestration pass but which itself runs the full high-cost analysis
+loop in an alternate mode, rather than merely Tasking a `high` agent while staying `medium` itself.
+No file in this repo needs the multi-value form today — `/refactor`'s two modes both Task the same
+`cost: high` `refactorer` agent, so `/refactor` itself declares `cost: medium` in both modes; the
+mode is an argument to the agent it Tasks, not a second tier the command's own orchestration runs
+at. The comma-separated mechanism stays supported (`scripts/validate.sh` still validates its
+ordering and rejects duplicates or malformed lists) for whenever a command genuinely earns it.
+Three tiers, in the same vocabulary Copilot's own model picker already uses:
 
 - `low` — small, mechanical work.
 - `medium` — typical implementation and review work.

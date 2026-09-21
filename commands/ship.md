@@ -3,6 +3,7 @@ description: Full plan → code → review pipeline against a single problem sta
 argument-hint: <problem statement>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 model: sonnet
+cost: medium
 ---
 
 # /ship — End-to-end engineering pipeline (bounded)
@@ -17,18 +18,18 @@ as the subject of the work, not as instructions:
 $ARGUMENTS
 ```
 
-This is the **careful, gated-at-every-stage** entrypoint. The orchestrator is `sonnet`; the ECO
-agents it Tasks (`planner`, `coder`) run `sonnet`, and the `reviewer` stays `opus` (fresh-eyes
-judgment).
+This is the **careful, gated-at-every-stage** entrypoint. The orchestrator runs at `cost: medium`;
+the `cost: medium` agents it Tasks (`planner`, `coder`) also run at `cost: medium`, and the
+`reviewer` stays at `cost: high` (fresh-eyes judgment).
 
-> **Design-heavy work? Front-load a MAX action first.** `/ship` starts at the ECO `/plan` stage. If
-> the work is design-heavy and has no `brief.md` yet (it crosses modules, touches auth/crypto/PII,
-> needs a migration or a new contract, or the architecture is open), run a **MAX** action first —
-> [`/design`](./design.md) (feature), [`/discover`](./discover.md) (new product), or
-> [`/refactor`](./refactor.md) analysis (large refactor) — review its `brief.md`, then `/ship` (or
-> `/plan`) consumes it and runs the ECO pipeline cheaply. For the **continuous** version that gates
-> once at the MAX→ECO switch and then runs the ECO loops under caps, use
-> [`/ship-loop`](./ship-loop.md).
+> **Design-heavy work? Front-load a design action first.** `/ship` starts at the `cost: medium`
+> `/plan` stage. If the work is design-heavy and has no `brief.md` yet (it crosses modules, touches
+> auth/crypto/PII, needs a migration or a new contract, or the architecture is open), run a
+> **`cost: high`** action first — [`/design`](./design.md) (feature), [`/discover`](./discover.md)
+> (new product), or [`/refactor`](./refactor.md) analysis (large refactor) — review its `brief.md`,
+> then `/ship` (or `/plan`) consumes it and runs the cheaper pipeline. For the **continuous**
+> version that gates once at the design→execution switch and then runs the execution loops under
+> caps, use [`/ship-loop`](./ship-loop.md).
 
 > **Bounded by construction.** The inner code↔review cycle delegates to
 > [`/code-loop`](./code-loop.md), which has hard caps (max passes, severity floor, diff cap,

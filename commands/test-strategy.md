@@ -3,6 +3,7 @@ description: Design or critique a test strategy for a change. Risk-driven covera
 argument-hint: <slug> | <file path> | <free-form description of what to test>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 model: sonnet
+cost: medium
 ---
 
 # /test-strategy — Targeted test-strategy review

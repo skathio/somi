@@ -83,5 +83,83 @@ expect_exit "a non-object per-host value in the override is rejected, not passed
 expect_exit "a null per-host value in the override is rejected, not a bare TypeError later" 1 \
   'M.mergeHostMapping(M.HOST_MODELS, { "h": null })'
 
+
+# --- scripts/validate.sh's own derivation idiom stays capture-then-check, not a bare eval --------
+# validate.sh builds its cost/model environment from this resolver via a shell idiom: assign the
+# node call's stdout to a plain variable with an explicit `|| { ...; exit 1; }`, THEN eval the
+# variable -- never `eval "$(node -e ...)"` directly. A PARTIAL failure (one tier's resolveModel
+# call throws after earlier tiers already printed) exits node non-zero, but a bare eval hides that
+# status from `set -e`: the failing substitution is only an argument being built for eval, not the
+# exit status of a simple command, so the earlier assignments land silently and the surrounding
+# checks report PASSED with the missing tier never having been derived. Two independent instruments
+# below, covering two different things -- neither substitutes for the other: the shape checks read
+# the REAL `scripts/validate.sh` and are the only coverage that file's own form actually has
+# (literal revert, or the script-form bypass below); the behavioral reproduction that follows runs
+# a hardcoded COPY of the idiom -- it never opens `validate.sh` -- and only pins that the
+# capture-then-check shell idiom itself, in the abstract, still exits 1 and reports its diagnostic
+# under a genuinely partial derivation failure. A rewrite of `validate.sh` that changes its form
+# without losing this property would pass the shape checks (correctly) but is not exercised by the
+# behavioral block at all.
+VALIDATE="$ROOT/scripts/validate.sh"
+if grep -qF 'cost_env="$(node -e' "$VALIDATE"; then
+  ok "validate.sh still captures the cost-model derivation into a plain variable before checking it"
+else
+  bad "validate.sh no longer captures the cost-model derivation into cost_env -- the guard may have been reverted"
+fi
+if grep -qF 'cost-model derivation failed; cannot validate cost tiers' "$VALIDATE"; then
+  ok "validate.sh still has an explicit failure diagnostic for the derivation"
+else
+  bad "validate.sh's derivation-failure diagnostic is gone"
+fi
+if grep -vE '^[[:space:]]*#' "$VALIDATE" | grep -qE 'eval[[:space:]]+"\$\(node|source[[:space:]]+<\(node'; then
+  bad "validate.sh evaluates or sources a node derivation directly (bare eval \"\$(node ...)\" or source <(node ...)) -- set -e cannot see a partial failure through either form"
+else
+  ok "validate.sh does not eval or source a node derivation directly (outside comments) -- the capture-then-check form is intact"
+fi
+
+# The previous literal `eval "$(node -e` match missed a script-form bypass: a longer derivation
+# naturally moves from `node -e '...'` to a file, and `eval "$(node scripts/lib/some-file.mjs)"`
+# loses the same capture-then-check property without containing `-e` anywhere. Prove the widened
+# check actually catches that form, on a scratch copy -- never the real file.
+scratch_validate="$(mktemp)"
+cp -a "$VALIDATE" "$scratch_validate"
+printf '\neval "$(node scripts/lib/derive-dispatch.mjs)"\n' >> "$scratch_validate"
+if grep -vE '^[[:space:]]*#' "$scratch_validate" | grep -qE 'eval[[:space:]]+"\$\(node|source[[:space:]]+<\(node'; then
+  ok "the widened shape check catches a bare eval of a node SCRIPT FILE (not just -e), on a scratch copy"
+else
+  bad "the widened shape check misses a bare eval of a node script file -- a literal '-e' match is too narrow"
+fi
+rm -f "$scratch_validate"
+
+# A derivation that prints two assignments and then throws is what a real partial failure looks
+# like (e.g. a tier added to VALID_COSTS but missing from a host's mapping, mid-forEach). Run
+# validate.sh's exact idiom against it under the same `set -euo pipefail` validate.sh runs under.
+partial_derivation() { node -e 'console.log("a=1"); console.log("b=2"); throw new Error("boom");'; }
+guarded_out="$(
+  exec 2>&1
+  set -euo pipefail
+  cost_env="$(partial_derivation)" || { echo "cost-model derivation failed; cannot validate cost tiers" >&2; exit 1; }
+  eval "$cost_env"
+  echo "REACHED-PAST-THE-GUARD"
+)"
+guarded_rc=$?
+if [ "$guarded_rc" -eq 1 ]; then
+  ok "the capture-then-check idiom exits 1 on a partial derivation failure"
+else
+  bad "the capture-then-check idiom did not exit 1 on a partial derivation failure (rc=$guarded_rc, out: $guarded_out)"
+fi
+case "$guarded_out" in
+  *"cost-model derivation failed; cannot validate cost tiers"*)
+    ok "the capture-then-check idiom's diagnostic reaches output" ;;
+  *)
+    bad "the capture-then-check idiom's diagnostic did not reach output (got: $guarded_out)" ;;
+esac
+case "$guarded_out" in
+  *"REACHED-PAST-THE-GUARD"*)
+    bad "execution continued past a partial derivation failure -- the guard did not stop it" ;;
+  *)
+    ok "execution did not continue past a partial derivation failure" ;;
+esac
+
 echo "cost model tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

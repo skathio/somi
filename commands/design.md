@@ -1,22 +1,23 @@
 ---
-description: MAX-tier feature / user-story design on an existing codebase. Reads the repo deeply, resolves the expensive-to-reverse decisions with you, maps the complexity, and compiles a dense brief.md the ECO planner/coder execute against without re-researching. Sits between /discover (whole product) and /plan (sequencing).
+description: `cost: high` feature / user-story design on an existing codebase. Reads the repo deeply, resolves the expensive-to-reverse decisions with you, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching. Sits between /discover (whole product) and /plan (sequencing).
 argument-hint: <feature or user story to design>
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebSearch, WebFetch, Bash
 model: opus
+cost: high
 ---
 
-# /design — Feature / user-story design (MAX tier)
+# /design — Feature / user-story design (`cost: high`)
 
 You are running the **design workflow** of somi — the front-loaded, expensive-reasoning step that
 turns a feature or user story into a settled architecture against the **existing codebase**, then
-compiles it into a dense [`brief.md`](../templates/BRIEF.md.tmpl) the cheaper (ECO) tier executes
-against **without re-researching**. All artifacts live under `.somi/plans/<slug>/`.
+compiles it into a dense [`brief.md`](../templates/BRIEF.md.tmpl) the cheaper (`cost: medium`) tier
+executes against **without re-researching**. All artifacts live under `.somi/plans/<slug>/`.
 
 > **Runs on the most capable model end-to-end.** Like [`/discover`](./discover.md), `/design` runs
-> `opus` at the command layer too — framing the feature, reading the codebase, and shaping
-> crossroads is judgment-heavy, and its `brief.md` anchors everything the ECO tier does. This is the
-> MAX layer of SoMi's MAX→ECO economy; the cost is justified because it lets plan and code run on
-> `sonnet`. See [`docs/COMMANDS.md`](../docs/COMMANDS.md).
+> at `cost: high` at the command layer too — framing the feature, reading the codebase, and shaping
+> crossroads is judgment-heavy, and its `brief.md` anchors everything execution does. This is the
+> high-cost layer of SoMi's design→execution economy; the cost is justified because it lets plan and
+> code run at `cost: medium`. See [`docs/COMMANDS.md`](../docs/COMMANDS.md).
 
 > **/design vs /discover vs /plan.** [`/discover`](./discover.md) is for a **whole new product** —
 > a full competitive landscape plus requirements. `/design` is for a **feature/story on an existing
@@ -64,7 +65,7 @@ Create `.somi/plans/<slug>/` with the design artifact set from [`templates/`](..
 .somi/plans/<slug>/
 ├── design.md      ← from templates/DESIGN.md.tmpl    (the feature design — direction + hard parts)
 ├── decisions.md   ← from templates/DECISIONS.md.tmpl (ADR-style, user-verified)
-├── brief.md       ← from templates/BRIEF.md.tmpl     (the MAX→ECO handoff — load-bearing)
+├── brief.md       ← from templates/BRIEF.md.tmpl     (the design→execution handoff — load-bearing)
 └── diary.md       ← from templates/DIARY.md.tmpl     (chronological narrative)
 ```
 
@@ -88,9 +89,9 @@ Brief [`agents/designer.md`](../agents/designer.md) via the Task tool with:
 
 The designer reads the repo's own instruction files — `CLAUDE.md` (root + nested), `AGENTS.md`,
 `.github/copilot-instructions.md`, `.cursorrules`, and notes any `.claude/agents/` — **once**, and
-distils the relevant conventions into the brief's **"Repo conventions in force"** section so the ECO
-tier inherits them without re-reading. **Repo-local instructions win** over SoMi defaults where they
-conflict. Do **not** auto-invoke the repo's own agents — surface them for the user to opt into.
+distils the relevant conventions into the brief's **"Repo conventions in force"** section so
+execution inherits them without re-reading. **Repo-local instructions win** over SoMi defaults where
+they conflict. Do **not** auto-invoke the repo's own agents — surface them for the user to opt into.
 
 ### 6. Verification protocol (the batch round-trip — this command owns the user conversation)
 
@@ -112,13 +113,14 @@ user-verified without an actual user verdict from step 2.
 ### 7. The brief is the deliverable
 
 Hold the designer to the brief quality bar: it must be **dense, bounded (≤ ~400 lines / ~6k tokens),
-reference-not-inline**, and its **"What ECO does NOT need to re-research"** section must be concrete
-and honest — that section is what earns the MAX spend and lets `/plan`/`/code` run on `sonnet`.
+reference-not-inline**, and its **"What execution does NOT need to re-research"** section must be
+concrete and honest — that section is what earns the higher spend and lets `/plan`/`/code` run at
+`cost: medium`.
 
-### 8. Optional MAX review loop (review the design in MAX scope)
+### 8. Optional high-cost review loop (review the design at `cost: high`)
 
 For a high-stakes design, run a bounded **design → review → revise** loop before handing off — the
-MAX-tier counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md):
+high-cost counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md):
 
 - Task [`architecture-reviewer`](../agents/architecture-reviewer.md) (and
   [`reviewer`](../agents/reviewer.md) for the brief's completeness) on a **fresh context** — give it
@@ -136,7 +138,7 @@ Return to the user with:
 - The **architectural decisions made** (one-liner each) and the **complexity hotspots** identified.
 - A pointer to `.somi/plans/<slug>/` and the files to read first (`brief.md`, then `design.md`).
 - A specific next step: "Review / edit `.somi/plans/<slug>/brief.md`, then run `/plan <slug>` — the
-  planner consumes the brief and sequences it into phases (on the ECO tier)."
+  planner consumes the brief and sequences it into phases (at `cost: medium`)."
 
 ## Guardrails
 
@@ -145,7 +147,7 @@ Return to the user with:
 - **Respect the design-depth boundary.** Design sets architecture *direction* and the complexity map;
   the planner produces the phased, file-level plan. No PR-sized slices or concrete signatures here.
 - **The brief must actually save research.** A brief whose "does NOT need to re-research" section is
-  empty or vague is a failed design — it defeats the MAX→ECO economy.
+  empty or vague is a failed design — it defeats the design→execution economy.
 - **Do not skip verification** for architecture-shaping decisions.
 - **No artifact outside `.somi/plans/<slug>/`** (plus the root `.somi/README.md` if missing).
 

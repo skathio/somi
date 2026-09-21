@@ -183,13 +183,13 @@ select the right agent, so `somi` mainly matters here, on Copilot.
 |----------------------------------|------------------------------------------------------------------------------------------|
 | `@somi /discover`             | `discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
 | `@somi /design`               | `designer` (brownfield feature design → `brief.md`)                                      |
-| `@somi /atlas`                | (none — MAX command; repo map → `.somi/atlas.md`)                                        |
+| `@somi /atlas`                | (none — `cost: high` command; repo map → `.somi/atlas.md`)                                        |
 | `@somi /plan`                 | `planner`                                                                                |
 | `@somi /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
 | `@somi /code`                 | `coder`                                                                                  |
 | `@somi /code-loop`            | `coder` + `reviewer` (bounded)                                                           |
 | `@somi /code-parallel`        | per eligible iteration: `/code-loop` (sequential on Copilot — no worktrees/concurrency)   |
-| `@somi /debug`                | `coder` (+ `reviewer` as MAX diagnosis hatch)                                            |
+| `@somi /debug`                | `coder` (+ `reviewer` as high-cost diagnosis hatch)                                            |
 | `@somi /review`               | `reviewer` (+ `security-reviewer` / `architecture-reviewer` / `test-strategist` auto-invoked) |
 | `@somi /review-panel`         | reviewer + specialist lenses (sequential on Copilot)                                     |
 | `@somi /ship`                 | `planner` + (per iteration) `/code-loop`                                                 |

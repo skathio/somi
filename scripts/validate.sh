@@ -121,38 +121,176 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
-echo "==> Validating MAX/ECO model tiering..."
-# Extract the first `model:` value from a file's frontmatter (the block between the
-# first two `---` lines).
+echo "==> Validating cost-tier declarations..."
+# Extract the first `cost:` (or `model:`) value(s) from a file's frontmatter (the block between
+# the first two `---` lines) -- a comma-separated list for a command whose OWN orchestration
+# genuinely runs at more than one tier depending on which mode it's invoked in (hypothetically: a
+# command whose default mode is a light pass but itself runs the full high-cost flow in another
+# mode). What a file Tasks never contributes a value here: a cost: medium orchestrator Tasking a
+# cost: high agent stays declared medium -- the agent's own frontmatter is where high is
+# truthfully declared, once. No file in this repo needs the multi-value form today; the
+# ordering/duplicate/malformed checks below still guard the mechanism for whenever a command
+# genuinely earns it.
+cost_of() {
+  awk '/^---$/{c++} c==1 && /^cost:[[:space:]]*/{sub(/^cost:[[:space:]]*/,""); print; exit}' "$1"
+}
 model_of() {
   awk '/^---$/{c++} c==1 && /^model:[[:space:]]*/{sub(/^model:[[:space:]]*/,""); print; exit}' "$1"
 }
-tier_failed=0
-assert_model() {
+cost_failed=0
+
+# Both the valid-cost enum and each tier's expected model are DERIVED from
+# scripts/lib/cost-model.mjs in one node call, not hardcoded a second time here -- a repricing or
+# a new tier is then a one-file edit instead of two files drifting apart.
+#
+# CAPTURE, CHECK, THEN EVAL -- deliberately not a bare `eval "$(node -e …)"`. A PARTIAL failure
+# (resolveModel throws for one tier mid-forEach, after valid_costs and earlier ranks already
+# printed) exits node non-zero, but that status is invisible to `eval`: the failing command
+# substitution is only an argument being built for eval, not the exit status of a simple command,
+# so `set -e` cannot see it and the script would report the cost block PASSED with that tier's
+# model_for_* silently missing. Assigning to a plain variable first makes the substitution's exit
+# status the ASSIGNMENT's status, which the explicit `||` below then catches -- and it must be
+# explicit, not a bare `cost_env=$(node …)`: under `set -e` a bare assignment dies silently at the
+# assignment, with no diagnostic reaching the user about which check was skipped.
+cost_env="$(node -e '
+import("./scripts/lib/cost-model.mjs").then((m) => {
+  console.log("valid_costs=" + JSON.stringify(m.VALID_COSTS.join("|")));
+  m.VALID_COSTS.forEach((c, idx) => {
+    console.log("rank_" + c + "=" + idx);
+    console.log("model_for_" + c + "=" + JSON.stringify(m.resolveModel(c, "claude-code")));
+  });
+});
+')" || { echo "cost-model derivation failed; cannot validate cost tiers" >&2; exit 1; }
+eval "$cost_env"
+
+# (a) Every agents/*.md and commands/*.md file declares a `cost:` field, and every value in it
+# (split on comma, for the multi-mode commands) is one of scripts/lib/cost-model.mjs's
+# VALID_COSTS. Generic presence+validity, across all ~34 files -- not just the ones pinned to an
+# exact value below.
+for f in agents/*.md commands/*.md; do
+  [ -f "$f" ] || continue
+  got="$(cost_of "$f")"
+  if [ -z "$got" ]; then
+    echo "COST TIER MISSING: $f has no 'cost:' field in frontmatter" >&2
+    cost_failed=1
+    continue
+  fi
+  # Reject an empty element (leading/trailing/double comma, e.g. "medium," or ",high") before
+  # splitting -- `IFS=',' read -ra` silently drops a trailing empty field, so a malformed list
+  # would otherwise split clean and pass.
+  stripped="$(echo "$got" | tr -d '[:space:]')"
+  case "$stripped" in
+    ,*|*,|*,,*)
+      echo "COST TIER MALFORMED: $f has an empty cost value (leading/trailing/double comma) in '$got'" >&2
+      cost_failed=1
+      continue
+      ;;
+  esac
+  IFS=',' read -ra cost_values <<< "$got"
+  prev_rank=-1
+  for v in "${cost_values[@]}"; do
+    v="$(echo "$v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    case "|$valid_costs|" in
+      *"|$v|"*)
+        rank_var="rank_$v"
+        rank="${!rank_var}"
+        ;;
+      *)
+        echo "COST TIER INVALID: $f declares cost value '$v' (expected one of $valid_costs)" >&2
+        cost_failed=1
+        rank=-1
+        ;;
+    esac
+    # Multi-value cost must be strictly ascending with no duplicates (low < medium < high) -- a
+    # second value that repeats or precedes the first is a hand-edit slip a reader will not
+    # notice, and the field is about to become a dispatch input.
+    if [ "$rank" -ge 0 ] && [ "$rank" -le "$prev_rank" ]; then
+      echo "COST TIER UNORDERED: $f declares '$got' -- multi-value cost must be strictly ascending ($valid_costs), no duplicates" >&2
+      cost_failed=1
+    fi
+    [ "$rank" -ge 0 ] && prev_rank="$rank"
+  done
+done
+
+# (b) Pin the exact declared cost for the files where the value is load-bearing beyond "some
+# valid tier" -- mirrors the thirteen model-value assertions this block replaces.
+# agents/somi.md's is the one the front-door dispatch derives from.
+assert_cost() {
   local f="$1" want="$2" got
-  got="$(model_of "$f")"
+  got="$(cost_of "$f" | tr -d '[:space:]')"
   if [ "$got" != "$want" ]; then
-    echo "MODEL TIER MISMATCH: $f model is '$got', expected '$want'" >&2
-    tier_failed=1
+    echo "COST TIER MISMATCH: $f cost is '$got', expected '$want'" >&2
+    cost_failed=1
   fi
 }
-# ECO tier (sonnet): planning + coding execute against the MAX brief.
-assert_model agents/planner.md sonnet
-assert_model agents/coder.md sonnet
-assert_model agents/somi.md sonnet
-# MAX tier (opus): front-load reasoning + fresh-eyes review.
+# medium: planning + coding execute against the high-cost brief.
+assert_cost agents/planner.md medium
+assert_cost agents/coder.md medium
+assert_cost agents/somi.md medium
+# high: front-load reasoning + fresh-eyes review.
 for a in discovery-analyst designer refactorer reviewer security-reviewer architecture-reviewer test-strategist; do
-  assert_model "agents/$a.md" opus
+  assert_cost "agents/$a.md" high
 done
-# MAX front-load commands run opus end-to-end (their orchestration is judgment-heavy).
-assert_model commands/discover.md opus
-assert_model commands/design.md opus
-assert_model commands/atlas.md opus
-if [ "$tier_failed" -ne 0 ]; then
+# high-cost front-load commands run at cost: high end-to-end (their orchestration is judgment-heavy).
+assert_cost commands/discover.md high
+assert_cost commands/design.md high
+assert_cost commands/atlas.md high
+
+# (c) `model:` and `cost:` state one fact twice, declared beside each other on exactly that
+# promise -- assert `model:` resolves from AT LEAST ONE declared `cost:` value (membership),
+# deriving the expected model(s) from the same resolveModel() mapping rather than a second
+# hardcoded table. Membership holds for a single-valued declaration too (one value to match), so
+# this is one check for both shapes, not two. It asserts only what every reading of a multi-value
+# declaration already agrees on, without prejudging which one slot (if any) is the "real" one.
+for f in agents/*.md commands/*.md; do
+  [ -f "$f" ] || continue
+  got="$(cost_of "$f" | tr -d '[:space:]')"
+  [ -z "$got" ] && continue  # already reported as COST TIER MISSING above
+  declared_model="$(model_of "$f" | tr -d '[:space:]')"
+  IFS=',' read -ra mv_values <<< "$got"
+  any_recognized=0
+  ok=0
+  for v in "${mv_values[@]}"; do
+    mv="model_for_$v"
+    expected="${!mv:-}"
+    [ -z "$expected" ] && continue  # unrecognized cost value, already reported above
+    any_recognized=1
+    [ "$expected" = "$declared_model" ] && ok=1
+  done
+  if [ "$any_recognized" -eq 1 ] && [ "$ok" -ne 1 ]; then
+    echo "MODEL/COST MISMATCH: $f declares cost: $got with model: $declared_model, which resolves from none of its declared cost value(s) per scripts/lib/cost-model.mjs" >&2
+    cost_failed=1
+  fi
+done
+
+if [ "$cost_failed" -ne 0 ]; then
   exit 1
 fi
 
-echo "==> Validating new MAX/ECO artifacts..."
+echo "==> Validating the stale-vocabulary retirement gate..."
+# scripts/validate.sh only ever asserted frontmatter VALUES above, never prose -- so a
+# half-converted ruleset (frontmatter switched to the new cost field, prose still naming the
+# retired tiers) would otherwise pass silently. tests/scripts/lib/retirement-gate.mjs sweeps the
+# roots below for the retired two-valued tier vocabulary and for hardcoded Claude model-name
+# mentions outside frontmatter, exemptions named in its own header.
+# tests/scripts/retirement-gate.sh proves this gate fails against a synthetic fixture still
+# carrying the old vocabulary and passes against a clean one, per the trap the tools-doctrine
+# sweep below documents (a check that can fire on its own fix needs to be proven against both
+# states, not just trusted against the final one).
+retirement_gate=$(node tests/scripts/lib/retirement-gate.mjs \
+  agents commands docs rules skills templates README.md CHANGELOG.md AGENTS.md .github \
+  .copilot-extension .claude-plugin examples hooks scripts tests)
+case "$retirement_gate" in
+  ok*) echo "  $retirement_gate" ;;
+  *)
+    echo "STALE VOCABULARY RETIREMENT GATE FAILED:" >&2
+    echo "$retirement_gate" >&2
+    exit 1
+    ;;
+esac
+bash tests/scripts/retirement-gate.sh
+
+echo "==> Validating new cost-tier artifacts..."
 for f in \
   templates/BRIEF.md.tmpl \
   templates/DESIGN.md.tmpl \
@@ -173,7 +311,7 @@ for f in \
     exit 1
   fi
 done
-# The execution brief is the load-bearing MAX→ECO handoff — it must be referenced by
+# The execution brief is the load-bearing design→execution handoff — it must be referenced by
 # the agents/commands that produce and consume it, not orphaned.
 if ! grep -rIlq 'BRIEF\.md\.tmpl' agents commands; then
   echo "templates/BRIEF.md.tmpl is not referenced by any agent or command" >&2

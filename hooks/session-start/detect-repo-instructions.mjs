@@ -6,10 +6,10 @@
 // iteration 2.7). Imports the shared read/context/projectRoot helpers from ../lib/common.mjs
 // (2.1, reviewer-blessed) rather than reimplementing them.
 //
-// SoMi's MAX→ECO economy is "respect repo conventions as context": when a project ships its
-// own instructions (CLAUDE.md / AGENTS.md / copilot-instructions / .cursorrules) or its own
-// subagents (.claude/agents/), SoMi's MAX actions should read them once and fold the relevant
-// conventions into the work-item brief.md, so the ECO tier inherits them without re-reading.
+// SoMi's design→execution economy is "respect repo conventions as context": when a project ships
+// its own instructions (CLAUDE.md / AGENTS.md / copilot-instructions / .cursorrules) or its own
+// subagents (.claude/agents/), SoMi's `cost: high` actions should read them once and fold the
+// relevant conventions into the work-item brief.md, so execution inherits them without re-reading.
 // Repo-local instructions WIN over SoMi defaults where they conflict; SoMi does NOT
 // auto-invoke foreign agents. This hook only *surfaces* what exists (paths + a one-line
 // directive) — it does not read or ingest file contents. It fires once per session and stays
@@ -46,8 +46,8 @@
 //   2. Correctness, not just performance: what gets SURFACED. A CLAUDE.md/AGENTS.md that
 //      happens to live inside a vendored dependency (node_modules), a submodule under
 //      vendor/, or somi's own internal state directory is not "this repository's own
-//      instructions" in the sense this hook's entire purpose describes to the MAX actions
-//      that consume its signal. Surfacing a third-party package's own CLAUDE.md as if it were
+//      instructions" in the sense this hook's entire purpose describes to the `cost: high`
+//      actions that consume its signal. Surfacing a third-party package's own CLAUDE.md as if it were
 //      this repo's convention is actively misleading downstream context, not neutral noise.
 //
 //   3. Performance, empirically measured, not assumed (this is the argument the phase file
@@ -149,7 +149,7 @@ const MAX_NESTED_RESULTS = 10; // bash: | head -n 10
 // `$'...'\''...'\''...'` escaping decodes to). Byte-exact against the fixture's
 // expect_context substrings.
 const DIRECTIVE =
-  "\nMAX actions (/discover, /design, /refactor analysis, and /plan on a cold start) should read these once and distil the relevant conventions into the work item's brief.md / context.md so the ECO tier inherits them without re-reading. Repo-local instructions WIN over SoMi defaults where they conflict. Do NOT auto-invoke the repo's own agents — surface them for the user to opt into.";
+  "\n`cost: high` actions (/discover, /design, /refactor analysis, and /plan on a cold start) should read these once and distil the relevant conventions into the work item's brief.md / context.md so execution inherits them without re-reading. Repo-local instructions WIN over SoMi defaults where they conflict. Do NOT auto-invoke the repo's own agents — surface them for the user to opt into.";
 
 function isFile(p) {
   try {

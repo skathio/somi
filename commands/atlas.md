@@ -1,17 +1,19 @@
 ---
-description: Build or refresh the Repo Atlas (.somi/atlas.md) — one MAX-tier deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later /design, cold /plan, /refactor analysis, and /impact.
+description: Build or refresh the Repo Atlas (.somi/atlas.md) — one `cost: high` deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later /design, cold /plan, /refactor analysis, and /impact.
 argument-hint: [nothing — build or refresh] | refresh
 allowed-tools: Read, Grep, Glob, Bash, Write, Edit
 model: opus
+cost: high
 ---
 
-# /atlas — Build or refresh the Repo Atlas (MAX tier)
+# /atlas — Build or refresh the Repo Atlas (`cost: high`)
 
-You are building the **repo-level MAX artifact**: a single deep read of this codebase, distilled
-into [`templates/ATLAS.md.tmpl`](../templates/ATLAS.md.tmpl) shape at **`.somi/atlas.md`**, so
-that every later MAX action starts from the atlas plus the drift since its SHA — instead of
-re-reading the whole repo per work item. This is the amortization layer of the MAX→ECO economy:
-`brief.md` compresses a *work item*; the atlas compresses the *repository*.
+You are building the **repo-level high-cost artifact**: a single deep read of this codebase,
+distilled into [`templates/ATLAS.md.tmpl`](../templates/ATLAS.md.tmpl) shape at
+**`.somi/atlas.md`**, so that every later design action starts from the atlas plus the drift since
+its SHA — instead of re-reading the whole repo per work item. This is the amortization layer of
+the design→execution economy: `brief.md` compresses a *work item*; the atlas compresses the
+*repository*.
 
 > **Runs on the most capable model end-to-end** (like `/discover` and `/design`): the entire
 > value is one high-quality read, paid once. There is no subagent — the reading *is* the work.
@@ -59,7 +61,7 @@ date. If `.somi/README.md` doesn't exist yet, also write it from
 - The one-paragraph repo framing (§1) and the module count.
 - Top 3 hotspots and the thinnest test ice.
 - Any instruction-vs-practice disagreements found.
-- Next step: "MAX actions now start from the atlas — `/design` / cold `/plan` / `/refactor`
+- Next step: "Design actions now start from the atlas — `/design` / cold `/plan` / `/refactor`
   analysis / `/impact` will deep-read only the drift since `<SHA>`. Refresh with `/atlas` after
   structural changes."
 

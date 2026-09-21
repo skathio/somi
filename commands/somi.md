@@ -3,6 +3,7 @@ description: SoMi's front door. No args — a status dashboard of every work ite
 argument-hint: [nothing — status] | <describe what you want to do — router>
 allowed-tools: Read, Grep, Glob, Bash
 model: sonnet
+cost: medium
 ---
 
 # /somi — Status dashboard & workflow router

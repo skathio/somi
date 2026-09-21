@@ -3,6 +3,7 @@ description: The sanctioned emergency lane. Production is broken — skip the pl
 argument-hint: <what is broken in production and how it was noticed>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 model: sonnet
+cost: medium
 ---
 
 # /incident — Mitigate first, account for it after

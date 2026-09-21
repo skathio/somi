@@ -10,7 +10,7 @@
     {
       "name": "somi",
       "source": "github:skathio/somi",
-      "description": "MAX/ECO economy: discover/design (MAX) → plan / code / review (ECO) workflow system with SOLID, OWASP, and clean-code guardrails.",
+      "description": "Cost-tiered economy: discover/design (high cost) → plan / code / review (medium cost) workflow system with SOLID, OWASP, and clean-code guardrails.",
       "version": "3.0.0",
       "tags": ["workflow", "agents", "review", "security"],
       "homepage": "https://github.com/skathio/somi"

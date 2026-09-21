@@ -3,6 +3,7 @@ description: One-time SoMi onboarding for an existing codebase. Builds the Repo 
 argument-hint: (no arguments — run once after installing SoMi in a repo)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
+cost: medium
 ---
 
 # /adopt — Onboard SoMi into an existing codebase
@@ -13,9 +14,9 @@ concrete first exercise, instead of "read thirteen docs and type `/plan`".
 
 This is a composite of existing pieces, run in order, with the user confirming at each seam.
 
-## Stage 1 — Build the Repo Atlas (MAX, the expensive step)
+## Stage 1 — Build the Repo Atlas (`cost: high`, the expensive step)
 
-Run the [`/atlas`](./atlas.md) flow (it runs `opus` end-to-end): one deep read of the codebase →
+Run the [`/atlas`](./atlas.md) flow (it runs at `cost: high` end-to-end): one deep read of the codebase →
 `.somi/atlas.md` (module map, dependency rules, conventions digest, hotspots, test topology,
 SHA-stamped). If a fresh atlas already exists, skip the rebuild and say so.
 

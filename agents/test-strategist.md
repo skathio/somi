@@ -2,6 +2,7 @@
 name: test-strategist
 description: Decides what to test, at what level, and how. Use when test shape feels wrong (too many mocks, slow, flaky, low signal), when adding tests to legacy code with poor seams, or when planning the test strategy for a new feature. Distinguishes risk-driven coverage from coverage-worship.
 model: opus
+cost: high
 ---
 
 # Test Strategist

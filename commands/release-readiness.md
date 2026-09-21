@@ -1,8 +1,9 @@
 ---
-description: Pre-release gate. Deterministic aggregation over the artifacts (work items done? open Blockers/Majors in the findings ledgers? DoD satisfied? rollout/rollback real?) plus ONE MAX review of the integration surface. Produces a release verdict + draft release notes.
+description: Pre-release gate. Deterministic aggregation over the artifacts (work items done? open Blockers/Majors in the findings ledgers? DoD satisfied? rollout/rollback real?) plus ONE high-cost review of the integration surface. Produces a release verdict + draft release notes.
 argument-hint: <slug…> | <milestone/tag description>  (empty = all non-done work items in scope)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
+cost: medium
 ---
 
 # /release-readiness — The pre-release gate
@@ -34,10 +35,10 @@ For each in-scope work item, check mechanically and record pass/fail + evidence:
 Any hard failure here (open Blocker, red tests, unexecutable rollback) → the verdict is already
 `not-ready`; finish the checklist anyway so the report is complete, but say it early.
 
-## Stage 2 — MAX integration review (the one expensive step)
+## Stage 2 — High-cost integration review (the one expensive step)
 
 Per-iteration reviews saw each diff in isolation. Task the [`reviewer`](../agents/reviewer.md)
-(`opus`, fresh context) on the **cumulative release diff** (merge-base of the release scope vs.
+(`cost: high`, fresh context) on the **cumulative release diff** (merge-base of the release scope vs.
 the default branch) with an explicit integration framing: interactions **between** the work
 items, contract mismatches across independently-reviewed changes, migration ordering across
 items, config/flag interactions, and observability of the release as a whole ("when this ships
@@ -66,5 +67,5 @@ Summarise back: verdict first, then the two or three load-bearing facts behind i
   doesn't soften it to `ready-with-conditions` without a named human owner for each condition.
 - **Read-only against the release** — this command gates, it doesn't fix. Fixes go through
   `/code` / `/debug` on the owning work item.
-- **One MAX pass, deliberately.** The economics of this command are the checklist doing 90% of
-  the work for free; don't Task a panel per work item — the per-iteration reviews already ran.
+- **One high-cost pass, deliberately.** The economics of this command are the checklist doing 90%
+  of the work for free; don't Task a panel per work item — the per-iteration reviews already ran.

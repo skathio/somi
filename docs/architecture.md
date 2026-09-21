@@ -44,40 +44,42 @@ Each layer has a clear job:
   dependency Node, no `bash`/`jq`, so the hook runtime itself runs the same on Windows, Linux, and
   macOS; see [`docs/HOOKS.md`](./HOOKS.md) for the one open Windows path-guard caveat).
 
-## Economic tiering (MAX/ECO) — the second axis
+## Cost tiering — the second axis
 
 The four layers above describe *structure*. A second, orthogonal axis describes *economics*: which
 model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth.
 
 ```
-        MAX tier (opus)                                  ECO tier (sonnet)
+        cost: high                                       cost: medium
   front-load reasoning → brief.md                    execute against the brief
   ┌───────────────────────────────┐   brief.md   ┌──────────────────────────────┐
   │ discovery-analyst, designer,  │ ───────────▶ │ planner, coder               │
   │ refactorer (analysis),        │  (the dense  │ (sequence + implement,       │
   │ reviewer + security/arch/test │   handoff)   │  no re-research)             │
   └───────────────────────────────┘              └──────────────────────────────┘
-        ▲ opus is spent here: once, up front, and on fresh-eyes review
+        ▲ the strong model is spent here: once, up front, and on fresh-eyes review
 ```
 
-- **MAX (`opus`)** front-loads research, design, decisions, and complexity mapping into a dense,
+- **`cost: high`** front-loads research, design, decisions, and complexity mapping into a dense,
   bounded **`brief.md`** ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)), and provides
   fresh-context review. The brief references its deep docs (research-report, sdd, design) rather than
-  inlining them, and carries an explicit *"What ECO does NOT need to re-research"* list.
-- **ECO (`sonnet`)** sequences and implements **against** the brief, so the high-volume work runs
+  inlining them, and carries an explicit *"What execution does NOT need to re-research"* list.
+- **`cost: medium`** sequences and implements **against** the brief, so the high-volume work runs
   cheap. This is the **plan-and-execute / model-cascade** pattern (strong planner, cheap executor).
 
-**Interaction with the layers.** Commands (the orchestration layer) stay `sonnet` and `Task` the
-tier-appropriate agent. A single-model orchestrator Tasking a differently-modeled subagent is the
-**cache-correct** way to mix models — and because prompt caches are model-scoped, the MAX→ECO switch
-is a natural cache boundary (which is exactly where `/ship-loop` places its single human gate).
-`/discover` and `/design` are the two commands that run `opus` at the orchestration layer too —
-their framing is judgment-heavy and their brief anchors the work item.
+**Interaction with the layers.** Commands (the orchestration layer) stay at `cost: medium` and
+`Task` the tier-appropriate agent. A single-cost orchestrator Tasking a differently-costed subagent
+is the **cache-correct** way to mix models — and because prompt caches are model-scoped, the
+design→execution switch is a natural cache boundary (which is exactly where `/ship-loop` places its
+single human gate). `/discover`, `/design`, and `/atlas` are the three commands that run at
+`cost: high` at the orchestration layer too — `/discover` and `/design`'s framing is judgment-heavy
+and their brief anchors the work item; `/atlas` has no paired agent, so the command itself is the
+high-cost deep repo read, end-to-end.
 
 **Repo-awareness.** A SessionStart hook surfaces repo-local instruction files (`CLAUDE.md`,
-`AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; MAX actions read them once and distil
-the conventions into the brief, so the ECO tier inherits them without re-reading. Repo-local
-instructions win over SoMi defaults; SoMi never auto-invokes foreign agents.
+`AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; `cost: high` actions read them once
+and distil the conventions into the brief, so execution inherits them without re-reading.
+Repo-local instructions win over SoMi defaults; SoMi never auto-invokes foreign agents.
 
 ## Data flow per workflow
 
@@ -85,7 +87,7 @@ instructions win over SoMi defaults; SoMi never auto-invokes foreign agents.
 
 ```
 user: "/discover <idea>"
-  → command /discover (runs opus end-to-end) reads $ARGUMENTS, validates it's a researchable idea
+  → command /discover (runs at cost: high end-to-end) reads $ARGUMENTS, validates it's a researchable idea
   → command derives slug, scaffolds .somi/rd/<slug>/ from templates/ (RD-README, RESEARCH, BRD,
     SRS, FRD, SDD, TDD + reused DECISIONS/DIARY)
   → invokes Task[subagent_type=discovery-analyst, prompt=<idea + slug + paths + context>]
@@ -174,10 +176,10 @@ lives in `commands/ship.md`; the agents are unchanged.
 | User-facing entrypoints                  | `commands/`   | Slash-command shape; thin orchestrators                              |
 | Deterministic guardrails                 | `hooks/`      | Runs in Claude Code's hook framework as Node (`.mjs`, no `bash`/`jq`); no model involved |
 | Runtime tooling (loop state, findings ledger, portable guard) | `scripts/` | `somi-loop.mjs` / `somi-findings.mjs` own the loops' arithmetic (invoked via Node by the loop commands); `somi-check.mjs` is the host-agnostic pre-commit/CI guard; tested by `tests/` in CI |
-| Artifact templates                       | `templates/`  | Shape of `brief.md` (the MAX→ECO handoff), `design.md`, `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
+| Artifact templates                       | `templates/`  | Shape of `brief.md` (the design→execution handoff), `design.md`, `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
 | Discovery artifacts (per project)        | `.somi/rd/<slug>/` | One subdir per greenfield initiative; the requirements & design foundation; feeds `.somi/plans/<slug>/` |
 | Work-item artifacts (per project)        | `.somi/plans/<slug>/` | One subdir per work item; persists indefinitely; user-controlled retention |
-| Repo Atlas (per project)                 | `.somi/atlas.md` | SHA-stamped repo map from `/atlas`; MAX actions consume it and deep-read only the drift |
+| Repo Atlas (per project)                 | `.somi/atlas.md` | SHA-stamped repo map from `/atlas`; `cost: high` actions consume it and deep-read only the drift |
 | Findings ledger (per work item)          | `.somi/reviews/<slug>/findings.json` | Machine view of review findings (stable `F-<n>` ids, lifecycle); powers the circuit breakers across sessions |
 | Project policy (optional, committed)     | `.somi/config.json` | Loop caps, dep-install allowlist, lockfile policy; env vars override per session |
 | Loop state (runtime, per loop)           | `.somi/somi-state/loop/` | Baseline SHA, pass counter, per-pass history; survives session death so loops resume; gitignored |

@@ -8,13 +8,13 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 
 | Command                                                  | Workflow            | Agent(s) invoked                                                                          | Output                                                                       |
 |----------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev, MAX) | `discovery-analyst`                                                                  | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README, **brief**) |
-| [`/design`](../commands/design.md)                       | Feature design (MAX) | `designer`                                                                               | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — the MAX→ECO handoff for a brownfield feature |
-| [`/atlas`](../commands/atlas.md)                         | Repo cartography (MAX) | (none — the opus command does the reading)                                             | `.somi/atlas.md` — SHA-stamped repo map (modules, dependency rules, conventions, hotspots, test topology) that later MAX actions consume instead of re-reading the repo |
-| [`/plan`](../commands/plan.md)                           | Planning (ECO)      | `planner`                                                                                 | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
+| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev, `cost: high`) | `discovery-analyst`                                                                  | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README, **brief**) |
+| [`/design`](../commands/design.md)                       | Feature design (`cost: high`) | `designer`                                                                               | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — the design→execution handoff for a brownfield feature |
+| [`/atlas`](../commands/atlas.md)                         | Repo cartography (`cost: high`) | (none — the high-cost command does the reading)                                             | `.somi/atlas.md` — SHA-stamped repo map (modules, dependency rules, conventions, hotspots, test topology) that later design actions consume instead of re-reading the repo |
+| [`/plan`](../commands/plan.md)                           | Planning (`cost: medium`)      | `planner`                                                                                 | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
 | [`/plan-loop`](../commands/plan-loop.md)                 | Bounded planning    | `planner` + `reviewer`                                                                    | `.somi/plans/<slug>/` + plan reviews under `.somi/reviews/<slug>/`           |
 | [`/code`](../commands/code.md)                           | Coding              | `coder`                                                                                   | diff + tests; updates `progress.md` + `diary.md`                             |
-| [`/debug`](../commands/debug.md)                         | Debugging           | `coder` (+ `reviewer` as MAX diagnosis hatch, `test-strategist` on test-shape gaps)       | `.somi/plans/<slug>/rca.md` (root-cause record) + repro test + fix diff (via `/code-loop`) |
+| [`/debug`](../commands/debug.md)                         | Debugging           | `coder` (+ `reviewer` as high-cost diagnosis hatch, `test-strategist` on test-shape gaps)       | `.somi/plans/<slug>/rca.md` (root-cause record) + repro test + fix diff (via `/code-loop`) |
 | [`/code-loop`](../commands/code-loop.md)                 | Bounded coding      | `coder` + `reviewer` (or `/review-panel` when `SOMI_CODE_LOOP_REVIEW=panel`)              | diff + tests + per-pass review files; bounded by caps                        |
 | [`/code-parallel`](../commands/code-parallel.md)         | Parallel coding     | per eligible iteration: `/code-loop` in an isolated git worktree                          | diffs built in parallel, **integrated sequentially** behind a per-merge test + review gate |
 | [`/review`](../commands/review.md)                       | Reviewing           | `reviewer` (+ `security-reviewer` / `architecture-reviewer` / `test-strategist` per triggers) | `.somi/reviews/<slug>/<YYYY-MM-DD>-…md` (code or plan review)                |
@@ -50,6 +50,7 @@ description: Short one-liner shown in / autocomplete.
 argument-hint: <how to phrase arguments>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 model: sonnet
+cost: medium
 ---
 
 # /command-name — Title
@@ -78,10 +79,11 @@ The heavy lifting lives in **agents**. Commands are deliberately small because:
   understand what the planner workflow does.
 - They isolate orchestration from agent-internal behavior; you can swap an agent's prompt without
   touching the command.
-- They run on `sonnet` (cheaper) while Tasking the tier-appropriate agent — **MAX** agents (`opus`:
-  design, discovery, review) for front-loaded reasoning, **ECO** agents (`sonnet`: planner, coder)
-  for execution against the brief. A single-model orchestrator Tasking a differently-modeled subagent
-  is the cache-correct way to mix tiers. See [Economic tiering](./AGENTS.md#economic-tiering-maxeco).
+- They run at `cost: medium` (cheaper) while Tasking the tier-appropriate agent — **`cost: high`**
+  agents (design, discovery, review) for front-loaded reasoning, **`cost: medium`** agents
+  (planner, coder) for execution against the brief. A single-cost orchestrator Tasking a
+  differently-costed subagent is the cache-correct way to mix tiers. See
+  [Cost tiering](./AGENTS.md#cost-tiering).
 
 ## Default model & tool grants
 
@@ -91,18 +93,20 @@ agent declares a `tools:` field, so every agent inherits full tool access. Revie
 constrained by a **`## Write discipline` contract in their own prompt**, not by platform restriction; see
 [`docs/AGENTS.md`](./AGENTS.md) for why that trade was made.
 
-**Orchestration commands run on `sonnet`**; the agent they Task runs on its **economic tier** —
-`opus` for MAX agents (design, discovery, review), `sonnet` for ECO agents (planner, coder). See
-[Economic tiering](./AGENTS.md#economic-tiering-maxeco). Review commands (`/review`,
+**Orchestration commands run at `cost: medium`**; the agent they Task runs on its **cost tier** —
+`cost: high` for high-cost agents (design, discovery, review), `cost: medium` for medium-cost agents
+(planner, coder). See [Cost tiering](./AGENTS.md#cost-tiering). Review commands (`/review`,
 `/security-review`, `/architecture-review`, `/test-strategy`) still need `Write` and `Edit` to
 produce the review file and append diary entries — they're not pure read-only at the command level
 even though the underlying review agents are contractually forbidden from writing.
 
-> **Two deliberate exceptions run `opus` at the command layer too: `/discover` and `/design`.** Their
-> orchestration is judgment-heavy (framing the work, reading the codebase, shaping crossroads) and
-> their `brief.md` anchors the whole work item, so they run on the most capable model end-to-end
-> rather than splitting `sonnet`-orchestrator / `opus`-agent. They are the MAX front-load of the
-> MAX→ECO economy — intentional, not an oversight.
+> **Three deliberate exceptions run at `cost: high` at the command layer too: `/discover`,
+> `/design`, and `/atlas`.** `/discover` and `/design`'s orchestration is judgment-heavy (framing
+> the work, reading the codebase, shaping crossroads) and their `brief.md` anchors the whole work
+> item, so they run on the most capable model end-to-end rather than splitting the orchestrator
+> and agent across tiers. `/atlas` has no paired agent — the command itself performs the deep repo
+> read that seeds `.somi/atlas.md` — so it is high-cost end-to-end by construction. All three are
+> the high-cost front-load of the design→execution economy — intentional, not an oversight.
 
 ## How `$ARGUMENTS` works
 
@@ -117,7 +121,9 @@ Some commands also support positional args (`$1`, `$2`) — see Claude Code's co
 
 ## Adding a new command
 
-1. Create `commands/<name>.md` with the frontmatter shape above. Default `model: sonnet`.
+1. Create `commands/<name>.md` with the frontmatter shape above. Default `cost: medium` (`model:`
+   set to whichever concrete model that resolves to — see
+   [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)).
 2. Write the body as a prompt: validate, resolve, invoke, write, summarise. Fence persisted
    user input as data.
 3. If the command writes artifacts inside `.somi/plans/<slug>/`, document the file naming convention.

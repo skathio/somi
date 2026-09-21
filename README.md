@@ -25,24 +25,24 @@ It is designed to be:
 
 ## The workflows
 
-| Command       | Tier | Agent               | Purpose                                                                                  |
-|---------------|------|---------------------|------------------------------------------------------------------------------------------|
-| `/discover`   | MAX  | `discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
-| `/design`     | MAX  | `designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
-| `/plan`       | ECO  | `planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
-| `/code`       | ECO  | `coder`             | Execute against an approved plan + brief with senior-level design judgment               |
-| `/debug`      | ECO  | `coder` (+MAX hatch) | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop`, keep the repro test as the regression guard; writes a one-page `rca.md` |
-| `/review`     | MAX  | `reviewer`          | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
-| `/ship`       | both | planner+coder+reviewer | Full (optional MAX front-load →) plan → code → review pipeline, gated at every stage   |
+| Command       | Cost   | Agent               | Purpose                                                                                  |
+|---------------|--------|---------------------|------------------------------------------------------------------------------------------|
+| `/discover`   | high   | `discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
+| `/design`     | high   | `designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
+| `/plan`       | medium | `planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
+| `/code`       | medium | `coder`             | Execute against an approved plan + brief with senior-level design judgment               |
+| `/debug`      | medium | `coder` | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop` (a `cost: high` hatch is available if isolation escalates), keep the repro test as the regression guard; writes a one-page `rca.md` |
+| `/review`     | medium | `reviewer`    | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
+| `/ship`       | medium | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `cost: high` front-load), gated at every stage |
 
-**Two economic tiers.** The **MAX** tier (`opus`) front-loads expensive reasoning — research, design,
-decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The **ECO** tier
-(`sonnet`) executes against that brief *without re-researching*, so the high-volume work (plan detail,
-iterative coding) runs cheaply. `/discover` (new product) and `/design` (brownfield feature) are the
-MAX front-loads that feed `/plan`; `/ship-loop` runs the whole pipeline continuously, gating once at
-the MAX→ECO model switch. Supporting MAX agents (by handoff): `security-reviewer`,
-`architecture-reviewer`, `test-strategist`, `refactorer`. See
-[`docs/AGENTS.md`](docs/AGENTS.md#economic-tiering-maxeco).
+**Two cost tiers in practice.** The **`cost: high`** tier front-loads expensive reasoning — research, design,
+decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The
+**`cost: medium`** tier executes against that brief *without re-researching*, so the high-volume
+work (plan detail, iterative coding) runs cheaply. `/discover` (new product) and `/design`
+(brownfield feature) are the high-cost front-loads that feed `/plan`; `/ship-loop` runs the whole
+pipeline continuously, gating once at the design→execution switch. Supporting high-cost agents (by
+handoff): `security-reviewer`, `architecture-reviewer`, `test-strategist`, `refactorer`. See
+[`docs/AGENTS.md`](docs/AGENTS.md#cost-tiering).
 
 ---
 
@@ -103,11 +103,12 @@ Once installed, use `@somi` in GitHub Copilot chat:
 >   `/ship`) and the parallel commands (`/review-panel`, `/code-parallel`) drive Claude Code
 >   sub-agents via the Task tool. Where the host can't spawn sub-agents concurrently, these run
 >   **one lens / one iteration at a time** — same result, no parallelism.
-> - **The MAX/ECO model split is a Claude Code feature.** The economy depends on per-agent model
->   tiering (`opus` for MAX, `sonnet` for ECO) and the cache-correct subagent-model split. Where the
->   host runs a single model, the workflow shape (MAX front-load → dense `brief.md` → ECO execution)
->   still holds and still helps — but the *cost* split does not. **Priority is Claude Code; quality is
->   not sacrificed for Copilot parity** — Copilot gets the portable subset.
+> - **The cost-tier model split is a Claude Code feature.** The economy depends on per-agent model
+>   tiering (high vs. medium cost) and the cache-correct subagent-model split. Where the
+>   host runs a single model, the workflow shape (high-cost front-load → dense `brief.md` →
+>   medium-cost execution) still holds and still helps — but the *cost* split does not.
+>   **Priority is Claude Code; quality is not sacrificed for Copilot parity** — Copilot gets the
+>   portable subset.
 >
 > The commands, agents, skills, rules, and templates are shared; the **enforcement, concurrency, and
 > model-tiering layers are Claude Code features**. Treat Copilot as the portable subset, not a
@@ -126,7 +127,7 @@ rules/            Global ruleset composed into CLAUDE.md
 hooks/            Deterministic guardrails (block dangerous bash, secret writes, ...)
 scripts/          Runtime tooling: somi-loop (resumable loop state & caps), somi-findings
                   (the findings ledger), somi-check (portable working-tree guard, npm bin)
-templates/        Artifact templates (BRIEF [MAX→ECO handoff], ATLAS [repo map], DESIGN, RCA,
+templates/        Artifact templates (BRIEF [design→execution handoff], ATLAS [repo map], DESIGN, RCA,
                   CONTEXT, SPEC, DECISIONS, PHASE, PROGRESS, DIARY, REVIEW, ADR, DOD;
                   R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD)
 tests/            Behavioral fixtures for hooks + end-to-end tests for the runtime scripts
@@ -160,18 +161,18 @@ For a **brand-new product**, start one step earlier with discovery:
 # /plan clinic-scheduler — the planner consumes that foundation.
 ```
 
-For a **design-heavy feature on an existing repo**, front-load the design (MAX) so planning and
-coding run cheaply against it:
+For a **design-heavy feature on an existing repo**, front-load the design (`cost: high`) so
+planning and coding run cheaply against it:
 
 ```text
 > /design  Add per-team rate limiting to the public webhook endpoint, sharing budget
           across replicas, with an emergency kill switch.
 
-# Claude (opus) reads the codebase, ingests the repo's own CLAUDE.md/AGENTS.md once,
+# Claude reads the codebase, ingests the repo's own CLAUDE.md/AGENTS.md once,
 # resolves the expensive-to-reverse calls with you (storage backend, where the limiter
 # lives), maps the complexity hotspots, and compiles .somi/plans/rate-limiting-webhooks/
-# brief.md — the dense MAX→ECO handoff. Then /plan rate-limiting-webhooks sequences it
-# into phases on the cheaper (sonnet) tier, /code-loop implements against the brief.
+# brief.md — the dense design→execution handoff. Then /plan rate-limiting-webhooks sequences it
+# into phases at the cheaper (cost: medium) tier, /code-loop implements against the brief.
 ```
 
 For an **incremental change** with a settled design (the daily loop), start at planning:

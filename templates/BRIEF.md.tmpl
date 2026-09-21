@@ -1,15 +1,15 @@
 # Execution Brief — <work item name>
 
-> The MAX→ECO handoff. Written by a MAX action (`/design`,
+> The design→execution handoff. Written by a `cost: high` action (`/design`,
 > a `/refactor` analysis, or `/discover`);
-> consumed by the ECO tier (`/plan`, `/code` and
+> consumed by execution (`/plan`, `/code` and
 > their loops).
 > Deep docs: <links — `design.md` / `sdd.md` / `research-report.md`>
 > Created: <YYYY-MM-DD> • Last updated: <YYYY-MM-DD> • Produced by: <discover | design | refactor>
 
-This is the dense, bounded distillation the expensive (MAX) layer leaves for the cheap (ECO) layer.
-Its whole job is to let plan and code execute **without re-running the research** — and to do that
-**without bloating context**.
+This is the dense, bounded distillation the expensive (`cost: high`) layer leaves for the cheap
+(`cost: medium`) layer. Its whole job is to let plan and code execute **without re-running the
+research** — and to do that **without bloating context**.
 
 **Author discipline (non-negotiable):**
 
@@ -17,12 +17,12 @@ Its whole job is to let plan and code execute **without re-running the research*
   research, large code blocks, or whole specs in here.
 - **Bounded.** Target ≤ ~400 lines / ~6k tokens. If it's longer than that, you're inlining what
   should be a link.
-- **Stable prefix.** ECO loops cache this file as a prompt prefix across passes — keep edits
+- **Stable prefix.** Execution loops cache this file as a prompt prefix across passes — keep edits
   additive and the ordering stable so the cache keeps hitting.
 - **Decisive.** Every entry states a conclusion, not a discussion. The deliberation lives in
   `decisions.md` / `sdd.md`; the brief carries the *result*.
 - **Supersessions go in §10, never edited into §2.** When the plan-change protocol supersedes a
-  decision mid-execution, the ECO tier appends one line to §10 — §1–§9 are never rewritten.
+  decision mid-execution, execution appends one line to §10 — §1–§9 are never rewritten.
 
 ---
 
@@ -33,7 +33,7 @@ why before reading anything else.>
 
 ## 2. Decisions in force
 
-The settled calls the ECO tier must build on. One line each + the reason + a link to the full entry.
+The settled calls execution must build on. One line each + the reason + a link to the full entry.
 **Do not re-litigate these** — if reality contradicts one, that's a plan-change-protocol event, not
 a research task.
 
@@ -43,7 +43,7 @@ a research task.
 
 ## 3. Complexity map — here be dragons
 
-Where the hard parts are, so ECO spends its attention there and nowhere else. Pointers, not prose.
+Where the hard parts are, so execution spends its attention there and nowhere else. Pointers, not prose.
 
 | Hotspot | Location | Why it's tricky | What to watch |
 |---------|----------|-----------------|---------------|
@@ -52,8 +52,8 @@ Where the hard parts are, so ECO spends its attention there and nowhere else. Po
 
 ## 4. File map
 
-The files in play and each one's role in this work item. ECO starts here instead of re-discovering
-the codebase.
+The files in play and each one's role in this work item. Execution starts here instead of
+re-discovering the codebase.
 
 | File | Role in this work | Touch? |
 |------|-------------------|--------|
@@ -64,7 +64,7 @@ the codebase.
 ## 5. Repo conventions in force
 
 The relevant subset distilled from the repo's own instruction files (`CLAUDE.md`, `AGENTS.md`,
-`.github/copilot-instructions.md`, etc.) — surfaced once here so ECO inherits them without
+`.github/copilot-instructions.md`, etc.) — surfaced once here so execution inherits them without
 re-reading. Source files, if present: <list paths, or "none found">. When a fresh
 `.somi/atlas.md` exists, cite its §4 digest (`atlas.md §4`) instead of re-listing conventions —
 one level of distillation is enough.
@@ -80,21 +80,22 @@ one level of distillation is enough.
 ## 6. Constraints & non-goals
 
 - **Constraints** (non-negotiable): <perf budgets, compat, deadlines, security rules>.
-- **Non-goals** (explicitly out of scope this work item): <list — keeps ECO from gold-plating>.
+- **Non-goals** (explicitly out of scope this work item): <list — keeps execution from gold-plating>.
 
-## 7. What ECO does NOT need to re-research
+## 7. What execution does NOT need to re-research
 
-The point of the brief. List, explicitly, the questions MAX already answered so the ECO tier doesn't
-burn tokens re-deriving them. Be concrete — name the thing and where the answer lives.
+The point of the brief. List, explicitly, the questions the `cost: high` pass already answered so
+execution doesn't burn tokens re-deriving them. Be concrete — name the thing and where the answer
+lives.
 
 - <e.g., "Storage backend — settled on Redis (D3); don't re-evaluate in-memory.">
 - <e.g., "Library choice — `x/time/rate` chosen (D5); don't survey alternatives.">
 - <e.g., "Auth model — read `sdd.md §4`; the trust boundaries are mapped there, don't re-derive.">
 
-## 8. Open risks ECO must watch
+## 8. Open risks execution must watch
 
-The few things MAX could **not** fully settle and that execution must keep an eye on — each with a
-trigger for surfacing it back to the user (usually via the plan-change protocol).
+The few things the `cost: high` pass could **not** fully settle and that execution must keep an eye
+on — each with a trigger for surfacing it back to the user (usually via the plan-change protocol).
 
 | Risk / unknown | Why it's open | Surface it when… |
 |----------------|---------------|------------------|
@@ -107,7 +108,7 @@ trigger for surfacing it back to the user (usually via the plan-change protocol)
 
 ## 10. Supersessions (append-only overlay on §2)
 
-Appended by the ECO tier when the **plan-change protocol** supersedes a decision listed in §2.
+Appended by execution when the **plan-change protocol** supersedes a decision listed in §2.
 The brief itself is never rewritten — §1–§9 stay byte-stable so the prompt cache keeps hitting
 across loop passes; this section is the one part that grows.
 

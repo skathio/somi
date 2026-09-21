@@ -3,6 +3,7 @@ description: Bounded plan → review → revise loop. Best for ambiguous / archi
 argument-hint: <problem statement> | <slug>  (slug to continue revising an existing plan)
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebFetch
 model: sonnet
+cost: medium
 ---
 
 # /plan-loop — Bounded plan↔review iteration
@@ -17,10 +18,10 @@ $ARGUMENTS
 ```
 
 This command automates the manual `/plan` → `/review plan <slug>` → `/plan` cycle, with **hard
-gates** that ensure it terminates. This is an **ECO-tier** loop: the orchestrator and the `planner`
-it Tasks both run `sonnet` (executing against an upstream `brief.md` when one exists), while the
-`reviewer` it Tasks stays `opus` — review is the fresh-eyes MAX judgment, run on a cold context so
-it isn't biased by the planner's reasoning.
+gates** that ensure it terminates. This is a **`cost: medium`** loop: the orchestrator and the
+`planner` it Tasks both run at `cost: medium` (executing against an upstream `brief.md` when one
+exists), while the `reviewer` it Tasks stays at `cost: high` — review is the fresh-eyes high-cost
+judgment, run on a cold context so it isn't biased by the planner's reasoning.
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > and `spec.md §1` — in the **same order at the front** of each pass's planner brief, and append the

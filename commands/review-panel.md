@@ -3,6 +3,7 @@ description: Parallel multi-lens review. Spawns the relevant review agents (revi
 argument-hint: <slug> [phase N, iteration M]  |  <diff target>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 model: sonnet
+cost: medium
 ---
 
 # /review-panel — Parallel multi-lens review
@@ -14,10 +15,10 @@ Write/Edit and is forbidden from using them.
 The user's target: **$ARGUMENTS** (a work-item slug, optionally `phase N, iteration M`, or a diff
 target such as a PR / commit range / working tree).
 
-The orchestrator (this command) is `sonnet`; each lens it Tasks (`reviewer`, `security-reviewer`,
-`architecture-reviewer`, `test-strategist`) remains `opus`. The lenses are read-only **by contract, not by platform
-restriction** — they return findings; this command owns every write (the merged review file,
-`progress.md`, `diary.md`).
+The orchestrator (this command) runs at `cost: medium`; each lens it Tasks (`reviewer`,
+`security-reviewer`, `architecture-reviewer`, `test-strategist`) remains `cost: high`. The lenses
+are read-only **by contract, not by platform restriction** — they return findings; this command
+owns every write (the merged review file, `progress.md`, `diary.md`).
 
 > **Why this exists.** A single reviewer carries one set of priorities at a time; running the
 > specialist lenses *in parallel* on one diff catches what a sequential, escalation-only pass misses

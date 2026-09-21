@@ -3,6 +3,7 @@ description: Fan out provably-independent iterations into isolated git worktrees
 argument-hint: <slug> [phase N]
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 model: sonnet
+cost: medium
 ---
 
 # /code-parallel — Independent iterations in parallel, integrated sequentially
@@ -13,9 +14,9 @@ a gate**. The parallelism is in the *building*; the *integration* is always sequ
 
 The user's target: **$ARGUMENTS** (a work-item slug, optionally a specific `phase N`).
 
-This is an **ECO-tier** fan-out: the orchestrator (this command) is `sonnet`, and each `/code-loop`
-it Tasks runs its `coder` on `sonnet` (executing against the work item's `brief.md` + plan) and its
-`reviewer` on `opus` (fresh-eyes MAX judgment).
+This is a **`cost: medium`** fan-out: the orchestrator (this command) runs at `cost: medium`, and
+each `/code-loop` it Tasks runs its `coder` at `cost: medium` (executing against the work item's
+`brief.md` + plan) and its `reviewer` at `cost: high` (fresh-eyes high-cost judgment).
 
 > **Why this exists, and why it's conservative.** Smaller diffs from focused agents are higher
 > quality — *if* they don't collide. Letting several coders edit the same tree at once produces merge

@@ -23,7 +23,7 @@
 #   - JSON validity (node JSON.parse)           -> covered
 #   - node --check over the ported .mjs sources -> covered (replaces shellcheck)
 #   - agent/command/skill frontmatter presence  -> covered, unchanged
-#   - MAX/ECO model-tiering assertions          -> covered, unchanged
+#   - cost-tiering field assertions             -> covered, unchanged
 #   - new-artifact existence (BRIEF.md.tmpl…)   -> covered, unchanged
 #   - coverage/lcov.info stub                   -> covered, unchanged; now
 #     actually consumed by `coverage-report` (a capability somi never had)
