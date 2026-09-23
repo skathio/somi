@@ -236,7 +236,8 @@ assert_cost agents/somi.md medium
 assert_cost agents/refactorer.md medium
 # high-only: a wrong call here is paid for through everything downstream that builds on it, so a
 # cheaper pass would be cheaper-and-wrong, not genuinely useful -- these never gain a lower member.
-for a in discovery-analyst designer security-reviewer refactor-designer; do
+# atlas joins this set: its whole value is one high-quality read of the repository, paid once.
+for a in discovery-analyst designer security-reviewer refactor-designer atlas; do
   assert_cost "agents/$a.md" high
 done
 # medium, high: a lighter pass is genuinely useful under a capped ceiling, but the deepest work
@@ -245,6 +246,16 @@ done
 for a in reviewer architecture-reviewer test-strategist; do
   assert_cost "agents/$a.md" medium,high
 done
+# medium-only, different reasons from the planner/coder/somi/refactorer set above: impact traces
+# already-written code and its existing call graph mechanically -- no open-ended research to
+# justify high, and no piece of the job is cheap enough to drop to low. incident's mitigation-stage
+# judgment (flag flip vs. revert vs. scoped patch, verified against the live symptom) and its
+# debt-capture accounting both need full reasoning on every run.
+assert_cost agents/impact.md medium
+assert_cost agents/incident.md medium
+# graded over one job at two depths: mechanical aggregation of existing artifacts is already a
+# correct, usable PR description at low; a fuller pass adds house-style matching, never required.
+assert_cost agents/pr.md low,medium
 # high-cost front-load commands run at cost: high end-to-end (their orchestration is judgment-heavy,
 # and the entire value is one high-quality pass paid once -- a shallower pass is cheaper-and-wrong).
 assert_cost commands/discover.md high
@@ -481,6 +492,13 @@ for a in $seated; do
   fi
 done
 if [ "$contract_failed" -ne 0 ]; then
+  exit 1
+fi
+# pr is never seated in commands/review-panel.md (it is not a review lens), so the derived sweep
+# above cannot cover it -- but its own contract is load-bearing (agents/pr.md's Write discipline
+# section is the only thing gating an ungated `gh pr create`), so assert it directly.
+if ! grep -q '^## Write discipline' agents/pr.md; then
+  echo "MISSING WRITE CONTRACT: agents/pr.md has no '## Write discipline' section" >&2
   exit 1
 fi
 

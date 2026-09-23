@@ -15,17 +15,18 @@ concrete first exercise, instead of "read thirteen docs and type `/plan`".
 This is a composite of existing pieces, run in order, with the user confirming at each seam.
 
 > **Cost: high (`cost: high`) — no lower member.** Stages 1→4 run sequentially, every invocation,
-> so the declared tier is what the **hardest** stage needs. Stage 1 runs the atlas build inline, at
-> `cost: high` end-to-end — `/atlas` has no paired agent to `Task` at a separate tier, so there is
-> nothing to dispatch cheaper. A `medium` declaration here would run that stage at `medium`
-> regardless of ceiling, silently. Stages 2-4 are lighter, but the set declares what the hardest
-> stage needs, same reasoning as [`/release-readiness`](./release-readiness.md).
+> so the declared tier states what the **hardest** stage needs. Stage 1 Tasks the `atlas` agent,
+> which declares `cost: high` on its own account and resolves against the ceiling independently of
+> this command's own declaration — but this command still names the requirement plainly rather
+> than looking cheaper than the flow it starts. Stages 2-4 are lighter, same reasoning as
+> [`/release-readiness`](./release-readiness.md).
 
 ## Stage 1 — Build the Repo Atlas (`cost: high`, the expensive step)
 
-Run the [`/atlas`](./atlas.md) flow (it runs at `cost: high` end-to-end): one deep read of the codebase →
+Task the `atlas` agent ([`agents/atlas.md`](../agents/atlas.md)) to build or refresh
 `.somi/atlas.md` (module map, dependency rules, conventions digest, hotspots, test topology,
-SHA-stamped). If a fresh atlas already exists, skip the rebuild and say so.
+SHA-stamped). It runs its own staleness check and skips the rebuild — saying so — when a fresh
+atlas already exists.
 
 Present the atlas §1 framing + module count and pause briefly: "does this map match your mental
 model?" — a wrong map should be corrected *now*, by the people who know, not discovered by the

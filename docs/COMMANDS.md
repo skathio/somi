@@ -10,7 +10,7 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 |----------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
 | [`/discover`](../commands/discover.md)                   | Discovery (pre-dev, `cost: high`) | `discovery-analyst`                                                                  | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README, **brief**) |
 | [`/design`](../commands/design.md)                       | Feature design (`cost: high`) | `designer`                                                                               | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — the design→execution handoff for a brownfield feature |
-| [`/atlas`](../commands/atlas.md)                         | Repo cartography (`cost: high`) | (none — the high-cost command does the reading)                                             | `.somi/atlas.md` — SHA-stamped repo map (modules, dependency rules, conventions, hotspots, test topology) that later design actions consume instead of re-reading the repo |
+| [`/atlas`](../commands/atlas.md)                         | Repo cartography (`cost: high`) | `atlas`                                                                                    | `.somi/atlas.md` — SHA-stamped repo map (modules, dependency rules, conventions, hotspots, test topology) that later design actions consume instead of re-reading the repo |
 | [`/plan`](../commands/plan.md)                           | Planning (`cost: medium`)      | `planner`                                                                                 | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
 | [`/plan-loop`](../commands/plan-loop.md)                 | Bounded planning    | `planner` + `reviewer`                                                                    | `.somi/plans/<slug>/` + plan reviews under `.somi/reviews/<slug>/`           |
 | [`/code`](../commands/code.md)                           | Coding              | `coder`                                                                                   | diff + tests; updates `progress.md` + `diary.md`                             |
@@ -24,15 +24,15 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 | [`/test-strategy`](../commands/test-strategy.md)         | Test-strategy QA    | `test-strategist`                                                                         | `.somi/reviews/<slug>/<YYYY-MM-DD>-test-strategy-…md`                        |
 | [`/refactor`](../commands/refactor.md)                   | Refactoring (`cost: medium`) | `refactorer`                                                                    | diff (behavior-preserving)                                                   |
 | [`/refactor-design`](../commands/refactor-design.md)     | Large-refactor scope design (`cost: high`) | `refactor-designer`                                                | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — feeds `/plan-loop` → `/code-loop` |
-| [`/impact`](../commands/impact.md)                       | Impact analysis     | (none — read-only tracing, atlas-first)                                                   | blast-radius report: callers, contracts, test gaps, warranted review lenses, proceed/design-first/reconsider recommendation |
-| [`/adopt`](../commands/adopt.md)                         | Onboarding          | `/atlas` flow (+ `test-strategist` for depth)                                             | atlas + confirmed `99-overrides.md` + adoption gap report + calibration recommendation |
+| [`/impact`](../commands/impact.md)                       | Impact analysis     | `impact` (read-only tracing, atlas-first)                                                 | blast-radius report: callers, contracts, test gaps, warranted review lenses, proceed/design-first/reconsider recommendation |
+| [`/adopt`](../commands/adopt.md)                         | Onboarding          | `atlas` (+ `test-strategist` for depth)                                                   | atlas + confirmed `99-overrides.md` + adoption gap report + calibration recommendation |
 | [`/upgrade`](../commands/upgrade.md)                     | Dependency upgrade  | `discovery-analyst` (research) + `/code-loop` (migration)                                 | cited breaking-change mini-brief + migrated call sites + green suite         |
 | [`/release-readiness`](../commands/release-readiness.md) | Release gate        | `reviewer` (one integration pass; checklist is deterministic)                             | release verdict (`ready` / `-with-conditions` / `not-ready`) + evidence table + draft release notes |
-| [`/incident`](../commands/incident.md)                   | Incident lane       | (mitigation inline; seeds `/debug` or `/plan` after)                                      | mitigation + diary timeline + mandatory postmortem note + seeded follow-up work item |
+| [`/incident`](../commands/incident.md)                   | Incident lane       | `incident` (frame stays in the command; seeds `/debug` or `/plan` after)                  | mitigation + diary timeline + mandatory postmortem note + seeded follow-up work item |
 | [`/ship`](../commands/ship.md)                           | Full pipeline       | `planner` + (per iteration) `/code-loop`                                                  | full `.somi/plans/<slug>/` set + iteration diffs + reviews                   |
 | [`/ship-loop`](../commands/ship-loop.md)                 | Bounded pipeline    | `/plan-loop` → `/code-loop` per iteration                                                 | as `/ship`, with both layers under caps and a hard human gate between them   |
 | [`/somi`](../commands/somi.md)                           | Status & routing    | (none — read-only over the artifacts)                                                     | status table with per-item next actions; or a routed recommendation for a new request |
-| [`/pr`](../commands/pr.md)                               | PR handoff          | (none — composes from artifacts; `gh` after confirmation)                                 | PR title + description distilled from the work item; optionally the opened PR |
+| [`/pr`](../commands/pr.md)                               | PR handoff          | `pr` (composes from artifacts, returns text; `gh` after confirmation, run by the command)  | PR title + description distilled from the work item; optionally the opened PR |
 
 > **Note:** `/plan-review` no longer exists as a separate command — plan-level review is part of
 > `/review` (use `/review plan <slug>` or pass an `.somi/plans/<slug>/` path).
@@ -106,11 +106,12 @@ even though the underlying review agents are contractually forbidden from writin
 > `/refactor-design`'s orchestration is judgment-heavy (framing the work, reading the codebase,
 > shaping crossroads) and their `brief.md` anchors the whole work item, so they run on the most
 > capable model end-to-end rather than splitting the orchestrator and agent across tiers. `/atlas`
-> has no paired agent — the command itself performs the deep repo read that seeds
-> `.somi/atlas.md` — so it is high-cost end-to-end by construction. `/adopt` inlines that same
-> `/atlas` flow as its own Stage 1 rather than `Task`-ing it, so under D21's sequential-stages
-> shape it declares what its hardest stage needs. All five are the high-cost front-load of the
-> design→execution economy — intentional, not an oversight.
+> Tasks the `atlas` agent for its one deep read but still declares `cost: high` itself: the read is
+> the whole job, so there's no lighter mode for this command to grade down to. `/adopt` Tasks that
+> same `atlas` agent as its Stage 1 rather than reading the repo itself, and keeps `cost: high`
+> because Stages 1→4 run sequentially every invocation and the declared tier states what the
+> hardest stage needs. All five are the high-cost front-load of the design→execution economy —
+> intentional, not an oversight.
 
 ## How `$ARGUMENTS` works
 

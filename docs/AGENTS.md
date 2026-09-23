@@ -11,6 +11,7 @@ re-researching. See [Cost tiering](#cost-tiering) below.
 |--------------------------------------------------------------|----------------|-----------------------------------------------------------------------|
 | [`discovery-analyst`](../agents/discovery-analyst.md)        | `high`         | New product / greenfield idea, before planning; requirements + research |
 | [`designer`](../agents/designer.md)                          | `high`         | Design-heavy feature / user story on an existing codebase, before planning |
+| [`atlas`](../agents/atlas.md)                                | `high`         | Build or refresh the repo-level map (`.somi/atlas.md`) that later design actions read first |
 | [`refactorer`](../agents/refactorer.md)                      | `medium`       | The next change needs untangling first, contained to one safe behavior-preserving diff |
 | [`refactor-designer`](../agents/refactor-designer.md)        | `high`         | The untangle spans many modules / needs a migration — too big for one diff; designs scope + brief |
 | [`reviewer`](../agents/reviewer.md)                          | `medium, high` | Before merge; whenever you want a skeptical second opinion            |
@@ -19,6 +20,9 @@ re-researching. See [Cost tiering](#cost-tiering) below.
 | [`test-strategist`](../agents/test-strategist.md)            | `medium, high` | Test shape feels wrong; deciding unit vs. integration; flake debugging |
 | [`planner`](../agents/planner.md)                            | `medium`       | Non-trivial change; sequence the design (brief) into phases           |
 | [`coder`](../agents/coder.md)                                | `medium`       | Executing against an approved plan + brief; small, well-scoped tasks  |
+| [`impact`](../agents/impact.md)                              | `medium`       | Blast-radius mapping before committing to `/design` or `/plan`; lens selection for a diff |
+| [`pr`](../agents/pr.md)                                       | `low, medium`  | Compose a PR title + description from a work item's artifacts         |
+| [`incident`](../agents/incident.md)                          | `medium`       | Mitigate + mandatory debt capture once an incident is framed          |
 | [`somi`](../agents/somi.md)                                   | `medium`       | GitHub Copilot session persona — not phase-specific; classifies the request and dispatches to whichever of the others fits (see "The front-door agent" below) |
 
 ## How agents get invoked
@@ -80,6 +84,23 @@ the complexity hotspots, and compiles a dense [`brief.md`](../templates/BRIEF.md
   `/plan` with an explicit handoff line; hand back to the planner if the design is trivial.
 
 Invoke directly via `/design`. Use *before* `/plan` when the architecture isn't settled.
+
+### atlas
+
+One deep read of the whole repository, distilled into **`.somi/atlas.md`** (module map, dependency
+rules, conventions digest, hotspots, test topology) — the repo-level counterpart to `brief.md`:
+`brief.md` compresses a work item, the atlas compresses the repository. Paid once, amortized by
+every later design-time read: `/design`, a cold `/plan`, `/refactor-design`, and `/impact` all read
+it first and deep-read only the drift since its stamped SHA.
+
+- **Cost**: `high` — no lower member. The whole value is one high-quality read of the repository;
+  a shallower pass produces a map later consumers trust without earning that trust.
+- **Won't**: edit anything outside `.somi/atlas.md` (and `.somi/README.md` if missing); describe
+  the intended architecture instead of the one actually in the code.
+- **Will**: run its own staleness check (`git diff --stat` against its stamped SHA) and refresh
+  only the drifted sections rather than rebuild from scratch on small drift.
+
+Invoke directly via `/atlas`, or as `/adopt`'s Stage 1.
 
 ## The build agents
 
@@ -210,6 +231,58 @@ declared tier.
 Invoke directly via `/refactor-design`. Use instead of `/refactor` when the target needs more than
 one reviewable diff to reach its destination.
 
+## The utility agents
+
+### impact
+
+Read-only change-impact analysis. Given a proposed change, a file/symbol, or a diff, maps the
+blast radius — callers/consumers, contracts crossed, test coverage, migration surface — atlas-first
+when a fresh one exists, and recommends proceed / design-first / reconsider. Feeds `/design` and
+`/plan` as their pre-read, or `/review-panel`'s lens selection for a diff.
+
+- **Cost**: `medium` — no lower or higher member. Every input is already-written code and its
+  existing call graph; tracing it is mechanical, not open-ended research, so neither a lighter nor
+  a deeper pass changes what the job needs.
+- **Won't**: fix anything, scaffold artifacts, write unless asked to keep the report.
+- **Will**: give an honest small-blast-radius answer rather than inflating a report to justify
+  itself; recommend *reconsider* when the radius is disproportionate to the stated value.
+
+Invoke directly via `/impact`. Use before committing to `/design` or `/plan` when the cost of a
+change is the open question.
+
+### pr
+
+Composes a PR title + description from a work item's `.somi/plans/<slug>/` artifacts (spec/rca,
+verified decisions, progress, review verdicts, open findings, diary highlights). Returns the
+composed markdown; never opens the PR itself.
+
+- **Cost**: `low, medium` — grades one job over two depths. At `low`, mechanical aggregation of
+  the existing artifacts into the template is already correct and usable; `medium` also matches
+  house style and applies light judgment about what to omit — strictly better, never required.
+- **Won't**: run `gh pr create`; hide red tests, open findings, or incomplete iterations.
+- **Will**: fill the repo's own PR template when one exists rather than fighting it.
+
+Invoke via `/pr`. The calling command shows the composed output to the user and gets confirmation
+before publishing anything.
+
+### incident
+
+Runs the mitigate-then-account half of the incident lane, once `/incident`'s Stage 1 has framed
+the incident (impact, timeline, slug, scaffolded `diary.md` + `progress.md`). Mitigates via flag
+flip / revert / scoped patch — reversibility first — then runs mandatory debt capture: a
+postmortem note, a seeded `/debug` or `/plan` follow-up, and a one-question guardrail retro. An
+incident does not close without all three.
+
+- **Cost**: `medium` — no lower or higher member. Both the mitigation call and the debt-capture
+  accounting need full reasoning every time; neither is mechanical enough for `low`, neither is
+  open-ended design work that would need `high`.
+- **Won't**: relax a hook for speed; skip debt capture; run the initial user exchange itself (that
+  stays in the command — a Tasked run can't pause mid-flight for it).
+- **Will**: keep the incident timeline as diary entries written *as mitigation happens*, not
+  reconstructed afterward.
+
+Invoke via `/incident`, never directly — Stage 1 must run first.
+
 ## The front-door agent
 
 ### somi
@@ -248,9 +321,10 @@ one-file change.
 
 | Declared `cost:` | Agents | What it does |
 |------|--------|--------------|
-| **`high`** (no lower member) | `discovery-analyst`, `designer`, `security-reviewer`, `refactor-designer` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it |
+| **`high`** (no lower member) | `discovery-analyst`, `designer`, `security-reviewer`, `refactor-designer`, `atlas` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it (`atlas` front-loads a repo map instead of a work-item brief) |
 | **`medium, high`** (graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept |
-| **`medium`** (no higher member) | `planner`, `coder`, `somi`, `refactorer` | Executes against an already-compiled input — a brief, a named smell, or a routing decision — without re-researching |
+| **`medium`** (no higher member) | `planner`, `coder`, `somi`, `refactorer`, `impact`, `incident` | Executes against an already-compiled input — a brief, a named smell, a routing decision, existing code's own call graph, or a framed incident — without re-researching |
+| **`low, medium`** (graded over one job) | `pr` | Composes a PR description from existing artifacts; a fuller pass adds house-style matching, never required for correctness |
 
 The handoff is the [`brief.md`](../templates/BRIEF.md.tmpl) (`templates/BRIEF.md.tmpl`): a dense,
 bounded, reference-not-inline distillation with an explicit **"What execution does NOT need to
@@ -271,9 +345,9 @@ the subagent runs on its own tier. (Prompt caches are model-scoped, so the desig
 is also a natural cache boundary.) **`/discover`, `/design`, `/atlas`, `/refactor-design`, and `/adopt` run
 at `cost: high` at the command layer too** — `/discover`, `/design`, and `/refactor-design`'s
 orchestration is judgment-heavy and their `brief.md` anchors the whole work item, so they don't
-split the orchestrator and agent across tiers; `/atlas` has no paired agent at all — the command
-itself does the deep repo read, so it is high-cost end-to-end by construction, not by a deliberate
-exception; `/adopt` inlines that same read as its own first stage. See [COMMANDS.md](./COMMANDS.md).
+split the orchestrator and agent across tiers; `/atlas` Tasks the `atlas` agent (also `cost: high`)
+for the deep repo read itself, so command and agent match rather than split; `/adopt` Tasks that
+same `atlas` agent as its own Stage 1. See [COMMANDS.md](./COMMANDS.md).
 
 ## Adding new agents
 
@@ -304,8 +378,8 @@ plain prose escalations from inside an agent are no longer the only path.
 # cost: high — front-load reasoning into brief.md
 /discover    → discovery-analyst (writes .somi/rd/<slug>/ + brief.md; feeds /plan — greenfield only)
 /design      → designer         (writes .somi/plans/<slug>/{design.md,brief.md}; feeds /plan — brownfield feature)
-/atlas       → (no agent — the high-cost command reads the repo itself; writes .somi/atlas.md, which
-                /design, cold /plan, /refactor-design, and /impact consume instead of re-reading)
+/atlas       → atlas            (writes .somi/atlas.md, which /design, cold /plan, /refactor-design,
+                                 and /impact consume instead of re-reading)
 /refactor-design → refactor-designer (writes .somi/plans/<slug>/{design.md,brief.md}; feeds /plan-loop → /code-loop)
 
 # cost: medium — execute against the brief
@@ -333,13 +407,15 @@ plain prose escalations from inside an agent are no longer the only path.
 # Lifecycle & utility commands
 /upgrade     → discovery-analyst (cited changelog/CVE research) + /code-loop (migration)
 /release-readiness → reviewer   (ONE high-cost integration pass; the checklist itself is deterministic)
-/incident    → (mitigation inline, hooks stay on; seeds /debug or /plan as the mandatory follow-up)
-/impact      → (no agent — read-only blast-radius tracing, atlas-first)
-/adopt       → /atlas flow (+ test-strategist for gap-report depth)
+/incident    → incident         (Stage 1 frame stays in the command; mitigation + mandatory debt
+                                 capture run in the agent; hooks stay on throughout)
+/impact      → impact           (read-only blast-radius tracing, atlas-first)
+/adopt       → atlas (Stage 1) + test-strategist (optional, gap-report depth)
 # Note: `somi` also names a selectable Copilot agent persona (agents/somi.md) — not invoked
 # via a command, so it has no row of its own here. See "The front-door agent" section above.
 /somi        → (no agent — read-only status dashboard & router; this is the /somi command)
-/pr          → (no agent — composes the PR from artifacts; gh only after confirmation)
+/pr          → pr               (composes the PR from artifacts, returns text; gh only after
+                                 confirmation, run by the command)
 
 # Within a code workflow:
 coder        → plan-change protocol  (when plan needs revising; updates spec/decisions/phases)
