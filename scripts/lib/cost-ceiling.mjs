@@ -24,7 +24,7 @@ import { resolveModel, VALID_COSTS } from './cost-model.mjs';
 
 export const CEILING_ENV = 'SOMI_COST_CEILING';
 export const DEFAULT_CEILING = 'high';
-export const ACTIONS = Object.freeze(['allow', 'ask', 'refuse']);
+export const ACTIONS = Object.freeze(['allow']);
 
 const ORDER = Object.freeze(Object.fromEntries(VALID_COSTS.map((c, i) => [c, i])));
 
@@ -167,22 +167,23 @@ function normalizeCostSet(costs, label) {
 }
 
 /**
- * Decides what a dispatch declaring `costs` (its full capability set) may do against `ceiling`.
- * `costs` is a single cost string or an ascending, duplicate-free array/list of them. Exactly three
- * outcomes exist (ACTIONS):
+ * Selects the tier a dispatch declaring `costs` (its full capability set) runs at against
+ * `ceiling`. `costs` is a single cost string or an ascending, duplicate-free array/list of them.
+ * Always allows, and always runs at a tier the unit itself declared:
  *
- *  - some declared member sits at or below the ceiling -> "allow", carrying the HIGHEST such
- *    member as `selected`. The ceiling silently picks the richest permitted tier -- this is
- *    selection within declared capability, not a downgrade, so it never prompts.
- *  - no declared member fits -> "ask" (interactive) or "refuse" (non-interactive). Neither branch
- *    carries a `selected` tier, because none was chosen: the unit never runs at a tier absent from
- *    its own declaration, so there is nothing to substitute.
+ *  - some declared member sits at or below the ceiling -> `selected` is the HIGHEST such member.
+ *    The ceiling silently picks the richest permitted tier -- this is selection within declared
+ *    capability, not a downgrade.
+ *  - no declared member fits -> `selected` is the CHEAPEST declared member (`supported[0]`). A
+ *    unit whose cheapest declared tier is already above the ceiling has no cheaper mode to fall
+ *    back to -- it is intrinsically that expensive, so blocking it would not be a saving, only a
+ *    stoppage. It runs at its own declared floor rather than not at all.
  *
- * `supported` on every branch always echoes exactly the normalized declared set -- there is no
- * lookup table, no "nearest allowed tier" pulled from outside what the unit itself declared. The
- * result is frozen so a caller can't rewrite it into something that would look like one.
+ * `supported` always echoes exactly the normalized declared set -- there is no lookup table, no
+ * "nearest allowed tier" pulled from outside what the unit itself declared. The result is frozen so
+ * a caller can't rewrite it into something that would look like one.
  */
-export function decideDispatch(costs, ceiling, interactive) {
+export function decideDispatch(costs, ceiling) {
   const supported = normalizeCostSet(costs, 'declared cost');
   if (!VALID_COSTS.includes(ceiling)) {
     throw new Error(`cost-ceiling: unrecognized ceiling "${ceiling}" (expected one of ${VALID_COSTS.join('|')})`);
@@ -197,37 +198,17 @@ export function decideDispatch(costs, ceiling, interactive) {
       selected = c;
     }
   }
-  if (selected !== null) {
-    return Object.freeze({ action: 'allow', selected, supported, ceiling });
-  }
-  // The cheapest declared member is above the ceiling by construction (nothing in `supported`
-  // fit, or `selected` would be non-null above) -- exactly the tier a "yes" to `ask` would need
-  // to run at. Exposed as `proposed` on both branches, not just interpolated into prose, so a
-  // caller acting on approval doesn't have to parse `message`/`reason` back out of English.
-  const cheapest = supported[0];
-  if (interactive) {
-    return Object.freeze({
-      action: 'ask',
-      supported,
-      ceiling,
-      proposed: cheapest,
-      message: `declared cost set [${supported.join(', ')}] has no member at or below the session ceiling "${ceiling}" — proceed at "${cheapest}" (its cheapest supported tier)?`,
-    });
-  }
-  return Object.freeze({
-    action: 'refuse',
-    supported,
-    ceiling,
-    proposed: cheapest,
-    reason: `declared cost set [${supported.join(', ')}] has no member at or below the session ceiling "${ceiling}" and this dispatch is non-interactive`,
-  });
+  // Nothing in `supported` fit the ceiling: fall back to the cheapest declared member rather than
+  // blocking. It is still a tier the unit itself declared, so the never-degrade rule holds.
+  if (selected === null) selected = supported[0];
+  return Object.freeze({ action: 'allow', selected, supported, ceiling });
 }
 
 /**
- * The only sanctioned way to turn a decideDispatch() result into a model: refuses outright unless
- * the decision is "allow", so a caller can never pass `supported` or `ceiling` -- present on the
- * ask/refuse branches, and never a tier that was actually chosen -- to resolveModel() as if a
- * selection had been made.
+ * The only sanctioned way to turn a decideDispatch() result into a model. `decideDispatch` always
+ * returns "allow" now, so this guard is unreachable by construction -- kept anyway as the
+ * structural closer for the never-degrade rule: nothing can hand this function a decision that
+ * wasn't produced by `decideDispatch`'s own selection and expect a model back.
  */
 export function modelForDispatch(decision, host, mapping) {
   if (!decision || decision.action !== 'allow') {

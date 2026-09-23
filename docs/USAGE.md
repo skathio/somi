@@ -651,44 +651,43 @@ object-literal syntax) throws rather than silently resolving to the wrong model.
 The library and the declarations below are in place; no dispatcher reads `cost:` against a ceiling
 yet, so this mechanism has no live callers today — that wiring is a later phase's work.
 
-A session ceiling caps which member of a unit's declared capability set a dispatch may use without
-explicit sign-off: [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s
-`resolveCeiling(root, arg)` and `decideDispatch(costs, ceiling, interactive)`. State lives at
-`.somi/somi-state/ceiling.json` — one file for the whole session, not per slug, since spend applies
-across whatever you're working on. Precedence for what can **move** a ceiling already in
-force: an explicit argument this call > `SOMI_COST_CEILING` this call > the ceiling already on
-disk; `.somi/config.json`'s `cost.ceiling` is read only once, when no state file exists yet — a
-bare config edit after that never silently reopens the ceiling, mirroring `/code-loop`'s cap
-precedent. Every move is recorded in `ceiling_overrides` as `{field, from, to, source, at}`.
+A session ceiling **selects among the tiers a unit offers; it does not decide whether the unit
+runs.** [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root,
+arg)` and `decideDispatch(costs, ceiling)`. State lives at `.somi/somi-state/ceiling.json` — one
+file for the whole session, not per slug, since spend applies across whatever you're working on.
+Precedence for what can **move** a ceiling already in force: an explicit argument this call >
+`SOMI_COST_CEILING` this call > the ceiling already on disk; `.somi/config.json`'s `cost.ceiling` is
+read only once, when no state file exists yet — a bare config edit after that never silently
+reopens the ceiling, mirroring `/code-loop`'s cap precedent. Every move is recorded in
+`ceiling_overrides` as `{field, from, to, source, at}`.
 
 `decideDispatch` takes `costs` — a unit's declared set, as a single string or an ascending array —
-and has exactly three outcomes, never a fourth:
+and always allows the dispatch. It picks `selected` from `costs`:
 
-- **allow** — some declared member sits at or below the ceiling. The result carries `selected`: the
-  **highest** such member, chosen silently, with no prompt. Running `agents/reviewer.md`'s
-  `medium, high` under a `medium` ceiling *allows at `medium`* — this is selection within declared
-  capability, not a downgrade, because the unit itself said `medium` was acceptable.
-- **ask** (interactive) / **refuse** (non-interactive) — *no* declared member fits the ceiling. The
-  result carries no `selected` tier, because none was chosen: a unit is never run at a tier absent
-  from its own declaration. A unit declaring only `high` simply has no lower mode — a `medium`
-  ceiling can't run it at all, and the outcome is ask/refuse, never a silent substitution of a tier
-  it never claimed to support.
+- some declared member sits at or below the ceiling → `selected` is the **highest** such member,
+  chosen silently, with no prompt. Running `agents/reviewer.md`'s `medium, high` under a `medium`
+  ceiling *selects `medium`* — this is choosing within declared capability, not a downgrade,
+  because the unit itself said `medium` was acceptable.
+- no declared member fits the ceiling → `selected` is the **cheapest** declared member. A unit
+  declaring only `high` has no lower mode to fall back to — it is intrinsically that expensive, so
+  blocking it would not be a saving, only a stoppage. It runs at `high` regardless of the ceiling.
 
-No outcome invents a tier from outside `supported` (the normalized declared set, present on every
-branch) — there is no lookup table, no "nearest allowed tier" pulled in from elsewhere. A malformed
+**The ceiling is therefore not a hard spend cap.** A `medium` session can still spawn `high` for a
+unit that declares only `high` (`security-reviewer`, `designer`, `refactor-designer`,
+`discovery-analyst`, and the `/atlas` work). There is currently no way to express "never `high`,
+full stop" — the mechanism that would enforce that does not exist yet, so don't rely on the ceiling
+alone for a hard budget guarantee. The tier a unit honestly declares (narrower sets are cheaper by
+construction) is the real spend lever.
+
+No outcome invents a tier from outside `supported` (the normalized declared set, present on the
+result) — there is no lookup table, no "nearest allowed tier" pulled in from elsewhere. A malformed
 ceiling or an unrecognized/unordered/duplicated declared set — from config, the env var, an
 explicit argument, or the `costs` argument itself — throws rather than disabling the ceiling or
 coercing into something valid. `modelForDispatch(decision, host, mapping)` is the sanctioned way to
 turn a decision into a model: it resolves `decision.selected` and refuses outright unless
-`decision.action` is `allow`, so an ask/refuse decision — which carries no `selected` field at all —
-cannot yield a model through it.
-
-**A delegate's `refuse` aborts the parent flow.** When an orchestrating command's own dispatch is
-allowed but a lens/agent it Tasks (e.g. `security-reviewer`, `high`-only) has no member at or below
-the ceiling, the refusal is not absorbed into a partial result — the parent flow stops and surfaces
-the delegate's reason, the same as if the top-level dispatch itself had refused. Continuing without
-the lens and reporting success anyway is the muted-reviewer failure by another route: it would look
-identical to a clean pass to anyone who didn't know a consultant was silently skipped.
+`decision.action` is `allow` — unreachable through `decideDispatch` today, since every dispatch now
+allows, but kept as the structural closer for the never-degrade rule: nothing ever runs below a
+tier it declared.
 
 ## Dependency additions
 
