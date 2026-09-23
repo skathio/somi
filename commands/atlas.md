@@ -1,5 +1,5 @@
 ---
-description: Build or refresh the Repo Atlas (.somi/atlas.md) — one `cost: high` deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later /design, cold /plan, /refactor analysis, and /impact.
+description: Build or refresh the Repo Atlas (.somi/atlas.md) — one `cost: high` deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later /design, cold /plan, /refactor-design, and /impact.
 argument-hint: [nothing — build or refresh] | refresh
 allowed-tools: Read, Grep, Glob, Bash, Write, Edit
 model: opus
@@ -61,13 +61,13 @@ date. If `.somi/README.md` doesn't exist yet, also write it from
 - The one-paragraph repo framing (§1) and the module count.
 - Top 3 hotspots and the thinnest test ice.
 - Any instruction-vs-practice disagreements found.
-- Next step: "Design actions now start from the atlas — `/design` / cold `/plan` / `/refactor`
-  analysis / `/impact` will deep-read only the drift since `<SHA>`. Refresh with `/atlas` after
-  structural changes."
+- Next step: "Design actions now start from the atlas — `/design` / cold `/plan` /
+  `/refactor-design` / `/impact` will deep-read only the drift since `<SHA>`. Refresh with
+  `/atlas` after structural changes."
 
 ## How consumers use it (the contract)
 
-- `/design`, cold `/plan`, `/refactor` analysis, `/impact`: read the atlas **first**, run the
+- `/design`, cold `/plan`, `/refactor-design`, `/impact`: read the atlas **first**, run the
   staleness check, deep-read **only** drifted areas and the paths the work item touches, and
   cite atlas sections in the brief's "Repo conventions in force" instead of re-deriving them.
 - A **stale atlas is worse than none** — consumers must run the `git diff --stat` check before

@@ -54,7 +54,7 @@ model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth.
   front-load reasoning → brief.md                    execute against the brief
   ┌───────────────────────────────┐   brief.md   ┌──────────────────────────────┐
   │ discovery-analyst, designer,  │ ───────────▶ │ planner, coder               │
-  │ refactorer (analysis),        │  (the dense  │ (sequence + implement,       │
+  │ refactor-designer,            │  (the dense  │ (sequence + implement,       │
   │ reviewer + security/arch/test │   handoff)   │  no re-research)             │
   └───────────────────────────────┘              └──────────────────────────────┘
         ▲ the strong model is spent here: once, up front, and on fresh-eyes review
@@ -71,10 +71,11 @@ model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth.
 `Task` the tier-appropriate agent. A single-cost orchestrator Tasking a differently-costed subagent
 is the **cache-correct** way to mix models — and because prompt caches are model-scoped, the
 design→execution switch is a natural cache boundary (which is exactly where `/ship-loop` places its
-single human gate). `/discover`, `/design`, and `/atlas` are the three commands that run at
-`cost: high` at the orchestration layer too — `/discover` and `/design`'s framing is judgment-heavy
-and their brief anchors the work item; `/atlas` has no paired agent, so the command itself is the
-high-cost deep repo read, end-to-end.
+single human gate). `/discover`, `/design`, `/atlas`, `/refactor-design`, and `/adopt` are the command-layer
+commands that run at `cost: high` too — `/discover`, `/design`, and `/refactor-design`'s framing is
+judgment-heavy and their brief anchors the work item; `/atlas` has no paired agent, so the command
+itself is the high-cost deep repo read, end-to-end; `/adopt` inlines that same read as its own
+first stage rather than `Task`-ing it.
 
 **Repo-awareness.** A SessionStart hook surfaces repo-local instruction files (`CLAUDE.md`,
 `AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; `cost: high` actions read them once

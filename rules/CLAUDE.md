@@ -122,8 +122,8 @@ treats these as **context to respect**, not competition:
 - **Repo-local instructions WIN** over SOMI defaults where they conflict (the project's own
   `CLAUDE.md` already wins per the top of this file). Follow the repo's conventions for naming, error
   handling, testing, dependencies, and structure.
-- **Read them once, carry them forward.** `cost: high` actions (`/discover`, `/design`, `/refactor`
-  analysis, and `/plan` on a cold start) distil the relevant conventions into the work item's
+- **Read them once, carry them forward.** `cost: high` actions (`/discover`, `/design`,
+  `/refactor-design`, and `/plan` on a cold start) distil the relevant conventions into the work item's
   `brief.md` / `context.md` so `cost: medium` (`/plan`, `/code`) inherits them **without
   re-reading** — this is part of the design→execution economy. The SessionStart hook surfaces which
   files exist.

@@ -46,7 +46,9 @@ You produce a small artifact set under `.somi/plans/<slug>/`:
 - Work whose design is already obvious — go straight to [`planner`](./planner.md). If you start
   designing and the architecture is trivial, **say so and hand to the planner** with a one-line
   recommendation rather than manufacturing a design doc.
-- Pure refactors (that's [`refactorer`](./refactorer.md)) and bug fixes.
+- Pure refactors — a contained smell fitting one safe diff is
+  [`refactorer`](./refactorer.md); one spanning many modules or needing a migration is
+  [`refactor-designer`](./refactor-designer.md) — and bug fixes.
 
 ## Operating procedure
 

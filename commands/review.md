@@ -15,8 +15,8 @@ branch, scoped to the single in-progress work item if exactly one exists).
 
 > **Note:** plan-level review is part of this command. Use `plan <slug>` (or pass an `.somi/plans/`
 > path) to review a spec/decisions/phases set instead of a diff. Use `design <slug>` to review a
-> `cost: high` design + `brief.md` (from [`/design`](./design.md), [`/discover`](./discover.md), or a
-> [`/refactor`](./refactor.md) analysis) before it hands off to execution. There is no separate
+> `cost: high` design + `brief.md` (from [`/design`](./design.md), [`/discover`](./discover.md), or
+> [`/refactor-design`](./refactor-design.md)) before it hands off to execution. There is no separate
 > `/plan-review` or `/design-review` command — this is the single deepest review surface.
 
 > **Fresh-context review (bias avoidance).** The `reviewer` (and any consultant) is **always** Tasked
@@ -85,7 +85,10 @@ into the review under a dedicated section:
 | New module / service / public contract / dependency-direction change / public interface | `architecture-reviewer` | Both code and plan |
 | Mock-heavy diff, new flaky tests, e2e-only coverage of risky code, untestable seams | `test-strategist` | Code review |
 
-Skipping a triggered consultant is itself a **finding** in the meta-review.
+Skipping a triggered consultant is itself a **finding** in the meta-review. If a triggered
+consultant's own declared `cost:` has no member at or below the session ceiling, that is not a
+skip to absorb quietly — stop and surface the refusal to the user rather than reporting a clean
+verdict the consultant never actually rendered.
 
 ### 4. Aggregate findings
 

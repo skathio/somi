@@ -123,14 +123,15 @@ fi
 
 echo "==> Validating cost-tier declarations..."
 # Extract the first `cost:` (or `model:`) value(s) from a file's frontmatter (the block between
-# the first two `---` lines) -- a comma-separated list for a command whose OWN orchestration
-# genuinely runs at more than one tier depending on which mode it's invoked in (hypothetically: a
-# command whose default mode is a light pass but itself runs the full high-cost flow in another
-# mode). What a file Tasks never contributes a value here: a cost: medium orchestrator Tasking a
-# cost: high agent stays declared medium -- the agent's own frontmatter is where high is
-# truthfully declared, once. No file in this repo needs the multi-value form today; the
-# ordering/duplicate/malformed checks below still guard the mechanism for whenever a command
-# genuinely earns it.
+# the first two `---` lines). A declared `cost:` is a CAPABILITY SET -- every tier that unit can
+# usefully run at, comma-separated in strictly ascending order -- and a dispatcher selects the
+# highest member its ceiling permits; that selection is capability, never a downgrade to a tier
+# the unit didn't declare. agents/reviewer.md's shipped `cost: medium, high` is a real example: a
+# lighter pass is honestly useful at `medium`, adversarial fresh-eyes review needs `high`. What a
+# file Tasks never contributes a value here, and a spawned unit never inherits its caller's tier
+# either direction: a cost: medium orchestrator Tasking a cost: high agent stays declared medium --
+# the agent's own frontmatter is where high is truthfully declared, once -- and a cost: high agent
+# Tasking a cost: low, medium helper does not pull that helper up to high either.
 cost_of() {
   awk '/^---$/{c++} c==1 && /^cost:[[:space:]]*/{sub(/^cost:[[:space:]]*/,""); print; exit}' "$1"
 }
@@ -165,7 +166,7 @@ eval "$cost_env"
 
 # (a) Every agents/*.md and commands/*.md file declares a `cost:` field, and every value in it
 # (split on comma, for the multi-mode commands) is one of scripts/lib/cost-model.mjs's
-# VALID_COSTS. Generic presence+validity, across all ~34 files -- not just the ones pinned to an
+# VALID_COSTS. Generic presence+validity, across all ~36 files -- not just the ones pinned to an
 # exact value below.
 for f in agents/*.md commands/*.md; do
   [ -f "$f" ] || continue
@@ -223,42 +224,52 @@ assert_cost() {
     cost_failed=1
   fi
 }
-# medium: planning + coding execute against the high-cost brief.
+# medium-only: planning is judgment, never mechanical; the front door is a thin dispatcher;
+# refactoring is structured execution against an already-named smell. refactorer has a split-out
+# sibling (below, refactor-designer) for the job a single tier can't honestly cover. coder has no
+# such sibling yet -- a genuinely lighter-weight job would need one (a separate single-purpose
+# unit at a lower tier), not a second member declared here, since coder still accepts full plan
+# iterations.
 assert_cost agents/planner.md medium
 assert_cost agents/coder.md medium
 assert_cost agents/somi.md medium
-# high: front-load reasoning + fresh-eyes review.
-for a in discovery-analyst designer refactorer reviewer security-reviewer architecture-reviewer test-strategist; do
+assert_cost agents/refactorer.md medium
+# high-only: a wrong call here is paid for through everything downstream that builds on it, so a
+# cheaper pass would be cheaper-and-wrong, not genuinely useful -- these never gain a lower member.
+for a in discovery-analyst designer security-reviewer refactor-designer; do
   assert_cost "agents/$a.md" high
 done
-# high-cost front-load commands run at cost: high end-to-end (their orchestration is judgment-heavy).
+# medium, high: a lighter pass is genuinely useful under a capped ceiling, but the deepest work
+# needs the strong model -- these grade ONE job over two depths, not two different jobs, so a
+# blind ceiling pick is safe at either member.
+for a in reviewer architecture-reviewer test-strategist; do
+  assert_cost "agents/$a.md" medium,high
+done
+# high-cost front-load commands run at cost: high end-to-end (their orchestration is judgment-heavy,
+# and the entire value is one high-quality pass paid once -- a shallower pass is cheaper-and-wrong).
 assert_cost commands/discover.md high
 assert_cost commands/design.md high
 assert_cost commands/atlas.md high
+assert_cost commands/refactor-design.md high
 
-# (c) `model:` and `cost:` state one fact twice, declared beside each other on exactly that
-# promise -- assert `model:` resolves from AT LEAST ONE declared `cost:` value (membership),
-# deriving the expected model(s) from the same resolveModel() mapping rather than a second
-# hardcoded table. Membership holds for a single-valued declaration too (one value to match), so
-# this is one check for both shapes, not two. It asserts only what every reading of a multi-value
-# declaration already agrees on, without prejudging which one slot (if any) is the "real" one.
+# (c) `model:` and `cost:` state one fact twice -- assert `model:` resolves from the declared
+# `cost:` set's TOP (highest, rightmost) member, deriving the expected model from resolveModel()
+# rather than a second hardcoded table. Top-ness, not mere membership: a `model:` naming a lower
+# declared member would silently run the agent at that lower tier regardless of ceiling -- the
+# muted-reviewer failure `cost:` exists to prevent, re-opened by hand.
 for f in agents/*.md commands/*.md; do
   [ -f "$f" ] || continue
   got="$(cost_of "$f" | tr -d '[:space:]')"
   [ -z "$got" ] && continue  # already reported as COST TIER MISSING above
   declared_model="$(model_of "$f" | tr -d '[:space:]')"
   IFS=',' read -ra mv_values <<< "$got"
-  any_recognized=0
-  ok=0
-  for v in "${mv_values[@]}"; do
-    mv="model_for_$v"
-    expected="${!mv:-}"
-    [ -z "$expected" ] && continue  # unrecognized cost value, already reported above
-    any_recognized=1
-    [ "$expected" = "$declared_model" ] && ok=1
-  done
-  if [ "$any_recognized" -eq 1 ] && [ "$ok" -ne 1 ]; then
-    echo "MODEL/COST MISMATCH: $f declares cost: $got with model: $declared_model, which resolves from none of its declared cost value(s) per scripts/lib/cost-model.mjs" >&2
+  top="${mv_values[${#mv_values[@]}-1]}"
+  mv="model_for_$top"
+  expected="${!mv:-}"
+  # An unrecognized top value was already reported as COST TIER INVALID above -- nothing further
+  # to check here (no expected model to compare against).
+  if [ -n "$expected" ] && [ "$expected" != "$declared_model" ]; then
+    echo "MODEL/COST MISMATCH: $f declares cost: $got (top tier: $top) with model: $declared_model, expected '$expected' per scripts/lib/cost-model.mjs" >&2
     cost_failed=1
   fi
 done
@@ -335,6 +346,62 @@ if [ "$index_failed" -ne 0 ]; then
   exit 1
 fi
 
+echo "==> Validating agent <-> docs/AGENTS.md index completeness..."
+# Every agents/<name>.md must have a matching '### <name>' section in docs/AGENTS.md, and every
+# such section must have a matching agents/<name>.md file -- mirrors the skills <-> docs/SKILLS.md
+# check above. Without this, a new agent file ships undocumented and stays green forever, which is
+# exactly how refactor-designer shipped with no docs/AGENTS.md section for two review passes.
+# Reserved heading level: '### ' in docs/AGENTS.md is read ENTIRELY as agent-section markers by
+# this loop -- any other H3 (e.g. "### Cost tiering details") is misdiagnosed as an orphaned agent
+# section. A non-agent subsection belongs at a different heading level (## or ####), not H3.
+agent_index_failed=0
+for f in agents/*.md; do
+  [ -f "$f" ] || continue
+  name="$(basename "$f" .md)"
+  if ! grep -qE "^### ${name}\$" docs/AGENTS.md; then
+    echo "AGENT NOT INDEXED: $name (docs/AGENTS.md has no '### $name' section)" >&2
+    agent_index_failed=1
+  fi
+done
+while IFS= read -r name; do
+  [ -z "$name" ] && continue
+  if [ ! -f "agents/$name.md" ]; then
+    echo "AGENT SECTION ORPHANED: docs/AGENTS.md has '### $name' but agents/$name.md does not exist -- if this is not an agent section, use ## or #### instead of ###" >&2
+    agent_index_failed=1
+  fi
+done < <(grep -E '^### ' docs/AGENTS.md | sed 's/^### //')
+if [ "$agent_index_failed" -ne 0 ]; then
+  exit 1
+fi
+
+echo "==> Validating command <-> docs/COMMANDS.md index completeness..."
+# Every commands/<name>.md must appear as a linked row in docs/COMMANDS.md's catalogue table, and
+# every linked row must correspond to a real commands/<name>.md file -- mirrors the agent <->
+# docs/AGENTS.md check above. docs/COMMANDS.md has no '### <name>' sections, so this gate matches
+# on the link form: only a catalogue-table row (a line starting with "| [") counts as an index
+# entry -- prose mentioning ../commands/<name>.md elsewhere must not. Both directions read from
+# the SAME indexed set below, so the table is checked against commands/ exactly, both ways.
+command_index_failed=0
+indexed_commands="$(grep -E '^\| \[' docs/COMMANDS.md | grep -oE '\.\./commands/[A-Za-z0-9_-]+\.md' | sed -E 's#^\.\./commands/##; s#\.md$##')"
+for f in commands/*.md; do
+  [ -f "$f" ] || continue
+  name="$(basename "$f" .md)"
+  if ! grep -qxF "$name" <<< "$indexed_commands"; then
+    echo "COMMAND NOT INDEXED: $name (docs/COMMANDS.md's catalogue table has no link to ../commands/$name.md)" >&2
+    command_index_failed=1
+  fi
+done
+while IFS= read -r name; do
+  [ -z "$name" ] && continue
+  if [ ! -f "commands/$name.md" ]; then
+    echo "COMMAND LINK ORPHANED: docs/COMMANDS.md's catalogue table links to ../commands/$name.md but commands/$name.md does not exist -- if this is not a catalogue-table row, use a different link form outside the table" >&2
+    command_index_failed=1
+  fi
+done <<< "$indexed_commands"
+if [ "$command_index_failed" -ne 0 ]; then
+  exit 1
+fi
+
 echo "==> Validating command/skill namespace collisions..."
 # (a) commands/ and skills/ share ONE namespace on Claude Code — a command and a skill with the
 # same name collide, and the skill silently loses. That is the defect this whole work item started
@@ -344,8 +411,9 @@ echo "==> Validating command/skill namespace collisions..."
 # Keyed on DIRECTORY name. That is sufficient under EITHER registration mechanism — not because
 # the mechanism is settled (it is not; F-28's probe is still open) but by composition: check (c)
 # below forces declared-name == directory for every skill, so no command basename can equal any
-# skill's declared name either. Unstated premise, verified today and unchecked: zero of 24
-# commands/*.md declare a frontmatter `name:`. If one ever does, this composition breaks silently.
+# skill's declared name either. Unstated premise, verified today and unchecked: zero of the
+# commands/*.md files declare a frontmatter `name:`. If one ever does, this composition breaks
+# silently.
 collision_failed=0
 for f in commands/*.md; do
   [ -f "$f" ] || continue

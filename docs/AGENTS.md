@@ -1,7 +1,7 @@
 # Agents
 
-SoMi ships ten agents: nine phase-specific subagents across two **cost tiers**, plus one
-Copilot-only front door (`somi`) documented separately in
+SoMi ships phase-specific subagents graded across **cost tiers**, plus one Copilot-only front
+door (`somi`) documented separately in
 ["The front-door agent"](#the-front-door-agent) below. The **`cost: high`** tier front-loads the
 expensive reasoning — research, design, decisions, complexity mapping, and fresh-eyes review — and
 compiles it into a dense `brief.md`. The **`cost: medium`** tier executes against that brief without
@@ -11,14 +11,15 @@ re-researching. See [Cost tiering](#cost-tiering) below.
 |--------------------------------------------------------------|----------------|-----------------------------------------------------------------------|
 | [`discovery-analyst`](../agents/discovery-analyst.md)        | `high`         | New product / greenfield idea, before planning; requirements + research |
 | [`designer`](../agents/designer.md)                          | `high`         | Design-heavy feature / user story on an existing codebase, before planning |
-| [`refactorer`](../agents/refactorer.md)                      | `high`         | The next change needs untangling first; behavior-preserving structure (surgical), or design a large refactor (analysis) |
-| [`reviewer`](../agents/reviewer.md)                          | `high`         | Before merge; whenever you want a skeptical second opinion            |
+| [`refactorer`](../agents/refactorer.md)                      | `medium`       | The next change needs untangling first, contained to one safe behavior-preserving diff |
+| [`refactor-designer`](../agents/refactor-designer.md)        | `high`         | The untangle spans many modules / needs a migration — too big for one diff; designs scope + brief |
+| [`reviewer`](../agents/reviewer.md)                          | `medium, high` | Before merge; whenever you want a skeptical second opinion            |
 | [`security-reviewer`](../agents/security-reviewer.md)        | `high`         | Auth, crypto, secrets, input validation, deserialization, file uploads |
-| [`architecture-reviewer`](../agents/architecture-reviewer.md)| `high`         | New module/service/contract; dependency direction change              |
-| [`test-strategist`](../agents/test-strategist.md)            | `high`         | Test shape feels wrong; deciding unit vs. integration; flake debugging |
+| [`architecture-reviewer`](../agents/architecture-reviewer.md)| `medium, high` | New module/service/contract; dependency direction change              |
+| [`test-strategist`](../agents/test-strategist.md)            | `medium, high` | Test shape feels wrong; deciding unit vs. integration; flake debugging |
 | [`planner`](../agents/planner.md)                            | `medium`       | Non-trivial change; sequence the design (brief) into phases           |
 | [`coder`](../agents/coder.md)                                | `medium`       | Executing against an approved plan + brief; small, well-scoped tasks  |
-| [`somi`](../agents/somi.md)                                   | `medium`       | GitHub Copilot session persona — not phase-specific; classifies the request and dispatches to whichever of the other 9 fits (see "The front-door agent" below) |
+| [`somi`](../agents/somi.md)                                   | `medium`       | GitHub Copilot session persona — not phase-specific; classifies the request and dispatches to whichever of the others fits (see "The front-door agent" below) |
 
 ## How agents get invoked
 
@@ -49,8 +50,9 @@ competition and mines real user complaints to design *away* from known failure m
 non-obvious claim and never fabricates. Respects the **design-depth boundary**: sets architectural
 *direction* (high-level SDD/TDD) and hands *detailed* design to the planner.
 
-- **Cost**: `high` — and its `/discover` command runs at `cost: high` too (the one command-layer
-  exception; see [COMMANDS.md](./COMMANDS.md)), because the output anchors the whole project.
+- **Cost**: `high` — and its `/discover` command runs at `cost: high` too (one of the command-layer
+  commands that does; see [COMMANDS.md](./COMMANDS.md)), because the output anchors the whole
+  project.
 - **Won't**: plan or code; fabricate research; produce detailed design that competes with the
   planner; cheerlead an idea the research condemns.
 - **Will**: stop and hand off to the planner if the idea is already well-specified rather than
@@ -122,7 +124,9 @@ architectural proposals. Checks plan-vs-code alignment: did the diff stay within
 changes get captured in `decisions.md` and `diary.md`, is `progress.md` accurate.
 Severity-graded findings, will reject weak solutions.
 
-- **Cost**: `high`.
+- **Cost**: `medium, high` — graded over one job, not alternative modes: a `medium` pass and a
+  `high` pass both produce a real review at different depths, and neither is insufficient for any
+  diff this agent accepts.
 - **Won't**: rubber-stamp; bury Blockers under Nits; review the author instead of the code; read the
   full accumulated artifact history when a bounded slice suffices (live decisions, active phase,
   recent diary entries).
@@ -131,7 +135,7 @@ Severity-graded findings, will reject weak solutions.
   run as a **parallel panel** via [`/review-panel`](./COMMANDS.md) — the relevant lenses review the
   same diff concurrently and their findings are merged into one verdict.
 
-## The support quartet
+## The support agents
 
 ### security-reviewer
 
@@ -154,7 +158,8 @@ ADR review. Time horizon is years; reversibility is a first-class concern.
 Invoke directly via `/architecture-review`, or via `/review` when the change introduces a
 contract/module/service (the consultant-trigger table auto-invokes).
 
-- **Cost**: `high`.
+- **Cost**: `medium, high` — grades one job over two depths; neither is insufficient for any
+  proposal this agent accepts.
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`api-design`](../skills/api-design/SKILL.md) skills — skill wins on divergence.
 
@@ -166,7 +171,8 @@ coverage-worship. Identifies when the test shape is a *design* problem.
 Invoke directly via `/test-strategy`, or via `/review` when the diff has mock-heavy / flaky /
 e2e-only-on-risky-code symptoms.
 
-- **Cost**: `high`.
+- **Cost**: `medium, high` — grades one job over two depths; neither is insufficient for any input
+  this agent accepts.
 - **Canonical knowledge**: the [`testing-playbook`](../skills/testing-playbook/SKILL.md) skill — skill wins
   on divergence.
 
@@ -175,22 +181,46 @@ e2e-only-on-risky-code symptoms.
 Surgical, behavior-preserving structure changes. Tests stay green at every step. No feature work
 mixed in. Returns the codebase to a state where the next planned change is easy.
 
-- **Cost**: `high`.
+- **Cost**: `medium` — no lower or higher member. Structured execution against an already-named
+  smell, one safe diff at a time, is honestly `medium` work for every job this agent accepts. A
+  refactor too big for one diff is a different job, split out to `refactor-designer` below rather
+  than declared as a second tier here — a caller-picked mode and a ceiling-picked tier can't safely
+  name the same choice on one unit.
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`clean-code`](../skills/clean-code/SKILL.md) skills — skill wins on divergence.
+
+### refactor-designer
+
+Front-loaded scope design for a refactor too big for one safe diff — it spans many modules, needs
+a migration, or changes a shared shape. Names the destination shape, maps seams and risks with
+`file:line` pointers, confirms test-coverage gaps, and compiles the
+[`brief.md`](../templates/BRIEF.md.tmpl) that `/plan-loop` → `/code-loop` execute against. The
+`refactorer`/`refactor-designer` split (mirrors `planner`/`designer`'s naming) exists because the
+two jobs — surgical execution and scope design — have different requirements and cannot share one
+declared tier.
+
+- **Cost**: `high` — no lower member. Every job this agent takes is scope design for a
+  multi-module refactor, which a `medium` ceiling cannot honestly serve.
+- **Won't**: edit code; ship an empty brief; pick the destination shape or migration approach
+  silently.
+- **Will**: reuse `.somi/atlas.md` when a fresh one exists rather than re-reading the repo; hand
+  off to `architecture-reviewer` or `test-strategist` when the destination or coverage gap needs
+  it.
+
+Invoke directly via `/refactor-design`. Use instead of `/refactor` when the target needs more than
+one reviewable diff to reach its destination.
 
 ## The front-door agent
 
 ### somi
 
 A Copilot-only dispatcher, not a phase-specific agent. Selecting it as the session persona
-removes the "which of the other 9 do I need?" choice: per incoming message it runs an
+removes the "which of the others do I need?" choice: per incoming message it runs an
 invocation-mode gate first — an explicit non-`/somi` command is proxied directly, an explicit
 `/somi` passes through to the `/somi` command verbatim, and anything else is classified against
 [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) and carried inline
-(adopt-inline — no sub-agent `Task`, since Copilot has none). High-cost flows (`/design`,
-`/discover`, `/atlas`) are routed to their direct command rather than adopted under this agent's
-own `cost: medium` tier.
+(adopt-inline — no sub-agent `Task`, since Copilot has none). High-cost flows are routed to their
+direct command rather than adopted under this agent's own `cost: medium` tier.
 
 - **Cost**: `medium` — a thin dispatcher; high-cost flows are routed to, not adopted under, this
   tier.
@@ -216,10 +246,11 @@ See [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs) for the curren
 mapping per host — this doc names the tier, not the model, so a repricing or a new model stays a
 one-file change.
 
-| `cost` | Agents | What it does |
+| Declared `cost:` | Agents | What it does |
 |------|--------|--------------|
-| **`high`** | `discovery-analyst`, `designer`, `refactorer`, `reviewer`, `security-reviewer`, `architecture-reviewer`, `test-strategist` | Front-loads research, design, decisions, and complexity mapping into a `brief.md`; and provides fresh-eyes review |
-| **`medium`** | `planner`, `coder` | Sequences and implements **against** the brief, without re-researching |
+| **`high`** (no lower member) | `discovery-analyst`, `designer`, `security-reviewer`, `refactor-designer` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it |
+| **`medium, high`** (graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept |
+| **`medium`** (no higher member) | `planner`, `coder`, `somi`, `refactorer` | Executes against an already-compiled input — a brief, a named smell, or a routing decision — without re-researching |
 
 The handoff is the [`brief.md`](../templates/BRIEF.md.tmpl) (`templates/BRIEF.md.tmpl`): a dense,
 bounded, reference-not-inline distillation with an explicit **"What execution does NOT need to
@@ -237,12 +268,12 @@ the agent frontmatter and the per-host mapping.
 `cost: medium` and `Task` their agents. A single-cost orchestrator that Tasks a differently-costed
 subagent is the cache-correct way to mix costs — the orchestrator's prompt cache stays intact while
 the subagent runs on its own tier. (Prompt caches are model-scoped, so the design→execution switch
-is also a natural cache boundary.) **`/discover`, `/design`, and `/atlas` run at `cost: high` at
-the command layer too** — `/discover` and `/design`'s orchestration is judgment-heavy and their
-`brief.md` anchors the whole work item, so they don't split the orchestrator and agent across
-tiers; `/atlas` has no paired agent at all — the command itself does the deep repo read, so it is
-high-cost end-to-end by construction, not by a deliberate exception. See
-[COMMANDS.md](./COMMANDS.md).
+is also a natural cache boundary.) **`/discover`, `/design`, `/atlas`, `/refactor-design`, and `/adopt` run
+at `cost: high` at the command layer too** — `/discover`, `/design`, and `/refactor-design`'s
+orchestration is judgment-heavy and their `brief.md` anchors the whole work item, so they don't
+split the orchestrator and agent across tiers; `/atlas` has no paired agent at all — the command
+itself does the deep repo read, so it is high-cost end-to-end by construction, not by a deliberate
+exception; `/adopt` inlines that same read as its own first stage. See [COMMANDS.md](./COMMANDS.md).
 
 ## Adding new agents
 
@@ -274,7 +305,8 @@ plain prose escalations from inside an agent are no longer the only path.
 /discover    → discovery-analyst (writes .somi/rd/<slug>/ + brief.md; feeds /plan — greenfield only)
 /design      → designer         (writes .somi/plans/<slug>/{design.md,brief.md}; feeds /plan — brownfield feature)
 /atlas       → (no agent — the high-cost command reads the repo itself; writes .somi/atlas.md, which
-                /design, cold /plan, /refactor analysis, and /impact consume instead of re-reading)
+                /design, cold /plan, /refactor-design, and /impact consume instead of re-reading)
+/refactor-design → refactor-designer (writes .somi/plans/<slug>/{design.md,brief.md}; feeds /plan-loop → /code-loop)
 
 # cost: medium — execute against the brief
 /plan        → planner         (writes .somi/plans/<slug>/; consumes brief.md / .somi/rd/<slug>/ if present)
@@ -295,7 +327,7 @@ plain prose escalations from inside an agent are no longer the only path.
 /refactor    → refactorer
 
 /ship        → [optional cost: high front-load] → /plan + (per iteration) /code-loop  (human gate at every stage)
-/plan-loop   → planner + reviewer  (bounded plan↔review loop, cost: medium planner + cost: high reviewer)
+/plan-loop   → planner + reviewer  (bounded plan↔review loop, cost: medium planner + reviewer at cost: medium, high)
 /ship-loop   → [optional cost: high front-load] → [gate at design→execution switch] → /plan-loop → /code-loop (continuous, under caps)
 
 # Lifecycle & utility commands

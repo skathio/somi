@@ -20,8 +20,9 @@ $ARGUMENTS
 This command automates the manual `/plan` → `/review plan <slug>` → `/plan` cycle, with **hard
 gates** that ensure it terminates. This is a **`cost: medium`** loop: the orchestrator and the
 `planner` it Tasks both run at `cost: medium` (executing against an upstream `brief.md` when one
-exists), while the `reviewer` it Tasks stays at `cost: high` — review is the fresh-eyes high-cost
-judgment, run on a cold context so it isn't biased by the planner's reasoning.
+exists), while the `reviewer` it Tasks declares `cost: medium, high` — the session ceiling picks
+the highest permitted member, typically `high` for the fresh-eyes judgment this loop wants, run on
+a cold context so it isn't biased by the planner's reasoning.
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > and `spec.md §1` — in the **same order at the front** of each pass's planner brief, and append the
@@ -60,8 +61,9 @@ starting a fresh loop. Plan loops have no diff cap; `--diff-cap` is inert for a 
   scaffold `.somi/plans/<slug>/`.
 - **Existing slug with a plan** → continue revising the plan for that work item. The first pass
   treats the existing plan as the starting point.
-- **Existing slug that is a design handoff** (a [`/design`](./design.md) or `/refactor` analysis left
-  a `brief.md` + `design.md` but no `spec.md`/`phases/` yet) → the first pass **creates** the plan
+- **Existing slug that is a design handoff** (a [`/design`](./design.md) or
+  [`/refactor-design`](./refactor-design.md) left a `brief.md` + `design.md` but no
+  `spec.md`/`phases/` yet) → the first pass **creates** the plan
   from the brief (the planner consumes `brief.md` per [`/plan`](./plan.md) §2a and scaffolds
   non-destructively per §3 — never clobbering the design's `decisions.md`/`diary.md`). Subsequent
   passes revise it.

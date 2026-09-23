@@ -35,6 +35,10 @@ Via the Task tool, pass:
   Write/Edit and its `## Write discipline` section forbids using them, so this command owns every
   write (the review file, `progress.md`, `diary.md`).
 
+`security-reviewer` declares `cost: high` alone, no lower member. If the session ceiling has no
+member at or below that, do not run a substitute lighter pass and report it as this review — stop
+and surface the refusal to the user.
+
 ### 3. Findings must include
 
 - **Attack path** — end-to-end, in plain language (entrypoint → intermediate steps → sink).

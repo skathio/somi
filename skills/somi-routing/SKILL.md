@@ -18,7 +18,8 @@ editing it once here keeps both consumers in sync, which is the whole reason thi
 | A whole new product / greenfield idea, requirements open | [`/discover`](../../commands/discover.md) |
 | A feature on this repo whose architecture is unsettled (crosses modules, auth/PII, migration, new contract) | [`/design`](../../commands/design.md), then `/plan` |
 | A feature whose design is settled — "just sequence and build it" | [`/plan`](../../commands/plan.md) → [`/code-loop`](../../commands/code-loop.md) |
-| "Clean this up first" / structure blocks the next change | [`/refactor`](../../commands/refactor.md) |
+| "Clean this up first" — a small, named smell that fits one safe diff | [`/refactor`](../../commands/refactor.md) |
+| "Clean this up first" — spans many modules, needs a migration, or changes a shared shape | [`/refactor-design`](../../commands/refactor-design.md), then `/plan-loop` → `/code-loop` |
 | "Is this OK?" — judge existing code / a plan / a design / a PR | [`/review`](../../commands/review.md) (or [`/review-panel`](../../commands/review-panel.md) for high-stakes multi-concern) |
 | Security-only / architecture-only / test-shape question | [`/security-review`](../../commands/security-review.md) / [`/architecture-review`](../../commands/architecture-review.md) / [`/test-strategy`](../../commands/test-strategy.md) |
 | "Do the whole thing end to end" | [`/ship`](../../commands/ship.md) (gated) or [`/ship-loop`](../../commands/ship-loop.md) (continuous, one gate) |

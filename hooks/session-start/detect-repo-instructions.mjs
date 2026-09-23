@@ -149,7 +149,7 @@ const MAX_NESTED_RESULTS = 10; // bash: | head -n 10
 // `$'...'\''...'\''...'` escaping decodes to). Byte-exact against the fixture's
 // expect_context substrings.
 const DIRECTIVE =
-  "\n`cost: high` actions (/discover, /design, /refactor analysis, and /plan on a cold start) should read these once and distil the relevant conventions into the work item's brief.md / context.md so execution inherits them without re-reading. Repo-local instructions WIN over SoMi defaults where they conflict. Do NOT auto-invoke the repo's own agents — surface them for the user to opt into.";
+  "\n`cost: high` actions (/discover, /design, /refactor-design, and /plan on a cold start) should read these once and distil the relevant conventions into the work item's brief.md / context.md so execution inherits them without re-reading. Repo-local instructions WIN over SoMi defaults where they conflict. Do NOT auto-invoke the repo's own agents — surface them for the user to opt into.";
 
 function isFile(p) {
   try {

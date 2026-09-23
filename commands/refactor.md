@@ -1,34 +1,28 @@
 ---
-description: Refactor a named smell. Surgical (default) — behavior-preserving, tests stay green, no feature work. Or `cost: high` analysis for a large refactor — designs the scope and compiles a brief.md, then /plan-loop → /code-loop execute it. Use when the next change requires untangling first.
+description: Refactor a named smell. Surgical, behavior-preserving execution against a smell that fits one safe diff — tests stay green, no feature work. For a refactor too big for one diff, use /refactor-design instead.
 argument-hint: <smell description and target files>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
 model: sonnet
 cost: medium
 ---
 
-# /refactor — Refactor (surgical, or high-cost analysis for large ones)
+# /refactor — Surgical refactor (`cost: medium`)
 
 You are invoking the **refactorer** workflow of somi.
 
 The user's refactor target: **$ARGUMENTS**
 
-## Pick the mode first
+## Precondition — this command is surgical only
 
-- **Surgical (default).** A small, named smell that fits one safe behavior-preserving diff — the
-  refactorer does it directly (steps 1–6 below).
-- **Analysis (`cost: high`, large refactor).** When the refactor spans many modules, needs a
-  migration, or changes a shared shape — too big for one safe diff (a 600-line refactor is a
-  *plan*, not a diff) — the refactorer instead runs the high-cost **analysis mode**: it identifies
-  and designs the refactor scope and compiles a [`brief.md`](../templates/BRIEF.md.tmpl) under
-  `.somi/plans/<slug>/`, then execution runs it via [`/plan-loop`](./plan-loop.md) →
-  [`/code-loop`](./code-loop.md). Choose this when the destination needs more than a single
-  reviewable diff; surface the scope to the user before handing off. For a high-stakes refactor,
-  review the brief at `cost: high` first via [`/review`](./review.md) `design <slug>` (fresh
-  context, bounded).
+This command performs a **small, named smell** that fits one safe, behavior-preserving diff. If the
+refactor spans many modules, needs a migration, or changes a shared shape — too big for one safe
+diff (a 600-line refactor is a *plan*, not a diff) — stop and recommend
+[`/refactor-design`](./refactor-design.md) instead: it designs the refactor scope and compiles a
+`brief.md` that [`/plan-loop`](./plan-loop.md) → [`/code-loop`](./code-loop.md) then execute. Mode
+selection and tier selection are separate decisions, which is why this is its own command rather
+than a mode flag; see [`agents/refactorer.md`](../agents/refactorer.md)'s `> **Cost:**` callout.
 
-The steps below are the **surgical** path.
-
-## What to do (surgical path)
+## What to do
 
 1. **Verify the precondition**: the refactor target is a *named smell* (e.g., "`OrderService` mixes pricing
    and persistence") with specific files in scope. If `$ARGUMENTS` is vague ("clean up the codebase"),
@@ -51,9 +45,8 @@ The steps below are the **surgical** path.
 
 - **No behavior changes.** No bug fixes mixed in. If a bug is discovered, file it as follow-up.
 - **No feature work.** This is structure-only.
-- **No big-bang rewrites on the surgical path.** If the destination requires a 600-line diff, switch
-  to **analysis mode** above: the refactorer designs the scope and compiles a `brief.md`, then
-  `/plan-loop` → `/code-loop` execute it as bounded, reviewable iterations.
+- **No big-bang rewrites.** Same threshold as the precondition above — if it's crossed mid-refactor,
+  stop and hand off to [`/refactor-design`](./refactor-design.md) instead of pushing through.
 - **Tests stay green** at every step. Not "green at the end" — green at every commit.
 
 ## Quality bar

@@ -20,7 +20,8 @@ The marketplace path is the recommended way to install SoMi into Claude Code.
 Once installed, the SoMi commands appear in Claude Code's `/` autocomplete: the build flows
 (`/discover`, `/design`, `/plan`, `/plan-loop`, `/code`, `/code-loop`, `/code-parallel`,
 `/review`, `/review-panel`, `/ship`, `/ship-loop`), debugging (`/debug`), the targeted reviews
-(`/security-review`, `/architecture-review`, `/test-strategy`), refactoring (`/refactor`), the
+(`/security-review`, `/architecture-review`, `/test-strategy`), refactoring (`/refactor`,
+`/refactor-design`), the
 repo-level utilities (`/atlas`, `/impact`, `/adopt`, `/somi`, `/pr`), and the lifecycle flows
 (`/upgrade`, `/release-readiness`, `/incident`). For an existing codebase, run `/adopt` once
 after installing; type `/somi` any time for status and routing.

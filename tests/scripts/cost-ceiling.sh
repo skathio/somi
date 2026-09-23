@@ -2,9 +2,10 @@
 # Unit guard for scripts/lib/cost-ceiling.mjs: the session cost ceiling.
 #
 # Exercises: re-resolution per dispatch across separate process invocations (state lives on disk,
-# not in memory), a bare .somi/config.json edit cannot move a ceiling already recorded, the
-# three-way ask/refuse/never-degrade split, and a malformed ceiling value — from config, an env
-# var, or an explicit argument — dying loudly instead of silently disabling the ceiling.
+# not in memory), a bare .somi/config.json edit cannot move a ceiling already recorded,
+# capability-set selection (allow picks the highest permitted declared member; ask/refuse only
+# when none fits, never a silent downgrade), and a malformed ceiling or declared set — from config,
+# an env var, or an explicit argument — dying loudly instead of silently disabling the ceiling.
 set -uo pipefail
 
 ROOT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -107,35 +108,95 @@ check "the thrown message names the state file, not a flag or env var" \
   "$(run "$CORRUPT" 'try { C.resolveCeiling(ROOT, undefined); } catch (e) { process.stdout.write(String(e.message.includes("ceiling.json"))); }')" \
   "true"
 
-# --- decideDispatch: the three-way ask / refuse / never-degrade split ---------------------------
-check "cost within ceiling: allow, cost echoed unchanged" \
-  "$(run "$B" 'const d = C.decideDispatch("low", "high", true); process.stdout.write(d.action + "," + d.cost)')" \
+# --- decideDispatch: a declared cost is a CAPABILITY SET; the ceiling selects the highest member
+# it permits. A bare string is a one-member set (back-compat, not a special case). -------------
+
+# One-member set (bare string) -- behaves exactly like a single declared tier.
+check "one-member set within ceiling: allow, selected echoes the sole member" \
+  "$(run "$B" 'const d = C.decideDispatch("low", "high", true); process.stdout.write(d.action + "," + d.selected + "," + d.supported.join("|"))')" \
+  "allow,low,low"
+check "one-member set above ceiling, interactive: ask, no selected tier" \
+  "$(run "$B" 'const d = C.decideDispatch("high", "low", true); process.stdout.write(d.action + "," + ("selected" in d) + "," + d.message.includes("high"))')" \
+  "ask,false,true"
+check "one-member set above ceiling, non-interactive: refuse, no selected tier, reason recorded" \
+  "$(run "$B" 'const d = C.decideDispatch("high", "low", false); process.stdout.write(d.action + "," + ("selected" in d) + "," + (d.reason.length > 0))')" \
+  "refuse,false,true"
+
+# Two-member set -- selection across three ceilings: below both, between them, above both.
+check "two-member set [medium,high], ceiling low: no member fits -> ask names the cheapest" \
+  "$(run "$B" 'const d = C.decideDispatch(["medium","high"], "low", true); process.stdout.write(d.action + "," + d.supported.join("|") + "," + d.message.includes("medium"))')" \
+  "ask,medium|high,true"
+check "two-member set [medium,high], ceiling medium: selects medium (highest permitted), silently" \
+  "$(run "$B" 'const d = C.decideDispatch(["medium","high"], "medium", true); process.stdout.write(d.action + "," + d.selected)')" \
+  "allow,medium"
+check "two-member set [medium,high], ceiling high: selects high (highest permitted)" \
+  "$(run "$B" 'const d = C.decideDispatch(["medium","high"], "high", true); process.stdout.write(d.action + "," + d.selected)')" \
+  "allow,high"
+
+# Three-member set -- selection at each of the three ceilings, proving the richest permitted
+# member is always the one chosen, never a lower one left on the table.
+check "three-member set [low,medium,high], ceiling low: selects low" \
+  "$(run "$B" 'const d = C.decideDispatch(["low","medium","high"], "low", true); process.stdout.write(d.action + "," + d.selected)')" \
   "allow,low"
-check "over ceiling, interactive: ask, naming the cost, cost echoed unchanged" \
-  "$(run "$B" 'const d = C.decideDispatch("high", "low", true); process.stdout.write(d.action + "," + d.cost + "," + d.message.includes("high"))')" \
-  "ask,high,true"
-check "over ceiling, non-interactive: refuse, cost echoed unchanged, reason recorded" \
-  "$(run "$B" 'const d = C.decideDispatch("high", "low", false); process.stdout.write(d.action + "," + d.cost + "," + (d.reason.length > 0))')" \
-  "refuse,high,true"
-check "no branch ever substitutes a different cost: allow/ask/refuse all echo the input" \
-  "$(run "$B" 'const a = C.decideDispatch("medium", "medium", true).cost; const b = C.decideDispatch("high", "low", true).cost; const c = C.decideDispatch("high", "low", false).cost; process.stdout.write([a,b,c].join(","))')" \
-  "medium,high,high"
-check "the decision object is frozen -- a caller cannot rewrite the cost after the fact" \
-  "$(run "$B" 'const d = C.decideDispatch("high", "low", false); try { d.cost = "low"; } catch {} process.stdout.write(d.cost)')" \
+check "three-member set [low,medium,high], ceiling medium: selects medium, not low" \
+  "$(run "$B" 'const d = C.decideDispatch(["low","medium","high"], "medium", true); process.stdout.write(d.action + "," + d.selected)')" \
+  "allow,medium"
+check "three-member set [low,medium,high], ceiling high: selects high, not a lower member" \
+  "$(run "$B" 'const d = C.decideDispatch(["low","medium","high"], "high", true); process.stdout.write(d.action + "," + d.selected)')" \
+  "allow,high"
+
+# A unit declaring only a high tier has no lower mode: a medium ceiling cannot run it at all --
+# this is the "no member fits" branch, not a downgrade to a tier it never declared.
+check "single-high declaration under a medium ceiling: no member fits (not silently allowed lower)" \
+  "$(run "$B" 'const d = C.decideDispatch("high", "medium", true); process.stdout.write(d.action + "," + d.supported.join("|"))')" \
+  "ask,high"
+
+# The no-member-fits split: ask when interactive, refuse when not -- same set, same ceiling.
+check "no member fits, interactive -> ask" \
+  "$(run "$B" 'process.stdout.write(C.decideDispatch(["medium","high"], "low", true).action)')" \
+  "ask"
+check "no member fits, non-interactive -> refuse" \
+  "$(run "$B" 'process.stdout.write(C.decideDispatch(["medium","high"], "low", false).action)')" \
+  "refuse"
+
+# No code path ever yields a tier absent from the declared set: sweep every set against every
+# ceiling and confirm allow.selected (when present) is always a member of supported, and ask/refuse
+# never carry a selected tier at all.
+check "selected (when present) is always a member of the declared set, across every set x ceiling" \
+  "$(run "$B" 'const sets=[["low"],["medium"],["high"],["low","medium"],["medium","high"],["low","high"],["low","medium","high"]]; const ceilings=["low","medium","high"]; let bad=0; for (const s of sets) for (const c of ceilings) for (const interactive of [true,false]) { const d=C.decideDispatch(s,c,interactive); if (d.action==="allow" && !s.includes(d.selected)) bad++; if (d.action!=="allow" && "selected" in d) bad++; } process.stdout.write(String(bad))')" \
+  "0"
+
+check "the decision object is frozen -- a caller cannot rewrite the selection after the fact" \
+  "$(run "$B" 'const d = C.decideDispatch(["low","high"], "high", false); try { d.selected = "low"; } catch {} process.stdout.write(d.selected)')" \
   "high"
-check "the ask/refuse shapes carry no field a caller could read as a substitute cost" \
-  "$(run "$B" 'const ask = Object.keys(C.decideDispatch("high", "low", true)).sort().join("|"); const refuse = Object.keys(C.decideDispatch("high", "low", false)).sort().join("|"); process.stdout.write(ask + " / " + refuse)')" \
-  "action|ceiling|cost|message / action|ceiling|cost|reason"
+check "the supported array itself is frozen too, not just the decision object wrapping it" \
+  "$(run "$B" 'const d = C.decideDispatch(["low","high"], "high", true); const before = d.supported.length; try { d.supported.push("medium"); } catch {} process.stdout.write(String(d.supported.length === before))')" \
+  "true"
+check "the allow shape carries selected + supported; ask/refuse carry no selected field, but do carry proposed" \
+  "$(run "$B" 'const allow = Object.keys(C.decideDispatch(["low","high"], "high", true)).sort().join("|"); const ask = Object.keys(C.decideDispatch("high", "low", true)).sort().join("|"); const refuse = Object.keys(C.decideDispatch("high", "low", false)).sort().join("|"); process.stdout.write(allow + " / " + ask + " / " + refuse)')" \
+  "action|ceiling|selected|supported / action|ceiling|message|proposed|supported / action|ceiling|proposed|reason|supported"
+check "ask/refuse's proposed field is the cheapest declared member, above the ceiling by construction" \
+  "$(run "$B" 'const ask = C.decideDispatch(["medium","high"], "low", true); const refuse = C.decideDispatch(["medium","high"], "low", false); process.stdout.write(ask.proposed + "," + refuse.proposed)')" \
+  "medium,medium"
 expect_exit "an unrecognized cost value throws rather than silently allowing" 1 \
   "$B" 'C.decideDispatch("critical", "high", true)'
 expect_exit "an unrecognized ceiling value throws rather than silently allowing" 1 \
   "$B" 'C.decideDispatch("low", "critical", true)'
+expect_exit "an unordered declared set (high before medium) throws rather than being silently sorted" 1 \
+  "$B" 'C.decideDispatch(["high","medium"], "high", true)'
+expect_exit "a duplicate in the declared set throws" 1 \
+  "$B" 'C.decideDispatch(["medium","medium"], "high", true)'
+expect_exit "an empty declared set throws rather than resolving to no-capability-silently" 1 \
+  "$B" 'C.decideDispatch([], "high", true)'
 
 # --- modelForDispatch: the sanctioned composition, structurally unable to degrade ---------------
-check "modelForDispatch resolves the model for an allow decision" \
+check "modelForDispatch resolves the model for the SELECTED tier, not just any declared member" \
+  "$(run "$B" 'process.stdout.write(C.modelForDispatch(C.decideDispatch(["low","medium"],"medium",true), "claude-code"))')" \
+  "sonnet"
+check "modelForDispatch on a one-member set resolves that member's model" \
   "$(run "$B" 'process.stdout.write(C.modelForDispatch(C.decideDispatch("low","high",true), "claude-code"))')" \
   "haiku"
-expect_exit "modelForDispatch refuses an ask decision -- ceiling is never read as a substitute cost" 1 \
+expect_exit "modelForDispatch refuses an ask decision -- no field on it is read as a substitute selection" 1 \
   "$B" 'C.modelForDispatch(C.decideDispatch("high","low",true), "claude-code")'
 expect_exit "modelForDispatch refuses a refuse decision" 1 \
   "$B" 'C.modelForDispatch(C.decideDispatch("high","low",false), "claude-code")'

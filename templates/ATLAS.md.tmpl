@@ -6,7 +6,7 @@
 > refresh via `/atlas` before relying on it.
 
 The repo-level high-cost artifact: one deep read of the codebase, amortized across every
-subsequent work item. Design actions (`/design`, `/plan` cold starts, `/refactor` analysis,
+subsequent work item. Design actions (`/design`, `/plan` cold starts, `/refactor-design`,
 `/impact`) consume this **first** and deep-read only what has drifted since `<SHA>` — instead of
 re-reading the repo from scratch per work item.
 

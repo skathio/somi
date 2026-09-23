@@ -15,10 +15,16 @@ Write/Edit and is forbidden from using them.
 The user's target: **$ARGUMENTS** (a work-item slug, optionally `phase N, iteration M`, or a diff
 target such as a PR / commit range / working tree).
 
-The orchestrator (this command) runs at `cost: medium`; each lens it Tasks (`reviewer`,
-`security-reviewer`, `architecture-reviewer`, `test-strategist`) remains `cost: high`. The lenses
-are read-only **by contract, not by platform restriction** — they return findings; this command
-owns every write (the merged review file, `progress.md`, `diary.md`).
+The orchestrator (this command) runs at `cost: medium`. Each lens it Tasks resolves its model from
+its **own** declared set, not this command's: `reviewer`, `architecture-reviewer`, and
+`test-strategist` declare `cost: medium, high` (the ceiling picks the highest permitted member,
+typically `high` for the fresh-eyes depth a panel wants); `security-reviewer` declares `cost: high`
+alone — a missed vulnerability outweighs a lighter generalist pass, so it has no lower mode (see
+its own `> **Cost:**` callout). The lenses are read-only **by contract, not by platform
+restriction** — they return findings; this command owns every write (the merged review file,
+`progress.md`, `diary.md`). If any seated lens's declared set has no member at or below the session
+ceiling, that lens's refusal is not absorbed into the merged verdict — stop and surface it to the
+user rather than presenting a panel result one seat never actually filled.
 
 > **Why this exists.** A single reviewer carries one set of priorities at a time; running the
 > specialist lenses *in parallel* on one diff catches what a sequential, escalation-only pass misses

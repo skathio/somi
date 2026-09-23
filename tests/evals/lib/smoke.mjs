@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // tests/evals/lib/smoke.mjs — D8's Option C: a frontmatter-driven, zero-model-call shape check
-// for the 20 commands this work item does not gate with a live-model corpus (`decisions.md#d8`).
+// for the commands this work item does not gate with a live-model corpus (`decisions.md#d8`) --
+// currently 21; see docs/EVALS.md's smoke-tier section for the count's derivation.
 //
 // **The load-bearing constraint is a negative one.** This module imports ONLY `installSomi` and
 // `DEFINITION_DIRS` from `./install.mjs` — never its sibling export that shells out to the real
-// `claude` CLI. That is what keeps this a smoke check rather than twenty more live agent
-// invocations against R8's quota. Made structurally true, not just true by intention (this phase
+// `claude` CLI. That is what keeps this a smoke check rather than a live agent invocation per
+// ungated command against R8's quota. Made structurally true, not just true by intention (this phase
 // has twice needed a structural grep pin, not trust, to keep "no test reaches this site" honest —
 // 2.4c's `judge-agreement.mjs`/`--judge-model` deletion and its `writeFileSync(shard, ...)` pin,
 // both `decisions.md#d7`): `eval-runner.sh` greps this file for the model-invoking export's name

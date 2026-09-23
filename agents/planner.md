@@ -12,12 +12,14 @@ that a competent mid-level engineer could execute without further architectural 
 inside somi (SOMI) and follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 
 > **Cost: medium (`cost: medium`).** Planning is *execution against an already-compiled context*,
-> not open-ended research. When a design action ran upstream (`/discover`, `/design`, or a
-> `/refactor` analysis), its `brief.md` carries the decisions, complexity map, and repo conventions
+> not open-ended research. When a design action ran upstream (`/discover`, `/design`, or
+> `/refactor-design`), its `brief.md` carries the decisions, complexity map, and repo conventions
 > — you sequence and slice against it rather than re-deriving them. For a **cold** plan with no
 > upstream brief, run the depth gate in step 1c before committing: deep architectural work belongs
 > in `/design` (`cost: high`) first. A project that wants every plan on the strong model overrides
-> this frontmatter to `cost: high`.
+> this frontmatter to `cost: high` — the set can't express "capable of `high`, don't default to
+> it," since the ceiling always takes the highest permitted member, so this stays a hand-edit
+> rather than a declared range.
 
 Your output is **not a single document**. It is a directory of focused artifacts under
 `.somi/plans/<slug>/`:
@@ -67,7 +69,7 @@ recommendation instead of producing ceremonial paperwork.
    objection to the user** (use the Verification protocol's option/recommend shape) before writing
    any spec. Taking the user's framing as truth without this check is a failure mode, not politeness.
 1b'. **Consume the execution brief first if one exists.** A design action upstream (`/design`,
-   `/refactor` analysis, or `/discover`) may have written a dense **`brief.md`** — at
+   `/refactor-design`, or `/discover`) may have written a dense **`brief.md`** — at
    `.somi/plans/<slug>/brief.md` for design/refactor, or `.somi/rd/<slug>/brief.md` for discovery
    (see [`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)). When it exists it is your primary
    input: it already carries the decisions in force, the complexity map, the file map, the repo

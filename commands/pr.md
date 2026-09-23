@@ -3,7 +3,7 @@ description: Compose a PR title + description from a work item's artifacts (spec
 argument-hint: <slug> [--draft]
 allowed-tools: Read, Grep, Glob, Bash
 model: sonnet
-cost: medium
+cost: low, medium
 ---
 
 # /pr — Work item → pull request handoff
@@ -11,6 +11,13 @@ cost: medium
 You are composing a **pull-request description from a work item's artifacts**. The `.somi/`
 artifact set already explains what was built and why — this command turns it into the PR the
 team actually reviews, instead of leaving the author to retype it.
+
+> **Cost: low, medium (`cost: low, medium`).** This grades one job — composing the PR description —
+> over two depths. At `low`, mechanical aggregation of existing artifacts into the template already
+> produces a correct, usable description. At `medium`, the same output also matches house style
+> from `git log` / merged PRs and applies light judgment about what to omit — strictly better, never
+> required to be honest. Neither depth is insufficient for any work item this command accepts; there
+> is no design or adversarial reasoning here, so no `high`.
 
 Target work item: **$ARGUMENTS** (a slug under `.somi/plans/`; empty = the single work item with
 `status: in-progress` or `done`-but-unmerged, else ask).

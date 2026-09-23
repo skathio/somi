@@ -1,13 +1,16 @@
 # Workflows
 
-SoMi organises Claude's behavior into two **cost tiers**. A **`cost: high`** tier front-loads the
-expensive reasoning — research, design, decisions, complexity mapping, fresh-eyes review — into a
-dense, bounded **`brief.md`**. A **`cost: medium`** tier then executes against that brief *without
-re-researching*, so the high-volume work (plan detail, iterative coding) runs cheaply.
+SoMi organises Claude's behavior into three **cost tiers** (`low` / `medium` / `high`). A
+**`cost: high`** tier front-loads the expensive reasoning — research, design, decisions, complexity
+mapping, fresh-eyes review — into a dense, bounded **`brief.md`**. A **`cost: medium`** tier then
+executes against that brief *without re-researching*, so the high-volume work (plan detail,
+iterative coding) runs cheaply; a **`cost: low`** tier covers small, mechanical, near-deterministic
+work.
 
 - **High-cost front-loads:** `/discover` (a whole new product), `/design` (a brownfield
-  feature/story), and `/refactor` analysis (a large refactor) — each compiles a `brief.md`.
-  `/review` is the high-cost fresh-eyes judgment.
+  feature/story), and `/refactor-design` (a large refactor) — each compiles a `brief.md`.
+  `/review`'s `reviewer` declares `cost: medium, high` — the session ceiling picks the highest
+  permitted member, typically `high` for the fresh-eyes judgment this stage wants.
 - **Medium-cost execution:** `/plan` (+ `/plan-loop`) sequences the brief into phases; `/code`
   (+ `/code-loop`, `/code-parallel`) implements against it.
 
@@ -81,7 +84,7 @@ review output:
 │       └── diary.md                    ← discovery narrative
 ├── plans/
 │   └── <slug>/                         ← one directory per work item
-│       ├── brief.md                    ← design→execution handoff (from /design or /refactor analysis)
+│       ├── brief.md                    ← design→execution handoff (from /design or /refactor-design)
 │       ├── design.md                   ← feature design (from /design — direction + hard parts)
 │       ├── context.md                  ← background, surrounding code, constraints
 │       ├── spec.md                     ← purpose, requirements, decisions, user story, DoD
@@ -173,7 +176,7 @@ consumes `brief.md` as its primary input and sequences it at `cost: medium`. For
 design, review it at `cost: high` first via `/review design <slug>` (fresh context, bounded loop).
 
 > **When to use which front-load.** New product, open requirements → `/discover`. Feature/story on an
-> existing repo, design unsettled → `/design`. Large structural untangle → `/refactor` analysis.
+> existing repo, design unsettled → `/design`. Large structural untangle → `/refactor-design`.
 > Settled design, just sequence it → straight to `/plan`.
 
 ## Planning
@@ -385,7 +388,7 @@ end-to-end with zero human review. The cost switch is the gate; the caps (per-la
 The `brief.md` compresses a *work item*; **`.somi/atlas.md`** (built by
 [`/atlas`](../commands/atlas.md), `cost: high`) compresses the *repository*: module map, dependency
 rules, conventions digest, complexity hotspots, test topology — SHA-stamped. Every later
-`cost: high` action (`/design`, a cold `/plan`, `/refactor` analysis, `/impact`) starts from the
+`cost: high` action (`/design`, a cold `/plan`, `/refactor-design`, `/impact`) starts from the
 atlas, runs its staleness check (`git diff --stat <atlas-SHA>..HEAD`), and deep-reads **only the
 drift plus the paths the work touches** — instead of paying a full repo read per work item. On a
 repo with regular feature work this is the largest remaining high-cost lever, and it makes designs

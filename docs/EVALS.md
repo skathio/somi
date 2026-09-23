@@ -40,9 +40,9 @@ passes**. The unit of measurement is a *task-dimension* — task 01's S2, task 0
 | **S6** | Reasoning transparency | The tradeoff is stated, not implied |
 | **S7** | Over-production | Nothing is invented that the input did not supply |
 
-## Coverage across all 24 commands
+## Coverage across all 25 commands
 
-R4 sets three tiers: **gate a few, smoke the rest, structurally check all**. All 24 commands get
+R4 sets three tiers: **gate a few, smoke the rest, structurally check all**. All 25 commands get
 the third tier unconditionally — `scripts/validate.sh` checks frontmatter presence and resolves
 every relative markdown link, on every `npm test` run. What differs is what a command gets *above*
 that floor.
@@ -50,7 +50,7 @@ that floor.
 Three commands carry live-model corpus evidence: `/plan`, `/code`, and `/review` (the three task
 specs above). `/code-loop` carries a fourth, structurally different gate: its own convergence gate
 (a Mann-Whitney comparison of passes-to-approve, `decisions.md#d1`–`#d5`, unrelated to task
-criteria — see "The convergence gate" below) landed in phase 3. The other 20 get **smoke**:
+criteria — see "The convergence gate" below) landed in phase 3. The other 21 get **smoke**:
 `tests/evals/lib/smoke.mjs` installs the definition set for real and validates the *installed*
 frontmatter and that the installed tree carries every `DEFINITION_DIRS` entry — **not** every
 referenced path; that's `scripts/check-links.mjs`'s job (`decisions.md#d8`'s 2026-08-31 correction)
@@ -84,6 +84,7 @@ capability at all, not a smaller share of one (`decisions.md#d11`'s supersession
 | `/plan-loop` | smoke | frontmatter + install check |
 | `/pr` | smoke | frontmatter + install check |
 | `/refactor` | smoke | frontmatter + install check |
+| `/refactor-design` | smoke | frontmatter + install check |
 | `/release-readiness` | smoke | frontmatter + install check |
 | `/review-panel` | smoke | frontmatter + install check |
 | `/security-review` | smoke | frontmatter + install check |
@@ -123,11 +124,13 @@ same case**: `/ship-loop`'s gate is deferred *indefinitely* (D9 — no work item
 see `progress.md`'s "Deferred, not dropped"); `/code-loop`'s gate is this work item's own
 centrepiece, and it has landed.
 
-**The smoke tier covers 20 commands, not 21.** `/code-loop` moved OUT of it this pass, the mirror
-of how `/ship-loop` moved INTO it **at 2.5** (before which it had coverage in neither tier).
-`discoverUngatedCommands()` (`tests/evals/lib/smoke.mjs`) returns all 20 today;
+**The smoke tier covers 21 commands, not 20.** `/code-loop` moved OUT of it in 3.4 — the mirror of
+how `/ship-loop` moved INTO it **at 2.5** (before which it had coverage in neither tier) — which
+took the tier from 21 to 20. A new command, `/refactor-design`, then joined the smoke tier like any
+other un-gated command, with no gate or mechanism of its own, which took it back to 21.
+`discoverUngatedCommands()` (`tests/evals/lib/smoke.mjs`) returns all 21 today;
 `tests/scripts/eval-runner.sh` pins the count and, separately, the exact set of command names this
-table claims, so a 21st command reappearing here, or a renamed one, fails the suite rather than
+table claims, so a 22nd command reappearing here, or a renamed one, fails the suite rather than
 only looking wrong here.
 
 ## Run counts and thresholds

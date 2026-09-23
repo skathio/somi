@@ -15,8 +15,9 @@ The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, i
 This command automates the manual `/code` → `/review` → `/code` cycle for a single iteration,
 with **hard gates** that ensure it terminates. This is a **`cost: medium`** loop: the orchestrator
 and the `coder` it Tasks both run at `cost: medium` (executing against the work item's `brief.md` +
-plan), while the `reviewer` it Tasks stays at `cost: high` — review is the fresh-eyes high-cost
-judgment, run on a cold context so it isn't biased by the coder's reasoning.
+plan), while the `reviewer` it Tasks declares `cost: medium, high` — the session ceiling picks the
+highest permitted member, typically `high` for the fresh-eyes judgment this loop wants, run on a
+cold context so it isn't biased by the coder's reasoning.
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > `spec.md`, and the active `phases/<NN>-*.md` — in the **same order at the front** of each pass's

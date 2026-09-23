@@ -13,6 +13,13 @@ Most of this is **deterministic aggregation over artifacts that already exist** 
 spend goes to exactly one place: a fresh-eyes review of the *integration surface*, which
 per-iteration reviews structurally miss.
 
+> **Cost: medium (`cost: medium`) — no `low` member.** Stages 1→2→3 run sequentially, every
+> invocation — there's no branch that skips Stage 3, so the declared tier is what the **hardest**
+> stage needs. Stage 1's checklist is mechanical, but Stage 3's verdict language and release notes
+> need real synthesis; a `low` ceiling would provably run that at a tier this file calls
+> insufficient. The one expensive step (Stage 2) is a separately-declared `cost: medium, high`
+> agent Task (`reviewer`), resolved from its own declared set, not inherited from this command's.
+
 Scope: **$ARGUMENTS** (one or more work-item slugs, or a milestone description; empty = every
 work item in `.somi/plans/` not marked `done`+merged).
 
@@ -38,8 +45,9 @@ Any hard failure here (open Blocker, red tests, unexecutable rollback) → the v
 ## Stage 2 — High-cost integration review (the one expensive step)
 
 Per-iteration reviews saw each diff in isolation. Task the [`reviewer`](../agents/reviewer.md)
-(`cost: high`, fresh context) on the **cumulative release diff** (merge-base of the release scope vs.
-the default branch) with an explicit integration framing: interactions **between** the work
+(declares `cost: medium, high`; the session ceiling picks the highest permitted member — typically
+`high`, the fresh-context depth this stage wants) on the **cumulative release diff** (merge-base of
+the release scope vs. the default branch) with an explicit integration framing: interactions **between** the work
 items, contract mismatches across independently-reviewed changes, migration ordering across
 items, config/flag interactions, and observability of the release as a whole ("when this ships
 and something degrades, what tells us which work item did it?"). Skip only if the release is a

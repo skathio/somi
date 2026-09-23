@@ -1,5 +1,5 @@
 ---
-description: Continuous design→execution pipeline. Optionally front-loads a `cost: high` action (/discover|/design|/refactor analysis) to compile a brief, gates ONE human checkpoint at the design→execution switch, then runs /plan-loop → /code-loop to completion under bounded caps. Never fully gateless — a cold start gates after /plan-loop.
+description: Continuous design→execution pipeline. Optionally front-loads a `cost: high` action (/discover|/design|/refactor-design) to compile a brief, gates ONE human checkpoint at the design→execution switch, then runs /plan-loop → /code-loop to completion under bounded caps. Never fully gateless — a cold start gates after /plan-loop.
 argument-hint: <problem statement>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 model: sonnet
@@ -19,13 +19,15 @@ $ARGUMENTS
 
 This command is the **continuous, cost-switch-gated** pipeline of SoMi's design→execution economy.
 It optionally front-loads a **`cost: high`** action ([`/design`](./design.md) /
-[`/discover`](./discover.md) / [`/refactor`](./refactor.md) analysis) to compile a `brief.md`, then
-runs the **`cost: medium`** layer ([`/plan-loop`](./plan-loop.md) → [`/code-loop`](./code-loop.md))
-**continuously under bounded caps**. The single mandatory human checkpoint sits **at the
-design→execution switch** — you review the compiled brief, then the medium-cost loops run to
-completion without a per-iteration stop. The orchestrator runs at `cost: medium`, the high-cost
-agents it Tasks run at `cost: high`, the medium-cost agents (`planner`, `coder`) stay at
-`cost: medium`, and the `reviewer` stays at `cost: high` (fresh-eyes judgment).
+[`/discover`](./discover.md) / [`/refactor-design`](./refactor-design.md)) to compile a `brief.md`,
+then runs the **`cost: medium`** layer ([`/plan-loop`](./plan-loop.md) →
+[`/code-loop`](./code-loop.md)) **continuously under bounded caps**. The single mandatory human
+checkpoint sits **at the design→execution switch** — you review the compiled brief, then the
+medium-cost loops run to completion without a per-iteration stop. The orchestrator runs at
+`cost: medium`, the high-cost agents it Tasks run at `cost: high`, the medium-cost agents
+(`planner`, `coder`) stay at `cost: medium`, and the `reviewer` it Tasks declares
+`cost: medium, high` (the session ceiling picks the highest permitted member — typically `high`
+for the fresh-eyes judgment this pipeline wants).
 
 > **"Stop only at the layer switch."** The cost switch is the gate, and the bounded caps
 > (per-layer + global budget + cross-layer breaker) are the safety net for the continuous
@@ -62,7 +64,7 @@ contract, or the architecture is open) **and** no `brief.md` exists yet, run the
 
 - A **whole new product** → [`/discover`](./discover.md).
 - A **feature / user story** on an existing repo → [`/design`](./design.md).
-- A **large refactor** → [`/refactor`](./refactor.md) in analysis mode.
+- A **large refactor** → [`/refactor-design`](./refactor-design.md).
 
 These run at `cost: high` and write `brief.md` (plus their deep docs). If the work is small / the
 design is already clear / a `brief.md` already exists, **skip Stage 0** — go straight to Stage 1's

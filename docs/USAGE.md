@@ -297,7 +297,7 @@ loops. Global budget caps total passes. See [`commands/ship-loop.md`](../command
 
 Builds (or refreshes) the **Repo Atlas** at `.somi/atlas.md` — one `cost: high` deep read of the
 codebase (module map, dependency rules, conventions digest, hotspots, test topology),
-SHA-stamped. Later `cost: high` actions (`/design`, cold `/plan`, `/refactor` analysis, `/impact`)
+SHA-stamped. Later `cost: high` actions (`/design`, cold `/plan`, `/refactor-design`, `/impact`)
 start from it and deep-read only the drift since its SHA, instead of re-reading the repo per work
 item. Worth running once on any repo you'll do repeated SoMi work in; refresh after structural
 changes. Commit it.
@@ -374,13 +374,25 @@ mock policy, determinism.
 
 ### `/refactor`
 
-Surgical, behavior-preserving refactor of a named smell. Tests stay green; no feature work mixed
-in.
+Surgical, behavior-preserving refactor of a named smell that fits one safe diff. Tests stay green;
+no feature work mixed in.
 
 ```text
 /refactor OrderService mixes pricing logic and persistence. Split pricing into a pure module and
           keep persistence behind a repository interface. Files: src/order/service.ts,
           src/order/repo.ts.
+```
+
+### `/refactor-design`
+
+`cost: high` scope design for a refactor too big for one diff — spans many modules, needs a
+migration, or changes a shared shape. Names the destination shape, maps seams and risks
+(`file:line`), confirms test-coverage gaps, and compiles a `brief.md` that `/plan-loop` →
+`/code-loop` execute.
+
+```text
+/refactor-design The auth module mixes session/token/permission logic across 8 files with no
+                 shared abstraction — needs untangling before we can add SSO.
 ```
 
 ### `/review-panel`
@@ -572,40 +584,76 @@ optional; omit anything you don't want to change:
 
 Cost is declared with a `cost:` field in frontmatter, beside `model:` — every `agents/*.md` and
 `commands/*.md` file declares one, and `scripts/validate.sh` asserts presence and validity across
-all of them. **`cost:` states what that unit itself runs at — never what it Tasks.** A command
-Tasking a `cost: high` agent stays declared at its own tier (typically `medium`); the agent's own
-frontmatter is where `high` is truthfully declared, once. A command declares more than one value,
-comma-separated (`cost: medium, high`), only when that command's *own* orchestration genuinely runs
-at a different tier depending on which mode you invoke it in — for example, a hypothetical command
-whose default mode is a light orchestration pass but which itself runs the full high-cost analysis
-loop in an alternate mode, rather than merely Tasking a `high` agent while staying `medium` itself.
-No file in this repo needs the multi-value form today — `/refactor`'s two modes both Task the same
-`cost: high` `refactorer` agent, so `/refactor` itself declares `cost: medium` in both modes; the
-mode is an argument to the agent it Tasks, not a second tier the command's own orchestration runs
-at. The comma-separated mechanism stays supported (`scripts/validate.sh` still validates its
-ordering and rejects duplicates or malformed lists) for whenever a command genuinely earns it.
-Three tiers, in the same vocabulary Copilot's own model picker already uses:
+all of them. **`cost:` is a CAPABILITY SET, and the test is universal, not "usually": a unit
+declares a tier only if that tier is acceptable for *everything the unit accepts*.** The session
+ceiling that later picks among a unit's declared members is blind to which job is running, so a
+declared tier has to hold for every job, not just the common case. A single value (`cost: medium`)
+means the unit has exactly one accepted-everywhere tier; a comma-separated, strictly-ascending list
+(`cost: medium, high`) means *each* listed tier produces acceptable output for every job the unit
+accepts — not "this tier for the easy jobs, that tier for the hard ones." That reading (a range
+covering different jobs at different tiers) is exactly what the three shapes below rule out.
+**`cost:` never aggregates what a unit Tasks, and a spawned unit never inherits its caller's tier**
+— a command Tasking a `cost: high` agent stays declared at its own tier (typically `medium`); the
+agent's own frontmatter is where `high` is truthfully declared, once, and a `cost: high` agent
+Tasking a `cost: low, medium` helper does not pull that helper up to `high` either.
 
-- `low` — small, mechanical work.
-- `medium` — typical implementation and review work.
-- `high` — front-loaded reasoning: architecture, cross-cutting design, fresh-eyes review.
+**Three declared shapes, and they resolve differently:**
 
-A shipped mapping resolves `cost` and host to a concrete model at spawn time:
-[`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s `resolveModel(cost, host, mapping)`.
-`mapping` defaults to the shipped table; `.somi/config.json`'s `cost.mapping` overrides it —
-`mergeHostMapping(HOST_MODELS, config.cost.mapping)` builds the effective mapping to pass as
-`resolveModel`'s third argument, replacing a named host's whole tier map rather than merging it
-tier-by-tier. A host absent from the mapping gets no override — the caller omits the model argument
-and that host's own default applies. An unrecognized `cost` value, a mapped host missing the
-requested tier, or a mapping override shaped as anything but a plain object (including a `__proto__`
-key — `JSON.parse` can give one a genuine own property, unlike object-literal syntax) throws rather
-than silently resolving to the wrong model.
+1. **Graded over one job** — no modes; output degrades smoothly with less reasoning depth. Declares
+   its full set; the ceiling picking blindly is correct because neither member is *insufficient*,
+   only shallower. This is the common case (`agents/reviewer.md`'s `medium, high` below).
+2. **Alternative modes** — the unit actually does two different jobs with different requirements
+   (A *xor* B, not "A but sometimes shallower"). **Split into separate units** rather than declaring
+   a range: mode selection and tier selection would otherwise name the same decision on one file, and
+   a caller could pick the demanding mode under a ceiling that only cleared the easy one.
+   [`/refactor`](../commands/refactor.md) (`cost: medium`, surgical execution) and
+   [`/refactor-design`](../commands/refactor-design.md) (`cost: high`, scope design for a refactor too
+   big for one diff) are the shipped example — one file used to do both jobs at one declared tier
+   that was insufficient for one of them, which let a large refactor enter scope-design work under
+   a `medium` ceiling; now they're two single-purpose files at two single tiers.
+3. **Sequential stages** — every stage runs on every invocation; nothing branches around the
+   expensive one. Declares what its **most demanding stage** needs, not what the easy stages could
+   get away with — a lower member would be provably wrong the moment the hard stage runs.
+   [`/release-readiness`](../commands/release-readiness.md) is the example: Stage 1's checklist is
+   mechanical, but Stage 3's synthesis needs real reasoning, so the command declares `cost: medium`
+   (no `low` member) even though most of its own work is deterministic aggregation.
+
+**A real, shipped example**: `agents/reviewer.md` declares `cost: medium, high`. `high` is the
+adversarial, fresh-eyes pass the agent is written for — every category in its "What to look for"
+walked in full. `medium` still produces a genuinely useful lighter review under a capped session
+ceiling: read for intent, walk the diff, apply the same severity grading, just with less
+exploration depth. There is no `low` in its set — the whole job is catching what the author missed,
+which needs reasoning about the code at every tier the agent runs at, never mechanical extraction.
+The comma-separated mechanism is validated the same way regardless of how many files use it today
+(`scripts/validate.sh` checks ordering and rejects duplicates or malformed lists). Three tiers, in
+the same vocabulary Copilot's own model picker already uses:
+
+- `low` — small, mechanical, near-deterministic work: formatting, extraction, lookup, aggregation
+  over already-produced artifacts.
+- `medium` — structured execution against an already-compiled plan or brief: typical implementation
+  and a lighter review pass.
+- `high` — front-loaded or adversarial reasoning: architecture, cross-cutting design, fresh-eyes
+  review, open-ended research.
+
+A shipped mapping resolves a single, already-*selected* cost tier and a host to a concrete model at
+spawn time: [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s
+`resolveModel(cost, host, mapping)`. `mapping` defaults to the shipped table; `.somi/config.json`'s
+`cost.mapping` overrides it — `mergeHostMapping(HOST_MODELS, config.cost.mapping)` builds the
+effective mapping to pass as `resolveModel`'s third argument, replacing a named host's whole tier
+map rather than merging it tier-by-tier. A host absent from the mapping gets no override — the
+caller omits the model argument and that host's own default applies. An unrecognized `cost` value,
+a mapped host missing the requested tier, or a mapping override shaped as anything but a plain
+object (including a `__proto__` key — `JSON.parse` can give one a genuine own property, unlike
+object-literal syntax) throws rather than silently resolving to the wrong model.
 
 ### Session ceiling
 
-A session ceiling caps the `cost` tier a dispatch may cross without explicit sign-off:
-[`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root, arg)` and
-`decideDispatch(cost, ceiling, interactive)`. State lives at
+The library and the declarations below are in place; no dispatcher reads `cost:` against a ceiling
+yet, so this mechanism has no live callers today — that wiring is a later phase's work.
+
+A session ceiling caps which member of a unit's declared capability set a dispatch may use without
+explicit sign-off: [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s
+`resolveCeiling(root, arg)` and `decideDispatch(costs, ceiling, interactive)`. State lives at
 `.somi/somi-state/ceiling.json` — one file for the whole session, not per slug, since spend applies
 across whatever you're working on. Precedence for what can **move** a ceiling already in
 force: an explicit argument this call > `SOMI_COST_CEILING` this call > the ceiling already on
@@ -613,16 +661,34 @@ disk; `.somi/config.json`'s `cost.ceiling` is read only once, when no state file
 bare config edit after that never silently reopens the ceiling, mirroring `/code-loop`'s cap
 precedent. Every move is recorded in `ceiling_overrides` as `{field, from, to, source, at}`.
 
-Over-ceiling dispatch has exactly three outcomes, never a fourth: **allow** (within ceiling),
-**ask** (over ceiling, interactive — names the cost, waits for sign-off), or **refuse** (over
-ceiling, non-interactive). No outcome substitutes a cheaper model — `decideDispatch`'s result
-always echoes the requested `cost` back unchanged; there is no silent-degrade path to leave out.
-A malformed ceiling value — from config, the env var, or an explicit argument — throws rather than
-disabling the ceiling. `modelForDispatch(decision, host, mapping)` is the sanctioned way to turn a
-decision into a model: it refuses outright unless `decision.action` is `allow`, so a decision that
-was not allowed cannot yield a model through it. `ceiling` is present and strictly cheaper on the
-ask/refuse branches, so reading it instead of `cost` does downgrade — nothing yet detects that, and
-`modelForDispatch` is what keeps the sanctioned path honest, not the shape of the result.
+`decideDispatch` takes `costs` — a unit's declared set, as a single string or an ascending array —
+and has exactly three outcomes, never a fourth:
+
+- **allow** — some declared member sits at or below the ceiling. The result carries `selected`: the
+  **highest** such member, chosen silently, with no prompt. Running `agents/reviewer.md`'s
+  `medium, high` under a `medium` ceiling *allows at `medium`* — this is selection within declared
+  capability, not a downgrade, because the unit itself said `medium` was acceptable.
+- **ask** (interactive) / **refuse** (non-interactive) — *no* declared member fits the ceiling. The
+  result carries no `selected` tier, because none was chosen: a unit is never run at a tier absent
+  from its own declaration. A unit declaring only `high` simply has no lower mode — a `medium`
+  ceiling can't run it at all, and the outcome is ask/refuse, never a silent substitution of a tier
+  it never claimed to support.
+
+No outcome invents a tier from outside `supported` (the normalized declared set, present on every
+branch) — there is no lookup table, no "nearest allowed tier" pulled in from elsewhere. A malformed
+ceiling or an unrecognized/unordered/duplicated declared set — from config, the env var, an
+explicit argument, or the `costs` argument itself — throws rather than disabling the ceiling or
+coercing into something valid. `modelForDispatch(decision, host, mapping)` is the sanctioned way to
+turn a decision into a model: it resolves `decision.selected` and refuses outright unless
+`decision.action` is `allow`, so an ask/refuse decision — which carries no `selected` field at all —
+cannot yield a model through it.
+
+**A delegate's `refuse` aborts the parent flow.** When an orchestrating command's own dispatch is
+allowed but a lens/agent it Tasks (e.g. `security-reviewer`, `high`-only) has no member at or below
+the ceiling, the refusal is not absorbed into a partial result — the parent flow stops and surfaces
+the delegate's reason, the same as if the top-level dispatch itself had refused. Continuing without
+the lens and reporting success anyway is the muted-reviewer failure by another route: it would look
+identical to a clean pass to anyone who didn't know a consultant was silently skipped.
 
 ## Dependency additions
 

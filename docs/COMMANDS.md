@@ -22,7 +22,8 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 | [`/security-review`](../commands/security-review.md)     | Security QA         | `security-reviewer`                                                                       | `.somi/reviews/<slug>/<YYYY-MM-DD>-security-…md`                             |
 | [`/architecture-review`](../commands/architecture-review.md) | Architecture QA | `architecture-reviewer` (+ `security-reviewer` when relevant)                             | `.somi/reviews/<slug>/<YYYY-MM-DD>-arch-…md`                                 |
 | [`/test-strategy`](../commands/test-strategy.md)         | Test-strategy QA    | `test-strategist`                                                                         | `.somi/reviews/<slug>/<YYYY-MM-DD>-test-strategy-…md`                        |
-| [`/refactor`](../commands/refactor.md)                   | Refactoring         | `refactorer`                                                                              | diff (behavior-preserving)                                                   |
+| [`/refactor`](../commands/refactor.md)                   | Refactoring (`cost: medium`) | `refactorer`                                                                    | diff (behavior-preserving)                                                   |
+| [`/refactor-design`](../commands/refactor-design.md)     | Large-refactor scope design (`cost: high`) | `refactor-designer`                                                | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — feeds `/plan-loop` → `/code-loop` |
 | [`/impact`](../commands/impact.md)                       | Impact analysis     | (none — read-only tracing, atlas-first)                                                   | blast-radius report: callers, contracts, test gaps, warranted review lenses, proceed/design-first/reconsider recommendation |
 | [`/adopt`](../commands/adopt.md)                         | Onboarding          | `/atlas` flow (+ `test-strategist` for depth)                                             | atlas + confirmed `99-overrides.md` + adoption gap report + calibration recommendation |
 | [`/upgrade`](../commands/upgrade.md)                     | Dependency upgrade  | `discovery-analyst` (research) + `/code-loop` (migration)                                 | cited breaking-change mini-brief + migrated call sites + green suite         |
@@ -100,13 +101,16 @@ constrained by a **`## Write discipline` contract in their own prompt**, not by 
 produce the review file and append diary entries — they're not pure read-only at the command level
 even though the underlying review agents are contractually forbidden from writing.
 
-> **Three deliberate exceptions run at `cost: high` at the command layer too: `/discover`,
-> `/design`, and `/atlas`.** `/discover` and `/design`'s orchestration is judgment-heavy (framing
-> the work, reading the codebase, shaping crossroads) and their `brief.md` anchors the whole work
-> item, so they run on the most capable model end-to-end rather than splitting the orchestrator
-> and agent across tiers. `/atlas` has no paired agent — the command itself performs the deep repo
-> read that seeds `.somi/atlas.md` — so it is high-cost end-to-end by construction. All three are
-> the high-cost front-load of the design→execution economy — intentional, not an oversight.
+> **Five deliberate exceptions run at `cost: high` at the command layer too: `/discover`,
+> `/design`, `/atlas`, `/refactor-design`, and `/adopt`.** `/discover`, `/design`, and
+> `/refactor-design`'s orchestration is judgment-heavy (framing the work, reading the codebase,
+> shaping crossroads) and their `brief.md` anchors the whole work item, so they run on the most
+> capable model end-to-end rather than splitting the orchestrator and agent across tiers. `/atlas`
+> has no paired agent — the command itself performs the deep repo read that seeds
+> `.somi/atlas.md` — so it is high-cost end-to-end by construction. `/adopt` inlines that same
+> `/atlas` flow as its own Stage 1 rather than `Task`-ing it, so under D21's sequential-stages
+> shape it declares what its hardest stage needs. All five are the high-cost front-load of the
+> design→execution economy — intentional, not an oversight.
 
 ## How `$ARGUMENTS` works
 

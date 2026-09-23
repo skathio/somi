@@ -169,9 +169,9 @@ copilot plugin update
 
 ### Selecting an agent
 
-Copilot requires selecting one agent to drive the whole session. SoMi ships ten: nine
-phase-specific experts (see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which
-phase you're in, and one generic front door, **`somi`**. Select `somi` when you're not sure —
+Copilot requires selecting one agent to drive the whole session. SoMi ships phase-specific experts
+(see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which phase you're in, and one
+generic front door, **`somi`**. Select `somi` when you're not sure —
 it recognizes an explicit command and proxies it, passes `/somi` straight through, and
 classifies free-form requests into the matching flow, carrying it inline (adopt-inline — no
 sub-agent `Task`, per the parity caveat above). On Claude Code the direct commands already
@@ -198,6 +198,7 @@ select the right agent, so `somi` mainly matters here, on Copilot.
 | `@somi /architecture-review`  | `architecture-reviewer` (+ `security-reviewer` when relevant)                            |
 | `@somi /test-strategy`        | `test-strategist`                                                                        |
 | `@somi /refactor`             | `refactorer`                                                                             |
+| `@somi /refactor-design`      | `refactor-designer`                                                                      |
 | `@somi /impact`               | (none — read-only blast-radius analysis)                                                 |
 | `@somi /adopt`                | `/atlas` flow (+ `test-strategist` for depth)                                            |
 | `@somi /upgrade`              | `discovery-analyst` (research) + `/code-loop` (migration)                                |

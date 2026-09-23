@@ -2,8 +2,8 @@
 description: One-time SoMi onboarding for an existing codebase. Builds the Repo Atlas, confirms detected conventions into a pre-filled 99-overrides scaffold, produces a gap report (test thin ice, hotspots, candidate first refactors), and suggests a calibration work item.
 argument-hint: (no arguments — run once after installing SoMi in a repo)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
-cost: medium
+model: opus
+cost: high
 ---
 
 # /adopt — Onboard SoMi into an existing codebase
@@ -13,6 +13,13 @@ already *knows this repo* — its map, its conventions, its weak spots — and t
 concrete first exercise, instead of "read thirteen docs and type `/plan`".
 
 This is a composite of existing pieces, run in order, with the user confirming at each seam.
+
+> **Cost: high (`cost: high`) — no lower member.** Stages 1→4 run sequentially, every invocation,
+> so the declared tier is what the **hardest** stage needs. Stage 1 runs the atlas build inline, at
+> `cost: high` end-to-end — `/atlas` has no paired agent to `Task` at a separate tier, so there is
+> nothing to dispatch cheaper. A `medium` declaration here would run that stage at `medium`
+> regardless of ceiling, silently. Stages 2-4 are lighter, but the set declares what the hardest
+> stage needs, same reasoning as [`/release-readiness`](./release-readiness.md).
 
 ## Stage 1 — Build the Repo Atlas (`cost: high`, the expensive step)
 
@@ -48,7 +55,8 @@ From the atlas plus targeted checks, produce a short **gap report** (in-chat, pl
   territory — Task it if the picture needs depth).
 - **Hotspots** — atlas §5, ranked; for each, whether it blocks likely upcoming work.
 - **Candidate first refactors** — untangles that would make the next changes easy
-  ([`/refactor`](./refactor.md) analysis candidates), each with the smell named precisely.
+  ([`/refactor`](./refactor.md) for a contained smell, [`/refactor-design`](./refactor-design.md)
+  candidates for anything spanning modules), each with the smell named precisely.
 - **Guardrail fit** — anything in the repo the hooks would fight (e.g. a workflow that
   hand-edits a lockfile) → recommend the matching `.somi/config.json` policy
   (`dep_install.allow`, `lockfiles.allow_edit`) instead of per-session env vars.

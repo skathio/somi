@@ -8,6 +8,13 @@ cost: medium
 
 # /somi — Status dashboard & workflow router
 
+> **Cost: medium (`cost: medium`) — deliberately conservative.** Mode 1 (dashboard) *xor*
+> Mode 2 (router) are genuinely alternative modes, splittable in principle the same way `/refactor`
+> and `/refactor-design` were — but this front door is due for a broader rebuild, and splitting the
+> file twice (once now, once there) would be waste. Declared as a single `medium` for now. It never
+> adopts or runs anything itself (see Mode 2's "recommend, don't run" guardrail below), so it never
+> needs `high`.
+
 You are running SoMi's **front door**. Two modes, by argument:
 
 The user's input (may be empty):

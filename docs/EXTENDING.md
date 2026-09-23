@@ -52,8 +52,8 @@ multi-piece change:
 ---
 name: <name>
 description: When to invoke this agent (concrete trigger conditions, not topic). The model uses this to decide whether to call it.
-model: opus
-cost: high
+model: <the model scripts/lib/cost-model.mjs maps your cost set's top tier to for claude-code>
+cost: <every tier acceptable for every job this unit accepts>
 ---
 
 # <name>
@@ -65,17 +65,21 @@ quality bar, output shape, failure modes to avoid, escalation rules, examples.>
 Rules of thumb:
 
 - **`description`** is the single most important field. Get it right.
-- **`model` / `cost`** follow the [cost tiers](./AGENTS.md#cost-tiering): `cost: high` for
-  agents that front-load reasoning into a `brief.md` or do fresh-eyes review; `cost: medium` for
-  agents that execute against the brief. A new agent that compiles context is `cost: high`; one
-  that executes it is `cost: medium`. Keep `model:` beside it — set it to whichever concrete model
-  [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs) maps that `cost` value to for
-  `claude-code` today.
+- **`model` / `cost`** — `cost:` is a capability set: a unit declares a tier only if that tier is
+  acceptable for *everything the unit accepts*, never "this tier for the easy jobs, that tier for
+  the hard ones." See [docs/USAGE.md § Cost tiers and model
+  resolution](./USAGE.md#cost-tiers-and-model-resolution) for the three declared shapes (graded /
+  alternative-modes / sequential-stages) and a worked example — don't re-derive the rule here, a
+  restatement is exactly what went stale. Keep `model:` beside it — set it to whichever concrete
+  model [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs) maps that `cost` value's top
+  tier to for `claude-code` today.
 - Omit `tools:` — SoMi's agents are trusted with full tool access by design; review-type agents are
   constrained by a **write-discipline contract in their own prompt**, not by platform restriction.
   This is a deliberate simplicity choice, **not** a compatibility requirement: both hosts support the
   field. If you add a review-type agent, give it the same `## Write discipline` section the existing
   four carry — the docs claim every review lens has one, and that claim must stay true.
+- **Add a `### <name>` section to [`docs/AGENTS.md`](./AGENTS.md).** `scripts/validate.sh` fails
+  the build otherwise (`AGENT NOT INDEXED`).
 
 ## Adding a skill
 
@@ -107,8 +111,8 @@ or examples, anti-patterns, when *not* to apply, when to escalate. See existing 
 description: One-liner for / autocomplete.
 argument-hint: <how to phrase arguments>
 allowed-tools: Task, Read, ...
-model: opus
-cost: high
+model: <the model scripts/lib/cost-model.mjs maps your cost set's top tier to for claude-code>
+cost: <every tier acceptable for every job this unit accepts>
 ---
 
 # /<name> — Title
@@ -117,7 +121,9 @@ cost: high
 invoke agents via Task, write artifact, summarise.)
 ```
 
-Keep commands thin; agents do the heavy lifting.
+Keep commands thin; agents do the heavy lifting. Add a catalogue-table row linking
+`../commands/<name>.md` to [`docs/COMMANDS.md`](./COMMANDS.md) — `scripts/validate.sh` fails the
+build otherwise (`COMMAND NOT INDEXED`).
 
 ## Adding a hook
 

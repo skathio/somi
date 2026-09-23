@@ -16,7 +16,8 @@ The user's target: **$ARGUMENTS** (a work-item slug, optionally a specific `phas
 
 This is a **`cost: medium`** fan-out: the orchestrator (this command) runs at `cost: medium`, and
 each `/code-loop` it Tasks runs its `coder` at `cost: medium` (executing against the work item's
-`brief.md` + plan) and its `reviewer` at `cost: high` (fresh-eyes high-cost judgment).
+`brief.md` + plan) and its `reviewer` at whatever `medium, high` member the session ceiling permits
+(typically `high`, fresh-eyes judgment).
 
 > **Why this exists, and why it's conservative.** Smaller diffs from focused agents are higher
 > quality — *if* they don't collide. Letting several coders edit the same tree at once produces merge

@@ -20,13 +20,14 @@ $ARGUMENTS
 
 This is the **careful, gated-at-every-stage** entrypoint. The orchestrator runs at `cost: medium`;
 the `cost: medium` agents it Tasks (`planner`, `coder`) also run at `cost: medium`, and the
-`reviewer` stays at `cost: high` (fresh-eyes judgment).
+`reviewer` it Tasks declares `cost: medium, high` — the session ceiling picks the highest
+permitted member, typically `high` for the fresh-eyes judgment this stage wants.
 
 > **Design-heavy work? Front-load a design action first.** `/ship` starts at the `cost: medium`
 > `/plan` stage. If the work is design-heavy and has no `brief.md` yet (it crosses modules, touches
 > auth/crypto/PII, needs a migration or a new contract, or the architecture is open), run a
 > **`cost: high`** action first — [`/design`](./design.md) (feature), [`/discover`](./discover.md)
-> (new product), or [`/refactor`](./refactor.md) analysis (large refactor) — review its `brief.md`,
+> (new product), or [`/refactor-design`](./refactor-design.md) (large refactor) — review its `brief.md`,
 > then `/ship` (or `/plan`) consumes it and runs the cheaper pipeline. For the **continuous**
 > version that gates once at the design→execution switch and then runs the execution loops under
 > caps, use [`/ship-loop`](./ship-loop.md).

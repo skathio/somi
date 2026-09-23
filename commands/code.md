@@ -8,9 +8,14 @@ cost: medium
 
 # /code — Coding workflow
 
-You are running the **coding workflow** of somi at **`cost: medium`**. The orchestrator and the
-`coder` it Tasks both run at `cost: medium`: coding executes against an already-compiled plan and
-`brief.md`, not from scratch. The expensive reasoning (architecture, decisions, complexity, repo
+You are running the **coding workflow** of somi at **`cost: medium`** — no `low` member. This
+orchestrator's own job is uniform regardless of which branch step 1 takes, but the `coder` it Tasks
+has no path today that can honestly deliver a full plan iteration below `medium` (see its own
+callout) — declaring `low` here would let a `low` ceiling select this command for that case too,
+since the ceiling can't see which branch a run will take before dispatching it. A future
+lighter-weight path for trivial changes would need a separate, single-purpose unit built for it,
+not a second member added here — a caller-picked branch and a ceiling-picked tier can't safely
+name the same choice on one file. The expensive reasoning (architecture, decisions, complexity, repo
 conventions) was front-loaded by a design action upstream and lives in the work item — implement
 against it.
 

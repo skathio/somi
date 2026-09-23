@@ -140,44 +140,94 @@ export function resolveCeiling(root, explicitArg) {
   return { ceiling: state.ceiling, overridden: true, override };
 }
 
-/**
- * Decides what a dispatch declaring `cost` may do against `ceiling`. Exactly three outcomes exist
- * (ACTIONS) and none of them carries a substitute cost: `cost` in the return value is always the
- * same value passed in, on every branch — there is no lookup table, no "nearest allowed tier".
- * `ceiling` IS present on the ask/refuse branches, and is a valid, strictly cheaper tier —
- * modelForDispatch() below, not this function's shape alone, is what keeps that from being read
- * as a substitute. The result is frozen so a caller can't rewrite it into something that would.
- */
-export function decideDispatch(cost, ceiling, interactive) {
-  if (!VALID_COSTS.includes(cost)) {
-    throw new Error(`cost-ceiling: unrecognized cost "${cost}" (expected one of ${VALID_COSTS.join('|')})`);
+// A declared `cost` is a CAPABILITY SET, not a single value -- every tier the unit can usefully
+// run at (a frontmatter `cost: medium, high` split on comma). Accepts a bare string too, as a
+// one-member set, so a single-tier unit's declaration needs no special-casing at the call site.
+// Always returns a frozen array in ascending order -- the same shape validate.sh already enforces
+// on a frontmatter declaration, re-checked here rather than trusted: this is a library over
+// explicit inputs, and a malformed set must die loudly rather than be silently coerced into
+// something valid -- the same discipline validateCeiling() above applies to the ceiling value.
+function normalizeCostSet(costs, label) {
+  const arr = Array.isArray(costs) ? costs : [costs];
+  if (arr.length === 0) {
+    throw new Error(`cost-ceiling: ${label} must declare at least one cost value`);
   }
+  let prevRank = -1;
+  for (const c of arr) {
+    if (!VALID_COSTS.includes(c)) {
+      throw new Error(`cost-ceiling: ${label} has an unrecognized value "${c}" (expected one of ${VALID_COSTS.join('|')})`);
+    }
+    const rank = ORDER[c];
+    if (rank <= prevRank) {
+      throw new Error(`cost-ceiling: ${label} must be strictly ascending with no duplicates, got "${arr.join(',')}"`);
+    }
+    prevRank = rank;
+  }
+  return Object.freeze([...arr]);
+}
+
+/**
+ * Decides what a dispatch declaring `costs` (its full capability set) may do against `ceiling`.
+ * `costs` is a single cost string or an ascending, duplicate-free array/list of them. Exactly three
+ * outcomes exist (ACTIONS):
+ *
+ *  - some declared member sits at or below the ceiling -> "allow", carrying the HIGHEST such
+ *    member as `selected`. The ceiling silently picks the richest permitted tier -- this is
+ *    selection within declared capability, not a downgrade, so it never prompts.
+ *  - no declared member fits -> "ask" (interactive) or "refuse" (non-interactive). Neither branch
+ *    carries a `selected` tier, because none was chosen: the unit never runs at a tier absent from
+ *    its own declaration, so there is nothing to substitute.
+ *
+ * `supported` on every branch always echoes exactly the normalized declared set -- there is no
+ * lookup table, no "nearest allowed tier" pulled from outside what the unit itself declared. The
+ * result is frozen so a caller can't rewrite it into something that would look like one.
+ */
+export function decideDispatch(costs, ceiling, interactive) {
+  const supported = normalizeCostSet(costs, 'declared cost');
   if (!VALID_COSTS.includes(ceiling)) {
     throw new Error(`cost-ceiling: unrecognized ceiling "${ceiling}" (expected one of ${VALID_COSTS.join('|')})`);
   }
-  if (ORDER[cost] <= ORDER[ceiling]) {
-    return Object.freeze({ action: 'allow', cost, ceiling });
+  // `ORDER[c] > ORDER[selected]` is redundant given `supported`'s strictly-ascending invariant
+  // (normalizeCostSet enforces it) -- each later `c` in the loop is already the higher one. Left
+  // in as a documented guard, not a bug: it makes "take the highest permitted member" true by
+  // construction even if that invariant were ever relaxed, rather than by iteration order alone.
+  let selected = null;
+  for (const c of supported) {
+    if (ORDER[c] <= ORDER[ceiling] && (selected === null || ORDER[c] > ORDER[selected])) {
+      selected = c;
+    }
   }
+  if (selected !== null) {
+    return Object.freeze({ action: 'allow', selected, supported, ceiling });
+  }
+  // The cheapest declared member is above the ceiling by construction (nothing in `supported`
+  // fit, or `selected` would be non-null above) -- exactly the tier a "yes" to `ask` would need
+  // to run at. Exposed as `proposed` on both branches, not just interpolated into prose, so a
+  // caller acting on approval doesn't have to parse `message`/`reason` back out of English.
+  const cheapest = supported[0];
   if (interactive) {
     return Object.freeze({
       action: 'ask',
-      cost,
+      supported,
       ceiling,
-      message: `declared cost "${cost}" is above the session ceiling "${ceiling}" — proceed at "${cost}"?`,
+      proposed: cheapest,
+      message: `declared cost set [${supported.join(', ')}] has no member at or below the session ceiling "${ceiling}" — proceed at "${cheapest}" (its cheapest supported tier)?`,
     });
   }
   return Object.freeze({
     action: 'refuse',
-    cost,
+    supported,
     ceiling,
-    reason: `declared cost "${cost}" exceeds the session ceiling "${ceiling}" and this dispatch is non-interactive`,
+    proposed: cheapest,
+    reason: `declared cost set [${supported.join(', ')}] has no member at or below the session ceiling "${ceiling}" and this dispatch is non-interactive`,
   });
 }
 
 /**
  * The only sanctioned way to turn a decideDispatch() result into a model: refuses outright unless
- * the decision is "allow", so a caller can never pass `ceiling` -- a valid, strictly cheaper tier
- * on the ask/refuse branches -- to resolveModel() as if it were the cost to dispatch at.
+ * the decision is "allow", so a caller can never pass `supported` or `ceiling` -- present on the
+ * ask/refuse branches, and never a tier that was actually chosen -- to resolveModel() as if a
+ * selection had been made.
  */
 export function modelForDispatch(decision, host, mapping) {
   if (!decision || decision.action !== 'allow') {
@@ -185,5 +235,5 @@ export function modelForDispatch(decision, host, mapping) {
       `cost-ceiling: modelForDispatch requires an "allow" decision (one of ${ACTIONS.join('|')}), got "${decision?.action}"`
     );
   }
-  return resolveModel(decision.cost, host, mapping);
+  return resolveModel(decision.selected, host, mapping);
 }
