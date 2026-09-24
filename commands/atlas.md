@@ -3,14 +3,15 @@ description: Build or refresh the Repo Atlas (.somi/atlas.md) — one `cost: hig
 argument-hint: [nothing — build or refresh] | refresh
 allowed-tools: Task, Read, Bash
 model: opus
-cost: high
 ---
 
-# /atlas — Build or refresh the Repo Atlas (`cost: high`)
+# /atlas — Build or refresh the Repo Atlas
 
 You are running the **repo cartography** workflow of somi: one deep read of this codebase, so
 every later design action starts from a map plus the drift since its SHA instead of re-reading
-the whole repo per work item.
+the whole repo per work item. This command has no `cost:` of its own — its `model:` is a
+separate, host-level selection — and Tasks the [`atlas`](../agents/atlas.md) agent for its entire job, which declares
+`cost: high` with no lower member.
 
 ## What to do
 

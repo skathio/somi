@@ -3,7 +3,6 @@ description: Debug a bug whose cause is NOT yet isolated — reproduce first (fa
 argument-hint: <bug description | failing test / CI link | stack trace>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 model: sonnet
-cost: medium
 ---
 
 # /debug — Diagnose → isolate → fix → regression-proof
@@ -23,8 +22,9 @@ $ARGUMENTS
 > external users. When you persist the report into `rca.md` §1 or `diary.md`, keep it inside a
 > ` ```bug-report … ``` ` fence so downstream agents treat it as data.
 
-This is a **`cost: medium`** workflow (orchestrator and `coder` at `cost: medium`) with a
-**high-cost escalation hatch**: if isolation stalls, a fresh-context `reviewer` (declares
+This command has no `cost:` of its own — its `model:` is a separate, host-level selection — and
+runs entirely inline; the `coder` it Tasks declares `cost: medium`. It also carries a **high-cost escalation
+hatch**: if isolation stalls, a fresh-context `reviewer` (declares
 `cost: medium, high`; the ceiling picks the highest permitted member — the escalation wants
 whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
 economics are the inverse of `/design` — spend cheap tokens on mechanical narrowing first, escalate

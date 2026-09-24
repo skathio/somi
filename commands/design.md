@@ -1,23 +1,25 @@
 ---
-description: `cost: high` feature / user-story design on an existing codebase. Reads the repo deeply, resolves the expensive-to-reverse decisions with you, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching. Sits between /discover (whole product) and /plan (sequencing).
+description: Feature / user-story design on an existing codebase — a `cost: high` pass that reads the repo deeply, resolves the expensive-to-reverse decisions with you, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching. Sits between /discover (whole product) and /plan (sequencing).
 argument-hint: <feature or user story to design>
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebSearch, WebFetch, Bash
 model: opus
-cost: high
 ---
 
-# /design — Feature / user-story design (`cost: high`)
+# /design — Feature / user-story design
 
 You are running the **design workflow** of somi — the front-loaded, expensive-reasoning step that
 turns a feature or user story into a settled architecture against the **existing codebase**, then
 compiles it into a dense [`brief.md`](../templates/BRIEF.md.tmpl) the cheaper (`cost: medium`) tier
 executes against **without re-researching**. All artifacts live under `.somi/plans/<slug>/`.
 
-> **Runs on the most capable model end-to-end.** Like [`/discover`](./discover.md), `/design` runs
-> at `cost: high` at the command layer too — framing the feature, reading the codebase, and shaping
-> crossroads is judgment-heavy, and its `brief.md` anchors everything execution does. This is the
-> high-cost layer of SoMi's design→execution economy; the cost is justified because it lets plan and
-> code run at `cost: medium`. See [`docs/COMMANDS.md`](../docs/COMMANDS.md).
+> **Runs on the most capable model end-to-end.** This command has no `cost:` of its own — its
+> `model:` is a separate, host-level selection — and Tasks the [`designer`](../agents/designer.md)
+> agent for its entire job — the work is judgment-heavy (framing the feature, reading the
+> codebase, shaping crossroads), and its `brief.md` anchors everything execution does, so the
+> designer declares `cost: high` with no lower member. This is the high-cost layer of SoMi's
+> design→execution economy; the cost is
+> justified because it lets plan and code run at `cost: medium`. See
+> [`docs/COMMANDS.md`](../docs/COMMANDS.md).
 
 > **/design vs /discover vs /plan.** [`/discover`](./discover.md) is for a **whole new product** —
 > a full competitive landscape plus requirements. `/design` is for a **feature/story on an existing

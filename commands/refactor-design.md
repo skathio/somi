@@ -1,12 +1,11 @@
 ---
-description: "`cost: high` scope design for a refactor too big for one diff: names the destination shape, maps seams and risks across modules, confirms test-coverage gaps, and compiles a brief.md that /plan-loop → /code-loop execute. Split from /refactor because mode selection and tier selection are different decisions."
+description: "Scope design for a refactor too big for one diff, done as a `cost: high` pass: names the destination shape, maps seams and risks across modules, confirms test-coverage gaps, and compiles a brief.md that /plan-loop → /code-loop execute. Split from /refactor because mode selection and tier selection are different decisions."
 argument-hint: <refactor target too large for one safe diff>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
 model: opus
-cost: high
 ---
 
-# /refactor-design — Large-refactor scope design (`cost: high`)
+# /refactor-design — Large-refactor scope design
 
 You are running the **refactor-designer** workflow of somi — the front-loaded, expensive-reasoning
 step for a refactor too big for one safe diff: it spans many modules, needs a migration, or changes
@@ -14,13 +13,16 @@ a shared shape. Rather than editing, this command **designs the refactor scope**
 into a [`brief.md`](../templates/BRIEF.md.tmpl) that the cheaper tier executes via
 [`/plan-loop`](./plan-loop.md) → [`/code-loop`](./code-loop.md).
 
-> **Runs on the most capable model end-to-end**, like [`/design`](./design.md). Split out from
-> [`/refactor`](./refactor.md) because mode selection (surgical vs. scope design) and tier
-> selection (`medium` vs. `high`) are two different decisions — one unit naming both let a
-> declared tier become a claim its own procedure could contradict (a large refactor under a
-> `medium` ceiling would have entered scope-design work at a tier its own text called
-> insufficient). [`/refactor`](./refactor.md) stays the default for a small, named smell that fits
-> one safe diff; use this command when the destination needs more than one reviewable diff.
+> **Runs on the most capable model end-to-end**, like [`/design`](./design.md). This command has
+> no `cost:` of its own — its `model:` is a separate, host-level selection — and Tasks the
+> [`refactor-designer`](../agents/refactor-designer.md) agent for its entire job, which declares
+> `cost: high` with no lower member. Split out from [`/refactor`](./refactor.md) because mode
+> selection (surgical vs. scope design) and tier selection (`medium` vs. `high`) are two different
+> decisions — one unit naming both let a declared tier become a claim its own procedure could
+> contradict (a large refactor under a `medium` ceiling would have entered scope-design work at a
+> tier its own text called insufficient). [`/refactor`](./refactor.md) stays the default for a
+> small, named smell that fits one safe diff; use this command when the destination needs more
+> than one reviewable diff.
 
 The user's refactor target: **$ARGUMENTS**
 

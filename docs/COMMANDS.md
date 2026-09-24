@@ -8,10 +8,10 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 
 | Command                                                  | Workflow            | Agent(s) invoked                                                                          | Output                                                                       |
 |----------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev, `cost: high`) | `discovery-analyst`                                                                  | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README, **brief**) |
-| [`/design`](../commands/design.md)                       | Feature design (`cost: high`) | `designer`                                                                               | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — the design→execution handoff for a brownfield feature |
-| [`/atlas`](../commands/atlas.md)                         | Repo cartography (`cost: high`) | `atlas`                                                                                    | `.somi/atlas.md` — SHA-stamped repo map (modules, dependency rules, conventions, hotspots, test topology) that later design actions consume instead of re-reading the repo |
-| [`/plan`](../commands/plan.md)                           | Planning (`cost: medium`)      | `planner`                                                                                 | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
+| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev) | `discovery-analyst` (`cost: high`)                                                                  | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README, **brief**) |
+| [`/design`](../commands/design.md)                       | Feature design | `designer` (`cost: high`)                                                                               | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — the design→execution handoff for a brownfield feature |
+| [`/atlas`](../commands/atlas.md)                         | Repo cartography | `atlas` (`cost: high`)                                                                                    | `.somi/atlas.md` — SHA-stamped repo map (modules, dependency rules, conventions, hotspots, test topology) that later design actions consume instead of re-reading the repo |
+| [`/plan`](../commands/plan.md)                           | Planning      | `planner` (`cost: medium`)                                                                                 | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
 | [`/plan-loop`](../commands/plan-loop.md)                 | Bounded planning    | `planner` + `reviewer`                                                                    | `.somi/plans/<slug>/` + plan reviews under `.somi/reviews/<slug>/`           |
 | [`/code`](../commands/code.md)                           | Coding              | `coder`                                                                                   | diff + tests; updates `progress.md` + `diary.md`                             |
 | [`/debug`](../commands/debug.md)                         | Debugging           | `coder` (+ `reviewer` as high-cost diagnosis hatch, `test-strategist` on test-shape gaps)       | `.somi/plans/<slug>/rca.md` (root-cause record) + repro test + fix diff (via `/code-loop`) |
@@ -22,8 +22,8 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 | [`/security-review`](../commands/security-review.md)     | Security QA         | `security-reviewer`                                                                       | `.somi/reviews/<slug>/<YYYY-MM-DD>-security-…md`                             |
 | [`/architecture-review`](../commands/architecture-review.md) | Architecture QA | `architecture-reviewer` (+ `security-reviewer` when relevant)                             | `.somi/reviews/<slug>/<YYYY-MM-DD>-arch-…md`                                 |
 | [`/test-strategy`](../commands/test-strategy.md)         | Test-strategy QA    | `test-strategist`                                                                         | `.somi/reviews/<slug>/<YYYY-MM-DD>-test-strategy-…md`                        |
-| [`/refactor`](../commands/refactor.md)                   | Refactoring (`cost: medium`) | `refactorer`                                                                    | diff (behavior-preserving)                                                   |
-| [`/refactor-design`](../commands/refactor-design.md)     | Large-refactor scope design (`cost: high`) | `refactor-designer`                                                | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — feeds `/plan-loop` → `/code-loop` |
+| [`/refactor`](../commands/refactor.md)                   | Refactoring | `refactorer` (`cost: medium`)                                                                    | diff (behavior-preserving)                                                   |
+| [`/refactor-design`](../commands/refactor-design.md)     | Large-refactor scope design | `refactor-designer` (`cost: high`)                                                | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — feeds `/plan-loop` → `/code-loop` |
 | [`/impact`](../commands/impact.md)                       | Impact analysis     | `impact` (read-only tracing, atlas-first)                                                 | blast-radius report: callers, contracts, test gaps, warranted review lenses, proceed/design-first/reconsider recommendation |
 | [`/adopt`](../commands/adopt.md)                         | Onboarding          | `atlas` (+ `test-strategist` for depth)                                                   | atlas + confirmed `99-overrides.md` + adoption gap report + calibration recommendation |
 | [`/upgrade`](../commands/upgrade.md)                     | Dependency upgrade  | `discovery-analyst` (research) + `/code-loop` (migration)                                 | cited breaking-change mini-brief + migrated call sites + green suite         |
@@ -51,7 +51,6 @@ description: Short one-liner shown in / autocomplete.
 argument-hint: <how to phrase arguments>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 model: sonnet
-cost: medium
 ---
 
 # /command-name — Title
@@ -80,11 +79,12 @@ The heavy lifting lives in **agents**. Commands are deliberately small because:
   understand what the planner workflow does.
 - They isolate orchestration from agent-internal behavior; you can swap an agent's prompt without
   touching the command.
-- They run at `cost: medium` (cheaper) while Tasking the tier-appropriate agent — **`cost: high`**
-  agents (design, discovery, review) for front-loaded reasoning, **`cost: medium`** agents
-  (planner, coder) for execution against the brief. A single-cost orchestrator Tasking a
-  differently-costed subagent is the cache-correct way to mix tiers. See
-  [Cost tiering](./AGENTS.md#cost-tiering).
+- They carry no `cost:` of their own — `cost:` sizes an agent instance being spawned, and a
+  command's own `model:` is a separate, host-level selection that `cost:` doesn't touch — and
+  simply Task the tier-appropriate agent: **`cost: high`** agents (design,
+  discovery, review) for front-loaded reasoning, **`cost: medium`** agents (planner, coder) for
+  execution against the brief. Tasking a differently-costed subagent from an uncosted orchestrator
+  is the cache-correct way to mix tiers. See [Cost tiering](./AGENTS.md#cost-tiering).
 
 ## Default model & tool grants
 
@@ -94,24 +94,23 @@ agent declares a `tools:` field, so every agent inherits full tool access. Revie
 constrained by a **`## Write discipline` contract in their own prompt**, not by platform restriction; see
 [`docs/AGENTS.md`](./AGENTS.md) for why that trade was made.
 
-**Orchestration commands run at `cost: medium`**; the agent they Task runs on its **cost tier** —
-`cost: high` for high-cost agents (design, discovery, review), `cost: medium` for medium-cost agents
-(planner, coder). See [Cost tiering](./AGENTS.md#cost-tiering). Review commands (`/review`,
-`/security-review`, `/architecture-review`, `/test-strategy`) still need `Write` and `Edit` to
-produce the review file and append diary entries — they're not pure read-only at the command level
-even though the underlying review agents are contractually forbidden from writing.
+**Commands declare no `cost:` of their own** — `scripts/validate.sh` fails the build if one
+does. The agent a command Tasks runs on its own **cost tier** — `cost: high` for high-cost agents
+(design, discovery, review), `cost: medium` for medium-cost agents (planner, coder). See
+[Cost tiering](./AGENTS.md#cost-tiering). Review commands (`/review`, `/security-review`,
+`/architecture-review`, `/test-strategy`) still need `Write` and `Edit` to produce the review file
+and append diary entries — they're not pure read-only at the command level even though the
+underlying review agents are contractually forbidden from writing.
 
-> **Five deliberate exceptions run at `cost: high` at the command layer too: `/discover`,
-> `/design`, `/atlas`, `/refactor-design`, and `/adopt`.** `/discover`, `/design`, and
-> `/refactor-design`'s orchestration is judgment-heavy (framing the work, reading the codebase,
-> shaping crossroads) and their `brief.md` anchors the whole work item, so they run on the most
-> capable model end-to-end rather than splitting the orchestrator and agent across tiers. `/atlas`
-> Tasks the `atlas` agent for its one deep read but still declares `cost: high` itself: the read is
-> the whole job, so there's no lighter mode for this command to grade down to. `/adopt` Tasks that
-> same `atlas` agent as its Stage 1 rather than reading the repo itself, and keeps `cost: high`
-> because Stages 1→4 run sequentially every invocation and the declared tier states what the
-> hardest stage needs. All five are the high-cost front-load of the design→execution economy —
-> intentional, not an oversight.
+> **Four commands Task a `cost: high` agent for their entire job: `/discover`, `/design`,
+> `/refactor-design`, and `/atlas`.** `/discover`, `/design`, and `/refactor-design`'s orchestration
+> is judgment-heavy (framing the work, reading the codebase, shaping crossroads) and their
+> `brief.md` anchors the whole work item, so nothing about their own inline work needs a lower
+> tier. `/atlas` Tasks the `atlas` agent for its one deep read: the read is the whole job, so
+> there's nothing left for the command to do at a different tier. `/adopt` Tasks that same `atlas`
+> agent as its Stage 1 rather than reading the repo itself. All four feed the high-cost front-load
+> of the design→execution economy — intentional, not an oversight, and each declaration lives on
+> the agent Tasked, never on the command doing the Tasking.
 
 ## How `$ARGUMENTS` works
 
@@ -126,9 +125,11 @@ Some commands also support positional args (`$1`, `$2`) — see Claude Code's co
 
 ## Adding a new command
 
-1. Create `commands/<name>.md` with the frontmatter shape above. Default `cost: medium` (`model:`
-   set to whichever concrete model that resolves to — see
-   [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)).
+1. Create `commands/<name>.md` with the frontmatter shape above. **No `cost:` field** — that
+   belongs on the agent this command Tasks, never on the command itself; `validate.sh` fails
+   the build on a command that declares one. If the command does its own work rather than routing
+   to another command, give it a paired `agents/<name>.md` and have the command Task it; that
+   agent's own `cost:` follows [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs).
 2. Write the body as a prompt: validate, resolve, invoke, write, summarise. Fence persisted
    user input as data.
 3. If the command writes artifacts inside `.somi/plans/<slug>/`, document the file naming convention.

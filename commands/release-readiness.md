@@ -3,7 +3,6 @@ description: Pre-release gate. Deterministic aggregation over the artifacts (wor
 argument-hint: <slug…> | <milestone/tag description>  (empty = all non-done work items in scope)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
-cost: medium
 ---
 
 # /release-readiness — The pre-release gate
@@ -13,12 +12,10 @@ Most of this is **deterministic aggregation over artifacts that already exist** 
 spend goes to exactly one place: a fresh-eyes review of the *integration surface*, which
 per-iteration reviews structurally miss.
 
-> **Cost: medium (`cost: medium`) — no `low` member.** Stages 1→2→3 run sequentially, every
-> invocation — there's no branch that skips Stage 3, so the declared tier is what the **hardest**
-> stage needs. Stage 1's checklist is mechanical, but Stage 3's verdict language and release notes
-> need real synthesis; a `low` ceiling would provably run that at a tier this file calls
-> insufficient. The one expensive step (Stage 2) is a separately-declared `cost: medium, high`
-> agent Task (`reviewer`), resolved from its own declared set, not inherited from this command's.
+> **No `cost:` of its own — its `model:` is a separate, host-level selection.** Stages 1 and 3 read and write
+> directly, inline, at whatever tier is already running this command. Stage 2, the one expensive
+> step, Tasks the [`reviewer`](../agents/reviewer.md) agent, which declares `cost: medium, high`
+> on its own account and resolves against the session ceiling independently of this command.
 
 Scope: **$ARGUMENTS** (one or more work-item slugs, or a milestone description; empty = every
 work item in `.somi/plans/` not marked `done`+merged).

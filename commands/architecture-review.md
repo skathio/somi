@@ -3,7 +3,6 @@ description: Targeted architectural review of a change, plan, or ADR. Evaluates 
 argument-hint: <slug> | <diff range> | <PR #> | <file path> | "plan <slug>"
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 model: sonnet
-cost: medium
 ---
 
 # /architecture-review — Targeted architectural review

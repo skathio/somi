@@ -3,7 +3,6 @@ description: Strict, skeptical, fresh-context review of the current changes — 
 argument-hint: <slug> | <diff range> | <PR #> | <file path> | "plan <slug>" | "design <slug>"
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 model: sonnet
-cost: medium
 ---
 
 # /review — Reviewing workflow

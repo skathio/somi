@@ -3,7 +3,6 @@ description: Dependency upgrade validation. High-cost research into the changelo
 argument-hint: <package [from → to]> | <link to a Renovate/Dependabot PR>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebSearch, WebFetch
 model: sonnet
-cost: medium
 ---
 
 # /upgrade — Dependency upgrade validation

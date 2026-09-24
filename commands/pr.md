@@ -3,7 +3,6 @@ description: Compose a PR title + description from a work item's artifacts (spec
 argument-hint: <slug> [--draft]
 allowed-tools: Task, Read, Bash, Write, Edit
 model: sonnet
-cost: low, medium
 ---
 
 # /pr — Work item → pull request handoff

@@ -3,12 +3,13 @@ description: Refactor a named smell. Surgical, behavior-preserving execution aga
 argument-hint: <smell description and target files>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
 model: sonnet
-cost: medium
 ---
 
-# /refactor — Surgical refactor (`cost: medium`)
+# /refactor — Surgical refactor
 
-You are invoking the **refactorer** workflow of somi.
+You are invoking the **refactorer** workflow of somi. This command has no `cost:` of its own —
+its `model:` is a separate, host-level selection — and Tasks the [`refactorer`](../agents/refactorer.md) agent, which
+declares `cost: medium` for this mode.
 
 The user's refactor target: **$ARGUMENTS**
 

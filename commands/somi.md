@@ -3,17 +3,14 @@ description: SoMi's front door. No args — a status dashboard of every work ite
 argument-hint: [nothing — status] | <describe what you want to do — router>
 allowed-tools: Read, Grep, Glob, Bash
 model: sonnet
-cost: medium
 ---
 
 # /somi — Status dashboard & workflow router
 
-> **Cost: medium (`cost: medium`) — deliberately conservative.** Mode 1 (dashboard) *xor*
-> Mode 2 (router) are genuinely alternative modes, splittable in principle the same way `/refactor`
-> and `/refactor-design` were — but this front door is due for a broader rebuild, and splitting the
-> file twice (once now, once there) would be waste. Declared as a single `medium` for now. It never
-> adopts or runs anything itself (see Mode 2's "recommend, don't run" guardrail below), so it never
-> needs `high`.
+> **No `cost:` of its own — its `model:` is a separate, host-level selection.** Both modes run entirely
+> inline, at whatever tier is already running this command; neither Tasks an agent
+> (`allowed-tools` above carries no `Task`). It never adopts or runs anything itself (see
+> Mode 2's "recommend, don't run" guardrail below), so nothing here would ever need a higher tier.
 
 You are running SoMi's **front door**. Two modes, by argument:
 

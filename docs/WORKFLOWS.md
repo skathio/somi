@@ -112,8 +112,9 @@ foundation — *before* planning or coding. This is the requirements-engineering
 software-design phase of the SDLC. Its output is the cornerstone the planner consumes.
 
 **Agent**: [`discovery-analyst`](../agents/discovery-analyst.md). Runs on the **most capable model
-end-to-end** (the orchestrating `/discover` command runs at `cost: high` too, not `cost: medium`)
-because the output anchors the entire project.
+end-to-end** (`/discover` declares no `cost:` of its own — its `model:` is a separate, host-level
+selection — and Tasks this agent at `cost: high` for its entire job) because the output anchors
+the entire project.
 
 **Input**: a software idea / product concept from the user.
 
@@ -148,16 +149,16 @@ verified, status in `README.md` becomes `ready-for-planning`.
 requirements source, the SDD/TDD as architectural direction, the research report as risk context.
 Planning re-opens a direction only where it genuinely diverges, recording why.
 
-## Design (feature, pre-planning, `cost: high`)
+## Design (feature, pre-planning)
 
 **Purpose**: settle a **brownfield feature or user story's architecture** against the existing
 codebase — *before* planning — and compile it into the `brief.md` execution runs against. It
 fills the gap between discovery (a whole new product) and planning (sequencing): the requirement is
 clear, but how it should be shaped against *this* repo is not.
 
-**Agent**: [`designer`](../agents/designer.md). Runs on the **most capable model end-to-end** (the
-`/design` command runs at `cost: high` too, like `/discover`) because its `brief.md` anchors the
-whole work item.
+**Agent**: [`designer`](../agents/designer.md). Runs on the **most capable model end-to-end**
+(`/design` declares no `cost:` of its own, like `/discover`, and Tasks this agent at `cost: high`
+for its entire job) because its `brief.md` anchors the whole work item.
 
 **Input**: a feature / user story on an existing codebase.
 
@@ -327,10 +328,10 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 
 - **Discover → Plan → Code → Review** for a greenfield product or major new initiative — discovery
   produces the requirements & design foundation (+ `brief.md`), which planning turns into phased work.
-- **Design → Plan → Code → Review** for a design-heavy brownfield feature — `/design`
-  (`cost: high`) compiles the `brief.md`; `/plan` (`cost: medium`) sequences it; `/code-loop`
-  (`cost: medium`) implements against it. This is the daily design→execution chain for non-trivial
-  features.
+- **Design → Plan → Code → Review** for a design-heavy brownfield feature — `/design` (Tasks
+  `designer` at `cost: high`) compiles the `brief.md`; `/plan` (Tasks `planner` at `cost: medium`)
+  sequences it; `/code-loop` (Tasks `coder` at `cost: medium`) implements against it. This is the
+  daily design→execution chain for non-trivial features.
 - **Plan → Code → Review** is the normal sequence when the design is already settled.
 - **Plan → Plan-review → Code → Review** when the plan is high-stakes or high-ambiguity.
 - **Code → Review → Code (rework) → Review** when the first review surfaces findings.
@@ -343,8 +344,9 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   report becomes `/design`'s pre-read, tells `/review-panel` which lenses the surface warrants,
   or honestly says "reconsider" with the numbers.
 - **Upgrade** for a dependency bump — [`/upgrade`](../commands/upgrade.md): cited
-  breaking-change/CVE research (`cost: high`) → usage scan → mini-brief (doubles as the dep-gate
-  sign-off) → migration under `/code-loop` (`cost: medium`).
+  breaking-change/CVE research (Tasks `discovery-analyst` at `cost: high`) → usage scan →
+  mini-brief (doubles as the dep-gate sign-off) → migration under `/code-loop` (Tasks `coder` at
+  `cost: medium`).
 - **Release-readiness** before shipping a set of work items —
   [`/release-readiness`](../commands/release-readiness.md): a deterministic checklist over the
   artifacts plus one high-cost review of the cumulative integration diff; verdict + draft release
@@ -386,7 +388,8 @@ end-to-end with zero human review. The cost switch is the gate; the caps (per-la
 ## The Repo Atlas (amortized high-cost)
 
 The `brief.md` compresses a *work item*; **`.somi/atlas.md`** (built by
-[`/atlas`](../commands/atlas.md), `cost: high`) compresses the *repository*: module map, dependency
+[`/atlas`](../commands/atlas.md), which Tasks the `atlas` agent at `cost: high`) compresses the
+*repository*: module map, dependency
 rules, conventions digest, complexity hotspots, test topology — SHA-stamped. Every later
 `cost: high` action (`/design`, a cold `/plan`, `/refactor-design`, `/impact`) starts from the
 atlas, runs its staleness check (`git diff --stat <atlas-SHA>..HEAD`), and deep-reads **only the

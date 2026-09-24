@@ -47,14 +47,18 @@ Each layer has a clear job:
 ## Cost tiering — the second axis
 
 The four layers above describe *structure*. A second, orthogonal axis describes *economics*: which
-model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth.
+model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth — and the
+declaration lives on **agents only**: `cost:` sizes an agent instance being spawned, and a
+command is instructions, not an instance, so it declares no `cost:` of its own (its own `model:`
+is a separate, host-level selection `cost:` doesn't touch) and simply `Task`s the agent whose own
+frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
 
 ```
         cost: high                                       cost: medium
   front-load reasoning → brief.md                    execute against the brief
   ┌───────────────────────────────┐   brief.md   ┌──────────────────────────────┐
   │ discovery-analyst, designer,  │ ───────────▶ │ planner, coder               │
-  │ refactor-designer,            │  (the dense  │ (sequence + implement,       │
+  │ refactor-designer, atlas,     │  (the dense  │ (sequence + implement,       │
   │ reviewer + security/arch/test │   handoff)   │  no re-research)             │
   └───────────────────────────────┘              └──────────────────────────────┘
         ▲ the strong model is spent here: once, up front, and on fresh-eyes review
@@ -66,20 +70,25 @@ model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth.
   inlining them, and carries an explicit *"What execution does NOT need to re-research"* list.
 - **`cost: medium`** sequences and implements **against** the brief, so the high-volume work runs
   cheap. This is the **plan-and-execute / model-cascade** pattern (strong planner, cheap executor).
+- A unit's declared `cost:` is a **capability set**, not a single value — every tier it can
+  honestly run at. The session ceiling selects the highest permitted member; it never blocks a
+  unit down to a tier it didn't declare, and a unit declaring only `high` (no cheaper mode exists)
+  still runs even under a lower ceiling, at its cheapest declared member.
 
-**Interaction with the layers.** Commands (the orchestration layer) stay at `cost: medium` and
-`Task` the tier-appropriate agent. A single-cost orchestrator Tasking a differently-costed subagent
-is the **cache-correct** way to mix models — and because prompt caches are model-scoped, the
-design→execution switch is a natural cache boundary (which is exactly where `/ship-loop` places its
-single human gate). `/discover`, `/design`, `/atlas`, `/refactor-design`, and `/adopt` are the command-layer
-commands that run at `cost: high` too — `/discover`, `/design`, and `/refactor-design`'s framing is
-judgment-heavy and their brief anchors the work item; `/atlas` has no paired agent, so the command
-itself is the high-cost deep repo read, end-to-end; `/adopt` inlines that same read as its own
-first stage rather than `Task`-ing it.
+**Interaction with the layers.** Commands (the orchestration layer) carry no `cost:` of their own
+and simply `Task` the tier-appropriate agent, which resolves its own model from its own declared
+set. Tasking a differently-costed subagent from an uncosted command is the **cache-correct** way to
+mix models — and because prompt caches are model-scoped, the design→execution switch is a natural
+cache boundary (which is exactly where `/ship-loop` places its single human gate). `/discover`,
+`/design`, `/refactor-design`, and `/atlas` are the commands that Task a `cost: high` agent for
+their **entire** job — `discovery-analyst`, `designer`, and `refactor-designer`'s framing is
+judgment-heavy and their brief anchors the work item; `atlas` is one high-quality deep repo read,
+paid once. `/adopt` Tasks the `atlas` agent as its own Stage 1, at the agent's own declared tier —
+it does not inline that read.
 
 **Repo-awareness.** A SessionStart hook surfaces repo-local instruction files (`CLAUDE.md`,
-`AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; `cost: high` actions read them once
-and distil the conventions into the brief, so execution inherits them without re-reading.
+`AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; the high-cost design agents read
+them once and distil the conventions into the brief, so execution inherits them without re-reading.
 Repo-local instructions win over SoMi defaults; SoMi never auto-invokes foreign agents.
 
 ## Data flow per workflow
@@ -88,7 +97,8 @@ Repo-local instructions win over SoMi defaults; SoMi never auto-invokes foreign 
 
 ```
 user: "/discover <idea>"
-  → command /discover (runs at cost: high end-to-end) reads $ARGUMENTS, validates it's a researchable idea
+  → command /discover (no `cost:` of its own; Tasks discovery-analyst at `cost: high` end-to-end)
+    reads $ARGUMENTS, validates it's a researchable idea
   → command derives slug, scaffolds .somi/rd/<slug>/ from templates/ (RD-README, RESEARCH, BRD,
     SRS, FRD, SDD, TDD + reused DECISIONS/DIARY)
   → invokes Task[subagent_type=discovery-analyst, prompt=<idea + slug + paths + context>]

@@ -183,7 +183,7 @@ select the right agent, so `somi` mainly matters here, on Copilot.
 |----------------------------------|------------------------------------------------------------------------------------------|
 | `@somi /discover`             | `discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
 | `@somi /design`               | `designer` (brownfield feature design → `brief.md`)                                      |
-| `@somi /atlas`                | (none — `cost: high` command; repo map → `.somi/atlas.md`)                                        |
+| `@somi /atlas`                | `atlas` (repo map → `.somi/atlas.md`)                                                     |
 | `@somi /plan`                 | `planner`                                                                                |
 | `@somi /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
 | `@somi /code`                 | `coder`                                                                                  |
@@ -199,13 +199,13 @@ select the right agent, so `somi` mainly matters here, on Copilot.
 | `@somi /test-strategy`        | `test-strategist`                                                                        |
 | `@somi /refactor`             | `refactorer`                                                                             |
 | `@somi /refactor-design`      | `refactor-designer`                                                                      |
-| `@somi /impact`               | (none — read-only blast-radius analysis)                                                 |
-| `@somi /adopt`                | `/atlas` flow (+ `test-strategist` for depth)                                            |
+| `@somi /impact`               | `impact` (read-only blast-radius analysis)                                               |
+| `@somi /adopt`                | `atlas` agent (+ `test-strategist` for depth)                                            |
 | `@somi /upgrade`              | `discovery-analyst` (research) + `/code-loop` (migration)                                |
 | `@somi /release-readiness`    | `reviewer` (one integration pass; the checklist is deterministic)                        |
-| `@somi /incident`             | (mitigation inline; seeds `/debug` / `/plan` after)                                      |
+| `@somi /incident`             | `incident` (mitigation inline; seeds `/debug` / `/plan` after)                            |
 | `@somi /somi`                 | (none — status dashboard & router, read-only)                                            |
-| `@somi /pr`                   | (none — composes the PR from artifacts; `gh` after confirmation)                         |
+| `@somi /pr`                   | `pr` (composes the PR from artifacts; `gh` after confirmation)                            |
 
 > On Copilot the loop caps fall back to judgment-enforced tracking when the host can't run the
 > `scripts/somi-loop.mjs` / `somi-findings.mjs` helpers — and `scripts/somi-check.mjs` (below) is

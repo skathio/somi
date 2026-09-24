@@ -23,7 +23,7 @@ re-researching. See [Cost tiering](#cost-tiering) below.
 | [`impact`](../agents/impact.md)                              | `medium`       | Blast-radius mapping before committing to `/design` or `/plan`; lens selection for a diff |
 | [`pr`](../agents/pr.md)                                       | `low, medium`  | Compose a PR title + description from a work item's artifacts         |
 | [`incident`](../agents/incident.md)                          | `medium`       | Mitigate + mandatory debt capture once an incident is framed          |
-| [`somi`](../agents/somi.md)                                   | `medium`       | GitHub Copilot session persona — not phase-specific; classifies the request and dispatches to whichever of the others fits (see "The front-door agent" below) |
+| [`somi`](../agents/somi.md)                                   | none           | GitHub Copilot session persona — not phase-specific; classifies the request and dispatches to whichever of the others fits (see "The front-door agent" below) |
 
 ## How agents get invoked
 
@@ -54,8 +54,8 @@ competition and mines real user complaints to design *away* from known failure m
 non-obvious claim and never fabricates. Respects the **design-depth boundary**: sets architectural
 *direction* (high-level SDD/TDD) and hands *detailed* design to the planner.
 
-- **Cost**: `high` — and its `/discover` command runs at `cost: high` too (one of the command-layer
-  commands that does; see [COMMANDS.md](./COMMANDS.md)), because the output anchors the whole
+- **Cost**: `high` — no lower member. `/discover` declares no `cost:` of its own (a command has no
+  model to size) and Tasks this agent for its entire job, because the output anchors the whole
   project.
 - **Won't**: plan or code; fabricate research; produce detailed design that competes with the
   planner; cheerlead an idea the research condemns.
@@ -76,8 +76,8 @@ the complexity hotspots, and compiles a dense [`brief.md`](../templates/BRIEF.md
 `design.md`. That brief is the load-bearing output — it lets the medium-cost planner/coder execute
 **without re-deriving the architecture**.
 
-- **Cost**: `high` — and its `/design` command runs at `cost: high` end-to-end (like `/discover`),
-  because the brief anchors everything downstream.
+- **Cost**: `high` — no lower member. `/design` declares no `cost:` of its own (like `/discover`)
+  and Tasks this agent for its entire job, because the brief anchors everything downstream.
 - **Won't**: plan or code; produce file-by-file design (that's the planner); pick architecture
   silently; emit a bloated brief or an empty "what execution need not re-research" section.
 - **Will**: ingest the repo's own instruction files once and distil them into the brief; hand off to
@@ -115,8 +115,8 @@ questions) as escape hatches.
 - **Cost**: `medium` — planning is *sequencing an already-compiled design*, not
   open-ended research. When a design action ran upstream, the planner consumes its `brief.md` and
   slices it into phases. For a cold, design-heavy plan with no brief, the planner runs a **depth
-  gate** and recommends `/design` (`cost: high`) first. Overridable to `cost: high` in the agent
-  frontmatter.
+  gate** and recommends `/design` (Tasks `designer` at `cost: high`) first. Overridable to
+  `cost: high` in the agent frontmatter.
 - **Won't**: write code, silently pick architectural defaults, take the request's framing as truth.
 - **Will**: stop and recommend re-scoping if the work is much larger than presented; **challenge the
   request's premise** (false premise, XY problem, contradiction, already-solved need) before planning
@@ -293,10 +293,11 @@ invocation-mode gate first — an explicit non-`/somi` command is proxied direct
 `/somi` passes through to the `/somi` command verbatim, and anything else is classified against
 [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) and carried inline
 (adopt-inline — no sub-agent `Task`, since Copilot has none). High-cost flows are routed to their
-direct command rather than adopted under this agent's own `cost: medium` tier.
+direct command rather than adopted under whatever model this session is already running.
 
-- **Cost**: `medium` — a thin dispatcher; high-cost flows are routed to, not adopted under, this
-  tier.
+- **Cost**: none of its own — this was always decorative: the host binds the model when the
+  user selects this agent in Copilot's UI, so nothing here could ever act on a declared value. It
+  is still, in effect, a thin dispatcher; high-cost flows are routed to, not adopted inline.
 - **Won't**: second-guess an explicit command; wrap a second opinion around `/somi`'s own
   recommendation; adopt a high-cost persona inline; emit a sub-agent `Task` (Copilot has none).
 - **Will**: announce which flow it's entering and why before adopting it; keep the dispatched
@@ -338,16 +339,17 @@ front-loaded brief, and (b) fresh-eyes review. The bulk token volume — sequenc
 runs at `cost: medium`, fed by the brief. The agent's resolved model is overridable per project in
 the agent frontmatter and the per-host mapping.
 
-**Orchestrator/agent cost and the prompt cache.** Commands (orchestrators) still run at
-`cost: medium` and `Task` their agents. A single-cost orchestrator that Tasks a differently-costed
-subagent is the cache-correct way to mix costs — the orchestrator's prompt cache stays intact while
-the subagent runs on its own tier. (Prompt caches are model-scoped, so the design→execution switch
-is also a natural cache boundary.) **`/discover`, `/design`, `/atlas`, `/refactor-design`, and `/adopt` run
-at `cost: high` at the command layer too** — `/discover`, `/design`, and `/refactor-design`'s
-orchestration is judgment-heavy and their `brief.md` anchors the whole work item, so they don't
-split the orchestrator and agent across tiers; `/atlas` Tasks the `atlas` agent (also `cost: high`)
-for the deep repo read itself, so command and agent match rather than split; `/adopt` Tasks that
-same `atlas` agent as its own Stage 1. See [COMMANDS.md](./COMMANDS.md).
+**Orchestrator/agent cost and the prompt cache.** Commands carry no `cost:` of their own and
+simply `Task` the tier-appropriate agent. Tasking a differently-costed subagent from an uncosted
+orchestrator is the cache-correct way to mix costs — the orchestrator's own prompt cache stays
+intact while the subagent runs on its own tier. (Prompt caches are model-scoped, so the
+design→execution switch is also a natural cache boundary.) **`/discover`, `/design`,
+`/refactor-design`, and `/atlas` Task a `cost: high` agent for their entire job** — `/discover`,
+`/design`, and `/refactor-design`'s orchestration is judgment-heavy and their `brief.md` anchors
+the whole work item, so nothing about their own inline work needs a lower tier; `/atlas` Tasks the
+`atlas` agent (also `cost: high`) for the deep repo read itself, so there is nothing left for the
+command to do at a different tier. `/adopt` Tasks that same `atlas` agent as its own Stage 1. See
+[COMMANDS.md](./COMMANDS.md).
 
 ## Adding new agents
 
@@ -375,14 +377,14 @@ test-strategist) based on the trigger table in [`commands/review.md`](../command
 plain prose escalations from inside an agent are no longer the only path.
 
 ```
-# cost: high — front-load reasoning into brief.md
+# agents at cost: high — front-load reasoning into brief.md
 /discover    → discovery-analyst (writes .somi/rd/<slug>/ + brief.md; feeds /plan — greenfield only)
 /design      → designer         (writes .somi/plans/<slug>/{design.md,brief.md}; feeds /plan — brownfield feature)
 /atlas       → atlas            (writes .somi/atlas.md, which /design, cold /plan, /refactor-design,
                                  and /impact consume instead of re-reading)
 /refactor-design → refactor-designer (writes .somi/plans/<slug>/{design.md,brief.md}; feeds /plan-loop → /code-loop)
 
-# cost: medium — execute against the brief
+# agents at cost: medium — execute against the brief
 /plan        → planner         (writes .somi/plans/<slug>/; consumes brief.md / .somi/rd/<slug>/ if present)
 /code        → coder           (handoff from planner: spec + active iteration + brief)
 /debug       → coder           (repro-gated diagnose→isolate→fix; reviewer Tasked as a fresh-context

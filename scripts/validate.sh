@@ -164,13 +164,38 @@ import("./scripts/lib/cost-model.mjs").then((m) => {
 ')" || { echo "cost-model derivation failed; cannot validate cost tiers" >&2; exit 1; }
 eval "$cost_env"
 
-# (a) Every agents/*.md and commands/*.md file declares a `cost:` field, and every value in it
-# (split on comma, for the multi-mode commands) is one of scripts/lib/cost-model.mjs's
-# VALID_COSTS. Generic presence+validity, across all ~36 files -- not just the ones pinned to an
-# exact value below.
+# (a) `cost:` lives on agents only -- `cost:` sizes an agent instance being spawned, and a
+# command isn't one, so `cost:` on a command binds to nothing (a command's own `model:` is a
+# separate, host-level selection this doesn't touch). Every agents/*.md file must declare a
+# `cost:` field (EXEMPTION:
+# agents/somi.md, see below) and every value in it (split on comma, for graded units) must be one
+# of scripts/lib/cost-model.mjs's VALID_COSTS. Every commands/*.md file must NOT declare one -- the
+# front door spawns that command's paired agent at the agent's own declared tier instead.
+#
+# EXEMPTION: agents/somi.md. `cost:` on this one file was always decorative -- the host binds the
+# model when the user picks this agent in its own UI, so nothing in this repo could ever act on
+# the declaration. A field nothing can read is worse than no field: a future dispatcher would have
+# to treat a decorative declaration as a trap. Named here, not silently skipped, so a later reader
+# does not "fix" it back in.
 for f in agents/*.md commands/*.md; do
   [ -f "$f" ] || continue
   got="$(cost_of "$f")"
+  case "$f" in
+    commands/*.md)
+      if [ -n "$got" ]; then
+        echo "COST TIER ON COMMAND: $f declares cost: '$got' -- commands declare no cost: of their own; declare cost: on the agent this command Tasks instead" >&2
+        cost_failed=1
+      fi
+      continue
+      ;;
+    agents/somi.md)
+      if [ -n "$got" ]; then
+        echo "COST TIER ON EXEMPT AGENT: $f declares cost: '$got' -- this file is exempt from cost: entirely (see the EXEMPTION comment above); remove the declaration" >&2
+        cost_failed=1
+      fi
+      continue
+      ;;
+  esac
   if [ -z "$got" ]; then
     echo "COST TIER MISSING: $f has no 'cost:' field in frontmatter" >&2
     cost_failed=1
@@ -215,7 +240,6 @@ done
 
 # (b) Pin the exact declared cost for the files where the value is load-bearing beyond "some
 # valid tier" -- mirrors the thirteen model-value assertions this block replaces.
-# agents/somi.md's is the one the front-door dispatch derives from.
 assert_cost() {
   local f="$1" want="$2" got
   got="$(cost_of "$f" | tr -d '[:space:]')"
@@ -224,15 +248,14 @@ assert_cost() {
     cost_failed=1
   fi
 }
-# medium-only: planning is judgment, never mechanical; the front door is a thin dispatcher;
-# refactoring is structured execution against an already-named smell. refactorer has a split-out
-# sibling (below, refactor-designer) for the job a single tier can't honestly cover. coder has no
-# such sibling yet -- a genuinely lighter-weight job would need one (a separate single-purpose
-# unit at a lower tier), not a second member declared here, since coder still accepts full plan
-# iterations.
+# medium-only: planning is judgment, never mechanical; refactoring is structured execution
+# against an already-named smell. refactorer has a split-out sibling (below, refactor-designer)
+# for the job a single tier can't honestly cover. coder has no such sibling yet -- a genuinely
+# lighter-weight job would need one (a separate single-purpose unit at a lower tier), not a
+# second member declared here, since coder still accepts full plan iterations. agents/somi.md is
+# EXEMPT from this whole block (see the comment above the loop) -- it declares no cost: at all.
 assert_cost agents/planner.md medium
 assert_cost agents/coder.md medium
-assert_cost agents/somi.md medium
 assert_cost agents/refactorer.md medium
 # high-only: a wrong call here is paid for through everything downstream that builds on it, so a
 # cheaper pass would be cheaper-and-wrong, not genuinely useful -- these never gain a lower member.
@@ -256,19 +279,15 @@ assert_cost agents/incident.md medium
 # graded over one job at two depths: mechanical aggregation of existing artifacts is already a
 # correct, usable PR description at low; a fuller pass adds house-style matching, never required.
 assert_cost agents/pr.md low,medium
-# high-cost front-load commands run at cost: high end-to-end (their orchestration is judgment-heavy,
-# and the entire value is one high-quality pass paid once -- a shallower pass is cheaper-and-wrong).
-assert_cost commands/discover.md high
-assert_cost commands/design.md high
-assert_cost commands/atlas.md high
-assert_cost commands/refactor-design.md high
 
 # (c) `model:` and `cost:` state one fact twice -- assert `model:` resolves from the declared
 # `cost:` set's TOP (highest, rightmost) member, deriving the expected model from resolveModel()
 # rather than a second hardcoded table. Top-ness, not mere membership: a `model:` naming a lower
 # declared member would silently run the agent at that lower tier regardless of ceiling -- the
-# muted-reviewer failure `cost:` exists to prevent, re-opened by hand.
-for f in agents/*.md commands/*.md; do
+# muted-reviewer failure `cost:` exists to prevent, re-opened by hand. `agents/` only -- commands
+# no longer declare `cost:`, so there is nothing here to check it against; a command's own
+# `model:` stays untouched pending later dispatch work that reads `cost:` instead.
+for f in agents/*.md; do
   [ -f "$f" ] || continue
   got="$(cost_of "$f" | tr -d '[:space:]')"
   [ -z "$got" ] && continue  # already reported as COST TIER MISSING above

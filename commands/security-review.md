@@ -3,7 +3,6 @@ description: Targeted security review of the current changes (or a specified dif
 argument-hint: <slug> | <diff range> | <PR #> | <file path>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 model: sonnet
-cost: medium
 ---
 
 # /security-review — Targeted security review

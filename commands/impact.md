@@ -3,7 +3,6 @@ description: Change-impact analysis (read-only). Given a proposed change, surfac
 argument-hint: <proposed change / file or symbol / diff range>
 allowed-tools: Task, Write
 model: sonnet
-cost: medium
 ---
 
 # /impact — Change-impact analysis (blast radius before commitment)

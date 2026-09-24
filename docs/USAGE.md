@@ -51,8 +51,9 @@ planning.
 
 **Expect**:
 - SoMi proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
-- Runs on the **most capable model end-to-end** (the `/discover` command itself runs at
-  `cost: high`, not just the agent) — its output is the cornerstone of the project.
+- Runs on the **most capable model end-to-end** (`/discover` declares no `cost:` of its own —
+  its `model:` is a separate, host-level selection — and Tasks `discovery-analyst` at `cost: high`
+  for its entire job) — its output is the cornerstone of the project.
 - **Researches the competition extensively** — scans direct/indirect competitors, mines real user
   complaints and churn reasons, and surfaces recurring failure modes to design *away* from. Every
   non-obvious claim is cited; signal is distinguished from noise; nothing is fabricated.
@@ -385,10 +386,10 @@ no feature work mixed in.
 
 ### `/refactor-design`
 
-`cost: high` scope design for a refactor too big for one diff — spans many modules, needs a
-migration, or changes a shared shape. Names the destination shape, maps seams and risks
-(`file:line`), confirms test-coverage gaps, and compiles a `brief.md` that `/plan-loop` →
-`/code-loop` execute.
+Scope design for a refactor too big for one diff — spans many modules, needs a migration, or
+changes a shared shape. Tasks the `refactor-designer` agent at `cost: high` for its entire job.
+Names the destination shape, maps seams and risks (`file:line`), confirms test-coverage gaps, and
+compiles a `brief.md` that `/plan-loop` → `/code-loop` execute.
 
 ```text
 /refactor-design The auth module mixes session/token/permission logic across 8 files with no
@@ -582,20 +583,25 @@ optional; omit anything you don't want to change:
 
 ## Cost tiers and model resolution
 
-Cost is declared with a `cost:` field in frontmatter, beside `model:` — every `agents/*.md` and
-`commands/*.md` file declares one, and `scripts/validate.sh` asserts presence and validity across
-all of them. **`cost:` is a CAPABILITY SET, and the test is universal, not "usually": a unit
-declares a tier only if that tier is acceptable for *everything the unit accepts*.** The session
-ceiling that later picks among a unit's declared members is blind to which job is running, so a
-declared tier has to hold for every job, not just the common case. A single value (`cost: medium`)
-means the unit has exactly one accepted-everywhere tier; a comma-separated, strictly-ascending list
-(`cost: medium, high`) means *each* listed tier produces acceptable output for every job the unit
-accepts — not "this tier for the easy jobs, that tier for the hard ones." That reading (a range
-covering different jobs at different tiers) is exactly what the three shapes below rule out.
-**`cost:` never aggregates what a unit Tasks, and a spawned unit never inherits its caller's tier**
-— a command Tasking a `cost: high` agent stays declared at its own tier (typically `medium`); the
-agent's own frontmatter is where `high` is truthfully declared, once, and a `cost: high` agent
-Tasking a `cost: low, medium` helper does not pull that helper up to `high` either.
+Cost is declared with a `cost:` field in frontmatter, beside `model:` — **agents only**: `cost:`
+sizes an agent instance being spawned, and a command is instructions, not an instance — it runs
+inline under whatever model its own `model:` field already picked, a separate, host-level
+selection `cost:` doesn't touch. `scripts/validate.sh` fails the build if a `commands/*.md` file
+declares `cost:`. Every `agents/*.md` file declares `cost:`
+(one narrow, named exemption: `agents/somi.md` — its declaration was always decorative, since the
+host binds that agent's model when the user selects it, not SoMi), and `scripts/validate.sh`
+asserts presence and validity across all of them. **`cost:` is a CAPABILITY SET, and the test is
+universal, not "usually": a unit declares a tier only if that tier is acceptable for *everything
+the unit accepts*.** The session ceiling that later picks among a unit's declared members is blind
+to which job is running, so a declared tier has to hold for every job, not just the common case. A
+single value (`cost: medium`) means the unit has exactly one accepted-everywhere tier; a
+comma-separated, strictly-ascending list (`cost: medium, high`) means *each* listed tier produces
+acceptable output for every job the unit accepts — not "this tier for the easy jobs, that tier for
+the hard ones." That reading (a range covering different jobs at different tiers) is exactly what
+the three shapes below rule out. **`cost:` never aggregates what a unit Tasks, and a spawned unit
+never inherits its caller's tier** — a command Tasking a `cost: high` agent declares nothing of its
+own; the agent's own frontmatter is where `high` is truthfully declared, once, and a `cost: high`
+agent Tasking a `cost: low, medium` helper does not pull that helper up to `high` either.
 
 **Three declared shapes, and they resolve differently:**
 
@@ -606,17 +612,23 @@ Tasking a `cost: low, medium` helper does not pull that helper up to `high` eith
    (A *xor* B, not "A but sometimes shallower"). **Split into separate units** rather than declaring
    a range: mode selection and tier selection would otherwise name the same decision on one file, and
    a caller could pick the demanding mode under a ceiling that only cleared the easy one.
-   [`/refactor`](../commands/refactor.md) (`cost: medium`, surgical execution) and
-   [`/refactor-design`](../commands/refactor-design.md) (`cost: high`, scope design for a refactor too
-   big for one diff) are the shipped example — one file used to do both jobs at one declared tier
-   that was insufficient for one of them, which let a large refactor enter scope-design work under
-   a `medium` ceiling; now they're two single-purpose files at two single tiers.
+   [`agents/refactorer.md`](../agents/refactorer.md) (`cost: medium`, surgical execution, Tasked by
+   [`/refactor`](../commands/refactor.md)) and
+   [`agents/refactor-designer.md`](../agents/refactor-designer.md) (`cost: high`, scope design for a
+   refactor too big for one diff, Tasked by
+   [`/refactor-design`](../commands/refactor-design.md)) are the shipped example — one agent used to
+   do both jobs at one declared tier that was insufficient for one of them, which let a large
+   refactor enter scope-design work under a `medium` ceiling; now they're two single-purpose agents
+   at two single tiers, each Tasked by its own single-purpose command.
 3. **Sequential stages** — every stage runs on every invocation; nothing branches around the
    expensive one. Declares what its **most demanding stage** needs, not what the easy stages could
-   get away with — a lower member would be provably wrong the moment the hard stage runs.
-   [`/release-readiness`](../commands/release-readiness.md) is the example: Stage 1's checklist is
-   mechanical, but Stage 3's synthesis needs real reasoning, so the command declares `cost: medium`
-   (no `low` member) even though most of its own work is deterministic aggregation.
+   get away with — a lower member would be provably wrong the moment the hard stage runs. No current
+   agent has this shape (`agents/reviewer.md` and the rest are graded, not staged); it was
+   illustrated by [`/release-readiness`](../commands/release-readiness.md) before the declaration
+   moved off commands entirely — that command still runs Stage 1's mechanical checklist then
+   Stage 3's real-reasoning synthesis, but it now declares no `cost:` of its own, so the shape has
+   no live example today. Kept declared and validated for the next **agent** whose own internal
+   stages earn it.
 
 **A real, shipped example**: `agents/reviewer.md` declares `cost: medium, high`. `high` is the
 adversarial, fresh-eyes pass the agent is written for — every category in its "What to look for"

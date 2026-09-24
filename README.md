@@ -25,17 +25,19 @@ It is designed to be:
 
 ## The workflows
 
-| Command       | Cost   | Agent               | Purpose                                                                                  |
+| Command       | Agent cost | Agent           | Purpose                                                                                  |
 |---------------|--------|---------------------|------------------------------------------------------------------------------------------|
 | `/discover`   | high   | `discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
 | `/design`     | high   | `designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
 | `/plan`       | medium | `planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
 | `/code`       | medium | `coder`             | Execute against an approved plan + brief with senior-level design judgment               |
 | `/debug`      | medium | `coder` | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop` (a `cost: high` hatch is available if isolation escalates), keep the repro test as the regression guard; writes a one-page `rca.md` |
-| `/review`     | medium | `reviewer`    | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
-| `/ship`       | medium | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `cost: high` front-load), gated at every stage |
+| `/review`     | medium, high | `reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
+| `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `cost: high` front-load), gated at every stage |
 
-**Cost tiers in practice.** The **`cost: high`** tier front-loads expensive reasoning — research, design,
+**Cost tiers in practice.** `cost:` is declared by **agents**, not commands — `cost:` sizes an
+agent instance being spawned, and a command's own `model:` is a separate, host-level selection
+that `cost:` doesn't touch, so the tier above is the tier of the agent that command Tasks. The **`cost: high`** tier front-loads expensive reasoning — research, design,
 decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The
 **`cost: medium`** tier executes against that brief *without re-researching*, so the high-volume
 work (plan detail, iterative coding) runs cheaply. `/discover` (new product) and `/design`

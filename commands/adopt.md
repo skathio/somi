@@ -3,7 +3,6 @@ description: One-time SoMi onboarding for an existing codebase. Builds the Repo 
 argument-hint: (no arguments — run once after installing SoMi in a repo)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
 model: opus
-cost: high
 ---
 
 # /adopt — Onboard SoMi into an existing codebase
@@ -14,12 +13,13 @@ concrete first exercise, instead of "read thirteen docs and type `/plan`".
 
 This is a composite of existing pieces, run in order, with the user confirming at each seam.
 
-> **Cost: high (`cost: high`) — no lower member.** Stages 1→4 run sequentially, every invocation,
-> so the declared tier states what the **hardest** stage needs. Stage 1 Tasks the `atlas` agent,
-> which declares `cost: high` on its own account and resolves against the ceiling independently of
-> this command's own declaration — but this command still names the requirement plainly rather
-> than looking cheaper than the flow it starts. Stages 2-4 are lighter, same reasoning as
-> [`/release-readiness`](./release-readiness.md).
+> **No `cost:` of its own — its `model:` is a separate, host-level selection.** Stage 1 Tasks
+> the `atlas` agent ([`agents/atlas.md`](../agents/atlas.md)), which declares `cost: high` on its
+> own account and resolves against the session ceiling independently of this command. Stages 2 and
+> 4 read and write directly, inline, at whatever tier is already running this command. Stage 3 may
+> also Task [`test-strategist`](../agents/test-strategist.md) for the gap report's test-thin-ice
+> depth — it resolves on its own account exactly as Stage 1's `atlas` does, not at this command's
+> tier.
 
 ## Stage 1 — Build the Repo Atlas (`cost: high`, the expensive step)
 
