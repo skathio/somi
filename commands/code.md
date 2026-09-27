@@ -2,7 +2,6 @@
 description: Execute against an approved plan in .somi/plans/<slug>/ with senior-level design judgment. Updates progress.md and diary.md as it goes. Specify which work item and phase/iteration to run.
 argument-hint: <slug> [phase N, iteration M] | <free-form task>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
-model: sonnet
 ---
 
 # /code — Coding workflow

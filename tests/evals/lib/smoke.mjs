@@ -24,8 +24,7 @@
 // not copied, a path that resolves differently once installed) is exactly the class of breakage
 // this check exists to catch, not only a typo in the source file's own YAML.
 //
-// **One check derives from an independent source, the other is an explicit allowlist — both
-// deliberately non-tautological**
+// **Tool names are checked against an explicit allowlist, deliberately non-tautological**
 // (`decisions.md#d8`'s correction: "every tool named in it is a real tool name, checked against
 // the tool list this repo's own agent/command definitions draw from"):
 //   - Tool names are checked against `CLAUDE_CODE_TOOLS` alone (below, a literal allowlist — a
@@ -36,11 +35,11 @@
 //     by two files agreeing, so the corpus half is gone rather than patched. A genuine tool this
 //     repo hasn't adopted yet (e.g. `TodoWrite`) is recognized on the allowlist alone; extend
 //     `CLAUDE_CODE_TOOLS` (its own doc comment below) when this repo adopts one not yet listed.
-//   - Model tiers are checked against `agents/*.md`'s own `model:` frontmatter, not against a
-//     tier list copied next to this check — `docs/AGENTS.md` states tiers are an agent-roster
-//     concept ("SoMi tiers models by SDLC phase"), and agents/*.md carries no `allowed-tools`
-//     field (checked directly: name/description/model only), so this source is independent of
-//     the commands/*.md corpus being validated — no self-reference in either direction.
+//
+// No `model` check here any more: commands declare no `model:` of their own (the front door
+// dispatches this command's paired agent at the agent's own declared cost/model instead) —
+// `scripts/validate.sh` fails the build if one does. Model tiers stay an agent-roster concept,
+// checked there against `agents/*.md`'s own `model:` frontmatter, not here.
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -79,17 +78,6 @@ function splitList(value) {
   return (value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-/** This repo's tiers, derived from `agents/*.md`'s own `model:` values — see the header comment. */
-function tiersFromAgents(agentsDir) {
-  const tiers = new Set();
-  if (!existsSync(agentsDir)) return tiers;
-  for (const f of readdirSync(agentsDir).filter((x) => x.endsWith('.md'))) {
-    const fm = parseFrontmatter(readFileSync(join(agentsDir, f), 'utf8'));
-    if (fm?.fields.model) tiers.add(fm.fields.model);
-  }
-  return tiers;
-}
-
 /**
  * Lists the un-gated commands: every `commands/*.md` file whose bare name (no `.md`) is not in
  * `gatedSet`. Pure discovery — no install, no frontmatter read; only `smokeCheck()` needs those.
@@ -117,11 +105,14 @@ export function discoverUngatedCommands(commandsDir, gatedSet) {
  * Materializes its OWN install into a throwaway temp directory via `installSomi()` — real exercise
  * of the harness's install/copy wiring, not just this file's syntax — then validates the INSTALLED
  * copy: `description` is a non-empty string, `allowed-tools` is present and every named tool is
- * real, `model` is present and is one of this repo's tiers, and the installed tree actually
- * contains every directory `install.mjs`'s `DEFINITION_DIRS` names (D8's correction,
- * `decisions.md#d8`: narrower than "every body-referenced path resolves" — `scripts/check-links.mjs`
- * already owns resolving a command body's own links, fence-aware; this is the one property that
- * check cannot see, since it walks source, never an installed copy).
+ * real, no `model` field is present (commands declare no model of their own — that lives on the
+ * agent this command Tasks, and `scripts/validate.sh` fails the build on the source file if one
+ * declares one; this check catches an install/copy step that reintroduces it into the INSTALLED
+ * copy instead), and the installed tree actually contains every directory `install.mjs`'s
+ * `DEFINITION_DIRS` names (D8's correction, `decisions.md#d8`: narrower than "every
+ * body-referenced path resolves" — `scripts/check-links.mjs` already owns resolving a command
+ * body's own links, fence-aware; this is the one property that check cannot see, since it walks
+ * source, never an installed copy).
  *
  * @param {string} commandFile
  * @returns {{ok: true} | {ok: false, field: 'file'|'description'|'allowed-tools'|'model'|'install', reason: string}}
@@ -165,15 +156,11 @@ export function smokeCheck(commandFile) {
       };
     }
 
-    if (!fields.model) {
-      return { ok: false, field: 'model', reason: `${name}: frontmatter has no 'model'` };
-    }
-    const tiers = tiersFromAgents(join(installedRoot, 'agents'));
-    if (!tiers.has(fields.model)) {
+    if (fields.model) {
       return {
         ok: false,
         field: 'model',
-        reason: `${name}: model '${fields.model}' is not one of this repo's tiers (${[...tiers].sort().join(', ') || 'none found'})`,
+        reason: `${name}: frontmatter declares 'model: ${fields.model}' -- commands no longer declare a model of their own; the front door dispatches this command's paired agent at the agent's own declared cost/model instead`,
       };
     }
 

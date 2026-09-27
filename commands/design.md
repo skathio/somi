@@ -2,7 +2,6 @@
 description: Feature / user-story design on an existing codebase — a `cost: high` pass that reads the repo deeply, resolves the expensive-to-reverse decisions with you, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching. Sits between /discover (whole product) and /plan (sequencing).
 argument-hint: <feature or user story to design>
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebSearch, WebFetch, Bash
-model: opus
 ---
 
 # /design — Feature / user-story design
@@ -12,8 +11,9 @@ turns a feature or user story into a settled architecture against the **existing
 compiles it into a dense [`brief.md`](../templates/BRIEF.md.tmpl) the cheaper (`cost: medium`) tier
 executes against **without re-researching**. All artifacts live under `.somi/plans/<slug>/`.
 
-> **Runs on the most capable model end-to-end.** This command has no `cost:` of its own — its
-> `model:` is a separate, host-level selection — and Tasks the [`designer`](../agents/designer.md)
+> **The judgment-heavy core runs at the most capable tier — on the agent, not the command.** This
+> command declares no `cost:` and no `model:` of its own; it runs on whatever model this session is
+> already using, and Tasks the [`designer`](../agents/designer.md)
 > agent for the judgment-heavy core of the work (framing the feature, reading the codebase,
 > shaping crossroads); its `brief.md` anchors everything execution does, so the designer declares
 > `cost: high` with no lower member. This command still does real work of its own — scaffolding the

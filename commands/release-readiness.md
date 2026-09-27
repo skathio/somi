@@ -2,7 +2,6 @@
 description: Pre-release gate. Deterministic aggregation over the artifacts (work items done? open Blockers/Majors in the findings ledgers? DoD satisfied? rollout/rollback real?) plus ONE high-cost review of the integration surface. Produces a release verdict + draft release notes.
 argument-hint: <slug…> | <milestone/tag description>  (empty = all non-done work items in scope)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
 ---
 
 # /release-readiness — The pre-release gate
@@ -12,7 +11,8 @@ Most of this is **deterministic aggregation over artifacts that already exist** 
 spend goes to exactly one place: a fresh-eyes review of the *integration surface*, which
 per-iteration reviews structurally miss.
 
-> **No `cost:` of its own — its `model:` is a separate, host-level selection.** Stages 1 and 3 read and write
+> **No `cost:` of its own, and no `model:` either — it runs on whatever model this session is
+> already using.** Stages 1 and 3 read and write
 > directly, inline, at whatever tier is already running this command. Stage 2, the one expensive
 > step, Tasks the [`reviewer`](../agents/reviewer.md) agent, which declares `cost: medium, high`
 > on its own account and resolves against the session ceiling independently of this command.

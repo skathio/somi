@@ -2,7 +2,6 @@
 description: The sanctioned emergency lane. Production is broken — skip the planning ceremony, mitigate fast (flag flip / revert / scoped patch) with hooks still enforcing, then MANDATORY debt-capture - a postmortem note and an auto-seeded /debug follow-up for the real cause. Less ceremony now, enforced accounting after.
 argument-hint: <what is broken in production and how it was noticed>
 allowed-tools: Task, Read, Write, Bash
-model: sonnet
 ---
 
 # /incident — Mitigate first, account for it after

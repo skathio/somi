@@ -2,7 +2,6 @@
 description: Continuous design→execution pipeline. Optionally front-loads a `cost: high` action (/discover|/design|/refactor-design) to compile a brief, gates ONE human checkpoint at the design→execution switch, then runs /plan-loop → /code-loop to completion under bounded caps. Never fully gateless — a cold start gates after /plan-loop.
 argument-hint: <problem statement>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
-model: sonnet
 ---
 
 # /ship-loop — Continuous design→execution pipeline
@@ -23,8 +22,9 @@ that declares `cost: high`) to compile a `brief.md`, then composes the medium-co
 ([`/plan-loop`](./plan-loop.md) → [`/code-loop`](./code-loop.md)) **continuously under bounded
 caps**. The single mandatory human checkpoint sits **at the design→execution switch** — you review
 the compiled brief, then the medium-cost loops run to completion without a per-iteration stop.
-This command has no `cost:` of its own — its `model:` is a separate, host-level selection — and
-runs entirely inline as a router; the `planner` and `coder` the composed commands Task declare
+This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
+session is already using — and runs entirely inline as a router; the `planner` and `coder` the
+composed commands Task declare
 `cost: low, medium` (`medium` unless the session ceiling resolves to `low`),
 and the `reviewer` declares `cost: medium, high` (the session ceiling picks the highest permitted
 member — typically `high` for the fresh-eyes judgment this pipeline wants).

@@ -49,8 +49,8 @@ Each layer has a clear job:
 The four layers above describe *structure*. A second, orthogonal axis describes *economics*: which
 model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth — and the
 declaration lives on **agents only**: `cost:` sizes an agent instance being spawned, and a
-command is instructions, not an instance, so it declares no `cost:` of its own (its own `model:`
-is a separate, host-level selection `cost:` doesn't touch) and simply `Task`s the agent whose own
+command is instructions, not an instance, so it declares neither `cost:` nor `model:` of its own —
+it runs on whatever model the session is already using — and simply `Task`s the agent whose own
 frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
 
 ```

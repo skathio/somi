@@ -2,14 +2,14 @@
 description: Refactor a named smell. Surgical, behavior-preserving execution against a smell that fits one safe diff — tests stay green, no feature work. For a refactor too big for one diff, use /refactor-design instead.
 argument-hint: <smell description and target files>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
-model: sonnet
 ---
 
 # /refactor — Surgical refactor
 
-You are invoking the **refactorer** workflow of somi. This command has no `cost:` of its own —
-its `model:` is a separate, host-level selection — and Tasks the [`refactorer`](../agents/refactorer.md) agent, which
-declares `cost: low, medium` for this mode (`medium` unless the session ceiling resolves to `low`).
+You are invoking the **refactorer** workflow of somi. This command has no `cost:` of its own — nor
+a `model:` of its own; it runs on whatever model this session is already using — and Tasks the
+[`refactorer`](../agents/refactorer.md) agent, which declares `cost: low, medium` for this mode
+(`medium` unless the session ceiling resolves to `low`).
 
 The user's refactor target: **$ARGUMENTS**
 

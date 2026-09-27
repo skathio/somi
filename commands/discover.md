@@ -2,7 +2,6 @@
 description: Pre-development discovery & requirements engineering. Researches the competition and common failure modes, then authors the .somi/rd/<slug>/ document set (research report, BRD, SRS, FRD, SDD, TDD) with inline user verification. Feeds the planning workflow.
 argument-hint: <software idea / product concept>
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebSearch, WebFetch, Bash
-model: opus
 ---
 
 # /discover — Discovery & requirements-engineering workflow
@@ -12,8 +11,9 @@ software-design phase of the SDLC that happens *before* planning or coding. Its 
 **cornerstone of a new project**: a research-grounded, traceable foundation that
 [`/plan`](./plan.md) consumes. All artifacts live under `.somi/rd/<slug>/`.
 
-> **Runs on the most capable model end-to-end.** This command has no `cost:` of its own — its
-> `model:` is a separate, host-level selection — and Tasks the
+> **The judgment-heavy core runs at the most capable tier — on the agent, not the command.** This
+> command declares no `cost:` and no `model:` of its own; it runs on whatever model this session is
+> already using, and Tasks the
 > [`discovery-analyst`](../agents/discovery-analyst.md) agent for the judgment-heavy core of the
 > work (framing the idea, deciding the document set, shaping crossroads); its output anchors the
 > entire project, so the analyst declares `cost: high` with no lower member. This command still

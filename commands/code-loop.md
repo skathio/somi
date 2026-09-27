@@ -2,7 +2,6 @@
 description: Bounded code → review → fix loop on a single iteration. Exits on approve, on Blocker/Major-free verdict, on iteration cap, on diff cap, or on a recurring finding (coder/reviewer disagree → human).
 argument-hint: <slug> [phase N, iteration M]
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
-model: sonnet
 ---
 
 # /code-loop — Bounded code↔review iteration

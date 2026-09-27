@@ -1773,9 +1773,13 @@ smoke_mutation_case "staged failure 2/4: a non-existent allowed-tools entry fail
   "const mutated = orig.replace(/^allowed-tools:.*\$/m, 'allowed-tools: Read, Grep, Glob, Bash, FrobnicateTool');" \
   "allowed-tools:pr.md: 'FrobnicateTool' is not a Claude Code tool this repo recognizes (not in CLAUDE_CODE_TOOLS)"
 
-smoke_mutation_case "staged failure 3/4: an unrecognized model fails, attributed to 'model'" \
-  "const mutated = orig.replace(/^model:.*\$/m, 'model: gpt-5-turbo');" \
-  "model:pr.md: model 'gpt-5-turbo' is not one of this repo's tiers (opus, sonnet)"
+# Commands no longer declare model: at all (the front door dispatches this command's paired agent
+# at the agent's own declared cost/model instead) -- so the mutation for this slot is INSERTING
+# one, not un-recognizing one. pr.md carries no `model:` line post-conversion, so the mutation
+# prepends one right after the frontmatter's opening fence rather than replacing an existing line.
+smoke_mutation_case "staged failure 3/4: a re-added model: on a command fails, attributed to 'model'" \
+  "const mutated = orig.replace(/^---\$/m, '---\nmodel: sonnet');" \
+  "model:pr.md: frontmatter declares 'model: sonnet' -- commands no longer declare a model of their own; the front door dispatches this command's paired agent at the agent's own declared cost/model instead"
 
 # F-148 fix, proven both ways: FrobnicateTool (not real, above) still fails; TodoWrite (real, but
 # declared by no command in this repo today) now passes -- via the allowlist, not popularity. The

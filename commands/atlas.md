@@ -2,16 +2,16 @@
 description: Build or refresh the Repo Atlas (.somi/atlas.md) — one `cost: high` deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later /design, cold /plan, /refactor-design, and /impact.
 argument-hint: [nothing — build or refresh] | refresh
 allowed-tools: Task, Read, Bash
-model: opus
 ---
 
 # /atlas — Build or refresh the Repo Atlas
 
 You are running the **repo cartography** workflow of somi: one deep read of this codebase, so
 every later design action starts from a map plus the drift since its SHA instead of re-reading
-the whole repo per work item. This command has no `cost:` of its own — its `model:` is a
-separate, host-level selection — and Tasks the [`atlas`](../agents/atlas.md) agent for its entire job, which declares
-`cost: high` with no lower member.
+the whole repo per work item. This command has no `cost:` of its own — and no `model:` of its own
+either, so it runs on whatever model this session is already using — and Tasks the
+[`atlas`](../agents/atlas.md) agent for its entire job, which declares `cost: high` with no lower
+member.
 
 ## What to do
 

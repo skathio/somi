@@ -51,9 +51,10 @@ planning.
 
 **Expect**:
 - SoMi proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
-- Runs on the **most capable model end-to-end** (`/discover` declares no `cost:` of its own —
-  its `model:` is a separate, host-level selection — and Tasks `discovery-analyst` at `cost: high`
-  for the judgment-heavy core of the work) — its output is the cornerstone of the project. The
+- The judgment-heavy core runs at the most capable tier — on the agent, not the command:
+  `/discover` declares no `cost:` and no `model:` of its own (it runs on whatever model this
+  session is already using) and Tasks `discovery-analyst` at `cost: high` for the judgment-heavy
+  core of the work — its output is the cornerstone of the project. The
   command itself still scaffolds the artifact set and owns the crossroads conversation with you,
   which can't live inside a single `Task` call.
 - **Researches the competition extensively** — scans direct/indirect competitors, mines real user
@@ -587,10 +588,9 @@ optional; omit anything you don't want to change:
 ## Cost tiers and model resolution
 
 Cost is declared with a `cost:` field in frontmatter, beside `model:` — **agents only**: `cost:`
-sizes an agent instance being spawned, and a command is instructions, not an instance — it runs
-inline under whatever model its own `model:` field already picked, a separate, host-level
-selection `cost:` doesn't touch. `scripts/validate.sh` fails the build if a `commands/*.md` file
-declares `cost:`. Every `agents/*.md` file declares `cost:`
+sizes an agent instance being spawned, and a command is instructions, not an instance — it declares
+neither field and runs inline under whatever model the session is already using. `scripts/validate.sh`
+fails the build if a `commands/*.md` file declares `cost:` or `model:`. Every `agents/*.md` file declares `cost:`
 (one narrow, named exemption: `agents/somi.md` — its declaration was always decorative, since the
 host binds that agent's model when the user selects it, not SoMi), and `scripts/validate.sh`
 asserts presence and validity across all of them. **`cost:` is a CAPABILITY SET, and the test is

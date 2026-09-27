@@ -165,9 +165,8 @@ import("./scripts/lib/cost-model.mjs").then((m) => {
 eval "$cost_env"
 
 # (a) `cost:` lives on agents only -- `cost:` sizes an agent instance being spawned, and a
-# command isn't one, so `cost:` on a command binds to nothing (a command's own `model:` is a
-# separate, host-level selection this doesn't touch). Every agents/*.md file must declare a
-# `cost:` field (EXEMPTION:
+# command isn't one, so `cost:` on a command binds to nothing. Every agents/*.md file must declare
+# a `cost:` field (EXEMPTION:
 # agents/somi.md, see below) and every value in it (split on comma, for graded units) must be one
 # of scripts/lib/cost-model.mjs's VALID_COSTS. Every commands/*.md file must NOT declare one -- the
 # front door spawns that command's paired agent at the agent's own declared tier instead.
@@ -177,6 +176,13 @@ eval "$cost_env"
 # the declaration. A field nothing can read is worse than no field: a future dispatcher would have
 # to treat a decorative declaration as a trap. Named here, not silently skipped, so a later reader
 # does not "fix" it back in.
+#
+# Commands must not declare `model:` either, for the same reason: Claude Code honoured a
+# command's own `model:` for that command's own turn, which taught the repo that a command has a
+# cost while every dispatch target's actual cost lives on the agent it Tasks. Agents keep
+# `model:` -- it is still the mechanism Claude Code reads to pick a Tasked subagent's model, and
+# the retirement gate's frontmatter exemption (tests/scripts/lib/retirement-gate.mjs) still applies
+# to it.
 for f in agents/*.md commands/*.md; do
   [ -f "$f" ] || continue
   got="$(cost_of "$f")"
@@ -184,6 +190,11 @@ for f in agents/*.md commands/*.md; do
     commands/*.md)
       if [ -n "$got" ]; then
         echo "COST TIER ON COMMAND: $f declares cost: '$got' -- commands declare no cost: of their own; declare cost: on the agent this command Tasks instead" >&2
+        cost_failed=1
+      fi
+      declared_model="$(model_of "$f" | tr -d '[:space:]')"
+      if [ -n "$declared_model" ]; then
+        echo "MODEL ON COMMAND: $f declares model: '$declared_model' -- commands no longer declare a model of their own; the front door dispatches this command's paired agent at the agent's own declared cost/model instead" >&2
         cost_failed=1
       fi
       continue
@@ -299,8 +310,8 @@ assert_cost agents/pr.md low,medium
 # rather than a second hardcoded table. Top-ness, not mere membership: a `model:` naming a lower
 # declared member would silently run the agent at that lower tier regardless of ceiling -- the
 # muted-reviewer failure `cost:` exists to prevent, re-opened by hand. `agents/` only -- commands
-# no longer declare `cost:`, so there is nothing here to check it against; a command's own
-# `model:` stays untouched pending later dispatch work that reads `cost:` instead.
+# declare neither `cost:` nor `model:` any more (asserted above), so there is nothing here to check
+# them against.
 for f in agents/*.md; do
   [ -f "$f" ] || continue
   got="$(cost_of "$f" | tr -d '[:space:]')"

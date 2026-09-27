@@ -111,7 +111,6 @@ or examples, anti-patterns, when *not* to apply, when to escalate. See existing 
 description: One-liner for / autocomplete.
 argument-hint: <how to phrase arguments>
 allowed-tools: Task, Read, ...
-model: <the lighter default model; match the paired agent's own model only if this command Tasks a cost: high agent for its entire job>
 ---
 
 # /<name> — Title
@@ -120,19 +119,16 @@ model: <the lighter default model; match the paired agent's own model only if th
 invoke agents via Task, write artifact, summarise.)
 ```
 
-**`model:`** — the lighter default, unless the command Tasks a `cost: high` agent for its
-*entire* job (no other inline work of its own), in which case match that agent's own model —
-five commands do this today (`/adopt`, `/atlas`, `/design`, `/discover`, `/refactor-design`; see
-[docs/COMMANDS.md](./COMMANDS.md)). There is no gate for this choice — commands declare no
-`cost:` for `scripts/validate.sh` to check `model:` against — so get it right by hand.
+**No `model:` field.** A command runs on whatever model the session is already using — it is
+instructions, not an instance being spawned, so there is nothing here to size or select.
+`scripts/validate.sh` fails the build on a command that declares `model:`.
 
-**No `cost:` field.** `cost:` sizes an agent instance being spawned; a command isn't one — it's
-instructions that run inline under whatever model this turn is already on. Its own `model:` field
-(above) is a separate, host-level selection that `cost:` doesn't touch — `scripts/validate.sh`
-fails the build on a command that declares `cost:`. If the command does
-meaningful work of its own rather than only routing to other commands, give it a paired
-`agents/<name>.md` and Task it; that agent's own `cost:` follows the rule in "Adding an agent"
-above. Keep commands thin; agents do the heavy lifting. Add a catalogue-table row linking
+**No `cost:` field.** `cost:` sizes an agent instance being spawned; a command isn't one. If the
+command does meaningful work of its own rather than only routing to other commands, give it a
+paired `agents/<name>.md` and Task it; that agent's own `cost:` (and its own `model:`) follows the
+rule in "Adding an agent" above — the front door dispatches that agent at its own declared tier.
+Keep commands thin; agents do the heavy lifting. `scripts/validate.sh` fails the build on a command
+that declares `cost:`. Add a catalogue-table row linking
 `../commands/<name>.md` to [`docs/COMMANDS.md`](./COMMANDS.md) — `scripts/validate.sh` fails the
 build otherwise (`COMMAND NOT INDEXED`).
 

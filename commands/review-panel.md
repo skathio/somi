@@ -2,7 +2,6 @@
 description: Parallel multi-lens review. Spawns the relevant review agents (reviewer + security / architecture / test as the diff warrants) concurrently on the same change, then merges and de-duplicates their findings into one severity-graded verdict.
 argument-hint: <slug> [phase N, iteration M]  |  <diff target>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /review-panel — Parallel multi-lens review
@@ -14,8 +13,9 @@ Write/Edit and is forbidden from using them.
 The user's target: **$ARGUMENTS** (a work-item slug, optionally `phase N, iteration M`, or a diff
 target such as a PR / commit range / working tree).
 
-The orchestrator (this command) has no `cost:` of its own — its `model:` is a separate,
-host-level selection — and runs entirely inline. Each lens it Tasks resolves its model from its **own** declared set:
+The orchestrator (this command) has no `cost:` of its own — nor a `model:` of its own; it runs on
+whatever model this session is already using — and runs entirely inline. Each lens it Tasks
+resolves its model from its **own** declared set:
 `reviewer`, `architecture-reviewer`, and
 `test-strategist` declare `cost: medium, high` (the ceiling picks the highest permitted member,
 typically `high` for the fresh-eyes depth a panel wants); `security-reviewer` declares `cost: high`

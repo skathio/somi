@@ -35,9 +35,10 @@ It is designed to be:
 | `/review`     | medium, high | `reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
 | `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `cost: high` front-load), gated at every stage |
 
-**Cost tiers in practice.** `cost:` is declared by **agents**, not commands — `cost:` sizes an
-agent instance being spawned, and a command's own `model:` is a separate, host-level selection
-that `cost:` doesn't touch, so the tier above is the tier of the agent that command Tasks. The **`cost: high`** tier front-loads expensive reasoning — research, design,
+**Cost tiers in practice.** `cost:` (and `model:`) are declared by **agents**, not commands —
+`cost:` sizes an agent instance being spawned, and a command declares neither field, running on
+whatever model the session is already using — so the tier above is the tier of the agent that
+command Tasks. The **`cost: high`** tier front-loads expensive reasoning — research, design,
 decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The
 **`cost: medium`** tier executes against that brief *without re-researching*, so the high-volume
 work (plan detail, iterative coding) runs cheaply. `/discover` (new product) and `/design`

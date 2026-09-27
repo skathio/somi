@@ -2,7 +2,6 @@
 description: One-time SoMi onboarding for an existing codebase. Builds the Repo Atlas, confirms detected conventions into a pre-filled 99-overrides scaffold, produces a gap report (test thin ice, hotspots, candidate first refactors), and suggests a calibration work item.
 argument-hint: (no arguments — run once after installing SoMi in a repo)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
-model: opus
 ---
 
 # /adopt — Onboard SoMi into an existing codebase
@@ -13,7 +12,8 @@ concrete first exercise, instead of "read thirteen docs and type `/plan`".
 
 This is a composite of existing pieces, run in order, with the user confirming at each seam.
 
-> **No `cost:` of its own — its `model:` is a separate, host-level selection.** Stage 1 Tasks
+> **No `cost:` of its own, and no `model:` either — it runs on whatever model this session is
+> already using.** Stage 1 Tasks
 > the `atlas` agent ([`agents/atlas.md`](../agents/atlas.md)), which declares `cost: high` on its
 > own account and resolves against the session ceiling independently of this command. Stages 2 and
 > 4 read and write directly, inline, at whatever tier is already running this command. Stage 3 may

@@ -111,12 +111,12 @@ Status lives in `progress.md`, not in the directory location. Only humans delete
 foundation — *before* planning or coding. This is the requirements-engineering and high-level
 software-design phase of the SDLC. Its output is the cornerstone the planner consumes.
 
-**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md). Runs on the **most capable model
-end-to-end** (`/discover` declares no `cost:` of its own — its `model:` is a separate, host-level
-selection — and Tasks this agent at `cost: high` for the judgment-heavy core of the work) because
-the output anchors the entire project. The command itself still scaffolds `.somi/rd/<slug>/` and
-owns the crossroads conversation with the user — a Tasked run can't pause mid-flight to converse,
-so that part can't move into the `Task` call.
+**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md), Tasked at `cost: high` — the most
+capable tier this repo maps — for the judgment-heavy core of the work, because the output anchors
+the entire project. `/discover` itself declares no `cost:` and no `model:` of its own; it runs on
+whatever model the session is already using, and still scaffolds `.somi/rd/<slug>/` and owns the
+crossroads conversation with the user — a Tasked run can't pause mid-flight to converse, so that
+part can't move into the `Task` call.
 
 **Input**: a software idea / product concept from the user.
 
@@ -158,11 +158,11 @@ codebase — *before* planning — and compile it into the `brief.md` execution 
 fills the gap between discovery (a whole new product) and planning (sequencing): the requirement is
 clear, but how it should be shaped against *this* repo is not.
 
-**Agent**: [`designer`](../agents/designer.md). Runs on the **most capable model end-to-end**
-(`/design` declares no `cost:` of its own, like `/discover`, and Tasks this agent at `cost: high`
-for the judgment-heavy core of the work) because its `brief.md` anchors the whole work item. The
-command itself still scaffolds the artifact set and owns the crossroads conversation with the
-user, for the same reason as `/discover`'s.
+**Agent**: [`designer`](../agents/designer.md), Tasked at `cost: high` — the most capable tier this
+repo maps — for the judgment-heavy core of the work, because its `brief.md` anchors the whole work
+item. `/design` itself declares no `cost:` and no `model:` of its own, like `/discover`; it runs on
+whatever model the session is already using, and still scaffolds the artifact set and owns the
+crossroads conversation with the user, for the same reason as `/discover`'s.
 
 **Input**: a feature / user story on an existing codebase.
 

@@ -2,7 +2,6 @@
 description: Produce a staff-engineer-grade implementation plan under .somi/plans/<slug>/ — context, spec, decisions, phases, progress, diary. Pauses for user verification on architectural decisions.
 argument-hint: <problem statement>
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebFetch, Bash
-model: sonnet
 ---
 
 # /plan — Planning workflow

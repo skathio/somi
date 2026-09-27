@@ -2,7 +2,6 @@
 description: "Scope design for a refactor too big for one diff, done as a `cost: high` pass: names the destination shape, maps seams and risks across modules, confirms test-coverage gaps, and compiles a brief.md that /plan-loop → /code-loop execute. Split from /refactor because mode selection and tier selection are different decisions."
 argument-hint: <refactor target too large for one safe diff>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
-model: opus
 ---
 
 # /refactor-design — Large-refactor scope design
@@ -13,8 +12,9 @@ a shared shape. Rather than editing, this command **designs the refactor scope**
 into a [`brief.md`](../templates/BRIEF.md.tmpl) that the cheaper tier executes via
 [`/plan-loop`](./plan-loop.md) → [`/code-loop`](./code-loop.md).
 
-> **Runs on the most capable model end-to-end**, like [`/design`](./design.md). This command has
-> no `cost:` of its own — its `model:` is a separate, host-level selection — and Tasks the
+> **The judgment-heavy core runs at the most capable tier — on the agent, not the command**, like
+> [`/design`](./design.md). This command declares no `cost:` and no `model:` of its own; it runs on
+> whatever model this session is already using, and Tasks the
 > [`refactor-designer`](../agents/refactor-designer.md) agent for the judgment-heavy core of the
 > work (naming the destination shape, mapping seams and risks, confirming test-coverage gaps); its
 > `brief.md` anchors the whole refactor, so the agent declares `cost: high` with no lower member.

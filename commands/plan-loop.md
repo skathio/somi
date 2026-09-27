@@ -2,7 +2,6 @@
 description: Bounded plan → review → revise loop. Best for ambiguous / architectural work. Exits on approve, on iteration cap, on divergence (plan keeps churning without findings dropping), or on user stop.
 argument-hint: <problem statement> | <slug>  (slug to continue revising an existing plan)
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /plan-loop — Bounded plan↔review iteration
@@ -17,8 +16,9 @@ $ARGUMENTS
 ```
 
 This command automates the manual `/plan` → `/review plan <slug>` → `/plan` cycle, with **hard
-gates** that ensure it terminates. It has no `cost:` of its own — its `model:` is a separate,
-host-level selection — and runs entirely inline; the `planner` it Tasks declares `cost: low,
+gates** that ensure it terminates. It has no `cost:` of its own — nor a `model:` of its own; it runs
+on whatever model this session is already using — and runs entirely inline; the `planner` it Tasks
+declares `cost: low,
 medium` (`medium` unless the session ceiling resolves to `low`; executing against an upstream
 `brief.md` when one exists), while the `reviewer` it Tasks declares
 `cost: medium, high` — the session ceiling picks the highest permitted member, typically `high`

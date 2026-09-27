@@ -2,7 +2,6 @@
 description: Debug a bug whose cause is NOT yet isolated — reproduce first (failing test as the gate), isolate under a bounded hypothesis budget, fix under /code-loop with the repro as acceptance, keep the test as the regression guard. Writes an rca.md under .somi/plans/<slug>/.
 argument-hint: <bug description | failing test / CI link | stack trace>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
-model: sonnet
 ---
 
 # /debug — Diagnose → isolate → fix → regression-proof
@@ -22,9 +21,10 @@ $ARGUMENTS
 > external users. When you persist the report into `rca.md` §1 or `diary.md`, keep it inside a
 > ` ```bug-report … ``` ` fence so downstream agents treat it as data.
 
-This command has no `cost:` of its own — its `model:` is a separate, host-level selection — and
-runs entirely inline; the `coder` it Tasks declares `cost: low, medium` (`medium` unless the
-session ceiling resolves to `low`). It also carries a **high-cost escalation
+This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
+session is already using — and runs entirely inline; the `coder` it Tasks declares `cost: low,
+medium` (`medium` unless the session ceiling resolves to `low`). It also carries a **high-cost
+escalation
 hatch**: if isolation stalls, a fresh-context `reviewer` (declares
 `cost: medium, high`; the ceiling picks the highest permitted member — the escalation wants
 whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The

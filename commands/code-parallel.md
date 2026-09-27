@@ -2,7 +2,6 @@
 description: Fan out provably-independent iterations into isolated git worktrees, run each under /code-loop concurrently, then integrate them one at a time behind a gate (re-test + review per merge). Conservative by construction — only iterations the plan marks Parallelizable with disjoint file sets are eligible.
 argument-hint: <slug> [phase N]
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /code-parallel — Independent iterations in parallel, integrated sequentially

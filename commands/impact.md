@@ -2,7 +2,6 @@
 description: Change-impact analysis (read-only). Given a proposed change, surface, or diff, map the blast radius — callers/consumers, contracts crossed, tests covering it, migration surface, review lenses warranted — before committing to /design or /plan. Sometimes the honest output is "reconsider".
 argument-hint: <proposed change / file or symbol / diff range>
 allowed-tools: Task, Write
-model: sonnet
 ---
 
 # /impact — Change-impact analysis (blast radius before commitment)

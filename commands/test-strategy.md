@@ -2,7 +2,6 @@
 description: Design or critique a test strategy for a change. Risk-driven coverage, level selection (unit/integration/e2e), mock policy, determinism. Output lands under .somi/reviews/<slug>/ when scoped.
 argument-hint: <slug> | <file path> | <free-form description of what to test>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /test-strategy — Targeted test-strategy review

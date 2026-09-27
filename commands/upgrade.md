@@ -2,7 +2,6 @@
 description: Dependency upgrade validation. High-cost research into the changelog / breaking changes / CVE context (cited), scans actual usage of the changed APIs, compiles a mini-brief; medium-cost execution migrates under /code-loop. Integrates with the dep-install gate.
 argument-hint: <package [from → to]> | <link to a Renovate/Dependabot PR>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebSearch, WebFetch
-model: sonnet
 ---
 
 # /upgrade — Dependency upgrade validation

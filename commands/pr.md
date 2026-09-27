@@ -2,7 +2,6 @@
 description: Compose a PR title + description from a work item's artifacts (spec/rca, verified decisions, progress, review verdicts, open findings, diary highlights) and optionally open it via gh. The exit ramp from .somi/ artifacts into the team's PR workflow.
 argument-hint: <slug> [--draft]
 allowed-tools: Task, Read, Bash, Write, Edit
-model: sonnet
 ---
 
 # /pr — Work item → pull request handoff

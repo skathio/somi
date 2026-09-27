@@ -50,7 +50,6 @@ Each command lives in `commands/<name>.md` with frontmatter:
 description: Short one-liner shown in / autocomplete.
 argument-hint: <how to phrase arguments>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
-model: sonnet
 ---
 
 # /command-name — Title
@@ -79,15 +78,15 @@ The heavy lifting lives in **agents**. Commands are deliberately small because:
   understand what the planner workflow does.
 - They isolate orchestration from agent-internal behavior; you can swap an agent's prompt without
   touching the command.
-- They carry no `cost:` of their own — `cost:` sizes an agent instance being spawned, and a
-  command's own `model:` is a separate, host-level selection that `cost:` doesn't touch — and
-  simply Task the tier-appropriate agent: **`cost: high`** agents (design,
+- They carry no `cost:` of their own, and no `model:` either — `cost:` sizes an agent instance
+  being spawned, and a command runs on whatever model the session is already using — and simply
+  Task the tier-appropriate agent: **`cost: high`** agents (design,
   discovery, review) for front-loaded reasoning, **`cost: low, medium`** agents (planner, coder)
   for execution against the brief, reduced-depth at `low` only when the user set the session
   ceiling there. Tasking a differently-costed subagent from an uncosted orchestrator is the
   cache-correct way to mix tiers. See [Cost tiering](./AGENTS.md#cost-tiering).
 
-## Default model & tool grants
+## Model & tool grants
 
 Commands declare what tools they expect to use. The default for SoMi commands is broad
 (`Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch`). **Agents do not narrow this** — no SoMi
@@ -95,8 +94,9 @@ agent declares a `tools:` field, so every agent inherits full tool access. Revie
 constrained by a **`## Write discipline` contract in their own prompt**, not by platform restriction; see
 [`docs/AGENTS.md`](./AGENTS.md) for why that trade was made.
 
-**Commands declare no `cost:` of their own** — `scripts/validate.sh` fails the build if one
-does. The agent a command Tasks runs on its own **cost tier** — `cost: high` for high-cost agents
+**Commands declare no `cost:` of their own, and no `model:` either** — `scripts/validate.sh` fails
+the build if a command declares either field; a command runs on whatever model the session is
+already using. The agent a command Tasks runs on its own **cost tier** — `cost: high` for high-cost agents
 (design, discovery, review), `cost: low, medium` for the builder agents (planner, coder,
 refactorer) — `low` selected whenever the session ceiling resolves there (an explicit CLI flag or
 `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the front door
@@ -133,11 +133,12 @@ Some commands also support positional args (`$1`, `$2`) — see Claude Code's co
 
 ## Adding a new command
 
-1. Create `commands/<name>.md` with the frontmatter shape above. **No `cost:` field** — that
-   belongs on the agent this command Tasks, never on the command itself; `validate.sh` fails
-   the build on a command that declares one. If the command does its own work rather than routing
-   to another command, give it a paired `agents/<name>.md` and have the command Task it; that
-   agent's own `cost:` follows [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs).
+1. Create `commands/<name>.md` with the frontmatter shape above. **No `cost:` field, and no
+   `model:` field** — both belong on the agent this command Tasks, never on the command itself;
+   `validate.sh` fails the build on a command that declares either. If the command does its own
+   work rather than routing to another command, give it a paired `agents/<name>.md` and have the
+   command Task it; that agent's own `cost:` and `model:` follow
+   [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs).
 2. Write the body as a prompt: validate, resolve, invoke, write, summarise. Fence persisted
    user input as data.
 3. If the command writes artifacts inside `.somi/plans/<slug>/`, document the file naming convention.

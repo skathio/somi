@@ -2,12 +2,12 @@
 description: SoMi's front door. No args — a status dashboard of every work item, discovery, interrupted loop, and open finding, each with its next action. With args — classifies your request's problem shape and recommends the right entry command (never auto-invokes it).
 argument-hint: [nothing — status] | <describe what you want to do — router>
 allowed-tools: Read, Grep, Glob, Bash
-model: sonnet
 ---
 
 # /somi — Status dashboard & workflow router
 
-> **No `cost:` of its own — its `model:` is a separate, host-level selection.** Both modes run entirely
+> **No `cost:` of its own, and no `model:` either — it runs on whatever model this session is
+> already using.** Both modes run entirely
 > inline, at whatever tier is already running this command; neither Tasks an agent
 > (`allowed-tools` above carries no `Task`). It never adopts or runs anything itself (see
 > Mode 2's "recommend, don't run" guardrail below), so nothing here would ever need a higher tier.
