@@ -12,9 +12,10 @@
 // justified, not just silently excluded:
 //   - scripts/lib/cost-model.mjs -- the mapping file itself; model names legitimately live here,
 //     it is the one place a repricing or a new model gets edited.
-//   - tests/scripts/cost-model.sh, tests/scripts/cost-ceiling.sh -- unit guards for the resolver
-//     above; their assertions are literally "does resolveModel(...) return the string 'haiku'",
-//     so the model names are test data proving the mapping, not tier vocabulary.
+//   - tests/scripts/cost-model.sh, tests/scripts/cost-ceiling.sh, tests/scripts/somi-dispatch.sh --
+//     unit guards for the resolver above and its CLI; their assertions are literally "does
+//     resolveModel(...) return the string 'haiku'" (or the CLI's JSON carry it), so the model
+//     names are test data proving the mapping, not tier vocabulary.
 //   - tests/evals/lib/boundary.mjs, tests/evals/lib/score.mjs -- historical comments about which
 //     specific Claude model variant graded a past eval run (an unrelated grading concern, not
 //     SoMi's own agent/command tier system).
@@ -49,6 +50,7 @@ const EXEMPT_FILES = new Set([
   'scripts/lib/cost-model.mjs',
   'tests/scripts/cost-model.sh',
   'tests/scripts/cost-ceiling.sh',
+  'tests/scripts/somi-dispatch.sh',
   'tests/scripts/eval-runner.sh',
   'tests/evals/lib/boundary.mjs',
   'tests/evals/lib/score.mjs',

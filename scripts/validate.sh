@@ -59,6 +59,38 @@ bash tests/scripts/cost-model.sh
 echo "==> Cost ceiling tests..."
 bash tests/scripts/cost-ceiling.sh
 
+echo "==> Dispatch resolver tests..."
+bash tests/scripts/somi-dispatch.sh
+
+echo "==> Validating the never-degrade dispatch guard..."
+# scripts/lib/cost-ceiling.mjs's modelForDispatch() is the ONLY sanctioned way to turn a dispatch
+# decision into a model: it resolves the SELECTED tier and refuses anything shaped as other than an
+# "allow" decision. Calling the underlying model resolver directly against a decision's ceiling
+# field instead of its selected field reads fine in English but is a different, unsanctioned
+# composition -- it would run a unit at whatever tier the session merely PERMITS rather than the
+# tier decideDispatch actually picked for it, silently running above what the unit declared. This
+# gate closes that path structurally rather than by convention: nothing outside the library itself
+# may compose the two functions that way. scripts/somi-dispatch.mjs is the first real dispatch call
+# site this machinery ever had (before it, decideDispatch/modelForDispatch had zero live callers),
+# so the gate had to land no later than this change, not after.
+#
+# EXEMPT: scripts/lib/ -- cost-ceiling.mjs's own modelForDispatch() resolves against a decision's
+# SELECTED tier, never its ceiling, but the exemption is by path, not by re-deriving that fact here
+# on every run. Also EXEMPT: tests/scripts/dispatch-guard.sh -- this guard's own regression test,
+# which plants the violating call ON PURPOSE inside a synthetic fixture to prove the guard catches
+# it; the same self-exemption tests/scripts/retirement-gate.sh needs from the gate it tests.
+dispatch_guard_failed=0
+if grep -rnE 'resolveModel\([A-Za-z_$][A-Za-z0-9_$]*\.ceiling' \
+    agents commands docs scripts hooks tests README.md AGENTS.md 2>/dev/null \
+    | grep -v '^scripts/lib/' | grep -v '^tests/scripts/dispatch-guard\.sh:'; then
+  echo "UNSANCTIONED DISPATCH: resolveModel() called against a ceiling value directly above -- use modelForDispatch(decideDispatch(...), host) instead, which resolves the SELECTED tier" >&2
+  dispatch_guard_failed=1
+fi
+if [ "$dispatch_guard_failed" -ne 0 ]; then
+  exit 1
+fi
+bash tests/scripts/dispatch-guard.sh
+
 echo "==> Eval fixture guards..."
 # Guards tests/evals/fixtures/. Two Blockers from iteration 3.3b live here: a plan tree shipped
 # under `.somi/` that .gitignore silently dropped from the package, and pass criteria

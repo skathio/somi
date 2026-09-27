@@ -664,9 +664,9 @@ the same vocabulary Copilot's own model picker already uses:
 - `high` — front-loaded or adversarial reasoning: architecture, cross-cutting design, fresh-eyes
   review, open-ended research.
 
-A shipped mapping resolves a single, already-*selected* cost tier and a host to a concrete model at
-spawn time: [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s
-`resolveModel(cost, host, mapping)`. `mapping` defaults to the shipped table; `.somi/config.json`'s
+A shipped mapping resolves a single, already-*selected* cost tier and a host to a concrete model:
+[`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s `resolveModel(cost, host, mapping)`.
+`mapping` defaults to the shipped table; `.somi/config.json`'s
 `cost.mapping` overrides it — `mergeHostMapping(HOST_MODELS, config.cost.mapping)` builds the
 effective mapping to pass as `resolveModel`'s third argument, replacing a named host's whole tier
 map rather than merging it tier-by-tier. A host absent from the mapping gets no override — the
@@ -677,8 +677,9 @@ object-literal syntax) throws rather than silently resolving to the wrong model.
 
 ### Session ceiling
 
-The library and the declarations below are in place; no dispatcher reads `cost:` against a ceiling
-yet, so this mechanism has no live callers today — that wiring is a later phase's work.
+The library and the declarations below are in place. [`scripts/somi-dispatch.mjs`](#dispatch-resolver)
+(below) is the first live caller composing this with the mapping above; a host prompt still has to
+shell out to it itself before a spawn — nothing invokes it automatically today.
 
 A session ceiling **selects among the tiers a unit offers; it does not decide whether the unit
 runs.** [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root,
@@ -717,6 +718,65 @@ turn a decision into a model: it resolves `decision.selected` and refuses outrig
 `decision.action` is `allow` — unreachable through `decideDispatch` today, since every dispatch now
 allows, but kept as the structural closer for the never-degrade rule: nothing ever runs below a
 tier it declared.
+
+### Dispatch resolver
+
+[`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs) is the one shipped command that
+composes the three pieces above into a single answer: for a given agent, right now, which tier and
+model should run it. A host prompt that cannot call a function directly shells out to this instead
+of judging cost tiers itself.
+
+```
+node scripts/somi-dispatch.mjs resolve --agent <name> [--host <host>] [--ceiling <tier>]
+```
+
+- `--agent` is validated against `^[a-z][a-z0-9-]*$` before it ever touches a filesystem path — it
+  may come from a prompt carrying untrusted text. The agent's frontmatter is read from **this
+  script's own install location**, never the caller's project (a consuming project may have no
+  `agents/` directory of its own).
+- `--host` defaults to `claude-code`.
+- `--ceiling` is an explicit override for this one call, passed straight through to
+  `resolveCeiling`.
+
+Before resolving a model, it builds the effective mapping the same way this doc's "Cost tiers"
+section above describes: `mergeHostMapping(HOST_MODELS, cost.mapping)`, where `cost.mapping` is
+read from the **caller's project** `.somi/config.json` (via `readCostConfig` — the same reader
+`resolveCeiling` uses for `cost.ceiling`, so a project's cost config is never parsed by two readers
+that could disagree). Unlike the ceiling, this is read fresh on every call rather than only at
+bootstrap: the mapping is a lookup table, not a gate a mid-session edit could reopen, so a config
+fix takes effect on the very next dispatch. This is how a host SoMi doesn't ship a mapping for
+(e.g. Copilot) gets one at all — the user's own project tells SoMi which of its models is
+`low`/`medium`/`high`. A malformed mapping (a `__proto__`/`constructor`/`prototype` key, a mapped
+host missing the tier just selected, a non-string model value) fails this call the same way a
+malformed `cost:` declaration does — loudly, exit `66`, never a guessed model.
+
+On success it prints one JSON object and exits 0 — `agent`, `supported` (the normalized declared
+set), `tier` (what `decideDispatch` selected), `model` (what the effective mapping resolves that
+tier and host to today — this doc names the tier, not the model, for the same reason the rest of
+this section does), `ceiling`, and `ceiling_source`:
+
+```json
+{"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "ceiling": "high", "ceiling_source": "default"}
+```
+
+`model` is `null` for a host absent from the mapping — "let the host choose" — never a guessed
+name. `ceiling_source` is one of `cli`, `env`, `config`, `state`, `default`: `resolveCeiling`
+reports this on every call, not only when a ceiling actually moves, which is what lets a caller
+announce a `low` ceiling honestly by where it came from, not just that it's in force.
+
+Failure is loud and specific rather than a bare stack trace, with a distinct exit code per cause:
+`64` for a bad or missing argument, `65` for an agent with no matching file, `66` for an agent whose
+declaration can't be resolved (a malformed `cost:` set, or `somi`, which is exempt — its model is
+bound by the host when the user selects it, so there is nothing here to resolve). No JSON is ever
+printed on a failing path.
+
+`scripts/validate.sh` additionally greps for `resolveModel(` called against a decision's `ceiling`
+field instead of its `selected` field, outside `scripts/lib/` — the one unsanctioned composition
+that would silently run a unit at whatever the session merely *permits* rather than the tier
+`decideDispatch` actually picked for it. This resolver is required to use `modelForDispatch`, never
+`resolveModel` directly, and the gate fails the build if a future call site reintroduces exactly
+that `resolveModel(<name>.ceiling, …)` shape — a targeted grep, not proof every call site uses
+`modelForDispatch`.
 
 ## Dependency additions
 

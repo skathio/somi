@@ -72,6 +72,29 @@ check "no duplicate override entry was recorded for the bare call" \
 out="$(SOMI_COST_CEILING=low node --input-type=module -e "const C = await import('$LIB'); const r = C.resolveCeiling('$B', 'medium'); process.stdout.write(r.ceiling+','+r.override.source+','+r.override.from)")"
 check "explicit argument wins over env var, and is recorded with source cli" "$out" "medium,cli,high"
 
+# --- resolveCeiling reports WHERE this call's ceiling came from -- this is what lets a dispatcher
+# announce a `low` ceiling honestly, by its real source, not just its bare value. Additive field,
+# checked independently of `ceiling`/`overridden` above so a caller that never reads it stays
+# unaffected. ---------------------------------------------------------------------------------
+DEF="$TMP/source-default"; mkdir -p "$DEF/.somi"
+check "bootstrap with no config, no env, no arg: source is 'default'" \
+  "$(run "$DEF" 'process.stdout.write(C.resolveCeiling(ROOT, undefined).source)')" \
+  "default"
+
+CFGSRC="$TMP/source-config"; mkdir -p "$CFGSRC/.somi"
+printf '{"cost": {"ceiling": "low"}}\n' > "$CFGSRC/.somi/config.json"
+check "bootstrap from .somi/config.json's cost.ceiling: source is 'config'" \
+  "$(run "$CFGSRC" 'process.stdout.write(C.resolveCeiling(ROOT, undefined).source)')" \
+  "config"
+check "a later bare call against the same state: source is 'state', not 'config' again" \
+  "$(run "$CFGSRC" 'process.stdout.write(C.resolveCeiling(ROOT, undefined).source)')" \
+  "state"
+check "an explicit CLI argument: source is 'cli' even when it matches the value already on disk" \
+  "$(run "$CFGSRC" 'process.stdout.write(C.resolveCeiling(ROOT, "low").source)')" \
+  "cli"
+out="$(SOMI_COST_CEILING=low node --input-type=module -e "const C = await import('$LIB'); process.stdout.write(C.resolveCeiling('$CFGSRC', undefined).source)")"
+check "an explicit env var: source is 'env'" "$out" "env"
+
 # --- malformed values die loudly, never silently defang the ceiling -----------------------------
 expect_exit "a malformed explicit argument is rejected (uncaught, not swallowed)" 1 \
   "$B" 'C.resolveCeiling(ROOT, "unlimited")'
@@ -99,6 +122,20 @@ expect_exit "a typo'd key inside cost dies loudly rather than falling back to th
 SHAPE3="$TMP/shape3"; mkdir -p "$SHAPE3/.somi"; printf '{"ceiling": "low"}' > "$SHAPE3/.somi/config.json"
 expect_exit "a ceiling key at the top level (outside cost) dies loudly, not silently ignored" 1 \
   "$SHAPE3" 'C.resolveCeiling(ROOT, undefined)'
+
+# --- an UNPARSABLE config.json (bad JSON, not just a wrong shape) dies loudly too, never {} ------
+BROKEN="$TMP/broken"; mkdir -p "$BROKEN/.somi"
+printf '{"cost": {"ceiling": "low"}\n' > "$BROKEN/.somi/config.json"  # missing closing brace
+expect_exit "an unparsable config.json dies loudly rather than silently resolving to {}" 1 \
+  "$BROKEN" 'C.resolveCeiling(ROOT, undefined)'
+broken_out="$(run "$BROKEN" 'C.resolveCeiling(ROOT, undefined); process.stdout.write("SHOULD-NOT-PRINT")' 2>/dev/null)"
+check "an unparsable config.json produces no stdout before dying" "$broken_out" ""
+check "the unparsable-config error names the config file path" \
+  "$(run "$BROKEN" 'try { C.resolveCeiling(ROOT, undefined); } catch (e) { process.stdout.write(String(e.message.includes("config.json"))); }')" \
+  "true"
+check "an unparsable config leaves no state file behind" \
+  "$(run "$BROKEN" 'const fs = await import("node:fs"); process.stdout.write(String(fs.existsSync(C.ceilingStatePath(ROOT))))')" \
+  "false"
 
 # --- a present state file with a semantically corrupt ceiling dies loudly, not silently ---------
 CORRUPT="$TMP/corrupt"; mkdir -p "$CORRUPT/.somi/somi-state"

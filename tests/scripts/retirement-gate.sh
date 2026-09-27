@@ -277,10 +277,10 @@ exempt_count="$(awk '
   f && /^\]\);$/ { f=0; next }
   f { print }
 ' "$GATE" | grep -c "'")"
-if [ "$exempt_count" -eq 9 ]; then
-  ok "EXEMPT_FILES has exactly 9 entries (growing the list is now a visible test failure, not a silent edit)"
+if [ "$exempt_count" -eq 10 ]; then
+  ok "EXEMPT_FILES has exactly 10 entries (growing the list is now a visible test failure, not a silent edit)"
 else
-  bad "EXEMPT_FILES has $exempt_count entries, expected 9 -- if the exemption list grew on purpose, update this pin deliberately"
+  bad "EXEMPT_FILES has $exempt_count entries, expected 10 -- if the exemption list grew on purpose, update this pin deliberately"
 fi
 
 echo "retirement gate tests: $pass ok, $fail failed"

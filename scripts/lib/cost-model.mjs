@@ -6,6 +6,11 @@
 
 export const VALID_COSTS = Object.freeze(['low', 'medium', 'high']);
 
+// A mapped model can come from committed, cloned .somi/config.json -- untrusted input about to
+// reach a prompt and possibly a host CLI -- so it must look like a model identifier, not just be
+// a non-empty string.
+const MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:/@\[\]-]{0,127}$/;
+
 // Hosts with a verified model identifier for each tier. Add an entry to opt a new host into
 // explicit model selection; leave a host out to keep it on its own default.
 //
@@ -27,8 +32,18 @@ export function resolveModel(cost, host, mapping = HOST_MODELS) {
   if (!Object.hasOwn(mapping, host)) return null; // unmapped host: no override, its own default applies
   const models = mapping[host];
   const model = models[cost];
-  if (!model) {
+  if (model === undefined) {
     throw new Error(`cost-model: host "${host}" has no "${cost}" entry in its mapping`);
+  }
+  // A user-supplied mapping (.somi/config.json's cost.mapping) can name a tier with a non-string
+  // value (a number, an object, an empty string) -- that must die loudly here, at the one place
+  // every mapping (shipped or overridden) is read, rather than silently handing a caller something
+  // that prints into JSON as a "model" no host can actually run.
+  if (typeof model !== 'string' || model === '') {
+    throw new Error(`cost-model: host "${host}"'s "${cost}" entry must be a non-empty string, got ${JSON.stringify(model)}`);
+  }
+  if (!MODEL_ID_RE.test(model)) {
+    throw new Error(`cost-model: host "${host}"'s "${cost}" entry "${model}" is not a valid model identifier`);
   }
   return model;
 }

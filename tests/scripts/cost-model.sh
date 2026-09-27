@@ -44,6 +44,20 @@ expect_exit "an unmapped host does not error" 0 \
 check "a prototype-chain host name is treated as unmapped, not inherited" \
   "$(run 'process.stdout.write(String(M.resolveModel("medium", "constructor")))')" "null"
 
+# --- a mapped model value must look like a model identifier, not just any non-empty string ------
+# Built from harmless shell metacharacters -- never a destructive command.
+HOSTILE_MODEL='opus; echo pwned; `id`; $(id)'
+expect_exit "a hostile mapped model value is rejected, not resolved" 1 \
+  "M.resolveModel(\"high\", \"hostile-host\", { \"hostile-host\": { \"high\": \"$HOSTILE_MODEL\" } })"
+hostile_out="$(run "process.stdout.write(M.resolveModel(\"high\", \"hostile-host\", { \"hostile-host\": { \"high\": \"$HOSTILE_MODEL\" } }))" 2>/dev/null)"
+check "the hostile model value produces no stdout before dying" "$hostile_out" ""
+check "the thrown error names the bad value, not a generic message" \
+  "$(run "try { M.resolveModel(\"high\", \"hostile-host\", { \"hostile-host\": { \"high\": \"$HOSTILE_MODEL\" } }); } catch (e) { process.stdout.write(String(e.message.includes('is not a valid model identifier'))); }")" \
+  "true"
+check "every shipped HOST_MODELS value passes the model-identifier pattern" \
+  "$(run 'let bad = 0; for (const host of Object.keys(M.HOST_MODELS)) { for (const c of M.VALID_COSTS) { try { M.resolveModel(c, host); } catch { bad++; } } } process.stdout.write(String(bad))')" \
+  "0"
+
 # --- an unrecognized cost value fails loudly, never silently ---------------------
 expect_exit "an invalid cost value throws (uncaught, not swallowed)" 1 \
   'M.resolveModel("critical", "claude-code")'

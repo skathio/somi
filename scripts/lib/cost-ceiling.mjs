@@ -37,10 +37,21 @@ function nowIso() {
 }
 
 function readConfig(root) {
+  const file = path.join(root, '.somi', 'config.json');
+  let raw;
   try {
-    return JSON.parse(fs.readFileSync(path.join(root, '.somi', 'config.json'), 'utf8'));
-  } catch {
-    return {}; // missing or unparsable config: best-effort, matches the existing config readers
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return {}; // no config committed: nothing configured, defaults apply
+    throw e;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    // A committed config that fails to PARSE is not "unconfigured" -- silently returning {} here
+    // would bootstrap DEFAULT_CEILING and PERSIST it, inverting a team's `low` policy until
+    // someone notices, and outliving the typo once fixed. Dies loudly instead, naming the file.
+    throw new Error(`cost-ceiling: ${file} is not valid JSON: ${e.message}`);
   }
 }
 
@@ -48,7 +59,11 @@ const COST_CONFIG_KEYS = new Set(['ceiling', 'mapping']);
 
 // A `cost` that isn't an object, has an unrecognized key (a typo), or a `ceiling` misplaced at
 // the top level all die loudly here instead of silently resolving to "not configured".
-function readCostConfig(root) {
+//
+// Exported: this is also the one config reader scripts/somi-dispatch.mjs uses to pull `mapping`
+// (its `ceiling` sibling), so a project's cost config is never parsed by two independent readers
+// that could drift on what counts as malformed.
+export function readCostConfig(root) {
   const cfg = readConfig(root);
   if (cfg.ceiling !== undefined) {
     throw new Error('cost-ceiling: "ceiling" in .somi/config.json belongs under "cost.ceiling"');
@@ -83,6 +98,12 @@ function saveState(root, state) {
 // .somi/config.json's `cost.ceiling` (validated) or DEFAULT_CEILING. A PRESENT but corrupt file is
 // not silently treated as missing — it throws, same "malformed dies loudly" discipline as a bad
 // CLI/env value, rather than quietly re-arming at the default with the corruption unreported.
+//
+// Returns `{state, bootstrapSource}` — `bootstrapSource` is `'config'` or `'default'` when this
+// call just bootstrapped a fresh state file, or `'state'` when an existing one was loaded. This is
+// what lets resolveCeiling() report where a ceiling came from even on a call that overrides
+// nothing — a dispatcher can then announce a `low` ceiling honestly, by its real source, not just
+// by its bare value.
 function loadOrInitState(root) {
   const file = ceilingStatePath(root);
   let raw;
@@ -91,19 +112,20 @@ function loadOrInitState(root) {
   } catch (e) {
     if (e.code !== 'ENOENT') throw e;
     const configured = readCostConfig(root).ceiling;
-    const ceiling = configured === undefined || configured === null || configured === ''
-      ? DEFAULT_CEILING
-      : validateCeiling(configured, 'cost.ceiling in .somi/config.json');
+    const isConfigured = !(configured === undefined || configured === null || configured === '');
+    const ceiling = isConfigured
+      ? validateCeiling(configured, 'cost.ceiling in .somi/config.json')
+      : DEFAULT_CEILING;
     const state = { ceiling };
     saveState(root, state);
-    return state;
+    return { state, bootstrapSource: isConfigured ? 'config' : 'default' };
   }
   const state = JSON.parse(raw);
   if (state === null || typeof state !== 'object' || Array.isArray(state)) {
     throw new Error(`cost-ceiling: ${file} is not a valid state object`);
   }
   state.ceiling = validateCeiling(state.ceiling, `ceiling in ${file}`);
-  return state;
+  return { state, bootstrapSource: 'state' };
 }
 
 /**
@@ -112,32 +134,37 @@ function loadOrInitState(root) {
  * Precedence for what can MOVE a ceiling already in force: explicitArg > env var; neither present
  * means the ceiling on disk stands, full stop — `.somi/config.json` is never re-read after the
  * state file first exists.
- * @returns {{ceiling: string, overridden: boolean, override?: object}}
+ * `source` names where THIS call's effective ceiling came from — `cli` or `env` when explicitArg
+ * or SOMI_COST_CEILING was read this call (whether or not it actually moved the value), otherwise
+ * the ceiling's own origin: `config` or `default` on the call that bootstrapped it, `state` on
+ * every later call that just loads what a previous call already persisted.
+ * @returns {{ceiling: string, overridden: boolean, source: string, override?: object}}
  */
 export function resolveCeiling(root, explicitArg) {
-  const state = loadOrInitState(root);
+  const { state, bootstrapSource } = loadOrInitState(root);
   const isCli = explicitArg !== undefined && explicitArg !== '';
   const envVal = process.env[CEILING_ENV];
   const explicit = isCli ? explicitArg : (envVal === undefined || envVal === '' ? undefined : envVal);
   if (explicit === undefined) {
-    return { ceiling: state.ceiling, overridden: false };
+    return { ceiling: state.ceiling, overridden: false, source: bootstrapSource };
   }
-  const validated = validateCeiling(explicit, isCli ? '--cost-ceiling' : CEILING_ENV);
+  const source = isCli ? 'cli' : 'env';
+  const validated = validateCeiling(explicit, isCli ? '--ceiling' : CEILING_ENV);
   if (validated === state.ceiling) {
-    return { ceiling: state.ceiling, overridden: false };
+    return { ceiling: state.ceiling, overridden: false, source };
   }
   const override = {
     field: 'ceiling',
     from: state.ceiling,
     to: validated,
-    source: isCli ? 'cli' : 'env',
+    source,
     at: nowIso(),
   };
   state.ceiling = validated;
   if (!Array.isArray(state.ceiling_overrides)) state.ceiling_overrides = [];
   state.ceiling_overrides.push(override);
   saveState(root, state);
-  return { ceiling: state.ceiling, overridden: true, override };
+  return { ceiling: state.ceiling, overridden: true, source, override };
 }
 
 // A declared `cost` is a CAPABILITY SET, not a single value -- every tier the unit can usefully
