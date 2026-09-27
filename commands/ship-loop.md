@@ -24,7 +24,8 @@ that declares `cost: high`) to compile a `brief.md`, then composes the medium-co
 caps**. The single mandatory human checkpoint sits **at the design→execution switch** — you review
 the compiled brief, then the medium-cost loops run to completion without a per-iteration stop.
 This command has no `cost:` of its own — its `model:` is a separate, host-level selection — and
-runs entirely inline as a router; the `planner` and `coder` the composed commands Task declare `cost: medium`,
+runs entirely inline as a router; the `planner` and `coder` the composed commands Task declare
+`cost: low, medium` (`medium` unless the session ceiling resolves to `low`),
 and the `reviewer` declares `cost: medium, high` (the session ceiling picks the highest permitted
 member — typically `high` for the fresh-eyes judgment this pipeline wants).
 

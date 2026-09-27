@@ -15,8 +15,13 @@ into a [`brief.md`](../templates/BRIEF.md.tmpl) that the cheaper tier executes v
 
 > **Runs on the most capable model end-to-end**, like [`/design`](./design.md). This command has
 > no `cost:` of its own — its `model:` is a separate, host-level selection — and Tasks the
-> [`refactor-designer`](../agents/refactor-designer.md) agent for its entire job, which declares
-> `cost: high` with no lower member. Split out from [`/refactor`](./refactor.md) because mode
+> [`refactor-designer`](../agents/refactor-designer.md) agent for the judgment-heavy core of the
+> work (naming the destination shape, mapping seams and risks, confirming test-coverage gaps); its
+> `brief.md` anchors the whole refactor, so the agent declares `cost: high` with no lower member.
+> This command still does real work of its own — scaffolding the artifact set and owning the
+> crossroads conversation with the user, which can't live inside a single `Task` call because a
+> Tasked run can't pause to converse — but that work has no `cost:` of its own to declare. Split
+> out from [`/refactor`](./refactor.md) because mode
 > selection (surgical vs. scope design) and tier selection (`medium` vs. `high`) are two different
 > decisions — one unit naming both let a declared tier become a claim its own procedure could
 > contradict (a large refactor under a `medium` ceiling would have entered scope-design work at a

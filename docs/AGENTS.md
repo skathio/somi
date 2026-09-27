@@ -12,14 +12,14 @@ re-researching. See [Cost tiering](#cost-tiering) below.
 | [`discovery-analyst`](../agents/discovery-analyst.md)        | `high`         | New product / greenfield idea, before planning; requirements + research |
 | [`designer`](../agents/designer.md)                          | `high`         | Design-heavy feature / user story on an existing codebase, before planning |
 | [`atlas`](../agents/atlas.md)                                | `high`         | Build or refresh the repo-level map (`.somi/atlas.md`) that later design actions read first |
-| [`refactorer`](../agents/refactorer.md)                      | `medium`       | The next change needs untangling first, contained to one safe behavior-preserving diff |
+| [`refactorer`](../agents/refactorer.md)                      | `low, medium`  | The next change needs untangling first, contained to one safe behavior-preserving diff |
 | [`refactor-designer`](../agents/refactor-designer.md)        | `high`         | The untangle spans many modules / needs a migration — too big for one diff; designs scope + brief |
 | [`reviewer`](../agents/reviewer.md)                          | `medium, high` | Before merge; whenever you want a skeptical second opinion            |
 | [`security-reviewer`](../agents/security-reviewer.md)        | `high`         | Auth, crypto, secrets, input validation, deserialization, file uploads |
 | [`architecture-reviewer`](../agents/architecture-reviewer.md)| `medium, high` | New module/service/contract; dependency direction change              |
 | [`test-strategist`](../agents/test-strategist.md)            | `medium, high` | Test shape feels wrong; deciding unit vs. integration; flake debugging |
-| [`planner`](../agents/planner.md)                            | `medium`       | Non-trivial change; sequence the design (brief) into phases           |
-| [`coder`](../agents/coder.md)                                | `medium`       | Executing against an approved plan + brief; small, well-scoped tasks  |
+| [`planner`](../agents/planner.md)                            | `low, medium`  | Non-trivial change; sequence the design (brief) into phases           |
+| [`coder`](../agents/coder.md)                                | `low, medium`  | Executing against an approved plan + brief; small, well-scoped tasks  |
 | [`impact`](../agents/impact.md)                              | `medium`       | Blast-radius mapping before committing to `/design` or `/plan`; lens selection for a diff |
 | [`pr`](../agents/pr.md)                                       | `low, medium`  | Compose a PR title + description from a work item's artifacts         |
 | [`incident`](../agents/incident.md)                          | `medium`       | Mitigate + mandatory debt capture once an incident is framed          |
@@ -55,8 +55,10 @@ non-obvious claim and never fabricates. Respects the **design-depth boundary**: 
 *direction* (high-level SDD/TDD) and hands *detailed* design to the planner.
 
 - **Cost**: `high` — no lower member. `/discover` declares no `cost:` of its own (a command has no
-  model to size) and Tasks this agent for its entire job, because the output anchors the whole
-  project.
+  model to size) and Tasks this agent for the judgment-heavy core of the work — the output anchors
+  the whole project. The command itself still scaffolds `.somi/rd/<slug>/` and owns the crossroads
+  conversation with the user (a Tasked run can't pause mid-flight to converse), which is real work
+  with no `cost:` of its own to declare.
 - **Won't**: plan or code; fabricate research; produce detailed design that competes with the
   planner; cheerlead an idea the research condemns.
 - **Will**: stop and hand off to the planner if the idea is already well-specified rather than
@@ -77,7 +79,9 @@ the complexity hotspots, and compiles a dense [`brief.md`](../templates/BRIEF.md
 **without re-deriving the architecture**.
 
 - **Cost**: `high` — no lower member. `/design` declares no `cost:` of its own (like `/discover`)
-  and Tasks this agent for its entire job, because the brief anchors everything downstream.
+  and Tasks this agent for the judgment-heavy core of the work — the brief anchors everything
+  downstream. The command itself still scaffolds the artifact set and owns the crossroads
+  conversation with the user, for the same reason as `/discover`'s.
 - **Won't**: plan or code; produce file-by-file design (that's the planner); pick architecture
   silently; emit a bloated brief or an empty "what execution need not re-research" section.
 - **Will**: ingest the repo's own instruction files once and distil them into the brief; hand off to
@@ -112,11 +116,16 @@ design decision: presents 2–4 concrete options with explicit pros and cons (no
 recommends one, and offers `Other` (user-proposed option) plus `Discover` (guided narrowing
 questions) as escape hatches.
 
-- **Cost**: `medium` — planning is *sequencing an already-compiled design*, not
+- **Cost**: `low, medium` — planning is *sequencing an already-compiled design*, not
   open-ended research. When a design action ran upstream, the planner consumes its `brief.md` and
   slices it into phases. For a cold, design-heavy plan with no brief, the planner runs a **depth
-  gate** and recommends `/design` (Tasks `designer` at `cost: high`) first. Overridable to
-  `cost: high` in the agent frontmatter.
+  gate** and recommends `/design` (Tasks `designer` at `cost: high`) first. `low` still produces
+  the full artifact set (and still keeps the false-premise/contradiction checks, the depth gate,
+  and `Pros`/`Cons`/`Reverses` on the recommended option) but trims the alternatives comparison and
+  Discovery mode's guided flow — selected whenever the session ceiling resolves to `low` (CLI,
+  `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the front door
+  announcing the ceiling and its source before work runs. Overridable to `cost: high` in the agent
+  frontmatter.
 - **Won't**: write code, silently pick architectural defaults, take the request's framing as truth.
 - **Will**: stop and recommend re-scoping if the work is much larger than presented; **challenge the
   request's premise** (false premise, XY problem, contradiction, already-solved need) before planning
@@ -129,10 +138,14 @@ Elite implementation. Executes against the plan with senior-level design judgmen
 when implementation reveals the plan needs changing: updates spec/decisions/phases in place,
 appends a diary entry, surfaces to the user before continuing.
 
-- **Cost**: `medium` — coding executes against the plan + `brief.md`, where the
+- **Cost**: `low, medium` — coding executes against the plan + `brief.md`, where the
   architecture/decisions/complexity/repo-conventions were already settled by a `cost: high` action.
-  The plan-change protocol (judgment, not research) still applies. Overridable to `cost: high` in
-  frontmatter.
+  The plan-change protocol (judgment, not research) still applies at either tier. `low` still runs
+  every numbered step (including the plan-change trigger and always reporting a silent failure or
+  hidden side effect) but trims the proactive design-smell sweep — selected whenever the session
+  ceiling resolves to `low` (CLI, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted
+  state), with the front door announcing the ceiling and its source before work runs. Overridable
+  to `cost: high` in frontmatter.
 - **Won't**: silently widen scope; ship without running tests; bypass hooks; let the plan show
   stale state.
 - **Will**: stop and trigger the plan-change protocol if the planned approach is producing bad
@@ -202,11 +215,15 @@ e2e-only-on-risky-code symptoms.
 Surgical, behavior-preserving structure changes. Tests stay green at every step. No feature work
 mixed in. Returns the codebase to a state where the next planned change is easy.
 
-- **Cost**: `medium` — no lower or higher member. Structured execution against an already-named
-  smell, one safe diff at a time, is honestly `medium` work for every job this agent accepts. A
-  refactor too big for one diff is a different job, split out to `refactor-designer` below rather
-  than declared as a second tier here — a caller-picked mode and a ceiling-picked tier can't safely
-  name the same choice on one unit.
+- **Cost**: `low, medium` — no `high` member. Structured execution against an already-named
+  smell, one safe diff at a time. A refactor too big for one diff is a different job, split out to
+  `refactor-designer` below rather than declared as a third tier here — a caller-picked mode and a
+  ceiling-picked tier can't safely name the same choice on one unit. `low` keeps the
+  behavior-preservation contract (tests green after every individual transform, no behavior change)
+  intact and trims commit granularity (batching mechanical steps only) plus the search for further
+  smells beyond the one named — selected whenever the session ceiling resolves to `low` (CLI,
+  `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the front door
+  announcing the ceiling and its source before work runs.
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`clean-code`](../skills/clean-code/SKILL.md) skills — skill wins on divergence.
 
@@ -240,9 +257,13 @@ blast radius — callers/consumers, contracts crossed, test coverage, migration 
 when a fresh one exists, and recommends proceed / design-first / reconsider. Feeds `/design` and
 `/plan` as their pre-read, or `/review-panel`'s lens selection for a diff.
 
-- **Cost**: `medium` — no lower or higher member. Every input is already-written code and its
-  existing call graph; tracing it is mechanical, not open-ended research, so neither a lighter nor
-  a deeper pass changes what the job needs.
+- **Cost**: `medium` — no lower or higher member. This agent is a **judge**, not a builder: its
+  deliverable is the proceed/design-first/reconsider verdict and, in diff mode, the review-lens
+  selection. A reduced-depth pass would undercount the blast radius (skipped indirect/dynamic
+  tracing) and can return a false "proceed, small" with nothing downstream to re-check it, or drop
+  a warranted lens that then never runs — the same false-pass failure that keeps `reviewer` and the
+  other judges off `low`. No `high` member either: even the full-depth pass is mechanical tracing
+  over an already-written call graph, never open-ended research.
 - **Won't**: fix anything, scaffold artifacts, write unless asked to keep the report.
 - **Will**: give an honest small-blast-radius answer rather than inflating a report to justify
   itself; recommend *reconsider* when the radius is disproportionate to the stated value.
@@ -323,9 +344,12 @@ one-file change.
 | Declared `cost:` | Agents | What it does |
 |------|--------|--------------|
 | **`high`** (no lower member) | `discovery-analyst`, `designer`, `security-reviewer`, `refactor-designer`, `atlas` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it (`atlas` front-loads a repo map instead of a work-item brief) |
-| **`medium, high`** (graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept |
-| **`medium`** (no higher member) | `planner`, `coder`, `somi`, `refactorer`, `impact`, `incident` | Executes against an already-compiled input — a brief, a named smell, a routing decision, existing code's own call graph, or a framed incident — without re-researching |
-| **`low, medium`** (graded over one job) | `pr` | Composes a PR description from existing artifacts; a fuller pass adds house-style matching, never required for correctness |
+| **`medium, high`** (graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept — the opt-in bar for `low` below does not extend to these: a weaker judge produces a false pass, not merely a lighter one |
+| **`medium`** (no lower or higher member) | `incident`, `impact` | `incident` executes against an already-framed incident without re-researching; every job is a live outage, so there is no lighter version of the mitigation/debt-capture call to make honestly. `impact` is a judge, reverted here from `low, medium`: its verdict and (in diff mode) its review-lens selection would produce a false pass at reduced depth, and its full-depth pass is already mechanical call-graph tracing rather than open-ended design, so `high` buys nothing either |
+| **`low, medium`** (graded over one job) | `coder`, `planner`, `refactorer`, `pr` | `pr` grades one job over two depths — a fuller pass adds house-style matching, never required for correctness. The other three widened downward: `low` is a reduced-depth pass (each agent's own "Running at `low`" section names its trims), selected whenever the session ceiling resolves to `low` (CLI, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the front door announcing the ceiling and its source before work runs — so the quality drop is a trade the user can see, not one made for them unseen |
+
+`somi` declares no `cost:` at all — exempt, not a fifth `medium` member: the host binds the model
+when the user selects the agent, so a declaration here would control nothing.
 
 The handoff is the [`brief.md`](../templates/BRIEF.md.tmpl) (`templates/BRIEF.md.tmpl`): a dense,
 bounded, reference-not-inline distillation with an explicit **"What execution does NOT need to
@@ -343,13 +367,15 @@ the agent frontmatter and the per-host mapping.
 simply `Task` the tier-appropriate agent. Tasking a differently-costed subagent from an uncosted
 orchestrator is the cache-correct way to mix costs — the orchestrator's own prompt cache stays
 intact while the subagent runs on its own tier. (Prompt caches are model-scoped, so the
-design→execution switch is also a natural cache boundary.) **`/discover`, `/design`,
-`/refactor-design`, and `/atlas` Task a `cost: high` agent for their entire job** — `/discover`,
-`/design`, and `/refactor-design`'s orchestration is judgment-heavy and their `brief.md` anchors
-the whole work item, so nothing about their own inline work needs a lower tier; `/atlas` Tasks the
-`atlas` agent (also `cost: high`) for the deep repo read itself, so there is nothing left for the
-command to do at a different tier. `/adopt` Tasks that same `atlas` agent as its own Stage 1. See
-[COMMANDS.md](./COMMANDS.md).
+design→execution switch is also a natural cache boundary.) **`/atlas` Tasks a `cost: high` agent
+for its entire job** — the deep repo read is the whole task, so there is nothing left for the
+command to do at a different tier; `/adopt` Tasks that same `atlas` agent as its own Stage 1.
+**`/discover`, `/design`, and `/refactor-design` Task a `cost: high` agent for the judgment-heavy
+core of their work** (their `brief.md` anchors the whole work item, so nothing about that core
+needs a lower tier) **but each keeps real work command-side**: scaffolding the artifact set, and
+owning the crossroads conversation with the user (the `DECISIONS-NEEDED` / `VERIFIED-DECISIONS`
+round trip), which can't live inside a single `Task` call because a Tasked run can't pause to
+converse. See [COMMANDS.md](./COMMANDS.md).
 
 ## Adding new agents
 
@@ -403,7 +429,7 @@ plain prose escalations from inside an agent are no longer the only path.
 /refactor    → refactorer
 
 /ship        → [optional cost: high front-load] → /plan + (per iteration) /code-loop  (human gate at every stage)
-/plan-loop   → planner + reviewer  (bounded plan↔review loop, cost: medium planner + reviewer at cost: medium, high)
+/plan-loop   → planner + reviewer  (bounded plan↔review loop, cost: low, medium planner + reviewer at cost: medium, high)
 /ship-loop   → [optional cost: high front-load] → [gate at design→execution switch] → /plan-loop → /code-loop (continuous, under caps)
 
 # Lifecycle & utility commands

@@ -34,8 +34,9 @@ Prefer, in order — **reversibility beats elegance under fire**:
 2. **Revert** the suspect change (`git revert`, never force-push — the hooks enforce that even
    now; if a hook denies something, stop and hand it back to the human rather than working around
    it).
-3. **Scoped forward-patch** — smallest change that stops the bleeding; skip the full review loop,
-   but state plainly what the patch does and what it deliberately ignores.
+3. **Scoped forward-patch** — before writing it, state plainly what the patch will do and what it
+   will deliberately ignore; then apply the smallest change that stops the bleeding, skipping the
+   full review loop.
 
 Every mitigation action gets a one-line diary entry **as it happens** (this is the incident
 timeline the postmortem needs — write it now, not from memory later). Verify the mitigation
@@ -72,13 +73,24 @@ Set `progress.md` status to `done` only when all three exist.
 - The seeded follow-up (slug + command) and the guardrail-retro answer.
 - Pointer to the diary timeline.
 
-## Guardrails
+## Failure modes to avoid
 
-- **Reversible first.** Flag > revert > patch. A clever irreversible fix under pressure is how
-  incidents become outages.
-- **Hooks are never relaxed for an incident.** If a deny blocks the mitigation, the human runs
-  that command themselves — deliberately.
-- **No silent scope.** The mitigation does one thing; "while I'm in here" is banned under fire
-  more than anywhere else.
-- **Stage 3 is not optional.** Mitigation without accounting is how the same incident happens
-  twice. The lane's speed is *paid for* by the mandatory follow-up.
+- **Reaching for the irreversible fix first.** Flag > revert > patch, in that order — a clever
+  irreversible fix under pressure is how incidents become outages.
+- **Relaxing a hook under fire.** Dangerous-bash, secret-writes, protected paths, dep gating stay
+  on; a denied action gets handed to the human, not worked around.
+- **Silent scope creep.** "While I'm in here" is banned under fire more than anywhere else — the
+  mitigation does one thing.
+- **Closing without all three debt-capture pieces.** Mitigation without accounting is how the same
+  incident happens twice.
+
+## Escalation
+
+- **The mitigation doesn't restore service.** Don't reach for something riskier under the same
+  pressure that produced the first attempt — re-run the reversibility order (flag → revert →
+  patch) against what's now known; if nothing in that order works, say so plainly and hand the
+  incident to the human rather than improvising further. A stuck sev-1 is a human decision, not a
+  prompt to try something less reversible.
+- **The suspected cause turns out wrong mid-mitigation.** Update the diary timeline with what
+  changed and restart Stage 2's ordering from the corrected understanding — don't keep pushing a
+  patch built on a diagnosis you've since abandoned.

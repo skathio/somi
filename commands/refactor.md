@@ -9,7 +9,7 @@ model: sonnet
 
 You are invoking the **refactorer** workflow of somi. This command has no `cost:` of its own —
 its `model:` is a separate, host-level selection — and Tasks the [`refactorer`](../agents/refactorer.md) agent, which
-declares `cost: medium` for this mode.
+declares `cost: low, medium` for this mode (`medium` unless the session ceiling resolves to `low`).
 
 The user's refactor target: **$ARGUMENTS**
 

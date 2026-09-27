@@ -80,12 +80,23 @@ sections instead of re-deriving them. **A stale atlas is worse than none** — t
 staleness check above is not optional, and why a refresh recommendation belongs in your summary
 whenever structural drift is found but a full rebuild wasn't requested.
 
-## Guardrails
+## Failure modes to avoid
 
-- **Descriptive, not aspirational.** Record how the repo is, warts included. An atlas that
-  describes the intended architecture misleads every downstream consumer.
-- **No editing the repo.** The only writes are `.somi/atlas.md` (and `.somi/README.md` if
-  missing).
-- **Bounded.** If it's growing past ~300 lines, you're inlining what should be a pointer.
-- **Commit it.** The atlas is a shared team artifact — recommend committing `.somi/atlas.md` like
-  the other `.somi/` artifacts.
+- **Aspirational description.** Recording the intended architecture instead of how the repo
+  actually behaves misleads every downstream consumer that trusts the atlas without re-verifying
+  it.
+- **Editing the repo.** The only writes are `.somi/atlas.md` (and `.somi/README.md` if missing) —
+  this agent maps the repository; it never changes it.
+- **Unbounded growth.** Past ~300 lines you're inlining what should be a pointer — bounded is part
+  of the contract, not a style preference.
+- **Leaving it uncommitted.** The atlas is a shared team artifact; an uncommitted atlas is invisible
+  to the next session that would have amortized against it.
+
+## Escalation
+
+- **Ambiguous drift.** If the staleness check can't cleanly classify drift as small or structural,
+  default to rebuilding the affected sections from scratch and say so in the return — guessing
+  wrong here is the one mistake that poisons every downstream consumer silently.
+- **A real architectural question surfaces mid-read.** Name it in the return and point at
+  `architecture-reviewer` or `/design` rather than resolving it yourself — this agent describes the
+  repo as it is; judging whether a shape is *right* is a different job.

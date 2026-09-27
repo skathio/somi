@@ -14,10 +14,12 @@ executes against **without re-researching**. All artifacts live under `.somi/pla
 
 > **Runs on the most capable model end-to-end.** This command has no `cost:` of its own — its
 > `model:` is a separate, host-level selection — and Tasks the [`designer`](../agents/designer.md)
-> agent for its entire job — the work is judgment-heavy (framing the feature, reading the
-> codebase, shaping crossroads), and its `brief.md` anchors everything execution does, so the
-> designer declares `cost: high` with no lower member. This is the high-cost layer of SoMi's
-> design→execution economy; the cost is
+> agent for the judgment-heavy core of the work (framing the feature, reading the codebase,
+> shaping crossroads); its `brief.md` anchors everything execution does, so the designer declares
+> `cost: high` with no lower member. This command still does real work of its own — scaffolding the
+> artifact set and owning the crossroads conversation with the user, which can't live inside a
+> single `Task` call because a Tasked run can't pause to converse — but that work has no `cost:` of
+> its own to declare. This is the high-cost layer of SoMi's design→execution economy; the cost is
 > justified because it lets plan and code run at `cost: medium`. See
 > [`docs/COMMANDS.md`](../docs/COMMANDS.md).
 
@@ -140,7 +142,8 @@ Return to the user with:
 - The **architectural decisions made** (one-liner each) and the **complexity hotspots** identified.
 - A pointer to `.somi/plans/<slug>/` and the files to read first (`brief.md`, then `design.md`).
 - A specific next step: "Review / edit `.somi/plans/<slug>/brief.md`, then run `/plan <slug>` — the
-  planner consumes the brief and sequences it into phases (at `cost: medium`)."
+  planner consumes the brief and sequences it into phases (at `cost: low, medium` — `medium`
+  unless the session ceiling resolves to `low`)."
 
 ## Guardrails
 

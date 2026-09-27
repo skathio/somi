@@ -15,7 +15,8 @@ The user's target: **$ARGUMENTS** (a work-item slug, optionally a specific `phas
 
 This command has no `cost:` of its own and Tasks no agent directly — it composes
 [`/code-loop`](./code-loop.md) instead, which makes it a router by inspection, not by
-declaration. Each `/code-loop` instance it runs Tasks its `coder` at `cost: medium` (executing against the work item's `brief.md`
+declaration. Each `/code-loop` instance it runs Tasks its `coder` at `cost: low, medium` (`medium`
+unless the session ceiling resolves to `low`; executing against the work item's `brief.md`
 + plan) and its `reviewer` at whatever `medium, high` member the session ceiling permits (typically
 `high`, fresh-eyes judgment).
 

@@ -248,15 +248,21 @@ assert_cost() {
     cost_failed=1
   fi
 }
-# medium-only: planning is judgment, never mechanical; refactoring is structured execution
-# against an already-named smell. refactorer has a split-out sibling (below, refactor-designer)
-# for the job a single tier can't honestly cover. coder has no such sibling yet -- a genuinely
-# lighter-weight job would need one (a separate single-purpose unit at a lower tier), not a
-# second member declared here, since coder still accepts full plan iterations. agents/somi.md is
+# low, medium: these three widen downward under the opt-in bar for `low` -- a builder-tier agent
+# may declare `low` once it can still do a reduced-depth version of its job and its own output says
+# so when it ran that way, even though the reduced depth would not hold up as the only tier it ever
+# ran at. `low` only ever runs when the session ceiling resolves to `low` -- an explicit CLI flag or
+# SOMI_COST_CEILING for this session, or inherited from a committed .somi/config.json or a saved
+# state file that persists across sessions -- and the front door announces that ceiling and its
+# source before work starts, so the quality drop is a trade the user can see, not one sprung on
+# them. Each agent's own frontmatter and "Running at `low`" section name what that agent's
+# reduced-depth pass keeps and what it trims -- read those, not this comment, for the specifics.
+# refactorer still has no `high` member: a refactor too big for one diff is a different job, split
+# out to the refactor-designer sibling below, not a third tier declared here. agents/somi.md is
 # EXEMPT from this whole block (see the comment above the loop) -- it declares no cost: at all.
-assert_cost agents/planner.md medium
-assert_cost agents/coder.md medium
-assert_cost agents/refactorer.md medium
+for a in planner coder refactorer; do
+  assert_cost "agents/$a.md" low,medium
+done
 # high-only: a wrong call here is paid for through everything downstream that builds on it, so a
 # cheaper pass would be cheaper-and-wrong, not genuinely useful -- these never gain a lower member.
 # atlas joins this set: its whole value is one high-quality read of the repository, paid once.
@@ -265,16 +271,24 @@ for a in discovery-analyst designer security-reviewer refactor-designer atlas; d
 done
 # medium, high: a lighter pass is genuinely useful under a capped ceiling, but the deepest work
 # needs the strong model -- these grade ONE job over two depths, not two different jobs, so a
-# blind ceiling pick is safe at either member.
+# blind ceiling pick is safe at either member. These are judges, not builders: a weaker judge
+# doesn't produce weaker output, it produces a false pass with nothing downstream to catch what it
+# missed, so the opt-in bar for `low` above does not extend to this set.
 for a in reviewer architecture-reviewer test-strategist; do
   assert_cost "agents/$a.md" medium,high
 done
-# medium-only, different reasons from the planner/coder/somi/refactorer set above: impact traces
-# already-written code and its existing call graph mechanically -- no open-ended research to
-# justify high, and no piece of the job is cheap enough to drop to low. incident's mitigation-stage
-# judgment (flag flip vs. revert vs. scoped patch, verified against the live symptom) and its
-# debt-capture accounting both need full reasoning on every run.
+# medium-only, judge not builder: impact's deliverable is a proceed / design-first / reconsider
+# verdict and, in diff mode, the review-lens selection -- a reduced-depth pass would undercount the
+# blast radius and can return a false "proceed, small" with nothing downstream to re-check it, or
+# drop a lens (security-reviewer, worst case) that then never runs elsewhere. Same false-pass
+# failure that keeps the medium,high judges above off `low`, so impact stays off it too despite
+# tracing an already-written call graph -- still no `high` member, since even its full-depth pass is
+# mechanical tracing, not open-ended research.
 assert_cost agents/impact.md medium
+# medium-only: incident's mitigation-stage judgment (flag flip vs. revert vs. scoped patch, verified
+# against the live symptom) and its debt-capture accounting both need full reasoning on every run --
+# every job this agent accepts is, by construction, a live outage handed off after framing, so there
+# is no lighter version of the call to make honestly.
 assert_cost agents/incident.md medium
 # graded over one job at two depths: mechanical aggregation of existing artifacts is already a
 # correct, usable PR description at low; a fuller pass adds house-style matching, never required.
@@ -305,6 +319,23 @@ for f in agents/*.md; do
 done
 
 if [ "$cost_failed" -ne 0 ]; then
+  exit 1
+fi
+
+echo "==> Validating cost-tier prose against coder/planner/refactorer's declared set..."
+# coder, planner, and refactorer all declare the widened `low, medium` set above; a stale "declares
+# cost: medium" claim about any of the three -- in a command's own explanatory prose, or in another
+# agent's cross-reference -- understates what they can run at and drifts back to exactly the
+# muted-capability bug this rework exists to close, silently and outside the frontmatter checks
+# above (which only ever see the agent's OWN file, never a claim made about it elsewhere). Matched
+# on the literal three-agent list, never a fourth: impact and incident are legitimately medium-only
+# today, so a plain `cost: medium` claim about either is correct, not stale, and must not fire here.
+stale_cost_claim_failed=0
+if grep -rnE '(coder|planner|refactorer)[^\n]{0,80}cost: medium`' commands/ agents/ docs/ 2>/dev/null; then
+  echo "STALE COST CLAIM: coder/planner/refactorer all declare the widened 'cost: low, medium' -- the line(s) above still claim a plain 'cost: medium'" >&2
+  stale_cost_claim_failed=1
+fi
+if [ "$stale_cost_claim_failed" -ne 0 ]; then
   exit 1
 fi
 

@@ -13,8 +13,9 @@ The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, i
 
 This command automates the manual `/code` → `/review` → `/code` cycle for a single iteration,
 with **hard gates** that ensure it terminates. It has no `cost:` of its own — a command has no
-model to size — and runs entirely inline; the `coder` it Tasks declares `cost: medium` (executing
-against the work item's `brief.md` + plan), while the `reviewer` it Tasks declares
+model to size — and runs entirely inline; the `coder` it Tasks declares `cost: low, medium`
+(`medium` unless the session ceiling resolves to `low`; executing against the work item's
+`brief.md` + plan), while the `reviewer` it Tasks declares
 `cost: medium, high` — the session ceiling picks the highest permitted member, typically `high`
 for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by the
 coder's reasoning.

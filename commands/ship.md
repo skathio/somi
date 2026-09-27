@@ -20,7 +20,8 @@ $ARGUMENTS
 This is the **careful, gated-at-every-stage** entrypoint. It has no `cost:` of its own — its
 `model:` is a separate, host-level selection — and runs entirely inline, composing [`/plan`](./plan.md) and
 [`/code-loop`](./code-loop.md) as a router. The `planner` and `coder` those commands Task declare
-`cost: medium`, and the `reviewer` `/code-loop` Tasks declares `cost: medium, high` — the session
+`cost: low, medium` (`medium` unless the session ceiling resolves to `low`), and the `reviewer`
+`/code-loop` Tasks declares `cost: medium, high` — the session
 ceiling picks the highest permitted member, typically `high` for the fresh-eyes judgment that
 stage wants.
 

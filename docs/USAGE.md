@@ -53,7 +53,9 @@ planning.
 - SoMi proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
 - Runs on the **most capable model end-to-end** (`/discover` declares no `cost:` of its own —
   its `model:` is a separate, host-level selection — and Tasks `discovery-analyst` at `cost: high`
-  for its entire job) — its output is the cornerstone of the project.
+  for the judgment-heavy core of the work) — its output is the cornerstone of the project. The
+  command itself still scaffolds the artifact set and owns the crossroads conversation with you,
+  which can't live inside a single `Task` call.
 - **Researches the competition extensively** — scans direct/indirect competitors, mines real user
   complaints and churn reasons, and surfaces recurring failure modes to design *away* from. Every
   non-obvious claim is cited; signal is distinguished from noise; nothing is fabricated.
@@ -298,7 +300,7 @@ loops. Global budget caps total passes. See [`commands/ship-loop.md`](../command
 
 Builds (or refreshes) the **Repo Atlas** at `.somi/atlas.md` — one `cost: high` deep read of the
 codebase (module map, dependency rules, conventions digest, hotspots, test topology),
-SHA-stamped. Later `cost: high` actions (`/design`, cold `/plan`, `/refactor-design`, `/impact`)
+SHA-stamped. Later actions that read the repo (`/design`, cold `/plan`, `/refactor-design`, `/impact`)
 start from it and deep-read only the drift since its SHA, instead of re-reading the repo per work
 item. Worth running once on any repo you'll do repeated SoMi work in; refresh after structural
 changes. Commit it.
@@ -387,9 +389,10 @@ no feature work mixed in.
 ### `/refactor-design`
 
 Scope design for a refactor too big for one diff — spans many modules, needs a migration, or
-changes a shared shape. Tasks the `refactor-designer` agent at `cost: high` for its entire job.
-Names the destination shape, maps seams and risks (`file:line`), confirms test-coverage gaps, and
-compiles a `brief.md` that `/plan-loop` → `/code-loop` execute.
+changes a shared shape. Tasks the `refactor-designer` agent at `cost: high` for the judgment-heavy
+core of the work; the command itself still scaffolds the artifact set and owns the crossroads
+conversation with the user. Names the destination shape, maps seams and risks (`file:line`),
+confirms test-coverage gaps, and compiles a `brief.md` that `/plan-loop` → `/code-loop` execute.
 
 ```text
 /refactor-design The auth module mixes session/token/permission logic across 8 files with no
@@ -603,6 +606,19 @@ never inherits its caller's tier** — a command Tasking a `cost: high` agent de
 own; the agent's own frontmatter is where `high` is truthfully declared, once, and a `cost: high`
 agent Tasking a `cost: low, medium` helper does not pull that helper up to `high` either.
 
+**`low` is the one exception to the strict universal bar, and only `low`.** `medium` and `high`
+still require the tier to hold for *every* accepted job. `low` uses an opt-in bar instead: a
+builder-tier agent (one that produces the work, not one that judges it) may declare `low` once it
+can still do a reduced-depth version of its job and its own output discloses that it ran at that
+depth and names what it skipped. This is safe specifically because `low` is never *silently*
+selected — it only runs when the session ceiling resolves to `low`, whether from an explicit CLI
+argument or `SOMI_COST_CEILING` for this session, or inherited from a committed `.somi/config.json`
+or a saved state file that persists across sessions, and the front door announces that ceiling and
+its source before any work runs. So the reduced depth is a trade the user can see coming, not one
+made for them unseen. The judging agents (`reviewer`, `security-reviewer`, `architecture-reviewer`,
+`test-strategist`) stay off `low` regardless: a weaker judge doesn't produce weaker output, it
+produces a false pass, with nothing downstream to catch what it missed.
+
 **Three declared shapes, and they resolve differently:**
 
 1. **Graded over one job** — no modes; output degrades smoothly with less reasoning depth. Declares
@@ -612,14 +628,15 @@ agent Tasking a `cost: low, medium` helper does not pull that helper up to `high
    (A *xor* B, not "A but sometimes shallower"). **Split into separate units** rather than declaring
    a range: mode selection and tier selection would otherwise name the same decision on one file, and
    a caller could pick the demanding mode under a ceiling that only cleared the easy one.
-   [`agents/refactorer.md`](../agents/refactorer.md) (`cost: medium`, surgical execution, Tasked by
-   [`/refactor`](../commands/refactor.md)) and
+   [`agents/refactorer.md`](../agents/refactorer.md) (`cost: low, medium`, surgical execution,
+   Tasked by [`/refactor`](../commands/refactor.md)) and
    [`agents/refactor-designer.md`](../agents/refactor-designer.md) (`cost: high`, scope design for a
    refactor too big for one diff, Tasked by
    [`/refactor-design`](../commands/refactor-design.md)) are the shipped example — one agent used to
    do both jobs at one declared tier that was insufficient for one of them, which let a large
-   refactor enter scope-design work under a `medium` ceiling; now they're two single-purpose agents
-   at two single tiers, each Tasked by its own single-purpose command.
+   refactor enter scope-design work under a `medium` ceiling; now they're two single-purpose agents,
+   each Tasked by its own single-purpose command, each graded over its own job rather than split
+   across modes.
 3. **Sequential stages** — every stage runs on every invocation; nothing branches around the
    expensive one. Declares what its **most demanding stage** needs, not what the easy stages could
    get away with — a lower member would be provably wrong the moment the hard stage runs. No current

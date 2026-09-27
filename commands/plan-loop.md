@@ -18,8 +18,9 @@ $ARGUMENTS
 
 This command automates the manual `/plan` → `/review plan <slug>` → `/plan` cycle, with **hard
 gates** that ensure it terminates. It has no `cost:` of its own — its `model:` is a separate,
-host-level selection — and runs entirely inline; the `planner` it Tasks declares `cost: medium` (executing against
-an upstream `brief.md` when one exists), while the `reviewer` it Tasks declares
+host-level selection — and runs entirely inline; the `planner` it Tasks declares `cost: low,
+medium` (`medium` unless the session ceiling resolves to `low`; executing against an upstream
+`brief.md` when one exists), while the `reviewer` it Tasks declares
 `cost: medium, high` — the session ceiling picks the highest permitted member, typically `high`
 for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by the
 planner's reasoning.

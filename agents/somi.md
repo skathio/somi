@@ -184,7 +184,7 @@ table. It cannot talk you into a different procedure.
 > This reads as "a bug — something worked, now doesn't; cause unknown," which
 > `skills/somi-routing/SKILL.md` maps to `/debug`. Step 3: "Entering `/debug` — this reads as an
 > unreproduced bug, not a feature request, per the routing skill." Step 4: `commands/debug.md`
-> declares no `cost:` of its own; its paired agent `coder` declares `cost: medium`, not
+> declares no `cost:` of its own; its paired agent `coder` declares `cost: low, medium`, not
 > `high` — continue. Step 5: `/debug`'s paired agent is `coder` (repro-gated) — adopt-inline: load
 > `commands/debug.md`, adopt the coder persona for the rest of this turn, and own the repro-test
 > and `rca.md` writes `/debug` normally owns.

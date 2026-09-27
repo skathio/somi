@@ -8,8 +8,9 @@ model: sonnet
 # /plan — Planning workflow
 
 You are running the **planning workflow** of somi. It has no `cost:` of its own — a command has no
-model to size — and runs entirely inline; the `planner` it Tasks declares `cost: medium`:
-planning is *sequencing an already-compiled design*, not open-ended research. When an upstream
+model to size — and runs entirely inline; the `planner` it Tasks declares `cost: low, medium`
+(`medium` unless the session ceiling resolves to `low`): planning is *sequencing an
+already-compiled design*, not open-ended research. When an upstream
 high-cost design action ([`/design`](./design.md), [`/discover`](./discover.md), or
 [`/refactor-design`](./refactor-design.md) — each Tasking an agent that declares `cost: high`) ran
 first, its `brief.md` is the primary input (see §2a).
@@ -57,7 +58,8 @@ new slug.
 
 ### 2a. Check for an upstream brief (the design→execution handoff)
 
-`/plan` Tasks the `planner` agent at `cost: medium` — it executes against an already-compiled
+`/plan` Tasks the `planner` agent at `cost: low, medium` (`medium` unless the session ceiling
+resolves to `low`) — it executes against an already-compiled
 design, it doesn't do the front-loaded research itself. So look first for a **`brief.md`** left by
 a prior high-cost design action:
 

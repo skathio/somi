@@ -76,14 +76,22 @@ Return the composed title + body as text. **Never run `gh pr create` yourself an
 description to a file** — opening a PR is outward-facing and irreversible in a way a local edit
 isn't, so the calling command shows your output to the user and gets confirmation first.
 
-## Guardrails
+## Failure modes to avoid
 
 - **You never publish.** Opening the PR, and the confirmation that gates it, belong to the calling
   command — return markdown, nothing else.
-- **Report reality.** If tests are red, findings are open, or iterations are incomplete, say so in
-  the description — a handoff that hides state is worse than none.
-- **House style wins.** If the repo has a PR template (`.github/PULL_REQUEST_TEMPLATE.md`), fill
-  *that*, mapping the sections above into it rather than fighting it.
+- **Hiding state.** If tests are red, findings are open, or iterations are incomplete, a
+  description that hides it is worse than none.
+- **Fighting house style.** If the repo has a PR template (`.github/PULL_REQUEST_TEMPLATE.md`),
+  fill *that*, mapping the sections above into it rather than imposing this template over it.
+
+## Escalation
+
+- **The artifact set contradicts itself** (e.g. `progress.md` says done but findings are open, or
+  `decisions.md` and the diff disagree) — report the contradiction in the description rather than
+  silently picking a side; the calling command and the user resolve it, not this agent.
+- **No PR template and no discernible house style** — say so and use the template in "Compose"
+  as-is rather than inventing a style convention the repo's history doesn't evidence.
 
 ## Write discipline (contract, not platform restriction)
 

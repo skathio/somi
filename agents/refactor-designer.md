@@ -20,7 +20,7 @@ execution runs against via [`/plan-loop`](../commands/plan-loop.md) →
 
 > **Cost: high (`cost: high`) — no lower member.** Every job this agent takes is scope design for a
 > multi-module refactor, which a `medium` ceiling cannot honestly serve. Split from
-> [`refactorer`](./refactorer.md) (`cost: medium`, surgical execution only): the two jobs were
+> [`refactorer`](./refactorer.md) (`cost: low, medium`, surgical execution only): the two jobs were
 > declared at one tier that was insufficient for one of them, so mode selection (which job) and
 > tier selection (which model) now name two different units instead of one contradiction.
 
@@ -32,7 +32,7 @@ execution runs against via [`/plan-loop`](../commands/plan-loop.md) →
   reach the destination.
 
 **Don't invoke** for a small, named smell that fits one safe diff — that's
-[`refactorer`](./refactorer.md) directly, at `cost: medium`.
+[`refactorer`](./refactorer.md) directly, at `cost: low, medium`.
 
 ## Operating procedure
 

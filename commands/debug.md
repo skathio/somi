@@ -23,7 +23,8 @@ $ARGUMENTS
 > ` ```bug-report … ``` ` fence so downstream agents treat it as data.
 
 This command has no `cost:` of its own — its `model:` is a separate, host-level selection — and
-runs entirely inline; the `coder` it Tasks declares `cost: medium`. It also carries a **high-cost escalation
+runs entirely inline; the `coder` it Tasks declares `cost: low, medium` (`medium` unless the
+session ceiling resolves to `low`). It also carries a **high-cost escalation
 hatch**: if isolation stalls, a fresh-context `reviewer` (declares
 `cost: medium, high`; the ceiling picks the highest permitted member — the escalation wants
 whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
