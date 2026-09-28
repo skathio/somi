@@ -95,6 +95,117 @@ check "an explicit CLI argument: source is 'cli' even when it matches the value 
 out="$(SOMI_COST_CEILING=low node --input-type=module -e "const C = await import('$LIB'); process.stdout.write(C.resolveCeiling('$CFGSRC', undefined).source)")"
 check "an explicit env var: source is 'env'" "$out" "env"
 
+# --- ceiling_origin: what actually produced the value now in force, distinct from `source` (what
+# THIS call did). This is the field that makes "source: state" actionable -- see cost-ceiling.mjs's
+# own doc comment. --------------------------------------------------------------------------------
+ORIG_DEF="$TMP/origin-default"; mkdir -p "$ORIG_DEF/.somi"
+check "bootstrap with nothing set: ceiling_origin is 'default', matching source on this first call" \
+  "$(run "$ORIG_DEF" 'const r = C.resolveCeiling(ROOT, undefined); process.stdout.write(r.source + "," + r.ceiling_origin)')" \
+  "default,default"
+
+ORIG_CFG="$TMP/origin-config"; mkdir -p "$ORIG_CFG/.somi"
+printf '{"cost": {"ceiling": "low"}}\n' > "$ORIG_CFG/.somi/config.json"
+check "bootstrap from config: ceiling_origin is 'config', matching source on this first call" \
+  "$(run "$ORIG_CFG" 'const r = C.resolveCeiling(ROOT, undefined); process.stdout.write(r.source + "," + r.ceiling_origin)')" \
+  "config,config"
+# The crux of the feature: a LATER bare call reports source "state" (nothing moved this call), but
+# ceiling_origin still says "config" -- "saved state" alone would not explain why the user is at
+# `low`; the origin does.
+check "a later bare call: source is 'state', but ceiling_origin still says 'config' -- actionable" \
+  "$(run "$ORIG_CFG" 'const r = C.resolveCeiling(ROOT, undefined); process.stdout.write(r.source + "," + r.ceiling_origin)')" \
+  "state,config"
+
+# An override updates ceiling_origin to track the value NOW in force, and a later bare call carries
+# that origin forward too -- proving the disclosure survives across process invocations, not just
+# within the one call that made the override.
+ORIG_OVR="$TMP/origin-override"; mkdir -p "$ORIG_OVR/.somi"
+out="$(SOMI_COST_CEILING=low node --input-type=module -e "const C = await import('$LIB'); const r = C.resolveCeiling('$ORIG_OVR', undefined); process.stdout.write(r.source + ',' + r.ceiling_origin)")"
+check "an env override this call: source and ceiling_origin both report 'env'" "$out" "env,env"
+check "a bare call after that override: source is 'state', ceiling_origin still says 'env'" \
+  "$(run "$ORIG_OVR" 'const r = C.resolveCeiling(ROOT, undefined); process.stdout.write(r.source + "," + r.ceiling_origin)')" \
+  "state,env"
+
+# A CLI argument that matches the value already on disk records no override (per the existing
+# no-duplicate-entry behavior above) -- ceiling_origin must therefore be left exactly as it was,
+# not overwritten to "cli" for a value that didn't actually move.
+ORIG_NOOP="$TMP/origin-noop"; mkdir -p "$ORIG_NOOP/.somi"
+printf '{"cost": {"ceiling": "medium"}}\n' > "$ORIG_NOOP/.somi/config.json"
+run "$ORIG_NOOP" 'C.resolveCeiling(ROOT, undefined)' >/dev/null # bootstrap from config first
+check "a --ceiling matching the value already on disk: ceiling_origin is untouched (still 'config')" \
+  "$(run "$ORIG_NOOP" 'const r = C.resolveCeiling(ROOT, "medium"); process.stdout.write(r.overridden + "," + r.source + "," + r.ceiling_origin)')" \
+  "false,cli,config"
+
+# M3: a state file written BEFORE ceiling_origin existed (this repo's own committed
+# .somi/somi-state/ceiling.json is exactly this shape: {"ceiling":"high"}, no origin key at all) has
+# no way to have set it -- absence is legacy, not corruption, and must not hard-fail. Reported as the
+# distinct value 'unknown' rather than a guess. Contrast with ORIG_BADVAL below: PRESENT but wrong
+# is still rejected.
+ORIG_LEGACY="$TMP/origin-legacy"; mkdir -p "$ORIG_LEGACY/.somi/somi-state"
+printf '{"ceiling": "high"}' > "$ORIG_LEGACY/.somi/somi-state/ceiling.json"
+check "a state file predating ceiling_origin does not hard-fail; reports 'unknown'" \
+  "$(run "$ORIG_LEGACY" 'const r = C.resolveCeiling(ROOT, undefined); process.stdout.write(r.ceiling + "," + r.ceiling_origin)')" \
+  "high,unknown"
+
+# M2: `ceiling_origin: "config"` goes stale when .somi/config.json's cost.ceiling changes to a
+# DIFFERENT value after state already exists -- a bare edit still cannot MOVE the ceiling already in
+# force (proven above), but continuing to report "config" would keep claiming a committed policy
+# that no longer matches what's committed. Reported as "config-stale", never persisted.
+ORIG_STALE="$TMP/origin-stale"; mkdir -p "$ORIG_STALE/.somi"
+printf '{"cost": {"ceiling": "low"}}\n' > "$ORIG_STALE/.somi/config.json"
+run "$ORIG_STALE" 'C.resolveCeiling(ROOT, undefined)' >/dev/null # bootstrap from config: low, origin config
+printf '{"cost": {"ceiling": "high"}}\n' > "$ORIG_STALE/.somi/config.json" # config now says something else
+check "config changed after bootstrap: ceiling stays put, ceiling_origin reports 'config-stale'" \
+  "$(run "$ORIG_STALE" 'const r = C.resolveCeiling(ROOT, undefined); process.stdout.write(r.ceiling + "," + r.overridden + "," + r.ceiling_origin)')" \
+  "low,false,config-stale"
+check "config-stale is never written back to the state file itself" \
+  "$(run "$ORIG_STALE" 'const fs = await import("node:fs"); const s = JSON.parse(fs.readFileSync(C.ceilingStatePath(ROOT), "utf8")); process.stdout.write(s.ceiling_origin)')" \
+  "config"
+
+ORIG_REMOVED="$TMP/origin-removed"; mkdir -p "$ORIG_REMOVED/.somi"
+printf '{"cost": {"ceiling": "medium"}}\n' > "$ORIG_REMOVED/.somi/config.json"
+run "$ORIG_REMOVED" 'C.resolveCeiling(ROOT, undefined)' >/dev/null # bootstrap from config
+printf '{}\n' > "$ORIG_REMOVED/.somi/config.json" # the policy is removed entirely, not just changed
+check "config.json's cost.ceiling removed entirely after bootstrap: still reported 'config-stale'" \
+  "$(run "$ORIG_REMOVED" 'process.stdout.write(C.resolveCeiling(ROOT, undefined).ceiling_origin)')" \
+  "config-stale"
+
+ORIG_UNCHANGED="$TMP/origin-unchanged"; mkdir -p "$ORIG_UNCHANGED/.somi"
+printf '{"cost": {"ceiling": "low"}}\n' > "$ORIG_UNCHANGED/.somi/config.json"
+run "$ORIG_UNCHANGED" 'C.resolveCeiling(ROOT, undefined)' >/dev/null # bootstrap
+check "config.json unchanged after bootstrap: ceiling_origin stays plain 'config', not stale" \
+  "$(run "$ORIG_UNCHANGED" 'process.stdout.write(C.resolveCeiling(ROOT, undefined).ceiling_origin)')" \
+  "config"
+
+# A ceiling_origin of 'cli'/'env'/'default' never gets the staleness check applied, even against a
+# config.json that would otherwise look stale by value -- staleness is only ever about a 'config'
+# claim specifically.
+ORIG_NOTCONFIG="$TMP/origin-not-config"; mkdir -p "$ORIG_NOTCONFIG/.somi"
+out="$(SOMI_COST_CEILING=low node --input-type=module -e "const C = await import('$LIB'); const r = C.resolveCeiling('$ORIG_NOTCONFIG', undefined); process.stdout.write(r.ceiling_origin)")"
+check "bootstrap via env override: ceiling_origin is 'env', unaffected by the config-staleness check" "$out" "env"
+
+# M3 + M2 do not interact: a legacy (no ceiling_origin) state file is never treated as possibly stale.
+ORIG_LEGACY_CFG="$TMP/origin-legacy-cfg"; mkdir -p "$ORIG_LEGACY_CFG/.somi/somi-state"
+mkdir -p "$ORIG_LEGACY_CFG/.somi"
+printf '{"ceiling": "high"}' > "$ORIG_LEGACY_CFG/.somi/somi-state/ceiling.json"
+printf '{"cost": {"ceiling": "low"}}\n' > "$ORIG_LEGACY_CFG/.somi/config.json"
+check "a legacy state file with a differing config.json still reports 'unknown', not 'config-stale'" \
+  "$(run "$ORIG_LEGACY_CFG" 'process.stdout.write(C.resolveCeiling(ROOT, undefined).ceiling_origin)')" \
+  "unknown"
+
+ORIG_BADVAL="$TMP/origin-badval"; mkdir -p "$ORIG_BADVAL/.somi/somi-state"
+printf '{"ceiling": "low", "ceiling_origin": "bogus"}' > "$ORIG_BADVAL/.somi/somi-state/ceiling.json"
+expect_exit "a present state file with an invalid (not merely absent) ceiling_origin value dies loudly" 1 \
+  "$ORIG_BADVAL" 'C.resolveCeiling(ROOT, undefined)'
+
+# --- an UNPARSABLE state file (bad JSON, not just a wrong shape) dies loudly and names the file --
+STATE_BROKEN="$TMP/state-broken"; mkdir -p "$STATE_BROKEN/.somi/somi-state"
+printf '{"ceiling": "low"\n' > "$STATE_BROKEN/.somi/somi-state/ceiling.json"  # missing closing brace
+expect_exit "an unparsable state file dies loudly rather than a bare uncaught SyntaxError" 1 \
+  "$STATE_BROKEN" 'C.resolveCeiling(ROOT, undefined)'
+check "the unparsable-state error names the ceiling.json file path, not a bare JSON position" \
+  "$(run "$STATE_BROKEN" 'try { C.resolveCeiling(ROOT, undefined); } catch (e) { process.stdout.write(String(e.message.includes("ceiling.json"))); }')" \
+  "true"
+
 # --- malformed values die loudly, never silently defang the ceiling -----------------------------
 expect_exit "a malformed explicit argument is rejected (uncaught, not swallowed)" 1 \
   "$B" 'C.resolveCeiling(ROOT, "unlimited")'

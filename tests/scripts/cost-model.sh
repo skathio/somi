@@ -97,6 +97,19 @@ expect_exit "a non-object per-host value in the override is rejected, not passed
 expect_exit "a null per-host value in the override is rejected, not a bare TypeError later" 1 \
   'M.mergeHostMapping(M.HOST_MODELS, { "h": null })'
 
+# --- mergeHostMapping rejects a tier key outside low|medium|high -- a typo'd tier would otherwise
+# sit unused forever, unflagged, since resolveModel() only ever looks up the tier actually selected.
+expect_exit "a tier key outside low|medium|high is rejected" 1 \
+  'M.mergeHostMapping(M.HOST_MODELS, { "some-host": { "lo": "x" } })'
+check "the rejected tier key error names the bad key, the host, and the valid set" \
+  "$(run 'try { M.mergeHostMapping(M.HOST_MODELS, { "some-host": { "lo": "x" } }); } catch (e) { process.stdout.write(e.message); }')" \
+  'cost-model: mapping override for host "some-host" has an unrecognized tier key "lo" (expected one of low|medium|high)'
+expect_exit "a valid tier key alongside an invalid one still rejects the whole per-host override" 1 \
+  'M.mergeHostMapping(M.HOST_MODELS, { "h": { "low": "x", "typo": "y" } })'
+check "a mapping with only valid tier keys is unaffected by the new check" \
+  "$(run 'process.stdout.write(M.resolveModel("low", "h", M.mergeHostMapping(M.HOST_MODELS, { "h": { "low": "x" } })))')" \
+  "x"
+
 
 # --- scripts/validate.sh's own derivation idiom stays capture-then-check, not a bare eval --------
 # validate.sh builds its cost/model environment from this resolver via a shell idiom: assign the

@@ -677,9 +677,15 @@ object-literal syntax) throws rather than silently resolving to the wrong model.
 
 ### Session ceiling
 
-The library and the declarations below are in place. [`scripts/somi-dispatch.mjs`](#dispatch-resolver)
-(below) is the first live caller composing this with the mapping above; a host prompt still has to
-shell out to it itself before a spawn — nothing invokes it automatically today.
+[`scripts/somi-dispatch.mjs`](#dispatch-resolver) (below) composes this with the mapping above, and
+the `somi` front-door agent (`agents/somi.md`) is the live caller: every non-`/somi` request it
+enters, it runs that command's own procedure live and shells out to the resolver before spawning
+**each** agent that procedure starts (never once for the whole command), so the ceiling is enforced
+on every dispatch the front door makes. A direct command invocation (Claude Code, or a Copilot command typed
+without going through the `somi` persona) still Tasks its agent straight from that agent's own
+frontmatter `model:` and never calls the resolver — the ceiling has no effect on that path today
+(see `docs/AGENTS.md`'s escalation matrix and the front-door section for which path a given
+invocation takes).
 
 A session ceiling **selects among the tiers a unit offers; it does not decide whether the unit
 runs.** [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root,
@@ -734,8 +740,11 @@ node scripts/somi-dispatch.mjs resolve --agent <name> [--host <host>] [--ceiling
   may come from a prompt carrying untrusted text. The agent's frontmatter is read from **this
   script's own install location**, never the caller's project (a consuming project may have no
   `agents/` directory of its own).
-- `--host` defaults to `claude-code`.
-- `--ceiling` is an explicit override for this one call, passed straight through to
+- `--host` defaults to `claude-code`. The `somi` front-door agent passes `claude-code` or `copilot`
+  precisely, naming whichever host is actually running it.
+- `--ceiling` is an explicit override for this one call. Its value is checked against
+  `low`/`medium`/`high` **before** anything is read from or written to disk — a rejected value
+  therefore never bootstraps a ceiling state file, exit `64` — and only then passed to
   `resolveCeiling`.
 
 Before resolving a model, it builds the effective mapping the same way this doc's "Cost tiers"
@@ -746,29 +755,69 @@ that could disagree). Unlike the ceiling, this is read fresh on every call rathe
 bootstrap: the mapping is a lookup table, not a gate a mid-session edit could reopen, so a config
 fix takes effect on the very next dispatch. This is how a host SoMi doesn't ship a mapping for
 (e.g. Copilot) gets one at all — the user's own project tells SoMi which of its models is
-`low`/`medium`/`high`. A malformed mapping (a `__proto__`/`constructor`/`prototype` key, a mapped
-host missing the tier just selected, a non-string model value) fails this call the same way a
-malformed `cost:` declaration does — loudly, exit `66`, never a guessed model.
+`low`/`medium`/`high`. A malformed mapping fails loudly, never a guessed model, split by **whose**
+fault it is: a **structurally** invalid mapping (a `__proto__`/`constructor`/`prototype` host key,
+a non-object per-host value, or a tier key outside `low`/`medium`/`high`) is the project's own
+`.somi/config.json` being broken, exit `67` — the same family as an unparsable config file, not
+this agent's declaration. A mapping that is shaped fine but incomplete for the tier this call
+actually selected, or that names a non-string model value, is split the same way, by whether the
+project's own `cost.mapping` named this **host** at all: `mergeHostMapping` replaces a named host's
+whole tier map rather than merging it tier-by-tier, so a **partial override of a shipped host** (an
+override naming only `high`, say, for `claude-code`) silently drops that host's `low`/`medium`
+entries — every other builder that resolves through that host then hits this same failure. That gap
+is the project's own file being incomplete, exit `67`, and the message names
+`.somi/config.json cost.mapping` explicitly so it never reads as this agent's own broken `cost:`
+declaration. Only a host the project's mapping never named failing this way would point at a bug in
+the shipped `HOST_MODELS` table itself — guarded against by `tests/scripts/cost-model.sh` asserting
+every shipped entry resolves for every tier — and that stays exit `66`.
 
 On success it prints one JSON object and exits 0 — `agent`, `supported` (the normalized declared
 set), `tier` (what `decideDispatch` selected), `model` (what the effective mapping resolves that
 tier and host to today — this doc names the tier, not the model, for the same reason the rest of
-this section does), `ceiling`, and `ceiling_source`:
+this section does), `ceiling`, `ceiling_source`, and `ceiling_origin`:
 
 ```json
-{"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "ceiling": "high", "ceiling_source": "default"}
+{"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "ceiling": "high", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
-`model` is `null` for a host absent from the mapping — "let the host choose" — never a guessed
-name. `ceiling_source` is one of `cli`, `env`, `config`, `state`, `default`: `resolveCeiling`
-reports this on every call, not only when a ceiling actually moves, which is what lets a caller
-announce a `low` ceiling honestly by where it came from, not just that it's in force.
+`model` is `null` for a host absent from the mapping — this call makes no guess. The **caller** is
+expected to do something with that `null` rather than pass nothing on: pick one of the models
+available on that host itself, matching the resolved tier (lightest for `low`, strongest for
+`high`), and disclose plainly that the pick is its own judgment, not the mapping's answer — never
+silently omit a model while a tier was still selected, and never invent one without saying so.
+`ceiling_source` is one of `cli`, `env`, `config`, `state`, `default`: `resolveCeiling` reports this
+on every call, not only when a ceiling actually moves. `ceiling_origin` is a companion field naming
+what actually produced the value now in force, and it survives every later bare call the way
+`ceiling_source` does not: once a ceiling is loaded from disk, `ceiling_source` just says `"state"`
+on every subsequent call, which alone cannot explain *why* the user is at `low` (a
+saved-but-unexplained state is not actionable). `ceiling_origin` keeps saying `config` (a committed
+team policy) or `cli`/`env` (an explicit override, possibly from a previous session) for as long as
+that value stays in force, which is what lets a caller announce a `low` ceiling honestly rather
+than only "it's in force, somehow." Two further values it can report, neither ever written to the
+state file: `config-stale` — the value was bootstrapped from `.somi/config.json`, but that file's
+`cost.ceiling` has since changed to something else or been removed, and a bare edit cannot itself
+move a ceiling already saved — and `unknown` — a state file written before `ceiling_origin` existed
+(there is no way to recover which of the other values actually produced it, so this is the honest
+answer rather than a guess).
 
 Failure is loud and specific rather than a bare stack trace, with a distinct exit code per cause:
-`64` for a bad or missing argument, `65` for an agent with no matching file, `66` for an agent whose
-declaration can't be resolved (a malformed `cost:` set, or `somi`, which is exempt — its model is
-bound by the host when the user selects it, so there is nothing here to resolve). No JSON is ever
-printed on a failing path.
+`64` for a bad or missing argument — including an unrecognized `--ceiling` value **or** an
+unrecognized `SOMI_COST_CEILING` value, both checked before anything touches disk, since either one
+is the caller telling this call which ceiling to use and getting it wrong, whichever channel it
+came through — `65` for an agent with no matching file, `66` for a malformed `cost:` set (or `somi`,
+which is exempt, since its model is bound by the host when the user selects it) — or a
+shape-valid mapping missing the tier just selected / holding a non-string model value **for a host
+the project's own `cost.mapping` never named**, which would mean a bug in the shipped `HOST_MODELS`
+table itself — and `67` for the **project's own files** being broken before resolution can even get
+that far — an unparsable or malformed-shape `.somi/config.json` (including a structurally invalid
+`cost.mapping`: a `__proto__`/`constructor`/`prototype` host key, a non-object per-host value, or a
+tier key outside `low`/`medium`/`high`), a corrupt `.somi/somi-state/ceiling.json` — **or** that same
+missing-tier / non-string-model failure for a host the project's own `cost.mapping` **did** name (a
+partial override of a shipped host drops its other tiers) — distinct from `64` because nothing the
+caller typed this call caused it, and distinct from `66` because the gap traces back to the
+project's own config, not this agent's declaration. Every `67` message names the offending file or
+config key — `.somi/config.json cost.mapping` for the mapping-gap case. No JSON is ever printed on
+a failing path.
 
 `scripts/validate.sh` additionally greps for `resolveModel(` called against a decision's `ceiling`
 field instead of its `selected` field, outside `scripts/lib/` — the one unsanctioned composition

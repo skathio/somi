@@ -96,7 +96,7 @@ Once installed, use `@somi` in GitHub Copilot chat:
 > front-door behavior automatically — no need to already know which command to type. See
 > [`docs/PLUGIN.md`](docs/PLUGIN.md#github-copilot-extension).
 
-> **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Two things do **not** carry
+> **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Three things do **not** carry
 > over, because they depend on Claude Code host capabilities Copilot doesn't expose:
 >
 > - **The deterministic guardrail hooks do not fire.** Blocking dangerous bash, secret-writes,
@@ -107,16 +107,23 @@ Once installed, use `@somi` in GitHub Copilot chat:
 >   `/ship`) and the parallel commands (`/review-panel`, `/code-parallel`) drive Claude Code
 >   sub-agents via the Task tool. Where the host can't spawn sub-agents concurrently, these run
 >   **one lens / one iteration at a time** — same result, no parallelism.
-> - **The cost-tier model split is a Claude Code feature.** The economy depends on per-agent model
->   tiering (high vs. medium cost) and the cache-correct subagent-model split. Where the
->   host runs a single model, the workflow shape (high-cost front-load → dense `brief.md` →
->   medium-cost execution) still holds and still helps — but the *cost* split does not.
->   **Priority is Claude Code; quality is not sacrificed for Copilot parity** — Copilot gets the
->   portable subset.
+> - **Per-call model binding is not confirmed on every host.** The cost tiers themselves (the
+>   `low`/`medium`/`high` axis, the session ceiling, the dispatch resolver) are host-agnostic — every
+>   agent declares its own tier and the resolver selects among it the same way everywhere it's
+>   dispatched through the `somi` front door, including Copilot. A **direct** command invocation, on
+>   either host, still Tasks its agent straight from that agent's own frontmatter and doesn't call
+>   the resolver yet, so the ceiling has no effect there today. What varies on the front-door path is
+>   only whether a *concrete model* can be bound per `Task` call:
+>   confirmed on Claude Code and on VS Code's Copilot; undocumented on Copilot CLI, where the
+>   agent's own frontmatter `model:` may be what actually governs instead. Where a model can't be
+>   bound per call, the dispatcher still names the tier it selected and says plainly that its model
+>   pick could not be applied — the tier decision itself never degrades.
 >
-> The commands, agents, skills, rules, and templates are shared; the **enforcement, concurrency, and
-> model-tiering layers are Claude Code features**. Treat Copilot as the portable subset, not a
-> drop-in equal. See [`docs/HOOKS.md`](docs/HOOKS.md) and [`docs/PLUGIN.md`](docs/PLUGIN.md).
+> The commands, agents, skills, rules, and templates are shared; **enforcement and concurrency are
+> Claude Code features**; cost tiering is shared, with per-call model binding confirmed on Claude
+> Code and VS Code and falling back to the agent's own declared model elsewhere. Treat Copilot as
+> the portable subset, not a drop-in equal. See [`docs/HOOKS.md`](docs/HOOKS.md) and
+> [`docs/PLUGIN.md`](docs/PLUGIN.md).
 
 ---
 

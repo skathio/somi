@@ -77,6 +77,18 @@ export function mergeHostMapping(defaults, override) {
     if (typeof tiers !== 'object' || tiers === null || Array.isArray(tiers)) {
       throw new Error(`cost-model: mapping override for host "${host}" must be an object of cost -> model`);
     }
+    // A tier key outside VALID_COSTS is either a typo (this repo's own "low"/"medium"/"high") or a
+    // stale key from a renamed tier -- either way it would sit unused forever, unflagged, since
+    // resolveModel() only ever looks up the tier it actually selected. Reject the whole per-host
+    // object rather than silently keeping the junk key alongside the valid ones.
+    for (const tier of Object.keys(tiers)) {
+      if (!VALID_COSTS.includes(tier)) {
+        throw new Error(
+          `cost-model: mapping override for host "${host}" has an unrecognized tier key "${tier}" ` +
+          `(expected one of ${VALID_COSTS.join('|')})`,
+        );
+      }
+    }
     merged[host] = tiers;
   }
   return merged;

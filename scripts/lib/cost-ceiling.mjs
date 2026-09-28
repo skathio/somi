@@ -17,6 +17,13 @@
 // Every raise is appended to `ceiling_overrides`, shaped {field, from, to, source, at} — the same
 // shape somi-loop.mjs's `cap_overrides` uses, so an override record looks the same wherever it's
 // read from. Created lazily, only on the first real override.
+//
+// The ceiling not moving on a bare config edit (above) means `ceiling_origin: "config"` can go
+// stale: config can change to a DIFFERENT value after state already exists, without moving what's
+// in force. `resolveCeiling` detects this and reports `"config-stale"` instead — never persisted,
+// since nothing about the value in force actually changed, only the honesty of naming why. A state
+// file written before `ceiling_origin` shipped (no hard failure -- reported as `"unknown"`) is the
+// other non-canonical value `resolveCeiling` can return; see LEGACY_ORIGIN below.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -88,6 +95,26 @@ function validateCeiling(raw, label) {
   return raw;
 }
 
+// What produced the ceiling value currently on disk -- distinct from `source` (below), which names
+// what THIS call did. `ceiling_origin` survives every later bare call that just loads state, so an
+// announcement can say WHY a persisted `low` is in force ("you set this via SOMI_COST_CEILING last
+// session") instead of only "it's saved state" -- see resolveCeiling's own doc comment.
+const VALID_ORIGINS = Object.freeze(['config', 'cli', 'env', 'default']);
+
+// Reported (never persisted) origin for a state file written before `ceiling_origin` existed --
+// this repo's own checked-in .somi/somi-state/ceiling.json is exactly that shape. There is no way
+// to recover which of config/cli/env/default actually produced the value, so this is the honest
+// answer rather than a guess. Distinct from a PRESENT-but-invalid value (a typo, a stale removed
+// value), which still dies loudly in loadOrInitState below -- absence is legacy, corruption isn't.
+const LEGACY_ORIGIN = 'unknown';
+
+function validateOrigin(raw, label) {
+  if (!VALID_ORIGINS.includes(raw)) {
+    throw new Error(`cost-ceiling: ${label} expected one of ${VALID_ORIGINS.join('|')}, got "${raw}"`);
+  }
+  return raw;
+}
+
 function saveState(root, state) {
   const file = ceilingStatePath(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -116,16 +143,48 @@ function loadOrInitState(root) {
     const ceiling = isConfigured
       ? validateCeiling(configured, 'cost.ceiling in .somi/config.json')
       : DEFAULT_CEILING;
-    const state = { ceiling };
+    const bootstrapSource = isConfigured ? 'config' : 'default';
+    const state = { ceiling, ceiling_origin: bootstrapSource };
     saveState(root, state);
-    return { state, bootstrapSource: isConfigured ? 'config' : 'default' };
+    return { state, bootstrapSource };
   }
-  const state = JSON.parse(raw);
+  // An unparsable state file (bad JSON, not merely a wrong shape) must still name the file in its
+  // error -- a bare JSON.parse throw here would surface as an unattributed SyntaxError, leaving a
+  // caller (or a project-environment-failure classifier) no path to report which file is corrupt.
+  let state;
+  try {
+    state = JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`cost-ceiling: ${file} is not valid JSON: ${e.message}`);
+  }
   if (state === null || typeof state !== 'object' || Array.isArray(state)) {
     throw new Error(`cost-ceiling: ${file} is not a valid state object`);
   }
   state.ceiling = validateCeiling(state.ceiling, `ceiling in ${file}`);
+  // Absent entirely (a state file written before this field shipped) is legacy, not corruption --
+  // report LEGACY_ORIGIN rather than hard-failing a file this repo itself ships checked in. Present
+  // but wrong (a typo, a stale removed value) is still rejected the same as any other malformed
+  // persisted value.
+  state.ceiling_origin = state.ceiling_origin === undefined
+    ? LEGACY_ORIGIN
+    : validateOrigin(state.ceiling_origin, `ceiling_origin in ${file}`);
   return { state, bootstrapSource: 'state' };
+}
+
+// `ceiling_origin: "config"` is a claim -- "a committed project policy produced this value" --
+// that a later, DIFFERENT `.somi/config.json` edit silently falsifies. By design (see this file's
+// own header) an edit after state already exists does not move the ceiling already in force, so
+// reporting the origin unchanged would keep asserting a policy that no longer matches what's
+// committed. Detected only when the origin currently on disk still claims 'config' (once a cli/env
+// override has moved it, the origin already reflects THAT, correctly) and only against a call that
+// LOADED existing state rather than bootstrapping fresh this same call (a fresh bootstrap read
+// config and set state from it in this same call, so it cannot yet be stale). Never persisted --
+// this changes only what THIS call reports, not the state file itself.
+function reportedOrigin(root, state, bootstrapSource) {
+  if (bootstrapSource !== 'state' || state.ceiling_origin !== 'config') return state.ceiling_origin;
+  const configured = readCostConfig(root).ceiling;
+  const unset = configured === undefined || configured === null || configured === '';
+  return (unset || configured !== state.ceiling) ? 'config-stale' : state.ceiling_origin;
 }
 
 /**
@@ -138,7 +197,15 @@ function loadOrInitState(root) {
  * or SOMI_COST_CEILING was read this call (whether or not it actually moved the value), otherwise
  * the ceiling's own origin: `config` or `default` on the call that bootstrapped it, `state` on
  * every later call that just loads what a previous call already persisted.
- * @returns {{ceiling: string, overridden: boolean, source: string, override?: object}}
+ * `ceiling_origin` is what actually produced the value now in force — `config`/`cli`/`env`/`default`
+ * — and, unlike `source`, it survives every later bare call. `source: "state"` alone only tells a
+ * caller a ceiling was already on disk; `ceiling_origin` is what lets an announcement say WHY (a
+ * committed team policy, or an explicit `cli`/`env` set in an earlier session) instead of only
+ * "it's saved state". Two further values it can report, neither ever persisted: `config-stale` —
+ * the value was bootstrapped from `.somi/config.json`, but that file's `cost.ceiling` has since
+ * changed to something else (or been removed) — and `unknown` — a state file written before this
+ * field existed (this repo's own committed state is exactly that shape).
+ * @returns {{ceiling: string, overridden: boolean, source: string, ceiling_origin: string, override?: object}}
  */
 export function resolveCeiling(root, explicitArg) {
   const { state, bootstrapSource } = loadOrInitState(root);
@@ -146,12 +213,12 @@ export function resolveCeiling(root, explicitArg) {
   const envVal = process.env[CEILING_ENV];
   const explicit = isCli ? explicitArg : (envVal === undefined || envVal === '' ? undefined : envVal);
   if (explicit === undefined) {
-    return { ceiling: state.ceiling, overridden: false, source: bootstrapSource };
+    return { ceiling: state.ceiling, overridden: false, source: bootstrapSource, ceiling_origin: reportedOrigin(root, state, bootstrapSource) };
   }
   const source = isCli ? 'cli' : 'env';
   const validated = validateCeiling(explicit, isCli ? '--ceiling' : CEILING_ENV);
   if (validated === state.ceiling) {
-    return { ceiling: state.ceiling, overridden: false, source };
+    return { ceiling: state.ceiling, overridden: false, source, ceiling_origin: reportedOrigin(root, state, bootstrapSource) };
   }
   const override = {
     field: 'ceiling',
@@ -161,10 +228,13 @@ export function resolveCeiling(root, explicitArg) {
     at: nowIso(),
   };
   state.ceiling = validated;
+  // The value now in force was produced by THIS override, not by whatever bootstrapped the file --
+  // ceiling_origin tracks the origin of the CURRENT value, so it must move with it.
+  state.ceiling_origin = source;
   if (!Array.isArray(state.ceiling_overrides)) state.ceiling_overrides = [];
   state.ceiling_overrides.push(override);
   saveState(root, state);
-  return { ceiling: state.ceiling, overridden: true, source, override };
+  return { ceiling: state.ceiling, overridden: true, source, ceiling_origin: state.ceiling_origin, override };
 }
 
 // A declared `cost` is a CAPABILITY SET, not a single value -- every tier the unit can usefully

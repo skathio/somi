@@ -312,18 +312,29 @@ A Copilot-only dispatcher, not a phase-specific agent. Selecting it as the sessi
 removes the "which of the others do I need?" choice: per incoming message it runs an
 invocation-mode gate first — an explicit non-`/somi` command is proxied directly, an explicit
 `/somi` passes through to the `/somi` command verbatim, and anything else is classified against
-[`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) and carried inline
-(adopt-inline — no sub-agent `Task`, since Copilot has none). High-cost flows are routed to their
-direct command rather than adopted under whatever model this session is already running.
+[`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md). It then **runs the matched
+command's own procedure live, in the same turn** — the role a command body plays on Claude Code —
+rather than handing the whole command to one Tasked agent. Every agent that procedure starts is
+resolved individually, right as it starts: [`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs)
+picks that agent's cost tier against the session ceiling, and it is Tasked with the resolved model
+(or, absent a host mapping, a model this agent picks itself for the tier and discloses as its own
+choice) and its tier stated in the briefing — the same dispatch a direct command performs on Claude
+Code, just triggered from inside this persona, and repeated for every agent a multi-agent command
+seats rather than collapsed into a single Task.
 
 - **Cost**: none of its own — this was always decorative: the host binds the model when the
   user selects this agent in Copilot's UI, so nothing here could ever act on a declared value. It
-  is still, in effect, a thin dispatcher; high-cost flows are routed to, not adopted inline.
+  is still, in effect, a thin dispatcher, not a reasoning engine: it decides *which* command starts,
+  runs that command's own procedure itself, and resolves *at what tier* each agent that procedure
+  starts runs.
 - **Won't**: second-guess an explicit command; wrap a second opinion around `/somi`'s own
-  recommendation; adopt a high-cost persona inline; emit a sub-agent `Task` (Copilot has none).
-- **Will**: announce which flow it's entering and why before adopting it; keep the dispatched
-  flow's own verification gates intact; nudge Claude Code users toward the direct commands,
-  where this agent adds no value (the direct commands already pick the right agent there).
+  recommendation; guess a model or tier when the resolver fails; suppress a dispatched persona's
+  own checkpoints (a `gh pr create` confirmation, `/incident`'s framing exchange, `/plan`'s decision
+  round-trip).
+- **Will**: announce which flow it's entering and why before dispatching it; announce a `low`
+  session ceiling and its source before any work runs; nudge Claude Code users toward the direct
+  commands, where this agent adds no value (the direct commands already pick the right agent and
+  Task it themselves there).
 
 Invoke by selecting `somi` as your Copilot agent. Not needed on Claude Code.
 

@@ -173,9 +173,11 @@ Copilot requires selecting one agent to drive the whole session. SoMi ships phas
 (see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which phase you're in, and one
 generic front door, **`somi`**. Select `somi` when you're not sure —
 it recognizes an explicit command and proxies it, passes `/somi` straight through, and
-classifies free-form requests into the matching flow, carrying it inline (adopt-inline — no
-sub-agent `Task`, per the parity caveat above). On Claude Code the direct commands already
-select the right agent, so `somi` mainly matters here, on Copilot.
+classifies free-form requests into the matching flow, then **runs that flow's own procedure live,
+in the same turn** — resolving and `Task`ing every agent the flow starts through the same cost
+resolver a direct command uses, the same way a command body dispatches on Claude Code. On Claude
+Code the direct commands already select the right agent and run their own procedure themselves, so
+`somi` mainly matters here, on Copilot.
 
 ### Available commands
 

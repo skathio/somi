@@ -99,8 +99,10 @@ the build if a command declares either field; a command runs on whatever model t
 already using. The agent a command Tasks runs on its own **cost tier** — `cost: high` for high-cost agents
 (design, discovery, review), `cost: low, medium` for the builder agents (planner, coder,
 refactorer) — `low` selected whenever the session ceiling resolves there (an explicit CLI flag or
-`SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the front door
-announcing the ceiling and its source before work runs. See
+`SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and its
+source announced before work runs **when dispatched through the `somi` front door**. A direct
+command invocation still Tasks its agent straight from that agent's own frontmatter `model:` and
+does not call the resolver, so the ceiling has no effect on that path yet. See
 [Cost tiering](./AGENTS.md#cost-tiering). Review commands (`/review`, `/security-review`,
 `/architecture-review`, `/test-strategy`) still need `Write` and `Edit` to produce the review file
 and append diary entries — they're not pure read-only at the command level even though the

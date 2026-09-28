@@ -62,6 +62,12 @@ bash tests/scripts/cost-ceiling.sh
 echo "==> Dispatch resolver tests..."
 bash tests/scripts/somi-dispatch.sh
 
+echo "==> Front-door agent <-> dispatch resolver contract tests..."
+# agents/somi.md is a prompt and can't be exercised without a model, but what its Step 4 tells the
+# model to RUN can be checked deterministically: the resolve --agent/--host invocation shape it
+# instructs, and the exit codes it maps, must both be real and current against the actual CLI.
+bash tests/scripts/somi-agent-dispatch-contract.sh
+
 echo "==> Validating the never-degrade dispatch guard..."
 # scripts/lib/cost-ceiling.mjs's modelForDispatch() is the ONLY sanctioned way to turn a dispatch
 # decision into a model: it resolves the SELECTED tier and refuses anything shaped as other than an
