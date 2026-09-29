@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Cross-checks agents/somi.md's dispatch instructions against scripts/somi-dispatch.mjs's real
+# Cross-checks agents/somi.md's dispatch instructions against both dispatch surfaces' real
 # behavior. A prompt cannot be exercised without a model, but what it tells the model to RUN can
-# be: the resolver invocation shape Step 4 instructs, and the exit codes Step 4 maps, must both be
-# real and current, not prose that quietly drifted from the CLI it describes.
+# be: the primary path is the bundled somi_resolve/somi_command MCP tools (checked against the
+# real server below, driven rather than hand-typed), and the CLI fallback invocation shape plus the
+# exit codes Step 4 maps must still be real and current against scripts/somi-dispatch.mjs, not
+# prose that quietly drifted from either surface it describes.
 set -uo pipefail
 
 ROOT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -25,18 +27,18 @@ reach() { # $1=name $2=want-exit-code, remaining = CLI args after 'resolve'
   if [ "$rc" = "$want" ]; then ok "$name"; else bad "$name (expected exit $want, got $rc)"; fi
 }
 
-# --- the invocation shape Step 4 instructs names the CLI's real subcommand and flags -------------
+# --- the CLI-fallback invocation shape Step 4 names the CLI's real subcommand and flags -----------
 if grep -qF 'resolve --agent <paired agent> --host <host>' "$AGENT_MD"; then
-  ok "agents/somi.md Step 4 instructs the 'resolve --agent ... --host ...' invocation shape"
+  ok "agents/somi.md Step 4's CLI fallback names the 'resolve --agent ... --host ...' invocation shape"
 else
-  bad "agents/somi.md no longer names the resolve --agent/--host invocation shape -- if the wording changed intentionally, update this test to match it"
+  bad "agents/somi.md no longer names the resolve --agent/--host CLI fallback shape -- if the wording changed intentionally, update this test to match it"
 fi
 
 out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent coder --host claude-code)"; rc=$?
 if [ "$rc" -eq 0 ] && node -e 'JSON.parse(process.argv[1])' "$out" >/dev/null 2>&1; then
-  ok "the literal invocation Step 4 instructs succeeds against the real CLI and prints valid JSON"
+  ok "the literal CLI-fallback invocation Step 4 names succeeds against the real CLI and prints valid JSON"
 else
-  bad "Step 4's instructed invocation does not succeed against the real CLI (rc=$rc, out=$out)"
+  bad "Step 4's CLI-fallback invocation does not succeed against the real CLI (rc=$rc, out=$out)"
 fi
 
 # --- the two host values Step 4 names are the CLI's own recognized host strings, not invented ones
@@ -89,6 +91,77 @@ if [ "$r67postrc" = "67" ]; then
   ok "67 is reachable even AFTER a successful bootstrap, not just on a fresh project"
 else
   bad "config corrupted after bootstrap did not reach 67 (got $r67postrc) -- may be misattributed to 66"
+fi
+
+
+# --- agents/somi.md's tool/argument names match the REAL somi-mcp.mjs tools/list ------------------
+# Step 4/5 now call the bundled MCP tools as their primary path (the CLI above is the fallback, only
+# where SoMi's own install path is already known). Derive the server's real advertised schema by
+# actually driving it -- never by hand-typing a second copy of scripts/somi-mcp.mjs's TOOLS table,
+# which is exactly the kind of copy that quietly drifts.
+echo "== agents/somi.md <-> somi-mcp.mjs tool/argument contract =="
+
+SCHEMA_JSON="$(node "$ROOT_REPO/tests/scripts/lib/somi-mcp-tool-schema.mjs" 2>/dev/null || true)"
+if [ -z "$SCHEMA_JSON" ] || ! node -e 'JSON.parse(process.argv[1])' "$SCHEMA_JSON" >/dev/null 2>&1; then
+  bad "could not drive scripts/somi-mcp.mjs's real tools/list to derive its schema"
+else
+  ok "drove the real MCP server to derive its tools/list schema"
+
+  schema_field() { node -e '
+    const s = JSON.parse(process.argv[1])[process.argv[2]] || {};
+    console.log((s[process.argv[3]] || []).join(" "));
+  ' "$SCHEMA_JSON" "$1" "$2"; }
+
+  REAL_TOOLS="$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).sort().join(" "))' "$SCHEMA_JSON")"
+  PROMPT_TOOLS="$(grep -oE '`somi_[a-z_]+`' "$AGENT_MD" | tr -d '`' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
+  if [ "$REAL_TOOLS" = "$PROMPT_TOOLS" ]; then
+    ok "agents/somi.md names exactly the server's real tools ($REAL_TOOLS)"
+  else
+    bad "tool-name mismatch -- server: [$REAL_TOOLS] vs agents/somi.md: [$PROMPT_TOOLS]"
+  fi
+
+  # somi_resolve: every REAL property must be named somewhere in the prompt (nothing silently
+  # dropped) -- and every key the prompt's own canonical invocation example passes must be a REAL
+  # property (nothing invented, nothing stale).
+  REAL_RESOLVE_PROPS="$(schema_field somi_resolve properties)"
+  for prop in $REAL_RESOLVE_PROPS; do
+    if grep -qE "\b${prop}\b" "$AGENT_MD"; then
+      ok "somi_resolve's real argument '$prop' is named in agents/somi.md"
+    else
+      bad "somi_resolve's real argument '$prop' is never mentioned in agents/somi.md"
+    fi
+  done
+
+  SNIPPET="$(sed -n '/somi_resolve({ agent:/,/})/p' "$AGENT_MD")"
+  if [ -z "$SNIPPET" ]; then
+    bad "agents/somi.md no longer has a somi_resolve({ agent: ...}) canonical invocation example -- if the wording changed intentionally, update this test to match it"
+  else
+    ok "found agents/somi.md's canonical somi_resolve invocation example"
+    SNIPPET_KEYS="$(printf '%s' "$SNIPPET" | grep -oE '[a-zA-Z_]+:' | tr -d ':' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
+    for key in $SNIPPET_KEYS; do
+      case " $REAL_RESOLVE_PROPS " in
+        *" $key "*) ok "the example's argument '$key' is a real somi_resolve property" ;;
+        *) bad "the example passes '$key', which is not a real somi_resolve property" ;;
+      esac
+    done
+    REAL_RESOLVE_REQUIRED="$(schema_field somi_resolve required)"
+    for req in $REAL_RESOLVE_REQUIRED; do
+      case " $SNIPPET_KEYS " in
+        *" $req "*) ok "the example passes somi_resolve's required argument '$req'" ;;
+        *) bad "somi_resolve's required argument '$req' is missing from the example" ;;
+      esac
+    done
+  fi
+
+  # somi_command: same shape, one required "name" argument.
+  REAL_COMMAND_PROPS="$(schema_field somi_command properties)"
+  for prop in $REAL_COMMAND_PROPS; do
+    if grep -qE "\b${prop}\b" "$AGENT_MD"; then
+      ok "somi_command's real argument '$prop' is named in agents/somi.md"
+    else
+      bad "somi_command's real argument '$prop' is never mentioned in agents/somi.md"
+    fi
+  done
 fi
 
 echo "somi agent <-> somi-dispatch.mjs dispatch contract tests: $pass ok, $fail failed"

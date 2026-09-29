@@ -315,8 +315,10 @@ invocation-mode gate first — an explicit non-`/somi` command is proxied direct
 [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md). It then **runs the matched
 command's own procedure live, in the same turn** — the role a command body plays on Claude Code —
 rather than handing the whole command to one Tasked agent. Every agent that procedure starts is
-resolved individually, right as it starts: [`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs)
-picks that agent's cost tier against the session ceiling, and it is Tasked with the resolved model
+resolved individually, right as it starts: the bundled `somi_resolve` MCP tool (falling back to
+[`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs) only where SoMi's own install path is
+already known — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) picks that agent's cost
+tier against the session ceiling, and it is Tasked with the resolved model
 (or, absent a host mapping, a model this agent picks itself for the tier and discloses as its own
 choice) and its tier stated in the briefing — the same dispatch a direct command performs on Claude
 Code, just triggered from inside this persona, and repeated for every agent a multi-agent command

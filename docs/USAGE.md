@@ -677,15 +677,16 @@ object-literal syntax) throws rather than silently resolving to the wrong model.
 
 ### Session ceiling
 
-[`scripts/somi-dispatch.mjs`](#dispatch-resolver) (below) composes this with the mapping above, and
-the `somi` front-door agent (`agents/somi.md`) is the live caller: every non-`/somi` request it
-enters, it runs that command's own procedure live and shells out to the resolver before spawning
-**each** agent that procedure starts (never once for the whole command), so the ceiling is enforced
-on every dispatch the front door makes. A direct command invocation (Claude Code, or a Copilot command typed
-without going through the `somi` persona) still Tasks its agent straight from that agent's own
-frontmatter `model:` and never calls the resolver — the ceiling has no effect on that path today
-(see `docs/AGENTS.md`'s escalation matrix and the front-door section for which path a given
-invocation takes).
+The [dispatch resolver](#dispatch-resolver) (below) composes this with the mapping above, and the
+`somi` front-door agent (`agents/somi.md`) is the live caller: every non-`/somi` request it enters,
+it runs that command's own procedure live and calls the resolver — primarily the bundled
+`somi_resolve` MCP tool, falling back to the CLI only where SoMi's own install path is already known
+— before spawning **each** agent that procedure starts (never once for the whole command), so the
+ceiling is enforced on every dispatch the front door makes. A direct command invocation (Claude
+Code, or a Copilot command typed without going through the `somi` persona) still Tasks its agent
+straight from that agent's own frontmatter `model:` and never calls the resolver — the ceiling has
+no effect on that path today (see `docs/AGENTS.md`'s escalation matrix and the front-door section
+for which path a given invocation takes).
 
 A session ceiling **selects among the tiers a unit offers; it does not decide whether the unit
 runs.** [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root,
@@ -727,10 +728,23 @@ tier it declared.
 
 ### Dispatch resolver
 
-[`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs) is the one shipped command that
-composes the three pieces above into a single answer: for a given agent, right now, which tier and
-model should run it. A host prompt that cannot call a function directly shells out to this instead
-of judging cost tiers itself.
+Both surfaces below compose the three pieces above into a single answer: for a given agent, right
+now, which tier and model should run it. Neither re-derives the composition — both call the same
+[`scripts/lib/dispatch-resolver.mjs`](../scripts/lib/dispatch-resolver.mjs) function and turn its
+result into their own shape.
+
+**`somi_resolve` — the bundled MCP tool — is the primary surface.** It's what `agents/somi.md`'s
+Step 4 actually calls: a prompt in a consuming project has no way to know where SoMi is installed,
+so it can't shell out to a script by path, but a plugin's bundled MCP server is launched with its
+own root already known. See [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server) for the tool's full
+argument/error contract (`agent`, `host`, `ceiling`, `project_dir`; the same four-code failure
+family as below, reported in the tool result text).
+
+[`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs) is the CLI wrapping the identical
+function. It's no longer the primary dispatch path — it's the resolver's test harness (this doc's
+own examples below run it directly), and the fallback `agents/somi.md` uses only where SoMi's own
+install path is already known without guessing (working inside the SoMi repo itself, or a vendored
+install whose `${SOMI_VENDOR_ROOT}` is already in hand):
 
 ```
 node scripts/somi-dispatch.mjs resolve --agent <name> [--host <host>] [--ceiling <tier>]

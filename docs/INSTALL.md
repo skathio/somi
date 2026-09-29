@@ -41,6 +41,15 @@ Verify hooks are loaded after install:
 
 If hooks are listed under "Hooks", the deterministic guardrails are live.
 
+### The bundled MCP server
+
+The plugin also declares one stdio MCP server (`somi`) in `.claude-plugin/plugin.json`'s own
+`mcpServers` field. Claude Code loads it straight from the plugin manifest on install — **there is
+nothing to configure**: no separate `.mcp.json`, no settings edit. It's what the front-door
+dispatch logic (`agents/somi.md`) calls to resolve an agent's cost tier and to read a command's
+procedure text, so a prompt never has to know where SoMi is installed. See
+[`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server) for the tool contract.
+
 ### Updating
 
 ```text
@@ -80,6 +89,14 @@ so the hook paths resolve.
 This is the path covered by the `.claude/settings.json` shipped in this repo. The plugin install
 path uses `hooks/hooks.json` instead.
 
+**The bundled MCP server is not part of this merge.** Only the `hooks` and `permissions` blocks are
+vendored above; the plugin-manifest-declared `mcpServers` entry (see
+["The bundled MCP server"](#the-bundled-mcp-server) above) isn't read outside an actual plugin
+install, so a vendored copy has no `somi_resolve`/`somi_command` tools available. The front door
+still works here without extra setup: its CLI fallback (`node scripts/somi-dispatch.mjs resolve
+...`) applies precisely because a vendored install's path (`${SOMI_VENDOR_ROOT}`) is already known,
+which is exactly the case that fallback is for.
+
 ---
 
 ## GitHub Copilot — extension marketplace
@@ -111,6 +128,10 @@ Once installed, use `@somi` in GitHub Copilot chat:
 @somi /test-strategy  rate-limiting-webhooks
 @somi /refactor  Untangle the payment service before patching
 ```
+
+The same bundled MCP server registers automatically here too, via the repo-root
+[`mcp.json`](../mcp.json) that Copilot CLI auto-loads — again, **nothing to configure**. See
+[`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server).
 
 ### Updating
 

@@ -112,27 +112,52 @@ broken model where a whole command was handed to one Tasked agent; it no longer 
 router's own procedure (`/ship`, `/ship-loop`, `/code-parallel`) is not a special case of this step
 either — it is Step 5's recursion rule, not this one, that handles it.
 
-Resolve the agent named at that point in the procedure by running the shipped resolver — never by
-reading its frontmatter and judging it yourself; that is this step's own fallback, only when the
-host truly cannot run a shell at all (see below):
+Resolve the agent named at that point in the procedure by calling the bundled `somi_resolve` tool
+— never by reading its frontmatter and judging it yourself; that is the last-resort fallback below,
+reached only when nothing else can be called at all. A host may surface the tool namespaced by
+plugin and server (e.g. `mcp__somi__somi_resolve`); call it by its bare name, `somi_resolve`,
+regardless of how it's namespaced.
 
 ```
-node <path to scripts/somi-dispatch.mjs, relative to the SoMi install root — the same convention
-commands/code-loop.md uses to locate scripts/somi-loop.mjs> resolve --agent <paired agent> --host <host>
+somi_resolve({ agent: "<paired agent>", host: "<host>",
+               project_dir: "<absolute path of the project you are working in this session>" })
 ```
+
+**Always pass `project_dir`.** The server is launched once, from SoMi's own install location, not
+the project you're working in, and it never guesses which project that is — without a root of its
+own it refuses outright (exit `67`, see Failures below). Give it the absolute path of the project
+this session is actually working in — read your own working directory to get it (a shell `pwd` if
+you have one this turn, or the workspace root the host already told you at session start) — never a
+relative path, and never SoMi's own install directory.
+
+**Pass `ceiling` only when the user actually asked, in this turn, to change the session ceiling.**
+It is not a per-call filter — passing it **persists** the value: it is saved to
+`.somi/somi-state/ceiling.json` and stays in force for every later resolve, this session and every
+later one, until something moves it again. Omit it on every ordinary resolve.
 
 Name `<host>` precisely, never guess it: `claude-code` if this turn is running in Claude Code,
 `copilot` if it's running in GitHub Copilot.
 
-**If the resolver can't be reached or crashes outright — say so and stop; do not fall back to
-judgment.** The shipped script is what this step calls today; a missing file, a Node error before
-the script's own argument parsing, or an exit code that is none of `0`, `64`, `65`, `66`, or `67`
-below all mean the tool itself is broken or absent on a host that *does* have a shell — a different
-problem from "this host has no shell at all," and the two must not be conflated. Report the failure
-plainly and stop before this agent's `Task` call; only a host with **no shell whatsoever** uses the
-host-fallback paragraph at the end of this step.
+**Fallback order — stated once, here; nowhere else in this file repeats it:**
 
-Read the printed JSON:
+1. **The `somi_resolve` tool** (above) — the primary path, tried first, on either host.
+2. **The CLI, by path** — `node scripts/somi-dispatch.mjs resolve --agent <paired agent> --host <host> [--ceiling <tier>]` —
+   only where SoMi's own files are actually reachable at a path you already know without guessing
+   (e.g. this session is working inside the SoMi repo itself, or a vendored install whose
+   `${SOMI_VENDOR_ROOT}` you already have). This is not a general substitute for the tool: most
+   consuming projects give a prompt no way to know where SoMi is installed at all, which is the
+   entire reason the tool exists.
+3. **The disclosed last-resort judgment fallback** (below) — reached only when *neither* of the
+   above can even be attempted: no MCP tool call is possible in this turn, **and** no shell is
+   available to run the CLI (or SoMi's install path genuinely isn't known).
+
+**A tool call that reaches the server and returns an error is never a reason to fall back.** Map
+its exit code below and stop — falling back to the CLI or to judgment after a real error would bury
+the actual failure under a second, unrelated guess. The fallback order above is for when a resolver
+genuinely cannot be reached at all, never for a reachable one that answered with a failure.
+
+Read the result — the tool's JSON comes back in its text content; the CLI fallback prints the
+identical shape to stdout:
 
 ```json
 {"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "ceiling": "high", "ceiling_source": "default", "ceiling_origin": "default"}
@@ -162,13 +187,15 @@ reason a saved `low` is in force:
 - `unknown` — a saved state file that predates this field entirely; there is no way to recover
   which of the above actually produced it, so say that honestly rather than guessing one.
 
-This is what lets the user raise the ceiling — via the resolver's own `--ceiling` argument or
-`SOMI_COST_CEILING` — before work starts, rather than discovering the reduced depth after the fact.
+This is what lets the user raise the ceiling — via `somi_resolve`'s own `ceiling` argument (the CLI
+fallback's `--ceiling`) or `SOMI_COST_CEILING` — before work starts, rather than discovering the
+reduced depth after the fact.
 
-**In-chat ceiling raise.** If the user asks, mid-session, to raise the ceiling, re-run the resolver
-with `--ceiling <tier>` the next time this step resolves an agent, and say plainly that the raise
-**persists**: it is saved to `.somi/somi-state/ceiling.json` and stays in force for every later
-resolve this session — and every later session — until something moves it again.
+**In-chat ceiling raise.** If the user asks, mid-session, to raise the ceiling, call `somi_resolve`
+again passing `ceiling: <tier>` (or the CLI fallback's `--ceiling <tier>`) the next time this step
+resolves an agent, and say plainly that the raise **persists**: it is saved to
+`.somi/somi-state/ceiling.json` and stays in force for every later resolve this session — and every
+later session — until something moves it again.
 
 **No mapped model.** When `model` comes back `null`, pick only from model identifiers **actually
 visible to you this turn** — e.g. the subagent tool's own `model` parameter, when it lists
@@ -185,34 +212,48 @@ retry more than once.
 
 **Failures — map each exit code, and stop; never guess a model or tier to keep going:**
 
-- `64` (usage — bad or missing arguments, including an unrecognized `--ceiling` or
-  `SOMI_COST_CEILING` value) — the call itself was malformed; say so and stop.
+- `64` (usage — bad or missing arguments, including an unrecognized `ceiling`/`--ceiling` or
+  `SOMI_COST_CEILING` value, or a malformed `project_dir` — not absolute, doesn't exist, or outside
+  a root the host already supplied) — the call itself was malformed; say so and stop.
 - `65` (unknown agent) — no file at the install root matches the agent name this step of the
   command's procedure named; say so and stop, don't dispatch.
 - `66` (malformed declaration) — this agent's own `cost:` frontmatter is missing or invalid; quote
   the resolver's own message and stop.
-- `67` (project environment/config failure) — `.somi/config.json` (including a structurally invalid
-  `cost.mapping`) or `.somi/somi-state/ceiling.json` is corrupt, unparsable, or malformed-shape —
-  **or** the merged mapping is missing the tier just selected, or holds a non-string model value,
-  for a host the project's own `cost.mapping` named (a partial override of a shipped host replaces
-  that host's whole tier map, so overriding just one tier drops the others; the resolver's own
-  message names `.somi/config.json cost.mapping` when this is the cause). Quote the resolver's
-  message — including the file path when it names one — and tell the user to fix or delete the
-  offending config before retrying.
+- `67` (project environment/config failure) — either `.somi/config.json` (including a structurally
+  invalid `cost.mapping`) or `.somi/somi-state/ceiling.json` is corrupt, unparsable, or
+  malformed-shape; or the merged mapping is missing the tier just selected, or holds a non-string
+  model value, for a host the project's own `cost.mapping` named (a partial override of a shipped
+  host replaces that host's whole tier map, so overriding just one tier drops the others); **or no
+  project root could be established at all** — no `project_dir` reached the server as usable, and
+  nothing else established one either. For the config/state cases, quote the resolver's own message
+  — including the file path when it names one — and tell the user to fix or delete the offending
+  config before retrying. For the no-project-root case specifically: **tell the user which folder
+  you passed (or tried to pass) as `project_dir` and stop** — this is never silently retried with a
+  guessed or different path.
 
-**Host fallback — no shell available at all.** If this host can't run shell commands at all,
-resolve the same decision manually. Say where you are reading the ceiling from, honestly, in the
-same order the resolver itself would check: `.somi/somi-state/ceiling.json` if it exists, else
+**Last-resort fallback — neither the tool nor a reachable CLI.** Reached only when this turn cannot
+call `somi_resolve` at all **and** there is no shell available to run the CLI (or SoMi's install
+path genuinely isn't known) — never when either one is reachable and simply returned a failure (map
+that per the exit codes above instead). Say plainly that you're doing this and name which of the two
+you couldn't reach, then resolve the same decision manually: read the ceiling yourself, in the same
+order the resolver itself would check — `.somi/somi-state/ceiling.json` if it exists, else
 `.somi/config.json`'s `cost.ceiling` if set, else `high` (the shipped default) — then read this
 agent's `cost:` frontmatter yourself and pick the highest declared tier at or below that ceiling —
-the same selection the resolver would have made — say plainly that you did this and why, mirroring
-`/code-loop`'s own no-shell fallback honesty.
+the same selection the resolver would have made — mirroring `/code-loop`'s own no-shell fallback
+honesty.
 
 ### Step 5 — Run the command's own procedure, live, as its orchestrator.
 
 This is the role a command body plays on Claude Code, on whichever host is actually running you.
-Read the target command's own markdown and follow it, step by step, in this same turn — including
-its own checkpoints, confirmations, and decision round-trips, exactly as written. `/plan`'s
+Call `somi_command({ name: "<command>" })` to get that command's own procedure text — the same
+tool-first, then CLI-by-known-path, then last-resort fallback order Step 4 states, since a prompt
+running in a consuming project has no way to know where SoMi's `commands/` directory lives any more
+than it knows where `agents/` lives (the CLI fallback here means reading `commands/<name>.md`
+directly, only where that path is already known; there is no judgment substitute for procedure text
+you haven't read — if neither the tool nor a known path can reach it, stop and say so rather than
+improvising a command's procedure from memory). Then follow the returned text, step by step, in
+this same turn — including its own checkpoints, confirmations, and decision round-trips, exactly as
+written. `/plan`'s
 decision round-trip still pauses for the user; `/pr`'s confirmation still happens before
 `gh pr create`; `/incident`'s framing exchange still happens before mitigation starts. Dispatching
 changes *who runs* a command's procedure, never removes what that procedure itself requires, and
@@ -224,14 +265,14 @@ A procedure's `Task` line names one of two things, and they are handled differen
 fix, `/code-loop` itself Tasks `/review-panel` in panel mode, `/upgrade` Tasks `/code-loop`, `/ship`
 and `/ship-loop` Task `/plan-loop`, `/code-loop`, and `/review`, and `/code-parallel` Tasks
 `/code-loop` once per eligible worktree. Treat that line exactly like Step 3 → Step 5 for the named
-command: read its own markdown and run its procedure live, in this same turn, applying this whole
-Step 5 — including this rule, recursively — as you go. This is what a router's own text (`/ship`,
+command: call `somi_command` for it and run its procedure live, in this same turn, applying this
+whole Step 5 — including this rule, recursively — as you go. This is what a router's own text (`/ship`,
 `/ship-loop`, `/code-parallel`) *is*: composing other commands inline, not a boundary to treat
 specially. Two things never happen with this shape: **a command name is never passed to Step 4's
 resolver** — `--agent /code-loop` is not a valid call, because a command is not an agent, and this
 line does not reach Step 4 until the recursion inside it names a real one — and **a command is
 never handed whole to one subagent's `Task` call** in place of running its procedure, the exact
-collapse that broke multi-agent commands and interactive checkpoints before D26.
+collapse that broke multi-agent commands and interactive checkpoints before this rewrite.
 
 `/code-parallel`'s worktree fan-out is the one shape this recursion cannot honor literally: its own
 text calls for issuing several `Task /code-loop` lines together so the worktrees build concurrently,
@@ -309,9 +350,9 @@ procedure.
   exists to close off.
 - **Guessing a model or a tier when Step 4's resolver fails, or when the host rejects the model
   argument at Step 5.** Every failure path stops and surfaces the resolver's own message instead —
-  including when the resolver itself can't be found or crashes outright; that is a stop, not a cue
-  to fall back to judgment (the no-shell fallback is for a host with no shell at all, not for a
-  broken tool call on a host that has one).
+  including when neither `somi_resolve` nor the CLI fallback can even be reached; that is a stop,
+  not a cue to fall back to judgment (the last-resort fallback is for when no resolver can be
+  reached at all, never for a reachable one — tool or CLI — that answered with a real error).
 - **Skipping the `low`-ceiling announcement, or repeating it needlessly.** It runs once per
   session, before the first agent that resolves to `low` starts — not before every later agent
   Task that also happens to resolve `low`, and not skipped just because a caller didn't ask again.
@@ -355,22 +396,23 @@ procedure.
 > `.somi/plans/*/progress.md` for an existing work item on the export button first — none found.
 > This reads as "a bug — something worked, now doesn't; cause unknown," which
 > `skills/somi-routing/SKILL.md` maps to `/debug`. Step 3: "Entering `/debug` — this reads as an
-> unreproduced bug, not a feature request, per the routing skill." Step 5: began following
-> `commands/debug.md`'s own procedure live, in this turn — §1 scaffolded `.somi/plans/<slug>/`
-> (`rca.md`, `progress.md`, `diary.md`); §2 reproduced the double-click race myself, live, in the
-> orchestrator, and committed it as a failing test — `/debug`'s repro gate is not a `Task` line at
-> all, so it never touches Step 4; §3 isolated the cause (a missing debounce on the submit handler)
-> the same way, two hypotheses in, no escalation needed. §4 reads `Task /code-loop "<slug>"` — a
-> **command**, not an agent, so it does not reach Step 4: I entered `/code-loop`'s own procedure
-> inline, recursively, the same as Step 3 → Step 5 for any other command. Inside that recursion,
-> `/code-loop`'s own text reaches a point that Tasks the `coder` agent — *that* line names an agent,
-> so Step 4 resolves it there: ran `node scripts/somi-dispatch.mjs resolve --agent coder --host
-> copilot` (path relative to the SoMi install root); it printed `{"agent": "coder", "supported":
-> ["low", "medium"], "tier": "medium", "model": null, "ceiling": "high", "ceiling_source":
-> "default", "ceiling_origin": "default"}` — a `medium` tier, `model: null` (no shipped mapping for
-> Copilot yet, and no model identifier visible to me this turn either), and a `high` ceiling, so no
-> `low`-ceiling announcement is needed. `model: null` with nothing visible to pick from calls for
-> passing no model at all, said plainly rather than invented. Still inside `/code-loop`'s
+> unreproduced bug, not a feature request, per the routing skill." Step 5: called
+> `somi_command({name: "debug"})` and began following its returned text live, in this turn — §1
+> scaffolded `.somi/plans/<slug>/` (`rca.md`, `progress.md`, `diary.md`); §2 reproduced the
+> double-click race myself, live, in the orchestrator, and committed it as a failing test —
+> `/debug`'s repro gate is not a `Task` line at all, so it never touches Step 4; §3 isolated the
+> cause (a missing debounce on the submit handler) the same way, two hypotheses in, no escalation
+> needed. §4 reads `Task /code-loop "<slug>"` — a **command**, not an agent, so it does not reach
+> Step 4: called `somi_command({name: "code-loop"})` and entered its procedure inline, recursively,
+> the same as Step 3 → Step 5 for any other command. Inside that recursion, `/code-loop`'s own text
+> reaches a point that Tasks the `coder` agent — *that* line names an agent, so Step 4 resolves it
+> there: called `somi_resolve({agent: "coder", host: "copilot", project_dir: "<this project's
+> absolute path>"})`; its result carried `{"agent": "coder", "supported": ["low", "medium"], "tier":
+> "medium", "model": null, "ceiling": "high", "ceiling_source": "default", "ceiling_origin":
+> "default"}` — a `medium` tier, `model: null` (no shipped mapping for Copilot yet, and no model
+> identifier visible to me this turn either), and a `high` ceiling, so no `low`-ceiling announcement
+> is needed. `model: null` with nothing visible to pick from calls for passing no model at all, said
+> plainly rather than invented. Still inside `/code-loop`'s
 > procedure: `Task`ed `coder` with no model argument, briefed `dispatched at cost: medium`, and
 > handed it exactly the scope `/code-loop` defines there — this iteration, acceptance = the §2
 > repro test passing. `coder` owns the fix diff only; the repro test stays mine from §2, and
