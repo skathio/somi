@@ -29,7 +29,7 @@ that lists one or more **plugins**. Each plugin is a directory shaped like:
 ```
 plugin-root/
 ├── .claude-plugin/
-│   └── plugin.json           # plugin manifest (name, version, description, ...)
+│   └── plugin.json           # plugin manifest (name, version, description, mcpServers, ...)
 ├── agents/                   # subagents (optional)
 ├── commands/                 # slash commands (optional)
 ├── skills/                   # skills (optional)
@@ -38,6 +38,36 @@ plugin-root/
 ```
 
 The SoMi repo is shaped that way: it is both a plugin and its own marketplace.
+
+### Bundled MCP server
+
+[`.claude-plugin/plugin.json`](../.claude-plugin/plugin.json)'s own `mcpServers` field declares
+one stdio MCP server, `somi`, launched as `node ${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs`. Claude
+Code loads a plugin's MCP servers straight from its manifest — no separate root-level `.mcp.json`
+is needed, and this repo deliberately doesn't ship one: a root `.mcp.json` is ALSO read as *this
+repo's own* project MCP config when a developer opens the SoMi repo itself (as opposed to having
+installed it as a plugin elsewhere), where `${CLAUDE_PLUGIN_ROOT}` is undefined and the server
+fails to launch. Declaring the server inline in the manifest avoids that collision — there is
+nothing at the repo root for a bare checkout to misread. It exposes two tools:
+
+- **`somi_resolve`** — the MCP-native equivalent of `node scripts/somi-dispatch.mjs resolve`:
+  given an agent name (and optionally a host/ceiling), returns its dispatch tier and model. A
+  failure maps one-to-one onto the CLI's exit-code family (64 usage / 65 unknown agent /
+  66 malformed `cost:` / 67 project environment failure), reported in the tool result text.
+- **`somi_command`** — returns a SoMi command's own procedure text (`commands/<name>.md`) from
+  the install root, so the front door can run a command live without knowing an install path.
+
+Because the server is launched once, from the plugin's own location rather than the consuming
+project, it cannot assume its own working directory is the project — see
+[`scripts/lib/mcp-project-root.mjs`](../scripts/lib/mcp-project-root.mjs) for the resolution
+`somi_resolve` uses to find the right `.somi/`. A HOST-supplied root — `CLAUDE_PROJECT_DIR`, or a
+single MCP `roots` entry the client offers — is used directly when no `project_dir` tool argument
+is given; when both are present, `project_dir` (text a MODEL supplied) must be that host root or a
+directory inside it, or the call is refused before anything is read or written — a model cannot
+point the server somewhere the host didn't authorize. Only when the host supplies nothing at all
+does `project_dir` alone decide. No usable root at all is a clear refusal, never a silent fallback
+to SoMi's own directory. `scripts/somi-dispatch.mjs` (the CLI) stays as the test harness and as the
+fallback for a host with a shell but no MCP client.
 
 ### Manifests
 
@@ -153,6 +183,16 @@ the Claude Code plugin.
 - [`.copilot-extension/extension.json`](../.copilot-extension/extension.json) — extension manifest.
 - [`.copilot-extension/marketplace.json`](../.copilot-extension/marketplace.json) — marketplace
   manifest (lists this extension so `copilot plugin marketplace add` resolves it).
+- [`mcp.json`](../mcp.json) — the same bundled MCP server as Claude Code's manifest-declared one
+  (see ["Bundled MCP server"](#bundled-mcp-server) above), launched as
+  `node ${PLUGIN_ROOT}/scripts/somi-mcp.mjs`. Copilot CLI auto-loads a plugin's root-level
+  `mcp.json` — unlike Claude Code, which reads its server declarations out of
+  `.claude-plugin/plugin.json` itself, so this file stays at the repo root without the same
+  bare-checkout collision (Copilot has no equivalent "open this plugin's own repo as a project"
+  auto-load path this repo has hit). No reference from `extension.json` is needed. Tool naming
+  inside an agent's own reasoning isn't documented for Copilot; refer to `somi_resolve` /
+  `somi_command` by their bare names — a host may surface them namespaced by plugin and server (as
+  Claude Code does).
 
 ### Installing
 

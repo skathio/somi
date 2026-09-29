@@ -18,6 +18,7 @@ for f in \
   .copilot-extension/extension.json \
   .copilot-extension/marketplace.json \
   .claude/settings.json \
+  mcp.json \
   package.json \
   hooks/hooks.json \
   examples/sample-consumer/.claude/settings.json; do
@@ -67,6 +68,13 @@ echo "==> Front-door agent <-> dispatch resolver contract tests..."
 # model to RUN can be checked deterministically: the resolve --agent/--host invocation shape it
 # instructs, and the exit codes it maps, must both be real and current against the actual CLI.
 bash tests/scripts/somi-agent-dispatch-contract.sh
+
+echo "==> Bundled MCP server tests (somi_resolve / somi_command)..."
+# scripts/somi-mcp.mjs is the MCP-native equivalent of the CLI above, launched from
+# ${CLAUDE_PLUGIN_ROOT}/${PLUGIN_ROOT} so a prompt never needs an install path. Both wrap the
+# identical scripts/lib/dispatch-resolver.mjs, so this drives the real JSON-RPC stdio protocol
+# rather than re-testing the resolver's arithmetic a third time.
+bash tests/scripts/somi-mcp.sh
 
 echo "==> Validating the never-degrade dispatch guard..."
 # scripts/lib/cost-ceiling.mjs's modelForDispatch() is the ONLY sanctioned way to turn a dispatch

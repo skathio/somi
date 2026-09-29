@@ -52,6 +52,7 @@
     ".claude-plugin/",
     ".copilot-extension/",
     ".claude/",
+    "mcp.json",
     "VERSION",
     "LICENSE"
   ]
