@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 // somi-mcp.mjs — a zero-dependency stdio MCP server bundling scripts/lib/dispatch-resolver.mjs's
 // resolveDispatch() as the `somi_resolve` tool, plus a command-procedure text reader as the
-// `somi_command` tool. Both Claude Code and Copilot CLI launch a plugin's bundled MCP server with
-// its root already expanded (${CLAUDE_PLUGIN_ROOT} / ${PLUGIN_ROOT}), so a prompt calling these
-// tools never needs to know where SoMi is installed — unlike scripts/somi-dispatch.mjs, which a
-// prompt can only shell out to via a path it has to already know. That CLI stays the other
-// consumer of the identical resolveDispatch() — this file's test harness and the fallback for a
-// host with a shell but no MCP. Neither surface re-derives the composition or validation order.
+// `somi_command` tool and a skill-text reader as the `somi_skill` tool. Both Claude Code and
+// Copilot CLI launch a plugin's bundled MCP server with its root already expanded
+// (${CLAUDE_PLUGIN_ROOT} / ${PLUGIN_ROOT}), so a prompt calling these tools never needs to know
+// where SoMi is installed — unlike scripts/somi-dispatch.mjs, which a prompt can only shell out to
+// via a path it has to already know. That CLI stays the other consumer of the identical
+// resolveDispatch() — this file's test harness and the fallback for a host with a shell but no
+// MCP. Neither surface re-derives the composition or validation order. `somi_skill` exists for the
+// identical reason `somi_command` does: a skill reference that's a relative link into SoMi's own
+// install directory can't be followed from a consuming project, so its text is served over the
+// same stdio channel instead.
 //
 // Hand-rolled, on purpose (zero dependencies — no MCP SDK): newline-delimited JSON-RPC 2.0 over
 // stdio, one JSON object per line either direction, matching the MCP stdio transport's own framing
@@ -152,6 +156,23 @@ const TOOLS = [
       required: ['name'],
     },
   },
+  {
+    name: 'somi_skill',
+    description:
+      "Read a SoMi skill's own text (skills/<name>/SKILL.md) from the install root — the same " +
+      'problem `somi_command` solves for commands/, applied to skills/: a reference to a skill from ' +
+      "a consuming project can't rely on a relative link into SoMi's own install directory, since " +
+      "that directory generally isn't the consuming project's own tree. Read the dispatch " +
+      'procedure this way (`somi_skill({name: "somi-dispatch"})`) whenever the skill can\'t be ' +
+      'loaded by name on the current host (e.g. no Skill tool, or a non-Claude-Code host).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'skill name, e.g. "somi-dispatch" (matches ^[a-z][a-z0-9-]*$)' },
+      },
+      required: ['name'],
+    },
+  },
 ];
 
 // --- tool implementations --------------------------------------------------------------------
@@ -216,6 +237,27 @@ function callSomiCommand(args) {
   return textResult(content);
 }
 
+// Mirrors callSomiCommand exactly -- same allowlist regex, checked BEFORE the path is ever built,
+// so a traversal payload (`../x`) is rejected by AGENT_NAME_RE (no `/`, no `.`) and never reaches
+// path.join at all; only the two path segments (commands/ vs skills/.../SKILL.md) differ.
+function callSomiSkill(args) {
+  const name = args?.name;
+  if (typeof name !== 'string' || !AGENT_NAME_RE.test(name)) {
+    return textResult(`somi-skill: invalid name ${JSON.stringify(name)} (expected ${AGENT_NAME_RE}) (exit ${EXIT_USAGE})`, true);
+  }
+  const skillPath = path.join(installRoot(), 'skills', name, 'SKILL.md');
+  let content;
+  try {
+    content = fs.readFileSync(skillPath, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      return textResult(`somi-skill: unknown skill "${name}" (no ${skillPath}) (exit ${EXIT_UNKNOWN_AGENT})`, true);
+    }
+    throw e;
+  }
+  return textResult(content);
+}
+
 // Returns null for an unrecognized tool name — the caller turns that into a JSON-RPC error, since
 // an unknown TOOL is the protocol failing to find it at all, distinct from a known tool that ran
 // and failed (which reports isError:true in an otherwise-successful JSON-RPC response).
@@ -223,6 +265,7 @@ async function callTool(name, args) {
   switch (name) {
     case 'somi_resolve': return await callSomiResolve(args || {});
     case 'somi_command': return callSomiCommand(args || {});
+    case 'somi_skill': return callSomiSkill(args || {});
     default: return null;
   }
 }

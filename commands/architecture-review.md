@@ -34,7 +34,9 @@ or `plan <slug>`.
 
 ### 2. Brief the `architecture-reviewer` agent
 
-Via the Task tool, pass:
+Before this `Task`, call `somi_resolve` for `architecture-reviewer` (with `project_dir`), pass its
+model, and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+(`somi_skill`, or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The diff or plan-artifact set.
 - The work-item paths (`spec.md`, `decisions.md`, the iteration phase file, recent `diary.md`
@@ -58,7 +60,8 @@ the command owns all writes.
 - **Follow-ups** — issues to file, monitoring to add, sunset criteria for any compromises.
 
 If the architecture has security implications, the command **must** also invoke
-`security-reviewer` via Task and merge those findings.
+`security-reviewer` via Task — call `somi_resolve` for `security-reviewer` first (full rules: the
+`somi-dispatch` skill) — and merge those findings.
 
 ### 4. Write the review
 

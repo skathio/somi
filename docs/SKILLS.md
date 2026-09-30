@@ -20,6 +20,7 @@ not a replacement for the global ruleset; they're depth-on-demand.
 | [`threat-modeling`](../skills/threat-modeling/SKILL.md)        | New attack surface: webhook, OAuth, file upload, new service                      |
 | [`reasoning-craft`](../skills/reasoning-craft/SKILL.md)        | Before answering a substantive question, or self-editing a draft for hedging and bland phrasing |
 | [`somi-routing`](../skills/somi-routing/SKILL.md)              | Classifying a free-form request into the right SoMi command — shared by `/somi` and the `somi` agent |
+| [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)            | Resolving and starting a SoMi agent's dispatch tier/model — shared by every command that Tasks an agent and the `somi` agent |
 
 ## When to invoke a skill
 

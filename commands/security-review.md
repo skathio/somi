@@ -22,7 +22,9 @@ Use the same resolution logic as [`/review`](./review.md):
 
 ### 2. Brief the `security-reviewer` agent
 
-Via the Task tool, pass:
+Before this `Task`, call `somi_resolve` for `security-reviewer` (with `project_dir`), pass its
+model, and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+(`somi_skill`, or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The diff and the relevant repo context.
 - The work-item paths (`spec.md` §8 security considerations, the iteration phase file, recent

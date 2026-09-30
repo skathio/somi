@@ -43,7 +43,10 @@ Any hard failure here (open Blocker, red tests, unexecutable rollback) → the v
 
 Per-iteration reviews saw each diff in isolation. Task the [`reviewer`](../agents/reviewer.md)
 (declares `cost: medium, high`; the session ceiling picks the highest permitted member — typically
-`high`, the fresh-context depth this stage wants) on the **cumulative release diff** (merge-base of
+`high`, the fresh-context depth this stage wants). Before this `Task`, call `somi_resolve` for
+`reviewer` (with `project_dir`), pass its model, and put `dispatched at cost: <tier>` in the
+briefing; full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude
+Code). Task it on the **cumulative release diff** (merge-base of
 the release scope vs. the default branch) with an explicit integration framing: interactions **between** the work
 items, contract mismatches across independently-reviewed changes, migration ordering across
 items, config/flag interactions, and observability of the release as a whole ("when this ships

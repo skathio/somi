@@ -18,8 +18,11 @@ $ARGUMENTS
 
 ## What to do
 
-1. **Brief the `impact` agent** ([`agents/impact.md`](../agents/impact.md)) with the target above
-   (a proposed change, a file/symbol, or a diff range/PR).
+1. **Brief the `impact` agent** ([`agents/impact.md`](../agents/impact.md)) — before this `Task`,
+   call `somi_resolve` for `impact` (with `project_dir`), pass its model, and put `dispatched at
+   cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`, or
+   `somi:somi-dispatch` on Claude Code) — with the target above (a proposed
+   change, a file/symbol, or a diff range/PR).
 2. **Relay its report** in-chat: blast radius in one sentence, the callers/contracts/tests table,
    risk concentration, warranted review lenses, and its proceed / design-first / reconsider
    recommendation.

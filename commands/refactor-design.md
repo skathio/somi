@@ -50,7 +50,10 @@ from [`templates/SOMI-README.md.tmpl`](../templates/SOMI-README.md.tmpl), same a
 
 ### 3. Invoke the `refactor-designer` agent
 
-Brief [`agents/refactor-designer.md`](../agents/refactor-designer.md) via the Task tool with: the
+Before this `Task`, call `somi_resolve` for `refactor-designer` (with `project_dir`), pass its
+model, and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+(`somi_skill`, or `somi:somi-dispatch` on Claude Code). Brief
+[`agents/refactor-designer.md`](../agents/refactor-designer.md) via the Task tool with: the
 refactor target, the slug and paths, and a reminder to name the destination shape, map the seams
 and risks (`file:line`), confirm or raise test-coverage gaps, and compile the brief.
 
@@ -64,7 +67,9 @@ brief's **"Repo conventions in force"** section, never auto-invoke the repo's ow
 Surface the destination shape and migration approach to the user before handing off — the shared
 batch round-trip ([`commands/plan.md`](./plan.md) §5): the research pass returns a
 `DECISIONS-NEEDED` block, this command presents it, and re-invokes the agent with a
-`VERIFIED-DECISIONS` block appended before it records `decisions.md` and compiles the brief.
+`VERIFIED-DECISIONS` block appended before it records `decisions.md` and compiles the brief. That
+re-invocation resolves fresh too — call `somi_resolve` for `refactor-designer` again before it, the
+same as the first Task (full rules: the `somi-dispatch` skill).
 
 ### 6. The brief is the deliverable
 

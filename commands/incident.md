@@ -28,7 +28,10 @@ diary entry = the fenced report + the timeline as known. No spec, no phases, no 
 
 ### 2. Brief the `incident` agent
 
-Via the Task tool, pass the slug and the frame from step 1. The agent
+Before this `Task`, call `somi_resolve` for `incident` (with `project_dir`), pass its model, and put
+`dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`,
+or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass
+the slug and the frame from step 1. The agent
 ([`agents/incident.md`](../agents/incident.md)) mitigates, verifies against the live symptom, and
 runs mandatory debt capture (postmortem note, seeded follow-up, guardrail retro) — writing
 `diary.md` / `progress.md` itself as it goes.

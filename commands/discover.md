@@ -93,7 +93,10 @@ If `.somi/README.md` does not yet exist at the repo root, also write it from
 
 ### 4. Invoke the `discovery-analyst` agent
 
-Brief the agent via the Task tool with:
+Before this `Task`, call `somi_resolve` for `discovery-analyst` (with `project_dir`), pass its
+model, and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+(`somi_skill`, or `somi:somi-dispatch` on Claude Code). Brief the agent via the
+Task tool with:
 - The full idea (kept inside the `user-software-idea` fence).
 - The slug and `.somi/rd/<slug>/` paths.
 - A reminder to follow the **research methodology** and the **verification protocol** (§5).
@@ -118,7 +121,9 @@ subagent cannot pause to converse with the user, so run the **shared batch round
    pivot** verdict (which rides the block as the first decision). Nothing is recorded yet.
 2. **You present each decision to the user faithfully** — options, pros/cons, recommendation, the
    escape hatches; the analyst's pre-supplied narrowing questions power Discover mode.
-3. Re-invoke the analyst with a **`VERIFIED-DECISIONS` block appended** to the same briefing; it
+3. This re-invocation resolves fresh too — call `somi_resolve` for `discovery-analyst` again before
+   it, same as the first Task (full rules: the `somi-dispatch` skill). Re-invoke the analyst with a
+   **`VERIFIED-DECISIONS` block appended** to the same briefing; it
    then authors the document set and records `decisions.md` entries with
    `Verified with user: yes`, referenced from the relevant documents.
 
@@ -153,7 +158,8 @@ After the documents are written:
 For a high-stakes initiative, run a bounded **discover → review → revise** loop before handing off —
 the high-cost counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md). Task
 [`/review`](./review.md) as `design <slug>` (and the [`architecture-reviewer`](../agents/architecture-reviewer.md)
-where the SDD warrants) on a **fresh context** — give it the artifacts only (`brief.md`, `srs.md`,
+— resolve it via `somi_resolve` first, full rules: the `somi-dispatch` skill — where the SDD
+warrants) on a **fresh context** — give it the artifacts only (`brief.md`, `srs.md`,
 `sdd.md`, …), **not** the discovery conversation, so the review is unbiased. Revise on Blocker/Major
 findings; re-review. **Bounded:** stop on a clean verdict, on an iteration cap (default 2; config
 key `discover_loop.max_passes` in `.somi/config.json`, env `SOMI_DISCOVER_LOOP_MAX_PASSES` — env

@@ -48,7 +48,7 @@ is needed, and this repo deliberately doesn't ship one: a root `.mcp.json` is AL
 repo's own* project MCP config when a developer opens the SoMi repo itself (as opposed to having
 installed it as a plugin elsewhere), where `${CLAUDE_PLUGIN_ROOT}` is undefined and the server
 fails to launch. Declaring the server inline in the manifest avoids that collision — there is
-nothing at the repo root for a bare checkout to misread. It exposes two tools:
+nothing at the repo root for a bare checkout to misread. It exposes three tools:
 
 - **`somi_resolve`** — the MCP-native equivalent of `node scripts/somi-dispatch.mjs resolve`:
   given an agent name (and optionally a host/ceiling), returns its dispatch tier and model. A
@@ -56,6 +56,13 @@ nothing at the repo root for a bare checkout to misread. It exposes two tools:
   66 malformed `cost:` / 67 project environment failure), reported in the tool result text.
 - **`somi_command`** — returns a SoMi command's own procedure text (`commands/<name>.md`) from
   the install root, so the front door can run a command live without knowing an install path.
+- **`somi_skill`** — returns a SoMi skill's own text (`skills/<name>/SKILL.md`) from the install
+  root, for the identical reason: a relative markdown link into `skills/` can't be followed from a
+  consuming project either, so the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill —
+  loaded by every entry path that starts an agent — is readable this way too
+  (`somi_skill({name: "somi-dispatch"})`), not only by name on a host that supports Skill-tool
+  loading. Both readers share the same `^[a-z][a-z0-9-]*$` name allowlist as `somi_resolve`'s
+  `agent` argument, checked before either ever touches a filesystem path.
 
 Because the server is launched once, from the plugin's own location rather than the consuming
 project, it cannot assume its own working directory is the project — see
@@ -191,8 +198,8 @@ the Claude Code plugin.
   bare-checkout collision (Copilot has no equivalent "open this plugin's own repo as a project"
   auto-load path this repo has hit). No reference from `extension.json` is needed. Tool naming
   inside an agent's own reasoning isn't documented for Copilot; refer to `somi_resolve` /
-  `somi_command` by their bare names — a host may surface them namespaced by plugin and server (as
-  Claude Code does).
+  `somi_command` / `somi_skill` by their bare names — a host may surface them namespaced by plugin
+  and server (as Claude Code does).
 
 ### Installing
 

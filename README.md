@@ -110,10 +110,10 @@ Once installed, use `@somi` in GitHub Copilot chat:
 > - **Per-call model binding is not confirmed on every host.** The cost tiers themselves (the
 >   `low`/`medium`/`high` axis, the session ceiling, the dispatch resolver) are host-agnostic — every
 >   agent declares its own tier and the resolver selects among it the same way everywhere it's
->   dispatched through the `somi` front door, including Copilot. A **direct** command invocation, on
->   either host, still Tasks its agent straight from that agent's own frontmatter and doesn't call
->   the resolver yet, so the ceiling has no effect there today. What varies on the front-door path is
->   only whether a *concrete model* can be bound per `Task` call:
+>   dispatched, whether that's through the `somi` front door or a command typed directly (both
+>   follow [`skills/somi-dispatch`](skills/somi-dispatch/SKILL.md), the one canonical resolve-then-
+>   start procedure), including on Copilot. What varies is only whether a *concrete model* can be
+>   bound per `Task` call:
 >   confirmed on Claude Code and on VS Code's Copilot; undocumented on Copilot CLI, where the
 >   agent's own frontmatter `model:` may be what actually governs instead. Where a model can't be
 >   bound per call, the dispatcher still names the tier it selected and says plainly that its model

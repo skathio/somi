@@ -129,7 +129,10 @@ If `.somi/README.md` does not yet exist at the repo root, also write it from
 
 ### 4. Invoke the `planner` agent
 
-Brief the agent via the Task tool with:
+Before this `Task`, call `somi_resolve` for `planner` (with `project_dir`), pass its model, and put
+`dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`,
+or `somi:somi-dispatch` on Claude Code). Brief the agent via the
+Task tool with:
 - The full problem statement.
 - The slug and `.somi/plans/<slug>/` paths.
 - **The `.somi/rd/<slug>/` paths if an R&D foundation exists** (see §2b), with the instruction to
@@ -188,7 +191,10 @@ converse with the user, so verification is a **batch round-trip owned by this co
    > diff two planning runs against each other, log which decisions were surfaced, or check that
    > the mandated fields were actually present has nothing to read. The human-readable relay stays
    > exactly as it is; the fence is additive.
-3. **Second Task — authoring mode.** Re-invoke the planner with the same briefing **plus a
+3. **Second Task — authoring mode.** This re-invocation resolves fresh too — call `somi_resolve`
+   for `planner` again before this `Task`, the same as the first (full rules: the `somi-dispatch`
+   skill); the pause is exactly when a user is likely to have raised the ceiling. Re-invoke the
+   planner with the same briefing **plus a
    `VERIFIED-DECISIONS` block appended at the end** (append-only, so the stable prefix keeps the
    prompt cache warm). The planner records each entry in `decisions.md` with
    `Verified with user: yes` (including the discovery Q&A when used, and the agent's original

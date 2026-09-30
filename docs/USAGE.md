@@ -677,16 +677,19 @@ object-literal syntax) throws rather than silently resolving to the wrong model.
 
 ### Session ceiling
 
-The [dispatch resolver](#dispatch-resolver) (below) composes this with the mapping above, and the
-`somi` front-door agent (`agents/somi.md`) is the live caller: every non-`/somi` request it enters,
-it runs that command's own procedure live and calls the resolver — primarily the bundled
-`somi_resolve` MCP tool, falling back to the CLI only where SoMi's own install path is already known
-— before spawning **each** agent that procedure starts (never once for the whole command), so the
-ceiling is enforced on every dispatch the front door makes. A direct command invocation (Claude
-Code, or a Copilot command typed without going through the `somi` persona) still Tasks its agent
-straight from that agent's own frontmatter `model:` and never calls the resolver — the ceiling has
-no effect on that path today (see `docs/AGENTS.md`'s escalation matrix and the front-door section
-for which path a given invocation takes).
+The [dispatch resolver](#dispatch-resolver) (below) composes this with the mapping above, and
+[`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) is the one canonical procedure
+that calls it — primarily the bundled `somi_resolve` MCP tool, falling back to the CLI only where
+SoMi's own install path is already known. **Every** entry path is instructed to resolve via that
+same skill: the `somi` front-door agent (`agents/somi.md`), for every non-`/somi` request it
+enters, runs that command's own procedure live and follows the skill before spawning **each** agent
+that procedure starts (never once for the whole command); and a **direct** command invocation on
+Claude Code follows the identical skill at its own agent-Tasking point, in the live turn actually
+running that command. This is a prompt-level instruction, not something a hook enforces at
+runtime: what `scripts/validate.sh` actually checks, mechanically, is that every command whose text
+starts a real agent references the skill somewhere in its own text (`MISSING DISPATCH REFERENCE`
+fails the build otherwise) — not only when a request happens to be routed through the `somi`
+persona (see `docs/AGENTS.md`'s escalation matrix for which agent a given command Tasks).
 
 A session ceiling **selects among the tiers a unit offers; it does not decide whether the unit
 runs.** [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root,

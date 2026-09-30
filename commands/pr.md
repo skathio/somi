@@ -14,7 +14,10 @@ Target work item: **$ARGUMENTS** (a slug under `.somi/plans/`; empty = the singl
 
 ## What to do
 
-1. **Brief the `pr` agent** ([`agents/pr.md`](../agents/pr.md)) with the resolved slug. It gathers
+1. **Brief the `pr` agent** ([`agents/pr.md`](../agents/pr.md)) — before this `Task`, call
+   `somi_resolve` for `pr` (with `project_dir`), pass its model, and put `dispatched at cost:
+   <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`, or
+   `somi:somi-dispatch` on Claude Code) — with the resolved slug. It gathers
    the artifacts itself and returns a composed title + body — it never writes or publishes
    anything; this command owns every write, including `gh pr create`.
 2. **Show the composed title + body to the user.** Opening a PR is outward-facing — only run

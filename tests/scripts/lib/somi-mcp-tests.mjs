@@ -63,7 +63,7 @@ async function run() {
 
     const list = await client.request('tools/list', {});
     const names = (list.tools || []).map((t) => t.name).sort();
-    check('tools/list carries exactly somi_resolve and somi_command', names, ['somi_command', 'somi_resolve']);
+    check('tools/list carries exactly somi_resolve, somi_command, and somi_skill', names, ['somi_command', 'somi_resolve', 'somi_skill']);
 
     const ping = await client.request('ping', {});
     check('ping returns an empty result', ping, {});
@@ -139,6 +139,21 @@ async function run() {
 
     const unknown = await toolCall(client, 'somi_command', { name: 'not-a-real-command' });
     check('somi_command rejects an unknown command name', unknown.isError, true);
+  });
+
+  // --- somi_skill: real text, and its own allowlist-before-path traversal rejection ---------
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const r = await toolCall(client, 'somi_skill', { name: 'somi-dispatch' });
+    check('somi_skill returns skills/somi-dispatch/SKILL.md content, not an error', r.isError, undefined);
+    check('the returned text is really skills/somi-dispatch/SKILL.md', toolText(r).includes('somi-dispatch — resolve, then start, one agent'), true);
+
+    const bad1 = await toolCall(client, 'somi_skill', { name: '../x' });
+    check('somi_skill rejects a path-traversal name (../x) via the allowlist, before any read', bad1.isError, true);
+    check('the traversal rejection is the usual usage code (64), not a filesystem error', /\(exit 64\)/.test(toolText(bad1)), true);
+
+    const unknownSkill = await toolCall(client, 'somi_skill', { name: 'not-a-real-skill' });
+    check('somi_skill rejects an unknown skill name', unknownSkill.isError, true);
   });
 
   // --- unknown tool name -> JSON-RPC error, not a tool result -------------------------------

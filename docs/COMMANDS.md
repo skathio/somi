@@ -100,9 +100,12 @@ already using. The agent a command Tasks runs on its own **cost tier** — `cost
 (design, discovery, review), `cost: low, medium` for the builder agents (planner, coder,
 refactorer) — `low` selected whenever the session ceiling resolves there (an explicit CLI flag or
 `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and its
-source announced before work runs **when dispatched through the `somi` front door**. A direct
-command invocation still Tasks its agent straight from that agent's own frontmatter `model:` and
-does not call the resolver, so the ceiling has no effect on that path yet. See
+source announced before the first agent it applies to starts. Every command that Tasks an agent
+directly is instructed to resolve it per
+[`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md) — the same resolve-then-start procedure
+the `somi` front door uses; `scripts/validate.sh` checks that every such command references the
+skill, though the resolution itself is a prompt-level instruction, not something the check runs.
+See
 [Cost tiering](./AGENTS.md#cost-tiering). Review commands (`/review`, `/security-review`,
 `/architecture-review`, `/test-strategy`) still need `Write` and `Edit` to produce the review file
 and append diary entries — they're not pure read-only at the command level even though the

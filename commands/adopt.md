@@ -23,7 +23,10 @@ This is a composite of existing pieces, run in order, with the user confirming a
 
 ## Stage 1 — Build the Repo Atlas (`cost: high`, the expensive step)
 
-Task the `atlas` agent ([`agents/atlas.md`](../agents/atlas.md)) to build or refresh
+Before this `Task`, call `somi_resolve` for `atlas` (with `project_dir`), pass its model, and put
+`dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`,
+or `somi:somi-dispatch` on Claude Code). Task the `atlas` agent
+([`agents/atlas.md`](../agents/atlas.md)) to build or refresh
 `.somi/atlas.md` (module map, dependency rules, conventions digest, hotspots, test topology,
 SHA-stamped). It runs its own staleness check and skips the rebuild — saying so — when a fresh
 atlas already exists.
@@ -53,7 +56,8 @@ From the atlas plus targeted checks, produce a short **gap report** (in-chat, pl
 
 - **Test thin ice** — the atlas §6 areas where a regression wouldn't be caught; the 2–3 places
   characterization tests would pay off first (this is [`test-strategist`](../agents/test-strategist.md)
-  territory — Task it if the picture needs depth).
+  territory — before Tasking it, call `somi_resolve` for `test-strategist`; full rules: the
+  `somi-dispatch` skill — if the picture needs depth).
 - **Hotspots** — atlas §5, ranked; for each, whether it blocks likely upcoming work.
 - **Candidate first refactors** — untangles that would make the next changes easy
   ([`/refactor`](./refactor.md) for a contained smell, [`/refactor-design`](./refactor-design.md)

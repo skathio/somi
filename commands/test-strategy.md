@@ -29,7 +29,9 @@ Target: **$ARGUMENTS** (empty = scoped to the single in-progress work item if ex
 
 ### 2. Brief the `test-strategist` agent
 
-Via the Task tool, pass:
+Before this `Task`, call `somi_resolve` for `test-strategist` (with `project_dir`), pass its model,
+and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+(`somi_skill`, or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The work-item or code paths.
 - A description of what's being tested and what the risks are (if known).

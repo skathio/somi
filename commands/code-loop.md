@@ -105,7 +105,9 @@ while true:
     exit 2 → STOP — write remaining ≥Major findings as progress.md follow-ups (by F-id),
              summarise, exit "max-passes-exceeded"
 
-  # 3b. Code
+  # 3b. Code — call somi_resolve for coder first (project_dir, model, dispatched-at-cost line in
+  #     the briefing); full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch on
+  #     Claude Code)
   Task coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
 
   # 3c. Diff & scope gate (deterministic — cumulative vs the recorded baseline, working tree
@@ -116,8 +118,9 @@ while true:
 
   # 3d. Review — single reviewer, or the parallel panel when REVIEW_MODE == panel
   if REVIEW_MODE == "panel":
-    Task /review-panel ( = <slug> phase <N>, iteration <M> )   # parallel multi-lens, merged verdict
+    Task /review-panel ( = <slug> phase <N>, iteration <M> )   # a command — resolves its own lenses
   else:
+    # call somi_resolve for reviewer first; full rules: the somi-dispatch skill
     Task reviewer ( = /review <slug>, scope = this iteration's diff )
 
   # 3e. Record the pass + findings. The ledger computes recurrence on a STABLE locus

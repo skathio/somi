@@ -63,7 +63,9 @@ errors that are cheaper to fix here than after code is written.
 
 ### 3. Brief the `reviewer` agent
 
-Via the Task tool, pass:
+Before this `Task`, call `somi_resolve` for `reviewer` (with `project_dir`), pass its model, and put
+`dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`,
+or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The target (diff, file, or plan-artifact set).
 - The work-item paths (`spec.md`, the iteration phase file, recent `diary.md` entries,
@@ -74,7 +76,8 @@ Via the Task tool, pass:
 
 The `reviewer` agent is read-only **by contract, not by platform restriction** — it holds Write/Edit
 but is forbidden from using them, so the command owns every write. If the target crosses the triggers
-below, **also invoke** the relevant consultant via a separate Task call and merge its findings
+below, **also invoke** the relevant consultant via a separate Task call — call `somi_resolve` for it
+first, like any other (full rules: the `somi-dispatch` skill) — and merge its findings
 into the review under a dedicated section:
 
 | Trigger | Consultant agent | When |

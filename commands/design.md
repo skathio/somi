@@ -81,7 +81,10 @@ If `.somi/README.md` does not yet exist at the repo root, also write it from
 
 ### 4. Invoke the `designer` agent
 
-Brief [`agents/designer.md`](../agents/designer.md) via the Task tool with:
+Before this `Task`, call `somi_resolve` for `designer` (with `project_dir`), pass its model, and put
+`dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`,
+or `somi:somi-dispatch` on Claude Code). Brief
+[`agents/designer.md`](../agents/designer.md) via the Task tool with:
 - The full feature (kept inside the `user-feature` fence).
 - The slug and `.somi/plans/<slug>/` paths.
 - A reminder to follow the operating procedure: premise-check, **read the codebase deeply**, ingest
@@ -108,7 +111,9 @@ with the user, so run the **shared batch round-trip** (see [`commands/plan.md`](
    framed, nothing recorded).
 2. **You present each decision to the user faithfully** — options, pros/cons, recommendation, the
    escape hatches; the designer's pre-supplied narrowing questions power Discover mode.
-3. Re-invoke the designer with a **`VERIFIED-DECISIONS` block appended** to the same briefing; it
+3. This re-invocation resolves fresh too — call `somi_resolve` for `designer` again before it, same
+   as the first Task (full rules: the `somi-dispatch` skill). Re-invoke the designer with a
+   **`VERIFIED-DECISIONS` block appended** to the same briefing; it
    then records `decisions.md` entries with `Verified with user: yes` and compiles the brief.
 
 **Do not silently pick** expensive-to-reverse defaults, and never let a decision be recorded as
@@ -127,7 +132,8 @@ For a high-stakes design, run a bounded **design → review → revise** loop be
 high-cost counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md):
 
 - Task [`architecture-reviewer`](../agents/architecture-reviewer.md) (and
-  [`reviewer`](../agents/reviewer.md) for the brief's completeness) on a **fresh context** — give it
+  [`reviewer`](../agents/reviewer.md) for the brief's completeness) — call `somi_resolve` for each
+  first (full rules: the `somi-dispatch` skill) — on a **fresh context** — give it
   the artifacts only (`design.md`, `decisions.md`, `brief.md`), **not** the design conversation, so
   the review is unbiased.
 - Revise on Blocker/Major findings; re-review. **Bounded:** stop on a clean verdict, on an iteration

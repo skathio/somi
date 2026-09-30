@@ -126,11 +126,19 @@ instructions, not an instance being spawned, so there is nothing here to size or
 **No `cost:` field.** `cost:` sizes an agent instance being spawned; a command isn't one. If the
 command does meaningful work of its own rather than only routing to other commands, give it a
 paired `agents/<name>.md` and Task it; that agent's own `cost:` (and its own `model:`) follows the
-rule in "Adding an agent" above — the front door dispatches that agent at its own declared tier.
-Keep commands thin; agents do the heavy lifting. `scripts/validate.sh` fails the build on a command
-that declares `cost:`. Add a catalogue-table row linking
-`../commands/<name>.md` to [`docs/COMMANDS.md`](./COMMANDS.md) — `scripts/validate.sh` fails the
-build otherwise (`COMMAND NOT INDEXED`).
+rule in "Adding an agent" above. Keep commands thin; agents do the heavy lifting.
+`scripts/validate.sh` fails the build on a command that declares `cost:`. Add a catalogue-table row
+linking `../commands/<name>.md` to [`docs/COMMANDS.md`](./COMMANDS.md) — `scripts/validate.sh` fails
+the build otherwise (`COMMAND NOT INDEXED`).
+
+**Starting an agent.** At the point in the command's own procedure that Tasks an agent, start it
+per [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) — a one-line reference
+(`Start it per skills/somi-dispatch`) at that point in the command's text is enough; do not restate
+the resolve-then-start procedure inline. This applies whether the front door is running the
+command's procedure or the command is typed directly — every entry path resolves an agent's tier
+and model against the session ceiling the same way. `scripts/validate.sh` derives which commands
+Task an agent from the real agent names under `agents/` and fails the build (`MISSING DISPATCH
+REFERENCE`) if one of them doesn't reference the skill.
 
 ## Adding a hook
 

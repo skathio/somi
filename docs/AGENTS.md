@@ -41,6 +41,13 @@ SoMi prefers **explicit handoff** over silent specialisation. When a core agent 
 support agent should be consulted, it surfaces the recommendation; the human (or the
 orchestrating command) decides.
 
+Whichever path starts the agent — a command Tasking it directly, or the `somi` front door running
+that command's procedure live — the same [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md)
+procedure is what resolves its cost tier and model against the session ceiling. This is a
+prompt-level instruction, not code that runs the resolution deterministically; what
+`scripts/validate.sh` mechanically checks is narrower — that every command whose text starts a real
+agent references the skill somewhere in its own text, failing the build otherwise.
+
 ## The discovery agent
 
 ### discovery-analyst
@@ -123,9 +130,10 @@ questions) as escape hatches.
   the full artifact set (and still keeps the false-premise/contradiction checks, the depth gate,
   and `Pros`/`Cons`/`Reverses` on the recommended option) but trims the alternatives comparison and
   Discovery mode's guided flow — selected whenever the session ceiling resolves to `low` (CLI,
-  `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the front door
-  announcing the ceiling and its source before work runs. Overridable to `cost: high` in the agent
-  frontmatter.
+  `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and
+  its source announced before the first agent it applies to starts, on every entry path (see
+  [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md)). Overridable to `cost: high` in the
+  agent frontmatter.
 - **Won't**: write code, silently pick architectural defaults, take the request's framing as truth.
 - **Will**: stop and recommend re-scoping if the work is much larger than presented; **challenge the
   request's premise** (false premise, XY problem, contradiction, already-solved need) before planning
@@ -144,7 +152,7 @@ appends a diary entry, surfaces to the user before continuing.
   every numbered step (including the plan-change trigger and always reporting a silent failure or
   hidden side effect) but trims the proactive design-smell sweep — selected whenever the session
   ceiling resolves to `low` (CLI, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted
-  state), with the front door announcing the ceiling and its source before work runs. Overridable
+  state), with the ceiling and its source announced before the first agent it applies to starts, on every entry path. Overridable
   to `cost: high` in frontmatter.
 - **Won't**: silently widen scope; ship without running tests; bypass hooks; let the plan show
   stale state.
@@ -222,8 +230,8 @@ mixed in. Returns the codebase to a state where the next planned change is easy.
   behavior-preservation contract (tests green after every individual transform, no behavior change)
   intact and trims commit granularity (batching mechanical steps only) plus the search for further
   smells beyond the one named — selected whenever the session ceiling resolves to `low` (CLI,
-  `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the front door
-  announcing the ceiling and its source before work runs.
+  `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and
+  its source announced before the first agent it applies to starts, on every entry path.
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`clean-code`](../skills/clean-code/SKILL.md) skills — skill wins on divergence.
 
@@ -315,7 +323,9 @@ invocation-mode gate first — an explicit non-`/somi` command is proxied direct
 [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md). It then **runs the matched
 command's own procedure live, in the same turn** — the role a command body plays on Claude Code —
 rather than handing the whole command to one Tasked agent. Every agent that procedure starts is
-resolved individually, right as it starts: the bundled `somi_resolve` MCP tool (falling back to
+resolved individually, right as it starts, per
+[`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) — the same procedure a direct
+command follows at its own agent-Tasking point: the bundled `somi_resolve` MCP tool (falling back to
 [`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs) only where SoMi's own install path is
 already known — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) picks that agent's cost
 tier against the session ceiling, and it is Tasked with the resolved model
@@ -359,7 +369,7 @@ one-file change.
 | **`high`** (no lower member) | `discovery-analyst`, `designer`, `security-reviewer`, `refactor-designer`, `atlas` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it (`atlas` front-loads a repo map instead of a work-item brief) |
 | **`medium, high`** (graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept — the opt-in bar for `low` below does not extend to these: a weaker judge produces a false pass, not merely a lighter one |
 | **`medium`** (no lower or higher member) | `incident`, `impact` | `incident` executes against an already-framed incident without re-researching; every job is a live outage, so there is no lighter version of the mitigation/debt-capture call to make honestly. `impact` is a judge, reverted here from `low, medium`: its verdict and (in diff mode) its review-lens selection would produce a false pass at reduced depth, and its full-depth pass is already mechanical call-graph tracing rather than open-ended design, so `high` buys nothing either |
-| **`low, medium`** (graded over one job) | `coder`, `planner`, `refactorer`, `pr` | `pr` grades one job over two depths — a fuller pass adds house-style matching, never required for correctness. The other three widened downward: `low` is a reduced-depth pass (each agent's own "Running at `low`" section names its trims), selected whenever the session ceiling resolves to `low` (CLI, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the front door announcing the ceiling and its source before work runs — so the quality drop is a trade the user can see, not one made for them unseen |
+| **`low, medium`** (graded over one job) | `coder`, `planner`, `refactorer`, `pr` | `pr` grades one job over two depths — a fuller pass adds house-style matching, never required for correctness. The other three widened downward: `low` is a reduced-depth pass (each agent's own "Running at `low`" section names its trims), selected whenever the session ceiling resolves to `low` (CLI, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and its source announced before the first agent it applies to starts on every entry path — so the quality drop is a trade the user can see, not one made for them unseen |
 
 `somi` declares no `cost:` at all — exempt, not a fifth `medium` member: the host binds the model
 when the user selects the agent, so a declaration here would control nothing.

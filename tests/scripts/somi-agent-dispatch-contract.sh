@@ -9,7 +9,9 @@ set -uo pipefail
 
 ROOT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 AGENT_MD="$ROOT_REPO/agents/somi.md"
+SKILL_MD="$ROOT_REPO/skills/somi-dispatch/SKILL.md"
 CLI="$ROOT_REPO/scripts/somi-dispatch.mjs"
+COMMAND_MDS="$ROOT_REPO"/commands/*.md
 
 pass=0; fail=0
 ok()  { pass=$((pass+1)); printf '  ok   %s\n' "$1"; }
@@ -27,11 +29,14 @@ reach() { # $1=name $2=want-exit-code, remaining = CLI args after 'resolve'
   if [ "$rc" = "$want" ]; then ok "$name"; else bad "$name (expected exit $want, got $rc)"; fi
 }
 
-# --- the CLI-fallback invocation shape Step 4 names the CLI's real subcommand and flags -----------
-if grep -qF 'resolve --agent <paired agent> --host <host>' "$AGENT_MD"; then
-  ok "agents/somi.md Step 4's CLI fallback names the 'resolve --agent ... --host ...' invocation shape"
+# --- the CLI-fallback invocation shape is named in skills/somi-dispatch/SKILL.md (the resolve
+# procedure lives there so every command that Tasks an agent shares it, not just the front door) --
+# checked against the skill and, for belt-and-braces, agents/somi.md too, since either file could
+# carry the wording after a future edit.
+if grep -qF 'resolve --agent <agent name> --host <host>' "$AGENT_MD" "$SKILL_MD"; then
+  ok "skills/somi-dispatch/SKILL.md names the 'resolve --agent ... --host ...' invocation shape"
 else
-  bad "agents/somi.md no longer names the resolve --agent/--host CLI fallback shape -- if the wording changed intentionally, update this test to match it"
+  bad "neither agents/somi.md nor skills/somi-dispatch/SKILL.md names the resolve --agent/--host CLI fallback shape -- if the wording changed intentionally, update this test to match it"
 fi
 
 out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent coder --host claude-code)"; rc=$?
@@ -41,12 +46,12 @@ else
   bad "Step 4's CLI-fallback invocation does not succeed against the real CLI (rc=$rc, out=$out)"
 fi
 
-# --- the two host values Step 4 names are the CLI's own recognized host strings, not invented ones
-if grep -q '`claude-code` if this turn is running in Claude Code' "$AGENT_MD" \
-    && grep -q '`copilot` if.*running in GitHub Copilot' "$AGENT_MD"; then
-  ok "agents/somi.md Step 4 names claude-code and copilot precisely as the two --host values"
+# --- the two host values the dispatch skill names are the CLI's own recognized host strings -------
+if grep -q '`claude-code` if this turn is running in Claude Code' "$AGENT_MD" "$SKILL_MD" \
+    && grep -q '`copilot` if.*running in GitHub Copilot' "$AGENT_MD" "$SKILL_MD"; then
+  ok "skills/somi-dispatch/SKILL.md names claude-code and copilot precisely as the two --host values"
 else
-  bad "agents/somi.md does not clearly name both claude-code and copilot as --host values"
+  bad "neither agents/somi.md nor skills/somi-dispatch/SKILL.md clearly names both claude-code and copilot as --host values"
 fi
 for h in claude-code copilot; do
   hrc=0
@@ -54,13 +59,13 @@ for h in claude-code copilot; do
   if [ "$hrc" = "0" ]; then ok "--host $h is accepted by the real CLI"; else bad "--host $h was rejected (rc=$hrc)"; fi
 done
 
-# --- the exit codes Step 4 maps are EXACTLY the CLI's real EXIT_* constants, neither more nor fewer
-PROMPT_CODES="$(grep -oE '^- `[0-9]+`' "$AGENT_MD" | grep -oE '[0-9]+' | sort -un | tr '\n' ' ')"
+# --- the exit codes the dispatch skill maps are EXACTLY the CLI's real EXIT_* constants -----------
+PROMPT_CODES="$(grep -ohE '^- `[0-9]+`' "$AGENT_MD" "$SKILL_MD" | grep -oE '[0-9]+' | sort -un | tr '\n' ' ')"
 CLI_CODES="$(grep -oE '^const EXIT_[A-Z_]+ = [0-9]+;' "$CLI" | grep -oE '[0-9]+' | sort -un | tr '\n' ' ')"
 if [ -n "$PROMPT_CODES" ] && [ "$PROMPT_CODES" = "$CLI_CODES" ]; then
-  ok "the exit codes agents/somi.md's Step 4 maps ($PROMPT_CODES) exactly match the CLI's real EXIT_* constants ($CLI_CODES)"
+  ok "the exit codes skills/somi-dispatch/SKILL.md maps ($PROMPT_CODES) exactly match the CLI's real EXIT_* constants ($CLI_CODES)"
 else
-  bad "agents/somi.md's mapped exit codes ($PROMPT_CODES) do not match the CLI's real EXIT_* constants ($CLI_CODES)"
+  bad "the mapped exit codes ($PROMPT_CODES) do not match the CLI's real EXIT_* constants ($CLI_CODES)"
 fi
 
 # --- each code Step 4 maps is genuinely reachable against the real CLI, not merely documented -----
@@ -94,12 +99,17 @@ else
 fi
 
 
-# --- agents/somi.md's tool/argument names match the REAL somi-mcp.mjs tools/list ------------------
+# --- agents/somi.md + skills/somi-dispatch/SKILL.md's tool/argument names match the REAL
+# somi-mcp.mjs tools/list --------------------------------------------------------------------------
 # Step 4/5 now call the bundled MCP tools as their primary path (the CLI above is the fallback, only
-# where SoMi's own install path is already known). Derive the server's real advertised schema by
-# actually driving it -- never by hand-typing a second copy of scripts/somi-mcp.mjs's TOOLS table,
-# which is exactly the kind of copy that quietly drifts.
-echo "== agents/somi.md <-> somi-mcp.mjs tool/argument contract =="
+# where SoMi's own install path is already known); the RESOLVE side of that (somi_resolve's
+# arguments, fallback order, exit-code mapping) moved out of agents/somi.md into
+# skills/somi-dispatch/SKILL.md so every command that Tasks an agent directly shares it too --
+# agents/somi.md keeps only what's specific to the front door (somi_command, the classify/recursion
+# steps). So this section checks the UNION of both files: wherever a given rule now lives, it must
+# still be there, and it must still be derived from the REAL server, never a hand-typed second copy
+# of scripts/somi-mcp.mjs's TOOLS table, which is exactly the kind of copy that quietly drifts.
+echo "== agents/somi.md + skills/somi-dispatch/SKILL.md <-> somi-mcp.mjs tool/argument contract =="
 
 SCHEMA_JSON="$(node "$ROOT_REPO/tests/scripts/lib/somi-mcp-tool-schema.mjs" 2>/dev/null || true)"
 if [ -z "$SCHEMA_JSON" ] || ! node -e 'JSON.parse(process.argv[1])' "$SCHEMA_JSON" >/dev/null 2>&1; then
@@ -112,31 +122,35 @@ else
     console.log((s[process.argv[3]] || []).join(" "));
   ' "$SCHEMA_JSON" "$1" "$2"; }
 
+  # The UNION of the front door, the skill, AND every commands/*.md file -- a command's own
+  # dispatch-reference line now names `somi_resolve`/`somi_skill` directly (not just a link to the
+  # skill), so a stale or invented tool name there would otherwise go unchecked: the skill/front-door
+  # pair alone can't see a typo that only ever appears in a command file.
   REAL_TOOLS="$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).sort().join(" "))' "$SCHEMA_JSON")"
-  PROMPT_TOOLS="$(grep -oE '`somi_[a-z_]+`' "$AGENT_MD" | tr -d '`' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
+  PROMPT_TOOLS="$(grep -ohE '`somi_[a-z_]+`' "$AGENT_MD" "$SKILL_MD" $COMMAND_MDS | tr -d '`' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
   if [ "$REAL_TOOLS" = "$PROMPT_TOOLS" ]; then
-    ok "agents/somi.md names exactly the server's real tools ($REAL_TOOLS)"
+    ok "agents/somi.md + skills/somi-dispatch/SKILL.md + commands/*.md together name exactly the server's real tools ($REAL_TOOLS)"
   else
-    bad "tool-name mismatch -- server: [$REAL_TOOLS] vs agents/somi.md: [$PROMPT_TOOLS]"
+    bad "tool-name mismatch -- server: [$REAL_TOOLS] vs agents/somi.md + skills/somi-dispatch/SKILL.md + commands/*.md: [$PROMPT_TOOLS]"
   fi
 
-  # somi_resolve: every REAL property must be named somewhere in the prompt (nothing silently
-  # dropped) -- and every key the prompt's own canonical invocation example passes must be a REAL
+  # somi_resolve: every REAL property must be named somewhere across the two files (nothing silently
+  # dropped) -- and every key the skill's own canonical invocation example passes must be a REAL
   # property (nothing invented, nothing stale).
   REAL_RESOLVE_PROPS="$(schema_field somi_resolve properties)"
   for prop in $REAL_RESOLVE_PROPS; do
-    if grep -qE "\b${prop}\b" "$AGENT_MD"; then
-      ok "somi_resolve's real argument '$prop' is named in agents/somi.md"
+    if grep -qE "\b${prop}\b" "$AGENT_MD" "$SKILL_MD"; then
+      ok "somi_resolve's real argument '$prop' is named in agents/somi.md or skills/somi-dispatch/SKILL.md"
     else
-      bad "somi_resolve's real argument '$prop' is never mentioned in agents/somi.md"
+      bad "somi_resolve's real argument '$prop' is never mentioned in agents/somi.md or skills/somi-dispatch/SKILL.md"
     fi
   done
 
-  SNIPPET="$(sed -n '/somi_resolve({ agent:/,/})/p' "$AGENT_MD")"
+  SNIPPET="$(cat "$AGENT_MD" "$SKILL_MD" | sed -n '/somi_resolve({ agent:/,/})/p')"
   if [ -z "$SNIPPET" ]; then
-    bad "agents/somi.md no longer has a somi_resolve({ agent: ...}) canonical invocation example -- if the wording changed intentionally, update this test to match it"
+    bad "neither agents/somi.md nor skills/somi-dispatch/SKILL.md has a somi_resolve({ agent: ...}) canonical invocation example -- if the wording changed intentionally, update this test to match it"
   else
-    ok "found agents/somi.md's canonical somi_resolve invocation example"
+    ok "found the canonical somi_resolve invocation example (skills/somi-dispatch/SKILL.md)"
     SNIPPET_KEYS="$(printf '%s' "$SNIPPET" | grep -oE '[a-zA-Z_]+:' | tr -d ':' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
     for key in $SNIPPET_KEYS; do
       case " $REAL_RESOLVE_PROPS " in
@@ -153,13 +167,26 @@ else
     done
   fi
 
-  # somi_command: same shape, one required "name" argument.
+  # somi_command: same shape, one required "name" argument -- stays specific to agents/somi.md
+  # (only the front door reads a command's procedure text this way), but check both files anyway
+  # so a future move doesn't silently drop the check.
   REAL_COMMAND_PROPS="$(schema_field somi_command properties)"
   for prop in $REAL_COMMAND_PROPS; do
-    if grep -qE "\b${prop}\b" "$AGENT_MD"; then
-      ok "somi_command's real argument '$prop' is named in agents/somi.md"
+    if grep -qE "\b${prop}\b" "$AGENT_MD" "$SKILL_MD"; then
+      ok "somi_command's real argument '$prop' is named in agents/somi.md or skills/somi-dispatch/SKILL.md"
     else
-      bad "somi_command's real argument '$prop' is never mentioned in agents/somi.md"
+      bad "somi_command's real argument '$prop' is never mentioned in agents/somi.md or skills/somi-dispatch/SKILL.md"
+    fi
+  done
+
+  # somi_skill: same shape again, one required "name" argument -- checked against the UNION that
+  # actually names it (agents/somi.md today; any commands/*.md file would also count).
+  REAL_SKILL_PROPS="$(schema_field somi_skill properties)"
+  for prop in $REAL_SKILL_PROPS; do
+    if grep -qE "\b${prop}\b" "$AGENT_MD" "$SKILL_MD" $COMMAND_MDS; then
+      ok "somi_skill's real argument '$prop' is named in agents/somi.md, skills/somi-dispatch/SKILL.md, or a command"
+    else
+      bad "somi_skill's real argument '$prop' is never mentioned in agents/somi.md, skills/somi-dispatch/SKILL.md, or any command"
     fi
   done
 fi

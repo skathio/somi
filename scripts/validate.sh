@@ -396,6 +396,20 @@ if [ "$stale_cost_claim_failed" -ne 0 ]; then
   exit 1
 fi
 
+echo "==> Validating command <-> somi-dispatch skill reference..."
+# Every command that Tasks an agent directly resolves it through the same dispatch procedure the
+# front door uses, not just when a request is routed through agents/somi.md. "Starts an agent"
+# is DERIVED from the real agent basenames under agents/ against this repo's own call-site idioms
+# (see tests/scripts/lib/dispatch-reference-gate.mjs) -- never a hand-typed command list, which
+# would silently miss a new command that Tasks an agent without also adding it here.
+# tests/scripts/dispatch-reference-gate.sh proves this gate RED (a `cp -a` copy with one command's
+# reference removed) and GREEN, the same two-sided proof retirement-gate.sh and dispatch-guard.sh
+# already give their own gates.
+if ! node tests/scripts/lib/dispatch-reference-gate.mjs commands agents; then
+  exit 1
+fi
+bash tests/scripts/dispatch-reference-gate.sh
+
 echo "==> Validating the stale-vocabulary retirement gate..."
 # scripts/validate.sh only ever asserted frontmatter VALUES above, never prose -- so a
 # half-converted ruleset (frontmatter switched to the new cost field, prose still naming the
