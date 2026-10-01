@@ -167,5 +167,7 @@ case "$router_out" in
   *) bad "commands/ship.md was NOT excluded (got: $router_out) -- a router must never be misdiagnosed as starting an agent" ;;
 esac
 
+bash "$ROOT/tests/scripts/review-panel-seats.sh" || fail=$((fail+1))
+
 echo "dispatch-reference-gate tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

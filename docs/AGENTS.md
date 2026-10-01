@@ -467,6 +467,7 @@ plain prose escalations from inside an agent are no longer the only path.
              → architecture-reviewer   (when introducing structure / contract change)
              → test-strategist         (when test shape is unclear)
 /review-panel → reviewer + security-reviewer + architecture-reviewer + test-strategist
+             + plan-reviewer + sdlc-reviewer
              (seated by relevance, run concurrently, findings merged into one verdict)
 /security-review     → security-reviewer
 /architecture-review → architecture-reviewer (+ security-reviewer if security implications)

@@ -305,7 +305,7 @@ run applies the plan-change protocol.
 
 **The parallel panel ([`/review-panel`](../commands/review-panel.md))** — for a high-stakes change
 that crosses several concerns at once, the panel seats the relevant lenses (`reviewer` plus
-`security-reviewer` / `architecture-reviewer` / `test-strategist` as the diff warrants) and runs them
+`security-reviewer` / `architecture-reviewer` / `test-strategist` / `plan-reviewer` / `sdlc-reviewer` as the diff warrants) and runs them
 **concurrently** on the same captured diff, then merges and de-duplicates their findings into one
 verdict (highest severity wins; lens disagreement is surfaced). It's safe to parallelize because
 `/review-panel` is the sole writer: each lens returns findings and none is given a write to perform,
