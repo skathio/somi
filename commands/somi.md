@@ -24,8 +24,9 @@ $ARGUMENTS
 
 Assemble the state of the world **from the artifacts only** — read, never write:
 
-1. **Work items** — for every `.somi/plans/<slug>/progress.md`: status, active iteration (from
-   "Currently in flight"), decisions outstanding (count), last activity date.
+1. **Work items** — for every `.somi/plans/<slug>/progress.md`: status, active iteration (the
+   `in-progress` row of the iteration table; older work items instead have a "Currently in flight"
+   section — accept either), decisions outstanding (count), last activity date.
 2. **Discoveries** — for every `.somi/rd/<slug>/README.md`: status (`researching` /
    `awaiting-verification` / `ready-for-planning`).
 3. **Open findings** — for every `.somi/reviews/<slug>/findings.json`:

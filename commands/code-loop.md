@@ -154,7 +154,8 @@ while true:
 - Mark iteration `done` in `phases/<NN>-*.md`.
 - Update `progress.md` (phase row, "Last activity").
 - Append a diary entry (category `note`): `code-loop done at pass <P>; verdict <V>`, plus any
-  `cap_overrides` entries from `finish`'s stdout.
+  `cap_overrides` entries from `finish`'s stdout. Then apply the compaction rule in
+  `templates/DIARY.md.tmpl`.
 - Summarise (see §6).
 
 ### 5. On STOP (gate hit)

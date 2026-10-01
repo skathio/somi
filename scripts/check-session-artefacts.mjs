@@ -46,8 +46,9 @@ const CODE_PATTERN = new RegExp(
     String.raw`\(\d\.\d{1,2}[a-z]?[,)]`,
     String.raw`\b(?:this|that) iteration\b`,
     String.raw`\breviewer-blessed\b`,
-    String.raw`\b(?:the|see|in the) diary\b`,
-    String.raw`\bphase file\b`,
+    // A pointer ("see the diary") sends the reader into the planning folder; the diary and phase
+    // files are also product artifacts SoMi's own code describes, so bare mentions are allowed.
+    String.raw`\bsee (?:the )?(?:diary|phase file)\b`,
     String.raw`\b(?:spec|context|brief)\.md §`,
     String.raw`\bthis work[ -]item\b`,
     PLAN_SLUG,

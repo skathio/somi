@@ -134,7 +134,7 @@ The command (not the agent) writes these:
   `node scripts/somi-findings.mjs resolve --slug <slug> --id F-<n> --status fixed --by <review-filename>`
   (`accepted` / `wontfix` when the human signed off on not fixing). The markdown review file is
   the human view; the ledger is the machine view — same command, same step, no drift.
-- In `progress.md`: append a line under "Recent activity" referencing the review file and verdict.
+- In `progress.md`: set the reviewed iteration's `Reviewed` cell to the verdict (there is no activity log).
 - If the reviewer returned a proposed `review-feedback` diary entry (because a Blocker/Major
   points at the plan rather than the code, or a plan-review finding requires plan changes),
   append it to `.somi/plans/<slug>/diary.md`. The follow-up `/code` (or next `/plan` revision)

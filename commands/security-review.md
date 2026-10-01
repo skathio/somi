@@ -55,7 +55,7 @@ Use [`templates/REVIEW.md.tmpl`](../templates/REVIEW.md.tmpl) with security fram
 
 ### 5. Update work-item state (if scoped)
 
-- `progress.md`: line under "Recent activity" referencing the security review file and verdict.
+- `progress.md`: set the iteration's `Reviewed` cell to the verdict (there is no activity log).
 - If a Blocker / Major finding requires a plan change (e.g., reveals a missing mitigation in
   `spec.md` §8), append a diary entry with category `review-feedback`. The follow-up `/code`
   invocation will pick up the changes via the plan-change protocol.

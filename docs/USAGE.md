@@ -246,7 +246,7 @@ radius, follow-ups. It's the durable record for the next person who hits this cl
   Consultant findings are merged into the review under attributed sections.
 - Written to `.somi/reviews/<slug>/<YYYY-MM-DD>-<phase>.<iter>-<verdict>.md` (or
   `…-plan-review-<verdict>.md` for plan reviews).
-- A line in `progress.md` "Recent activity"; a diary entry if findings affect the plan.
+- The verdict in `progress.md`'s `Reviewed` cell; a diary entry if findings affect the plan.
 - Summary: verdict, counts, top 3 findings.
 
 See [`examples/code-review-example.md`](../examples/code-review-example.md) for a worked review.

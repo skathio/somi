@@ -181,7 +181,7 @@ user: "/review <slug>" (or working tree / range / PR / plan)
   → reviewer aggregates findings, severity-grades them
   → reviewer writes review file at .somi/reviews/<slug>/<YYYY-MM-DD>-…md using
     templates/REVIEW.md.tmpl
-  → progress.md "Recent activity" gets a line; diary.md gets a review-feedback entry if
+  → progress.md `Reviewed` cell gets the verdict; diary.md gets a review-feedback entry if
     findings affect the plan
   → command surfaces verdict + top 3 findings
 ```

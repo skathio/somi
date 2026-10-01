@@ -33,6 +33,12 @@ expect_exit "trailing comment with iteration number fails" 1 run
 mktree; printf 'const msg = "D5 is a string, not a comment";\n' >> "$TMP/r/hooks/h.mjs"
 expect_exit "tag inside a string literal (not a comment) passes" 0 run
 
+mktree; printf '// Appends a dated entry to the diary and reads the phase file.\n' >> "$TMP/r/hooks/h.mjs"
+expect_exit "product mention of the diary or a phase file in a comment passes" 0 run
+
+mktree; printf '// see the diary for why this changed\n' >> "$TMP/r/hooks/h.mjs"
+expect_exit "a 'see the diary' pointer in a comment fails" 1 run
+
 mktree; printf 'Decided in (D3).\n' >> "$TMP/r/commands/c.md"
 expect_exit "decision tag in command markdown fails" 1 run
 

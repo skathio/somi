@@ -285,7 +285,7 @@ a file.
 
 **Output**: a review file at `.somi/reviews/<slug>/<YYYY-MM-DD>-<phase>.<iter>-<verdict>.md` with
 severity-graded findings (Blocker / Major / Minor / Nit), each with a location, what's wrong, why
-it matters, and a suggested fix. Plus a line in `progress.md` "Recent activity" and a diary entry
+it matters, and a suggested fix. Plus the verdict in `progress.md`'s `Reviewed` cell and a diary entry
 if findings affect the plan.
 
 **Plan-vs-code checks** (SoMi-specific) — does the diff stay within the iteration scope? Did plan

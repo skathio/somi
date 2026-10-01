@@ -80,7 +80,6 @@ not mirror it into `phases/<NN>-*.md`):
 
 - In the **Iteration progress** table: set this iteration's `Status` to `in-progress`.
 - Update the **Phase progress** row's status (if the phase was `not-started`).
-- Set the **"Currently in flight"** section to this iteration.
 - Update `Last activity` line.
 
 ### 5. Plan-change protocol (mid-coding adjustments)
@@ -121,11 +120,10 @@ scope or files actually changed):
 - In the **Iteration progress** table: set this iteration's `Status` to `done` and `Reviewed`
   to the latest verdict.
 - In the **Phase progress** table: update iterations-done / total.
-- Move this iteration out of "Currently in flight".
 - Update `Last activity` line.
 - If all iterations in the phase are now `done`, set the phase status to `done` and check
   whether the next phase is ready to start.
-- Append a short diary entry: category `note`, one line summarising what was implemented.
+- Append a short diary entry: category `note`, one line summarising what was implemented. Then apply the diary compaction rule in `templates/DIARY.md.tmpl`.
 
 ### 8. Summarise back
 

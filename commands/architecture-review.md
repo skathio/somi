@@ -74,7 +74,7 @@ Use [`templates/REVIEW.md.tmpl`](../templates/REVIEW.md.tmpl) with architecture 
 
 ### 5. Update work-item state (if scoped)
 
-- `progress.md`: append a line under "Recent activity" referencing the architecture review and verdict.
+- `progress.md`: set the iteration's `Reviewed` cell to the verdict (there is no activity log).
 - If a Blocker / Major requires a plan change (e.g., a chosen pattern doesn't fit the boundary),
   append a `review-feedback` diary entry. The follow-up `/plan` revision (or `/code`'s plan-change
   protocol) will apply changes.

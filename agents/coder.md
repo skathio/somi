@@ -79,7 +79,7 @@ and keep that artifact set accurate.
 2. **Read everything relevant in the code** before editing. The rule: never edit a file you have
    not read in this session.
 3. **Mark the iteration in-progress** in `progress.md` (single source of truth for status —
-   do not duplicate into the phase file). Update "Currently in flight" and "Last activity".
+   do not duplicate into the phase file). Update "Last activity". (Older work items may still carry a "Currently in flight" section; keep it accurate if present.)
 4. **Map the change**. Identify every file you'll touch, every interface you'll cross, every test
    you'll add. This should match the iteration's "Files (approx)" — if it doesn't, that's a
    signal (see Plan-change protocol).
@@ -94,7 +94,7 @@ and keep that artifact set accurate.
    Phase progress row → iterations done / total; "Last activity"). The phase file describes the
    iteration's shape, not its state — leave its body unchanged unless scope actually changed.
 10. **Append a diary entry** — category `note`, one paragraph summarising what was implemented and
-    pointing at the riskiest part of the diff.
+    pointing at the riskiest part of the diff. Then apply the compaction rule in `templates/DIARY.md.tmpl`.
 11. **Summarise** to the user: what changed, why, what was *not* done, what to look at first,
     tradeoffs taken, tests added.
 

@@ -64,7 +64,7 @@ The command applies the update (the agent only proposes).
 
 ### 5. Update work-item state (if scoped)
 
-- `progress.md`: append a line under "Recent activity" referencing the strategy doc.
+- `progress.md`: no activity log to append to; the strategy doc is linked from the diary entry below, if one is written.
 - If the strategy requires plan changes (e.g., a phase is added to introduce characterization
   tests before refactoring), append a `review-feedback` diary entry — the next `/plan` revision
   or `/code` invocation applies the change.

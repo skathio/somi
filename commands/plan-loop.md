@@ -140,7 +140,8 @@ while true:
   diary entry below.
 - Set `progress.md` status to `awaiting-approval`.
 - Append a diary entry (category `note`): `plan-loop done at pass <P>; verdict <V>`, plus any
-  `cap_overrides` entries from `finish`'s stdout.
+  `cap_overrides` entries from `finish`'s stdout. Then apply the compaction rule in
+  `templates/DIARY.md.tmpl`.
 - Summarise (see §6) — explicitly call out that the user still owns the final go/no-go on the
   plan even though it passed the bounded review.
 

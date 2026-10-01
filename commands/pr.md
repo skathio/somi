@@ -26,7 +26,6 @@ Target work item: **$ARGUMENTS** (a slug under `.somi/plans/`; empty = the singl
    markdown to paste. Never push branches or create the PR unprompted.
 3. **After opening (if opened)**:
    - Append a `diary.md` entry (category `note`): `PR opened: <url>`.
-   - Add a `progress.md` "Recent activity" line with the PR URL.
 
 ## Guardrails
 

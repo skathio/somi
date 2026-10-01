@@ -114,6 +114,16 @@ if [ "$dispatch_guard_failed" -ne 0 ]; then
 fi
 bash tests/scripts/dispatch-guard.sh
 
+echo "==> Diary compaction rule present in the template..."
+# The rule must stay triggered and concrete: a numeric trigger, a verbatim move to diary-archive.md,
+# and the never-move rule for decision-change / plan-change entries. Weakening it back to
+# a soft "may compact" wording lets that log grow without bound.
+DIARY_TMPL="${DIARY_TMPL:-templates/DIARY.md.tmpl}"
+for pat in 'more than 40' 'diary-archive\.md' 'verbatim' 'Never move a `decision-change` or `plan-change`'; do
+  grep -Eq -- "$pat" "$DIARY_TMPL" || { echo "DIARY COMPACTION RULE WEAKENED: '$pat' missing from $DIARY_TMPL" >&2; exit 1; }
+done
+echo "  ok: $DIARY_TMPL"
+
 echo "==> Eval fixture guards..."
 # Guards tests/evals/fixtures/. Two defects are guarded here: a plan tree shipped
 # under `.somi/` that .gitignore silently dropped from the package, and pass criteria
