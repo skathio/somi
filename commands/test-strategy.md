@@ -2,7 +2,6 @@
 description: Design or critique a test strategy for a change. Risk-driven coverage, level selection (unit/integration/e2e), mock policy, determinism. Output lands under .somi/reviews/<slug>/ when scoped.
 argument-hint: <slug> | <file path> | <free-form description of what to test>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /test-strategy — Targeted test-strategy review
@@ -30,14 +29,17 @@ Target: **$ARGUMENTS** (empty = scoped to the single in-progress work item if ex
 
 ### 2. Brief the `test-strategist` agent
 
-Via the Task tool, pass:
+Before this `Task`, call `somi_resolve` for `test-strategist` (with `project_dir`), pass its model,
+and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+(`somi_skill`, or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The work-item or code paths.
 - A description of what's being tested and what the risks are (if known).
 - The expectation: identify risks, identify testable surface, pick the right level per concern,
   decide mock policy, design for diagnosis, define what's intentionally **not** covered.
 
-The `test-strategist` agent is read-only (Read/Grep/Glob/Bash). Have it **return** its strategy;
+The `test-strategist` agent is read-only **by contract, not by platform restriction** — it holds
+Write/Edit but is forbidden from using them, so the command owns every write. Have it **return** its strategy;
 the command owns all writes.
 
 ### 3. Output shape
@@ -62,7 +64,7 @@ The command applies the update (the agent only proposes).
 
 ### 5. Update work-item state (if scoped)
 
-- `progress.md`: append a line under "Recent activity" referencing the strategy doc.
+- `progress.md`: no activity log to append to; the strategy doc is linked from the diary entry below, if one is written.
 - If the strategy requires plan changes (e.g., a phase is added to introduce characterization
   tests before refactoring), append a `review-feedback` diary entry — the next `/plan` revision
   or `/code` invocation applies the change.

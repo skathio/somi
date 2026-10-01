@@ -1,28 +1,43 @@
 # Workflows
 
-SoMi organises Claude's behavior into two **economic tiers**. A **MAX** tier (`opus`) front-loads the
-expensive reasoning — research, design, decisions, complexity mapping, fresh-eyes review — into a
-dense, bounded **`brief.md`**. An **ECO** tier (`sonnet`) then executes against that brief *without
-re-researching*, so the high-volume work (plan detail, iterative coding) runs cheaply.
+SoMi organises Claude's behavior into three **cost tiers** (`low` / `medium` / `high`). A
+**`cost: high`** tier front-loads the expensive reasoning — research, design, decisions, complexity
+mapping, fresh-eyes review — into a dense, bounded **`brief.md`**. A **`cost: medium`** tier then
+executes against that brief *without re-researching*, so the high-volume work (plan detail,
+iterative coding) runs cheaply; a **`cost: low`** tier covers small, mechanical, near-deterministic
+work.
 
-- **MAX front-loads:** `/discover` (a whole new product), `/design` (a brownfield feature/story), and
-  `/refactor` analysis (a large refactor) — each compiles a `brief.md`. `/review` is the MAX
-  fresh-eyes judgment.
-- **ECO execution:** `/plan` (+ `/plan-loop`) sequences the brief into phases; `/code` (+ `/code-loop`,
-  `/code-parallel`) implements against it.
+- **High-cost front-loads:** `/discover` (a whole new product), `/design` (a brownfield
+  feature/story), and `/refactor-design` (a large refactor) — each compiles a `brief.md`.
+  `/review`'s `reviewer` declares `cost: medium, high` — the session ceiling picks the highest
+  permitted member, typically `high` for the fresh-eyes judgment this stage wants.
+- **Medium-cost execution:** `/plan` (+ `/plan-loop`) sequences the brief into phases; `/code`
+  (+ `/code-loop`, `/code-parallel`) implements against it.
 
 Each workflow has a clean handoff to the next and can be invoked alone (**chunked execution** — run
 `/design` today, `/code-loop` next week, each cold-starting from the brief). The whole pipeline can
-run together as `/ship` (gated at every stage) or `/ship-loop` (continuous, gated once at the MAX→ECO
-model switch). The build workflows produce durable artifacts inside `.somi/plans/<slug>/`; discovery
-produces the requirements & design foundation inside `.somi/rd/<slug>/`.
+run together as `/ship` (gated at every stage) or `/ship-loop` (continuous, gated once at the
+brief handoff). The build workflows produce durable artifacts inside `.somi/plans/<slug>/`;
+discovery produces the requirements & design foundation inside `.somi/rd/<slug>/`.
 
-> **Why tier this way.** Previously every agent ran `opus`, spreading the expensive model across the
-> whole lifecycle — including the highest-volume work. Concentrating `opus` on the front-loaded brief
-> and on review, then running plan/code on `sonnet` against the brief, is the **plan-and-execute /
-> model-cascade** pattern: a strong model compiles the context once, a cheaper model executes it many
-> times. The `brief.md` is the contract that makes the cheap tier safe — it carries the decisions,
-> the complexity map, and an explicit *"what ECO does NOT need to re-research"* list.
+> **Why tier this way.** Previously every agent ran at the top tier, spreading the expensive model
+> across the whole lifecycle — including the highest-volume work. Concentrating the expensive model
+> on the front-loaded brief and on review, then running plan/code at `cost: medium` against the
+> brief, is the **plan-and-execute / model-cascade** pattern: a strong model compiles the context
+> once, a cheaper model executes it many times. The `brief.md` is the contract that makes the cheap
+> tier safe — it carries the decisions, the complexity map, and an explicit *"what execution does
+> NOT need to re-research"* list.
+
+**How dispatch actually happens.** Nothing hands a whole command's procedure to one Tasked agent
+that runs it end-to-end. On Claude Code, invoking a command directly runs its own steps live in
+that turn; on Copilot, selecting the `somi` front-door persona runs the matched command's own
+procedure live instead of Tasking a single agent to carry it out. Either way, every agent that
+procedure starts — one `Task` call per agent — resolves its cost tier and model first, through
+`somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill, served over the
+bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP isn't reachable), and
+the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling **selects**
+the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
+declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
 
 ## The workflows
 
@@ -76,11 +91,11 @@ review output:
 │       ├── sdd.md                       ← software design (high-level direction)
 │       ├── tdd.md                       ← technical design (high-level constraints)
 │       ├── decisions.md                ← crossroads resolved with the user
-│       ├── brief.md                    ← the MAX→ECO handoff (dense; feeds /plan)
+│       ├── brief.md                    ← the design→execution handoff (dense; feeds /plan)
 │       └── diary.md                    ← discovery narrative
 ├── plans/
 │   └── <slug>/                         ← one directory per work item
-│       ├── brief.md                    ← MAX→ECO handoff (from /design or /refactor analysis)
+│       ├── brief.md                    ← design→execution handoff (from /design or /refactor-design)
 │       ├── design.md                   ← feature design (from /design — direction + hard parts)
 │       ├── context.md                  ← background, surrounding code, constraints
 │       ├── spec.md                     ← purpose, requirements, decisions, user story, DoD
@@ -107,9 +122,12 @@ Status lives in `progress.md`, not in the directory location. Only humans delete
 foundation — *before* planning or coding. This is the requirements-engineering and high-level
 software-design phase of the SDLC. Its output is the cornerstone the planner consumes.
 
-**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md). Runs on the **most capable model
-end-to-end** (the orchestrating `/discover` command is `opus` too, not `sonnet`) because the output
-anchors the entire project.
+**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md), Tasked at `cost: high` — the most
+capable tier this repo maps — for the judgment-heavy core of the work, because the output anchors
+the entire project. `/discover` itself declares no `cost:` and no `model:` of its own; it runs on
+whatever model the session is already using, and still scaffolds `.somi/rd/<slug>/` and owns the
+crossroads conversation with the user — a Tasked run can't pause mid-flight to converse, so that
+part can't move into the `Task` call.
 
 **Input**: a software idea / product concept from the user.
 
@@ -144,34 +162,37 @@ verified, status in `README.md` becomes `ready-for-planning`.
 requirements source, the SDD/TDD as architectural direction, the research report as risk context.
 Planning re-opens a direction only where it genuinely diverges, recording why.
 
-## Design (feature, pre-planning, MAX)
+## Design (feature, pre-planning)
 
 **Purpose**: settle a **brownfield feature or user story's architecture** against the existing
-codebase — *before* planning — and compile it into the `brief.md` the ECO tier executes against. It
+codebase — *before* planning — and compile it into the `brief.md` execution runs against. It
 fills the gap between discovery (a whole new product) and planning (sequencing): the requirement is
 clear, but how it should be shaped against *this* repo is not.
 
-**Agent**: [`designer`](../agents/designer.md). Runs on the **most capable model end-to-end** (the
-`/design` command is `opus` too, like `/discover`) because its `brief.md` anchors the whole work item.
+**Agent**: [`designer`](../agents/designer.md), Tasked at `cost: high` — the most capable tier this
+repo maps — for the judgment-heavy core of the work, because its `brief.md` anchors the whole work
+item. `/design` itself declares no `cost:` and no `model:` of its own, like `/discover`; it runs on
+whatever model the session is already using, and still scaffolds the artifact set and owns the
+crossroads conversation with the user, for the same reason as `/discover`'s.
 
 **Input**: a feature / user story on an existing codebase.
 
 **Output**: `design.md` (the approach + complexity analysis), `decisions.md` (user-verified
-architectural choices), **`brief.md`** (the load-bearing MAX→ECO handoff), and `diary.md`, under
-`.somi/plans/<slug>/`. The designer reads the codebase deeply, ingests the repo's own instruction
-files once (folding conventions into the brief), resolves the expensive-to-reverse calls with the
-user (same verification protocol as the planner), and maps the complexity hotspots.
+architectural choices), **`brief.md`** (the load-bearing design→execution handoff), and `diary.md`,
+under `.somi/plans/<slug>/`. The designer reads the codebase deeply, ingests the repo's own
+instruction files once (folding conventions into the brief), resolves the expensive-to-reverse calls
+with the user (same verification protocol as the planner), and maps the complexity hotspots.
 
 **Design-depth boundary** — design owns the *architectural approach* and the *complexity map*; the
 planner owns *sequencing* into phases and PR-sized slices, and the concrete file-level design. Same
 seam as discovery↔planning, one level down.
 
 **Stops the workflow**: never plans or codes. **Handoff to planning**: explicit — `/plan <slug>`
-consumes `brief.md` as its primary input and sequences it on the ECO tier. For a high-stakes design,
-review it in MAX scope first via `/review design <slug>` (fresh context, bounded loop).
+consumes `brief.md` as its primary input and sequences it at `cost: medium`. For a high-stakes
+design, review it at `cost: high` first via `/review design <slug>` (fresh context, bounded loop).
 
 > **When to use which front-load.** New product, open requirements → `/discover`. Feature/story on an
-> existing repo, design unsettled → `/design`. Large structural untangle → `/refactor` analysis.
+> existing repo, design unsettled → `/design`. Large structural untangle → `/refactor-design`.
 > Settled design, just sequence it → straight to `/plan`.
 
 ## Planning
@@ -264,7 +285,7 @@ a file.
 
 **Output**: a review file at `.somi/reviews/<slug>/<YYYY-MM-DD>-<phase>.<iter>-<verdict>.md` with
 severity-graded findings (Blocker / Major / Minor / Nit), each with a location, what's wrong, why
-it matters, and a suggested fix. Plus a line in `progress.md` "Recent activity" and a diary entry
+it matters, and a suggested fix. Plus the verdict in `progress.md`'s `Reviewed` cell and a diary entry
 if findings affect the plan.
 
 **Plan-vs-code checks** (SoMi-specific) — does the diff stay within the iteration scope? Did plan
@@ -284,10 +305,12 @@ run applies the plan-change protocol.
 
 **The parallel panel ([`/review-panel`](../commands/review-panel.md))** — for a high-stakes change
 that crosses several concerns at once, the panel seats the relevant lenses (`reviewer` plus
-`security-reviewer` / `architecture-reviewer` / `test-strategist` as the diff warrants) and runs them
+`security-reviewer` / `architecture-reviewer` / `test-strategist` / `plan-reviewer` / `sdlc-reviewer` as the diff warrants) and runs them
 **concurrently** on the same captured diff, then merges and de-duplicates their findings into one
 verdict (highest severity wins; lens disagreement is surfaced). It's safe to parallelize because
-every lens is read-only — there's no write contention — and the orchestrator owns the single merged
+`/review-panel` is the sole writer: each lens returns findings and none is given a write to perform,
+  so there is nothing to contend over (the lenses do hold Write/Edit — this rests on their
+  `## Write discipline` contract, not on a platform restriction) — and the orchestrator owns the single merged
 write. Use `/review` for the everyday single-lens pass; reach for `/review-panel` before merging
 something that touches auth *and* a new contract *and* the test shape. (On hosts without concurrent
 sub-agents, the panel runs the same lenses sequentially.)
@@ -320,9 +343,10 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 
 - **Discover → Plan → Code → Review** for a greenfield product or major new initiative — discovery
   produces the requirements & design foundation (+ `brief.md`), which planning turns into phased work.
-- **Design → Plan → Code → Review** for a design-heavy brownfield feature — `/design` (MAX) compiles
-  the `brief.md`; `/plan` (ECO) sequences it; `/code-loop` (ECO) implements against it. This is the
-  daily MAX→ECO chain for non-trivial features.
+- **Design → Plan → Code → Review** for a design-heavy brownfield feature — `/design` (Tasks
+  `designer` at `cost: high`) compiles the `brief.md`; `/plan` (Tasks `planner`, `cost: low, medium`)
+  sequences it; `/code-loop` (Tasks `coder`, `cost: low, medium`) implements against it. This is the
+  daily design→execution chain for non-trivial features.
 - **Plan → Code → Review** is the normal sequence when the design is already settled.
 - **Plan → Plan-review → Code → Review** when the plan is high-stakes or high-ambiguity.
 - **Code → Review → Code (rework) → Review** when the first review surfaces findings.
@@ -335,11 +359,13 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   report becomes `/design`'s pre-read, tells `/review-panel` which lenses the surface warrants,
   or honestly says "reconsider" with the numbers.
 - **Upgrade** for a dependency bump — [`/upgrade`](../commands/upgrade.md): cited
-  breaking-change/CVE research (MAX) → usage scan → mini-brief (doubles as the dep-gate
-  sign-off) → migration under `/code-loop` (ECO).
+  breaking-change/CVE research (Tasks `discovery-analyst` at `cost: high`) → usage scan →
+  mini-brief (doubles as the dep-gate sign-off) → migration under `/code-loop` (Tasks `coder`,
+  `cost: low, medium`).
 - **Release-readiness** before shipping a set of work items —
   [`/release-readiness`](../commands/release-readiness.md): a deterministic checklist over the
-  artifacts plus one MAX review of the cumulative integration diff; verdict + draft release notes.
+  artifacts plus one high-cost review of the cumulative integration diff; verdict + draft release
+  notes.
 - **Incident (emergency lane)** when production is broken —
   [`/incident`](../commands/incident.md): mitigate fast (hooks stay on), live diary timeline,
   then **mandatory** postmortem + a seeded `/debug` or `/plan` follow-up. The lane exists so
@@ -348,7 +374,7 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   conventions into `99-overrides.md` + gap report + a calibration work item.
 - **Debug (standalone)** when a bug's cause is not yet isolated — [`/debug`](../commands/debug.md)
   reproduces first (failing test as the non-overridable gate), isolates under a bounded
-  hypothesis budget (with a fresh-context MAX diagnosis hatch when narrowing stalls), fixes under
+  hypothesis budget (with a fresh-context high-cost diagnosis hatch when narrowing stalls), fixes under
   `/code-loop` with the repro as acceptance, and leaves the repro test as the regression guard
   plus a one-page `rca.md` under `.somi/plans/<slug>/`. If diagnosis reveals a feature-sized fix
   or a wrong architectural decision, it hands off to `/plan` with the RCA as input.
@@ -363,27 +389,31 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 ## The `/ship` and `/ship-loop` pipelines
 
 `/ship <problem>` runs the full pipeline with **hard gates between every stage** — the careful path.
-It's identical to running (an optional MAX front-load, then) `/plan`, then `/code`, then `/review`
-manually, with the orchestration baked in.
+It's identical to running (an optional `cost: high` front-load, then) `/plan`, then `/code`, then
+`/review` manually, with the orchestration baked in.
 
-`/ship-loop <problem>` is the **continuous** path of the MAX→ECO economy: it front-loads a MAX action
-once (compiling `brief.md`), gates a **single** human checkpoint **at the MAX→ECO model switch** (you
-review the brief), then runs the ECO loops (`/plan-loop` → `/code-loop`) to completion **under bounded
-caps** with no per-iteration stop. If you start cold with no MAX front-load, the gate falls to after
-`/plan-loop` — the pipeline is never run end-to-end with zero human review. The model switch is the
-gate; the caps (per-layer + global budget + cross-layer breaker) are the safety net.
+`/ship-loop <problem>` is the **continuous** path of the design→execution economy: it front-loads a
+`cost: high` action once (compiling `brief.md`), gates a **single** human checkpoint **once that
+design action has produced the `brief.md`, before planning consumes it** (you review the brief),
+then runs the `cost: medium` loops (`/plan-loop` → `/code-loop`) to completion **under bounded
+caps** with no per-iteration stop. If you start cold with no design action, the gate falls to after
+`/plan-loop`, before any code — the pipeline is never run end-to-end with zero human review. The
+brief handoff is the gate; the caps (per-layer + global budget + cross-layer breaker) are the
+safety net.
 
-## The Repo Atlas (amortized MAX)
+## The Repo Atlas (amortized high-cost)
 
 The `brief.md` compresses a *work item*; **`.somi/atlas.md`** (built by
-[`/atlas`](../commands/atlas.md), MAX tier) compresses the *repository*: module map, dependency
-rules, conventions digest, complexity hotspots, test topology — SHA-stamped. Every later MAX
-action (`/design`, a cold `/plan`, `/refactor` analysis, `/impact`) starts from the atlas, runs
-its staleness check (`git diff --stat <atlas-SHA>..HEAD`), and deep-reads **only the drift plus
-the paths the work touches** — instead of paying a full repo read per work item. On a repo with
-regular feature work this is the largest remaining MAX-cost lever, and it makes designs more
-consistent (every feature works from the same map). A stale atlas is worse than none: consumers
-check before trusting, and structural drift triggers a refresh rather than silent reliance.
+[`/atlas`](../commands/atlas.md), which Tasks the `atlas` agent at `cost: high`) compresses the
+*repository*: module map, dependency
+rules, conventions digest, complexity hotspots, test topology — SHA-stamped. Every later
+`cost: high` action (`/design`, a cold `/plan`, `/refactor-design`, `/impact`) starts from the
+atlas, runs its staleness check (`git diff --stat <atlas-SHA>..HEAD`), and deep-reads **only the
+drift plus the paths the work touches** — instead of paying a full repo read per work item. On a
+repo with regular feature work this is the largest remaining high-cost lever, and it makes designs
+more consistent (every feature works from the same map). A stale atlas is worse than none:
+consumers check before trusting, and structural drift triggers a refresh rather than silent
+reliance.
 
 ## The deterministic loop core (state + findings ledger)
 

@@ -133,7 +133,7 @@ rule is being enforced — don't work around the hook.
 - **Hot paths.** Sometimes the readable version costs 10x and you need the gnarly one. Document why.
 - **Generated code.** Don't fight your generator's conventions.
 - **Existing code without coverage.** Don't "clean up" code you can't safely modify. Refactor under green
-  or escalate to [`test-strategist`](../test-strategy/SKILL.md) first.
+  or escalate to [`test-strategist`](../testing-playbook/SKILL.md) first.
 
 ## The reader test
 

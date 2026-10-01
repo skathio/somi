@@ -2,12 +2,10 @@
 // hooks/user-prompt-submit/inject-workflow-context.mjs — UserPromptSubmit hook — inject SOMI
 // context on relevant turns.
 //
-// Node port of hooks/user-prompt-submit/inject-workflow-context.sh (node-runtime-port, phase 2,
-// iteration 2.8 — the heaviest hook in the corpus: 12 bash arrays, process substitution, a
-// signature-hash gate). Imports the shared read/context/projectRoot helpers from
-// ../lib/common.mjs (2.1, reviewer-blessed) rather than reimplementing them.
+// The heaviest hook in the set: several pattern lists and a signature-hash gate. Imports the
+// shared read/context/projectRoot helpers from ../lib/common.mjs rather than reimplementing them.
 //
-// Two responsibilities (unchanged from bash):
+// Two responsibilities (unchanged from the original bash hook):
 //   1. Remind the agent of the priority stack and active work-item state.
 //   2. Surface end-of-turn loose ends (TODO(claude) markers, scratch files) on the NEXT user
 //      turn — this replaces the old Stop hook, which used an additionalContext channel that Stop
@@ -18,6 +16,31 @@
 // gate below). The loose-end nudges fire whenever there is something to nudge about, completely
 // independent of the reminder gate (see main() — this independence is pinned by the fixture case
 // "nudge-fires-independent-of-suppressed-reminder").
+//
+// === THE TIER 1 / TIER 2 DIGEST SPLIT =========================================================
+//
+// This hook carries rules/CLAUDE.md's always-on digest into a consuming Claude Code project —
+// the only delivery path that reaches one (plugin.json has no `rules` key). An always-on floor and the state-change gate below want opposite behavior from the same
+// mechanism, so emission is split into two independent tiers rather than picking one:
+//
+//   Tier 1 — REMINDER_BODY, unconditional, every UserPromptSubmit turn, independent of the
+//   signature gate below (the same independence pattern the loose-end nudges already use).
+//
+//   Tier 2 — the full eleven-bullet digest, extracted at RUNTIME from rules/CLAUDE.md's
+//   `<!-- digest:start/end -->` markers (never hand-copied into this hook as a fourth drift-prone
+//   copy), plus planHint/rdHint. Both hints STAY on Tier 2 rather than moving to
+//   Tier 1: they are themselves state-change signals (which plan/rd is active), so gating them
+//   here preserves their gated behavior rather than making them newly always-on. Tier 2 rides the signature gate exactly as the old single-tier reminder did.
+//
+// Tier 2's bullets are read via pluginRoot() (hooks/lib/common.mjs), not assumed to live at this
+// repo's own path, because this hook also runs inside a CONSUMING project, where SoMi's rules/
+// lives inside the plugin's install directory, not at ./rules/... relative to the consumer's
+// project root. For the same reason, each bullet's trailing citation is rewritten to a bare
+// `` `NN` `` numeric code before injection (stripDigestCitations() below) rather than left as
+// whatever link form rules/CLAUDE.md's canonical file uses — an unmodified normalized link would
+// assert six paths that ENOENT in the consumer's context, on every gated turn. Fails safe:
+// an unresolved pluginRoot(), or a rules/CLAUDE.md missing/malformed digest markers, silently
+// omits Tier 2 rather than throwing — Tier 1 still fires regardless (see buildTier2Digest()).
 //
 // === THE SIGNATURE-HASH GATE: what bash actually feeds sha256sum ================================
 //
@@ -64,20 +87,19 @@
 //   doesn't exist at all on Windows) nor required for correctness. What IS required, and IS
 //   preserved exactly, is the gate's BEHAVIORAL contract: stable across repeated invocations when
 //   nothing changed, and different whenever the matched file set or any matched file's mtime
-//   changes — both verified by direct probe (see the diary). One bounded, expected consequence:
+//   changes — both verified by direct probe. One bounded, expected consequence:
 //   the FIRST Node-hook invocation on a host whose `.somi/somi-state/last-context-signature`
 //   was last written by the bash hook will see a "changed" signature (different hash algorithms
 //   for the same state) and re-emit the reminder ONE extra time at cutover — benign, not a bug.
 //
-// === THE STATUS-DETECTION DECISION (explicit, named, per the phase file's requirement) ==========
+// === THE STATUS-DETECTION DECISION (explicit and named) =============================
 //
-// 0.5's fixture pinned a real gap: bash's in-progress detection recognizes a bare status line
+// A fixture pinned a real gap in the original bash hook: its in-progress detection recognizes a bare status line
 // matching `^[[:space:]]*<?in-progress>?[[:space:]]*$` (optional ANGLE brackets, not backticks)
 // or a line matching `status:[[:space:]]*`?in-progress`?` (requires a literal "status:" prefix).
 // Neither pattern matches this project's OWN `progress.md` convention: a bare, BACKTICK-wrapped
 // status line with no "Status:" prefix — confirmed not just by the fixture's synthetic example
-// but by this work item's own `.somi/plans/node-runtime-port/progress.md` line 10 (`` `in-progress` ``)
-// and by `templates/PROGRESS.md.tmpl` line 16 (`<One of: ... | in-progress | ...>` under a bare
+// but by `templates/PROGRESS.md.tmpl` (`<One of: ... | in-progress | ...>` under a bare
 // `## Status` heading, zero "Status:" prefix) — the CANONICAL template every `/plan`-generated
 // work item's `progress.md` follows. So the narrow bash regexes miss the mainline case, not an
 // edge case: every SoMi work item created via the documented template is invisible to this
@@ -91,69 +113,66 @@
 // rule the original never had. The full-line anchor (`^...$`, tested per PHYSICAL LINE, matching
 // grep's line-oriented semantics, not a whole-file substring search) is preserved exactly.
 //
-// Reasoning, weighed explicitly against reproducing the narrow detection for parity (mirroring
-// 2.7's prune-list decision structure):
+// Reasoning, weighed explicitly against reproducing the narrow detection for parity:
 //
 //   1. Self-inconsistency, not a deliberate choice being preserved. SoMi's OWN planning tooling
 //      generates `progress.md` files in the exact format its OWN hook fails to recognize. This
 //      is not a hypothetical third-party format difference — it is SoMi authoring content for
 //      itself that its own runtime cannot read.
 //   2. Bounded, precisely-scoped false-positive risk — verified empirically, not assumed. Unlike
-//      2.7's prune fix (which could only ever go quiet, never surface something new — fail-quiet
-//      in the safe direction), THIS widening is in the OPPOSITE risk direction: it can make the
+//      the prune-list fix in detect-repo-instructions.mjs (which could only ever go quiet, never
+//      surface something new — fail-quiet in the safe direction), THIS widening is in the OPPOSITE risk direction: it can make the
 //      hook say MORE than it used to, and a badly-shaped widening could false-positive on
-//      narrative text. Checked directly: `grep -nE '^\s*[<`]?in-progress[>`]?\s*$'` against this
-//      work item's own ~1100-line `progress.md` — which repeatedly contains the SUBSTRING
+//      narrative text. Checked directly: `grep -nE '^\s*[<`]?in-progress[>`]?\s*$'` against a
+//      real ~1100-line `progress.md` — which repeatedly contains the SUBSTRING
 //      "in-progress" inside narrative sentences (e.g. "Iteration left `in-progress` (pass 1);
 //      review decides `done`." appears a dozen+ times in the Recent-activity/diary prose) —
 //      matches EXACTLY ONE line: the real `## Status` field's own bare `` `in-progress` `` line.
 //      Every narrative occurrence is disqualified by the full-line anchor (surrounding text on
 //      the same physical line breaks the `^...$` match). This is the concrete evidence that a
 //      substring-anywhere widening would be dangerous (it would false-positive on nearly every
-//      real `progress.md` once it accumulates iteration history) while the full-line-anchored
+//      real `progress.md` once it accumulates history) while the full-line-anchored
 //      widening actually chosen is not.
 //   3. Confined blast radius: only `PLAN_STATUS_BARE_RE` changes. The R&D status scan
 //      (`researching|drafting|awaiting-verification|ready-for-planning`) already matches this
 //      repo's actual R&D README convention (`> Status: `researching``, already carrying the
-//      "Status:" prefix the regex requires) — 0.5's review found no gap there, so it is
+//      "Status:" prefix the regex requires) — no gap there, so it is
 //      reproduced unchanged. `PLAN_STATUS_PREFIXED_RE` (the "status:"-prefixed in-progress form)
 //      is also reproduced unchanged — it already matches its own fixture cases correctly.
 //
-// Consumer-observable consequence, named per D6's precedent: a work item using the bare-backtick
-// `progress.md` convention (this repo's own convention) now surfaces its "Active work item:" hint
-// on turns where it previously stayed silent. This is a real behavior change, not a bug fix to an
-// internal-only mechanism (unlike 2.7's prune fix, which only affected an already-informational,
-// no-decision-consequence context surface) — flagged for the close-out to record in decisions.md
-// (a new D-entry, D6-style) and 4.4's CHANGELOG scope, alongside D6's SessionStart prune change.
+// Consumer-observable consequence: a work item using the bare-backtick `progress.md` convention
+// now surfaces its "Active work item:" hint on turns where it previously stayed silent. This is a
+// real behavior change, not a bug fix to an internal-only mechanism (unlike the SessionStart
+// prune fix, which only affected an already-informational context surface), so it belongs in
+// the CHANGELOG.
 //
 // Fixture implication: `tests/hooks/cases/inject-workflow-context.json`'s
 // `plan-hint-bare-backtick-status-not-detected` case (which pinned the bash gap as current
 // behavior) is renamed to `plan-hint-bare-backtick-status-now-detected` and its expectation
 // FLIPPED (`expect_context_excludes: "Active work item:"` → `expect_context: "Active work item:
-// \`.somi/plans/demo-slug/\`."`) — the one deliberate, named, reviewed case edit this iteration
-// makes. Every other case passes with only the `"script"` field retargeted.
+// \`.somi/plans/demo-slug/\`."`) — the one deliberate case edit this change required.
 //
 // === Loose-end nudges: execFileSync argument arrays, explicit maxBuffer ==========================
 // `git diff`/`git status` are invoked via `execFileSync` with argument ARRAYS (never a shell
 // string), avoiding any shell-injection surface entirely (paths interpolated into a shell command
 // string is exactly the class of bug `execFileSync(cmd, [args])` structurally forecloses). Both
-// calls set `maxBuffer` explicitly (10 MB — the convention 2.5's review established for every
-// output-capturing subprocess call in this port series), rather than relying on Node's low
+// calls set `maxBuffer` explicitly (10 MB — the convention for every
+// output-capturing subprocess call in the hooks), rather than relying on Node's low
 // 1 MB default. A failed/absent `git` (ENOENT) or a non-zero exit from either command degrades to
 // "no nudge from that check" — mirrors bash's `2>/dev/null` + `set -o pipefail`-tolerant `if
 // pipeline; then` idiom, where either failure mode collapses to the same "condition false" outcome
 // (a pipeline's non-zero exit inside an `if` condition does not abort under `set -e`).
 //
-// === Windows caveat (same class already flagged in 2.2/2.3/2.5/2.7) ==============================
+// === Windows caveat (same class already flagged in the other path-handling hooks) ==========
 // Paths embedded in the signature hash and extracted slugs use `path.join`/`path.basename`
 // (platform-default separator). Purely internal (signature) or free-text-message (slugs) use —
-// not fixed here, consistent with prior ports' documented-not-fixed Windows path-separator gaps.
+// not fixed here, consistent with the other hooks' documented-not-fixed Windows path-separator gaps.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readPayload, projectRoot, contextOutput, runHook } from '../lib/common.mjs';
+import { readPayload, projectRoot, pluginRoot, contextOutput, runHook } from '../lib/common.mjs';
 
 // bash: `grep -qiE '^[[:space:]]*<?in-progress>?[[:space:]]*$'` — WIDENED per THE
 // STATUS-DETECTION DECISION above: backtick added as a second optional wrap character alongside
@@ -164,8 +183,8 @@ const PLAN_STATUS_BARE_RE = /^\s*[<`]?in-progress[>`]?\s*$/i;
 const PLAN_STATUS_PREFIXED_RE = /status:\s*`?in-progress`?/i;
 
 // bash: `grep -qiE 'status:[[:space:]]*`?(researching|drafting|awaiting-verification)`?'` /
-// `grep -qiE 'status:[[:space:]]*`?ready-for-planning`?'` — reproduced unchanged; 0.5's review
-// found the real R&D README.md convention already carries the required "Status:" prefix.
+// `grep -qiE 'status:[[:space:]]*`?ready-for-planning`?'` — reproduced unchanged; the real R&D
+// README.md convention already carries the required "Status:" prefix.
 const RD_STATUS_ACTIVE_RE = /status:\s*`?(researching|drafting|awaiting-verification)`?/i;
 const RD_STATUS_READY_RE = /status:\s*`?ready-for-planning`?/i;
 
@@ -174,17 +193,132 @@ const TODO_MARKER_RE = /^\+.*(TODO\(claude\)|TODO\(agent\)|FIXME\(claude\))/;
 // bash: `grep -E '^\?\? .*(\.bak|\.orig|scratch_)'` against `git status --porcelain` output.
 const SCRATCH_FILE_RE = /^\?\? .*(\.bak|\.orig|scratch_)/;
 
-// 2.5's review-established convention for every output-capturing subprocess call in this port
-// series (Node's spawnSync/execFileSync default maxBuffer is 1 MB — too small for a real `git
-// diff`/`git status --porcelain` on a large working tree).
+// The convention for every output-capturing subprocess call (Node's spawnSync/execFileSync default
+// maxBuffer is 1 MB — too small for a real `git diff`/`git status --porcelain` on a large
+// working tree).
 const GIT_MAX_BUFFER = 10 * 1024 * 1024;
 
 const REMINDER_BODY =
   'somi is active. Reminders:\n' +
-  '- Follow rules/CLAUDE.md priorities: security > correctness > maintainability > performance > convenience.\n' +
+  // No `rules/...` path here, deliberately. This text is injected into a CONSUMING
+  // project's context, where SoMi's `rules/` lives inside the plugin install dir, not at
+  // `./rules/`. Naming the path asserted a file that ENOENTs there — the same defect the Tier 2
+  // digest avoids — and this block is emitted on EVERY turn, so the false assertion would be
+  // loud. Stating the priority order directly needs no path at all. Keeping
+  // Tier 1 free of `rules/` is also what lets the Tier 2 assertion be a flat "no `rules/`".
+  '- Follow SoMi\'s priority order: security > correctness > maintainability > performance > convenience.\n' +
   '- Plan before coding non-trivial work. Code from the plan, not around it.\n' +
   '- Surface tradeoffs and shortcuts in plain text; never silently compromise.\n' +
   '- Hooks may deny dangerous bash, secret writes, protected paths, and unsanctioned dep installs — do not work around them.';
+
+// Markers pinned in rules/CLAUDE.md's own "Always-on digest" section so extraction never depends
+// on heading text staying stable — scripts/generate-digest.mjs consumes the same two markers for
+// its own targets.
+const DIGEST_MARKER_RE = /<!-- digest:start -->\r?\n([\s\S]*?)\r?\n<!-- digest:end -->/;
+
+// Flattens a markdown link to its target, e.g. `[label](target)` -> `target` — the first half of
+// rewriting each bullet's trailing citation to a bare numeric code (see stripDigestCitations()
+// below). `.replace()` with a global regex resets its own lastIndex at the start of every call
+// (per spec), so reusing this module-level pattern across lines carries none of the
+// stateful-/g-regex hazard common.mjs's toRegExp()/matchesAny() guard against.
+const DIGEST_LINK_RE = /\[([^\]]*)\]\(([^)]*)\)/g;
+
+// Rewrites each physical line's trailing `(...)` citation to bare backtick-wrapped numeric
+// code(s): `(`00`)` stays `(`00`)`; `([rules/00-priorities.md](./rules/00-priorities.md))`
+// becomes `(`00`)`; `(`00`, `20`)` stays `(`00`, `20`)`. This is the required OUTPUT, not "strip
+// back to the parenthetical it wrapped" — the latter, applied to a markdown-link source, still
+// leaves a path assertion behind (`(rules/00-priorities.md)` still ENOENTs in a consuming
+// project). Handles the already-bare canonical form and the
+// full-markdown-link form identically — a markdown link is flattened to its target text before
+// the numeric code is extracted, so this function doesn't need to know which form rules/CLAUDE.md
+// is currently in.
+function stripDigestCitations(block) {
+  return block
+    .split('\n')
+    .map((line) => {
+      // Match the trailing parenthetical on the ORIGINAL line — never on a pre-flattened copy
+      // Flattening the whole line first and returning that copy from the reject paths meant
+      // any line the recognizer DECLINED still had its markdown links destroyed: a bullet reading
+      // `read [the security file](./rules/30-security-owasp.md) before touching a sink` was injected
+      // as `read ./rules/30-security-owasp.md before touching a sink` — the very output this function exists
+      // to prevent, reached through the opposite door, and via the `!citationMatch` branch, which has nothing to do with
+      // citations at all. The mutation is now confined to the citation: links are flattened ONLY
+      // inside the captured body, and every reject path returns `line` byte-identical.
+      //
+      // One level of nesting is tolerated so a full markdown-link citation —
+      // `([rules/00-priorities.md](./rules/00-priorities.md))`, the form the digest generator
+      // normalizes to — is captured whole rather than truncated at its inner `)`.
+      const citationMatch = line.match(/\((?:[^()]|\([^()]*\))*\)\s*$/);
+      if (!citationMatch) return line; // no trailing parenthetical on this physical line — a
+      // bullet's citation sits on its own word-wrapped continuation line, not every line has one.
+      // Returns `line`, NOT a flattened copy: a line with no citation is none of this function's
+      // business, whatever else it contains.
+      const inner = citationMatch[0].slice(1, -1); // drop the outer parens
+      const flattenedBody = inner.replace(DIGEST_LINK_RE, (_m, label, target) => target || label);
+      // ANCHORED recognizer. An earlier form scanned the parenthetical unanchored
+      // for any two-digit run, so ANY line-final parenthetical containing two consecutive digits
+      // became a rule citation: a bullet ending `(ISO 27001)` was rewritten to (`27`, `00`) —
+      // fabricating a citation to two rule files and delivering it to the model as fact. Rewrapping or trimming this block is precisely when a non-citation
+      // parenthetical lands at end-of-line.
+      //
+      // The whole body must now BE a citation list — comma-separated `NN` / `` `NN` `` /
+      // `rules/NN-*.md` / `./rules/NN-*.md` — or the line is left untouched. Partial matches no
+      // longer leak: `ISO 27001` fails because `27001` is not a two-digit item.
+      const body = flattenedBody.trim();
+      // The `rules/` segment is OPTIONAL (widened after review). The canonical
+      // digest lives at rules/CLAUDE.md, so a link that RESOLVES from there is `./NN-*.md` with no
+      // `rules/` segment — the form the composition table in that same file already uses. Requiring
+      // `rules/` accepted only `./rules/NN-*.md`, which resolves to `rules/rules/...` and is a dead
+      // link; the round-trip appeared to pass precisely BECAUSE the canonical was broken. Both forms
+      // are accepted now so correcting the canonical cannot silently reintroduce path assertions.
+      const ITEM_RE = /^(?:`?(\d{2})`?|\.?\/?(?:rules\/)?(\d{2})-[A-Za-z0-9-]+\.md)$/;
+      const items = body === '' ? [] : body.split(',').map((s) => s.trim());
+      const codes = [];
+      let allItemsAreCitations = items.length > 0;
+      for (const item of items) {
+        const m = ITEM_RE.exec(item);
+        if (!m) {
+          allItemsAreCitations = false;
+          break;
+        }
+        const code = m[1] ?? m[2];
+        if (!codes.includes(code)) codes.push(code);
+      }
+      // Not a citation list — return `line` UNCHANGED. A rejected line keeps its original
+      // markdown links intact. If such a link points into `rules/`, a digest-wide
+      // `excludes: "rules/"` assertion goes red and forces the digest's author to use the accepted
+      // grammar rather than having the link silently mangled into a bare path. Loud beats silent.
+      if (!allItemsAreCitations || codes.length === 0) return line;
+      const rewritten = `(${codes.map((c) => `\`${c}\``).join(', ')})`;
+      return line.slice(0, citationMatch.index) + rewritten;
+    })
+    .join('\n');
+}
+
+// Tier 2's content, read fresh from rules/CLAUDE.md at runtime rather than hand-copied into this
+// hook as a fourth drift-prone copy. Fails safe at every step — an unresolved
+// pluginRoot(), an unreadable file, or missing/malformed digest markers all return '' (Tier 2
+// silently omitted) rather than throwing; Tier 1 (REMINDER_BODY) fires regardless, in main().
+function buildTier2Digest() {
+  const base = pluginRoot();
+  if (!base) return '';
+  let content;
+  try {
+    content = fs.readFileSync(path.join(base, 'rules', 'CLAUDE.md'), 'utf8');
+  } catch {
+    return '';
+  }
+  const match = DIGEST_MARKER_RE.exec(content);
+  if (!match) return '';
+  return stripDigestCitations(match[1]);
+}
+
+// The single, durable pointer that replaces the per-bullet paths stripDigestCitations() removes.
+// Appended by main() AFTER planHint/rdHint so it is genuinely trailing: building it into
+// buildTier2Digest() put it before the hints, leaving a hint rendered as a dangling bullet hanging
+// off a prose sentence — readable as an elaboration of "load the rules skill" rather than as the
+// work-item notice it is.
+const RULES_SKILL_POINTER = 'For full detail on any of these, load the `rules` skill.';
 
 function isDirectory(p) {
   try {
@@ -412,10 +546,23 @@ function main() {
   const rdHint = computeRdHint(root);
   const nudges = computeNudges(root);
 
-  const parts = [];
+  // Tier 1: unconditional, every turn, independent of emitReminder.
+  const parts = [REMINDER_BODY];
+
+  // Tier 2: gated exactly as the old single-tier reminder was. planHint/rdHint ride Tier 2 (see
+  // the header note above) — concatenated the same way REMINDER_BODY+hints were joined before
+  // this split, then any leading newline left over from an empty/omitted digest is trimmed so a
+  // fail-safe-omitted Tier 2 with a present hint doesn't emit a stray blank line.
   if (emitReminder) {
-    parts.push(`${REMINDER_BODY}${planHint}${rdHint}`);
+    const tier2Digest = buildTier2Digest();
+    let tier2Block = `${tier2Digest}${planHint}${rdHint}`.replace(/^\n+/, '');
+    // The pointer goes last, after the hints — and only when a digest was actually
+    // extracted, so the fail-safe path (missing/marker-less rules/CLAUDE.md) doesn't advertise a
+    // skill for content it just failed to deliver.
+    if (tier2Digest !== '') tier2Block += `\n\n${RULES_SKILL_POINTER}`;
+    if (tier2Block !== '') parts.push(tier2Block);
   }
+
   if (nudges.length > 0) {
     let nudgeBlock = 'somi loose-end check:';
     for (const n of nudges) {
@@ -424,9 +571,10 @@ function main() {
     parts.push(nudgeBlock);
   }
 
-  if (parts.length > 0) {
-    contextOutput('UserPromptSubmit', parts.join('\n\n'));
-  }
+  // Tier 1 is unconditional, so `parts` is never empty — the old `if (parts.length > 0)` guard
+  // became dead code with the tier split and is dropped rather than left as a false suggestion that
+  // a silent turn is still reachable.
+  contextOutput('UserPromptSubmit', parts.join('\n\n'));
 }
 
 runHook(main);

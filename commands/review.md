@@ -1,8 +1,7 @@
 ---
-description: Strict, skeptical, fresh-context review of the current changes — or a plan, a MAX design+brief, an ADR, a PR, or an arbitrary diff. Severity-graded findings, evidence-driven, will reject weak solutions. Output lands under .somi/reviews/<slug>/.
+description: Strict, skeptical, fresh-context review of the current changes — or a plan, a high-cost design+brief, an ADR, a PR, or an arbitrary diff. Severity-graded findings, evidence-driven, will reject weak solutions. Output lands under .somi/reviews/<slug>/.
 argument-hint: <slug> | <diff range> | <PR #> | <file path> | "plan <slug>" | "design <slug>"
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /review — Reviewing workflow
@@ -14,8 +13,8 @@ branch, scoped to the single in-progress work item if exactly one exists).
 
 > **Note:** plan-level review is part of this command. Use `plan <slug>` (or pass an `.somi/plans/`
 > path) to review a spec/decisions/phases set instead of a diff. Use `design <slug>` to review a
-> MAX-tier design + `brief.md` (from [`/design`](./design.md), [`/discover`](./discover.md), or a
-> [`/refactor`](./refactor.md) analysis) before it hands off to the ECO tier. There is no separate
+> `cost: high` design + `brief.md` (from [`/design`](./design.md), [`/discover`](./discover.md), or
+> [`/refactor-design`](./refactor-design.md)) before it hands off to execution. There is no separate
 > `/plan-review` or `/design-review` command — this is the single deepest review surface.
 
 > **Fresh-context review (bias avoidance).** The `reviewer` (and any consultant) is **always** Tasked
@@ -39,11 +38,12 @@ branch, scoped to the single in-progress work item if exactly one exists).
 - **`plan <slug>`** → review the spec/decisions/phases for that work item, not its code. If
   exactly one work item has `status: awaiting-approval` or `planning` in `.somi/plans/` and the
   user typed bare `plan`, use it.
-- **`design <slug>`** → review a MAX-tier design + handoff: `design.md` (or the `.somi/rd/<slug>/`
-  doc set for discovery), `decisions.md`, and especially **`brief.md`**. This is the "MAX reviewed in
-  MAX scope" pass — calibrate as a plan review (cheaper to fix here), and additionally check the
-  brief is **dense, bounded, reference-not-inline**, and that its **"What ECO does NOT need to
-  re-research"** section is concrete enough to actually save the ECO tier the research.
+- **`design <slug>`** → review a `cost: high` design + handoff: `design.md` (or the
+  `.somi/rd/<slug>/` doc set for discovery), `decisions.md`, and especially **`brief.md`**. This is
+  the "high cost reviewed at high cost" pass — calibrate as a plan review (cheaper to fix here), and
+  additionally check the brief is **dense, bounded, reference-not-inline**, and that its **"What
+  execution does NOT need to re-research"** section is concrete enough to actually save execution
+  the research.
 - **A file path** → review the file (typically an ADR or design doc outside `.somi/`).
 
 ### 2. Read for intent first
@@ -63,7 +63,9 @@ errors that are cheaper to fix here than after code is written.
 
 ### 3. Brief the `reviewer` agent
 
-Via the Task tool, pass:
+Before this `Task`, call `somi_resolve` for `reviewer` (with `project_dir`), pass its model, and put
+`dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`,
+or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The target (diff, file, or plan-artifact set).
 - The work-item paths (`spec.md`, the iteration phase file, recent `diary.md` entries,
@@ -72,8 +74,10 @@ Via the Task tool, pass:
 - An instruction to **return** (not write) the full review body and any proposed diary entry;
   the command owns all writes.
 
-The `reviewer` agent is read-only (Read/Grep/Glob/Bash). If the target crosses the triggers
-below, **also invoke** the relevant consultant via a separate Task call and merge its findings
+The `reviewer` agent is read-only **by contract, not by platform restriction** — it holds Write/Edit
+but is forbidden from using them, so the command owns every write. If the target crosses the triggers
+below, **also invoke** the relevant consultant via a separate Task call — call `somi_resolve` for it
+first, like any other (full rules: the `somi-dispatch` skill) — and merge its findings
 into the review under a dedicated section:
 
 | Trigger | Consultant agent | When |
@@ -82,7 +86,10 @@ into the review under a dedicated section:
 | New module / service / public contract / dependency-direction change / public interface | `architecture-reviewer` | Both code and plan |
 | Mock-heavy diff, new flaky tests, e2e-only coverage of risky code, untestable seams | `test-strategist` | Code review |
 
-Skipping a triggered consultant is itself a **finding** in the meta-review.
+Skipping a triggered consultant is itself a **finding** in the meta-review. If a triggered
+consultant's own declared `cost:` has no member at or below the session ceiling, that is not a
+skip to absorb quietly — stop and surface the refusal to the user rather than reporting a clean
+verdict the consultant never actually rendered.
 
 ### 4. Aggregate findings
 
@@ -127,7 +134,7 @@ The command (not the agent) writes these:
   `node scripts/somi-findings.mjs resolve --slug <slug> --id F-<n> --status fixed --by <review-filename>`
   (`accepted` / `wontfix` when the human signed off on not fixing). The markdown review file is
   the human view; the ledger is the machine view — same command, same step, no drift.
-- In `progress.md`: append a line under "Recent activity" referencing the review file and verdict.
+- In `progress.md`: set the reviewed iteration's `Reviewed` cell to the verdict (there is no activity log).
 - If the reviewer returned a proposed `review-feedback` diary entry (because a Blocker/Major
   points at the plan rather than the code, or a plan-review finding requires plan changes),
   append it to `.somi/plans/<slug>/diary.md`. The follow-up `/code` (or next `/plan` revision)

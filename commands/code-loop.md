@@ -2,7 +2,6 @@
 description: Bounded code → review → fix loop on a single iteration. Exits on approve, on Blocker/Major-free verdict, on iteration cap, on diff cap, or on a recurring finding (coder/reviewer disagree → human).
 argument-hint: <slug> [phase N, iteration M]
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
-model: sonnet
 ---
 
 # /code-loop — Bounded code↔review iteration
@@ -12,10 +11,13 @@ You are running the **bounded code↔review loop** of somi.
 The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, iteration M`).
 
 This command automates the manual `/code` → `/review` → `/code` cycle for a single iteration,
-with **hard gates** that ensure it terminates. This is an **ECO-tier** loop: the orchestrator and
-the `coder` it Tasks both run `sonnet` (executing against the work item's `brief.md` + plan), while
-the `reviewer` it Tasks stays `opus` — review is the fresh-eyes MAX judgment, run on a cold context
-so it isn't biased by the coder's reasoning.
+with **hard gates** that ensure it terminates. It has no `cost:` of its own — a command has no
+model to size — and runs entirely inline; the `coder` it Tasks declares `cost: low, medium`
+(`medium` unless the session ceiling resolves to `low`; executing against the work item's
+`brief.md` + plan), while the `reviewer` it Tasks declares
+`cost: medium, high` — the session ceiling picks the highest permitted member, typically `high`
+for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by the
+coder's reasoning.
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > `spec.md`, and the active `phases/<NN>-*.md` — in the **same order at the front** of each pass's
@@ -33,10 +35,27 @@ so it isn't biased by the coder's reasoning.
 | `REVIEW_MODE` — `single` (Task `reviewer`) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens) | `single` | `SOMI_CODE_LOOP_REVIEW` (`panel`) |
 | `HUMAN_CHECKPOINT` — pause between passes if user reply `stop` is detected | always on | (n/a) |
 
-**Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
-keys `code_loop.max_passes`, `code_loop.severity_floor`, `code_loop.diff_cap_lines`,
+**Precedence:** CLI flag (`--max-passes`, `--diff-cap`) > env var (session override) >
+`.somi/config.json` (committed project policy — keys
+`code_loop.max_passes`, `code_loop.severity_floor`, `code_loop.diff_cap_lines`,
 `code_loop.review_mode`) > the defaults above. Read both at the start of the run; record the
 effective values in the first diary entry of the loop.
+
+`MAX_PASSES` and `DIFF_CAP_LINES` are **re-resolved on every `pass` / `check-diff` call**, not
+frozen at `init` — the fired-gate remedy below only works because of this. Absent an explicit CLI
+flag or env var *this invocation*, the cap already in force for the loop stands unchanged (a
+`.somi/config.json` edit made mid-loop cannot silently reopen an already-resolved gate). When the
+CLI flag or env var this invocation does differ from the value already in force, the new value
+takes effect immediately (same subcommand, **no** `init --force`, and `baseline_sha` / `started` /
+`pass` / `history` are untouched) and the change is appended to the loop state's `cap_overrides`
+array (`field`, `from`, `to`, `source`, `after_pass`, `at`) — durable after the shell that set the
+env var has exited, and returned in `finish`'s stdout JSON too, so a raise is as visible after the
+fact as it was easy in the moment (§4/§5 below fold any entries into the closing diary entry, which
+*is* committed). A malformed value (`--max-passes unlimited`, a non-numeric env var) is rejected
+with a clear error rather than silently disabling the gate. `SEVERITY_FLOOR` and
+`REVIEW_MODE` are still resolved once at `init` — neither is a hard gate `somi-loop.mjs` enforces
+via exit code, so the defect of a gate resolved once and never revisited doesn't apply to them;
+adjusting either mid-loop still means starting a fresh loop.
 
 ## What to do
 
@@ -86,7 +105,9 @@ while true:
     exit 2 → STOP — write remaining ≥Major findings as progress.md follow-ups (by F-id),
              summarise, exit "max-passes-exceeded"
 
-  # 3b. Code
+  # 3b. Code — call somi_resolve for coder first (project_dir, model, dispatched-at-cost line in
+  #     the briefing); full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch on
+  #     Claude Code)
   Task coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
 
   # 3c. Diff & scope gate (deterministic — cumulative vs the recorded baseline, working tree
@@ -97,8 +118,9 @@ while true:
 
   # 3d. Review — single reviewer, or the parallel panel when REVIEW_MODE == panel
   if REVIEW_MODE == "panel":
-    Task /review-panel ( = <slug> phase <N>, iteration <M> )   # parallel multi-lens, merged verdict
+    Task /review-panel ( = <slug> phase <N>, iteration <M> )   # a command — resolves its own lenses
   else:
+    # call somi_resolve for reviewer first; full rules: the somi-dispatch skill
     Task reviewer ( = /review <slug>, scope = this iteration's diff )
 
   # 3e. Record the pass + findings. The ledger computes recurrence on a STABLE locus
@@ -125,18 +147,25 @@ while true:
 
 ### 4. On DONE (clean exit)
 
-- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status done`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status done` — its
+  stdout includes `cap_overrides`; if non-empty, list each entry (field, from, to, source,
+  after_pass) in the diary entry below rather than leaving the record only in the gitignored
+  state file.
 - Mark iteration `done` in `phases/<NN>-*.md`.
 - Update `progress.md` (phase row, "Last activity").
-- Append a diary entry (category `note`): `code-loop done at pass <P>; verdict <V>`.
+- Append a diary entry (category `note`): `code-loop done at pass <P>; verdict <V>`, plus any
+  `cap_overrides` entries from `finish`'s stdout. Then apply the compaction rule in
+  `templates/DIARY.md.tmpl`.
 - Summarise (see §6).
 
 ### 5. On STOP (gate hit)
 
-- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status stopped-<reason>`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --iteration <N>.<M> --status stopped-<reason>`
+  — same `cap_overrides` note as §4.
 - Do **not** mark iteration `done`.
 - Append a diary entry (category `blocker` or `plan-change`): which gate fired, what's
-  outstanding, what the user needs to decide.
+  outstanding, what the user needs to decide, plus any `cap_overrides` entries from `finish`'s
+  stdout.
 - Write remaining ≥Major findings as `progress.md` follow-ups **by ledger id** (`F-3: <title>`)
   so they aren't lost and the next review can assert their resolution.
 - Summarise with explicit next step (usually: human review of the partial work, then a
@@ -156,7 +185,9 @@ while true:
 ## Guardrails
 
 - **Never silently bypass a gate.** If a gate is wrong for this work item, the user adjusts the
-  env var explicitly and re-runs — the loop does not "decide" to widen its own bounds.
+  env var (or `--max-passes` / `--diff-cap`) explicitly and re-runs the **same** `pass` /
+  `check-diff` call — the loop does not "decide" to widen its own bounds, and the raise is
+  recorded in `cap_overrides`, not just left in a shell that may since have exited.
 - **The user can reply `stop` between passes.** Honour it immediately, treat it as the
   `user-stop` exit.
 - **Plan-change protocol still applies.** If the coder discovers a planning gap mid-pass, it
@@ -164,7 +195,7 @@ while true:
   resumes on the revised plan (this counts as one pass).
 - **One iteration per loop.** This command does *not* march through multiple iterations. Each
   iteration gets its own `/code-loop` invocation.
-- **Reviewer is read-only.** The command (this orchestrator) owns all `progress.md` /
+- **Reviewer is read-only by contract** (it holds Write/Edit; the workflow forbids using them). The command (this orchestrator) owns all `progress.md` /
   `diary.md` writes — the agents return text, this command persists.
 
 ## Why this command exists

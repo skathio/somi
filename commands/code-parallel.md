@@ -2,7 +2,6 @@
 description: Fan out provably-independent iterations into isolated git worktrees, run each under /code-loop concurrently, then integrate them one at a time behind a gate (re-test + review per merge). Conservative by construction — only iterations the plan marks Parallelizable with disjoint file sets are eligible.
 argument-hint: <slug> [phase N]
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /code-parallel — Independent iterations in parallel, integrated sequentially
@@ -13,9 +12,12 @@ a gate**. The parallelism is in the *building*; the *integration* is always sequ
 
 The user's target: **$ARGUMENTS** (a work-item slug, optionally a specific `phase N`).
 
-This is an **ECO-tier** fan-out: the orchestrator (this command) is `sonnet`, and each `/code-loop`
-it Tasks runs its `coder` on `sonnet` (executing against the work item's `brief.md` + plan) and its
-`reviewer` on `opus` (fresh-eyes MAX judgment).
+This command has no `cost:` of its own and Tasks no agent directly — it composes
+[`/code-loop`](./code-loop.md) instead, which makes it a router by inspection, not by
+declaration. Each `/code-loop` instance it runs Tasks its `coder` at `cost: low, medium` (`medium`
+unless the session ceiling resolves to `low`; executing against the work item's `brief.md`
++ plan) and its `reviewer` at whatever `medium, high` member the session ceiling permits (typically
+`high`, fresh-eyes judgment).
 
 > **Why this exists, and why it's conservative.** Smaller diffs from focused agents are higher
 > quality — *if* they don't collide. Letting several coders edit the same tree at once produces merge

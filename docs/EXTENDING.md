@@ -52,7 +52,8 @@ multi-piece change:
 ---
 name: <name>
 description: When to invoke this agent (concrete trigger conditions, not topic). The model uses this to decide whether to call it.
-model: opus
+model: <the model scripts/lib/cost-model.mjs maps your cost set's top tier to for claude-code>
+cost: <every tier acceptable for every job this unit accepts>
 ---
 
 # <name>
@@ -64,12 +65,21 @@ quality bar, output shape, failure modes to avoid, escalation rules, examples.>
 Rules of thumb:
 
 - **`description`** is the single most important field. Get it right.
-- **`model`** follows the [MAX/ECO tiers](./AGENTS.md#economic-tiering-maxeco): `opus` for **MAX**
-  agents that front-load reasoning into a `brief.md` or do fresh-eyes review; `sonnet` for **ECO**
-  agents that execute against the brief. A new agent that compiles context is MAX; one that executes
-  it is ECO.
-- Omit `tools:` — leave it unrestricted so the agent works across Claude Code and GitHub Copilot.
-  If the underlying runtime enforces restrictions, it does so at its own layer.
+- **`model` / `cost`** — `cost:` is a capability set: a unit declares a tier only if that tier is
+  acceptable for *everything the unit accepts*, never "this tier for the easy jobs, that tier for
+  the hard ones." See [docs/USAGE.md § Cost tiers and model
+  resolution](./USAGE.md#cost-tiers-and-model-resolution) for the three declared shapes (graded /
+  alternative-modes / sequential-stages) and a worked example — don't re-derive the rule here, a
+  restatement is exactly what went stale. Keep `model:` beside it — set it to whichever concrete
+  model [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs) maps that `cost` value's top
+  tier to for `claude-code` today.
+- Omit `tools:` — SoMi's agents are trusted with full tool access by design; review-type agents are
+  constrained by a **write-discipline contract in their own prompt**, not by platform restriction.
+  This is a deliberate simplicity choice, **not** a compatibility requirement: both hosts support the
+  field. If you add a review-type agent, give it the same `## Write discipline` section the existing
+  four carry — the docs claim every review lens has one, and that claim must stay true.
+- **Add a `### <name>` section to [`docs/AGENTS.md`](./AGENTS.md).** `scripts/validate.sh` fails
+  the build otherwise (`AGENT NOT INDEXED`).
 
 ## Adding a skill
 
@@ -101,7 +111,6 @@ or examples, anti-patterns, when *not* to apply, when to escalate. See existing 
 description: One-liner for / autocomplete.
 argument-hint: <how to phrase arguments>
 allowed-tools: Task, Read, ...
-model: opus
 ---
 
 # /<name> — Title
@@ -110,7 +119,26 @@ model: opus
 invoke agents via Task, write artifact, summarise.)
 ```
 
-Keep commands thin; agents do the heavy lifting.
+**No `model:` field.** A command runs on whatever model the session is already using — it is
+instructions, not an instance being spawned, so there is nothing here to size or select.
+`scripts/validate.sh` fails the build on a command that declares `model:`.
+
+**No `cost:` field.** `cost:` sizes an agent instance being spawned; a command isn't one. If the
+command does meaningful work of its own rather than only routing to other commands, give it a
+paired `agents/<name>.md` and Task it; that agent's own `cost:` (and its own `model:`) follows the
+rule in "Adding an agent" above. Keep commands thin; agents do the heavy lifting.
+`scripts/validate.sh` fails the build on a command that declares `cost:`. Add a catalogue-table row
+linking `../commands/<name>.md` to [`docs/COMMANDS.md`](./COMMANDS.md) — `scripts/validate.sh` fails
+the build otherwise (`COMMAND NOT INDEXED`).
+
+**Starting an agent.** At the point in the command's own procedure that Tasks an agent, start it
+per [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) — a one-line reference
+(`Start it per skills/somi-dispatch`) at that point in the command's text is enough; do not restate
+the resolve-then-start procedure inline. This applies whether the front door is running the
+command's procedure or the command is typed directly — every entry path resolves an agent's tier
+and model against the session ceiling the same way. `scripts/validate.sh` derives which commands
+Task an agent from the real agent names under `agents/` and fails the build (`MISSING DISPATCH
+REFERENCE`) if one of them doesn't reference the skill.
 
 ## Adding a hook
 
@@ -198,6 +226,25 @@ Or add a brand-new project convention that doesn't conflict with SoMi:
 
 <convention text>
 ```
+
+## File-size budgets
+
+`scripts/validate.sh` fails the build when a tracked file outgrows its line budget: **300** for
+prompt files (`agents/*.md`, `commands/*.md`, `skills/**/*.md`, which are loaded into a model's
+context on every run), **500** for `.mjs`, **800** for `.sh`. Docs are not gated, and neither is
+`tests/evals/results/`. A new file over budget should be split.
+
+Files already over budget are recorded in [`scripts/size-budget-overrides.json`](../scripts/size-budget-overrides.json),
+one entry each: `{file, budget, current_size, source, at, reason}`.
+
+- **A ledgered file may not grow past its recorded `current_size`.** Shrinking is always fine.
+  Growth means updating the entry with a reason a reviewer can challenge.
+- **Who may add an entry:** anyone introducing or materially touching an over-budget file, with a
+  concrete `reason` and a `source` (the commit that introduced or last touched it:
+  `git log -1 --format=%h -- <file>`). No blanket exemptions.
+- **When entries are revisited:** at every `/release-readiness` pass. A file that is back within
+  budget is warned about until its entry is removed.
+- **The goal is an empty ledger:** shrink or split the file, then delete its entry.
 
 ## Versioning your extensions
 

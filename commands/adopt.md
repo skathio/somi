@@ -2,7 +2,6 @@
 description: One-time SoMi onboarding for an existing codebase. Builds the Repo Atlas, confirms detected conventions into a pre-filled 99-overrides scaffold, produces a gap report (test thin ice, hotspots, candidate first refactors), and suggests a calibration work item.
 argument-hint: (no arguments — run once after installing SoMi in a repo)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
 ---
 
 # /adopt — Onboard SoMi into an existing codebase
@@ -13,11 +12,24 @@ concrete first exercise, instead of "read thirteen docs and type `/plan`".
 
 This is a composite of existing pieces, run in order, with the user confirming at each seam.
 
-## Stage 1 — Build the Repo Atlas (MAX, the expensive step)
+> **No `cost:` of its own, and no `model:` either — it runs on whatever model this session is
+> already using.** Stage 1 Tasks
+> the `atlas` agent ([`agents/atlas.md`](../agents/atlas.md)), which declares `cost: high` on its
+> own account and resolves against the session ceiling independently of this command. Stages 2 and
+> 4 read and write directly, inline, at whatever tier is already running this command. Stage 3 may
+> also Task [`test-strategist`](../agents/test-strategist.md) for the gap report's test-thin-ice
+> depth — it resolves on its own account exactly as Stage 1's `atlas` does, not at this command's
+> tier.
 
-Run the [`/atlas`](./atlas.md) flow (it runs `opus` end-to-end): one deep read of the codebase →
+## Stage 1 — Build the Repo Atlas (`cost: high`, the expensive step)
+
+Before this `Task`, call `somi_resolve` for `atlas` (with `project_dir`), pass its model, and put
+`dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`,
+or `somi:somi-dispatch` on Claude Code). Task the `atlas` agent
+([`agents/atlas.md`](../agents/atlas.md)) to build or refresh
 `.somi/atlas.md` (module map, dependency rules, conventions digest, hotspots, test topology,
-SHA-stamped). If a fresh atlas already exists, skip the rebuild and say so.
+SHA-stamped). It runs its own staleness check and skips the rebuild — saying so — when a fresh
+atlas already exists.
 
 Present the atlas §1 framing + module count and pause briefly: "does this map match your mental
 model?" — a wrong map should be corrected *now*, by the people who know, not discovered by the
@@ -44,10 +56,12 @@ From the atlas plus targeted checks, produce a short **gap report** (in-chat, pl
 
 - **Test thin ice** — the atlas §6 areas where a regression wouldn't be caught; the 2–3 places
   characterization tests would pay off first (this is [`test-strategist`](../agents/test-strategist.md)
-  territory — Task it if the picture needs depth).
+  territory — before Tasking it, call `somi_resolve` for `test-strategist`; full rules: the
+  `somi-dispatch` skill — if the picture needs depth).
 - **Hotspots** — atlas §5, ranked; for each, whether it blocks likely upcoming work.
 - **Candidate first refactors** — untangles that would make the next changes easy
-  ([`/refactor`](./refactor.md) analysis candidates), each with the smell named precisely.
+  ([`/refactor`](./refactor.md) for a contained smell, [`/refactor-design`](./refactor-design.md)
+  candidates for anything spanning modules), each with the smell named precisely.
 - **Guardrail fit** — anything in the repo the hooks would fight (e.g. a workflow that
   hand-edits a lockfile) → recommend the matching `.somi/config.json` policy
   (`dep_install.allow`, `lockfiles.allow_edit`) instead of per-session env vars.

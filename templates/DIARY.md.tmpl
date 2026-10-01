@@ -12,11 +12,16 @@ not deleted or rewritten; if you're wrong about something, write a new entry cor
 > they reach for older entries only when a specific finding needs the backstory. So keep each entry
 > short (one paragraph) and self-contained, and capture the *why*, not a diff dump.
 >
-> **Optional compaction.** When the diary grows past ~40 entries on a long-running work item, a human
-> (or an explicit request) may fold resolved, no-longer-relevant entries into a single dated
-> **"Compacted: <range>"** summary entry, preserving every decision-change, blocker, and supersession
-> verbatim. Never compact silently and never drop a `decision-change` / `plan-change` entry — those
-> are the audit trail.
+> **Compaction (mandatory, done by the writer).** Whoever appends an entry counts the `## ` entry
+> headings afterwards. If there are **more than 40**, compact in the same edit: move every entry
+> *older than the newest 15* whose category is `note`, `discovery`, `unblock`, `blocker`, or
+> `review-feedback` **verbatim** to the end of a sibling `diary-archive.md` (create it if absent;
+> keep newest-first order), and leave **one** entry in `diary.md` titled
+> `Compacted: <oldest date> .. <newest date>` (category `note`) saying how many entries moved and
+> pointing at `diary-archive.md`. **Never move a `decision-change` or `plan-change` entry** — they
+> stay in `diary.md`, where the recent slice is read. Nothing is deleted; history only leaves the
+> default read path. 40 keeps the file to roughly a screenful-per-entry skim; 15 keeps a full
+> review cycle of context.
 
 **Always write a diary entry when**:
 

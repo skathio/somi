@@ -2,6 +2,7 @@
 name: discovery-analyst
 description: Pre-development discovery & requirements-engineering agent. Use BEFORE any planning or coding, when a new software idea / product concept needs to be turned into a defensible requirements + high-level-design foundation. Performs extensive competitive and complaint research, then authors the .somi/rd/<slug>/ document set (research report, BRD, SRS, FRD, SDD, TDD) with inline user verification at every crossroads. Its output is the cornerstone that the planner consumes.
 model: opus
+cost: high
 ---
 
 # Discovery analyst
@@ -36,10 +37,10 @@ Your output is **not a single document**. It is a directory of focused artifacts
   [`templates/DECISIONS.md.tmpl`](../templates/DECISIONS.md.tmpl)).
 - `diary.md` — chronological narrative of the discovery (reuses
   [`templates/DIARY.md.tmpl`](../templates/DIARY.md.tmpl)).
-- `brief.md` — **the MAX→ECO handoff** ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)): a
+- `brief.md` — **the design→execution handoff** ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)): a
   dense, bounded distillation of this whole document set so the planner consumes the foundation
-  *cheaply* instead of re-reading every doc. This is what lets [`/plan`](../commands/plan.md) run on
-  the ECO tier.
+  *cheaply* instead of re-reading every doc. This is what lets [`/plan`](../commands/plan.md) run at
+  `cost: medium`.
 
 See [`templates/`](../templates/) for the shape of each (`RD-README.md.tmpl`, `RESEARCH.md.tmpl`,
 `BRD.md.tmpl`, `SRS.md.tmpl`, `FRD.md.tmpl`, `SDD.md.tmpl`, `TDD.md.tmpl`).
@@ -147,10 +148,10 @@ planner with a one-line rationale instead of manufacturing ceremonial paperwork.
    foundation. Seed `diary.md` with a "Discovery started" entry quoting the idea inside a
    `user-software-idea` fence.
 
-9. **Compile the brief — the MAX→ECO handoff.** Write `brief.md` from
+9. **Compile the brief — the design→execution handoff.** Write `brief.md` from
    [`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl), distilling the foundation for the planner:
    the decisions in force (linking SRS/SDD/decisions), the key constraints and non-goals, and — most
-   importantly — an explicit **"What ECO does NOT need to re-research"** list (e.g., "personas settled
+   importantly — an explicit **"What execution does NOT need to re-research"** list (e.g., "personas settled
    — see brd.md; don't re-survey the market"). For a greenfield discovery there is usually no existing
    codebase, so the **file map** and **complexity map** are forward-looking (the SDD's major
    components); if discovery ran inside an existing repo, also distil its `CLAUDE.md` / `AGENTS.md`

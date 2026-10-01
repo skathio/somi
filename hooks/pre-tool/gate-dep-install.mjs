@@ -2,9 +2,8 @@
 // hooks/pre-tool/gate-dep-install.mjs — PreToolUse hook (matcher: Bash) — gate
 // dependency-adding commands.
 //
-// Node port of hooks/pre-tool/gate-dep-install.sh (node-runtime-port, phase 2,
-// iteration 2.4). Imports the shared read/deny/audit/config helpers from
-// ../lib/common.mjs (2.1, reviewer-blessed) rather than reimplementing them.
+// Imports the shared read/deny/audit/config helpers from ../lib/common.mjs rather than
+// reimplementing them.
 //
 // Adding a runtime dependency crosses a trust boundary: it imports unreviewed code,
 // expands attack surface, and creates a long-term maintenance obligation. The coder
@@ -16,21 +15,18 @@
 // respecting reinstalls (bare `npm install`, `yarn install`, etc.) are allowed — those
 // don't add deps, they materialize what's already declared.
 //
-// COUNT CORRECTION (verified by direct read, not inherited from the phase file's
-// prose): the bash original's DEP_ADD_PATTERNS array holds 19 patterns, not 18 — and
-// the trailing "generic curl-to-installer" trio (brew/apt/apt-get) sits outside the
-// six named package-manager ecosystems the file's own comments group (js: npm/yarn/
-// pnpm/bun; python: pip/pipx/uv/poetry/conda; rust/go/ruby/php: cargo/go/gem/bundle/
-// composer). All 19 are ported below — "port ALL of the patterns" wins over an
-// inherited miscount; the phase file's iteration-2.4 scope line is corrected
-// alongside this port (see the diary entry for this pass).
+// PATTERN COUNT (verified by direct read): the original bash DEP_ADD_PATTERNS array holds 19
+// patterns, not 18 — the trailing "generic curl-to-installer" trio (brew/apt/apt-get) sits
+// outside the six named package-manager ecosystems the file's own comments group (js: npm/
+// yarn/pnpm/bun; python: pip/pipx/uv/poetry/conda; rust/go/ruby/php: cargo/go/gem/bundle/
+// composer). All 19 are ported below.
 //
 // ERE→RegExp translation notes:
 //   - `[[:space:]]` → `\s`. NOT byte-identical: POSIX `[[:space:]]` matches exactly
 //     the 6 ASCII whitespace bytes (space/tab/newline/CR/FF/VT); JS `\s` matches those
 //     same 6 PLUS additional Unicode whitespace (U+00A0, U+2028, U+2029, U+FEFF, and
 //     other Unicode Zs-category characters) — a strict SUPERSET, not the dot-narrowing
-//     divergence 2.9 has to worry about. Direction matters: a wider `\s` can only make
+//     divergence block-dangerous-bash.mjs has to worry about. Direction matters: a wider `\s` can only make
 //     this hook MATCH (and therefore gate) a *broader* set of verb/package-argument
 //     separators than bash would — the safe direction for a security-adjacent gate.
 //     The widening DOES produce observable fail-closed decision divergences on some
@@ -44,7 +40,7 @@
 //   - `[^[:space:]]` → `[^\s]`: same superset relationship, applied to the negated
 //     class (excludes slightly more from "package token" chars) — same safe direction.
 //   - Bare/unescaped `.` or `.*` wildcard (the live POSIX-vs-JS `.` line-terminator
-//     divergence that matters for block-dangerous-bash.sh, 2.9): NONE of this file's
+//     divergence that matters for block-dangerous-bash.mjs): NONE of this file's
 //     19 patterns use one. The only `.` occurrences are the escaped literal
 //     `\.txt` in the `pip install -r ...txt` pattern — an escaped dot means "literal
 //     dot", identical in ERE and JS regex syntax, so there is no line-terminator
@@ -59,7 +55,7 @@
 // FIRST-MATCH-WINS / single-decision semantics: bash's per-pattern loop body ends in
 // either `exit 0` (ALLOW, audited) or `somi::deny_pretool` (which itself calls
 // `exit 0` — see common.sh:89) — so only the FIRST pattern to match the command is
-// ever evaluated; the loop never reaches a second pattern. `matchesAny()` (2.1)
+// ever evaluated; the loop never reaches a second pattern. `matchesAny()`
 // returns the first-matching pattern's `RegExpExecArray` in array order, reproducing
 // this exactly, and `m[0]` is the `${BASH_REMATCH[0]}` equivalent interpolated into
 // the deny message.
@@ -74,7 +70,7 @@
 // land on the same false/true outcome — verified case-by-case, not assumed.
 //
 // COMPOUND-COMMAND REFUSAL (config_allows_dep → configAllowsDep, the security-relevant
-// detail this iteration was told to preserve exactly): the allowlist prefix-match only
+// detail that must be preserved exactly): the allowlist prefix-match only
 // ever applies to the RAW, unmodified `$CMD`/`cmd` string — bash tests
 // `[[ "$c" == *';'* || "$c" == *'&'* || "$c" == *'|'* ]]` against the WHOLE command
 // text (not just the matched substring) and refuses the allow (returns 1 / false) if
@@ -84,8 +80,7 @@
 // in the same order, before any tokenization happens — not simplified to a regex or a
 // "look compound" heuristic.
 //
-// TOKENIZATION judgment call (named per this iteration's "check exactly what bash
-// checks" instruction, not a silent default): bash's `for tok in $c` performs BOTH
+// TOKENIZATION judgment call (named here, not a silent default): bash's `for tok in $c` performs BOTH
 // IFS word-splitting AND pathname (glob) expansion on the unquoted `$c` — a token
 // containing `*`/`?`/`[...]` could silently expand against files in the hook's cwd,
 // making the allowlist check's actual token set depend on the filesystem at hook-run
@@ -96,8 +91,7 @@
 // whitespace), which is the behavior this hook's allowlist logic actually depends on.
 //
 // DISCOVERED DIVERGENCE, decided explicitly (differential-probe finding, not a silent
-// default — same category of call as 2.7's prune-list decision and 2.8's regex-
-// widening decision): the bash original's `${BASH_REMATCH[0]}` interpolation in its
+// default): the bash original's `${BASH_REMATCH[0]}` interpolation in its
 // deny message is CORRUPTED whenever `.somi/config.json`'s `dep_install.allow` is
 // configured (non-empty) and the command is denied via a non-compound path. Root
 // cause, confirmed by isolated repro: `$BASH_REMATCH` is a bash GLOBAL, not scoped to
@@ -116,18 +110,15 @@
 // `$BASH_REMATCH` — confirmed by differential probe, zero divergence there).
 // This corrupted text is NOT reproduced here. Reasons: (1) no fixture in
 // `tests/hooks/cases/gate-dep-install.json` asserts `expect_reason` at all, so no
-// pinned contract is broken; (2) D2's behavior-preservation contract is scoped to
-// "identical exit codes and stdout SHAPES" (decisions.md D2) — the shape is identical,
-// only this one interpolated substring's content differs, and only on an untested
-// path; (3) reproducing it would mean deliberately shipping a message that names the
+// pinned contract is broken; (2) the behavior-preservation contract covers "identical exit
+// codes and stdout SHAPES" — the shape is identical, only this one interpolated substring's
+// content differs, and only on an untested path; (3) reproducing it would mean deliberately shipping a message that names the
 // wrong thing as "the dependency" in a security-relevant, audit-logged, user-facing
 // deny reason — strictly worse for the human/agent reading it, not a feature. This
 // port always interpolates the REAL `DEP_ADD_PATTERNS` match (`m[0]` from the outer
 // `matchesAny` call, captured once and never touched by `configAllowsDep`), for every
-// deny path, allow-list-configured or not. Flagged here and in the diary for explicit
-// reviewer sign-off, per this iteration's "verify precisely, do not simplify or
-// improve" instruction for `config_allows_dep` — this is the one place a literal
-// bug-for-bug port was deliberately NOT chosen, named rather than silent.
+// deny path, allow-list-configured or not. This is the one place a literal bug-for-bug port
+// was deliberately NOT chosen, named here rather than left silent.
 import { readPayload, field, denyPretool, audit, matchesAny, runHook, config } from '../lib/common.mjs';
 
 // Patterns for "add a new dependency". A trailing package argument is required;

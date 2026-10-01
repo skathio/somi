@@ -1,0 +1,808 @@
+#!/usr/bin/env bash
+# Guards the eval fixtures in tests/evals/fixtures/.
+#
+# Every assertion here exists because an earlier draft of the fixtures broke it. The two defects:
+# a plan tree shipped under `.somi/` that .gitignore silently dropped from the package, and
+# pass criteria written into the fixture source as comments the candidate reads.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+F=tests/evals/fixtures
+pass=0; fail=0
+ok()   { pass=$((pass+1)); printf '  ok   %s\n' "$1"; }
+bad()  { fail=$((fail+1)); printf '  FAIL %s\n' "$1"; }
+check(){ if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (want '$3', got '$2')"; fi; }
+
+# Pre-declared and trapped once, so a temp dir created after the trap is still cleaned up
+# on an early exit. Previously $R leaked on one path and $RB was never trapped at all.
+W=""; R=""; RB=""; RM=""
+trap 'rm -rf "$W" "$R" "$RB" "$RM"' EXIT
+
+echo "== eval fixtures =="
+
+# --- B1: every fixture file must actually ship -------------------------------------------
+# Two wrong spellings preceded this one. `git add -An` lists only UNTRACKED files, so it matched
+# the on-disk count exactly once -- before this work was committed -- and returned 0 forever after.
+# Then plain `git check-ignore`, which consults the INDEX and reports nothing for a tracked file:
+# every fixture file is tracked, so it could not fire on any of them. Measured: a rule matching
+# task02's plan tree gave `default: 0 reported, --no-index: 4 reported` while npm pack dropped all
+# four. `--no-index` asks the question the assertion's name claims to ask.
+# Floor first: every "no bad files found" assertion below passes vacuously against an empty
+# tree, so establish that the tree is actually populated before trusting any of them.
+# Bumped 24 -> 35 for multipass-code's own 11 files (8 under multipass-code/ plus
+# the 3 sibling scorer-side reference files) -- a floor with real headroom below the live count,
+# not a re-pin to it, so the tree can keep growing without needing another bump every time.
+n_files=$(find "$F" -type f | wc -l | tr -d ' ')
+if [ "$n_files" -ge 35 ]; then
+  ok "fixture tree is populated ($n_files files)"
+else
+  bad "fixture tree is populated (want >=35, got $n_files)"
+fi
+
+ignored=$(find "$F" -type f -print0 | xargs -0 git check-ignore --no-index 2>/dev/null)
+if [ -z "$ignored" ]; then
+  ok "no fixture file is gitignored"
+else
+  bad "no fixture file is gitignored"
+  printf '%s\n' "$ignored" | sed 's/^/       /'
+fi
+
+if git check-ignore -q --no-index "$F" 2>/dev/null; then
+  bad "fixtures directory is not itself ignored"
+else
+  ok "fixtures directory is not itself ignored"
+fi
+
+# `.somi` is ignored at any depth; the plan tree ships as `_somi/` and the runner renames it.
+if find "$F" -type d -name '.somi' | grep -q .; then
+  bad "no fixture ships a literal .somi/ directory (it would be gitignored)"
+else
+  ok "no fixture ships a literal .somi/ directory (it would be gitignored)"
+fi
+[ -d "$F/task02-code/_somi/plans/expired-token" ] \
+  && ok "task02 ships its plan tree as _somi/" \
+  || bad "task02 ships its plan tree as _somi/"
+for a in spec.md progress.md diary.md phases/01-reject-expired.md; do
+  [ -f "$F/task02-code/_somi/plans/expired-token/$a" ] \
+    && ok "task02 work item has $a" \
+    || bad "task02 work item has $a"
+done
+
+# Scorer-side files that belong in the manifest even though they sit outside the three fixture
+# directories. Declared ONCE: the generator, the count assertion, and the presence loop all read
+# this array, so adding a file here cannot leave the arithmetic 40 lines away out of step.
+# multipass-code's own three reference files added here -- multipass-code/ itself is added to the manifest's `find` calls
+# directly (below), kept as its own find argument rather than folded into the SAME list as
+# task01/02/03 (R9: this fixture stays visibly standalone, never merged into the rubric-graded
+# corpus's own tree, even though both are hashed into the one shared MANIFEST.sha256 file).
+EXTRA_MANIFEST=("$F/task03-review.patch" "$F/make-review-patch.mjs" \
+                "$F/multipass-code-mutant-a.mjs" "$F/multipass-code-mutant-b.mjs" \
+                "$F/multipass-code-control.mjs")
+SCORER_SIDE=(README.md MANIFEST.sha256 make-review-patch.mjs task03-review.patch \
+             task02-code-mutant.mjs task02-code-control.mjs \
+             multipass-code-mutant-a.mjs multipass-code-mutant-b.mjs multipass-code-control.mjs)
+
+# --- the scorer-side files exist. None is imported by anything here, so deletion is silent,
+# and fixtures/README.md is the reconstruction contract 3.4b is built from.
+# _candidates/ holds hand-written /code outputs used by tests/scripts/eval-runner.sh. Scorer-side:
+# never copied into a candidate's repo, never in the candidate manifest.
+[ -d "$F/_candidates" ] \
+  && ok "scorer-side candidates present (_candidates/)" \
+  || bad "scorer-side candidates present (_candidates/)"
+for f in "${SCORER_SIDE[@]}"; do
+  [ -f "$F/$f" ] && ok "scorer-side file present: $f" || bad "scorer-side file present: $f"
+done
+
+# --- B2: the fixture must not state its own pass criteria --------------------------------
+# A content-hash manifest over every candidate-visible file. It fails on ANY edit -- addition,
+# modification, deletion -- which a keyword denylist cannot do: the grep below only catches
+# phrasings someone already thought of (proven: a paraphrase of the exact comment it was written
+# for passed it, as did a leak in plain domain language).
+#
+# BE CLEAR ABOUT WHAT THIS IS. It is a tripwire, not a gate. It cannot judge whether an edit
+# leaks a criterion -- it forces a human to. Once cleared via --update-manifest, the only
+# remaining semantic defences are the same denylists it was adopted to supplement. Two things
+# limit the damage: --update-manifest REFUSES to regenerate while any other assertion is failing
+# (so it cannot be used to paper over a detectable leak), and the failure message leads with the
+# invariant checklist rather than the regenerate command.
+if [ "${1:-}" = "--update-manifest" ]; then
+  # Refuse while anything else is red. --update-manifest exists to record a reviewed change, not
+  # to clear a failing guard; without this it is a one-command bypass of every check below it.
+  PRE=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
+  if ! bash "$ROOT/tests/scripts/evals-fixtures.sh" --no-manifest >"$PRE" 2>&1; then
+    echo "refusing to regenerate: other assertions are failing. Fix them first." >&2
+    grep -E '^  FAIL' "$PRE" >&2 || true
+    rm -f "$PRE"
+    exit 1
+  fi
+  rm -f "$PRE"
+  {
+    echo "# Content hashes of every CANDIDATE-VISIBLE fixture file."
+    echo "# Regenerate with: bash tests/scripts/evals-fixtures.sh --update-manifest"
+    echo "# An edit failing here is not a bug: re-read fixtures/README.md's invariant list, confirm"
+    echo "# the change states no pass criterion, then regenerate. A keyword denylist cannot make"
+    echo "# this promise -- it only catches phrasings someone already thought of."
+    { find "$F/task01-plan" "$F/task02-code" "$F/task03-review" "$F/multipass-code" -type f
+      printf '%s\n' "${EXTRA_MANIFEST[@]}"; } \
+      | LC_ALL=C sort | xargs sha256sum
+  } > "$F/MANIFEST.sha256"
+  echo "manifest regenerated: $(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256") files"
+  exit 0
+fi
+
+if [ "${1:-}" = "--no-manifest" ]; then
+  : # the manifest check is skipped; every other assertion still runs
+elif [ -f "$F/MANIFEST.sha256" ]; then
+  man_out=$(grep '^[0-9a-f]' "$F/MANIFEST.sha256" | sha256sum -c --quiet 2>&1)
+  if [ -z "$man_out" ]; then
+    ok "every candidate-visible file matches the content manifest"
+  else
+    bad "every candidate-visible file matches the content manifest"
+    printf '%s\n' "$man_out" | sed 's/^/       /'
+    printf '\n       A candidate-visible file changed. The manifest cannot judge whether the change\n'
+    printf '       leaks a pass criterion -- only a human can. Confirm ALL of these first:\n'
+    printf '         [ ] states no pass criterion, and hints at none (fixtures/README.md invariants)\n'
+    printf '         [ ] task01 supplies no traffic, volume, or row-size figure\n'
+    printf '         [ ] task02 keeps 3 passing tests, none touching expiry\n'
+    printf '         [ ] task03 exercises only 30-day months\n'
+    printf '         [ ] no file names a mutant, a control, scoring, or an eval\n'
+    printf '       Only then:  bash tests/scripts/evals-fixtures.sh --update-manifest\n'
+  fi
+  # The manifest must also cover the tree exactly -- a NEW file is invisible to sha256sum -c.
+  man_n=$(grep -c '^[0-9a-f]' "$F/MANIFEST.sha256")
+  live_n=$(( $(find "$F/task01-plan" "$F/task02-code" "$F/task03-review" "$F/multipass-code" -type f | wc -l) + ${#EXTRA_MANIFEST[@]} ))
+  # Argument order matters here: the MANIFEST is the stale value when these disagree, so it goes
+  # in the "got" slot. The previous order framed the live tree as wrong.
+  if [ "$man_n" = "$live_n" ]; then
+    ok "manifest covers every candidate-visible file (no untracked additions)"
+  else
+    bad "manifest covers every candidate-visible file (want $live_n live files, manifest has $man_n) — run: bash tests/scripts/evals-fixtures.sh --update-manifest"
+  fi
+else
+  bad "MANIFEST.sha256 exists"
+fi
+
+# Cheap first pass. Scans EVERY file under the fixture tree -- an earlier spelling used
+# --include='*.mjs' --include='*.sql' --include='*.md', silently exempting package.json.
+leak=$(grep -rniE 'point of the task|declared file set|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|token-control|code-control|criterion [0-9]|dimension S[0-9]|graded|open book|trim comparison|you are measured|do not invent' \
+        "$F/task01-plan" "$F/task02-code" "$F/task03-review" 2>/dev/null)
+if [ -z "$leak" ]; then
+  ok "no candidate-visible file trips the leak keyword list"
+else
+  bad "no candidate-visible file trips the leak keyword list"
+  printf '%s\n' "$leak" | sed 's/^/       /'
+fi
+
+# The reference implementations must not live inside the copied tree.
+if find "$F/task02-code" -name '*mutant*' -o -name '*control*' | grep -q .; then
+  bad "no reference implementation inside task02-code/ (it lands in the candidate's repo)"
+else
+  ok "no reference implementation inside task02-code/ (it lands in the candidate's repo)"
+fi
+
+# --- the control must speak the candidate's vocabulary ----------------------------------
+# The control is run against the CANDIDATE'S test. A candidate that asserts on an error message --
+# idiomatic, and what the shipped tests themselves do (/malformed token/, /bad signature/) -- passes
+# the control only if the control words its errors the way the candidate-visible code does.
+#
+# It did not. The control threw 'token expired' while the shipped token.mjs establishes
+# adjective-noun ('malformed token', 'bad signature'), and the control's own file used that style
+# three lines earlier. Every one of the first three real draws wrote a CORRECT expiry test, followed
+# the convention in front of it, asserted /expired token/, and was failed at the control step for
+# word order the task never specifies -- 3/3 on a gating dimension, which is what stopped the
+# certification campaign. Nothing compared the two vocabularies, so nothing caught it.
+ctl_msgs=$(grep -o "new Error('[^']*')" "$F/task02-code-control.mjs" | sed "s/new Error('//;s/')//" | LC_ALL=C sort -u)
+vis_msgs=$(grep -o "new Error('[^']*')" "$F/task02-code/src/auth/token.mjs" | sed "s/new Error('//;s/')//" | LC_ALL=C sort -u)
+
+# (a) every message the candidate can actually SEE must survive verbatim into the control, or a
+#     shipped test asserting it goes red on substitution through no fault of the candidate.
+missing=""
+while IFS= read -r m; do
+  [ -z "$m" ] && continue
+  printf '%s\n' "$ctl_msgs" | grep -qxF "$m" || missing="$missing '$m'"
+done <<EOF_VIS
+$vis_msgs
+EOF_VIS
+if [ -z "$missing" ]; then
+  ok "every candidate-visible error message survives verbatim into the control"
+else
+  bad "every candidate-visible error message survives verbatim into the control (absent:$missing)"
+fi
+
+# (b) the expiry message -- the one the candidate CANNOT see, and must therefore guess from the
+#     convention -- has to follow that same convention: '<adjective> token', not 'token <verb>'.
+exp_msg=$(printf '%s\n' "$ctl_msgs" | grep -i "expir" | head -1)
+case "$exp_msg" in
+  token\ *) bad "the control's expiry message follows the candidate-visible '<adjective> token' convention (got '$exp_msg', which reverses it -- F-330)" ;;
+  *\ token) ok "the control's expiry message follows the candidate-visible '<adjective> token' convention ('$exp_msg')" ;;
+  *) bad "the control's expiry message follows the candidate-visible '<adjective> token' convention (got '$exp_msg')" ;;
+esac
+
+# --- task03: patch, greenness, and the mis-billing delta ---------------------------------
+[ -f "$F/task03-review.patch" ] \
+  && ok "review.patch lives outside the reviewed tree" \
+  || bad "review.patch lives outside the reviewed tree"
+[ -f "$F/task03-review/review.patch" ] \
+  && bad "review.patch is NOT inside task03-review/" \
+  || ok "review.patch is NOT inside task03-review/"
+
+W=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
+: "${W:?mktemp -d returned empty}"
+cp -r "$F/task03-review/." "$W"/
+( cd "$W" && git init -q -b main \
+  && git config user.email t@somi.invalid && git config user.name t \
+  && git add -A && git commit -qm baseline ) >/dev/null 2>&1
+
+# `fail 0` alone is satisfied by a suite with NO tests. Pin the pass count as well.
+t3_pass(){ ( cd "$W" && node --test 2>&1 | grep -oE '^(#|ℹ) pass [0-9]+' | grep -oE '[0-9]+' | head -1 ); }
+t3_fail(){ ( cd "$W" && node --test 2>&1 | grep -oE '^(#|ℹ) fail [0-9]+' | grep -oE '[0-9]+' | head -1 ); }
+check "task03 suite is 3 passing / 0 failing BEFORE the patch" "$(t3_pass)/$(t3_fail)" "3/0"
+
+if ( cd "$W" && git apply "$ROOT/$F/task03-review.patch" ) 2>/dev/null; then
+  ok "review.patch applies to the shipped fixture"
+else
+  bad "review.patch applies to the shipped fixture (run node $F/make-review-patch.mjs)"
+fi
+
+check "task03 suite is STILL 3 passing / 0 failing after the patch (the trap)" "$(t3_pass)/$(t3_fail)" "3/0"
+
+# task03's candidate reviews the PATCHED tree, so that is the tree the leak check must scan. A
+# comment injected via make-review-patch.mjs lands in proration.mjs as candidate-visible source
+# and is invisible to a scan of the shipped directory.
+leak3=$(grep -rniE 'point of the task|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|criterion [0-9]|dimension S[0-9]|graded|no test covers|under-credits|silently (under|over)' "$W" 2>/dev/null)
+if [ -z "$leak3" ]; then
+  ok "post-patch task03 tree states no pass criterion"
+else
+  bad "post-patch task03 tree states no pass criterion"
+  printf '%s\n' "$leak3" | sed 's/^/       /'
+fi
+
+# Directly: every date the suite exercises must fall in a 30-day month. The greenness pair above
+# covers this only as a side effect; asserted here so the failure names the actual invariant.
+months=$( cd "$F/task03-review" && node --input-type=module -e "
+  import { register } from 'node:module';
+  // Stub prorate() and record every changeDate the suite passes it. Assertions inside the tests
+  // will fail against the stub -- irrelevant: we are collecting call arguments, not running them.
+  const seen = [];
+  globalThis.__seen = seen;
+  const real = await import('./src/billing/proration.mjs');
+  const mod = await import('node:test');
+  const tests = [];
+  const t = (name, fn) => tests.push(fn);
+  const src = (await import('node:fs')).readFileSync('tests/proration.test.mjs','utf8');
+  const body = src
+    .replace(/^import .*$/gm, '')
+    .replace(/\\btest\\(/g, '__t(');
+  let fn;
+  try { fn = new Function('__t','assert','prorate', body); }
+  catch (e) { process.stdout.write('cannot parse proration.test.mjs: ' + e.message); process.exit(0); }
+  // Invoke any function-valued argument. A bare no-op Proxy never runs the callbacks passed to
+  // assert.throws / assert.doesNotThrow / assert.rejects, so a 31-day date written inside one was
+  // invisible here while node --test executed it -- the same measured-the-wrong-thing shape as
+  // the Date.UTC syntax count this check replaced.
+  const assert = new Proxy({}, { get: () => (...a) => { for (const x of a) if (typeof x === 'function') { try { x(); } catch {} } } });
+  fn(t, assert, (o,n,d) => { seen.push(d); return { credit:0, charge:0, net:0, display:'' }; });
+  for (const f of tests) { try { f(); } catch {} }
+  if (seen.length < 3) { process.stdout.write('only ' + seen.length + ' prorate() calls observed'); process.exit(0); }
+  const bad = seen
+    .filter(d => !(d instanceof Date) || new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()+1, 0)).getUTCDate() !== 30)
+    .map(d => (d instanceof Date ? d.toISOString().slice(0,10) : String(d)));
+  process.stdout.write(bad.length ? bad.join(',') : 'ok');
+" 2>/dev/null )
+check "every task03 test date is in a 30-day month" "$months" "ok"
+
+delta=$( node --input-type=module -e "
+  const pre  = (await import('$ROOT/$F/task03-review/src/billing/proration.mjs')).prorate;
+  const post = (await import('$W/src/billing/proration.mjs')).prorate;
+  const d30 = new Date('2024-04-16T00:00:00Z'), d31 = new Date('2024-07-16T00:00:00Z');
+  const same30 = pre(1000,2000,d30).net === post(1000,2000,d30).net;
+  const diff31 = pre(1000,2000,d31).net !== post(1000,2000,d31).net;
+  process.stdout.write(same30 && diff31 ? 'ok' : 'no');
+" 2>/dev/null )
+check "defect is invisible in 30-day months and mis-bills in 31-day ones" "$delta" "ok"
+
+# --- B1, one layer down: the RECONSTRUCTED repo, not just the shipped tree ----------------
+# Everything above checks what ships. B1 can reappear at reconstruction time: if SoMi's install
+# step (or a future runner) drops a .gitignore containing `.somi` into $WORK before the baseline
+# commit, `git add -A` silently skips the renamed plan tree and the candidate meets a work item
+# with no plan phases. Nothing in SoMi writes a .gitignore today — this asserts it stays that way.
+R=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
+: "${R:?mktemp -d returned empty}"
+cp -r "$F/task02-code/." "$R"/
+[ -d "$R/_somi" ] && mv "$R/_somi" "$R/.somi"
+# Task02's inherited instance of the same defect: the git init/commit subshell's status used to be discarded by
+# a blanket `2>&1` into /dev/null, so a failing `git commit` was invisible; and the check read
+# `git ls-files` (the INDEX, which `git add -A` alone already populates -- no commit required) not
+# `git ls-tree ... HEAD` (the BASELINE COMMIT the check's own name promises). Both fixed here.
+recon_log=$(mktemp) || { bad "mktemp failed"; exit 1; }
+if ( cd "$R" && git init -q -b main && git config user.email t@somi.invalid && git config user.name t \
+     && git add -A && git commit -qm baseline ) >"$recon_log" 2>&1; then
+  tracked_list=$( cd "$R" && git ls-tree -r --name-only HEAD | grep '^\.somi/plans/expired-token/' | sort )
+else
+  bad "task02's reconstruction baseline commit succeeded"
+  sed 's/^/       /' "$recon_log"
+  tracked_list="__git_commit_failed__"
+fi
+rm -f "$recon_log"
+# Compares the actual path SET, not a count -- a count alone can't distinguish a renamed
+# file from a missing one (renaming diary.md to notes.md keeps the count at 4); a set mismatch
+# names the file that moved.
+expected_tracked='.somi/plans/expired-token/diary.md
+.somi/plans/expired-token/phases/01-reject-expired.md
+.somi/plans/expired-token/progress.md
+.somi/plans/expired-token/spec.md'
+if [ "$tracked_list" = "$expected_tracked" ]; then
+  ok "reconstructed task02 tracks its plan tree in the baseline commit"
+else
+  bad "reconstructed task02 tracks its plan tree in the baseline commit"
+  diff <(printf '%s\n' "$expected_tracked") <(printf '%s\n' "$tracked_list") | sed 's/^/       /'
+fi
+
+# --- class 3, one layer down: run.mjs's copy SOURCE, not just the shipped tree's placement -----
+# The reference-implementation and review.patch checks above guard class 3 (a fixture-readable
+# file stating an invariant it shouldn't see) at the file-PLACEMENT level. This file's own
+# "Invariants worth not breaking" section has a second exposure: it lives one level above the
+# copied tree and reaches $WORK only if the LIVE copy step (tests/evals/run.mjs, not the shell
+# contract above) is ever broadened from the resolved per-task directory to the fixtures root --
+# the same shape as the $WORK-must-be-outside-the-checkout leak fixtures/README.md:47-51 already
+# names ("the bug and the leak were the same character").
+# Nothing above inspects run.mjs. This narrows that gap with two greps -- existential facts about
+# the source text, not a parse of it -- plus a pinned occurrence count. Two greps alone would pass
+# an ADDED, broader copy sitting right next to an untouched anchor line (both greps still match),
+# which is the silent case: the per-task copy still lands correctly, the run behaves normally, and
+# the candidate additionally gets the fixtures root -- including this section's own trap table --
+# at a path the leak keyword denylist above never scans. run.mjs has exactly four `cpSync(`
+# occurrences today; pinning the occurrence count (not a line count -- `grep -c` would miss a
+# second occurrence appended to an already-matching line) turns an added `cpSync(` call red,
+# same line or a new one, without needing an AST. This is a tripwire on a known substring, not a
+# closed enumeration over copy operations -- a call reached via `copyFileSync`, `execFileSync('cp',
+# ...)`, or an alias would not move this count.
+# NOT covered: a change to what the `fixtureDir` argument resolves to BEFORE it reaches this
+# function (run.mjs's CLI driver, ~line 820, calls `fixtureFor(id, source.dir)` once) -- the count
+# below stays 4 either way. That variant nests every task file one level deep and never renames
+# `_somi` to `.somi`. The fixtures root still leaks into $WORK either way (the copy call itself is
+# untouched); what's inferred, not confirmed, is that the accompanying tree-shape mismatch breaks
+# the run visibly enough downstream that a corrupted measurement would be noticed rather than
+# scored (not confirmed by an actual live run: that needs a model invocation, out of reach for
+# this hermetic script) -- so it is a named, accepted residual, not a second assertion.
+n_cp=$(grep -o 'cpSync(' tests/evals/run.mjs | wc -l | tr -d ' ')
+check "run.mjs's cpSync( occurrence count is unchanged (4)" "$n_cp" "4"
+if grep -qF 'cpSync(fixtureDir, work' tests/evals/run.mjs \
+   && grep -qF 'startsWith(`task${id}-`)' tests/evals/run.mjs; then
+  ok "run.mjs's live reconstruction copies the resolved per-task dir, not the fixtures root"
+else
+  bad "run.mjs's live reconstruction copies the resolved per-task dir, not the fixtures root"
+fi
+
+# --- task01: the absence criterion 3 scores ----------------------------------------------
+# `kb` was missing and row size is one of the three things criterion 3 forbids; spelled-out
+# magnitudes ("half a billion") slipped because the alternation required an adjacent digit.
+vol=$(grep -rniE '[0-9][0-9,._]*[[:space:]]*(rows|req|rps|qps|[kmgt]i?b|[kmgtKMGT]\b|million|billion|thousand)|(rows|req)/(s|sec|second|min|hour|day|yr|year)|(hundreds|tens|dozens|scores|half|quarter|couple)[[:space:]]+(of[[:space:]]+)?(a[[:space:]]+)?(million|billion|thousand|gigabyte|terabyte|megabyte)s?|(million|billion|thousand|gigabyte|terabyte)s?([[:space:]]+of)?[[:space:]]+(rows|records|requests|events)|[0-9]+e[0-9]+[[:space:]]*(rows|records|requests|events)' \
+      "$F/task01-plan" 2>/dev/null)
+if [ -z "$vol" ]; then
+  ok "task01 trips no known volume-figure phrasing (denylist, not a proof)"
+else
+  bad "task01 trips no known volume-figure phrasing (denylist, not a proof)"
+  printf '%s\n' "$vol" | sed 's/^/       /'
+fi
+
+# --- task02: mutant surface parity + the absent expiry coverage ---------------------------
+surf=$( node --input-type=module -e "
+  const a = await import('$ROOT/$F/task02-code/src/auth/token.mjs');
+  const b = await import('$ROOT/$F/task02-code-mutant.mjs');
+  const c = await import('$ROOT/$F/task02-code-control.mjs');
+  const k = (m) => Object.keys(m).sort().join(',');
+  process.stdout.write(k(a) === k(b) && k(b) === k(c) ? 'ok' : k(a)+' | '+k(b)+' | '+k(c));
+" 2>/dev/null )
+check "mutant and control export the same surface as token.mjs" "$surf" "ok"
+
+# The control exists so criterion 1(b) can attribute a red to the expiry axis. That only holds
+# if the two differ on expiry and NOTHING else: a candidate test red against both is failing for
+# a reason it pinned, not for the defect. Verified behaviourally, not by diffing source.
+# "Byte-identical except the expiry comparison" is a claim about SOURCE. Assert it there: strip
+# each file's header block, remove the expiry guard from the control, and require what remains to
+# match the mutant exactly. The behavioural cross-check below is the second layer -- on its own it
+# only ever minted well-formed tokens, so a one-line divergence in the malformed-token message
+# passed at 29/29 and then let a candidate whose only new test asserted `verifyToken(null)` throws
+# score green/green/attributably-red with zero expiry logic.
+# "Byte-identical except the expiry comparison" is a claim about SOURCE, so assert it there --
+# the behavioural cross-check below only ever exercised inputs someone thought to probe. COMMENTS
+# are excluded deliberately: the two files explain different things and should say so. Code is
+# what must match, and an earlier version normalised one JSDoc line by regex, which is exactly the
+# kind of "the check has a special case" seam that hides a real divergence.
+ident=$( node "$ROOT/tests/scripts/lib/reference-pair.mjs" \
+           "$F/task02-code-mutant.mjs" "$F/task02-code-control.mjs" 2>/dev/null )
+check "control is the mutant plus EXACTLY the expiry block (source-identical)" "$ident" "ok"
+
+pair=$( node --input-type=module -e "
+  const mut = await import('$ROOT/$F/task02-code-mutant.mjs');
+  const ctl = await import('$ROOT/$F/task02-code-control.mjs');
+  const past = Math.floor(Date.now()/1000) - 60, future = Math.floor(Date.now()/1000) + 3600;
+  const acc = (m, e) => { try { m.verifyToken(m.mintToken('u', e)); return true; } catch { return false; } };
+  // Probe the ERROR paths too, not just well-formed tokens. Both files must agree exactly on
+  // every input that is not an expiry question.
+  const good = mut.mintToken('u', future);
+  const shapes = [null, undefined, '', 'no-dot', 'a.b', good + 'x', good.split('.')[0] + '.', 42, {},
+                  Buffer.from('{}','utf8').toString('base64url') + '.' + 'sig'];
+  const out = (m, t) => { try { return 'OK:' + JSON.stringify(m.verifyToken(t)); } catch (e) { return 'ERR:' + e.message; } };
+  const errAgree = shapes.every((t) => out(mut, t) === out(ctl, t));
+  const cross = (a, b, e) => out(b, a.mintToken('u', e));
+  const expiryOnly = acc(mut,past) && !acc(ctl,past)
+    && acc(mut,future) && acc(ctl,future)
+    && cross(mut, ctl, future) === cross(ctl, mut, future)
+    && cross(mut, ctl, future) === cross(mut, mut, future);
+  process.stdout.write(!errAgree ? 'they disagree on a non-expiry input shape'
+    : expiryOnly ? 'ok' : 'differ on more than expiry, or not on expiry');
+" 2>/dev/null )
+check "mutant accepts an expired token, control rejects it, agree otherwise" "$pair" "ok"
+
+if node "$F/make-review-patch.mjs" --check >/dev/null 2>&1; then
+  ok "committed patch matches its generator (--check)"
+else
+  bad "committed patch matches its generator (run: node $F/make-review-patch.mjs)"
+fi
+
+# THE DEFECT MUST STILL BE THERE. Every other task02 assertion guards the *conditions* around
+# the bug -- no expiry coverage, mutant parity, reference greenness -- and none guards the bug.
+# Adding the four-line expiry check to token.mjs and clearing the manifest through the sanctioned
+# --update-manifest path scored 38/38 green: a task with nothing to fix, whose candidate still
+# writes a test that is green on the control and red on the mutant, so S5 flatlines at pass in
+# BOTH arms and reports no regression. task03's symmetric assertion existed from the start.
+defect2=$( node --input-type=module -e "
+  const t = await import('$ROOT/$F/task02-code/src/auth/token.mjs');
+  const expired = t.mintToken('u', Math.floor(Date.now()/1000) - 60);
+  let accepted = false;
+  try { t.verifyToken(expired); accepted = true; } catch {}
+  process.stdout.write(accepted ? 'ok' : 'token.mjs already REJECTS expired tokens - task02 has no defect left to find');
+" 2>/dev/null )
+check "shipped token.mjs accepts an expired token (the defect IS the task)" "$defect2" "ok"
+
+# task01's trap is the ADR's filename-vs-content tension: the filename says no-new-datastores,
+# the content only requires a migration path. If the content ever grows an actual prohibition,
+# criterion 4's "citing it as 'we don't add datastores' fails" becomes a false fail.
+adr="$F/task01-plan/docs/adr/0004-no-new-datastores.md"
+# Scoped to the Decision BODY. The title legitimately reads "No new datastores without a migration
+# path" -- that filename-vs-title-vs-content tension is the whole trap, so searching the whole file
+# for a prohibition matches the trap itself and fails a correct fixture.
+# Scoped to the Decision AND Consequences bodies. The title legitimately reads "No new datastores
+# without a migration path" -- that filename-vs-title-vs-content tension is the whole trap.
+#
+# Asserted POSITIVELY. A denylist of prohibition phrasings let through "we don't add datastores",
+# "New datastores are prohibited", and "Never introduce a new datastore" -- the first being the
+# exact wrong answer criterion 4 fails a candidate for citing. Requiring the conditional-permission
+# construct and forbidding any modal-negative is a claim the pattern can actually make.
+adr_ok=$( node "$ROOT/tests/scripts/lib/adr-shape.mjs" "$adr" 2>/dev/null )
+check "task01 ADR grants conditional permission and prohibits nothing (the trap)" "$adr_ok" "yes"
+
+exp=$(grep -ncE '\bexp\b|expir' "$F/task02-code/tests/auth/token.test.mjs" 2>/dev/null | tr -d ' \n')
+check "task02 suite has NO expiry coverage (the absence is the task)" "${exp:-0}" "0"
+
+# Pass count alone is satisfied by a suite with a red test appended: `pass 3` stays true while
+# `fail 1` goes unexamined -- and a red task02 baseline makes criterion 1(a) ("green first")
+# unmeetable for every run.
+t2p=$( cd "$F/task02-code" && node --test 2>&1 | grep -oE '^(#|ℹ) pass [0-9]+' | grep -oE '[0-9]+' | head -1 )
+t2f=$( cd "$F/task02-code" && node --test 2>&1 | grep -oE '^(#|ℹ) fail [0-9]+' | grep -oE '[0-9]+' | head -1 )
+check "task02 suite is exactly 3 passing / 0 failing" "${t2p:-?}/${t2f:-?}" "3/0"
+
+# Criterion 1(b) says "whole suite green on the control" and skips identifying which tests are
+# new. That is only sound while every BASELINE test is green against both references -- true
+# because they differ only in expiry and no baseline test touches expiry. Pin the premise.
+refs_ok=ok
+for r in task02-code-control task02-code-mutant; do
+  RB=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }; : "${RB:?empty}"; cp -r "$F/task02-code/." "$RB"/; cp "$F/$r.mjs" "$RB/src/auth/token.mjs"
+  got=$( cd "$RB" && node --test 2>&1 | grep -oE '^(#|ℹ) (pass|fail) [0-9]+' | grep -oE '[0-9]+' | tr '\n' '/' )
+  [ "$got" = "3/0/" ] || refs_ok="$r -> $got"
+  rm -rf "$RB"
+done
+check "baseline suite is green against BOTH references (1(b)'s premise)" "$refs_ok" "ok"
+
+# --- defects found in the first live runs ---------------------------------------------------------
+# task01's endpoint must AUTHENTICATE the caller. The problem statement asks to record "who sent
+# it"; when tenantId came straight from the request body that was unanswerable, so the request
+# rested on a false premise -- and commands/plan.md §1a makes the premise check "not optional".
+# All 3 of 3 live runs correctly blocked on the auth gap instead of answering the storage
+# question, and the task failed them for complying: S2 0/3, S1 0/3, S6 0/3.
+#
+# The general property -- a fixture must not contain a defect more urgent than the one it measures
+# -- is not mechanically checkable. This asserts the specific regression, which is.
+if grep -q 'tenantForKey' "$F/task01-plan/src/ingest/handler.mjs" \
+   && ! grep -qE 'const \{ *tenantId' "$F/task01-plan/src/ingest/handler.mjs"; then
+  ok "task01's endpoint authenticates the caller (the premise the task rests on)"
+else
+  bad "task01's endpoint authenticates the caller -- tenantId must not come from the request body"
+fi
+
+# --- the contract must be asserted, not just written down --------------
+# R4 in task02's spec states the clock shape the candidate may inject. Three passes running, the
+# references were "fixed" by adding whichever convention the last review found unsupported --
+# epoch-seconds, then an options object, then a clock function. That does not converge, and it
+# judged candidates against a rule they were never given. R4 is now the contract; this asserts the
+# references honour exactly it.
+clock=$( node --input-type=module -e "
+  const ctl = await import('$ROOT/$F/task02-code-control.mjs');
+  const mut = await import('$ROOT/$F/task02-code-mutant.mjs');
+  const T = 1700000000;
+  const throws = (m, e, now) => { try { m.verifyToken(m.mintToken('u', e), now); return false; } catch { return true; } };
+  const bad = [];
+  // R4: second positional parameter, epoch MILLISECONDS.
+  if (!throws(ctl, T - 1, T * 1000)) bad.push('control accepts an expired token under an injected ms clock');
+  if (throws(ctl, T + 3600, T * 1000)) bad.push('control rejects a VALID token under an injected ms clock');
+  // Default parameter: a candidate reading the wall clock directly passes no argument.
+  if (!throws(ctl, Math.floor(Date.now()/1000) - 60, undefined)) bad.push('control accepts an expired token with no clock passed');
+  if (throws(ctl, Math.floor(Date.now()/1000) + 3600, undefined)) bad.push('control rejects a valid token with no clock passed');
+  // The mutant must ignore the clock in every one of those positions -- that IS the mutation.
+  if (throws(mut, T - 1, T * 1000) || throws(mut, Math.floor(Date.now()/1000) - 60, undefined)) bad.push('mutant enforces expiry');
+  process.stdout.write(bad.length ? bad.join('; ') : 'ok');
+" 2>/dev/null )
+check "references honour R4's clock contract exactly (ms positional, or none)" "$clock" "ok"
+
+# R4 must actually be stated where the candidate reads it, or the assertion above is scoring a
+# rule nobody was given -- which is the failure it was added to end.
+if grep -q 'epoch' "$F/task02-code/_somi/plans/expired-token/spec.md"; then
+  ok "task02 spec states the clock contract to the candidate (R4)"
+else
+  bad "task02 spec states the clock contract to the candidate (R4)"
+fi
+
+# Task specs have been renumbered once and are cross-referenced from three documents. A
+# `criterion N` pointing at a criterion that no longer means that is a scorer reading the wrong
+# dimension -- task01's Scenario did exactly this after the pass-3 split.
+xref=$( node -e "
+  const fs = require('fs'), path = require('path');
+  const dir = '$ROOT/tests/evals/tasks';
+  const bad = [];
+  for (const f of fs.readdirSync(dir).filter(n => /^\\d+-.*\\.md\$/.test(n))) {
+    const t = fs.readFileSync(path.join(dir, f), 'utf8');
+    const n = (t.match(/^[0-9]+\\. \\*\\*S[1-7]/gm) || []).length;
+    for (const m of t.matchAll(/criterion ([0-9]+)/gi)) {
+      if (Number(m[1]) > n || Number(m[1]) < 1) bad.push(f + ' cites criterion ' + m[1] + ' but has ' + n);
+    }
+  }
+  process.stdout.write(bad.length ? bad.join('; ') : 'ok');
+" 2>/dev/null )
+check "every task spec's 'criterion N' cross-reference resolves" "$xref" "ok"
+
+# --- the shell-quoting class, closed structurally ----------------------------------------------
+embed=$( node "$ROOT/tests/scripts/lib/shell-embedded-js.mjs" \
+  "$ROOT/tests/scripts/evals-fixtures.sh" "$ROOT/tests/scripts/eval-runner.sh" \
+  "$ROOT/tests/scripts/evals-packaging.sh" 2>/dev/null )
+if [ "$embed" = "ok" ]; then
+  ok "no node -e block contains a backtick or unescaped double quote"
+else
+  bad "no node -e block contains a backtick or unescaped double quote"
+  printf '%s\n' "$embed" | sed 's/^/       /'
+fi
+
+# --- multipass-code: reference-set export parity + dependence proof ----------
+# Anchors for A (cursor.mjs's bound check) and B (paginate.mjs's shrink branch) on the SHIPPED
+# source, occurrence count asserted first -- "pattern not found -- source moved" discipline; this
+# repo has already been bitten by a pattern that occurs twice and gets selected positionally
+# (the $work-level cpSync( pin above is the same discipline).
+MC="$F/multipass-code"
+a_anchor=$(grep -o 'payload.offset >= total' "$MC/src/pagination/cursor.mjs" | wc -l | tr -d ' ')
+check "A's anchor (decodeCursor's >= bound) occurs exactly once in shipped cursor.mjs" "$a_anchor" "1"
+b_anchor=$(grep -o 'encodeCursor(offset)' "$MC/src/pagination/paginate.mjs" | wc -l | tr -d ' ')
+check "B's anchor (the shrink branch's re-minted cursor) occurs exactly once in shipped paginate.mjs" "$b_anchor" "1"
+
+# Export-key parity across all four states, generalizing the task02 mutant/control comparison
+# above to three reference files plus the shipped module's own combined surface (cursor.mjs +
+# paginate.mjs -- there is no single shipped file here, unlike token.mjs).
+# Diagnostic captured, not discarded: a parse/import error on
+# either side previously vanished behind `2>/dev/null`, leaving only "want 'ok', got ''" on screen.
+surf_mp_err=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
+surf_mp=$( node --input-type=module -e "
+const c = await import('$ROOT/$MC/src/pagination/cursor.mjs');
+const p = await import('$ROOT/$MC/src/pagination/paginate.mjs');
+const shipped = [...Object.keys(c), ...Object.keys(p)].sort().join(',');
+const a = Object.keys(await import('$ROOT/$F/multipass-code-mutant-a.mjs')).sort().join(',');
+const b = Object.keys(await import('$ROOT/$F/multipass-code-mutant-b.mjs')).sort().join(',');
+const ctl = Object.keys(await import('$ROOT/$F/multipass-code-control.mjs')).sort().join(',');
+process.stdout.write(shipped === a && a === b && b === ctl ? 'ok' : shipped+' | '+a+' | '+b+' | '+ctl);
+" 2>"$surf_mp_err" )
+if [ "$surf_mp" = "ok" ]; then
+  ok "control, mutant-a, mutant-b export the same surface as shipped (cursor.mjs + paginate.mjs)"
+else
+  bad "control, mutant-a, mutant-b export the same surface as shipped (cursor.mjs + paginate.mjs) (want 'ok', got '$surf_mp')"
+  [ -s "$surf_mp_err" ] && sed 's/^/       stderr: /' "$surf_mp_err"
+fi
+rm -f "$surf_mp_err"
+
+# The SOURCE layer: the behavioural equality/inequality sweeps
+# below can only see a difference SOME probed input exercises, so a hand-copy slip in a validation
+# branch no probe cursor trips (a neutered negative-offset guard, a neutered string/empty-cursor
+# guard, a neutered VERSION check) leaves the behaviour layer green. This asserts each reference
+# file's source is shipped's plus EXACTLY the expected vocabulary-constrained hunk(s) -- see
+# tests/scripts/lib/multipass-source-identity.mjs for the full mechanism (a real, bidirectional
+# diff generalizing reference-pair.mjs's insertion-only hunk walk to a replacement-shaped change).
+# Covers mutant-a and control too, not just mutant-b: the
+# argument -- every probe cursor mint() produces is well-formed, so a validation branch no
+# probe exercises is permanently unchecked -- is a property of the shared probe set, not of any one
+# reference file, and mutant-a/control are the two states draws are actually scored against.
+# Diagnostic captured, not discarded (this call previously used
+# `2>/dev/null`, reintroducing exactly what surf_mp above already fixed -- same fix, same pattern).
+ident_mp_err=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
+ident_mp=$( node "$ROOT/tests/scripts/lib/multipass-source-identity.mjs" \
+              "$MC/src/pagination/cursor.mjs" "$MC/src/pagination/paginate.mjs" \
+              "$F/multipass-code-mutant-a.mjs" "$F/multipass-code-mutant-b.mjs" \
+              "$F/multipass-code-control.mjs" 2>"$ident_mp_err" )
+field_ident(){ printf '%s\n' "$ident_mp" | sed -n "s/^$1=//p" | head -1; }
+# unanchoredBody used to strip a trailing $
+# unconditionally, silently corrupting any vocabulary not genuinely anchored ^...$ into a
+# valid-but-different regex -- and AB_VOCAB is the only thing constraining what control's two
+# hunks may contain. This asserts the guard's own self-check reports it CAN still fail, not
+# just that A_VOCAB/B_VOCAB currently happen to pass it.
+check "unanchoredBody rejects a malformed vocabulary (F-26 self-check)" "$(field_ident UNANCHORED_SELF_CHECK)" "ok"
+ident_a=$(field_ident MUTANT_A); ident_b=$(field_ident MUTANT_B); ident_ctl=$(field_ident CONTROL)
+check "mutant-a is shipped source plus EXACTLY A's fix, nothing else (source-identical)" "$ident_a" "ok"
+check "mutant-b is shipped source plus EXACTLY B's fix, nothing else (source-identical)" "$ident_b" "ok"
+check "control is shipped source plus EXACTLY A's fix and B's fix, nothing else (source-identical)" "$ident_ctl" "ok"
+if [ "$ident_a" != "ok" ] || [ "$ident_b" != "ok" ] || [ "$ident_ctl" != "ok" ]; then
+  [ -s "$ident_mp_err" ] && sed 's/^/       stderr: /' "$ident_mp_err"
+fi
+rm -f "$ident_mp_err"
+
+# The dependence proof itself: three observable states plus mutant-b's positive equality to
+# shipped, swept over ONE shared probed-input set (not a smaller one per state) -- see
+# tests/scripts/lib/multipass-dependence.mjs for the full mechanism and its own self-check.
+dep=$(node "$ROOT/tests/scripts/lib/multipass-dependence.mjs" "$ROOT" 2>&1)
+printf '%s\n' "$dep" | sed 's/^/       /'
+# Anchored at line start: multipass-dependence.mjs prints one field per line now (each line's
+# value running to end-of-line), so this can safely take the WHOLE rest of the line rather than
+# stopping at the first space -- the previous stop-at-space extraction silently truncated
+# THIRD_DEFECT's own (potentially multi-word) value.
+field(){ printf '%s\n' "$dep" | sed -n "s/^$1=//p" | head -1; }
+# Floor, not just a drift guard: on an empty probe grid
+# (TOTALS=[]), PROBES=0, BOUNDARY_PROBES=0, every .every() on an empty array is vacuously true, and
+# every diffCount is 0 -- eleven of the twelve checks below would report green with zero probes
+# ever run, and the exact pins (0 == 0) would be exactly what let that through. This also
+# closes the crashed-harness case: if multipass-dependence.mjs throws before printing its report,
+# every field() call returns '', and an integer comparison against '' fails loudly here (2>/dev/null
+# on the `[ ... -ge N ]` swallows the "integer expression expected" error, so the check's own
+# "$(... && echo yes)" ends up empty, not "yes" -- reported as a clear FAIL, not a silent pass).
+# Floors, not equalities, so the grid can still grow.
+check "the probe grid is populated (floor, not vacuous)" "$( [ "$(field PROBES)" -ge 200 ] 2>/dev/null && echo yes )" "yes"
+check "shipped exhibits A (throws on the shrink boundary, every boundary probe)" "$(field SHIPPED_EXHIBITS_A)" "yes"
+check "shipped's B branch is unreached (identical to a no-B variant, all 225 probes)" "$(field SHIPPED_B_UNREACHED)" "yes"
+check "mutant-a exhibits B (newly reachable, every boundary probe) and not A" "$(field MUTANT_A_EXHIBITS_B)/$(field MUTANT_A_NOT_A)" "yes/yes"
+check "control exhibits neither defect (every boundary probe)" "$(field CONTROL_CLEAN)" "yes"
+check "mutant-b is EXACTLY equal to shipped across the full probed-input set (the reachability proof)" "$(field SHIPPED_VS_MUTANT_B_DIFF)" "0"
+# Pinned to BOUNDARY_PROBES exactly, not just "> 0" : all three
+# variants are hand-copies of the shipped two-file source into standalone files with no textual
+# sync guard. A loose `-gt 0` only proves the pair differs SOMEWHERE -- a variant that silently
+# acquired a third behavioural difference beyond A/B would still pass and would then contaminate
+# every draw scored against it. The design puts every difference at the boundary set and nowhere
+# else, so pinning to the boundary count exactly converts a liveness check into a real drift guard.
+bp=$(field BOUNDARY_PROBES)
+# Floor on the boundary subset specifically: the three pins immediately below compare
+# $sa/$sc/$ac against $bp itself -- a self-referencing expected value that passes 0==0 on a
+# crashed/empty grid just as readily as the PROBES floor above closes for the outer grid. Both
+# floors are needed: PROBES>=200 alone would not catch a grid with plenty of probes but zero at
+# the boundary (a hypothetical future change to boundaryIdxs's own selection, not just TOTALS=[]).
+check "the boundary probe set is populated (floor)" "$( [ "$bp" -ge 40 ] 2>/dev/null && echo yes )" "yes"
+sa=$(field SHIPPED_VS_MUTANT_A_DIFF); sc=$(field SHIPPED_VS_CONTROL_DIFF); ac=$(field MUTANT_A_VS_CONTROL_DIFF)
+check "shipped vs mutant-a differ at exactly the boundary probes, nowhere else" "$sa" "$bp"
+check "shipped vs control differ at exactly the boundary probes, nowhere else" "$sc" "$bp"
+check "mutant-a vs control differ at exactly the boundary probes, nowhere else" "$ac" "$bp"
+check "the equality check's own harness detects a deliberately-broken mutant-b (proves it CAN fail)" "$(field HARNESS_SELF_CHECK)" "ok"
+check "no third shipped defect (bounded sweep: bad pageSize, bad cursor offset)" "$(field THIRD_DEFECT)" "none"
+
+# --- multipass-code: leak-scan extension + reconstruction contract ---------------
+# Generic denylist, extended to this tree (same vocabulary as the task01/02/03 scan above).
+leak_mp=$(grep -rniE 'point of the task|declared file set|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|token-control|code-control|criterion [0-9]|dimension S[0-9]|graded|open book|trim comparison|you are measured|do not invent' \
+        "$MC" 2>/dev/null)
+if [ -z "$leak_mp" ]; then
+  ok "no multipass-code file trips the generic leak keyword list"
+else
+  bad "no multipass-code file trips the generic leak keyword list"
+  printf '%s\n' "$leak_mp" | sed 's/^/       /'
+fi
+
+# Chain-specific vocabulary (the "widened leak surface" risk): the enabler/gated
+# design admits a class of leak the generic list above cannot see -- phrasing that narrates "B
+# depends on A" or "there are exactly two things to find here", whether in abstract terms
+# (enabler, gated) or in this domain's own terms (the list shrinking is the ONLY scenario in
+# which A manifests, so naming it narrates the dependency just as plainly).
+CHAIN_LEAK='enabler|\bgated\b|unreachable until|dependent chain|depends on (a|b|it)|only reachable after|gameable|second (defect|bug)|exactly two (things|defects|bugs)|two things to find|\bshrinks?\b|\bshrunk\b'
+
+# Known collision, verified by hand (and re-verified directly above rather than trusted from a note): CHAIN_LEAK's shrink/shrunk
+# terms match the load-bearing comment at paginate.mjs -- the only place in the tree naming the
+# scenario that exposes A -- which that amendment requires be KEPT verbatim (removing it would
+# make the fixture read as sanitised, its own tell). Neither obvious response is right: failing
+# this guard on a line the amendment forbids touching, or editing the comment, which the
+# amendment also forbids. Decision recorded in decisions.md: a single, pinned exemption for that
+# exact line, not a vocabulary carve-out -- narrowing CHAIN_LEAK to drop shrink/shrunk would also
+# blind the scan to a FUTURE leak using that same domain word elsewhere in the tree, which this
+# pin does not.
+#
+# The pin is anchored to the comment's exact CONTENT, not its line number ("pattern not found --
+# source moved" discipline, mirrored from the A/B anchor checks above): if the line is edited,
+# reworded, or removed, the count below stops being exactly 1 and this fails loudly instead of
+# the exemption silently widening to cover whatever text now sits there.
+#
+# WHOLE-LINE pin (-x), not a substring match: -F
+# alone is a substring match, so APPENDING leak text to this line (e.g. "... there is nothing
+# Bug two is gated on bug one.") leaves the pinned substring intact -- exempt_count stays 1, the
+# pin reports ok, and the appended "gated" text is then silently filtered out along with the rest
+# of the line by the exemption below, becoming a blind spot for the WHOLE chain vocabulary on the
+# one line an author has the most reason to edit. Reword and duplicate were staged and correctly
+# fail this pin; append was the direction that was not, and is exactly the one -F's substring
+# semantics miss. -x requires the line's four leading spaces to match too (line 28 sits indented
+# inside paginate.mjs's `if` block) -- deliberately whitespace-sensitive: a reindent of this block
+# fails the pin loudly and requires a human to reconfirm it, rather than silently continuing to
+# exempt whatever the line now reads. That is the intended tradeoff before a freeze.
+EXEMPT_TEXT='    // The list has shrunk since this cursor was issued (items removed) -- there is nothing'
+exempt_hits=$(grep -n -H -x -F "$EXEMPT_TEXT" "$MC/src/pagination/paginate.mjs" 2>/dev/null)
+exempt_count=$(printf '%s\n' "$exempt_hits" | grep -c . || true)
+if [ "$exempt_count" = "1" ]; then
+  ok "the amendment-kept comment's exact text is pinned (occurs exactly once)"
+  exempt_line="${exempt_hits%%:*}:$(printf '%s\n' "$exempt_hits" | cut -d: -f2)"
+else
+  bad "the amendment-kept comment's exact text is pinned (want exactly 1 occurrence, got ${exempt_count:-0} -- pattern not found or source moved)"
+  # A sentinel that matches no real grep line, so a failed pin exempts nothing rather than
+  # silently matching everything -- the scan below still runs, and fails loudly instead.
+  exempt_line="__no_such_line__"
+fi
+
+chain_hits=$(grep -rniE "$CHAIN_LEAK" "$MC" 2>/dev/null)
+# Anchored at line start: a plain `grep -vF "$exempt_line:"` matches the pin's path:line
+# prefix ANYWHERE in the line, so a future absolute path that happens to contain "$exempt_line:"
+# as a substring elsewhere in its own content would also be filtered -- needs a checkout-varying
+# absolute path to actually collide, so unreachable in practice, but anchoring costs nothing.
+# awk's index() is a literal substring search (no regex-metacharacter escaping needed for the
+# path), checked at position 1 only -- exactly "starts with", not "contains".
+chain_leak=$(printf '%s\n' "$chain_hits" | awk -v pin="${exempt_line}:" 'index($0, pin) != 1')
+if [ -z "$chain_leak" ]; then
+  ok "no multipass-code file trips the chain-specific leak vocabulary (one pinned, kept exemption)"
+else
+  bad "no multipass-code file trips the chain-specific leak vocabulary"
+  printf '%s\n' "$chain_leak" | sed 's/^/       /'
+fi
+
+# --- B1, one layer down, for multipass-code too: the RECONSTRUCTED repo, not just what ships ----
+# Mirrors task02's own reconstruction contract above: cp -> rename _somi to .somi -> git init +
+# commit -> assert the plan tree's four expected files (spec.md, progress.md, diary.md,
+# the first phase-plan file) are tracked in the baseline commit.
+RM=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
+: "${RM:?mktemp -d returned empty}"
+cp -r "$MC/." "$RM"/
+[ -d "$RM/_somi" ] && mv "$RM/_somi" "$RM/.somi"
+# git ls-tree HEAD reads the BASELINE COMMIT
+# itself, not the index (`git ls-files`, which `git add -A` alone already populates); the commit
+# subshell's own status is captured instead of discarded, so a failing `git commit` names itself;
+# and the tracked-file SET is compared literally, not just its count, so a rename is caught by name
+# rather than passing at the same cardinality (task02's identical fix, above, has the full comment).
+recon_log_mp=$(mktemp) || { bad "mktemp failed"; exit 1; }
+if ( cd "$RM" && git init -q -b main && git config user.email t@somi.invalid && git config user.name t \
+     && git add -A && git commit -qm baseline ) >"$recon_log_mp" 2>&1; then
+  tracked_list_mp=$( cd "$RM" && git ls-tree -r --name-only HEAD | grep '^\.somi/plans/expired-token/' | sort )
+else
+  bad "multipass-code's reconstruction baseline commit succeeded"
+  sed 's/^/       /' "$recon_log_mp"
+  tracked_list_mp="__git_commit_failed__"
+fi
+rm -f "$recon_log_mp"
+expected_tracked_mp='.somi/plans/expired-token/diary.md
+.somi/plans/expired-token/phases/01-backward-paging.md
+.somi/plans/expired-token/progress.md
+.somi/plans/expired-token/spec.md'
+if [ "$tracked_list_mp" = "$expected_tracked_mp" ]; then
+  ok "reconstructed multipass-code tracks its plan tree in the baseline commit"
+else
+  bad "reconstructed multipass-code tracks its plan tree in the baseline commit"
+  diff <(printf '%s\n' "$expected_tracked_mp") <(printf '%s\n' "$tracked_list_mp") | sed 's/^/       /'
+fi
+rm -rf "$RM"; RM=""
+
+# --- runnable fixtures declare a test script ----------------------------------------------
+for d in task02-code task03-review; do
+  if grep -q '"test": *"node --test"' "$F/$d/package.json" 2>/dev/null; then
+    ok "$d/package.json runs node --test"
+  else
+    bad "$d/package.json runs node --test"
+  fi
+done
+
+echo
+printf '  %d passed, %d failed\n' "$pass" "$fail"
+[ "$fail" -eq 0 ]

@@ -44,40 +44,66 @@ Each layer has a clear job:
   dependency Node, no `bash`/`jq`, so the hook runtime itself runs the same on Windows, Linux, and
   macOS; see [`docs/HOOKS.md`](./HOOKS.md) for the one open Windows path-guard caveat).
 
-## Economic tiering (MAX/ECO) — the second axis
+## Cost tiering — the second axis
 
 The four layers above describe *structure*. A second, orthogonal axis describes *economics*: which
-model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth.
+model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth — and the
+declaration lives on **agents only**: `cost:` sizes an agent instance being spawned, and a
+command is instructions, not an instance, so it declares neither `cost:` nor `model:` of its own —
+it runs on whatever model the session is already using — and simply `Task`s the agent whose own
+frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
 
 ```
-        MAX tier (opus)                                  ECO tier (sonnet)
+        cost: high                                       cost: medium
   front-load reasoning → brief.md                    execute against the brief
   ┌───────────────────────────────┐   brief.md   ┌──────────────────────────────┐
   │ discovery-analyst, designer,  │ ───────────▶ │ planner, coder               │
-  │ refactorer (analysis),        │  (the dense  │ (sequence + implement,       │
+  │ refactor-designer, atlas,     │  (the dense  │ (sequence + implement,       │
   │ reviewer + security/arch/test │   handoff)   │  no re-research)             │
   └───────────────────────────────┘              └──────────────────────────────┘
-        ▲ opus is spent here: once, up front, and on fresh-eyes review
+        ▲ the strong model is spent here: once, up front, and on fresh-eyes review
 ```
 
-- **MAX (`opus`)** front-loads research, design, decisions, and complexity mapping into a dense,
+- **`cost: high`** front-loads research, design, decisions, and complexity mapping into a dense,
   bounded **`brief.md`** ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)), and provides
   fresh-context review. The brief references its deep docs (research-report, sdd, design) rather than
-  inlining them, and carries an explicit *"What ECO does NOT need to re-research"* list.
-- **ECO (`sonnet`)** sequences and implements **against** the brief, so the high-volume work runs
+  inlining them, and carries an explicit *"What execution does NOT need to re-research"* list.
+- **`cost: medium`** sequences and implements **against** the brief, so the high-volume work runs
   cheap. This is the **plan-and-execute / model-cascade** pattern (strong planner, cheap executor).
+- A unit's declared `cost:` is a **capability set**, not a single value — every tier it can
+  honestly run at. The session ceiling selects the highest permitted member; it never blocks a
+  unit down to a tier it didn't declare, and a unit declaring only `high` (no cheaper mode exists)
+  still runs even under a lower ceiling, at its cheapest declared member.
 
-**Interaction with the layers.** Commands (the orchestration layer) stay `sonnet` and `Task` the
-tier-appropriate agent. A single-model orchestrator Tasking a differently-modeled subagent is the
-**cache-correct** way to mix models — and because prompt caches are model-scoped, the MAX→ECO switch
-is a natural cache boundary (which is exactly where `/ship-loop` places its single human gate).
-`/discover` and `/design` are the two commands that run `opus` at the orchestration layer too —
-their framing is judgment-heavy and their brief anchors the work item.
+**Interaction with the layers.** Commands (the orchestration layer) carry no `cost:` of their own
+and simply `Task` the tier-appropriate agent, which resolves its own model from its own declared
+set. Tasking a differently-costed subagent from an uncosted command is the **cache-correct** way to
+mix models — and because prompt caches are model-scoped, a `cost: high` design action's `brief.md`
+and the `cost: medium` execution that consumes it sit on either side of a natural cache boundary,
+which is why `/ship-loop` places its single human gate right there: once the design action has
+produced `brief.md`, before planning consumes it (falling to after `/plan-loop` on a cold start
+with no design action). `/discover`, `/design`, `/refactor-design`, and `/atlas` are the commands
+that Task a `cost: high` agent for their **entire** job — `discovery-analyst`, `designer`, and
+`refactor-designer`'s framing is judgment-heavy and their brief anchors the work item; `atlas` is
+one high-quality deep repo read, paid once. `/adopt` Tasks the `atlas` agent as its own Stage 1, at
+the agent's own declared tier — it does not inline that read.
+
+**How dispatch actually happens.** Neither a command nor the front door hands a whole command's
+procedure to one Tasked agent that runs it end-to-end. On Claude Code, invoking a command runs its
+own steps live, in that turn; on Copilot, selecting the `somi` front-door persona
+(`agents/somi.md`) runs the matched command's own procedure live instead. Either way, every agent
+that procedure starts — one `Task` call per agent, never the whole command in one call — resolves
+its cost tier and model through `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)
+skill, served over the bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP
+isn't reachable — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) before the `Task`, and
+the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling **selects**
+the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
+declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
 
 **Repo-awareness.** A SessionStart hook surfaces repo-local instruction files (`CLAUDE.md`,
-`AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; MAX actions read them once and distil
-the conventions into the brief, so the ECO tier inherits them without re-reading. Repo-local
-instructions win over SoMi defaults; SoMi never auto-invokes foreign agents.
+`AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; the high-cost design agents read
+them once and distil the conventions into the brief, so execution inherits them without re-reading.
+Repo-local instructions win over SoMi defaults; SoMi never auto-invokes foreign agents.
 
 ## Data flow per workflow
 
@@ -85,7 +111,8 @@ instructions win over SoMi defaults; SoMi never auto-invokes foreign agents.
 
 ```
 user: "/discover <idea>"
-  → command /discover (runs opus end-to-end) reads $ARGUMENTS, validates it's a researchable idea
+  → command /discover (no `cost:` of its own; Tasks discovery-analyst at `cost: high` end-to-end)
+    reads $ARGUMENTS, validates it's a researchable idea
   → command derives slug, scaffolds .somi/rd/<slug>/ from templates/ (RD-README, RESEARCH, BRD,
     SRS, FRD, SDD, TDD + reused DECISIONS/DIARY)
   → invokes Task[subagent_type=discovery-analyst, prompt=<idea + slug + paths + context>]
@@ -154,7 +181,7 @@ user: "/review <slug>" (or working tree / range / PR / plan)
   → reviewer aggregates findings, severity-grades them
   → reviewer writes review file at .somi/reviews/<slug>/<YYYY-MM-DD>-…md using
     templates/REVIEW.md.tmpl
-  → progress.md "Recent activity" gets a line; diary.md gets a review-feedback entry if
+  → progress.md `Reviewed` cell gets the verdict; diary.md gets a review-feedback entry if
     findings affect the plan
   → command surfaces verdict + top 3 findings
 ```
@@ -174,10 +201,10 @@ lives in `commands/ship.md`; the agents are unchanged.
 | User-facing entrypoints                  | `commands/`   | Slash-command shape; thin orchestrators                              |
 | Deterministic guardrails                 | `hooks/`      | Runs in Claude Code's hook framework as Node (`.mjs`, no `bash`/`jq`); no model involved |
 | Runtime tooling (loop state, findings ledger, portable guard) | `scripts/` | `somi-loop.mjs` / `somi-findings.mjs` own the loops' arithmetic (invoked via Node by the loop commands); `somi-check.mjs` is the host-agnostic pre-commit/CI guard; tested by `tests/` in CI |
-| Artifact templates                       | `templates/`  | Shape of `brief.md` (the MAX→ECO handoff), `design.md`, `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
+| Artifact templates                       | `templates/`  | Shape of `brief.md` (the design→execution handoff), `design.md`, `context.md`, `spec.md`, `decisions.md`, `phases/*.md`, `progress.md`, `diary.md`, review files, and the R&D set (`RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`) |
 | Discovery artifacts (per project)        | `.somi/rd/<slug>/` | One subdir per greenfield initiative; the requirements & design foundation; feeds `.somi/plans/<slug>/` |
 | Work-item artifacts (per project)        | `.somi/plans/<slug>/` | One subdir per work item; persists indefinitely; user-controlled retention |
-| Repo Atlas (per project)                 | `.somi/atlas.md` | SHA-stamped repo map from `/atlas`; MAX actions consume it and deep-read only the drift |
+| Repo Atlas (per project)                 | `.somi/atlas.md` | SHA-stamped repo map from `/atlas`; `cost: high` actions consume it and deep-read only the drift |
 | Findings ledger (per work item)          | `.somi/reviews/<slug>/findings.json` | Machine view of review findings (stable `F-<n>` ids, lifecycle); powers the circuit breakers across sessions |
 | Project policy (optional, committed)     | `.somi/config.json` | Loop caps, dep-install allowlist, lockfile policy; env vars override per session |
 | Loop state (runtime, per loop)           | `.somi/somi-state/loop/` | Baseline SHA, pass counter, per-pass history; survives session death so loops resume; gitignored |

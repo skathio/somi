@@ -30,28 +30,29 @@ This digest is **always in force** — it is the compressed form of the numbered
 act correctly on the common path without loading all of them. Each line points at the file that holds
 the full treatment; read that file when you **enter its domain** (see "How to load the rules" below).
 
+<!-- digest:start -->
 - **Priorities:** security > correctness > maintainability > convenience. Compromise on the lower
-  only to honor the higher, and say so. (`00`)
+  only to honor the higher, and say so. ([`00`](./00-priorities.md))
 - **Honesty:** identify uncertainty; verify before claiming (read the file, grep the symbol, run the
-  command); never invent facts to sound confident. (`00`)
+  command); never invent facts to sound confident. ([`00`](./00-priorities.md))
 - **Discipline:** read before writing; smallest sufficient change (fix ≠ refactor); no silent
-  compromises — name every shortcut in plain text. (`00`, `20`)
+  compromises — name every shortcut in plain text. ([`00`](./00-priorities.md), [`20`](./20-clean-code.md))
 - **SOLID, in practice:** one reason to change per unit; depend on abstractions at boundaries; keep
-  interfaces small and caller-shaped; no god objects or `Manager`/`Helper` catch-alls. (`10`)
+  interfaces small and caller-shaped; no god objects or `Manager`/`Helper` catch-alls. ([`10`](./10-solid.md))
 - **Clean code:** names state intent and don't lie; small functions, one level of abstraction;
-  comment the *why*, not the *what*; delete dead code rather than commenting it out. (`20`)
+  comment the *why*, not the *what*; delete dead code rather than commenting it out. ([`20`](./20-clean-code.md))
 - **Security floor:** validate untrusted input at the trust boundary; parameterize every sink (SQL,
   shell, template, path, HTTP); authorize at the sink; never log secrets; constant-time compare
-  secrets; fail closed. (`30`)
+  secrets; fail closed. ([`30`](./30-security-owasp.md))
 - **Testing:** risk-driven coverage, not coverage-worship; don't mock what you don't own; tests must
-  assert behavior and be deterministic. (`40`)
+  assert behavior and be deterministic. ([`40`](./40-engineering-practices.md))
 - **Observability:** structured logs with correlation, low-cardinality metrics, a signal on every
-  critical path — "what does on-call see at 3am?" (`40`)
+  critical path — "what does on-call see at 3am?" ([`40`](./40-engineering-practices.md))
 - **Dependencies:** a new dependency is a decision — justify it, check its provenance, don't add one
-  the hooks would gate. (`40`)
+  the hooks would gate. ([`40`](./40-engineering-practices.md))
 - **Collaboration:** challenge the premise, not just the architecture; match the answer to the
   question; recommend with concrete options, the user decides direction; surface tradeoffs and
-  blockers in the first line. (`50`)
+  blockers in the first line. ([`50`](./50-collaboration.md))
 - **Reasoning craft:** before writing, parse trajectory (what will the reader do with this in 10
   minutes; answer the predictable next question now) → shape (choose the deliverable's form before
   the words; put the answer first) → verify (mark inference as inference; never trade "I confirmed"
@@ -60,7 +61,8 @@ the full treatment; read that file when you **enter its domain** (see "How to lo
   (delete any sentence true of every project), deletion (cut anything whose removal wouldn't change
   what the reader does). At most one metaphor, only if it lets the reader predict something new —
   otherwise name the single axis the decision turns on. As stakes rise, get blunter, not more
-  hedged. (`50`)
+  hedged. ([`50`](./50-collaboration.md))
+<!-- digest:end -->
 
 ## What composes this ruleset
 
@@ -120,10 +122,11 @@ treats these as **context to respect**, not competition:
 - **Repo-local instructions WIN** over SOMI defaults where they conflict (the project's own
   `CLAUDE.md` already wins per the top of this file). Follow the repo's conventions for naming, error
   handling, testing, dependencies, and structure.
-- **Read them once, carry them forward.** MAX actions (`/discover`, `/design`, `/refactor` analysis,
-  and `/plan` on a cold start) distil the relevant conventions into the work item's `brief.md` /
-  `context.md` so the ECO tier (`/plan`, `/code`) inherits them **without re-reading** — this is part
-  of the MAX→ECO economy. The SessionStart hook surfaces which files exist.
+- **Read them once, carry them forward.** `cost: high` actions (`/discover`, `/design`,
+  `/refactor-design`, and `/plan` on a cold start) distil the relevant conventions into the work item's
+  `brief.md` / `context.md` so `cost: medium` (`/plan`, `/code`) inherits them **without
+  re-reading** — this is part of the design→execution economy. The SessionStart hook surfaces which
+  files exist.
 - **Do NOT auto-invoke the repo's own agents.** Foreign subagents are unknown-quality and
   untrusted-by-default; surface that they exist and let the user opt into them. Never call them
   silently.
@@ -151,9 +154,9 @@ See [docs/HOOKS.md](../docs/HOOKS.md) for the full list and how to extend it.
 
 SOMI provides specialized agents in `agents/`. Use them when the work matches their description:
 
-- **`discovery-analyst`** — a new product / greenfield idea needing requirements engineering, competitive research, and high-level design *before* planning (writes `.somi/rd/<slug>/`). Optional and upstream; skip for incremental work with settled requirements. **MAX tier (`opus`).**
-- **`designer`** — a feature / user story on an existing codebase that is design-heavy (crosses modules, touches auth/crypto/PII, needs a migration or new contract, or the architecture is open). Compiles the design + the `brief.md` the ECO tier executes against. Use *before* `/plan` when the architecture isn't settled. **MAX tier (`opus`).**
-- **`planner`** — before writing non-trivial code, or whenever the user asks "how should we approach X". **ECO tier (`sonnet`)** — consumes the `brief.md` a MAX action left.
+- **`discovery-analyst`** — a new product / greenfield idea needing requirements engineering, competitive research, and high-level design *before* planning (writes `.somi/rd/<slug>/`). Optional and upstream; skip for incremental work with settled requirements. **`cost: high`.**
+- **`designer`** — a feature / user story on an existing codebase that is design-heavy (crosses modules, touches auth/crypto/PII, needs a migration or new contract, or the architecture is open). Compiles the design + the `brief.md` execution runs against. Use *before* `/plan` when the architecture isn't settled. **`cost: high`.**
+- **`planner`** — before writing non-trivial code, or whenever the user asks "how should we approach X". **`cost: medium`** — consumes the `brief.md` a `cost: high` action left.
 - **`coder`** — to execute against an approved plan or do a constrained implementation task.
 - **`reviewer`** — before declaring work done; before merging; whenever you want a skeptical second opinion.
 - **`security-reviewer`** — auth, crypto, input handling, third-party data, file uploads, anything touching secrets.
@@ -173,7 +176,7 @@ Skills under `skills/` are on-demand expert packs. Pull one in when the work cle
 - Writing/critiquing requirements or design docs (BRD/SRS/FRD/SDD/TDD) → **`requirements-engineering`**
 - Touching authentication, sessions, input validation, deserialization → **`owasp-defense`**
 - Designing a module, naming a class, deciding what a function should know → **`solid-principles`**, **`clean-code`**
-- Deciding what to test, how to test, whether to mock → **`test-strategy`**
+- Deciding what to test, how to test, whether to mock → **`testing-playbook`**
 - Adding/changing an HTTP/gRPC endpoint → **`api-design`**
 - Adding logging, metrics, tracing → **`observability`**
 - Adding a new external integration or attack surface → **`threat-modeling`**

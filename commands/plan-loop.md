@@ -2,7 +2,6 @@
 description: Bounded plan → review → revise loop. Best for ambiguous / architectural work. Exits on approve, on iteration cap, on divergence (plan keeps churning without findings dropping), or on user stop.
 argument-hint: <problem statement> | <slug>  (slug to continue revising an existing plan)
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /plan-loop — Bounded plan↔review iteration
@@ -17,10 +16,14 @@ $ARGUMENTS
 ```
 
 This command automates the manual `/plan` → `/review plan <slug>` → `/plan` cycle, with **hard
-gates** that ensure it terminates. This is an **ECO-tier** loop: the orchestrator and the `planner`
-it Tasks both run `sonnet` (executing against an upstream `brief.md` when one exists), while the
-`reviewer` it Tasks stays `opus` — review is the fresh-eyes MAX judgment, run on a cold context so
-it isn't biased by the planner's reasoning.
+gates** that ensure it terminates. It has no `cost:` of its own — nor a `model:` of its own; it runs
+on whatever model this session is already using — and runs entirely inline; the `planner` it Tasks
+declares `cost: low,
+medium` (`medium` unless the session ceiling resolves to `low`; executing against an upstream
+`brief.md` when one exists), while the `reviewer` it Tasks declares
+`cost: medium, high` — the session ceiling picks the highest permitted member, typically `high`
+for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by the
+planner's reasoning.
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > and `spec.md §1` — in the **same order at the front** of each pass's planner brief, and append the
@@ -36,9 +39,20 @@ it isn't biased by the planner's reasoning.
 | `DIVERGENCE_DETECTOR` — stop if `spec.md §1` / `decisions.md` keeps churning across passes without finding-count dropping | always on | (n/a) |
 | `HUMAN_CHECKPOINT` — pause if user replies `stop` between passes | always on | (n/a) |
 
-**Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
-keys `plan_loop.max_passes`, `plan_loop.severity_floor`) > the defaults above. Read both at the
-start of the run; record the effective values in the first diary entry of the loop.
+**Precedence:** CLI flag (`--max-passes`) > env var (session override) > `.somi/config.json`
+(committed project policy — keys `plan_loop.max_passes`, `plan_loop.severity_floor`) > the
+defaults above. Read both at the start of the run; record the effective values in the first diary
+entry of the loop.
+
+`MAX_PASSES` is **re-resolved on every `pass` call**, not frozen at `init` (same fix as
+[`/code-loop`](./code-loop.md)). Absent an explicit CLI flag or env var *this invocation*, the cap
+already in force stands unchanged; when one does differ, it takes effect immediately, on the same
+subcommand, without discarding `pass`/`history`, and is appended to the loop state's
+`cap_overrides` array (`field`, `from`, `to`, `source`, `after_pass`, `at`) — also returned in
+`finish`'s stdout JSON — so the raise is auditable after the fact. A malformed value is rejected
+with a clear error rather than silently disabling the gate. `SEVERITY_FLOOR` is still resolved once
+at `init` — it isn't a hard gate `somi-loop.mjs` enforces, so adjusting it mid-loop still means
+starting a fresh loop. Plan loops have no diff cap; `--diff-cap` is inert for a plan loop.
 
 ## What to do
 
@@ -48,8 +62,9 @@ start of the run; record the effective values in the first diary entry of the lo
   scaffold `.somi/plans/<slug>/`.
 - **Existing slug with a plan** → continue revising the plan for that work item. The first pass
   treats the existing plan as the starting point.
-- **Existing slug that is a design handoff** (a [`/design`](./design.md) or `/refactor` analysis left
-  a `brief.md` + `design.md` but no `spec.md`/`phases/` yet) → the first pass **creates** the plan
+- **Existing slug that is a design handoff** (a [`/design`](./design.md) or
+  [`/refactor-design`](./refactor-design.md) left a `brief.md` + `design.md` but no
+  `spec.md`/`phases/` yet) → the first pass **creates** the plan
   from the brief (the planner consumes `brief.md` per [`/plan`](./plan.md) §2a and scaffolds
   non-destructively per §3 — never clobbering the design's `decisions.md`/`diary.md`). Subsequent
   passes revise it.
@@ -85,10 +100,13 @@ while true:
              exit "max-passes-exceeded"
 
   # 3b. Plan (the batch verification round-trip pauses here for the user when the
-  #     planner returns DECISIONS-NEEDED — that pause never counts as a pass)
+  #     planner returns DECISIONS-NEEDED — that pause never counts as a pass, and the
+  #     re-invocation after it resolves fresh too, same as any other start). Call somi_resolve
+  #     for planner first; full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch
+  #     on Claude Code).
   Task planner (= /plan <problem>  or  /plan revision <slug> with prior findings as brief)
 
-  # 3c. Plan review
+  # 3c. Plan review — call somi_resolve for reviewer first; full rules: the somi-dispatch skill
   Task reviewer (= /review plan <slug>)
 
   # 3d. Record the pass + findings (locus file for a plan finding is the artifact —
@@ -117,18 +135,24 @@ while true:
 
 ### 4. On DONE (clean exit)
 
-- `node scripts/somi-loop.mjs finish --slug <slug> --status done`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --status done` — its stdout includes
+  `cap_overrides`; if non-empty, list each entry (field, from, to, source, after_pass) in the
+  diary entry below.
 - Set `progress.md` status to `awaiting-approval`.
-- Append a diary entry (category `note`): `plan-loop done at pass <P>; verdict <V>`.
+- Append a diary entry (category `note`): `plan-loop done at pass <P>; verdict <V>`, plus any
+  `cap_overrides` entries from `finish`'s stdout. Then apply the compaction rule in
+  `templates/DIARY.md.tmpl`.
 - Summarise (see §6) — explicitly call out that the user still owns the final go/no-go on the
   plan even though it passed the bounded review.
 
 ### 5. On STOP (gate hit)
 
-- `node scripts/somi-loop.mjs finish --slug <slug> --status stopped-<reason>`.
+- `node scripts/somi-loop.mjs finish --slug <slug> --status stopped-<reason>` — same
+  `cap_overrides` note as §4.
 - Leave `progress.md` status as `planning`.
 - Append a diary entry (category `plan-change` or `blocker`): which gate fired, what's
-  outstanding, what the user needs to decide.
+  outstanding, what the user needs to decide, plus any `cap_overrides` entries from `finish`'s
+  stdout.
 - Summarise with the current best plan and the open findings.
 
 ### 6. Summarise back
@@ -148,7 +172,9 @@ while true:
   §5): a `DECISIONS-NEEDED` return from the planner **pauses the loop for the user's verdicts**
   (it is not a review pass and never counts toward `MAX_PASSES` or the divergence detector) —
   the loop does not silently pick on the user's behalf.
-- **Never silently bypass a gate.** Adjust via env vars explicitly and re-run.
+- **Never silently bypass a gate.** Adjust via `--max-passes` or the env var explicitly and
+  re-run the same `pass` call — the raise is recorded in `cap_overrides`, not just left in a
+  shell that may since have exited.
 - **The user can reply `stop` between passes.** Honour it immediately.
 - **Divergence is information.** When the plan oscillates, the human disagreement between
   planner and reviewer is the signal — surface it, don't paper over.

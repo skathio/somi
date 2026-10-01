@@ -1,8 +1,10 @@
 {
   "name": "@skathio/somi",
-  "version": "2.2.2",
+  "version": "3.0.0",
   "scripts": {
-    "test": "bash scripts/validate.sh"
+    "test": "bash scripts/validate.sh",
+    "eval:behavioral": "node tests/evals/run.mjs",
+    "eval:convergence": "node tests/evals/convergence.mjs"
   },
   "bin": {
     "somi-check": "scripts/somi-check.mjs"
@@ -50,6 +52,7 @@
     ".claude-plugin/",
     ".copilot-extension/",
     ".claude/",
+    "mcp.json",
     "VERSION",
     "LICENSE"
   ]

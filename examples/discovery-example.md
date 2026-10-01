@@ -9,8 +9,8 @@
 
 The initiative slug: **`clinic-scheduler`**. All artifacts live at `.somi/rd/clinic-scheduler/`.
 
-> **Discovery runs `opus` end-to-end** (the `/discover` command itself, not just the agent) — its
-> output anchors the whole project. See [docs/COMMANDS.md](../docs/COMMANDS.md).
+> **Discovery runs at `cost: high` end-to-end** (the `/discover` command itself, not just the agent)
+> — its output anchors the whole project. See [docs/COMMANDS.md](../docs/COMMANDS.md).
 
 ---
 

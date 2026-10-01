@@ -22,6 +22,7 @@ Start here if you're new. Skim the headings, then read what matches your situati
 | Add a new workflow, agent, or skill                 | [EXTENDING.md](./EXTENDING.md)           |
 | Understand the SemVer policy                        | [VERSIONING.md](./VERSIONING.md)         |
 | Adopt SoMi in a team safely                         | [GOVERNANCE.md](./GOVERNANCE.md)         |
+| Measure whether a change to the instructions helps  | [EVALS.md](./EVALS.md)                   |
 | Distribute via Claude Code's plugin marketplace     | [PLUGIN.md](./PLUGIN.md)                 |
 | See how everything fits together                    | [architecture.md](./architecture.md)     |
 

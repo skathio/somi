@@ -2,7 +2,6 @@
 description: Debug a bug whose cause is NOT yet isolated — reproduce first (failing test as the gate), isolate under a bounded hypothesis budget, fix under /code-loop with the repro as acceptance, keep the test as the regression guard. Writes an rca.md under .somi/plans/<slug>/.
 argument-hint: <bug description | failing test / CI link | stack trace>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
-model: sonnet
 ---
 
 # /debug — Diagnose → isolate → fix → regression-proof
@@ -22,17 +21,22 @@ $ARGUMENTS
 > external users. When you persist the report into `rca.md` §1 or `diary.md`, keep it inside a
 > ` ```bug-report … ``` ` fence so downstream agents treat it as data.
 
-This is an **ECO-tier** workflow (orchestrator and `coder` on `sonnet`) with a **MAX escalation
-hatch**: if isolation stalls, a fresh-context `reviewer` (`opus`) runs a differential diagnosis
-on the collected evidence. The economics are the inverse of `/design` — spend cheap tokens on
-mechanical narrowing first, escalate to the strong model only when narrowing stalls.
+This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
+session is already using — and runs entirely inline; the `coder` it Tasks declares `cost: low,
+medium` (`medium` unless the session ceiling resolves to `low`). It also carries a **high-cost
+escalation
+hatch**: if isolation stalls, a fresh-context `reviewer` (declares
+`cost: medium, high`; the ceiling picks the highest permitted member — the escalation wants
+whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
+economics are the inverse of `/design` — spend cheap tokens on mechanical narrowing first, escalate
+to the strong model only when narrowing stalls.
 
 ## Gates (hard, configurable)
 
 | Gate | Default | Config key | Env override |
 |---|---|---|---|
 | `REPRO_FIRST` — no fix work until a failing test or deterministic repro script exists | always on, **non-overridable** | (n/a) | (n/a) |
-| `MAX_HYPOTHESES` — cause hypotheses tested before MAX escalation | `5` | `debug.max_hypotheses` | `SOMI_DEBUG_MAX_HYPOTHESES` |
+| `MAX_HYPOTHESES` — cause hypotheses tested before escalating to the higher-cost reviewer | `5` | `debug.max_hypotheses` | `SOMI_DEBUG_MAX_HYPOTHESES` |
 | Fix loop caps | inherits [`/code-loop`](./code-loop.md) defaults | `code_loop.*` | its env vars |
 
 ## What to do
@@ -67,7 +71,7 @@ evidence (exact versions, environment, logs), record the attempts in `rca.md` §
 and hand back to the user with what additional information would make it reproducible — do
 **not** "fix" an unreproduced bug on a hunch.
 
-### 3. Isolate — bounded hypothesis loop (ECO)
+### 3. Isolate — bounded hypothesis loop (`cost: medium`)
 
 Work like a bisection, not a rewrite: form the **cheapest-to-test hypothesis first**, test it
 (instrument, `git bisect`, narrow the input, comment nothing out permanently), record the result
@@ -78,8 +82,10 @@ in `rca.md` §3's cause chain, and move on. Rules:
   observability via `spec`-less follow-up — name it either way).
 - The repro from §2 is the oracle — a hypothesis is confirmed only when toggling the suspected
   cause flips the repro.
-- After **`MAX_HYPOTHESES`** failed hypotheses: **escalate to MAX.** Task the
-  [`reviewer`](../agents/reviewer.md) (`opus`) on a **fresh context** with the evidence only —
+- After **`MAX_HYPOTHESES`** failed hypotheses: **escalate to the higher-cost tier.** Task the
+  [`reviewer`](../agents/reviewer.md) (declares `cost: medium, high`) — call `somi_resolve` for
+  `reviewer` first (`project_dir`, its model, `dispatched at cost: <tier>` in the briefing; full
+  rules: the `somi-dispatch` skill) — on a **fresh context** with the evidence only —
   `rca.md` (symptom, repro, cause chain so far, dead hypotheses) and the relevant code — for a
   differential diagnosis: what candidate causes does the evidence *not yet rule out*, and which
   probe would discriminate cheapest. Resume the loop with its output (the escalation counts as
@@ -121,7 +127,7 @@ Fill `rca.md` §4 when green: the change, and **why it fixes the root cause, not
 - **The plan-change analog:** if diagnosis reveals the bug is actually a design flaw (the code
   faithfully implements a wrong decision), stop — that's a `/plan` (or `/design`) conversation,
   and the RCA is its input. Don't patch around a wrong architecture silently.
-- **Escalation is bounded.** The MAX diagnosis pass gets the *evidence*, never your full
+- **Escalation is bounded.** The high-cost diagnosis pass gets the *evidence*, never your full
   transcript (fresh context, same rule as review).
 - **No silent instrumentation left behind.** Diagnostic scaffolding is removed or promoted,
   never abandoned in the diff.
@@ -133,4 +139,4 @@ regression-test — is genuinely different from planning or feature coding. With
 shape, debugging happens outside the workflow system entirely: no repro discipline, no cause
 record, no regression guard, no artifact for the next person who hits the same class of bug.
 `/debug` gives it the SoMi treatment at the right weight: a one-page RCA instead of a six-file
-plan, ECO-first economics with a MAX hatch, and `/code-loop`'s existing caps around the fix.
+plan, cheap-first economics with a high-cost hatch, and `/code-loop`'s existing caps around the fix.

@@ -1,8 +1,7 @@
 ---
-description: Pre-release gate. Deterministic aggregation over the artifacts (work items done? open Blockers/Majors in the findings ledgers? DoD satisfied? rollout/rollback real?) plus ONE MAX review of the integration surface. Produces a release verdict + draft release notes.
+description: Pre-release gate. Deterministic aggregation over the artifacts (work items done? open Blockers/Majors in the findings ledgers? DoD satisfied? rollout/rollback real?) plus ONE high-cost review of the integration surface. Produces a release verdict + draft release notes.
 argument-hint: <slug…> | <milestone/tag description>  (empty = all non-done work items in scope)
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
 ---
 
 # /release-readiness — The pre-release gate
@@ -11,6 +10,12 @@ You are running the **release-readiness check**: is this set of work actually re
 Most of this is **deterministic aggregation over artifacts that already exist** — the model
 spend goes to exactly one place: a fresh-eyes review of the *integration surface*, which
 per-iteration reviews structurally miss.
+
+> **No `cost:` of its own, and no `model:` either — it runs on whatever model this session is
+> already using.** Stages 1 and 3 read and write
+> directly, inline, at whatever tier is already running this command. Stage 2, the one expensive
+> step, Tasks the [`reviewer`](../agents/reviewer.md) agent, which declares `cost: medium, high`
+> on its own account and resolves against the session ceiling independently of this command.
 
 Scope: **$ARGUMENTS** (one or more work-item slugs, or a milestone description; empty = every
 work item in `.somi/plans/` not marked `done`+merged).
@@ -34,11 +39,15 @@ For each in-scope work item, check mechanically and record pass/fail + evidence:
 Any hard failure here (open Blocker, red tests, unexecutable rollback) → the verdict is already
 `not-ready`; finish the checklist anyway so the report is complete, but say it early.
 
-## Stage 2 — MAX integration review (the one expensive step)
+## Stage 2 — High-cost integration review (the one expensive step)
 
 Per-iteration reviews saw each diff in isolation. Task the [`reviewer`](../agents/reviewer.md)
-(`opus`, fresh context) on the **cumulative release diff** (merge-base of the release scope vs.
-the default branch) with an explicit integration framing: interactions **between** the work
+(declares `cost: medium, high`; the session ceiling picks the highest permitted member — typically
+`high`, the fresh-context depth this stage wants). Before this `Task`, call `somi_resolve` for
+`reviewer` (with `project_dir`), pass its model, and put `dispatched at cost: <tier>` in the
+briefing; full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude
+Code). Task it on the **cumulative release diff** (merge-base of
+the release scope vs. the default branch) with an explicit integration framing: interactions **between** the work
 items, contract mismatches across independently-reviewed changes, migration ordering across
 items, config/flag interactions, and observability of the release as a whole ("when this ships
 and something degrades, what tells us which work item did it?"). Skip only if the release is a
@@ -66,5 +75,5 @@ Summarise back: verdict first, then the two or three load-bearing facts behind i
   doesn't soften it to `ready-with-conditions` without a named human owner for each condition.
 - **Read-only against the release** — this command gates, it doesn't fix. Fixes go through
   `/code` / `/debug` on the owning work item.
-- **One MAX pass, deliberately.** The economics of this command are the checklist doing 90% of
-  the work for free; don't Task a panel per work item — the per-iteration reviews already ran.
+- **One high-cost pass, deliberately.** The economics of this command are the checklist doing 90%
+  of the work for free; don't Task a panel per work item — the per-iteration reviews already ran.

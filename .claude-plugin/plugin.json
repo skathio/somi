@@ -1,6 +1,6 @@
 {
   "name": "somi",
-  "version": "2.2.2",
+  "version": "3.0.0",
   "displayName": "SoMi",
   "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
   "keywords": [
@@ -20,5 +20,11 @@
   },
   "homepage": "https://github.com/skathio/somi",
   "repository": "https://github.com/skathio/somi",
-  "license": "MIT"
+  "license": "MIT",
+  "mcpServers": {
+    "somi": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs"]
+    }
+  }
 }

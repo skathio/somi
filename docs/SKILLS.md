@@ -8,17 +8,21 @@ not a replacement for the global ruleset; they're depth-on-demand.
 
 | Skill                                                          | Use when                                                                          |
 |----------------------------------------------------------------|-----------------------------------------------------------------------------------|
+| [`rules`](../skills/rules/SKILL.md)                            | Loading a full numbered rules file (`00`-`50`) on-demand once its domain is engaged; finding where a project's local overrides live |
 | [`market-research`](../skills/market-research/SKILL.md)        | Researching a software idea: competitors, complaints, churn, failure modes to avoid |
 | [`requirements-engineering`](../skills/requirements-engineering/SKILL.md) | Writing/critiquing BRD/SRS/FRD/SDD/TDD; turning an idea into testable, traceable requirements |
 | [`owasp-defense`](../skills/owasp-defense/SKILL.md)            | Auth, crypto, input validation at trust boundaries, deserialization, file uploads |
 | [`solid-principles`](../skills/solid-principles/SKILL.md)      | Designing a module, naming a class, evaluating an abstraction                     |
+| [`plan-review`](../skills/plan-review/SKILL.md)                | Judging whether a plan, brief, or ADR is sound before code is written             |
+| [`sdlc-process`](../skills/sdlc-process/SKILL.md)              | Checking that progress, diary, decisions, and findings match the repository       |
 | [`clean-code`](../skills/clean-code/SKILL.md)                  | Naming, function structure, comments, errors                                      |
-| [`test-strategy`](../skills/test-strategy/SKILL.md)            | Choosing test level, mock policy, deciding what to skip                           |
+| [`testing-playbook`](../skills/testing-playbook/SKILL.md)      | Choosing test level, mock policy, deciding what to skip                           |
 | [`api-design`](../skills/api-design/SKILL.md)                  | HTTP/gRPC/library APIs, versioning, idempotency, error shapes                     |
 | [`observability`](../skills/observability/SKILL.md)            | Logs, metrics, traces, alerting philosophy                                        |
 | [`threat-modeling`](../skills/threat-modeling/SKILL.md)        | New attack surface: webhook, OAuth, file upload, new service                      |
 | [`reasoning-craft`](../skills/reasoning-craft/SKILL.md)        | Before answering a substantive question, or self-editing a draft for hedging and bland phrasing |
 | [`somi-routing`](../skills/somi-routing/SKILL.md)              | Classifying a free-form request into the right SoMi command — used by the `somi` agent (Copilot's front door) |
+| [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)            | Resolving and starting a SoMi agent's dispatch tier/model — shared by every command that Tasks an agent and the `somi` agent |
 
 ## When to invoke a skill
 
@@ -28,7 +32,7 @@ costs context window; invoking the wrong skill costs accuracy. Some rules of thu
 - **Domain is engaged**: the change actually touches the skill's territory (a new HTTP endpoint
   engages `api-design`; a new webhook engages `owasp-defense` + `threat-modeling`).
 - **Decision is non-trivial**: the change involves a judgment call within the domain (deciding how to
-  mock an external service engages `test-strategy`).
+  mock an external service engages `testing-playbook`).
 - **Pattern matches a known anti-pattern**: the existing code is producing a smell from the skill's
   list (engaging `solid-principles` or `clean-code`).
 
@@ -95,8 +99,8 @@ when one domain calls into another:
 
 - `api-design` references `owasp-defense` for security touchpoints.
 - `threat-modeling` references `owasp-defense` for mitigations.
-- `clean-code` references `test-strategy` (untestable code is often badly-coupled code).
-- `test-strategy` references `refactorer` (when a test-shape problem is really a design problem).
+- `clean-code` references `testing-playbook` (untestable code is often badly-coupled code).
+- `testing-playbook` references `refactorer` (when a test-shape problem is really a design problem).
 - `market-research` references `requirements-engineering` (every research finding must become a
   requirement, non-goal, or risk).
 - `requirements-engineering` references `solid-principles`, `api-design`, and `threat-modeling` for

@@ -1,0 +1,50 @@
+{
+  "sha": "4ff4da62caff23248f9d057c6bc9046a8a22ecf6",
+  "taskId": "01",
+  "run": {
+    "index": 0,
+    "dimensions": {
+      "S2": true,
+      "S7": true,
+      "S1": true,
+      "S6": true,
+      "S3": true
+    },
+    "criteria": [
+      {
+        "n": 1,
+        "verdict": "pass",
+        "evidence": "(trimmed)"
+      },
+      {
+        "n": 2,
+        "verdict": "pass",
+        "evidence": "(trimmed)"
+      },
+      {
+        "n": 3,
+        "verdict": "pass",
+        "evidence": "(trimmed)"
+      },
+      {
+        "n": 4,
+        "verdict": "pass",
+        "evidence": "(trimmed)"
+      },
+      {
+        "n": 5,
+        "verdict": "pass",
+        "evidence": "(trimmed)"
+      },
+      {
+        "n": 6,
+        "verdict": "pass",
+        "evidence": "(trimmed)"
+      }
+    ],
+    "transcript": "(transcript omitted: this fixture is a trimmed copy of a real pre-schema shard; only its shape matters)",
+    "decisionsMd": null,
+    "error": null,
+    "rescored": true
+  }
+}

@@ -6,7 +6,110 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
-_Nothing yet._
+**Major — 3.0.0.** Breaking: the cost-tier model, command frontmatter and `/refactor` changes listed
+under `somi-3-0-rework` below (each with migration steps), and `skills/test-strategy/` renamed to
+`skills/testing-playbook/` (the `/test-strategy` command is unchanged). Per `docs/VERSIONING.md`, a rename is MAJOR
+regardless of how narrow the observable break is.
+
+**Migration**: if you invoke the *skill* by name, use `somi:testing-playbook`. If you use the
+`/test-strategy` **command**, nothing changes.
+
+**The standalone `/somi` command stays removed** (since 2.2.1): there is no `commands/somi.md`, and
+the catalogue is 24 commands. The status dashboard lives in the `somi` agent (a bare `@somi`), which
+also strips its own leading `/somi`/`@somi` marker before recognising a command, so
+`@somi /ship-loop feature` runs `/ship-loop`. 3.0 keeps its own front-door dispatch (each command's
+procedure runs live and every agent starts through `somi_resolve`), superseding 2.2.2's inline
+persona mechanics.
+
+Three work items, each with a full `.somi/` artifact set.
+
+### `context-economy-overhaul` — deliver the ruleset, and stop the digest drifting
+
+- **Ruleset delivery into consuming projects** (`rules/CLAUDE.md`, `skills/rules/`,
+  `hooks/user-prompt-submit/inject-workflow-context.mjs`, `hooks/lib/common.mjs`) — the rules now
+  reach a session by a documented path rather than by assumption, and `docs/RULES.md` describes how.
+- **Digest drift made unrepresentable** (`scripts/generate-digest.mjs`, `scripts/check-links.mjs`,
+  `scripts/validate.sh`) — five new CI guards, plus version fan-out and dead-link checks.
+- **`/design` gains `WebSearch`** with a narrowed research boundary.
+- **Removed a false read-only claim** from the agent/rules surface.
+- **BREAKING** — `skills/test-strategy/` renamed to `skills/testing-playbook/`. The
+  `/test-strategy` **command** is unchanged and still works; only the skill directory moved.
+  Nothing in the repo references the old skill path.
+- Closed on a **negative result**, deliberately: its phase 4 established that a model judge cannot
+  deliver the ≥99% per-draw consistency its error budget assumed. That finding is what motivated
+  the work item below.
+
+### `eval-corpus-rebuild` — rebuild the corpus on executed criteria; add a convergence gate
+
+- **The judge machinery is deleted.** Gating now rests on complete enumeration over closed input,
+  never pattern search over open-ended content (**D11**). `judge()` survives only as an opt-in
+  `--report` pass (**D7**).
+- **New convergence gate for `/code-loop`** — `tests/evals/convergence.mjs` plus an
+  `eval:convergence` npm script. Loops are measured on **cost** (passes-to-approve), never outcome
+  (**D1**, **D10**): a three-way cap-breach extractor, a zero-dependency tie-conditional
+  Mann-Whitney (**D3**, **D5**), a four-state verdict, and a live-draw driver with resumable
+  per-draw sharding.
+- **Coverage tiering** (**D8**) — 4 gated commands, 20 in a zero-model-call smoke tier;
+  `docs/EVALS.md` states coverage for all 24, every derived number pinned to its source.
+- **`scripts/somi-loop.mjs`**: the diff cap now counts untracked files. It previously read 248
+  against a true 503, because `git diff` cannot see a file git has never been told about — so a
+  new file cost nothing against the cap until someone ran `git add`.
+- **New finding, `D12`**: `task02-code` cannot carry a convergence signal — five live draws
+  returned mean 1.0, sd 0.0, `d = 1/sd` undefined. The gate itself is sound and verified against
+  synthetic arms with real variance; what is missing is a fixture with room to vary.
+- `tests/scripts/eval-runner.sh` 46 → **379** checks; new `tests/scripts/convergence-runner.sh`
+  at **89**. Every acceptance point mutation-verified.
+
+### `somi-3-0-rework` — cost tiers on agents, a front door that dispatches, and bloat gates
+
+**BREAKING**, with migration:
+
+- **MAX/ECO vocabulary is retired** for a `cost:` field (`low` / `medium` / `high`). If you extended
+  SoMi with your own agents, replace any MAX/ECO wording and declare `cost:` on the agent.
+- **Commands declare neither `cost:` nor `model:`**; agents do. A command runs on the session's model
+  and starts its agents at their own declared tier. `scripts/validate.sh` fails a command that
+  declares either field. Custom commands: delete both lines and put the tier on the agent they start.
+- **`cost:` is a capability set** — every tier the agent can honestly run at (`medium, high`), not one
+  value. The highest tier at or below the session ceiling is selected.
+- **The session ceiling selects; it never blocks.** An agent that only declares `high` still runs at
+  `high` under a `medium` ceiling. There is no "never high, full stop" setting yet. Set the ceiling
+  with `SOMI_COST_CEILING`, `--ceiling`, or `cost.ceiling` in `.somi/config.json`.
+- **Agents run at the resolved tier, not their frontmatter `model:`**, on every entry path.
+- **`/refactor` is surgical only**; the large-refactor scoping mode is now `/refactor-design`
+  (agent `refactor-designer`).
+
+**What changed:**
+
+- **The `somi` front door runs commands itself** instead of telling you which one to run. It follows
+  each command's own steps in the conversation, so checkpoints (`/plan`'s decisions, `/pr`'s
+  confirmation, `/incident`'s framing) stay with you on every host, and starts each agent through
+  the resolver. A `low` ceiling is announced once, with where it came from (CLI, env, project config
+  or saved state).
+- **Resolver as a bundled MCP server** (`scripts/somi-mcp.mjs`; tools `somi_resolve`, `somi_command`,
+  `somi_skill`), registered in `.claude-plugin/plugin.json` and `mcp.json`, so no prompt needs SoMi's
+  install path. `scripts/somi-dispatch.mjs` is the CLI form. Map your host's models to tiers with
+  `cost.mapping` in `.somi/config.json`; without a mapping the front door picks from models it can
+  see and says so. Untrusted input (agent names, project folder, committed config) is validated.
+- **`skills/somi-dispatch`** is the single "how to start an agent" procedure every command uses.
+- **New agents** `atlas`, `impact`, `pr`, `incident` (commands that did their own work now delegate),
+  and `plan-reviewer` / `sdlc-reviewer` with skills `plan-review` / `sdlc-process`, seated in
+  `/review-panel` (now six lenses).
+- **`low` is a working tier** for `coder`, `planner` and `refactorer` (reduced depth, disclosed);
+  reviewers and `impact` stay off it — a weaker judge gives a false pass.
+- **Small tasks need no plan**: "trivial" is defined once in `skills/somi-routing`, and `/code`
+  proceeds without a work item when a request meets it. The coder climbs a Decision Ladder before
+  writing new code.
+- **`/ship-loop`'s mandatory checkpoint** is now `HUMAN_CHECKPOINT_BRIEF_HANDOFF`: it fires when a
+  brief exists, before planning consumes it (after `/plan-loop` on a cold start).
+- **Gates**: no references into the gitignored planning folder in shipped code, tests or docs;
+  per-kind file-size budgets (prompts 300, `.mjs` 500, `.sh` 800) with a tracked exceptions ledger
+  that cannot grow; the diary compacts itself on write; `progress.md` no longer copies the diary;
+  the DoD template requires each criterion to state its evidence.
+
+**Known limitations:** the front door has been verified by automated tests only — one run on a real
+host is outstanding, and Copilot CLI does not document per-call model selection. Commands still
+locate `scripts/somi-loop.mjs` relative to the install root, which a consuming project cannot always
+resolve (they fall back to manual tracking).
 
 ## [2.2.2] — 2026-07-27 — fix: the `somi` front door collapsing every command into a single persona
 

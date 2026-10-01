@@ -2,7 +2,6 @@
 description: Targeted security review of the current changes (or a specified diff). Walks trust boundaries to sinks, applies OWASP Top 10 lens, produces severity-graded findings with explicit attack paths. Output lands under .somi/reviews/<slug>/ when scoped to a work item.
 argument-hint: <slug> | <diff range> | <PR #> | <file path>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /security-review — Targeted security review
@@ -23,12 +22,22 @@ Use the same resolution logic as [`/review`](./review.md):
 
 ### 2. Brief the `security-reviewer` agent
 
-Via the Task tool, pass:
+Before this `Task`, call `somi_resolve` for `security-reviewer` (with `project_dir`), pass its
+model, and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+(`somi_skill`, or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The diff and the relevant repo context.
 - The work-item paths (`spec.md` §8 security considerations, the iteration phase file, recent
   `diary.md` entries) when scoped.
 - The expectation: walk trust boundaries to sinks, produce **attack-path-grounded** findings.
+- The expectation that it **returns** its findings as text rather than writing them. The
+  `security-reviewer` agent is read-only **by contract, not by platform restriction** — it holds
+  Write/Edit and its `## Write discipline` section forbids using them, so this command owns every
+  write (the review file, `progress.md`, `diary.md`).
+
+`security-reviewer` declares `cost: high` alone, no lower member. If the session ceiling has no
+member at or below that, do not run a substitute lighter pass and report it as this review — stop
+and surface the refusal to the user.
 
 ### 3. Findings must include
 
@@ -46,7 +55,7 @@ Use [`templates/REVIEW.md.tmpl`](../templates/REVIEW.md.tmpl) with security fram
 
 ### 5. Update work-item state (if scoped)
 
-- `progress.md`: line under "Recent activity" referencing the security review file and verdict.
+- `progress.md`: set the iteration's `Reviewed` cell to the verdict (there is no activity log).
 - If a Blocker / Major finding requires a plan change (e.g., reveals a missing mitigation in
   `spec.md` §8), append a diary entry with category `review-feedback`. The follow-up `/code`
   invocation will pick up the changes via the plan-change protocol.

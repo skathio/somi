@@ -5,10 +5,10 @@
 > only the drifted areas; structural drift (new/moved top-level modules, manifest changes):
 > refresh via `/atlas` before relying on it.
 
-The repo-level MAX artifact: one deep read of the codebase, amortized across every subsequent
-work item. MAX actions (`/design`, `/plan` cold starts, `/refactor` analysis, `/impact`) consume
-this **first** and deep-read only what has drifted since `<SHA>` — instead of re-reading the
-repo from scratch per work item.
+The repo-level high-cost artifact: one deep read of the codebase, amortized across every
+subsequent work item. Design actions (`/design`, `/plan` cold starts, `/refactor-design`,
+`/impact`) consume this **first** and deep-read only what has drifted since `<SHA>` — instead of
+re-reading the repo from scratch per work item.
 
 **Author discipline (non-negotiable):**
 

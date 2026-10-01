@@ -29,7 +29,7 @@ that lists one or more **plugins**. Each plugin is a directory shaped like:
 ```
 plugin-root/
 ├── .claude-plugin/
-│   └── plugin.json           # plugin manifest (name, version, description, ...)
+│   └── plugin.json           # plugin manifest (name, version, description, mcpServers, ...)
 ├── agents/                   # subagents (optional)
 ├── commands/                 # slash commands (optional)
 ├── skills/                   # skills (optional)
@@ -38,6 +38,43 @@ plugin-root/
 ```
 
 The SoMi repo is shaped that way: it is both a plugin and its own marketplace.
+
+### Bundled MCP server
+
+[`.claude-plugin/plugin.json`](../.claude-plugin/plugin.json)'s own `mcpServers` field declares
+one stdio MCP server, `somi`, launched as `node ${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs`. Claude
+Code loads a plugin's MCP servers straight from its manifest — no separate root-level `.mcp.json`
+is needed, and this repo deliberately doesn't ship one: a root `.mcp.json` is ALSO read as *this
+repo's own* project MCP config when a developer opens the SoMi repo itself (as opposed to having
+installed it as a plugin elsewhere), where `${CLAUDE_PLUGIN_ROOT}` is undefined and the server
+fails to launch. Declaring the server inline in the manifest avoids that collision — there is
+nothing at the repo root for a bare checkout to misread. It exposes three tools:
+
+- **`somi_resolve`** — the MCP-native equivalent of `node scripts/somi-dispatch.mjs resolve`:
+  given an agent name (and optionally a host/ceiling), returns its dispatch tier and model. A
+  failure maps one-to-one onto the CLI's exit-code family (64 usage / 65 unknown agent /
+  66 malformed `cost:` / 67 project environment failure), reported in the tool result text.
+- **`somi_command`** — returns a SoMi command's own procedure text (`commands/<name>.md`) from
+  the install root, so the front door can run a command live without knowing an install path.
+- **`somi_skill`** — returns a SoMi skill's own text (`skills/<name>/SKILL.md`) from the install
+  root, for the identical reason: a relative markdown link into `skills/` can't be followed from a
+  consuming project either, so the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill —
+  loaded by every entry path that starts an agent — is readable this way too
+  (`somi_skill({name: "somi-dispatch"})`), not only by name on a host that supports Skill-tool
+  loading. Both readers share the same `^[a-z][a-z0-9-]*$` name allowlist as `somi_resolve`'s
+  `agent` argument, checked before either ever touches a filesystem path.
+
+Because the server is launched once, from the plugin's own location rather than the consuming
+project, it cannot assume its own working directory is the project — see
+[`scripts/lib/mcp-project-root.mjs`](../scripts/lib/mcp-project-root.mjs) for the resolution
+`somi_resolve` uses to find the right `.somi/`. A HOST-supplied root — `CLAUDE_PROJECT_DIR`, or a
+single MCP `roots` entry the client offers — is used directly when no `project_dir` tool argument
+is given; when both are present, `project_dir` (text a MODEL supplied) must be that host root or a
+directory inside it, or the call is refused before anything is read or written — a model cannot
+point the server somewhere the host didn't authorize. Only when the host supplies nothing at all
+does `project_dir` alone decide. No usable root at all is a clear refusal, never a silent fallback
+to SoMi's own directory. `scripts/somi-dispatch.mjs` (the CLI) stays as the test harness and as the
+fallback for a host with a shell but no MCP client.
 
 ### Manifests
 
@@ -153,6 +190,16 @@ the Claude Code plugin.
 - [`.copilot-extension/extension.json`](../.copilot-extension/extension.json) — extension manifest.
 - [`.copilot-extension/marketplace.json`](../.copilot-extension/marketplace.json) — marketplace
   manifest (lists this extension so `copilot plugin marketplace add` resolves it).
+- [`mcp.json`](../mcp.json) — the same bundled MCP server as Claude Code's manifest-declared one
+  (see ["Bundled MCP server"](#bundled-mcp-server) above), launched as
+  `node ${PLUGIN_ROOT}/scripts/somi-mcp.mjs`. Copilot CLI auto-loads a plugin's root-level
+  `mcp.json` — unlike Claude Code, which reads its server declarations out of
+  `.claude-plugin/plugin.json` itself, so this file stays at the repo root without the same
+  bare-checkout collision (Copilot has no equivalent "open this plugin's own repo as a project"
+  auto-load path this repo has hit). No reference from `extension.json` is needed. Tool naming
+  inside an agent's own reasoning isn't documented for Copilot; refer to `somi_resolve` /
+  `somi_command` / `somi_skill` by their bare names — a host may surface them namespaced by plugin
+  and server (as Claude Code does).
 
 ### Installing
 
@@ -169,15 +216,15 @@ copilot plugin update
 
 ### Selecting an agent
 
-Copilot requires selecting one agent to drive the whole session. SoMi ships ten: nine
-phase-specific experts (see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which
-phase you're in, and one generic front door, **`somi`**. Select `somi` when you're not sure —
-bare `@somi` renders a status dashboard, an explicit command is recognized and proxied, and
-free-form requests are classified into the matching flow. The selected command then runs under its
-**real personas** — a composite command like `/ship-loop` walks its stages and runs each as
-`planner`, `coder`, or `reviewer` in turn, sequentially where the host can't spawn concurrent
-sub-agents (per the parity caveat above). On Claude Code the direct commands already select the
-right agent, so `somi` mainly matters here, on Copilot.
+Copilot requires selecting one agent to drive the whole session. SoMi ships phase-specific experts
+(see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which phase you're in, and one
+generic front door, **`somi`**. Select `somi` when you're not sure —
+bare `@somi` renders a read-only status dashboard, it recognizes an explicit command and proxies it, and
+classifies free-form requests into the matching flow, then **runs that flow's own procedure live,
+in the same turn** — resolving and `Task`ing every agent the flow starts through the same cost
+resolver a direct command uses, the same way a command body dispatches on Claude Code. On Claude
+Code the direct commands already select the right agent and run their own procedure themselves, so
+`somi` mainly matters here, on Copilot.
 
 ### Available commands
 
@@ -185,13 +232,13 @@ right agent, so `somi` mainly matters here, on Copilot.
 |----------------------------------|------------------------------------------------------------------------------------------|
 | `@somi /discover`             | `discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
 | `@somi /design`               | `designer` (brownfield feature design → `brief.md`)                                      |
-| `@somi /atlas`                | (none — MAX command; repo map → `.somi/atlas.md`)                                        |
+| `@somi /atlas`                | `atlas` (repo map → `.somi/atlas.md`)                                                     |
 | `@somi /plan`                 | `planner`                                                                                |
 | `@somi /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
 | `@somi /code`                 | `coder`                                                                                  |
 | `@somi /code-loop`            | `coder` + `reviewer` (bounded)                                                           |
 | `@somi /code-parallel`        | per eligible iteration: `/code-loop` (sequential on Copilot — no worktrees/concurrency)   |
-| `@somi /debug`                | `coder` (+ `reviewer` as MAX diagnosis hatch)                                            |
+| `@somi /debug`                | `coder` (+ `reviewer` as high-cost diagnosis hatch)                                            |
 | `@somi /review`               | `reviewer` (+ `security-reviewer` / `architecture-reviewer` / `test-strategist` auto-invoked) |
 | `@somi /review-panel`         | reviewer + specialist lenses (sequential on Copilot)                                     |
 | `@somi /ship`                 | `planner` + (per iteration) `/code-loop`                                                 |
@@ -200,13 +247,14 @@ right agent, so `somi` mainly matters here, on Copilot.
 | `@somi /architecture-review`  | `architecture-reviewer` (+ `security-reviewer` when relevant)                            |
 | `@somi /test-strategy`        | `test-strategist`                                                                        |
 | `@somi /refactor`             | `refactorer`                                                                             |
-| `@somi /impact`               | (none — read-only blast-radius analysis)                                                 |
-| `@somi /adopt`                | `/atlas` flow (+ `test-strategist` for depth)                                            |
+| `@somi /refactor-design`      | `refactor-designer`                                                                      |
+| `@somi /impact`               | `impact` (read-only blast-radius analysis)                                               |
+| `@somi /adopt`                | `atlas` agent (+ `test-strategist` for depth)                                            |
 | `@somi /upgrade`              | `discovery-analyst` (research) + `/code-loop` (migration)                                |
 | `@somi /release-readiness`    | `reviewer` (one integration pass; the checklist is deterministic)                        |
-| `@somi /incident`             | (mitigation inline; seeds `/debug` / `/plan` after)                                      |
-| `@somi /pr`                   | (none — composes the PR from artifacts; `gh` after confirmation)                         |
+| `@somi /incident`             | `incident` (mitigation inline; seeds `/debug` / `/plan` after)                            |
 | `@somi` (bare)                | (none — status dashboard, read-only)                                                     |
+| `@somi /pr`                   | `pr` (composes the PR from artifacts; `gh` after confirmation)                            |
 
 > On Copilot the loop caps fall back to judgment-enforced tracking when the host can't run the
 > `scripts/somi-loop.mjs` / `somi-findings.mjs` helpers — and `scripts/somi-check.mjs` (below) is

@@ -2,24 +2,38 @@
 description: Parallel multi-lens review. Spawns the relevant review agents (reviewer + security / architecture / test as the diff warrants) concurrently on the same change, then merges and de-duplicates their findings into one severity-graded verdict.
 argument-hint: <slug> [phase N, iteration M]  |  <diff target>
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
-model: sonnet
 ---
 
 # /review-panel — Parallel multi-lens review
 
-You are running the **review panel** of somi: several independent, read-only review lenses on the
-**same change at the same time**, merged into one verdict.
+You are running the **review panel** of somi: several independent review lenses on the **same change
+at the same time**, merged into one verdict. Each lens is read-only **by contract** — it holds
+Write/Edit and is forbidden from using them.
 
 The user's target: **$ARGUMENTS** (a work-item slug, optionally `phase N, iteration M`, or a diff
 target such as a PR / commit range / working tree).
 
-The orchestrator (this command) is `sonnet`; each lens it Tasks (`reviewer`, `security-reviewer`,
-`architecture-reviewer`, `test-strategist`) remains `opus`. The lenses are **read-only** — they
-return findings; this command owns every write (the merged review file, `progress.md`, `diary.md`).
+The orchestrator (this command) has no `cost:` of its own — nor a `model:` of its own; it runs on
+whatever model this session is already using — and runs entirely inline. Each lens it Tasks
+resolves its model from its **own** declared set:
+`reviewer`, `architecture-reviewer`,
+`test-strategist`, `plan-reviewer`, and `sdlc-reviewer` declare `cost: medium, high` (the ceiling picks the highest permitted member,
+typically `high` for the fresh-eyes depth a panel wants); `security-reviewer` declares `cost: high`
+alone — a missed vulnerability outweighs a lighter generalist pass, so it has no lower mode (see
+its own `> **Cost:**` callout). The lenses are read-only **by contract, not by platform
+restriction** — they return findings; this command owns every write (the merged review file,
+`progress.md`, `diary.md`). The session ceiling selects each lens's tier and never refuses one: a lens whose declared tiers
+all sit above the ceiling still runs, at its cheapest declared tier.
 
 > **Why this exists.** A single reviewer carries one set of priorities at a time; running the
 > specialist lenses *in parallel* on one diff catches what a sequential, escalation-only pass misses
-> — and it's safe to parallelize because every lens is read-only, so there is no write contention.
+> — and parallelizing is safe because **this command is the sole writer**: every lens returns
+> findings as text and none is given a write to perform, so there is nothing for them to contend
+> over. **Concurrency does not weaken this**: zero writers is zero writers whether one lens runs or
+> six, so parallelism adds no contention risk the sequential case lacks. Note it rests on the
+> lenses honouring their contract — each carries a `## Write discipline` section — not on a platform
+> restriction; they do hold Write/Edit. Parallelism does raise the *cost* if that contract breaks:
+> concurrent violating writes race, where a sequential one would merely be last-write-wins.
 > This is the panel for a change you want scrutinized hard before merge. For a quick single-lens
 > pass, use [`/review`](./review.md).
 
@@ -50,20 +64,27 @@ its domain** — seating an irrelevant lens is wasted spend and dilutes signal:
 | `security-reviewer` | touches auth/authz, crypto, secrets, input validation, deserialization, file uploads, third-party data, templating, or user-controlled input reaching a sink |
 | `architecture-reviewer` | adds/splits a module or service, changes a public contract, or changes dependency direction |
 | `test-strategist` | adds/changes meaningful test surface, or the diff's risk is concentrated where tests are thin/over-mocked/flaky |
+| `plan-reviewer` | the review target is a plan or design (a `.somi/plans/<slug>/` artifact set, a `brief.md`, or an ADR), or the diff changes `spec.md` / `decisions.md` / `phases/` / `brief.md` — the plan's shape is what is under review, not only the code |
+| `sdlc-reviewer` | a work-item `<slug>` was given, or the diff touches `progress.md` / `diary.md` / the findings ledger — so the planning record can be checked against what the diff actually did |
 
 Record which lenses you seated and **why each unseated one was skipped** — that record is part of
 the panel's value (it shows the surface was considered, not ignored).
 
 ### 3. Run the panel **in parallel**
 
-Issue the seated lenses as **multiple `Task` calls in a single turn** so they run concurrently. Give
-each the *same* scoped diff and work-item context, and each its own briefing:
+Issue the seated lenses as **multiple `Task` calls in a single turn** so they run concurrently —
+call `somi_resolve` for each lens back-to-back immediately before the batch (each call's own
+`project_dir`, model, and `dispatched at cost: <tier>` in that lens's own briefing — this is the
+concurrent-batch case the `somi-dispatch` skill's §5 names explicitly). Give each the *same* scoped
+diff and work-item context, and each its own briefing:
 
 ```text
 Task reviewer            (= /review <target>, scope = this diff)
 Task security-reviewer   (= security lens on this diff)            # if seated
 Task architecture-reviewer (= structural lens on this diff)        # if seated
 Task test-strategist     (= test-shape lens on this diff)          # if seated
+Task plan-reviewer       (= plan lens on the plan artifacts)       # if seated
+Task sdlc-reviewer       (= process lens on the planning record)   # if seated
 ```
 
 > **Copilot / sequential fallback.** Parallel sub-agent execution is a Claude Code capability. Where
@@ -105,7 +126,7 @@ lenses found the change.
   lenses in the markdown, not as duplicate ledger entries.
 - Update `progress.md` (the iteration's `Reviewed` column → `panel:<verdict>`) and append a
   `diary.md` entry (category `review-feedback`) naming the verdict, the seated lenses, and the top
-  finding. The lenses are read-only; these writes are yours.
+  finding. The lenses write nothing by contract; these writes are yours.
 - If any lens surfaced a **plan** issue (not just code), include its proposed diary entry and
   recommend `/plan` (or the `/code` plan-change protocol) per [`/review`](./review.md).
 

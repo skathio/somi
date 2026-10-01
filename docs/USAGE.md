@@ -6,14 +6,14 @@ to type, what to expect, and where the artifacts go.
 ## The fundamental loop
 
 ```
-MAX tier (opus) — front-load reasoning into a dense brief.md:
+cost: high — front-load reasoning into a dense brief.md:
 /discover <idea>           →  .somi/rd/<slug>/ + brief.md     →  user reviews + approves
    ↓ (new product)           (research + BRD/SRS/FRD/SDD/TDD)
 /design <feature>          →  .somi/plans/<slug>/ + brief.md  →  user reviews + approves
    ↓ (brownfield, design-    (design.md + decisions + brief)
    ↓  heavy feature)
-─────────────────────────  MAX→ECO model switch  ─────────────────────────
-ECO tier (sonnet) — execute against the brief, cheaply:
+───────────────────────────  brief handoff  ───────────────────────────────
+cost: medium — execute against the brief, cheaply:
 /plan <problem|slug>       →  .somi/plans/<slug>/ created    →  user reviews + approves
    ↓                          (consumes brief.md as primary input)
 /code-loop <slug>           →  diff + tests + review files;  →  user inspects
@@ -23,14 +23,14 @@ ECO tier (sonnet) — execute against the brief, cheaply:
 (next iteration; or merge if done)
 ```
 
-The **MAX** front-loads (`/discover` for a new product, `/design` for a brownfield design-heavy
-feature) compile a dense `brief.md` so the **ECO** tier (`/plan`, `/code`) executes *without
-re-researching*. Incremental work with a settled design skips the front-load and starts at `/plan`;
-a cold design-heavy plan triggers `/plan`'s depth gate, which recommends `/design` first.
+The **`cost: high`** front-loads (`/discover` for a new product, `/design` for a brownfield
+design-heavy feature) compile a dense `brief.md` so **`cost: medium`** (`/plan`, `/code`) executes
+*without re-researching*. Incremental work with a settled design skips the front-load and starts at
+`/plan`; a cold design-heavy plan triggers `/plan`'s depth gate, which recommends `/design` first.
 
 `/code <slug>` runs a single coder pass without the review loop. `/code-loop` is the bounded
 code↔review cycle for a single iteration. `/ship` runs the whole pipeline with hard gates at every
-stage; `/ship-loop` runs it continuously, gating once at the MAX→ECO model switch.
+stage; `/ship-loop` runs it continuously, gating once at the brief handoff.
 
 ---
 
@@ -51,8 +51,12 @@ planning.
 
 **Expect**:
 - SoMi proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
-- Runs on the **most capable model end-to-end** (the `/discover` command itself is `opus`, not just
-  the agent) — its output is the cornerstone of the project.
+- The judgment-heavy core runs at the most capable tier — on the agent, not the command:
+  `/discover` declares no `cost:` and no `model:` of its own (it runs on whatever model this
+  session is already using) and Tasks `discovery-analyst` at `cost: high` for the judgment-heavy
+  core of the work — its output is the cornerstone of the project. The
+  command itself still scaffolds the artifact set and owns the crossroads conversation with you,
+  which can't live inside a single `Task` call.
 - **Researches the competition extensively** — scans direct/indirect competitors, mines real user
   complaints and churn reasons, and surfaces recurring failure modes to design *away* from. Every
   non-obvious claim is cited; signal is distinguished from noise; nothing is fabricated.
@@ -203,7 +207,7 @@ machine", a stack trace pointing somewhere implausible. (Cause already known + t
   with what's missing; no hunch-fixes.
 - **Bounded isolation**: one falsifiable hypothesis at a time (default budget 5 — config
   `debug.max_hypotheses`, env `SOMI_DEBUG_MAX_HYPOTHESES`); when narrowing stalls, a
-  fresh-context MAX diagnosis pass (the `reviewer` on the evidence only) discriminates the
+  fresh-context high-cost diagnosis pass (the `reviewer` on the evidence only) discriminates the
   remaining candidates.
 - The **fix runs under `/code-loop`** with the repro test as acceptance — the usual caps apply,
   and a fix that blows the diff cap is treated as a signal the change is feature-sized (hand-off
@@ -242,7 +246,7 @@ radius, follow-ups. It's the durable record for the next person who hits this cl
   Consultant findings are merged into the review under attributed sections.
 - Written to `.somi/reviews/<slug>/<YYYY-MM-DD>-<phase>.<iter>-<verdict>.md` (or
   `…-plan-review-<verdict>.md` for plan reviews).
-- A line in `progress.md` "Recent activity"; a diary entry if findings affect the plan.
+- The verdict in `progress.md`'s `Reviewed` cell; a diary entry if findings affect the plan.
 - Summary: verdict, counts, top 3 findings.
 
 See [`examples/code-review-example.md`](../examples/code-review-example.md) for a worked review.
@@ -295,10 +299,10 @@ loops. Global budget caps total passes. See [`commands/ship-loop.md`](../command
 
 ### `/atlas`
 
-Builds (or refreshes) the **Repo Atlas** at `.somi/atlas.md` — one MAX-tier deep read of the
+Builds (or refreshes) the **Repo Atlas** at `.somi/atlas.md` — one `cost: high` deep read of the
 codebase (module map, dependency rules, conventions digest, hotspots, test topology),
-SHA-stamped. Later MAX actions (`/design`, cold `/plan`, `/refactor` analysis, `/impact`) start
-from it and deep-read only the drift since its SHA, instead of re-reading the repo per work
+SHA-stamped. Later actions that read the repo (`/design`, cold `/plan`, `/refactor-design`, `/impact`)
+start from it and deep-read only the drift since its SHA, instead of re-reading the repo per work
 item. Worth running once on any repo you'll do repeated SoMi work in; refresh after structural
 changes. Commit it.
 
@@ -369,13 +373,26 @@ mock policy, determinism.
 
 ### `/refactor`
 
-Surgical, behavior-preserving refactor of a named smell. Tests stay green; no feature work mixed
-in.
+Surgical, behavior-preserving refactor of a named smell that fits one safe diff. Tests stay green;
+no feature work mixed in.
 
 ```text
 /refactor OrderService mixes pricing logic and persistence. Split pricing into a pure module and
           keep persistence behind a repository interface. Files: src/order/service.ts,
           src/order/repo.ts.
+```
+
+### `/refactor-design`
+
+Scope design for a refactor too big for one diff — spans many modules, needs a migration, or
+changes a shared shape. Tasks the `refactor-designer` agent at `cost: high` for the judgment-heavy
+core of the work; the command itself still scaffolds the artifact set and owns the crossroads
+conversation with the user. Names the destination shape, maps seams and risks (`file:line`),
+confirms test-coverage gaps, and compiles a `brief.md` that `/plan-loop` → `/code-loop` execute.
+
+```text
+/refactor-design The auth module mixes session/token/permission logic across 8 files with no
+                 shared abstraction — needs untangling before we can add SSO.
 ```
 
 ### `/review-panel`
@@ -420,7 +437,7 @@ suggestions), and recommends a small calibration work item to run as `/ship` or 
 
 ### `/upgrade`
 
-Dependency upgrade validation, MAX→ECO shaped: cited changelog/breaking-change/CVE research →
+Dependency upgrade validation, design→execution shaped: cited changelog/breaking-change/CVE research →
 usage scan of the flagged APIs → mini-`brief.md` (which doubles as the dep-gate sign-off
 record) → human gate → migration under `/code-loop` with the full suite as acceptance.
 Patch/minor with nothing breaking documented → it says so and recommends the short path.
@@ -434,7 +451,7 @@ Patch/minor with nothing breaking documented → it says so and recommends the s
 
 The pre-release gate: a deterministic checklist over the artifacts (all iterations done? open
 Blocker/Major `F-<n>`s? DoD checkable? rollout/rollback real? interrupted loops?
-`somi-check --all` clean?) plus **one** MAX fresh-context review of the *cumulative* release
+`somi-check --all` clean?) plus **one** high-cost fresh-context review of the *cumulative* release
 diff — the integration surface per-iteration reviews never saw. Output: `ready` /
 `ready-with-conditions` / `not-ready` with evidence, and draft release notes generated from the
 work items' specs and diaries.
@@ -489,6 +506,7 @@ several genuinely independent slices and you want smaller, more focused per-iter
 | `audit.log`                           | `.somi/audit.log`                                    | Append-only across sessions                       |
 | Context-injection state               | `.somi/somi-state/last-context-signature`            | Project-local, gitignored                         |
 | Loop state                            | `.somi/somi-state/loop/<slug>[.<N>.<M>].json`        | Project-local, gitignored; survives session death (loops resume) |
+| Cost ceiling state                    | `.somi/somi-state/ceiling.json`                      | Project-local, gitignored; one file for the whole session, not per slug |
 | Diff                                  | git                                                  | As long as the branch / history is kept           |
 
 All artifacts under `.somi/` should be committed to the repository. They're how the team and
@@ -544,7 +562,8 @@ optional; omit anything you don't want to change:
   "parallel":      { "max_parallel": 3 },
   "debug":         { "max_hypotheses": 5 },
   "dep_install":   { "allow": ["@types/", "eslint-"] },
-  "lockfiles":     { "allow_edit": false }
+  "lockfiles":     { "allow_edit": false },
+  "cost":          { "ceiling": "high", "mapping": {} }
 }
 ```
 
@@ -556,6 +575,269 @@ optional; omit anything you don't want to change:
   and every package in the command must match a prefix.
 - `lockfiles.allow_edit: true` permits hand-editing lockfiles as project policy
   (`SOMI_ALLOW_LOCKFILES` still wins for a session, including `=0` to re-deny).
+- `cost.ceiling` sets the session's maximum `cost` tier (`low`/`medium`/`high`, default `high` — no
+  restriction). `cost.mapping` overrides [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s
+  shipped per-host model mapping; a host named there replaces that host's whole tier map. See "Cost
+  tiers and model resolution" below for how the ceiling and the mapping override actually apply.
+
+## Cost tiers and model resolution
+
+Cost is declared with a `cost:` field in frontmatter, beside `model:` — **agents only**: `cost:`
+sizes an agent instance being spawned, and a command is instructions, not an instance — it declares
+neither field and runs inline under whatever model the session is already using. `scripts/validate.sh`
+fails the build if a `commands/*.md` file declares `cost:` or `model:`. Every `agents/*.md` file declares `cost:`
+(one narrow, named exemption: `agents/somi.md` — its declaration was always decorative, since the
+host binds that agent's model when the user selects it, not SoMi), and `scripts/validate.sh`
+asserts presence and validity across all of them. **`cost:` is a CAPABILITY SET, and the test is
+universal, not "usually": a unit declares a tier only if that tier is acceptable for *everything
+the unit accepts*.** The session ceiling that later picks among a unit's declared members is blind
+to which job is running, so a declared tier has to hold for every job, not just the common case. A
+single value (`cost: medium`) means the unit has exactly one accepted-everywhere tier; a
+comma-separated, strictly-ascending list (`cost: medium, high`) means *each* listed tier produces
+acceptable output for every job the unit accepts — not "this tier for the easy jobs, that tier for
+the hard ones." That reading (a range covering different jobs at different tiers) is exactly what
+the three shapes below rule out. **`cost:` never aggregates what a unit Tasks, and a spawned unit
+never inherits its caller's tier** — a command Tasking a `cost: high` agent declares nothing of its
+own; the agent's own frontmatter is where `high` is truthfully declared, once, and a `cost: high`
+agent Tasking a `cost: low, medium` helper does not pull that helper up to `high` either.
+
+**`low` is the one exception to the strict universal bar, and only `low`.** `medium` and `high`
+still require the tier to hold for *every* accepted job. `low` uses an opt-in bar instead: a
+builder-tier agent (one that produces the work, not one that judges it) may declare `low` once it
+can still do a reduced-depth version of its job and its own output discloses that it ran at that
+depth and names what it skipped. This is safe specifically because `low` is never *silently*
+selected — it only runs when the session ceiling resolves to `low`, whether from an explicit CLI
+argument or `SOMI_COST_CEILING` for this session, or inherited from a committed `.somi/config.json`
+or a saved state file that persists across sessions, and the front door announces that ceiling and
+its source before any work runs. So the reduced depth is a trade the user can see coming, not one
+made for them unseen. The judging agents (`reviewer`, `security-reviewer`, `architecture-reviewer`,
+`test-strategist`) stay off `low` regardless: a weaker judge doesn't produce weaker output, it
+produces a false pass, with nothing downstream to catch what it missed.
+
+**Three declared shapes, and they resolve differently:**
+
+1. **Graded over one job** — no modes; output degrades smoothly with less reasoning depth. Declares
+   its full set; the ceiling picking blindly is correct because neither member is *insufficient*,
+   only shallower. This is the common case (`agents/reviewer.md`'s `medium, high` below).
+2. **Alternative modes** — the unit actually does two different jobs with different requirements
+   (A *xor* B, not "A but sometimes shallower"). **Split into separate units** rather than declaring
+   a range: mode selection and tier selection would otherwise name the same decision on one file, and
+   a caller could pick the demanding mode under a ceiling that only cleared the easy one.
+   [`agents/refactorer.md`](../agents/refactorer.md) (`cost: low, medium`, surgical execution,
+   Tasked by [`/refactor`](../commands/refactor.md)) and
+   [`agents/refactor-designer.md`](../agents/refactor-designer.md) (`cost: high`, scope design for a
+   refactor too big for one diff, Tasked by
+   [`/refactor-design`](../commands/refactor-design.md)) are the shipped example — one agent used to
+   do both jobs at one declared tier that was insufficient for one of them, which let a large
+   refactor enter scope-design work under a `medium` ceiling; now they're two single-purpose agents,
+   each Tasked by its own single-purpose command, each graded over its own job rather than split
+   across modes.
+3. **Sequential stages** — every stage runs on every invocation; nothing branches around the
+   expensive one. Declares what its **most demanding stage** needs, not what the easy stages could
+   get away with — a lower member would be provably wrong the moment the hard stage runs. No current
+   agent has this shape (`agents/reviewer.md` and the rest are graded, not staged); it was
+   illustrated by [`/release-readiness`](../commands/release-readiness.md) before the declaration
+   moved off commands entirely — that command still runs Stage 1's mechanical checklist then
+   Stage 3's real-reasoning synthesis, but it now declares no `cost:` of its own, so the shape has
+   no live example today. Kept declared and validated for the next **agent** whose own internal
+   stages earn it.
+
+**A real, shipped example**: `agents/reviewer.md` declares `cost: medium, high`. `high` is the
+adversarial, fresh-eyes pass the agent is written for — every category in its "What to look for"
+walked in full. `medium` still produces a genuinely useful lighter review under a capped session
+ceiling: read for intent, walk the diff, apply the same severity grading, just with less
+exploration depth. There is no `low` in its set — the whole job is catching what the author missed,
+which needs reasoning about the code at every tier the agent runs at, never mechanical extraction.
+The comma-separated mechanism is validated the same way regardless of how many files use it today
+(`scripts/validate.sh` checks ordering and rejects duplicates or malformed lists). Three tiers, in
+the same vocabulary Copilot's own model picker already uses:
+
+- `low` — small, mechanical, near-deterministic work: formatting, extraction, lookup, aggregation
+  over already-produced artifacts.
+- `medium` — structured execution against an already-compiled plan or brief: typical implementation
+  and a lighter review pass.
+- `high` — front-loaded or adversarial reasoning: architecture, cross-cutting design, fresh-eyes
+  review, open-ended research.
+
+A shipped mapping resolves a single, already-*selected* cost tier and a host to a concrete model:
+[`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s `resolveModel(cost, host, mapping)`.
+`mapping` defaults to the shipped table; `.somi/config.json`'s
+`cost.mapping` overrides it — `mergeHostMapping(HOST_MODELS, config.cost.mapping)` builds the
+effective mapping to pass as `resolveModel`'s third argument, replacing a named host's whole tier
+map rather than merging it tier-by-tier. A host absent from the mapping gets no override — the
+caller omits the model argument and that host's own default applies. An unrecognized `cost` value,
+a mapped host missing the requested tier, or a mapping override shaped as anything but a plain
+object (including a `__proto__` key — `JSON.parse` can give one a genuine own property, unlike
+object-literal syntax) throws rather than silently resolving to the wrong model.
+
+### Session ceiling
+
+The [dispatch resolver](#dispatch-resolver) (below) composes this with the mapping above, and
+[`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) is the one canonical procedure
+that calls it — primarily the bundled `somi_resolve` MCP tool, falling back to the CLI only where
+SoMi's own install path is already known. **Every** entry path is instructed to resolve via that
+same skill: the `somi` front-door agent (`agents/somi.md`), for every request it
+enters, runs that command's own procedure live and follows the skill before spawning **each** agent
+that procedure starts (never once for the whole command); and a **direct** command invocation on
+Claude Code follows the identical skill at its own agent-Tasking point, in the live turn actually
+running that command. This is a prompt-level instruction, not something a hook enforces at
+runtime: what `scripts/validate.sh` actually checks, mechanically, is that every command whose text
+starts a real agent references the skill somewhere in its own text (`MISSING DISPATCH REFERENCE`
+fails the build otherwise) — not only when a request happens to be routed through the `somi`
+persona (see `docs/AGENTS.md`'s escalation matrix for which agent a given command Tasks).
+
+A session ceiling **selects among the tiers a unit offers; it does not decide whether the unit
+runs.** [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root,
+arg)` and `decideDispatch(costs, ceiling)`. State lives at `.somi/somi-state/ceiling.json` — one
+file for the whole session, not per slug, since spend applies across whatever you're working on.
+Precedence for what can **move** a ceiling already in force: an explicit argument this call >
+`SOMI_COST_CEILING` this call > the ceiling already on disk; `.somi/config.json`'s `cost.ceiling` is
+read only once, when no state file exists yet — a bare config edit after that never silently
+reopens the ceiling, mirroring `/code-loop`'s cap precedent. Every move is recorded in
+`ceiling_overrides` as `{field, from, to, source, at}`.
+
+`decideDispatch` takes `costs` — a unit's declared set, as a single string or an ascending array —
+and always allows the dispatch. It picks `selected` from `costs`:
+
+- some declared member sits at or below the ceiling → `selected` is the **highest** such member,
+  chosen silently, with no prompt. Running `agents/reviewer.md`'s `medium, high` under a `medium`
+  ceiling *selects `medium`* — this is choosing within declared capability, not a downgrade,
+  because the unit itself said `medium` was acceptable.
+- no declared member fits the ceiling → `selected` is the **cheapest** declared member. A unit
+  declaring only `high` has no lower mode to fall back to — it is intrinsically that expensive, so
+  blocking it would not be a saving, only a stoppage. It runs at `high` regardless of the ceiling.
+
+**The ceiling is therefore not a hard spend cap.** A `medium` session can still spawn `high` for a
+unit that declares only `high` (`security-reviewer`, `designer`, `refactor-designer`,
+`discovery-analyst`, and the `/atlas` work). There is currently no way to express "never `high`,
+full stop" — the mechanism that would enforce that does not exist yet, so don't rely on the ceiling
+alone for a hard budget guarantee. The tier a unit honestly declares (narrower sets are cheaper by
+construction) is the real spend lever.
+
+No outcome invents a tier from outside `supported` (the normalized declared set, present on the
+result) — there is no lookup table, no "nearest allowed tier" pulled in from elsewhere. A malformed
+ceiling or an unrecognized/unordered/duplicated declared set — from config, the env var, an
+explicit argument, or the `costs` argument itself — throws rather than disabling the ceiling or
+coercing into something valid. `modelForDispatch(decision, host, mapping)` is the sanctioned way to
+turn a decision into a model: it resolves `decision.selected` and refuses outright unless
+`decision.action` is `allow` — unreachable through `decideDispatch` today, since every dispatch now
+allows, but kept as the structural closer for the never-degrade rule: nothing ever runs below a
+tier it declared.
+
+### Dispatch resolver
+
+Both surfaces below compose the three pieces above into a single answer: for a given agent, right
+now, which tier and model should run it. Neither re-derives the composition — both call the same
+[`scripts/lib/dispatch-resolver.mjs`](../scripts/lib/dispatch-resolver.mjs) function and turn its
+result into their own shape.
+
+**`somi_resolve` — the bundled MCP tool — is the primary surface.** It's what `agents/somi.md`'s
+Step 4 actually calls: a prompt in a consuming project has no way to know where SoMi is installed,
+so it can't shell out to a script by path, but a plugin's bundled MCP server is launched with its
+own root already known. See [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server) for the tool's full
+argument/error contract (`agent`, `host`, `ceiling`, `project_dir`; the same four-code failure
+family as below, reported in the tool result text).
+
+[`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs) is the CLI wrapping the identical
+function. It's no longer the primary dispatch path — it's the resolver's test harness (this doc's
+own examples below run it directly), and the fallback `agents/somi.md` uses only where SoMi's own
+install path is already known without guessing (working inside the SoMi repo itself, or a vendored
+install whose `${SOMI_VENDOR_ROOT}` is already in hand):
+
+```
+node scripts/somi-dispatch.mjs resolve --agent <name> [--host <host>] [--ceiling <tier>]
+```
+
+- `--agent` is validated against `^[a-z][a-z0-9-]*$` before it ever touches a filesystem path — it
+  may come from a prompt carrying untrusted text. The agent's frontmatter is read from **this
+  script's own install location**, never the caller's project (a consuming project may have no
+  `agents/` directory of its own).
+- `--host` defaults to `claude-code`. The `somi` front-door agent passes `claude-code` or `copilot`
+  precisely, naming whichever host is actually running it.
+- `--ceiling` is an explicit override for this one call. Its value is checked against
+  `low`/`medium`/`high` **before** anything is read from or written to disk — a rejected value
+  therefore never bootstraps a ceiling state file, exit `64` — and only then passed to
+  `resolveCeiling`.
+
+Before resolving a model, it builds the effective mapping the same way this doc's "Cost tiers"
+section above describes: `mergeHostMapping(HOST_MODELS, cost.mapping)`, where `cost.mapping` is
+read from the **caller's project** `.somi/config.json` (via `readCostConfig` — the same reader
+`resolveCeiling` uses for `cost.ceiling`, so a project's cost config is never parsed by two readers
+that could disagree). Unlike the ceiling, this is read fresh on every call rather than only at
+bootstrap: the mapping is a lookup table, not a gate a mid-session edit could reopen, so a config
+fix takes effect on the very next dispatch. This is how a host SoMi doesn't ship a mapping for
+(e.g. Copilot) gets one at all — the user's own project tells SoMi which of its models is
+`low`/`medium`/`high`. A malformed mapping fails loudly, never a guessed model, split by **whose**
+fault it is: a **structurally** invalid mapping (a `__proto__`/`constructor`/`prototype` host key,
+a non-object per-host value, or a tier key outside `low`/`medium`/`high`) is the project's own
+`.somi/config.json` being broken, exit `67` — the same family as an unparsable config file, not
+this agent's declaration. A mapping that is shaped fine but incomplete for the tier this call
+actually selected, or that names a non-string model value, is split the same way, by whether the
+project's own `cost.mapping` named this **host** at all: `mergeHostMapping` replaces a named host's
+whole tier map rather than merging it tier-by-tier, so a **partial override of a shipped host** (an
+override naming only `high`, say, for `claude-code`) silently drops that host's `low`/`medium`
+entries — every other builder that resolves through that host then hits this same failure. That gap
+is the project's own file being incomplete, exit `67`, and the message names
+`.somi/config.json cost.mapping` explicitly so it never reads as this agent's own broken `cost:`
+declaration. Only a host the project's mapping never named failing this way would point at a bug in
+the shipped `HOST_MODELS` table itself — guarded against by `tests/scripts/cost-model.sh` asserting
+every shipped entry resolves for every tier — and that stays exit `66`.
+
+On success it prints one JSON object and exits 0 — `agent`, `supported` (the normalized declared
+set), `tier` (what `decideDispatch` selected), `model` (what the effective mapping resolves that
+tier and host to today — this doc names the tier, not the model, for the same reason the rest of
+this section does), `ceiling`, `ceiling_source`, and `ceiling_origin`:
+
+```json
+{"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "ceiling": "high", "ceiling_source": "default", "ceiling_origin": "default"}
+```
+
+`model` is `null` for a host absent from the mapping — this call makes no guess. The **caller** is
+expected to do something with that `null` rather than pass nothing on: pick one of the models
+available on that host itself, matching the resolved tier (lightest for `low`, strongest for
+`high`), and disclose plainly that the pick is its own judgment, not the mapping's answer — never
+silently omit a model while a tier was still selected, and never invent one without saying so.
+`ceiling_source` is one of `cli`, `env`, `config`, `state`, `default`: `resolveCeiling` reports this
+on every call, not only when a ceiling actually moves. `ceiling_origin` is a companion field naming
+what actually produced the value now in force, and it survives every later bare call the way
+`ceiling_source` does not: once a ceiling is loaded from disk, `ceiling_source` just says `"state"`
+on every subsequent call, which alone cannot explain *why* the user is at `low` (a
+saved-but-unexplained state is not actionable). `ceiling_origin` keeps saying `config` (a committed
+team policy) or `cli`/`env` (an explicit override, possibly from a previous session) for as long as
+that value stays in force, which is what lets a caller announce a `low` ceiling honestly rather
+than only "it's in force, somehow." Two further values it can report, neither ever written to the
+state file: `config-stale` — the value was bootstrapped from `.somi/config.json`, but that file's
+`cost.ceiling` has since changed to something else or been removed, and a bare edit cannot itself
+move a ceiling already saved — and `unknown` — a state file written before `ceiling_origin` existed
+(there is no way to recover which of the other values actually produced it, so this is the honest
+answer rather than a guess).
+
+Failure is loud and specific rather than a bare stack trace, with a distinct exit code per cause:
+`64` for a bad or missing argument — including an unrecognized `--ceiling` value **or** an
+unrecognized `SOMI_COST_CEILING` value, both checked before anything touches disk, since either one
+is the caller telling this call which ceiling to use and getting it wrong, whichever channel it
+came through — `65` for an agent with no matching file, `66` for a malformed `cost:` set (or `somi`,
+which is exempt, since its model is bound by the host when the user selects it) — or a
+shape-valid mapping missing the tier just selected / holding a non-string model value **for a host
+the project's own `cost.mapping` never named**, which would mean a bug in the shipped `HOST_MODELS`
+table itself — and `67` for the **project's own files** being broken before resolution can even get
+that far — an unparsable or malformed-shape `.somi/config.json` (including a structurally invalid
+`cost.mapping`: a `__proto__`/`constructor`/`prototype` host key, a non-object per-host value, or a
+tier key outside `low`/`medium`/`high`), a corrupt `.somi/somi-state/ceiling.json` — **or** that same
+missing-tier / non-string-model failure for a host the project's own `cost.mapping` **did** name (a
+partial override of a shipped host drops its other tiers) — distinct from `64` because nothing the
+caller typed this call caused it, and distinct from `66` because the gap traces back to the
+project's own config, not this agent's declaration. Every `67` message names the offending file or
+config key — `.somi/config.json cost.mapping` for the mapping-gap case. No JSON is ever printed on
+a failing path.
+
+`scripts/validate.sh` additionally greps for `resolveModel(` called against a decision's `ceiling`
+field instead of its `selected` field, outside `scripts/lib/` — the one unsanctioned composition
+that would silently run a unit at whatever the session merely *permits* rather than the tier
+`decideDispatch` actually picked for it. This resolver is required to use `modelForDispatch`, never
+`resolveModel` directly, and the gate fails the build if a future call site reintroduces exactly
+that `resolveModel(<name>.ceiling, …)` shape — a targeted grep, not proof every call site uses
+`modelForDispatch`.
 
 ## Dependency additions
 

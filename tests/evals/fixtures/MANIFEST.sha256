@@ -1,0 +1,40 @@
+# Content hashes of every CANDIDATE-VISIBLE fixture file.
+# Regenerate with: bash tests/scripts/evals-fixtures.sh --update-manifest
+# An edit failing here is not a bug: re-read fixtures/README.md's invariant list, confirm
+# the change states no pass criterion, then regenerate. A keyword denylist cannot make
+# this promise -- it only catches phrasings someone already thought of.
+efb8d9ea796674e4e1b65bd9970b113db83c2c0f3133a70ef293d1f446386e85  tests/evals/fixtures/make-review-patch.mjs
+0d7b52ebf5ff2d8cd0e9b1923c40e49a06fe2e4cb5a35506c0679e3d72171af0  tests/evals/fixtures/multipass-code-control.mjs
+8c2dc1da450fcff692cae86e8d93c5407ffd89051bc6908e94575bece733b446  tests/evals/fixtures/multipass-code-mutant-a.mjs
+80fe791cde7d7526493d8d888144a01a4994a0eea1204eece654ef0238b6ddbc  tests/evals/fixtures/multipass-code-mutant-b.mjs
+7eebccdd03392b6ab9e501e61897c049623343ff5b89b90fc4a271e407e667d3  tests/evals/fixtures/multipass-code/_somi/plans/expired-token/diary.md
+4494c98e4fae8abe955bfed791e7e827be28e210e565c63764fae63c7d2ee174  tests/evals/fixtures/multipass-code/_somi/plans/expired-token/phases/01-backward-paging.md
+a23b9267d03c79072ce20eda9466e5506891f9fb5dbb658dbe765293ea9e3656  tests/evals/fixtures/multipass-code/_somi/plans/expired-token/progress.md
+cf2d109ef69bb78b448e982072530ca8f89a5992856c1b346b0fd50f791366f5  tests/evals/fixtures/multipass-code/_somi/plans/expired-token/spec.md
+2d9548d23f599e7bd315de873cba513d8700b892c3c89bcbd20165accd659556  tests/evals/fixtures/multipass-code/package.json
+17267d8549fe886e7bb01f858dcb49a1ab39592ee2cd9ca0d173b805607a1361  tests/evals/fixtures/multipass-code/src/pagination/cursor.mjs
+590089c83fa3621f6c398f6f26e068efcd7704e0ef89781079b6eb4f7b1f1025  tests/evals/fixtures/multipass-code/src/pagination/paginate.mjs
+7afa23af92186cdeffc30c0bba9cc3e10719edf57af82862a1eeba340833161e  tests/evals/fixtures/multipass-code/tests/pagination/paginate.test.mjs
+4ff45771a457910e65df85581bcb920c6425885cd8af431cd0b24bad8580106e  tests/evals/fixtures/task01-plan/CLAUDE.md
+8760f32dabd6af73ea9a90ca608e8735eba076274bcb3e07d89c85a96ad540fc  tests/evals/fixtures/task01-plan/docs/adr/0004-no-new-datastores.md
+142b0468c3c1b067cdaf10033df506494d158b11e4032ad0d69e3418ce04c7cb  tests/evals/fixtures/task01-plan/src/auth/api-key.mjs
+070a0c239c20f9c8bcbf71bd9fc5e9249833d8eef1ea5c09976b0c5ed4c60fe9  tests/evals/fixtures/task01-plan/src/db/client.mjs
+c6ba6edcb514a253b6e4869ba01e367499526248bc053a98a58bb355835aae12  tests/evals/fixtures/task01-plan/src/db/schema.sql
+fb6566c9fb39fbd5441dcbcf15649cb4663a7aa27fb1a88cd31bcfe1f3255236  tests/evals/fixtures/task01-plan/src/ingest/handler.mjs
+1d3adba40012ab0834d2925262358318712c692863e7d3131fe4c2ee6c2d4e45  tests/evals/fixtures/task02-code/_somi/plans/expired-token/diary.md
+9ce59c9fc60951f23b0ce5b1bcc462d01fc5c353e71b79807295689abb94d6a2  tests/evals/fixtures/task02-code/_somi/plans/expired-token/phases/01-reject-expired.md
+1d32afbe9e8a49840704b32ae6ae708c0b0c5105c234da3e30c5dc16751f7ccf  tests/evals/fixtures/task02-code/_somi/plans/expired-token/progress.md
+0f7fc4d4c86b373ac158d6c4122aae8f723438e198672cff507de60545d8e9cb  tests/evals/fixtures/task02-code/_somi/plans/expired-token/spec.md
+935c868b19cc83e275ade958b1cc1c26db88f96266f4332b1001d3902ba2a1a0  tests/evals/fixtures/task02-code/package.json
+efb988d40c617a41ba6560f14356f60b0410e357cb9d1d0983650355b8a25f77  tests/evals/fixtures/task02-code/src/auth/session.mjs
+be2695e7eb7d93fe725fa0350a0daf6419e715e4af710c6a39d8b5c6d3e7c866  tests/evals/fixtures/task02-code/src/auth/token.mjs
+1d547b241722598f9a2675e278ffc544a7032deb477b9afc58dc3746d6797e73  tests/evals/fixtures/task02-code/tests/auth/token.test.mjs
+f61e1c6139eef547cca425d657cd24a0fe10736e03094116242c003890e2fab0  tests/evals/fixtures/task03-review.patch
+8214417c187ce0bd1d7c62de02a5d56efa29cd64c5b2d6980c55ea25ddf3f2e1  tests/evals/fixtures/task03-review/README.md
+567afab3f46dda0af32951934f58294eb74c66a7dc86ddc69cbbb6a98582273a  tests/evals/fixtures/task03-review/package.json
+eb64f9be62e2d2acb8988d5c908fba5a8771b776c3586c1d83e9252d5e09611f  tests/evals/fixtures/task03-review/src/billing/proration.mjs
+fd1ca859d9d0f05c0cd4ab8219f617b9f495e8a350cf4dc9a2032c8176163c46  tests/evals/fixtures/task03-review/src/invoice/lines.mjs
+6a73cb2f2f5265e7a84a5dc0e75c9ab14091453e834927bf60bd629b7d4d236e  tests/evals/fixtures/task03-review/src/reporting/dunning.mjs
+0b1a82e39d6817f8982793195fc6fc195ad76370bc75ed8788984c80824aa3cf  tests/evals/fixtures/task03-review/src/reporting/summary.mjs
+1345e21e701b5482816093ecc69fd8d62dbb11e1112bf62d6bde8b0d16267378  tests/evals/fixtures/task03-review/src/util/format.mjs
+58c1d446480c12a58ac35e6598c0bb00ff0382ad1a70bb48fd238a6657342445  tests/evals/fixtures/task03-review/tests/proration.test.mjs
