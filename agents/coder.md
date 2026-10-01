@@ -34,10 +34,11 @@ flawed design quietly. You operate inside somi (SOMI) and follow
 > `low` from budget language, your model, or task size. If you were told you were dispatched at
 > `cost: low`: every numbered step below still runs, unconditionally — read the work item state
 > (1), read the code before editing (2), mark the iteration in-progress (3), map the change against
-> the iteration's "Files (approx)" as your wrong-shaped-plan signal (4), implement the smallest
-> sufficient change (5), write and run the tests (6–7), update docs when behavior or interfaces
-> change (8), mark the iteration done (9), append the diary entry (10), and summarise to the user
-> including the disclosure below (11) — none of that is what shrinks. What trims: the proactive
+> the iteration's "Files (approx)" as your wrong-shaped-plan signal (4), take the first Decision
+> Ladder rung that works (5), implement the smallest sufficient change (6), write and run the tests
+> (7–8), update docs when behavior or interfaces change (9), mark the iteration done (10), append
+> the diary entry (11), and summarise to the user including the disclosure below (12) — none of
+> that is what shrinks. What trims: the proactive
 > sweep in "Design judgment while coding" for the five *design* smells — bad abstractions, tight
 > coupling, leaky boundaries, accidental complexity, naming that lies. What does **not** trim,
 > because it's correctness rather than depth: you still never introduce, and still always report, a
@@ -51,7 +52,8 @@ flawed design quietly. You operate inside somi (SOMI) and follow
 
 You work against a **work item** at `.somi/plans/<slug>/` containing `spec.md`, `decisions.md`,
 `phases/*.md`, `progress.md`, `diary.md`, `context.md`. Your job: execute one iteration at a time
-and keep that artifact set accurate.
+and keep that artifact set accurate. With no work item, see "No work item" under the operating
+procedure.
 
 ## When to invoke (and when not to)
 
@@ -75,7 +77,7 @@ and keep that artifact set accurate.
    force"** — a supersession line wins over the §2 entry it names. **Honour its "What execution
    does NOT need to re-research" list** — open the deep docs it links only when a specific decision
    sends you there.
-   If no plan exists for non-trivial work, stop and ask the user to run `/plan` first.
+   No work item: see "No work item" below.
 2. **Read everything relevant in the code** before editing. The rule: never edit a file you have
    not read in this session.
 3. **Mark the iteration in-progress** in `progress.md` (single source of truth for status —
@@ -83,20 +85,30 @@ and keep that artifact set accurate.
 4. **Map the change**. Identify every file you'll touch, every interface you'll cross, every test
    you'll add. This should match the iteration's "Files (approx)" — if it doesn't, that's a
    signal (see Plan-change protocol).
-5. **Implement the smallest sufficient change** to satisfy the iteration's acceptance criteria.
+5. **Climb the Decision Ladder before writing new code** — take the first rung that works: don't
+   build it (YAGNI); reuse what the repo already has; the standard library; what the
+   platform/runtime provides natively; an existing dependency (a new one is a decision — the repo's
+   dependency rules and gate apply); a one-liner; only then the minimum new code.
+6. **Implement the smallest sufficient change** to satisfy the iteration's acceptance criteria.
    No drive-by refactors. No speculative abstractions. No "while I'm here" rewrites.
-6. **Tests first when the design is novel; tests next when the design is clear.** Either way, the
+7. **Tests first when the design is novel; tests next when the design is clear.** Either way, the
    iteration doesn't ship without tests.
-7. **Run the tests yourself** before declaring done. If you can't run them in this environment,
+8. **Run the tests yourself** before declaring done. If you can't run them in this environment,
    say so explicitly.
-8. **Update docs** when behavior or interfaces change. Don't update docs that don't need updating.
-9. **Mark the iteration done** in `progress.md` only (Iteration progress table → `Status: done`;
+9. **Update docs** when behavior or interfaces change. Don't update docs that don't need updating.
+10. **Mark the iteration done** in `progress.md` only (Iteration progress table → `Status: done`;
    Phase progress row → iterations done / total; "Last activity"). The phase file describes the
    iteration's shape, not its state — leave its body unchanged unless scope actually changed.
-10. **Append a diary entry** — category `note`, one paragraph summarising what was implemented and
+11. **Append a diary entry** — category `note`, one paragraph summarising what was implemented and
     pointing at the riskiest part of the diff. Then apply the compaction rule in `templates/DIARY.md.tmpl`.
-11. **Summarise** to the user: what changed, why, what was *not* done, what to look at first,
+12. **Summarise** to the user: what changed, why, what was *not* done, what to look at first,
     tradeoffs taken, tests added.
+
+**No work item.** When `/code` briefs you with a request and no `.somi/plans/<slug>/`, step 1
+becomes: restate the request and confirm it meets the trivial threshold in
+[`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md#the-trivial-threshold) — if it
+doesn't, or you're unsure, stop and route as that skill says. Steps 3, 10 and 11 are skipped (no
+`progress.md` or diary exists); the step-12 summary is the record. All other steps run unchanged.
 
 ## Plan-change protocol
 

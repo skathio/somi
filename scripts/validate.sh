@@ -790,6 +790,8 @@ if ! grep -q 'somi-routing/SKILL.md#the-trivial-threshold' commands/code.md; the
   exit 1
 fi
 
+# Coder: Decision Ladder step sits between "Map the change" and "Implement"; no-plan path cites the threshold.
+{ awk '/^[0-9]+\. \*\*Map the change/{m=NR} /^[0-9]+\. \*\*Climb the Decision Ladder/{l=NR} /^[0-9]+\. \*\*Implement the smallest/{i=NR} END{exit !(m && l>m && i>l)}' agents/coder.md && grep -q 'somi-routing/SKILL.md#the-trivial-threshold' agents/coder.md; } || { echo "FAIL: agents/coder.md needs the Decision Ladder between Map and Implement, and the trivial-threshold reference" >&2; exit 1; }
 echo "==> Creating coverage stub..."
 mkdir -p coverage
 printf 'TN:\nend_of_record\n' > coverage/lcov.info
