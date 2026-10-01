@@ -778,6 +778,18 @@ if ! node scripts/check-size-budget.mjs; then
   exit 1
 fi
 
+echo "==> Validating the trivial threshold is defined once and referenced by /code..."
+# Routing is model-judged, so the testable invariant is structural: the definition exists in the
+# routing skill and the /code command points at it rather than restating it.
+if ! grep -q '^## The trivial threshold' skills/somi-routing/SKILL.md; then
+  echo "FAIL: skills/somi-routing/SKILL.md lacks the 'The trivial threshold' section" >&2
+  exit 1
+fi
+if ! grep -q 'somi-routing/SKILL.md#the-trivial-threshold' commands/code.md; then
+  echo "FAIL: commands/code.md does not reference the trivial threshold" >&2
+  exit 1
+fi
+
 echo "==> Creating coverage stub..."
 mkdir -p coverage
 printf 'TN:\nend_of_record\n' > coverage/lcov.info

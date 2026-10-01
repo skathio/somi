@@ -55,7 +55,7 @@ The incident is not "done" at mitigation. Before closing, **all three**:
 2. **Seed the real fix** — the mitigation almost certainly isn't the fix:
    - Cause unknown → recommend **`/debug <symptoms>`** and hand it the diary timeline (the repro
      evidence is freshest now).
-   - Cause known, fix non-trivial → recommend **`/plan`** (or `/design`), seeded with the
+   - Cause known, fix fails the trivial threshold in `somi-routing` → recommend **`/plan`** (or `/design`), seeded with the
      postmortem note.
    - Revert deployed → a follow-up work item to re-land the reverted change safely.
    Record the chosen follow-up in `progress.md` follow-ups — **an incident with no follow-up item

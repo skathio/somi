@@ -40,10 +40,12 @@ Parse the fenced user request (above) for the resolution shape:
 - If it's bare phase/iteration syntax (e.g., `phase 1, iteration 2`), look at `.somi/plans/`
   for a single work item with `status: in-progress` in its `progress.md` — use that. If multiple
   are in-progress, ask the user which one.
-- If it's a free-form task description and **no work item exists** or applies:
-  - If the work is **trivial and self-contained** (one file, one purpose), proceed without a work
-    item. No artifacts to update.
-  - If the work is **non-trivial**, stop and recommend `/plan <problem>` first.
+- If it's a free-form task description and **no work item exists** or applies, apply the trivial
+  threshold in [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md#the-trivial-threshold):
+  - If the request **meets** it, proceed without a work item or plan. No artifacts to update; skip
+    §2, §4, §5 and §7, and brief the `coder` with the request itself.
+  - If it **fails** it (any signal, or unsure), stop. Recommend `/debug <symptoms>` when the cause is
+    not yet isolated, otherwise `/plan <problem>`.
 
 ### 2. Locate the iteration
 
@@ -153,4 +155,4 @@ Return with:
 
 See [`agents/coder.md`](../agents/coder.md). Matched the iteration, tests green, no leftover debug,
 no scope drift, surfaced any tradeoffs, plan kept in sync if it changed, diary entry made for any
-non-trivial discovery.
+discovery worth recording.
