@@ -8,7 +8,7 @@
 // copy that drifts (the same reasoning behind the cost-model / digest-marker derivations
 // elsewhere in this test suite).
 //
-// A router command (`/ship`, `/ship-loop`, `/code-parallel`, `/somi`) Tasks other COMMANDS
+// A router command (`/ship`, `/ship-loop`, `/code-parallel`) Tasks other COMMANDS
 // (`Task /code-loop`, …), never an agent directly, so none of the call-site patterns below match
 // it and it is correctly excluded — verified empirically against the real repo, not assumed.
 //

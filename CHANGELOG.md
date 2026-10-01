@@ -14,6 +14,13 @@ regardless of how narrow the observable break is.
 **Migration**: if you invoke the *skill* by name, use `somi:testing-playbook`. If you use the
 `/test-strategy` **command**, nothing changes.
 
+**The standalone `/somi` command stays removed** (since 2.2.1): there is no `commands/somi.md`, and
+the catalogue is 24 commands. The status dashboard lives in the `somi` agent (a bare `@somi`), which
+also strips its own leading `/somi`/`@somi` marker before recognising a command, so
+`@somi /ship-loop feature` runs `/ship-loop`. 3.0 keeps its own front-door dispatch (each command's
+procedure runs live and every agent starts through `somi_resolve`), superseding 2.2.2's inline
+persona mechanics.
+
 Three work items, each with a full `.somi/` artifact set.
 
 ### `context-economy-overhaul` — deliver the ruleset, and stop the digest drifting
@@ -103,6 +110,88 @@ Three work items, each with a full `.somi/` artifact set.
 host is outstanding, and Copilot CLI does not document per-call model selection. Commands still
 locate `scripts/somi-loop.mjs` relative to the install root, which a consuming project cannot always
 resolve (they fall back to manual tracking).
+
+## [2.2.2] — 2026-07-27 — fix: the `somi` front door collapsing every command into a single persona
+
+**Patch — bug fix.** Running `@somi /ship-loop <problem>` on GitHub Copilot executed no agents at
+all: planning, coding, and reviewing were done by one undifferentiated `sonnet` pass, and the
+`planner` / `coder` / `reviewer` personas — plus the fresh-context review boundary — silently
+vanished. Three compounding defects in `agents/somi.md`:
+
+- **Composite commands had no defined behavior.** Step 5 offered exactly two cases — "no paired
+  agent" (run inline) and "one paired agent" (adopt it). But `/ship`, `/ship-loop`, `/plan-loop`,
+  `/code-loop`, `/code-parallel`, `/review-panel`, `/upgrade`, `/release-readiness`, and `/adopt`
+  orchestrate **several** agents across stages and match neither case. (The file's own worked
+  example even noted `/ship-loop` "has no single paired agent" and then routed it to a case that
+  didn't cover it.) Step 5 now has a third case: walk the command's stages in written order and run
+  each delegation as its own pass under its own persona, announced, never merged.
+- **A blanket "never emit a `Task` call — there are no sub-agents on Copilot."** This contradicted
+  the rest of the repo, which only ever claims **concurrency** is unavailable and mandates
+  sequential execution anyway — `/review-panel`: "never drop a lens to save a round trip";
+  `/code-parallel`: "do not fake it." Replaced with the actual rule: prefer a real sub-agent `Task`
+  where the host supports one, otherwise run the same agents sequentially inline. Skipping an agent
+  is never an option.
+- **The MAX check tested the wrong layer.** Step 4 diverted only the three commands whose own
+  frontmatter is `opus` (`/design`, `/discover`, `/atlas`), so every command that *Tasks* an `opus`
+  agent — `/review`, `/refactor`, `/security-review`, `/architecture-review`, `/test-strategy`,
+  `/code-loop`, `/plan-loop`, `/release-readiness` — was adopted at `sonnet` with no signal, despite
+  the file claiming a MAX persona is never adopted under `sonnet`. MAX agents now still run (skipping
+  them would make `/review` unreachable from the front door) but must be **declared** at the stage
+  that adopts them.
+
+Also declared rather than hidden: inline review is **warm-context** (adopting `reviewer` right after
+being `coder` loses the cold-context property `/code-loop` requires), and must be re-derived from the
+diff and artifacts on disk, never from recollection of writing the code.
+
+**Cleanup in the same pass** (`agents/somi.md`, 247 → 193 lines despite the additions above):
+
+- **Removed 8 dangling `D2`–`D6` references.** They pointed at nothing in the repo, and collided
+  with SoMi's established convention where `D<n>` means a numbered decision in a work item's
+  `decisions.md` (`agents/planner.md`, `agents/reviewer.md`, `commands/pr.md`, `docs/USAGE.md`).
+- **Removed the vestigial "Mode 2 — Router" section** — 11 lines restating Step 2, and describing
+  the outcome as "recommend" (the deleted command's behavior), contradicting Steps 3–5's dispatch.
+  Renamed the orphaned "Mode 1" to "The status dashboard."
+- **Removed the "Failure modes to avoid" list** — seven bullets restating steps stated imperatively
+  above, two of which addressed a maintainer editing the file rather than the agent running it.
+- **Trimmed the maintainer note** from ~24 lines to 8, dropping the 2.2.1 bug retelling already
+  carried by this changelog and `docs/AGENTS.md`, and the step-header meta-commentary.
+
+**Docs** — `docs/AGENTS.md` and `docs/PLUGIN.md` no longer claim Copilot "has no sub-agents"
+(`docs/PLUGIN.md` cited a parity caveat that actually says *concurrent*); both now describe the
+staged-persona behavior. `skills/somi-routing/SKILL.md` says "Route to" rather than "Recommend",
+matching its only remaining consumer.
+
+No migration action required.
+
+## [2.2.1] — 2026-07-27 — fix: GitHub Copilot's `/somi` command swallowing explicit command invocations
+
+**Patch — bug fix.** On GitHub Copilot, an invocation like `/somi ship-loop feature` was being
+misread as an explicit `/somi` (the Mode 2 router), which only **recommends** a command and never
+runs one — so `ship-loop` never actually invoked `/ship-loop`. Root cause: `somi` named two
+coexisting surfaces (the `agents/somi.md` persona and the standalone `commands/somi.md` slash
+command), and Copilot always addresses the agent with a leading `/somi`/`@somi` token — that
+token was indistinguishable from the user's own explicit `/somi` invocation, so every message got
+permanently short-circuited into the recommend-only router.
+
+- **Removed `commands/somi.md`** and its `commands` entry in
+  `.copilot-extension/extension.json`. There is no more standalone `/somi` command.
+- **`agents/somi.md`** now absorbs both of the removed command's modes directly: bare
+  invocation renders the status dashboard (formerly Mode 1); free-form text classifies and
+  dispatches via [`skills/somi-routing/SKILL.md`](skills/somi-routing/SKILL.md) (formerly Mode
+  2, now adopt-inline rather than recommend-only, matching the agent's existing classify-and-run
+  behavior). Step 1 now strips the leading `/somi`/`@somi` marker before recognizing commands, so
+  `/somi ship-loop feature` correctly proxies to `/ship-loop` with argument `feature`.
+- **`scripts/validate.sh`** no longer asserts `commands/somi.md` exists.
+- **Docs** — `docs/AGENTS.md`, `docs/PLUGIN.md`, `docs/COMMANDS.md`, `docs/USAGE.md`,
+  `docs/SKILLS.md`, `docs/EXTENDING.md`, `docs/INSTALL.md`, `README.md` updated: no more `/somi`
+  command, no more `somi` agent / `/somi` command coexistence.
+
+**Claude Code impact**: Claude Code never invoked the `somi` agent (direct commands already
+select the right agent there), so the standalone `/somi` status-dashboard-and-router is simply
+gone on that host with no equivalent replacement — the direct commands (`/plan`, `/review`, …)
+remain the entry points. This is shipped as a patch because the fix removes a broken, conflicting
+duplicate rather than changing any command's or agent's intended contract; the underlying
+capability (dashboard + router) is preserved in full on GitHub Copilot, where it actually matters.
 
 ## [2.2.0] — 2026-07-23 — feat: `somi` front-door agent for GitHub Copilot + shared routing skill
 

@@ -31,15 +31,16 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 | [`/incident`](../commands/incident.md)                   | Incident lane       | `incident` (`cost: medium`; frame stays in the command; seeds `/debug` or `/plan` after)   | mitigation + diary timeline + mandatory postmortem note + seeded follow-up work item |
 | [`/ship`](../commands/ship.md)                           | Full pipeline       | `planner` (`cost: low, medium`) + (per iteration) `/code-loop` (see its row)               | full `.somi/plans/<slug>/` set + iteration diffs + reviews                   |
 | [`/ship-loop`](../commands/ship-loop.md)                 | Bounded pipeline    | none of its own — router; `/plan-loop` (see its row) → `/code-loop` (see its row) per iteration | as `/ship`, with both layers under caps and a hard human gate between them   |
-| [`/somi`](../commands/somi.md)                           | Status & routing    | none — read-only over the artifacts                                                       | status table with per-item next actions; or a routed recommendation for a new request |
 | [`/pr`](../commands/pr.md)                               | PR handoff          | `pr` (`cost: low, medium`; composes from artifacts, returns text; `gh` after confirmation, run by the command) | PR title + description distilled from the work item; optionally the opened PR |
 
 > **Note:** `/plan-review` no longer exists as a separate command — plan-level review is part of
 > `/review` (use `/review plan <slug>` or pass an `.somi/plans/<slug>/` path).
 
-> `/somi`'s Mode 2 classification table lives in
-> [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) — shared with the `somi`
-> agent, GitHub Copilot's front-door persona (see [`docs/PLUGIN.md`](./PLUGIN.md)).
+> **Note:** there is no `/somi` command. The status dashboard and problem-shape router it used to
+> provide now live entirely in the `somi` **agent** — GitHub Copilot's front-door persona (see
+> [`docs/PLUGIN.md`](./PLUGIN.md)) — whose classification table is
+> [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md). Claude Code has no equivalent
+> entry point; use the direct commands in the table above.
 
 ## Command file shape
 

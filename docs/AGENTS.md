@@ -339,9 +339,9 @@ Invoke via `/incident`, never directly — Stage 1 must run first.
 ### somi
 
 A Copilot-only dispatcher, not a phase-specific agent. Selecting it as the session persona
-removes the "which of the others do I need?" choice: per incoming message it runs an
-invocation-mode gate first — an explicit non-`/somi` command is proxied directly, an explicit
-`/somi` passes through to the `/somi` command verbatim, and anything else is classified against
+removes the "which of the others do I need?" choice: per incoming message it first strips its own
+`/somi`/`@somi` invocation marker, then runs an invocation-mode gate — nothing left renders the
+read-only status dashboard, an explicit command is proxied directly, and anything else is classified against
 [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md). It then **runs the matched
 command's own procedure live, in the same turn** — the role a command body plays on Claude Code —
 rather than handing the whole command to one Tasked agent. Every agent that procedure starts is
@@ -361,8 +361,7 @@ seats rather than collapsed into a single Task.
   is still, in effect, a thin dispatcher, not a reasoning engine: it decides *which* command starts,
   runs that command's own procedure itself, and resolves *at what tier* each agent that procedure
   starts runs.
-- **Won't**: second-guess an explicit command; wrap a second opinion around `/somi`'s own
-  recommendation; guess a model or tier when the resolver fails; suppress a dispatched persona's
+- **Won't**: second-guess an explicit command; guess a model or tier when the resolver fails; suppress a dispatched persona's
   own checkpoints (a `gh pr create` confirmation, `/incident`'s framing exchange, `/plan`'s decision
   round-trip).
 - **Will**: announce which flow it's entering and why before dispatching it; announce a `low`
@@ -372,11 +371,14 @@ seats rather than collapsed into a single Task.
 
 Invoke by selecting `somi` as your Copilot agent. Not needed on Claude Code.
 
-**`somi` the agent vs. `/somi` the command.** The token names two surfaces, disambiguated by
-kind: the **agent** (`agents/somi.md`) is what a Copilot user *selects* to drive a session; the
-**`/somi` command** (`commands/somi.md`) is the read-only status-dashboard-and-router *invoked
-inside* a session on either host (`@somi /somi`). They coexist deliberately — see
-[`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension) for how a Copilot session uses both.
+**There is no separate `/somi` command.** An earlier version shipped both a `somi` agent and a
+standalone `/somi` slash command with the same name — on Copilot, this agent's own
+`/somi`/`@somi` invocation marker was indistinguishable from an explicit invocation of that
+command, so every message got permanently short-circuited into a recommend-only router and never
+reached the real command the user typed (e.g. `/somi ship-loop feature` never ran `/ship-loop`).
+The fix was structural: the command is gone, and this agent absorbs both the status dashboard and
+the router directly. See the maintainer note in [`agents/somi.md`](../agents/somi.md) and
+[`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension) for how a Copilot session uses it.
 
 ## Cost tiering
 
@@ -485,9 +487,8 @@ plain prose escalations from inside an agent are no longer the only path.
                                  capture run in the agent; hooks stay on throughout)
 /impact      → impact           (read-only blast-radius tracing, atlas-first)
 /adopt       → atlas (Stage 1) + test-strategist (optional, gap-report depth)
-# Note: `somi` also names a selectable Copilot agent persona (agents/somi.md) — not invoked
-# via a command, so it has no row of its own here. See "The front-door agent" section above.
-/somi        → (no agent — read-only status dashboard & router; this is the /somi command)
+# Note: `somi` names a selectable Copilot agent persona (agents/somi.md) only — there is no
+# `/somi` command, so it has no row of its own here. See "The front-door agent" section above.
 /pr          → pr               (composes the PR from artifacts, returns text; gh only after
                                  confirmation, run by the command)
 

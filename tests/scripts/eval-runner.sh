@@ -1631,7 +1631,7 @@ fi
 # /code-loop's own convergence gate was once unbuilt, and labeling it `gate` excluded it from smoke
 # for a mechanism that did not exist. It then joined THIS tier, the same treatment /ship-loop gets
 # for its own deferred gate. Commands on disk today minus the gated set is what
-# remains in the smoke tier -- both counted below, not assumed (currently 25 minus 4 = 21).
+# remains in the smoke tier -- both counted below, not assumed (currently 24 minus 4 = 20).
 #
 # this set used to be spelled independently at three sites (now three still --
 # GATED_COMMANDS_JS plus the two hardcoded expected.set('code-loop', ...)/('ship-loop', ...) rows
@@ -1646,17 +1646,17 @@ fi
 GATED_COMMANDS_JS="new Set(['plan', 'code', 'review', 'code-loop'])"
 
 # A new command (commands/refactor-design.md) joined the smoke tier like every other ungated
-# command, no gate/mechanism change -- the two counts below moved 24->25 and 20->21 for that
+# reason alone; removing /somi (2.2.1) then took them to 24 and 20.
 # reason alone.
-check "25 commands on disk today (commands/*.md)" \
-  "$(ls "$ROOT"/commands/*.md | wc -l | tr -d ' ')" "25"
+check "24 commands on disk today (commands/*.md)" \
+  "$(ls "$ROOT"/commands/*.md | wc -l | tr -d ' ')" "24"
 
-check "discoverUngatedCommands() finds exactly the 21 D8 scopes this smoke check to (3.4: code-loop moved into GATED_COMMANDS_JS, 21 -> 20; a new command joined the smoke tier, 20 -> 21)" \
+check "discoverUngatedCommands() finds exactly the 20 D8 scopes this smoke check to (3.4: code-loop moved into GATED_COMMANDS_JS, 21 -> 20; a new command joined the smoke tier, 20 -> 21)" \
   "$(j "
     const S = await import('$ROOT/tests/evals/lib/smoke.mjs');
     const gated = $GATED_COMMANDS_JS;
     process.stdout.write(String(S.discoverUngatedCommands('$ROOT/commands', gated).length));
-  ")" "21"
+  ")" "20"
 
 # The load-bearing negative constraint, made structural rather than trusted by intention (this
 # phase has twice needed a grep pin, not trust, to keep "no test reaches this site" honest --
@@ -1686,8 +1686,8 @@ stub_iters=$(PATH="$stub_bin:$PATH" node --input-type=module -e "
 # proves the loop iterated the shared gated-set constant for real (a throw before the final
 # write also leaves this empty, subsuming the old exit-status check) -- not a stale count reused
 # from a different check.
-check "the stub-claude loop iterated all 21 currently un-gated commands, so ABSENT below can't mean it never ran" \
-  "$stub_iters" "21"
+check "the stub-claude loop iterated all 20 currently un-gated commands, so ABSENT below can't mean it never ran" \
+  "$stub_iters" "20"
 check "no smokeCheck() call reaches a stub claude on PATH (sentinel stays absent)" \
   "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "ABSENT"
 
@@ -1712,7 +1712,7 @@ allpass=$(j "
   const failed = files.map((f) => [f, S.smokeCheck(f)]).filter(([, r]) => !r.ok);
   process.stdout.write(failed.length === 0 ? 'ALL PASS' : failed.map(([f, r]) => f + ':' + r.field + ':' + r.reason).join(' | '));
 ")
-check "smokeCheck() succeeds for all 21 currently un-gated commands" "$allpass" "ALL PASS"
+check "smokeCheck() succeeds for all 20 currently un-gated commands" "$allpass" "ALL PASS"
 
 # --- 2.5 acceptance: each of the four staged mutations fails with a SPECIFIC, ATTRIBUTABLE reason
 # -- part of the acceptance criterion, not added at review. Staged against a
@@ -1953,8 +1953,8 @@ coverage_check=$(j "
   const problems = diff(actual, expected);
   process.stdout.write(problems.length === 0 ? 'MATCH:' + actual.size : problems.join(' | '));
 ")
-check "docs/EVALS.md's coverage table (25 rows) matches labels derived from classification.mjs + D8's floor rule, live -- not copied from the plan" \
-  "$coverage_check" "MATCH:25"
+check "docs/EVALS.md's coverage table (24 rows) matches labels derived from classification.mjs + D8's floor rule, live -- not copied from the plan" \
+  "$coverage_check" "MATCH:24"
 
 # The full-scope numeric row, same discipline: parsed off docs/EVALS.md's actual text, compared
 # against SCOPES.full imported live from run.mjs, formatted exactly as certify()'s own CLI output

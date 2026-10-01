@@ -219,7 +219,7 @@ copilot plugin update
 Copilot requires selecting one agent to drive the whole session. SoMi ships phase-specific experts
 (see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which phase you're in, and one
 generic front door, **`somi`**. Select `somi` when you're not sure —
-it recognizes an explicit command and proxies it, passes `/somi` straight through, and
+bare `@somi` renders a read-only status dashboard, it recognizes an explicit command and proxies it, and
 classifies free-form requests into the matching flow, then **runs that flow's own procedure live,
 in the same turn** — resolving and `Task`ing every agent the flow starts through the same cost
 resolver a direct command uses, the same way a command body dispatches on Claude Code. On Claude
@@ -253,7 +253,7 @@ Code the direct commands already select the right agent and run their own proced
 | `@somi /upgrade`              | `discovery-analyst` (research) + `/code-loop` (migration)                                |
 | `@somi /release-readiness`    | `reviewer` (one integration pass; the checklist is deterministic)                        |
 | `@somi /incident`             | `incident` (mitigation inline; seeds `/debug` / `/plan` after)                            |
-| `@somi /somi`                 | (none — status dashboard & router, read-only)                                            |
+| `@somi` (bare)                | (none — status dashboard, read-only)                                                     |
 | `@somi /pr`                   | `pr` (composes the PR from artifacts; `gh` after confirmation)                            |
 
 > On Copilot the loop caps fall back to judgment-enforced tracking when the host can't run the
@@ -262,9 +262,12 @@ Code the direct commands already select the right agent and run their own proced
 
 > Plan-level review uses `@somi /review plan <slug>` — there is no separate `/plan-review`.
 
-> The `somi` **agent** — a selectable persona, distinct from the `@somi /somi` **command** row
-> above — is the recommended default agent selection for a Copilot session. See "Selecting an
-> agent" above.
+> There is no separate `/somi` command. An earlier version registered both a `somi` agent and a
+> `somi` command; on Copilot the two were indistinguishable at dispatch time, so an invocation
+> like `@somi /ship-loop feature` (which Copilot sends as `/somi ship-loop feature`) got
+> misread as an explicit `/somi` and permanently short-circuited into a recommend-only router
+> that never ran `/ship-loop`. The fix folded the dashboard and router directly into the `somi`
+> **agent** — see the maintainer note in [`agents/somi.md`](../agents/somi.md).
 
 ### Plugin lifecycle
 

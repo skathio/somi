@@ -1,17 +1,17 @@
 ---
 name: somi-routing
-description: Use when classifying a free-form request's problem shape into the right SoMi command. The canonical problem-shape → command table shared by /somi's Mode 2 and the somi agent's classify step — edit only here.
+description: Use when classifying a free-form request's problem shape into the right SoMi command. The canonical problem-shape → command table used by the somi agent's classify step (Copilot's front door) — edit only here.
 ---
 
 # SoMi routing — problem shape → command
 
-This is the single source of truth for SoMi's request-classification table. Both `/somi` (Mode 2)
-and the `somi` agent (Copilot's front-door persona) load it instead of embedding their own copy —
-editing it once here keeps both consumers in sync, which is the whole reason this skill exists.
+This is the single source of truth for SoMi's request-classification table. The `somi` agent
+(Copilot's front-door persona) loads it instead of embedding its own copy — editing it once here
+is what keeps routing decisions in sync across every place a classification is made.
 
 ## The table
 
-| Shape (what the request smells like) | Recommend |
+| Shape (what the request smells like) | Route to |
 |---|---|
 | A bug — something worked, now doesn't; error/trace/CI failure; cause unknown | [`/debug`](../../commands/debug.md) |
 | A bug with the cause already isolated and a fix that [meets the trivial threshold](#the-trivial-threshold) | [`/code`](../../commands/code.md) (no work item needed) |
@@ -51,7 +51,7 @@ Not trivial and cause unknown goes to `/debug`; not trivial and cause known goes
 ## Existing-work-item check (do this first)
 
 Check the existing-work-item row **first** — grep `.somi/plans/*/progress.md` and
-`.somi/rd/*/README.md` for overlap with the request — before recommending a new work item. The
+`.somi/rd/*/README.md` for overlap with the request — before starting a new work item. The
 most common routing mistake is scaffolding a duplicate work item for something already in flight.
 
 ## Ambiguity disambiguation
@@ -61,7 +61,7 @@ disambiguates (e.g. "is the architecture for this settled?" splits `/plan` from 
 
 ## Consumers
 
-Loaded by exactly two surfaces for the table: `commands/somi.md` (Mode 2) and `agents/somi.md` (the classify
-step, reached only after its own invocation-mode gate). Adding a 10th command's routing row means
-editing this file only — neither consumer should re-embed the table. The trivial threshold is also read by `commands/code.md`,
-which applies it when no work item resolves.
+Loaded for the table by exactly one surface: `agents/somi.md` (the classify step, reached only
+after its own invocation-mode gate). Adding a new command's routing row means editing this file
+only — the consumer should not re-embed the table. The trivial threshold is also read by
+`commands/code.md`, which applies it when no work item resolves.
