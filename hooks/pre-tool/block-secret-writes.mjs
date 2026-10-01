@@ -2,19 +2,16 @@
 // hooks/pre-tool/block-secret-writes.mjs — PreToolUse hook (matcher: Write|Edit) — block
 // writes to secret-bearing paths.
 //
-// Node port of hooks/pre-tool/block-secret-writes.sh (node-runtime-port, phase 2,
-// iteration 2.2). Imports the shared read/deny/context helpers from ../lib/common.mjs
-// (2.1, reviewer-blessed) rather than reimplementing them.
+// Imports the shared read/deny/context helpers from ../lib/common.mjs rather than
+// reimplementing them.
 //
 // We block any attempt to write/edit files that are likely to hold real secrets. If the
 // user genuinely needs to bootstrap a `.env`, they can do it themselves or explicitly add
 // an override in their settings.local.json.
 //
-// SECRET_PATTERNS mirrors block-dangerous-bash.sh's SECRET_BASENAME set
-// (block-dangerous-bash.sh:86) — "kept in sync by comment convention, not code sharing"
-// today (context.md §2). Preserved as a deliberate duplication in this port; do not
-// unify the two lists — that would be a scope-creeping refactor beyond this
-// behavior-preserving port (flagged as a future-refactor target, same as today).
+// SECRET_PATTERNS mirrors the secret-basename set in block-dangerous-bash.mjs, kept in sync
+// by comment convention rather than code sharing. The duplication is deliberate: unifying the
+// two lists is a separate refactor, not something to fold into an unrelated change.
 //
 // ERE→RegExp translation note: every pattern below is basename-only, pure-ASCII, and
 // uses only anchors, escaped literal dots, and `?`/`*` quantifiers (plus one bare `.`
@@ -25,7 +22,7 @@
 // raw COMMAND-STRING content — irrelevant here, since every pattern below matches a
 // normalized file-path BASENAME extracted from the JSON payload, never raw content, and
 // no realistic basename contains a line-terminator character for that divergence to bite.
-// One platform sensitivity 2.3+ must inherit knowingly: path.basename() is posix-vs-win32
+// One platform sensitivity later hooks must inherit knowingly: path.basename() is posix-vs-win32
 // separator-aware (on Windows, `C:\Users\me\.env` → `.env` → DENY, where bash basename on
 // Linux treats `\` as a regular character → allow). For THIS hook the Windows behavior is
 // strictly safer; for path-heavier hooks (guard-protected-paths) the same divergence could

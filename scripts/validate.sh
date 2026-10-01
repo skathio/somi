@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Validation script run as `npm test`. Checks JSON validity, Node source syntax, and frontmatter.
-# The runtime it validates is zero-dependency Node (D1/D5): JSON validity uses `node -e JSON.parse`
-# (not `jq`), and source syntax uses `node --check` over the ported `.mjs` files (not `shellcheck`/
-# `bash -n` over `.sh`, which no longer exist under scripts/ or hooks/ — see work item
-# node-runtime-port). This file itself stays bash (dev/CI tooling, per context.md §6), invoked from
-# `npm test`; it needs neither jq nor shellcheck installed. Also emits a minimal coverage/lcov.info
+# The runtime it validates is zero-dependency Node: JSON validity uses `node -e JSON.parse`
+# (not `jq`), and source syntax uses `node --check` over the `.mjs` files (not `shellcheck`/
+# `bash -n` over `.sh`, which no longer exist under scripts/ or hooks/). This file itself stays
+# bash (dev/CI tooling), invoked from `npm test`; it needs neither jq nor shellcheck installed. Also emits a minimal coverage/lcov.info
 # stub so the hashira-ops CI coverage-report action has a file to parse (no unit test suite).
 set -euo pipefail
 
-# JSON validity via Node's own parser (D5: no jq). Fails loudly on the first invalid file.
+# JSON validity via Node's own parser (no jq). Fails loudly on the first invalid file.
 json_valid() { node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$1"; }
 
 echo "==> Validating JSON files..."
@@ -47,10 +46,15 @@ bash tests/scripts/run.sh
 echo "==> Link-checker tests..."
 bash tests/scripts/check-links.sh
 
+echo "==> Session-artefact gate tests..."
+# Guards scripts/check-session-artefacts.mjs: fails on a tagged comment, passes a clean one, and
+# honours its explicit exclusions.
+bash tests/scripts/check-session-artefacts.sh
+
 echo "==> Digest-generator tests..."
 # Guards scripts/generate-digest.mjs: per-target prefix transform, drift detection in EITHER
 # copy alone, clean errors on malformed input, and splice anchoring. Wiring `--check` itself
-# into this script (so CI fails on committed drift) is phase 3, iteration 3.1 — this is the
+# into this script is the separate "Validating digest parity" step below — this is the
 # unit guard for the generator, not the drift gate.
 bash tests/scripts/generate-digest.sh
 
@@ -106,7 +110,7 @@ fi
 bash tests/scripts/dispatch-guard.sh
 
 echo "==> Eval fixture guards..."
-# Guards tests/evals/fixtures/. Two Blockers from iteration 3.3b live here: a plan tree shipped
+# Guards tests/evals/fixtures/. Two defects are guarded here: a plan tree shipped
 # under `.somi/` that .gitignore silently dropped from the package, and pass criteria
 # written into fixture source as comments the candidate reads — which would have flatlined two
 # load-bearing rubric dimensions at pass in BOTH arms of the trim comparison, reporting no
@@ -114,34 +118,34 @@ echo "==> Eval fixture guards..."
 if [ -d tests/evals ]; then bash tests/scripts/evals-fixtures.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
 echo "==> Eval runner unit tests..."
-# Guards tests/evals/run.mjs: the N-of-M grading bands, the phase-4 comparison rule, the result
+# Guards tests/evals/run.mjs: the N-of-M grading bands, the trim-comparison rule, the result
 # schema, and --source worktree cleanup. Hermetic -- every case is --dry-run or a direct call.
 # This runs the runner's UNIT tests; it never invokes the runner against a model. The structural
 # assertion that npm test cannot execute the runner lives inside eval-runner.sh itself.
 if [ -d tests/evals ]; then bash tests/scripts/eval-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
 echo "==> Convergence gate CLI unit tests..."
-# Guards tests/evals/convergence.mjs's CLI section (phase 3, iteration 3.4): argument parsing,
-# --dry-run's shape/zero-model-call contract, --merge/--certify's shard-fold report, and F-251's
-# sha boundary check. Mirrors eval-runner.sh's own pattern -- unit-tests the gate logic, never a
-# live run. The module's non-CLI logic (3.1-3.3) is already covered by eval-runner.sh; this file
-# is scoped to what 3.4 alone adds, so the two stay disjoint rather than duplicating each other.
+# Guards tests/evals/convergence.mjs's CLI section: argument parsing, --dry-run's shape/zero-model-call
+# contract, --merge/--certify's shard-fold report, and the sha boundary check. Mirrors
+# eval-runner.sh's own pattern -- unit-tests the gate logic, never a live run. The module's
+# non-CLI logic is already covered by eval-runner.sh; this file is scoped to the CLI section
+# alone, so the two stay disjoint rather than duplicating each other.
 if [ -d tests/evals ]; then bash tests/scripts/convergence-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
 echo "==> Eval packaging & hermeticity..."
-# Phase 3's stated invariant risk lives here, and iteration 3.4c owns it alone: `npm test` never
+# The hermeticity invariant lives here, and this step owns it alone: `npm test` never
 # invokes a model, reaches the network, or reads a credential -- and the eval corpus never ships
 # to consumers. Asserted at the INVOCATION level, because validate.sh must NAME tests/evals to
 # syntax-check it, so a "no mention" rule would be self-contradicting.
 bash tests/scripts/evals-packaging.sh
 
 echo "==> Digest-marker / hook-fixture coupling..."
-# Phase 4 exit criterion. A `rules/` trim that removes or rewords a digest bullet must update
-# tests/hooks/cases/inject-workflow-context.json's Tier-2 marker in the SAME attempt. Phase 1
-# added a fixture PAIR on that bullet (positive + negative); trim the bullet and the cases that
+# A `rules/` trim that removes or rewords a digest bullet must update
+# tests/hooks/cases/inject-workflow-context.json's Tier-2 marker in the SAME attempt. The fixture
+# has a PAIR of cases on that bullet (positive + negative); trim the bullet and the cases that
 # carry it as incidental context go quietly vacuous while the suite stays green.
 #
-# `rules/` is one of phase 4's four trim candidates, so this is the coupling most likely to break.
+# `rules/` is the tree most likely to be trimmed, so this is the coupling most likely to break.
 coupling=$(node tests/scripts/lib/digest-marker-coupling.mjs \
   tests/hooks/cases/inject-workflow-context.json \
   hooks/user-prompt-submit/inject-workflow-context.mjs \
@@ -548,12 +552,12 @@ fi
 
 echo "==> Validating command/skill namespace collisions..."
 # (a) commands/ and skills/ share ONE namespace on Claude Code — a command and a skill with the
-# same name collide, and the skill silently loses. That is the defect this whole work item started
-# from: commands/test-strategy.md shadowed skills/test-strategy/SKILL.md, the skill never loaded,
+# same name collide, and the skill silently loses. That is the defect this check exists to catch:
+# commands/test-strategy.md shadowed skills/test-strategy/SKILL.md, the skill never loaded,
 # and nothing errored.
 #
 # Keyed on DIRECTORY name. That is sufficient under EITHER registration mechanism — not because
-# the mechanism is settled (it is not; F-28's probe is still open) but by composition: check (c)
+# the mechanism is settled (it is not; the probe is still open) but by composition: check (c)
 # below forces declared-name == directory for every skill, so no command basename can equal any
 # skill's declared name either. Unstated premise, verified today and unchecked: zero of the
 # commands/*.md files declare a frontmatter `name:`. If one ever does, this composition breaks
@@ -573,12 +577,12 @@ fi
 
 echo "==> Validating skill frontmatter name <-> directory parity..."
 # (c) A skill's declared `name:` and its directory must agree. A mismatch is invisible to every
-# other gate here: iteration 1.1's review reverted a renamed skill's `name:` and BOTH acceptance
-# greps plus the whole suite stayed green. Whether the host registers on directory or on `name:`
+# other gate here: reverting a renamed skill's `name:` once left BOTH acceptance
+# greps plus the whole suite green. Whether the host registers on directory or on `name:`
 # is not settled (evidence points at directory — Anthropic's hookify ships a mismatch and its own
 # commands invoke the directory name), so this ships as a parity/hygiene assertion: an
 # undetectable inconsistency between the two is worth failing on either way. Do NOT reword this
-# as "prevents a collision" until the mechanism probe in phase 1 iteration 1.1 has returned.
+# as "prevents a collision" until the mechanism probe has returned.
 parity_failed=0
 for f in skills/*/SKILL.md; do
   [ -f "$f" ] || continue
@@ -609,7 +613,7 @@ contract_failed=0
 # derived, the vacuity guard below would not have fired either. Trade accepted deliberately: a
 # future table in this file leading with a backticked non-agent cell now produces a LOUD, named
 # MISSING AGENT error rather than a silent miss. Loud-and-wrong is diagnosable; silent-and-missing
-# is the defect class this whole work item exists to remove.
+# is the defect class this check exists to remove.
 seated="$(grep -oE '^\| *`[a-z][a-z0-9-]*`' commands/review-panel.md | tr -d '|` ' | sort -u)"
 if [ -z "$seated" ]; then
   echo "WRITE CONTRACT CHECK: found no seated lenses in commands/review-panel.md — table shape changed?" >&2
@@ -637,20 +641,20 @@ fi
 
 echo "==> Validating the tools-doctrine two-part sweep..."
 # The `read-only` grep STRUCTURALLY cannot find false-rationale locations that omit the phrase —
-# which is why docs/AGENTS.md and docs/COMMANDS.md had to be hand-added to iteration 2.1's list,
+# which is why docs/AGENTS.md and docs/COMMANDS.md had to be hand-added to the sweep list,
 # and why docs/EXTENDING.md was missed entirely until code review. Both patterns must stay clean.
 # Pattern 2 targets the false RATIONALE, not the token `tools:` — a broader pattern matches the
 # corrected text too, and a check that fires on its own fix is a check nobody keeps.
 sweep_failed=0
-# SWEEP ROOTS: the plan's full eight. An earlier draft ran three and silently dropped rules/ —
+# SWEEP ROOTS: all eight trees. An earlier draft ran three and silently dropped rules/ —
 # the digest SOURCE injected into every gated turn of every consuming project, and one the
 # parity-only drift gate below cannot cover (it verifies the copies match the canonical, never
 # that the canonical is true).
 SWEEP_ROOTS="agents/ commands/ docs/ rules/ skills/ templates/ AGENTS.md .github/"
 # Pattern 1 must cover BOTH grammatical shapes the false claim takes. An earlier draft matched
 # only "does not have Write/Edit" and "agent is read-only (Read" — 4 of the 12 known instances,
-# missing every commands/review-panel.md case and docs/WORKFLOWS.md:290, which are the two the
-# plan singles out as worst because /review-panel's concurrency argument rests on them. The
+# missing every commands/review-panel.md case and docs/WORKFLOWS.md:290, which are the two
+# worst cases because /review-panel's concurrency argument rests on them. The
 # `by contract` filter is what lets the CORRECTED text through: it says read-only and means it.
 if grep -rnE 'do(es)? not have (Write|Edit)|agent is read-only \(Read|(lens|lenses|[Rr]eviewer|review agents?) (is|are) \*{0,2}read-only|read-only review (lens|lenses|agents?)' $SWEEP_ROOTS 2>/dev/null | grep -vE 'read-only \*{0,2}(by contract|\*{0,2} ?by contract)'; then
   echo "FALSE CAPABILITY CLAIM: an agent/lens is described as lacking Write/Edit; no SoMi agent declares tools: — restate as a contract" >&2
@@ -739,6 +743,15 @@ echo "==> Validating relative markdown links..."
 # than exempts. A marker on a link that DOES resolve fails too, so the hatch cannot outlive its
 # reason. Prefer a code span or a fence over a marker; see check-links.mjs's header.
 if ! node scripts/check-links.mjs; then
+  exit 1
+fi
+
+echo "==> Validating no session-artefact references in shipped code and prose..."
+# Comments in hooks/ and scripts/, and every line of agents/, commands/, skills/, must not point at
+# the gitignored .somi/ planning folder (finding ids, decision tags, iteration/phase numbers) --
+# a reader who cloned the repo cannot resolve them. Scope, patterns and exclusions live in
+# scripts/check-session-artefacts.mjs.
+if ! node scripts/check-session-artefacts.mjs; then
   exit 1
 fi
 

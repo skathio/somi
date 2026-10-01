@@ -2,9 +2,8 @@
 // hooks/session-start/detect-repo-instructions.mjs — SessionStart hook — detect repo-local
 // agent/instruction files and surface them.
 //
-// Node port of hooks/session-start/detect-repo-instructions.sh (node-runtime-port, phase 2,
-// iteration 2.7). Imports the shared read/context/projectRoot helpers from ../lib/common.mjs
-// (2.1, reviewer-blessed) rather than reimplementing them.
+// Imports the shared read/context/projectRoot helpers from ../lib/common.mjs rather than
+// reimplementing them.
 //
 // SoMi's design→execution economy is "respect repo conventions as context": when a project ships
 // its own instructions (CLAUDE.md / AGENTS.md / copilot-instructions / .cursorrules) or its own
@@ -15,11 +14,11 @@
 // directive) — it does not read or ingest file contents. It fires once per session and stays
 // silent when nothing repo-local is present.
 //
-// === THE PRUNE-LIST DECISION (explicit, named, per the phase file's requirement) =============
+// === THE PRUNE-LIST DECISION (explicit and named) ==============================
 //
 // bash's nested-file find (`detect-repo-instructions.sh:41-46`) declares a prune list
-// (.git/node_modules/.somi/vendor) but it is CONFIRMED NON-FUNCTIONAL on GNU find (0.4's
-// finding, independently reproduced by 0.4 pass 2's review with a control experiment): GNU
+// (.git/node_modules/.somi/vendor) but it is CONFIRMED NON-FUNCTIONAL on GNU find (found by a
+// probe and reproduced independently with a control experiment): GNU
 // find's `-mindepth 2` suppresses evaluation of EVERY predicate — including `-prune` — for
 // entries at depth < 2, and the pruned directories themselves (.git, node_modules, .somi,
 // vendor) are always depth-1 children of PROJECT_ROOT. The `-prune` clause therefore never
@@ -50,8 +49,8 @@
 //      actions that consume its signal. Surfacing a third-party package's own CLAUDE.md as if it were
 //      this repo's convention is actively misleading downstream context, not neutral noise.
 //
-//   3. Performance, empirically measured, not assumed (this is the argument the phase file
-//      flagged as possibly strongest, and it held up under measurement). Built a synthetic
+//   3. Performance, empirically measured, not assumed (possibly the strongest argument, and it
+//      held up under measurement). Built a synthetic
 //      800-package node_modules (4802 fs entries at depth <= 3, no matches, so `head -n 10`
 //      cannot short-circuit either implementation — full traversal is forced both ways) and
 //      timed three walks against it: bash's find (buggy, still descends node_modules) ~14ms;
@@ -64,25 +63,24 @@
 //      commonly have thousands of packages — non-negligible for a hook whose whole premise is
 //      being cheap enough to run unconditionally on every SessionStart.
 //
-//   4. Fail-quiet in the safe direction, matching this work item's existing precedent for
-//      accepted divergences (2.4's BASH_REMATCH-clobber fix, 2.6's UTF-8 truncation
+//   4. Fail-quiet in the safe direction, matching the other accepted divergences from the
+//      original bash hooks (the BASH_REMATCH-clobber fix, the UTF-8 truncation
 //      divergence): this change can only ever make a previously-surfaced file go silent
 //      (prune now excludes something it used to include); in every realistic case it never
-//      surfaces something new. (Pedantic corner from the 2.7 review: with >10 nested matches
+//      surfaces something new. (Pedantic corner: with >10 nested matches
 //      where pruned-dir junk sorts ahead of real files, bash's head -n 10 could truncate a
 //      REAL file the pruned walk now surfaces — arguably more correct, but not absolutely
 //      "never new".) A regression from this fix is "the hook says nothing when it used to
 //      say something," never a false positive.
 //
-//   5. Confined blast radius: unlike the audit()-embedded-delimiter issue (filed work-item-
-//      wide, deliberately NOT fixed in a single hook's port), this fix touches only this file
+//   5. Confined blast radius: unlike the audit()-embedded-delimiter issue (shared by every hook,
+//      deliberately NOT fixed in a single hook), this fix touches only this file
 //      — no shared common.mjs contract, no other hook's behavior, no cross-file coupling.
 //
 // What this means for the fixture (tests/hooks/cases/detect-repo-instructions.json):
 // `surfaces-nested-claude-md-under-pruned-dir` (which pinned the CURRENT bash bug — a
 // node_modules/CLAUDE.md being surfaced) is renamed and re-pointed to assert the FIXED
-// behavior (silent exit — node_modules is now actually pruned) as a named, reviewed edit, per
-// the same convention 2.8's status-detection decision is instructed to follow. The stated
+// behavior (silent exit — node_modules is now actually pruned) as a named, reviewed edit. The stated
 // fixture-implications of the OTHER option (had (a) been chosen instead): every other case in
 // the corpus would be untouched, this one case would pass completely as-is with zero edits,
 // and the.mjs would need to intentionally NOT prune node_modules/.git/.somi/vendor at
@@ -117,7 +115,7 @@
 // `fs.statSync(...).isFile()` and Dirent's `isFile()` both return `false` for a directory
 // identically, no extra branch required.
 //
-// === Windows caveat (same class already flagged in 2.2/2.3/2.5) ==============================
+// === Windows caveat (same class already flagged in the other path-handling hooks) ==============================
 // `path.relative()` (platform-default separator: posix on Linux/macOS, win32 on Windows) is
 // used to build the relative paths this hook emits in its message text. On Windows this would
 // emit backslash-separated relative paths where bash's `${nested#"$PROJECT_ROOT"/}` prefix

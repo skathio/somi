@@ -1,6 +1,5 @@
 // somi-loop.mjs — deterministic state engine for the bounded loops.
 //
-// Node port of scripts/somi-loop.sh (node-runtime-port, phase 1, iteration 1.1).
 // Zero-dependency: stdlib only (node:fs, node:path, node:child_process). No jq,
 // no bash. Behavior-preserving — exit codes and stdout JSON shapes are frozen
 // and reproduced exactly; see the bash original's header comment for the full
@@ -16,7 +15,7 @@
 //
 // Cap precedence (matches the gate tables): CLI flag > env var > .somi/config.json
 // > default. `init` resolves once from that chain and freezes the result into state.
-// `pass`/`check-diff` re-resolve their own cap on every call (F-29 — the documented
+// `pass`/`check-diff` re-resolve their own cap on every call (the documented
 // remedy for a fired gate, "adjust the env var and re-run", used to be inert): absent
 // an explicit CLI flag or env var THIS invocation, the cap already in force for the
 // loop stands unchanged (a `.somi/config.json` edit made mid-loop cannot silently
@@ -119,7 +118,7 @@ function nowIso() {
 // told about is in neither -- so a brand-new file counts ZERO until someone runs
 // `git add`. That made the cap under-measure by the entire size of every new
 // file an iteration introduced, silently, in the direction that lets work
-// through (F-220: measured 248 against a true 503 on this work item's own 3.3).
+// through (measured 248 against a true 503 on one real iteration).
 // Enumerated separately and merged into the same stream rather than fixed with
 // `git add -N`, which would mutate the caller's index as a side effect of a
 // read-only query.
@@ -204,11 +203,11 @@ function computeDiff(root, baseline, iterationFiles) {
   return { total, weighted, outOfScope };
 }
 
-// --- mid-loop cap re-resolution (F-29) --------------------------------------------
+// --- mid-loop cap re-resolution --------------------------------------------
 // `init` resolves caps once (CLI flag > env var > .somi/config.json > default) and
 // freezes them into state -- deliberately, so the diff baseline and pass history stay
 // stable across a whole loop. But commands/code-loop.md's Guardrails document a
-// remedy for a gate that's wrong for this work item: "the user adjusts the env var
+// remedy for a gate that's wrong for the work at hand: "the user adjusts the env var
 // explicitly and re-runs -- the loop does not 'decide' to widen its own bounds." That
 // remedy needs a path that re-reads the override on the SAME subcommand (`pass`,
 // `check-diff`), without `init --force` (which discards `pass`/`history`).

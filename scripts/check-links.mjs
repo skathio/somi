@@ -4,16 +4,13 @@
 // WHY A SEPARATE SCRIPT
 // A ~120-line walker inside a `validate.sh` heredoc would be unreadable and untestable, and the
 // repo already has the pattern of validate.sh invoking a focused Node script (generate-digest.mjs).
-// Recorded as a scope addition in the phase file rather than done quietly.
 //
 // WHAT IT WALKS
-// Every git-tracked `*.md`, minus `CHANGELOG.md` (generated release history — the same exclusion
-// spec.md §6 and phase 1 iteration 1.1's rename greps use). `.somi/` needs no filter: it is
+// Every git-tracked `*.md`, minus `CHANGELOG.md` (generated release history). `.somi/` needs no filter: it is
 // gitignored, so `git ls-files` can never produce a path inside it.
 //
 // FENCED AND INLINE CODE ARE SKIPPED — this is the whole correctness story.
-// A plan-review pass ran a fence-blind walker, recorded "7 links across 3 files fail today", and
-// built an escape-hatch policy around that inventory. **Four of the seven were sample content
+// A fence-blind walker once reported "7 links across 3 files fail today". **Four of the seven were sample content
 // inside a ```markdown fence** in examples/feature-plan-example.md — displayed source, not links;
 // no renderer resolves them. Marking them wrote a SoMi-internal CI token into the rendered body of
 // the canonical example spec, which ships in the npm tarball and is what users copy. With fence
@@ -23,14 +20,14 @@
 // SCANS WHOLE FILE CONTENT, NOT LINE BY LINE.
 // A per-line scan cannot see a link whose text wraps across lines — and this repo hard-wraps prose
 // at ~100 characters, so `See [the write-discipline contract in the reviewer\nagent](../x.md)` would
-// pass forever. Phase 3 iteration 3.1 paid for exactly this blind spot once already (a single-line
-// grep undercounted a 12-item inventory as 11 because one claim wrapped). Reference-style links
+// pass forever. A single-line grep has already paid for exactly this blind spot once
+// (it undercounted a 12-item inventory as 11 because one claim wrapped). Reference-style links
 // (`[text][ref]` + `[ref]: ./path`) are resolved too.
 //
 // THE illustrative-path ESCAPE HATCH, deliberately narrowed.
 // THIRD RESORT, not first. Before reaching for a marker: (1) if the text need not be a link, make
-// it an inline code span — iteration 1.3 resolved the real `examples/sample-consumer/` case that
-// way, and a non-link cannot rot; (2) if it is displayed sample source, put it in a fence, which
+// it an inline code span (that is how the real `examples/sample-consumer/` case was
+// resolved), and a non-link cannot rot; (2) if it is displayed sample source, put it in a fence, which
 // this walker now skips. Mark only when the link must stay a live link and its target genuinely
 // lives outside this repo.
 //
@@ -46,7 +43,7 @@
 //      artifact rather than something you'd have to diff markdown by eye to notice.
 // A marker on a link that DOES resolve also fails: an escape hatch that cannot detect its own
 // obsolescence becomes permanent. A separate allowlist file was rejected — it drifts out of sync
-// with the links it covers, the anti-pattern D3 already rejects for the digest triplication.
+// with the links it covers, the same anti-pattern rejected for the digest copies.
 //
 // KNOWN BOUNDARY (asserted by negative tests, not left to assumption): HTML `<a href>` is not
 // checked, directories satisfy existence, and `#fragment` targets are not validated — only the file
@@ -91,7 +88,7 @@ function blankCode(src, file) {
     // stray fence-looking lines can pair up and silently swallow the real prose between them —
     // demonstrated, a planted dead link between two stray indented ``` lines is missed. Accepted
     // because the other direction is worse: flagging displayed source costs a broken illustration,
-    // which is exactly what this iteration's Blocker did. Zero indented fences in the corpus today.
+    // which is exactly what an earlier version of this walker did. Zero indented fences in the corpus today.
     const open = line.match(/^[ \t]*(`{3,}|~{3,})/);
     if (open) {
       const [char, len] = [open[1][0], open[1].length];

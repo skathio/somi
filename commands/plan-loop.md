@@ -44,7 +44,7 @@ planner's reasoning.
 defaults above. Read both at the start of the run; record the effective values in the first diary
 entry of the loop.
 
-`MAX_PASSES` is **re-resolved on every `pass` call**, not frozen at `init` (F-29, same fix as
+`MAX_PASSES` is **re-resolved on every `pass` call**, not frozen at `init` (same fix as
 [`/code-loop`](./code-loop.md)). Absent an explicit CLI flag or env var *this invocation*, the cap
 already in force stands unchanged; when one does differ, it takes effect immediately, on the same
 subcommand, without discarding `pass`/`history`, and is appended to the loop state's

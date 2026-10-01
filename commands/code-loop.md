@@ -54,7 +54,7 @@ fact as it was easy in the moment (§4/§5 below fold any entries into the closi
 *is* committed). A malformed value (`--max-passes unlimited`, a non-numeric env var) is rejected
 with a clear error rather than silently disabling the gate. `SEVERITY_FLOOR` and
 `REVIEW_MODE` are still resolved once at `init` — neither is a hard gate `somi-loop.mjs` enforces
-via exit code, so F-29's defect (a gate resolved once and never revisited) doesn't apply to them;
+via exit code, so the defect of a gate resolved once and never revisited doesn't apply to them;
 adjusting either mid-loop still means starting a fresh loop.
 
 ## What to do

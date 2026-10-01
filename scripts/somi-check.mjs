@@ -1,22 +1,16 @@
 #!/usr/bin/env node
 // somi-check.mjs — host-agnostic working-tree guard (the portable enforcement layer).
 //
-// Node port of scripts/somi-check.sh (node-runtime-port, phase 1, iteration 1.3).
 // Zero-dependency: stdlib only (node:fs, node:path, node:child_process). No jq, no bash.
 // Behavior-preserving — exit codes are frozen and reproduced exactly; see the bash
 // original's header comment for the full rationale.
 //
-// SHEBANG NOTE (the sanctioned exception to D1's "no shebang/exec-bit reliance"
-// principle for the hook/manifest invocation path): every other Node port in this
-// work item (somi-loop.mjs, somi-findings.mjs) is invoked as `node <file>` and carries
-// no shebang. This file keeps one because package.json's `bin` field
-// ("somi-check": "scripts/somi-check.sh", repointed to this file in Phase 3 iteration
-// 3.2) is a *separate* invocation path via npm's own bin-symlinking, which on POSIX
+// SHEBANG NOTE: the other scripts (somi-loop.mjs, somi-findings.mjs) are invoked as
+// `node <file>` and carry no shebang, so nothing relies on a shebang or exec bit for the
+// hook/manifest invocation path. This file keeps one because package.json's `bin` field
+// ("somi-check") is a *separate* invocation path via npm's own bin-symlinking, which on POSIX
 // needs the linked file to be directly executable — that relies on a shebang. That's
 // npm's own contract, distinct from how hooks.json/somi-loop/somi-findings are invoked.
-// See phases/01-state-scripts-port.md's Iteration 1.3 implementation note. (The
-// executable bit itself is left to Phase 3 iteration 3.2, which owns the bin repoint
-// and the live-wiring smoke test — this iteration only adds the file content needed.)
 //
 // Checks (each maps to a hook-layer guarantee):
 //   1. Staged secret-bearing files      (block-secret-writes' basename patterns)
@@ -40,8 +34,7 @@ const PROG = 'somi-check';
 
 // Thrown to unwind to the top-level handler, which sets process.exitCode and lets Node
 // exit naturally — avoids process.exit()'s risk of truncating buffered stdout/stderr
-// writes on a pipe. Same idiom as somi-loop.mjs / somi-findings.mjs (1.1/1.2,
-// reviewer-blessed).
+// writes on a pipe. Same idiom as somi-loop.mjs / somi-findings.mjs.
 class ExitSignal extends Error {
   constructor(code) {
     super(`exit ${code}`);
@@ -72,7 +65,7 @@ function projectRoot() {
 // Bash matches these as POSIX ERE via `[[ "$base" =~ $p ]]` — every pattern here uses
 // only `^`/`$`/`.`/`*`/`?` and escaped literal dots, which are byte-identical in ERE
 // and JS regex syntax (no `[[:class:]]` bracket expressions, no ERE-vs-PCRE anchor
-// divergence to worry about). CAVEAT, do not inherit blindly in 2.9: JS `.` refuses to
+// divergence to worry about). CAVEAT, do not inherit blindly in block-dangerous-bash.mjs: JS `.` refuses to
 // match \r/U+2028/U+2029 where POSIX `.` matches every byte except \n — harmless HERE
 // only because git's core.quotePath C-escapes non-ASCII filenames before either
 // implementation sees them; on raw CONTENT (see the TODO-marker check below, and all of

@@ -11,25 +11,24 @@
 // Reads the bullets between `<!-- digest:start -->` / `<!-- digest:end -->` in the canonical
 // file and writes them into each target's own "## Always-on digest" section, adjusting the relative
 // link prefix per target's directory depth (see TARGETS below). `--check` exits non-zero on any diff
-// instead of writing, for CI (wired into scripts/validate.sh in phase 3, iteration 3.1).
+// instead of writing, for CI (wired into scripts/validate.sh).
 //
 // THE PREFIX ADJUSTMENT IS NOT THE WHOLE FIX
-// A plan-review pass established that a link-prefix substitution ALONE cannot reproduce the copies:
-// the canonical had no links at all, so there was no prefix to substitute. Phase 2 iteration 2.2
-// normalized the canonical to full markdown links FIRST; only then does a per-file prefix adjustment
-// become sufficient. Both halves are required — this script is the second half.
+// A link-prefix substitution ALONE cannot reproduce the copies from a canonical with no links:
+// there would be no prefix to substitute. The canonical is therefore written with full markdown
+// links FIRST; only then does a per-file prefix adjustment become sufficient. Both halves are required — this script is the second half.
 //
 // MARKER PLACEMENT is pinned deliberately: the markers wrap ONLY the digest bullets, not the
 // heading and not the framing paragraph. Two consumers depend on that. This generator inserts
 // bullets under each target's own existing heading (neither target has a framing paragraph today,
 // and adding one silently would be a content change nobody asked for). The UserPromptSubmit hook
-// (phase 1, iteration 1.2) injects the same bullets into a consuming project's context, where a
+// injects the same bullets into a consuming project's context, where a
 // repeated heading is pure token cost. One marker pair serves both.
 //
 // CONSUMER-CONTEXT CAVEAT (the seam this script deliberately does NOT own): the hook strips these
 // markdown links back to bare `(NN)` codes before injecting, because no repo-relative path resolves
 // in a consuming project — SoMi's rules/ lives in the plugin install directory. That stripping is
-// iteration 1.2's job, at the point of extraction. Loosening the canonical's citation style to suit
+// the hook's job, at the point of extraction. Loosening the canonical's citation style to suit
 // a consumer this file is never injected into would fix the symptom in the wrong place.
 
 import fs from 'node:fs';
@@ -49,7 +48,7 @@ const HEADING = '## Always-on digest';
 // canonical was the only thing that round-tripped. Both are fixed; this comment is the guard.)
 // AGENTS.md is at the repo root, so it needs `./rules/`; .github/copilot-instructions.md is one
 // level down, so it needs `../rules/`. Getting this wrong produces links that render but 404 — the
-// exact silent failure this work item exists to remove, so it is data here rather than a guess.
+// exact silent failure the digest copies exist to prevent, so it is data here rather than a guess.
 const TARGETS = [
   { file: 'AGENTS.md', prefix: './rules/' },
   { file: '.github/copilot-instructions.md', prefix: '../rules/' },
@@ -79,7 +78,7 @@ function retarget(bullets, prefix) {
   // ANCHORED on the citation shape (`./NN-name.md`), not on any `](./`. An unanchored pattern
   // rewrites every relative link in a bullet: a prose link like `[guide](./docs/ADOPTION.md)`
   // became `./rules/docs/ADOPTION.md` — dead — while `--check` reported both copies in sync.
-  // The hook's F-37 fix exists specifically to keep prose links in bullets intact, so an
+  // The hook deliberately keeps prose links in bullets intact, so an
   // unanchored rewrite here put the two halves of the seam in disagreement about what is legal.
   return bullets.replace(/\]\(\.\/(\d{2}-[A-Za-z0-9-]+\.md)\)/g, `](${prefix}$1)`);
 }

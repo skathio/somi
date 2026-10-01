@@ -1,6 +1,5 @@
 // somi-findings.mjs — the findings ledger: identity and lifecycle for review findings.
 //
-// Node port of scripts/somi-findings.sh (node-runtime-port, phase 1, iteration 1.2).
 // Zero-dependency: stdlib only (node:fs, node:path). No jq, no bash. Behavior-preserving
 // — exit codes and stdout JSON shapes are frozen and reproduced exactly; see the bash
 // original's header comment for the full rationale (finding identity/lifecycle, the
@@ -37,7 +36,7 @@ const PROG = 'somi-findings';
 
 // Thrown to unwind to the top-level handler, which sets process.exitCode and lets Node
 // exit naturally — avoids process.exit()'s risk of truncating buffered stdout/stderr
-// writes on a pipe. Same idiom as somi-loop.mjs (1.1, reviewer-blessed).
+// writes on a pipe. Same idiom as somi-loop.mjs.
 class ExitSignal extends Error {
   constructor(code) {
     super(`exit ${code}`);
@@ -92,9 +91,9 @@ function rawStr(v) {
 // byte-wise `tr` would never produce (bash leaves İ's UTF-8 bytes alone; the following
 // `tr -cs 'a-z0-9' ' '` step then discards all of them as non-alphanumeric). So the
 // lowercasing below only maps `A`-`Z`, mirroring `tr '[:upper:]' '[:lower:]'` exactly.
-// Verified against all six of Phase 0.6's normalize_title edge-case goldens (empty,
+// Verified against six normalize_title edge-case goldens (empty,
 // single-word, >8-word, leading/trailing whitespace, multi-space, punctuation) plus
-// adversarial Unicode probes (café, İstanbul) — see diary for the case-by-case trace.
+// adversarial Unicode probes (café, İstanbul).
 function normalizeTitle(title) {
   const lowered = title.replace(/[A-Z]/g, (c) => c.toLowerCase());
   const squeezed = lowered.replace(/[^a-z0-9]+/g, ' ').trim();
@@ -120,7 +119,7 @@ function loadLedger(ledgerPath) {
 function saveLedger(ledgerPath, ledger) {
   // Mirror bash's `tmp="$(mktemp)"; jq ... "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"`:
   // pretty 2-space + trailing newline (jq's default pretty-print, verified byte-identical
-  // against JSON.stringify(ledger, null, 2) + '\n' — see diary), written to a temp file in
+  // against JSON.stringify(ledger, null, 2) + '\n'), written to a temp file in
   // the SAME directory as the target and renamed into place so the write is atomic and the
   // rename never crosses a filesystem boundary.
   const tmpPath = `${ledgerPath}.tmp`;

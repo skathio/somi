@@ -2,20 +2,17 @@
 // hooks/post-tool/audit-log.mjs — PostToolUse hook (matcher: *) — record every tool call to
 // the SOMI audit log.
 //
-// Node port of hooks/post-tool/audit-log.sh (node-runtime-port, phase 2, iteration 2.6).
-// The simplest hook in the corpus: append-only, no decision logic beyond field extraction
-// already ported in 2.1 (../lib/common.mjs). Pairs with the BLOCK entries written from
+// The simplest hook in the corpus: append-only, no decision logic beyond the field extraction
+// in ../lib/common.mjs. Pairs with the BLOCK entries written from
 // pre-tool hooks: gives you a single log to grep for "what did the agent actually do during
 // this session?" Sensitive arguments are trimmed; we record tool name, status, and a short
 // summary.
 //
-// Line format is the frozen contract (spec.md §9): "timestamp\tkind\ttool\tdetail\n",
+// Line format is a frozen contract: "timestamp\tkind\ttool\tdetail\n",
 // byte-exact — common.mjs's audit() owns that shape; this file only builds `detail`.
 //
-// TRUNCATION-BOUNDARY NOTE (F-14, phase-2-hooks-port.md, iteration 2.6): bash's
-// `head -c 240` truncates at exactly 240 BYTES, not characters — verified directly against
-// the unmodified bash original before this port existed (see progress.md/diary.md, 2.6):
-// a 271-byte compact tool_input truncates to exactly 240 bytes, dropping the tail including
+// TRUNCATION-BOUNDARY NOTE: the original bash hook's `head -c 240` truncates at exactly 240
+// BYTES, not characters — verified directly against that original: a 271-byte compact tool_input truncates to exactly 240 bytes, dropping the tail including
 // the closing `"}`. truncateBytes() below reproduces that byte-exact cut via a UTF-8 Buffer
 // slice (Buffer.from(str, 'utf8').subarray(0, 240)), NOT a UTF-16-code-unit `.slice(0, 240)`
 // — the latter would cut at the wrong BYTE position for any non-ASCII content before the
@@ -35,9 +32,8 @@
 // bash original nor this port escapes a tab/newline that happens to be embedded IN the
 // summary content itself (e.g. a Bash command containing a literal tab byte, verified
 // directly: it lands as a real 0x09 byte in the audit line, silently misaligning any
-// naive `split('\t')` consumer). Preserved as-is — this is pre-existing bash behavior, not
-// port-introduced, and D2 (behavior preservation) governs this hook; escaping would be a
-// behavior change out of this iteration's scope.
+// naive `split('\t')` consumer). Preserved as-is: it is inherited bash behavior, and the
+// hook's contract is to keep that behavior, so escaping would be a behavior change.
 
 import { readPayload, field, audit, runHook } from '../lib/common.mjs';
 

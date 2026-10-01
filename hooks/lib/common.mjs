@@ -1,9 +1,7 @@
 // hooks/lib/common.mjs — shared helpers for somi hooks.
 //
-// Node port of hooks/lib/common.sh (node-runtime-port, phase 2, iteration 2.1).
 // Zero-dependency: stdlib only (node:fs, node:path). No jq, no bash — every
-// hook port (2.2-2.9) imports named exports from this module instead of
-// `source`-ing a shell file.
+// hook imports named exports from this module instead of `source`-ing a shell file.
 //
 // Hooks receive a JSON payload on stdin describing the tool invocation, and may
 // emit a JSON response on stdout to control the harness. Output schema is
@@ -37,8 +35,8 @@ import { fileURLToPath } from 'node:url';
 // the signal carries an explicit code rather than a hard-coded 0 in case a
 // future hook needs a different one.
 //
-// Deliberately NOT using process.exit() here: scripts/somi-loop.mjs (1.1,
-// reviewer-blessed) established the precedent that process.exit() risks
+// Deliberately NOT using process.exit() here: scripts/somi-loop.mjs
+// established the precedent that process.exit() risks
 // truncating buffered stdout/stderr on a pipe if Node hasn't finished
 // flushing yet — exactly the scenario denyPretool()/contextOutput() create
 // (a console.log() immediately followed by an exit). Throwing + a top-level
@@ -52,7 +50,7 @@ export class HookExit extends Error {
 }
 
 // Runs a hook's main() and translates a thrown HookExit into process.exitCode.
-// The standard wrapper every hook port (2.2-2.9) should use at its top level,
+// The standard wrapper every hook should use at its top level,
 // so denyPretool()'s early-exit contract works without each hook file
 // re-declaring the same try/catch boilerplate (the somi-loop.mjs/
 // somi-findings.mjs/somi-check.mjs precedent, centralized here since EVERY
@@ -76,11 +74,10 @@ export function runHook(main) {
 // SOMI_AUDIT_LOG, below) can arrive as the literal string
 // "${CLAUDE_PROJECT_DIR}/...". Without this guard, a path built from that
 // literal would create a directory named `${CLAUDE_PROJECT_DIR}` in the repo
-// root. This guard is duplicated across 5+ bash files (context.md §2,
-// brief.md §3) — centralized here as the ONE copy every hook port imports,
-// rather than re-duplicating the `.includes('${')` check per file. (Note:
-// scripts/*.mjs — a separate module graph, out of this iteration's scope —
-// still carry their own copy; unifying those is a follow-up, not this pass.)
+// root. This guard is duplicated across 5+ bash files — centralized
+// here as the ONE copy every hook imports, rather than re-duplicating the
+// `.includes('${')` check per file. (Note: scripts/*.mjs — a separate module
+// graph — still carry their own copy; unifying those is a follow-up.)
 export function projectRoot() {
   let base = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   if (base.includes('${')) base = process.cwd();
@@ -90,8 +87,7 @@ export function projectRoot() {
 // plugin_root() — the directory containing SoMi's OWN shipped content (rules/, skills/, etc.),
 // as distinct from projectRoot() above (the CONSUMING project's root). A hook needs this to read
 // rules/CLAUDE.md's digest regardless of whether SoMi is running as an installed plugin, a
-// vendored copy, or this repo's own dev/test checkout (decisions.md#d5,
-// phases/01-restore-delivery.md iteration 1.2).
+// vendored copy, or this repo's own dev/test checkout.
 //
 // Resolution order, EACH candidate existence-validated, not merely presence-checked — accepted
 // only if `<candidate>/rules/CLAUDE.md` is actually readable, else the search continues to the
@@ -237,7 +233,7 @@ export function config(fieldPath) {
     // jq's "// empty" on a generator (`.dep_install.allow[]? // empty`)
     // drops null/false elements from the output stream element-by-element —
     // it does NOT stringify them to "null"/"false" (verified against real
-    // jq: F-29). A stray null/false entry in a committed config array is
+    // jq). A stray null/false entry in a committed config array is
     // silently skipped, matching that.
     return cur
       .filter((v) => v !== null && v !== false)
@@ -247,7 +243,7 @@ export function config(fieldPath) {
   return typeof cur === 'string' ? cur : JSON.stringify(cur);
 }
 
-// Append a structured line to the audit log. Frozen contract (spec.md §9):
+// Append a structured line to the audit log. Frozen contract:
 // "timestamp\tkind\ttool\tdetail\n", byte-exact — any deviation here is a
 // regression, not a style choice.
 export function audit(payload, kind, detail) {
@@ -305,17 +301,17 @@ export function contextOutput(event, context) {
 // the same pattern a second time just to recover the substring it already
 // matched.
 //
-// FIRST-MATCH-ONLY CONTRACT (F-28): both wrappers strip the "g"/"y" flags
+// FIRST-MATCH-ONLY CONTRACT: both wrappers strip the "g"/"y" flags
 // from every pattern before matching, UNCONDITIONALLY — even if the
 // caller's own RegExp carries one. `.exec()` on a /g or /y regex is
 // STATEFUL: it advances the object's own `lastIndex` on every call, so
-// running the SAME pattern object through `matchesAny` twice (e.g. 2.9
+// running the SAME pattern object through `matchesAny` twice (e.g. block-dangerous-bash.mjs
 // scans its whole pattern list against the raw command, then again against
 // the quote-stripped copy — block-dangerous-bash.sh:166-167) could silently
 // return null on the second call even though the string still matches.
 // Bash's `[[ =~ ]]` has no equivalent statefulness, so this would be a
-// NEW failure mode the port introduces into the security substrate 2.9
-// depends on. Rather than trust every pattern literal across 2.2-2.9 to
+// NEW failure mode the port introduces into the security substrate that
+// hook depends on. Rather than trust every pattern literal across the hooks to
 // never accidentally carry "g"/"y", toRegExp() makes the hazard
 // unrepresentable: the effective flags are always normalized to exclude
 // "g"/"y" first, so neither wrapper's returned RegExp is ever stateful
@@ -346,12 +342,12 @@ export function matchesAny(str, patterns) {
 // nocasematch` is an AMBIENT property of the matching operation, not a
 // per-pattern annotation — the bash ERE pattern strings themselves have no
 // case-flag syntax at all. Centralizing the flag here means a pattern added
-// to a nocase list in a future hook port can never silently end up
+// to a nocase list in a future hook can never silently end up
 // case-sensitive from one missing "/i" on one literal; the guarantee lives
 // in which function you called, not in every pattern's own flags.
 //
 // ASCII-only, by construction of JS's own /i semantics — NOT by any bespoke
-// folding logic here (1.2's F-23 precedent: bash's nocasematch is
+// folding logic here (bash's nocasematch is
 // ASCII-only for these pattern classes, and Unicode-aware case folding can
 // introduce surprises C-locale regex/`tr` never would). JS's /i flag
 // WITHOUT the /u flag already refuses to fold a non-ASCII input character
@@ -362,7 +358,7 @@ export function matchesAny(str, patterns) {
 // form is < U+0080 but the character itself is >= U+0080, the algorithm
 // returns the character UNCHANGED instead of folding it — the exact guard
 // `String.prototype.toLowerCase()` lacks, which is what made
-// normalizeTitle's İstanbul/café cases (somi-findings.mjs, F-23) a real
+// normalizeTitle's İstanbul/café cases (somi-findings.mjs) a real
 // bug. The one residual gap: two DIFFERENT non-ASCII characters Unicode
 // considers case-equivalent to each other (e.g. é/É) would still fold under
 // JS's /i, where bash's C-locale nocasematch would not — moot for every

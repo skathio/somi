@@ -7,7 +7,7 @@ description: Use when classifying a free-form request's problem shape into the r
 
 This is the single source of truth for SoMi's request-classification table. Both `/somi` (Mode 2)
 and the `somi` agent (Copilot's front-door persona) load it instead of embedding their own copy —
-editing it once here keeps both consumers in sync, which is the whole reason this skill exists (D3).
+editing it once here keeps both consumers in sync, which is the whole reason this skill exists.
 
 ## The table
 

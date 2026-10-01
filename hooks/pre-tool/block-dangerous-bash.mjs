@@ -2,27 +2,20 @@
 // hooks/pre-tool/block-dangerous-bash.mjs — PreToolUse hook (matcher: Bash) — block clearly
 // dangerous shell commands.
 //
-// Node port of hooks/pre-tool/block-dangerous-bash.sh (node-runtime-port, phase 2,
-// iteration 2.9 — the work item's named highest-risk file, brief.md §3/§8). Imports the
-// shared read/deny/matching helpers from ../lib/common.mjs (2.1, reviewer-blessed)
-// rather than reimplementing them.
+// The highest-risk hook in the set: a wrong translation here silently under-gates. Imports the
+// shared read/deny/matching helpers from ../lib/common.mjs rather than reimplementing them.
 //
 // This is a deterministic guardrail, not a policy debate. It catches the
 // common-and-catastrophic class of mistakes; nuanced cases are the human's call. Block
 // list focuses on irreversible / system-destructive / supply-chain shapes, plus
 // shell-level writes to secret-bearing paths — the Bash-side complement of
-// block-secret-writes.mjs (2.2), whose Write|Edit matcher a redirect / tee / sed -i /
+// block-secret-writes.mjs, whose Write|Edit matcher a redirect / tee / sed -i /
 // cp / mv would otherwise bypass entirely. Intentionally conservative — false positives
 // cost less than false negatives here.
 //
-// COUNT CORRECTION (verified by direct read — `awk` over the array literal, not
-// inherited from the phase file's/brief's stated "19"): the bash original's
-// DANGEROUS_PATTERNS array holds 23 case-sensitive patterns, not 19 — same class of
-// miscount 2.4 found and corrected for DEP_ADD_PATTERNS (18→19), just larger here. All
-// 23 are ported below, plus the 5 case-insensitive SQL patterns (that count IS
-// accurate) and the 4 secret-write patterns. "Port ALL of the patterns" wins over an
-// inherited miscount, per 2.4's precedent; phases/02-hooks-port.md's iteration-2.9 scope
-// line is corrected alongside this port (see the diary entry for this pass).
+// PATTERN COUNT (verified by direct read — `awk` over the array literal): the original bash
+// DANGEROUS_PATTERNS array holds 23 case-sensitive patterns, not 19. All 23 are ported below,
+// plus the 5 case-insensitive SQL patterns and the 4 secret-write patterns.
 //
 // ERE→RegExp translation rules applied uniformly (verified pattern-by-pattern, not by a
 // blanket find-and-replace across the whole set — every one of the 23+5+4 patterns
@@ -35,11 +28,11 @@
 //                              U+2028/U+2029, U+FEFF, other Zs). A wider POSITIVE \s can
 //                              only make this hook MATCH (and therefore block) a
 //                              broader set of verb/argument separators than bash would —
-//                              over-gating, never under-gating. Same argument 2.4 made
-//                              for gate-dep-install, and it is sound for this direction.
-//   [^[:space:]]  → [^ \t\n\r\f\v]   NOT [^\s] (F-40, Major, fixed at 2.9 pass 2 after
-//                              the security review caught it — a prior version of this
-//                              file used [^\s] here and was WRONG). Negation INVERTS the
+//                              over-gating, never under-gating. Same argument
+//                              as gate-dep-install, and it is sound for this direction.
+//   [^[:space:]]  → [^ \t\n\r\f\v]   NOT [^\s] (an earlier version of this
+//                              file used [^\s] here and was WRONG; a security review
+//                              caught it). Negation INVERTS the
 //                              superset relationship above: \s ⊋ [[:space:]] means
 //                              [^\s] ⊊ [^[:space:]] — the negated JS class matches FEWER
 //                              characters than bash's negated POSIX class, so a pattern
@@ -84,11 +77,10 @@
 // where the same caveat was checked and found inert because those files only ever
 // match basenames or already-tokenized argument text, never raw command-string content).
 //
-// RE-DERIVED AT 2.9 PASS 2 (F-39, Blocker) — the paragraph that used to sit here claimed
-// "POSIX ERE '.' matches every byte except '\n'" and translated '.*' to '[^\n]*'. That
-// claim is WRONG for what this file actually needs: it is grep/awk-with-REG_NEWLINE
-// semantics, not bash `[[ =~ ]]` semantics, and the security review caught the gap it
-// produced. Re-derived from first principles, not restated:
+// An earlier version of this file claimed "POSIX ERE '.' matches every byte except '\n'" and
+// translated '.*' to '[^\n]*'. That claim is WRONG for what this file actually needs: it is
+// grep/awk-with-REG_NEWLINE semantics, not bash `[[ =~ ]]` semantics, and a security review
+// caught the gap it produced. Derived from first principles:
 //
 // bash's `[[ "$c" =~ $pattern ]]` calls glibc `regexec()` WITHOUT the `REG_NEWLINE`
 // flag. REG_NEWLINE is what makes '.' refuse a newline (and makes '^'/'$' match at
@@ -108,8 +100,8 @@
 // `--no-verify` disables somi's own commit/push safety hooks, and multi-line commit
 // messages are completely routine, so this was a live gap, not a theoretical one. A CR
 // (not LF) embedded in the same position happens to still be excluded by `[^\n]` too
-// (CR isn't `\n`), which is why the pass-1 CR-embedded regression probes passed and gave
-// false confidence — LF was the actual break, and pass 1 had no LF fixture.
+// (CR isn't `\n`), which is why a CR-embedded probe passes and gives false confidence —
+// LF is the actual break, so keep an LF case in the fixtures.
 //
 // Every other '.' in this file is an ESCAPED '\.' (a literal dot character, e.g.
 // `mkfs\.`), unaffected by this caveat in either engine — checked by hand per
@@ -122,11 +114,8 @@
 // to `\/`. No pattern here uses a backtick or `${`, so String.raw is safe throughout.
 //
 // SECRET_WRITE_PATTERNS mirrors block-secret-writes.mjs's SECRET_PATTERNS set
-// (block-secret-writes.mjs's SECRET_PATTERNS / block-dangerous-bash.sh:86) — "kept in
-// sync by comment convention, not code sharing" today (context.md §2). Preserved as a
-// deliberate duplication in this port; do not unify the two lists — that would be a
-// scope-creeping refactor beyond this behavior-preserving port (same convention 2.2
-// already flagged as a future-refactor target).
+// — kept in sync by comment convention, not code sharing. The duplication is deliberate:
+// unifying the two lists is a separate refactor, not part of an unrelated change.
 //
 // check_secret_writes' capture-before-internal-test discipline is preserved exactly
 // (see checkSecretWrites below): the matched substring is read into a local `matched`
@@ -167,7 +156,7 @@ const DANGEROUS_PATTERNS = [
 
   // device / partition writes (bash:45-47)
   new RegExp(String.raw`>\s*/dev/(sd[a-z]|nvme|hd[a-z]|disk)`), // #6
-  new RegExp(String.raw`dd\s+if=[^]*\s+of=/dev/(sd[a-z]|nvme|hd[a-z]|disk)`), // #7 dot-semantics: .*→[^]* (F-39)
+  new RegExp(String.raw`dd\s+if=[^]*\s+of=/dev/(sd[a-z]|nvme|hd[a-z]|disk)`), // #7 dot-semantics: .*→[^]*
   new RegExp(String.raw`mkfs(\.|\s)`), // #8
 
   // supply-chain / remote-exec one-liners (bash:50-53)
@@ -178,22 +167,22 @@ const DANGEROUS_PATTERNS = [
 
   // destructive git ops on protected branches (bash:57-64). Covers --force, -f,
   // --force-with-lease (with or without =value), and refspec form (origin HEAD:main).
-  new RegExp(String.raw`git\s+push\s+(-{1,2}force|-f)([\s=]|$)[^]*[\s:](main|master|trunk|release)(\s|$)`), // #13 dot-semantics (F-39)
-  new RegExp(String.raw`git\s+push\s+--force-with-lease([\s=][^ \t\n\r\f\v]*)?\s[^]*[\s:](main|master|trunk|release)(\s|$)`), // #14 dot-semantics + negated-class (F-39, F-40)
+  new RegExp(String.raw`git\s+push\s+(-{1,2}force|-f)([\s=]|$)[^]*[\s:](main|master|trunk|release)(\s|$)`), // #13 dot-semantics
+  new RegExp(String.raw`git\s+push\s+--force-with-lease([\s=][^ \t\n\r\f\v]*)?\s[^]*[\s:](main|master|trunk|release)(\s|$)`), // #14 dot-semantics + negated-class
   // force-push via +refspec — no --force flag involved (`git push origin +main`, `+HEAD:main`)
   new RegExp(String.raw`git\s+push\s+[^;&|]*\s\+(main|master|trunk|release)([\s:]|$)`), // #15
-  new RegExp(String.raw`git\s+push\s+[^;&|]*\s\+[^ \t\n\r\f\v]*:(main|master|trunk|release)(\s|$)`), // #16 negated-class (F-40)
+  new RegExp(String.raw`git\s+push\s+[^;&|]*\s\+[^ \t\n\r\f\v]*:(main|master|trunk|release)(\s|$)`), // #16 negated-class
   new RegExp(String.raw`git\s+branch\s+-D\s+(main|master|trunk)`), // #17
   new RegExp(String.raw`git\s+reset\s+--hard\s+(origin/)?(main|master|trunk)`), // #18
   new RegExp(String.raw`git\s+clean\s+-[fdx]+\s`), // #19
 
   // process / permission ops (bash:67-68)
   new RegExp(String.raw`chmod\s+-R\s+777\s+/`), // #20
-  new RegExp(String.raw`chown\s+-R\s+[^]*\s+/`), // #21 dot-semantics: .*→[^]* (F-39)
+  new RegExp(String.raw`chown\s+-R\s+[^]*\s+/`), // #21 dot-semantics: .*→[^]*
 
   // skipping safety checks (only block when used in commit/push context) (bash:71-72)
-  new RegExp(String.raw`git\s+commit\s+[^]*--no-verify`), // #22 dot-semantics (F-39)
-  new RegExp(String.raw`git\s+push\s+[^]*--no-verify`), // #23 dot-semantics (F-39)
+  new RegExp(String.raw`git\s+commit\s+[^]*--no-verify`), // #22 dot-semantics
+  new RegExp(String.raw`git\s+push\s+[^]*--no-verify`), // #23 dot-semantics
 ];
 
 // Case-insensitive patterns (bash:76-82, 5 entries — SQL keywords arrive lowercase
@@ -219,9 +208,8 @@ const DANGEROUS_PATTERNS = [
 // reordering the alternation LONGEST-FIRST (`production` before `prod`; `public` has
 // no prefix relationship with either, so its position doesn't matter) — this changes
 // nothing about WHICH inputs match, only WHICH substring an ambiguous input's match
-// reports, restoring exact parity with bash's leftmost-longest result. Audited every
-// other alternation group in this file for the same prefix-collision shape (see the
-// diary for the full audit): `(main|master|trunk|release)`,
+// reports, restoring exact parity with bash's leftmost-longest result. Every other
+// alternation group in this file was audited for the same prefix-collision shape: `(main|master|trunk|release)`,
 // `(sd[a-z]|nvme|hd[a-z]|disk)`, `(rsa|ed25519|ecdsa|dsa)`,
 // `(local|production|prod|staging|secret)` (already longest-first in bash's own
 // source), `(-{1,2}force|-f)` (protected by a mandatory boundary character after the
@@ -239,7 +227,7 @@ const DANGEROUS_PATTERNS_NOCASE = [
 // Secret-bearing basename alternation (bash:86). A regex-source FRAGMENT, not a
 // standalone pattern — interpolated into each of the 4 SECRET_WRITE_PATTERNS below,
 // exactly as bash interpolates `${SECRET_BASENAME}` into 4 array entries.
-const SECRET_BASENAME = String.raw`(\.env(\.(local|production|prod|staging|secret))?|id_(rsa|ed25519|ecdsa|dsa)|[^ \t\n\r\f\v]*\.(pem|key|p12|pfx|jks)|[^ \t\n\r\f\v]*(-key|-credentials)\.json|service-account[^ \t\n\r\f\v]*\.json|\.netrc|\.pgpass|[^ \t\n\r\f\v]*secrets?\.(ya?ml|json))`; // negated-class fixed (F-40)
+const SECRET_BASENAME = String.raw`(\.env(\.(local|production|prod|staging|secret))?|id_(rsa|ed25519|ecdsa|dsa)|[^ \t\n\r\f\v]*\.(pem|key|p12|pfx|jks)|[^ \t\n\r\f\v]*(-key|-credentials)\.json|service-account[^ \t\n\r\f\v]*\.json|\.netrc|\.pgpass|[^ \t\n\r\f\v]*secrets?\.(ya?ml|json))`; // negated-class
 
 // Shell-level writes to secret paths (bash:90-95): redirection, tee, in-place sed,
 // cp/mv onto the target. Matched against the quote-stripped command, same as bash.
@@ -248,7 +236,7 @@ const SECRET_WRITE_PATTERNS = [
   new RegExp(String.raw`(^|[\s|;&])tee\s+(-[a-zA-Z]+\s+)*([^ \t\n\r\f\v]*/)?${SECRET_BASENAME}(\s|$)`),
   new RegExp(String.raw`(^|[\s|;&])sed\s+[^|;&]*-i[^|;&]*\s([^ \t\n\r\f\v]*/)?${SECRET_BASENAME}(\s|$)`),
   new RegExp(String.raw`(^|[\s|;&])(cp|mv)\s+[^|;&]*\s([^ \t\n\r\f\v]*/)?${SECRET_BASENAME}(\s|$)`),
-]; // negated-class prefix groups fixed (F-40)
+]; // negated-class prefix groups
 
 // Explicit example/template files are fine — same exception as block-secret-writes.mjs.
 const EXAMPLE_ENV_RE = /\.env\.(example|sample|template|dist)/;
@@ -306,7 +294,7 @@ Bash-side twin of the Write/Edit secret guard — do not work around either sile
 // Gate regex (bash:141) — unchanged translation rules from DANGEROUS_PATTERNS above,
 // no dot-semantics concern (no '.'/'.*' in this one):
 const BARE_FORCE_PUSH_GATE_RE = new RegExp(
-  String.raw`git\s+push(\s+[^;&|]*)?\s(-f|--force(-with-lease(=[^ \t\n\r\f\v]*)?)?)(\s|$)`, // negated-class fixed (F-40)
+  String.raw`git\s+push(\s+[^;&|]*)?\s(-f|--force(-with-lease(=[^ \t\n\r\f\v]*)?)?)(\s|$)`, // negated-class
 );
 
 // This is NOT a regex port — bash:144-156 is a small procedural parser (word-split the
@@ -320,7 +308,7 @@ const BARE_FORCE_PUSH_GATE_RE = new RegExp(
 //
 //   bash: for tok in $after_push   (IFS word-splitting; bash ALSO performs unquoted
 //         pathname/glob expansion here, deliberately NOT reproduced — same judgment
-//         call gate-dep-install.mjs's tokensAfterVerb() made (2.4): glob expansion
+//         call gate-dep-install.mjs's tokensAfterVerb() made: glob expansion
 //         would make the gate's outcome depend on the hook process's cwd/filesystem
 //         state, a strictly worse property for a security control, and no realistic
 //         git-push argument or fixture exercises it).

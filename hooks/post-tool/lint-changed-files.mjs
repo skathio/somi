@@ -2,9 +2,8 @@
 // hooks/post-tool/lint-changed-files.mjs — PostToolUse hook (matcher: Write|Edit) —
 // best-effort lint of just-changed files.
 //
-// Node port of hooks/post-tool/lint-changed-files.sh (node-runtime-port, phase 2,
-// iteration 2.5). Imports the shared read/context/projectRoot helpers from
-// ../lib/common.mjs (2.1, reviewer-blessed) rather than reimplementing them.
+// Imports the shared read/context/projectRoot helpers from ../lib/common.mjs rather than
+// reimplementing them.
 //
 // Runs the project's configured linter on the touched file, if one is available,
 // keyed off file extension + presence of a config file. Result is informational —
@@ -17,7 +16,7 @@
 // --- PROJECT_ROOT resolution: guarded projectRoot(), not bash's raw pattern ------
 // bash: `PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"` — no `${...}`-unexpanded-
 // literal guard on THIS specific line (unlike most other ported hooks' PROJECT_ROOT
-// lines, context.md §2). Using common.mjs's projectRoot() here anyway (which DOES
+// lines). Using common.mjs's projectRoot() here anyway (which DOES
 // carry the guard) is a deliberate, safe-direction improvement, not a silent
 // behavior change: if a host ever fails to expand `${CLAUDE_PROJECT_DIR}` before
 // setting it, bash's un-guarded line would set PROJECT_ROOT to that literal
@@ -27,7 +26,7 @@
 // best-effort no-op). The guarded projectRoot() falls back to `process.cwd()` in
 // that same scenario instead, so this port degrades to "no lint delegate ran" for
 // the broken-host case rather than crashing — strictly safer, and consistent with
-// 2.1's centralization intent (every port imports the one guarded helper rather
+// the centralization intent (every hook imports the one guarded helper rather
 // than re-duplicating bash's un-guarded line).
 //
 // --- run_if_present() -> runIfPresent(), combined with the `command -v` gate ----
@@ -68,10 +67,8 @@
 // cheap, best-effort side note. If a real run exceeds it, spawnSync sets
 // `result.error`, which `runIfPresent`'s swallow-everything contract already
 // treats as "nothing to report" — an over-the-cap linter run degrades to silence,
-// not a crash. This establishes the explicit-maxBuffer convention 1.1's review
-// asked Phase 2's first output-capturing hook to set
-// (`.somi/reviews/node-runtime-port/2026-07-06-1.1-pass1-approve.md`); later hook
-// ports that capture subprocess output should follow this precedent.
+// not a crash. This is the explicit-maxBuffer convention; any hook that captures
+// subprocess output should follow it.
 //
 // --- command-substitution trailing-newline stripping -----------------------------
 // bash builds LINT_OUTPUT via `"$(...)"` command substitution, which
@@ -151,8 +148,8 @@ function hasEslintConfig(root) {
 // PROJECT_ROOT/ prefix (a no-op if PATH_INPUT doesn't actually start with it,
 // matching bash's `#`-prefix-removal no-op-on-no-match behavior), take the
 // directory component, wrap as a `go vet` package pattern. Uses platform-default
-// path.dirname (posix on Linux/macOS) — same Windows-backslash caveat 2.2/2.3
-// already flagged and deferred (F-32-class divergence, not fixed here either).
+// path.dirname (posix on Linux/macOS) — same Windows-backslash caveat the
+// other path-handling hooks already flag and defer (not fixed here either).
 function goVetPackageArg(pathInput, root) {
   const prefix = root.endsWith(path.sep) ? root : root + path.sep;
   const rel = pathInput.startsWith(prefix) ? pathInput.slice(prefix.length) : pathInput;
