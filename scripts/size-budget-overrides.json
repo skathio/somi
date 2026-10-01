@@ -1,0 +1,74 @@
+[
+  {
+    "file": "agents/planner.md",
+    "budget": 300,
+    "current_size": 402,
+    "source": "ecbad71",
+    "at": "2026-10-01",
+    "reason": "Prompt file over the context-cost budget; split or trim to drive to zero."
+  },
+  {
+    "file": "agents/discovery-analyst.md",
+    "budget": 300,
+    "current_size": 331,
+    "source": "e1701df",
+    "at": "2026-10-01",
+    "reason": "Prompt file over the context-cost budget; split or trim to drive to zero."
+  },
+  {
+    "file": "hooks/user-prompt-submit/inject-workflow-context.mjs",
+    "budget": 500,
+    "current_size": 580,
+    "source": "df8cf8b",
+    "at": "2026-10-01",
+    "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
+  },
+  {
+    "file": "scripts/somi-loop.mjs",
+    "budget": 500,
+    "current_size": 522,
+    "source": "df8cf8b",
+    "at": "2026-10-01",
+    "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
+  },
+  {
+    "file": "tests/evals/convergence.mjs",
+    "budget": 500,
+    "current_size": 1218,
+    "source": "e3243d6",
+    "at": "2026-10-01",
+    "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
+  },
+  {
+    "file": "tests/evals/run.mjs",
+    "budget": 500,
+    "current_size": 1433,
+    "source": "e3243d6",
+    "at": "2026-10-01",
+    "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
+  },
+  {
+    "file": "tests/scripts/eval-runner.sh",
+    "budget": 800,
+    "current_size": 3692,
+    "source": "6d9dec9",
+    "at": "2026-10-01",
+    "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
+  },
+  {
+    "file": "tests/scripts/convergence-runner.sh",
+    "budget": 800,
+    "current_size": 1510,
+    "source": "6d9dec9",
+    "at": "2026-10-01",
+    "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
+  },
+  {
+    "file": "tests/scripts/evals-fixtures.sh",
+    "budget": 800,
+    "current_size": 808,
+    "source": "6d9dec9",
+    "at": "2026-10-01",
+    "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
+  }
+]

@@ -51,6 +51,11 @@ echo "==> Session-artefact gate tests..."
 # honours its explicit exclusions.
 bash tests/scripts/check-session-artefacts.sh
 
+echo "==> File-size budget gate tests..."
+# Guards scripts/check-size-budget.mjs: an un-ledgered oversized file fails, a ledgered file may
+# shrink but not grow, a stale entry warns, a malformed ledger fails loudly.
+bash tests/scripts/check-size-budget.sh
+
 echo "==> Digest-generator tests..."
 # Guards scripts/generate-digest.mjs: per-target prefix transform, drift detection in EITHER
 # copy alone, clean errors on malformed input, and splice anchoring. Wiring `--check` itself
@@ -752,6 +757,14 @@ echo "==> Validating no session-artefact references in shipped code and prose...
 # a reader who cloned the repo cannot resolve them. Scope, patterns and exclusions live in
 # scripts/check-session-artefacts.mjs.
 if ! node scripts/check-session-artefacts.mjs; then
+  exit 1
+fi
+
+echo "==> Validating file-size budgets..."
+# Prompt files 300 lines, .mjs 500, .sh 800 (tracked files only). Files already over budget are
+# recorded in scripts/size-budget-overrides.json and may not grow past their recorded size.
+# Budgets and ledger governance live in the header of scripts/check-size-budget.mjs.
+if ! node scripts/check-size-budget.mjs; then
   exit 1
 fi
 

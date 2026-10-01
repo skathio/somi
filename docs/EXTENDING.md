@@ -227,6 +227,25 @@ Or add a brand-new project convention that doesn't conflict with SoMi:
 <convention text>
 ```
 
+## File-size budgets
+
+`scripts/validate.sh` fails the build when a tracked file outgrows its line budget: **300** for
+prompt files (`agents/*.md`, `commands/*.md`, `skills/**/*.md`, which are loaded into a model's
+context on every run), **500** for `.mjs`, **800** for `.sh`. Docs are not gated, and neither is
+`tests/evals/results/`. A new file over budget should be split.
+
+Files already over budget are recorded in [`scripts/size-budget-overrides.json`](../scripts/size-budget-overrides.json),
+one entry each: `{file, budget, current_size, source, at, reason}`.
+
+- **A ledgered file may not grow past its recorded `current_size`.** Shrinking is always fine.
+  Growth means updating the entry with a reason a reviewer can challenge.
+- **Who may add an entry:** anyone introducing or materially touching an over-budget file, with a
+  concrete `reason` and a `source` (the commit that introduced or last touched it:
+  `git log -1 --format=%h -- <file>`). No blanket exemptions.
+- **When entries are revisited:** at every `/release-readiness` pass. A file that is back within
+  budget is warned about until its entry is removed.
+- **The goal is an empty ledger:** shrink or split the file, then delete its entry.
+
 ## Versioning your extensions
 
 If you're extending SoMi for your team, treat your extensions like the upstream repo: SemVer, change
