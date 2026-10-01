@@ -12,7 +12,7 @@
         "source": "url",
         "url": "https://github.com/skathio/somi.git"
       },
-      "description": "Cost-tiered economy: discover/design (high cost) → plan / code / review (medium cost) workflow system with SOLID, OWASP, and clean-code guardrails.",
+      "description": "Multi-agent engineering workflow: discover/design → plan → code → review. Agents declare their own cost tiers and a per-session ceiling selects among them; SOLID, OWASP and clean-code guardrails.",
       "version": "3.0.0",
       "tags": ["workflow", "agents", "review", "security"],
       "homepage": "https://github.com/skathio/somi"

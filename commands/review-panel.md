@@ -22,9 +22,8 @@ typically `high` for the fresh-eyes depth a panel wants); `security-reviewer` de
 alone — a missed vulnerability outweighs a lighter generalist pass, so it has no lower mode (see
 its own `> **Cost:**` callout). The lenses are read-only **by contract, not by platform
 restriction** — they return findings; this command owns every write (the merged review file,
-`progress.md`, `diary.md`). If any seated lens's declared set has no member at or below the session
-ceiling, that lens's refusal is not absorbed into the merged verdict — stop and surface it to the
-user rather than presenting a panel result one seat never actually filled.
+`progress.md`, `diary.md`). The session ceiling selects each lens's tier and never refuses one: a lens whose declared tiers
+all sit above the ceiling still runs, at its cheapest declared tier.
 
 > **Why this exists.** A single reviewer carries one set of priorities at a time; running the
 > specialist lenses *in parallel* on one diff catches what a sequential, escalation-only pass misses
