@@ -390,7 +390,7 @@ the agent frontmatter and the per-host mapping.
 simply `Task` the tier-appropriate agent. Tasking a differently-costed subagent from an uncosted
 orchestrator is the cache-correct way to mix costs — the orchestrator's own prompt cache stays
 intact while the subagent runs on its own tier. (Prompt caches are model-scoped, so the
-design→execution switch is also a natural cache boundary.) **`/atlas` Tasks a `cost: high` agent
+brief handoff is also a natural cache boundary.) **`/atlas` Tasks a `cost: high` agent
 for its entire job** — the deep repo read is the whole task, so there is nothing left for the
 command to do at a different tier; `/adopt` Tasks that same `atlas` agent as its own Stage 1.
 **`/discover`, `/design`, and `/refactor-design` Task a `cost: high` agent for the judgment-heavy
@@ -453,7 +453,7 @@ plain prose escalations from inside an agent are no longer the only path.
 
 /ship        → [optional cost: high front-load] → /plan + (per iteration) /code-loop  (human gate at every stage)
 /plan-loop   → planner + reviewer  (bounded plan↔review loop, cost: low, medium planner + reviewer at cost: medium, high)
-/ship-loop   → [optional cost: high front-load] → [gate at design→execution switch] → /plan-loop → /code-loop (continuous, under caps)
+/ship-loop   → [optional cost: high front-load] → [gate at the brief handoff] → /plan-loop → /code-loop (continuous, under caps)
 
 # Lifecycle & utility commands
 /upgrade     → discovery-analyst (cited changelog/CVE research) + /code-loop (migration)

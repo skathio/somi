@@ -17,7 +17,7 @@ work.
 Each workflow has a clean handoff to the next and can be invoked alone (**chunked execution** — run
 `/design` today, `/code-loop` next week, each cold-starting from the brief). The whole pipeline can
 run together as `/ship` (gated at every stage) or `/ship-loop` (continuous, gated once at the
-design→execution switch). The build workflows produce durable artifacts inside `.somi/plans/<slug>/`;
+brief handoff). The build workflows produce durable artifacts inside `.somi/plans/<slug>/`;
 discovery produces the requirements & design foundation inside `.somi/rd/<slug>/`.
 
 > **Why tier this way.** Previously every agent ran at the top tier, spreading the expensive model
@@ -27,6 +27,17 @@ discovery produces the requirements & design foundation inside `.somi/rd/<slug>/
 > once, a cheaper model executes it many times. The `brief.md` is the contract that makes the cheap
 > tier safe — it carries the decisions, the complexity map, and an explicit *"what execution does
 > NOT need to re-research"* list.
+
+**How dispatch actually happens.** Nothing hands a whole command's procedure to one Tasked agent
+that runs it end-to-end. On Claude Code, invoking a command directly runs its own steps live in
+that turn; on Copilot, selecting the `somi` front-door persona runs the matched command's own
+procedure live instead of Tasking a single agent to carry it out. Either way, every agent that
+procedure starts — one `Task` call per agent — resolves its cost tier and model first, through
+`somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill, served over the
+bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP isn't reachable), and
+the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling **selects**
+the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
+declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
 
 ## The workflows
 
@@ -382,12 +393,13 @@ It's identical to running (an optional `cost: high` front-load, then) `/plan`, t
 `/review` manually, with the orchestration baked in.
 
 `/ship-loop <problem>` is the **continuous** path of the design→execution economy: it front-loads a
-`cost: high` action once (compiling `brief.md`), gates a **single** human checkpoint **at the
-design→execution switch** (you review the brief), then runs the `cost: medium` loops (`/plan-loop`
-→ `/code-loop`) to completion **under bounded caps** with no per-iteration stop. If you start cold
-with no high-cost front-load, the gate falls to after `/plan-loop` — the pipeline is never run
-end-to-end with zero human review. The cost switch is the gate; the caps (per-layer + global budget
-+ cross-layer breaker) are the safety net.
+`cost: high` action once (compiling `brief.md`), gates a **single** human checkpoint **once that
+design action has produced the `brief.md`, before planning consumes it** (you review the brief),
+then runs the `cost: medium` loops (`/plan-loop` → `/code-loop`) to completion **under bounded
+caps** with no per-iteration stop. If you start cold with no design action, the gate falls to after
+`/plan-loop`, before any code — the pipeline is never run end-to-end with zero human review. The
+brief handoff is the gate; the caps (per-layer + global budget + cross-layer breaker) are the
+safety net.
 
 ## The Repo Atlas (amortized high-cost)
 

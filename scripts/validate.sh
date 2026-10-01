@@ -433,6 +433,18 @@ case "$retirement_gate" in
 esac
 bash tests/scripts/retirement-gate.sh
 
+echo "==> Validating /ship-loop's non-overridable checkpoint..."
+# /ship-loop's single mandatory human checkpoint moved from a cost-tier boundary (which
+# stopped existing once commands declared no tier) to the brief handoff. Nothing else here fails
+# the build if a later edit to commands/ship-loop.md quietly drops "non-overridable" or either of
+# the two anchors the checkpoint fires at -- the brief handoff, and (on a cold start with no design
+# action) after /plan-loop. tests/scripts/checkpoint-gate.sh proves this gate both ways, against
+# the real file and against a `cp`'d copy with the wording deliberately weakened.
+if ! node tests/scripts/lib/checkpoint-gate.mjs commands/ship-loop.md; then
+  exit 1
+fi
+bash tests/scripts/checkpoint-gate.sh
+
 echo "==> Validating new cost-tier artifacts..."
 for f in \
   templates/BRIEF.md.tmpl \

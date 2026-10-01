@@ -43,7 +43,7 @@ decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brie
 **`cost: medium`** tier executes against that brief *without re-researching*, so the high-volume
 work (plan detail, iterative coding) runs cheaply. `/discover` (new product) and `/design`
 (brownfield feature) are the high-cost front-loads that feed `/plan`; `/ship-loop` runs the whole
-pipeline continuously, gating once at the design→execution switch. Supporting agents invoked by
+pipeline continuously, gating once at the brief handoff (before planning consumes the brief). Supporting agents invoked by
 handoff, at whichever cost their own frontmatter declares: `security-reviewer`,
 `architecture-reviewer`, `test-strategist`, `refactor-designer` — see
 [`docs/AGENTS.md`](docs/AGENTS.md#cost-tiering) for the exact shape per agent.

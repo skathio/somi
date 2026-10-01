@@ -78,13 +78,27 @@ frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
 **Interaction with the layers.** Commands (the orchestration layer) carry no `cost:` of their own
 and simply `Task` the tier-appropriate agent, which resolves its own model from its own declared
 set. Tasking a differently-costed subagent from an uncosted command is the **cache-correct** way to
-mix models — and because prompt caches are model-scoped, the design→execution switch is a natural
-cache boundary (which is exactly where `/ship-loop` places its single human gate). `/discover`,
-`/design`, `/refactor-design`, and `/atlas` are the commands that Task a `cost: high` agent for
-their **entire** job — `discovery-analyst`, `designer`, and `refactor-designer`'s framing is
-judgment-heavy and their brief anchors the work item; `atlas` is one high-quality deep repo read,
-paid once. `/adopt` Tasks the `atlas` agent as its own Stage 1, at the agent's own declared tier —
-it does not inline that read.
+mix models — and because prompt caches are model-scoped, a `cost: high` design action's `brief.md`
+and the `cost: medium` execution that consumes it sit on either side of a natural cache boundary,
+which is why `/ship-loop` places its single human gate right there: once the design action has
+produced `brief.md`, before planning consumes it (falling to after `/plan-loop` on a cold start
+with no design action). `/discover`, `/design`, `/refactor-design`, and `/atlas` are the commands
+that Task a `cost: high` agent for their **entire** job — `discovery-analyst`, `designer`, and
+`refactor-designer`'s framing is judgment-heavy and their brief anchors the work item; `atlas` is
+one high-quality deep repo read, paid once. `/adopt` Tasks the `atlas` agent as its own Stage 1, at
+the agent's own declared tier — it does not inline that read.
+
+**How dispatch actually happens.** Neither a command nor the front door hands a whole command's
+procedure to one Tasked agent that runs it end-to-end. On Claude Code, invoking a command runs its
+own steps live, in that turn; on Copilot, selecting the `somi` front-door persona
+(`agents/somi.md`) runs the matched command's own procedure live instead. Either way, every agent
+that procedure starts — one `Task` call per agent, never the whole command in one call — resolves
+its cost tier and model through `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)
+skill, served over the bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP
+isn't reachable — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) before the `Task`, and
+the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling **selects**
+the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
+declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
 
 **Repo-awareness.** A SessionStart hook surfaces repo-local instruction files (`CLAUDE.md`,
 `AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; the high-cost design agents read

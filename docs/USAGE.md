@@ -12,7 +12,7 @@ cost: high — front-load reasoning into a dense brief.md:
 /design <feature>          →  .somi/plans/<slug>/ + brief.md  →  user reviews + approves
    ↓ (brownfield, design-    (design.md + decisions + brief)
    ↓  heavy feature)
-─────────────────────────  design→execution switch  ─────────────────────────
+───────────────────────────  brief handoff  ───────────────────────────────
 cost: medium — execute against the brief, cheaply:
 /plan <problem|slug>       →  .somi/plans/<slug>/ created    →  user reviews + approves
    ↓                          (consumes brief.md as primary input)
@@ -30,7 +30,7 @@ design-heavy feature) compile a dense `brief.md` so **`cost: medium`** (`/plan`,
 
 `/code <slug>` runs a single coder pass without the review loop. `/code-loop` is the bounded
 code↔review cycle for a single iteration. `/ship` runs the whole pipeline with hard gates at every
-stage; `/ship-loop` runs it continuously, gating once at the design→execution switch.
+stage; `/ship-loop` runs it continuously, gating once at the brief handoff.
 
 ---
 

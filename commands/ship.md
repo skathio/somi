@@ -31,13 +31,13 @@ stage wants.
 > (new product), or [`/refactor-design`](./refactor-design.md) (large refactor), each Tasking an
 > agent that declares `cost: high` — review its `brief.md`, then `/ship` (or `/plan`) consumes it
 > and runs the cheaper pipeline. For the **continuous** version that gates once at the
-> design→execution switch and then runs the execution loops under caps, use
+> brief handoff and then runs the execution loops under caps, use
 > [`/ship-loop`](./ship-loop.md).
 
 > **Bounded by construction.** The inner code↔review cycle delegates to
 > [`/code-loop`](./code-loop.md), which has hard caps (max passes, severity floor, diff cap,
 > circuit breaker). `/ship` itself is not the loop — `/code-loop` is. If you want both layers
-> automated under caps with a single gate at the model switch, use [`/ship-loop`](./ship-loop.md).
+> automated under caps with a single gate at the brief handoff, use [`/ship-loop`](./ship-loop.md).
 
 ## Pipeline stages
 
