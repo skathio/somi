@@ -804,13 +804,12 @@ check "shard directory is removable and merge then fails loudly" \
 
 # --- mergeShards() skips a shard from a prior schema, with a clear message ----------------
 # SCHEMA_VERSION was bumped 1 -> 2 but nothing read it back -- this is the pass that gives
-# it a job. The REAL shard the judge-retirement correction names by path (no `schema` field at all,
-# predates the mechanical-overlay guarantee) is copied into a throwaway SHA -- never
-# the original on disk, never mutated in place.
+# it a job. A trimmed copy of a real shard from before the schema field existed (committed as a
+# fixture so this runs on a fresh checkout) is copied into a throwaway SHA, never mutated in place.
 legacysha="legacytest$(date +%s)"
 legacydir="$ROOT/tests/evals/results/$legacysha"
 mkdir -p "$legacydir"
-cp "$ROOT/tests/evals/results/4ff4da62caff23248f9d057c6bc9046a8a22ecf6/01-000.json" "$legacydir/01-000.json"
+cp "$ROOT/tests/scripts/fixtures/legacy-shard-no-schema.json" "$legacydir/01-000.json"
 legacyerrfile=$(mktemp)
 legacyout=$(node --input-type=module -e "
   const M = await import('$ROOT/$R');
@@ -874,7 +873,7 @@ j "
   const fs = await import('node:fs');
   fs.writeFileSync(M.shardPath(null,'01',0), JSON.stringify(M.shardRecord(null,'01',{ index: 0, dimensions: { S3: true }, criteria: null, error: null })));
 " >/dev/null
-cp "$ROOT/tests/evals/results/4ff4da62caff23248f9d057c6bc9046a8a22ecf6/01-000.json" "$resumedir/01-001.json"
+cp "$ROOT/tests/scripts/fixtures/legacy-shard-no-schema.json" "$resumedir/01-001.json"
 resumeout=$(ANTHROPIC_API_KEY=test-stub-key PATH="$resumebin:$PATH" node "$R" --source . --tasks 01 --runs 2 --out "$(mktemp)" 2>&1)
 case "$resumeout" in
   *"skipped"*"01-001.json"*) ok "the resume-read skips a stale-schema shard rather than resuming from it (F-131)" ;;
