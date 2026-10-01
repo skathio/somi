@@ -13,6 +13,8 @@ not a replacement for the global ruleset; they're depth-on-demand.
 | [`requirements-engineering`](../skills/requirements-engineering/SKILL.md) | Writing/critiquing BRD/SRS/FRD/SDD/TDD; turning an idea into testable, traceable requirements |
 | [`owasp-defense`](../skills/owasp-defense/SKILL.md)            | Auth, crypto, input validation at trust boundaries, deserialization, file uploads |
 | [`solid-principles`](../skills/solid-principles/SKILL.md)      | Designing a module, naming a class, evaluating an abstraction                     |
+| [`plan-review`](../skills/plan-review/SKILL.md)                | Judging whether a plan, brief, or ADR is sound before code is written             |
+| [`sdlc-process`](../skills/sdlc-process/SKILL.md)              | Checking that progress, diary, decisions, and findings match the repository       |
 | [`clean-code`](../skills/clean-code/SKILL.md)                  | Naming, function structure, comments, errors                                      |
 | [`testing-playbook`](../skills/testing-playbook/SKILL.md)      | Choosing test level, mock policy, deciding what to skip                           |
 | [`api-design`](../skills/api-design/SKILL.md)                  | HTTP/gRPC/library APIs, versioning, idempotency, error shapes                     |

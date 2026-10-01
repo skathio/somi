@@ -50,10 +50,8 @@ A clean diff with no obvious bugs can be rejected if it solves the wrong problem
 1. **Anchor on intent.** What is this change *supposed* to do? Read `spec.md`, the relevant
    `phases/<NN>-*.md`, recent `diary.md` entries, the commit messages. If you can't tell what the
    change is for, that's finding #1.
-2. **Check plan-vs-code alignment.** Did the diff stay within the iteration's scope? Did changes
-   to the plan (if any) get captured in `decisions.md` (with superseded entries) and `diary.md`?
-   If the spec says one thing and the code does another with no diary entry explaining the
-   divergence, that's a finding.
+2. **Check plan-vs-code alignment** with the `sdlc-process` skill: scope, recorded decision
+   changes, diary entries.
 3. **Read the diff in its surroundings**, not in isolation. A line that looks innocent in the diff
    can be wrong given the file it lives in. Open the file. Look at the callers.
 4. **Walk the trust boundaries.** Where does untrusted input enter? Where does authority get
@@ -69,21 +67,14 @@ A clean diff with no obvious bugs can be rejected if it solves the wrong problem
 
 ## What to look for
 
-### Plan integrity (SoMi-specific)
+### Plan integrity and artifact discipline (SoMi-specific)
 
-- **Spec / code divergence** — the diff implements something different from the spec/iteration,
-  and no diary entry explains why.
-- **Stale decisions** — code contradicts an entry in `decisions.md` that wasn't superseded.
-- **Stale brief** — a decision was superseded in `decisions.md` but the work item's `brief.md`
-  still lists it in §2 "Decisions in force" with no matching line in `§10 Supersessions`. The
-  brief is execution's cached primary input; a missing overlay line means every later pass
-  builds on a decision that no longer holds.
-- **Missing diary entries** — a phase shape changed (different files, different scope) and no
-  diary entry records it.
-- **Unrecorded scope creep** — diff touches code outside the iteration's "Files (approx)"; not
-  inherently wrong, but should be acknowledged in the summary or `progress.md` follow-ups.
-- **Inaccurate progress** — `progress.md` says the iteration is `done` but the acceptance criteria
-  aren't met by the diff.
+The checks for plan soundness live in the [`plan-review`](../skills/plan-review/SKILL.md) skill and
+the checks for artifact discipline (spec/code divergence, stale decisions and briefs, missing diary
+entries, inaccurate `progress.md`, unrecorded scope creep) in the
+[`sdlc-process`](../skills/sdlc-process/SKILL.md) skill. Load the one the review engages; the skill
+wins over this file. Seat `plan-reviewer` or `sdlc-reviewer` when you want an independent context
+window on either.
 
 ### Design / architecture
 
@@ -218,10 +209,8 @@ the file yourself.
 - **Reviewing the author, not the code.** Findings are about the code.
 - **Inventing findings.** Don't claim a vulnerability exists without tracing it. Mark hunches as
   **Low confidence**.
-- **Ignoring the plan.** A change that diverges from `spec.md` / `phases/` is a finding, even if
-  the divergent code is technically fine.
-- **Ignoring the diary.** If the diary explains a divergence, you may still flag it as a Minor for
-  visibility, but don't grade it as a Blocker just because the spec didn't update.
+- **Ignoring the plan or the diary.** A divergence from `spec.md` / `phases/` is a finding even if
+  the code is fine; a diary entry that explains it lowers it to Minor, not Blocker.
 
 ## Examples
 

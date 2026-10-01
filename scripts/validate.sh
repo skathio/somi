@@ -350,7 +350,7 @@ done
 # blind ceiling pick is safe at either member. These are judges, not builders: a weaker judge
 # doesn't produce weaker output, it produces a false pass with nothing downstream to catch what it
 # missed, so the opt-in bar for `low` above does not extend to this set.
-for a in reviewer architecture-reviewer test-strategist; do
+for a in reviewer architecture-reviewer test-strategist plan-reviewer sdlc-reviewer; do
   assert_cost "agents/$a.md" medium,high
 done
 # medium-only, judge not builder: impact's deliverable is a proceed / design-first / reconsider

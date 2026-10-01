@@ -17,6 +17,8 @@ re-researching. See [Cost tiering](#cost-tiering) below.
 | [`reviewer`](../agents/reviewer.md)                          | `medium, high` | Before merge; whenever you want a skeptical second opinion            |
 | [`security-reviewer`](../agents/security-reviewer.md)        | `high`         | Auth, crypto, secrets, input validation, deserialization, file uploads |
 | [`architecture-reviewer`](../agents/architecture-reviewer.md)| `medium, high` | New module/service/contract; dependency direction change              |
+| [`plan-reviewer`](../agents/plan-reviewer.md)                | `medium, high` | An independent read of a plan, brief, or ADR before it is approved or executed |
+| [`sdlc-reviewer`](../agents/sdlc-reviewer.md)                | `medium, high` | Audit that progress, diary, decisions, and findings match the repository |
 | [`test-strategist`](../agents/test-strategist.md)            | `medium, high` | Test shape feels wrong; deciding unit vs. integration; flake debugging |
 | [`planner`](../agents/planner.md)                            | `low, medium`  | Non-trivial change; sequence the design (brief) into phases           |
 | [`coder`](../agents/coder.md)                                | `low, medium`  | Executing against an approved plan + brief; small, well-scoped tasks  |
@@ -205,6 +207,26 @@ contract/module/service (the consultant-trigger table auto-invokes).
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`api-design`](../skills/api-design/SKILL.md) skills — skill wins on divergence.
 
+### plan-reviewer
+
+An independent context window on a plan: premise, user-verified decisions with real options and a
+reversal cost, iteration sizing, concrete risks, and acceptance criteria that can actually fail.
+Read-only; returns severity-graded findings.
+
+- **Cost**: `medium, high` — one job over two depths; judges stay off `low`.
+- **Canonical knowledge**: the [`plan-review`](../skills/plan-review/SKILL.md) skill — skill wins on
+  divergence.
+
+### sdlc-reviewer
+
+An independent audit of a work item's paper trail against the repository: `progress.md` accuracy,
+diary entries and compaction, decisions recorded before acted on, findings resolved by id, nothing
+shipped that points into the planning folder. Read-only; returns severity-graded findings.
+
+- **Cost**: `medium, high` — one job over two depths; judges stay off `low`.
+- **Canonical knowledge**: the [`sdlc-process`](../skills/sdlc-process/SKILL.md) skill — skill wins
+  on divergence.
+
 ### test-strategist
 
 Decides what to test, at what level, and how. Distinguishes risk-driven coverage from
@@ -367,7 +389,7 @@ one-file change.
 | Declared `cost:` | Agents | What it does |
 |------|--------|--------------|
 | **`high`** (no lower member) | `discovery-analyst`, `designer`, `security-reviewer`, `refactor-designer`, `atlas` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it (`atlas` front-loads a repo map instead of a work-item brief) |
-| **`medium, high`** (graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept — the opt-in bar for `low` below does not extend to these: a weaker judge produces a false pass, not merely a lighter one |
+| **`medium, high`** (graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist`, `plan-reviewer`, `sdlc-reviewer` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept — the opt-in bar for `low` below does not extend to these: a weaker judge produces a false pass, not merely a lighter one |
 | **`medium`** (no lower or higher member) | `incident`, `impact` | `incident` executes against an already-framed incident without re-researching; every job is a live outage, so there is no lighter version of the mitigation/debt-capture call to make honestly. `impact` is a judge, reverted here from `low, medium`: its verdict and (in diff mode) its review-lens selection would produce a false pass at reduced depth, and its full-depth pass is already mechanical call-graph tracing rather than open-ended design, so `high` buys nothing either |
 | **`low, medium`** (graded over one job) | `coder`, `planner`, `refactorer`, `pr` | `pr` grades one job over two depths — a fuller pass adds house-style matching, never required for correctness. The other three widened downward: `low` is a reduced-depth pass (each agent's own "Running at `low`" section names its trims), selected whenever the session ceiling resolves to `low` (CLI, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and its source announced before the first agent it applies to starts on every entry path — so the quality drop is a trade the user can see, not one made for them unseen |
 
