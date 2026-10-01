@@ -3,7 +3,7 @@
 # against a decision's `ceiling` field instead of its `selected` field would silently run a unit at
 # whatever the session merely PERMITS, not the tier decideDispatch picked. That guard was
 # hand-verified RED once, by eye, and its automated test then dropped to fit a diff cap -- exactly
-# the failure this repo has already hit seven times over in this work item (see
+# the failure this repo has already hit repeatedly (see
 # tests/scripts/retirement-gate.sh's own header): a guard proven only by memory of once failing.
 #
 # Runs the REAL block, extracted verbatim from a throwaway COPY of scripts/validate.sh (never the

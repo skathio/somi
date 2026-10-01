@@ -266,7 +266,7 @@ check "one-member set within ceiling: allow, selected echoes the sole member" \
   "$(run "$B" 'const d = C.decideDispatch("low", "high"); process.stdout.write(d.action + "," + d.selected + "," + d.supported.join("|"))')" \
   "allow,low,low"
 
-# D22's canonical case: a unit declaring only `high` has no cheaper mode. Under a ceiling that
+# The canonical case: a unit declaring only `high` has no cheaper mode. Under a ceiling that
 # permits none of its members, it still runs, at that one declared tier -- blocking it would not be
 # a saving, only a stoppage.
 check "single-high declaration under a medium ceiling: still allow, at high (its only declared tier)" \

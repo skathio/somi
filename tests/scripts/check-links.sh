@@ -8,7 +8,7 @@
 #
 # NEGATIVE cases are as load-bearing as positive ones here. The walker's pass-1 regex silently
 # passed five dead-link forms, and every staged failure used the single form it was authored
-# against — the same sample-selection defect iteration 3.1 was blocked on. The forms below are
+# against — the same sample-selection defect. The forms below are
 # chosen to be ones a naive implementation gets WRONG.
 
 set -euo pipefail
@@ -80,7 +80,7 @@ check "the exemption is reported on success" \
 # The success line is F5's whole remedy — the number that makes hatch growth visible. An earlier
 # form incremented `checked` before the resolving branch, so it reported exempted (non-resolving)
 # links as resolving: "2 relative link(s) resolve" when zero did. A false claim in the output of
-# the tool this work item built to remove false claims.
+# the tool built to remove false claims.
 check "an exempted link is NOT counted as resolving" \
   "$( (cd "$TMP/r" && node scripts/check-links.mjs) | grep -q '^check-links: 0 relative link(s) resolve; 1 illustrative-path exemption'; echo $?)"
 mkrepo; printf '# t\n<!-- illustrative-path -->[dead](./nope.md)\n' > "$TMP/r/docs/a.md"; commit

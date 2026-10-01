@@ -8,7 +8,7 @@
 # Runs the real script against a throwaway repo whose layout mirrors this one (rules/CLAUDE.md
 # canonical + two targets at different depths), so the per-target prefix transform is exercised for
 # BOTH targets independently — getting one right and the other wrong is exactly the silent-drift
-# class this iteration removes.
+# class this script removes.
 #
 # Wired into scripts/validate.sh (npm test).
 
@@ -142,7 +142,7 @@ check "the prose mention survived intact" \
 # --- retarget() rewrites ONLY citations, never other relative links -------------
 # An unanchored `](./` pattern rewrote every relative link in a bullet: a prose link became
 # ./rules/docs/GUIDE.md in one copy and ../rules/docs/GUIDE.md in the other — both dead — while
-# --check reported "in sync". The hook's F-37 fix exists to keep prose links in bullets intact, so
+# --check reported "in sync". The hook exists to keep prose links in bullets intact, so
 # an unanchored rewrite here put the two halves of that seam in disagreement.
 write_canonical '- **Guide:** see [guide](./docs/GUIDE.md) first. ([`20`](./20-clean-code.md))'
 node "$GENC" >/dev/null

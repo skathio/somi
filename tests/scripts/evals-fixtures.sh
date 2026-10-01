@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Guards the eval fixtures in tests/evals/fixtures/.
 #
-# Every assertion here exists because a draft of iteration 3.3b broke it. The two Blockers:
+# Every assertion here exists because an earlier draft of the fixtures broke it. The two defects:
 # a plan tree shipped under `.somi/` that .gitignore silently dropped from the package, and
 # pass criteria written into the fixture source as comments the candidate reads.
 set -uo pipefail
@@ -30,7 +30,7 @@ echo "== eval fixtures =="
 # four. `--no-index` asks the question the assertion's name claims to ask.
 # Floor first: every "no bad files found" assertion below passes vacuously against an empty
 # tree, so establish that the tree is actually populated before trusting any of them.
-# Bumped 24 -> 35 (phase 2, 2.3) for multipass-code's own 11 files (8 under multipass-code/ plus
+# Bumped 24 -> 35 for multipass-code's own 11 files (8 under multipass-code/ plus
 # the 3 sibling scorer-side reference files) -- a floor with real headroom below the live count,
 # not a re-pin to it, so the tree can keep growing without needing another bump every time.
 n_files=$(find "$F" -type f | wc -l | tr -d ' ')
@@ -72,8 +72,7 @@ done
 # Scorer-side files that belong in the manifest even though they sit outside the three fixture
 # directories. Declared ONCE: the generator, the count assertion, and the presence loop all read
 # this array, so adding a file here cannot leave the arithmetic 40 lines away out of step.
-# multipass-code's own three reference files added here (phase 2, 2.3, decisions.md#d2
-# Implementation notes) -- multipass-code/ itself is added to the manifest's `find` calls
+# multipass-code's own three reference files added here -- multipass-code/ itself is added to the manifest's `find` calls
 # directly (below), kept as its own find argument rather than folded into the SAME list as
 # task01/02/03 (R9: this fixture stays visibly standalone, never merged into the rubric-graded
 # corpus's own tree, even though both are hashed into the one shared MANIFEST.sha256 file).
@@ -84,7 +83,7 @@ SCORER_SIDE=(README.md MANIFEST.sha256 make-review-patch.mjs task03-review.patch
              task02-code-mutant.mjs task02-code-control.mjs \
              multipass-code-mutant-a.mjs multipass-code-mutant-b.mjs multipass-code-control.mjs)
 
-# --- D1: the scorer-side files exist. None is imported by anything here, so deletion is silent,
+# --- the scorer-side files exist. None is imported by anything here, so deletion is silent,
 # and fixtures/README.md is the reconstruction contract 3.4b is built from.
 # _candidates/ holds hand-written /code outputs used by tests/scripts/eval-runner.sh. Scorer-side:
 # never copied into a candidate's repo, never in the candidate manifest.
@@ -182,7 +181,7 @@ else
   ok "no reference implementation inside task02-code/ (it lands in the candidate's repo)"
 fi
 
-# --- F-330: the control must speak the candidate's vocabulary ----------------------------------
+# --- the control must speak the candidate's vocabulary ----------------------------------
 # The control is run against the CANDIDATE'S test. A candidate that asserts on an error message --
 # idiomatic, and what the shipped tests themselves do (/malformed token/, /bad signature/) -- passes
 # the control only if the control words its errors the way the candidate-visible code does.
@@ -307,13 +306,12 @@ check "defect is invisible in 30-day months and mis-bills in 31-day ones" "$delt
 # Everything above checks what ships. B1 can reappear at reconstruction time: if SoMi's install
 # step (or a future runner) drops a .gitignore containing `.somi` into $WORK before the baseline
 # commit, `git add -A` silently skips the renamed plan tree and the candidate meets a work item
-# with no phase file. Nothing in SoMi writes a .gitignore today — this asserts it stays that way.
+# with no plan phases. Nothing in SoMi writes a .gitignore today — this asserts it stays that way.
 R=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
 : "${R:?mktemp -d returned empty}"
 cp -r "$F/task02-code/." "$R"/
 [ -d "$R/_somi" ] && mv "$R/_somi" "$R/.somi"
-# F-33 (multipass-fixture review pass 2 on 2.3, reviewer's question 2 -- same defect, same file,
-# task02's own inherited instance): the git init/commit subshell's status used to be discarded by
+# Task02's inherited instance of the same defect: the git init/commit subshell's status used to be discarded by
 # a blanket `2>&1` into /dev/null, so a failing `git commit` was invisible; and the check read
 # `git ls-files` (the INDEX, which `git add -A` alone already populates -- no commit required) not
 # `git ls-tree ... HEAD` (the BASELINE COMMIT the check's own name promises). Both fixed here.
@@ -327,7 +325,7 @@ else
   tracked_list="__git_commit_failed__"
 fi
 rm -f "$recon_log"
-# Compares the actual path SET (F-34), not a count -- a count alone can't distinguish a renamed
+# Compares the actual path SET, not a count -- a count alone can't distinguish a renamed
 # file from a missing one (renaming diary.md to notes.md keeps the count at 4); a set mismatch
 # names the file that moved.
 expected_tracked='.somi/plans/expired-token/diary.md
@@ -499,7 +497,7 @@ for r in task02-code-control task02-code-mutant; do
 done
 check "baseline suite is green against BOTH references (1(b)'s premise)" "$refs_ok" "ok"
 
-# --- routed from 4.1's first live runs ---------------------------------------------------------
+# --- defects found in the first live runs ---------------------------------------------------------
 # task01's endpoint must AUTHENTICATE the caller. The problem statement asks to record "who sent
 # it"; when tenantId came straight from the request body that was unanswerable, so the request
 # rested on a false premise -- and commands/plan.md §1a makes the premise check "not optional".
@@ -515,7 +513,7 @@ else
   bad "task01's endpoint authenticates the caller -- tenantId must not come from the request body"
 fi
 
-# --- routed from 3.3b pass 5: the contract must be asserted, not just written down --------------
+# --- the contract must be asserted, not just written down --------------
 # R4 in task02's spec states the clock shape the candidate may inject. Three passes running, the
 # references were "fixed" by adding whichever convention the last review found unsupported --
 # epoch-seconds, then an options object, then a clock function. That does not converge, and it
@@ -576,7 +574,7 @@ else
   printf '%s\n' "$embed" | sed 's/^/       /'
 fi
 
-# --- multipass-code: reference-set export parity + dependence proof (phase 2, 2.1/2.2) ----------
+# --- multipass-code: reference-set export parity + dependence proof ----------
 # Anchors for A (cursor.mjs's bound check) and B (paginate.mjs's shrink branch) on the SHIPPED
 # source, occurrence count asserted first -- "pattern not found -- source moved" discipline; this
 # repo has already been bitten by a pattern that occurs twice and gets selected positionally
@@ -590,7 +588,7 @@ check "B's anchor (the shrink branch's re-minted cursor) occurs exactly once in 
 # Export-key parity across all four states, generalizing the task02 mutant/control comparison
 # above to three reference files plus the shipped module's own combined surface (cursor.mjs +
 # paginate.mjs -- there is no single shipped file here, unlike token.mjs).
-# Diagnostic captured, not discarded (multipass-fixture review F-14): a parse/import error on
+# Diagnostic captured, not discarded: a parse/import error on
 # either side previously vanished behind `2>/dev/null`, leaving only "want 'ok', got ''" on screen.
 surf_mp_err=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
 surf_mp=$( node --input-type=module -e "
@@ -610,26 +608,26 @@ else
 fi
 rm -f "$surf_mp_err"
 
-# The SOURCE layer (2.2, multipass-fixture review F-11): the behavioural equality/inequality sweeps
+# The SOURCE layer: the behavioural equality/inequality sweeps
 # below can only see a difference SOME probed input exercises, so a hand-copy slip in a validation
 # branch no probe cursor trips (a neutered negative-offset guard, a neutered string/empty-cursor
 # guard, a neutered VERSION check) leaves the behaviour layer green. This asserts each reference
 # file's source is shipped's plus EXACTLY the expected vocabulary-constrained hunk(s) -- see
 # tests/scripts/lib/multipass-source-identity.mjs for the full mechanism (a real, bidirectional
 # diff generalizing reference-pair.mjs's insertion-only hunk walk to a replacement-shaped change).
-# Covers mutant-a and control too, not just mutant-b (multipass-fixture review pass 2, F-24): F-11's
-# own argument -- every probe cursor mint() produces is well-formed, so a validation branch no
+# Covers mutant-a and control too, not just mutant-b: the
+# argument -- every probe cursor mint() produces is well-formed, so a validation branch no
 # probe exercises is permanently unchecked -- is a property of the shared probe set, not of any one
 # reference file, and mutant-a/control are the two states draws are actually scored against.
-# Diagnostic captured, not discarded (multipass-fixture review F-14/F-21: this call previously used
-# `2>/dev/null`, reintroducing exactly what F-14 fixed for surf_mp above -- same fix, same pattern).
+# Diagnostic captured, not discarded (this call previously used
+# `2>/dev/null`, reintroducing exactly what surf_mp above already fixed -- same fix, same pattern).
 ident_mp_err=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
 ident_mp=$( node "$ROOT/tests/scripts/lib/multipass-source-identity.mjs" \
               "$MC/src/pagination/cursor.mjs" "$MC/src/pagination/paginate.mjs" \
               "$F/multipass-code-mutant-a.mjs" "$F/multipass-code-mutant-b.mjs" \
               "$F/multipass-code-control.mjs" 2>"$ident_mp_err" )
 field_ident(){ printf '%s\n' "$ident_mp" | sed -n "s/^$1=//p" | head -1; }
-# F-26 (multipass-fixture review pass 3): unanchoredBody used to strip a trailing $
+# unanchoredBody used to strip a trailing $
 # unconditionally, silently corrupting any vocabulary not genuinely anchored ^...$ into a
 # valid-but-different regex -- and AB_VOCAB is the only thing constraining what control's two
 # hunks may contain. This asserts the guard's own self-check reports it CAN still fail, not
@@ -644,7 +642,7 @@ if [ "$ident_a" != "ok" ] || [ "$ident_b" != "ok" ] || [ "$ident_ctl" != "ok" ];
 fi
 rm -f "$ident_mp_err"
 
-# The dependence proof itself (2.2): three observable states plus mutant-b's positive equality to
+# The dependence proof itself: three observable states plus mutant-b's positive equality to
 # shipped, swept over ONE shared probed-input set (not a smaller one per state) -- see
 # tests/scripts/lib/multipass-dependence.mjs for the full mechanism and its own self-check.
 dep=$(node "$ROOT/tests/scripts/lib/multipass-dependence.mjs" "$ROOT" 2>&1)
@@ -652,12 +650,12 @@ printf '%s\n' "$dep" | sed 's/^/       /'
 # Anchored at line start: multipass-dependence.mjs prints one field per line now (each line's
 # value running to end-of-line), so this can safely take the WHOLE rest of the line rather than
 # stopping at the first space -- the previous stop-at-space extraction silently truncated
-# THIRD_DEFECT's own (potentially multi-word) value (multipass-fixture review F-17).
+# THIRD_DEFECT's own (potentially multi-word) value.
 field(){ printf '%s\n' "$dep" | sed -n "s/^$1=//p" | head -1; }
-# Floor, not just a drift guard (multipass-fixture review pass 2, F-18): on an empty probe grid
+# Floor, not just a drift guard: on an empty probe grid
 # (TOTALS=[]), PROBES=0, BOUNDARY_PROBES=0, every .every() on an empty array is vacuously true, and
 # every diffCount is 0 -- eleven of the twelve checks below would report green with zero probes
-# ever run, and F-12's own exact pins (0 == 0) would be exactly what let that through. This also
+# ever run, and the exact pins (0 == 0) would be exactly what let that through. This also
 # closes the crashed-harness case: if multipass-dependence.mjs throws before printing its report,
 # every field() call returns '', and an integer comparison against '' fails loudly here (2>/dev/null
 # on the `[ ... -ge N ]` swallows the "integer expression expected" error, so the check's own
@@ -669,14 +667,14 @@ check "shipped's B branch is unreached (identical to a no-B variant, all 225 pro
 check "mutant-a exhibits B (newly reachable, every boundary probe) and not A" "$(field MUTANT_A_EXHIBITS_B)/$(field MUTANT_A_NOT_A)" "yes/yes"
 check "control exhibits neither defect (every boundary probe)" "$(field CONTROL_CLEAN)" "yes"
 check "mutant-b is EXACTLY equal to shipped across the full probed-input set (the reachability proof)" "$(field SHIPPED_VS_MUTANT_B_DIFF)" "0"
-# Pinned to BOUNDARY_PROBES exactly, not just "> 0" (multipass-fixture review F-12/F-h): all three
+# Pinned to BOUNDARY_PROBES exactly, not just "> 0" : all three
 # variants are hand-copies of the shipped two-file source into standalone files with no textual
 # sync guard. A loose `-gt 0` only proves the pair differs SOMEWHERE -- a variant that silently
 # acquired a third behavioural difference beyond A/B would still pass and would then contaminate
 # every draw scored against it. The design puts every difference at the boundary set and nowhere
 # else, so pinning to the boundary count exactly converts a liveness check into a real drift guard.
 bp=$(field BOUNDARY_PROBES)
-# Floor on the boundary subset specifically (F-18): the three pins immediately below compare
+# Floor on the boundary subset specifically: the three pins immediately below compare
 # $sa/$sc/$ac against $bp itself -- a self-referencing expected value that passes 0==0 on a
 # crashed/empty grid just as readily as the PROBES floor above closes for the outer grid. Both
 # floors are needed: PROBES>=200 alone would not catch a grid with plenty of probes but zero at
@@ -689,7 +687,7 @@ check "mutant-a vs control differ at exactly the boundary probes, nowhere else" 
 check "the equality check's own harness detects a deliberately-broken mutant-b (proves it CAN fail)" "$(field HARNESS_SELF_CHECK)" "ok"
 check "no third shipped defect (bounded sweep: bad pageSize, bad cursor offset)" "$(field THIRD_DEFECT)" "none"
 
-# --- multipass-code: leak-scan extension + reconstruction contract (phase 2, 2.3) ---------------
+# --- multipass-code: leak-scan extension + reconstruction contract ---------------
 # Generic denylist, extended to this tree (same vocabulary as the task01/02/03 scan above).
 leak_mp=$(grep -rniE 'point of the task|declared file set|no 31-day month|is the defect|exists to fix|pass criteri|the scorer|scoring|scored|mutant|token-control|code-control|criterion [0-9]|dimension S[0-9]|graded|open book|trim comparison|you are measured|do not invent' \
         "$MC" 2>/dev/null)
@@ -700,15 +698,14 @@ else
   printf '%s\n' "$leak_mp" | sed 's/^/       /'
 fi
 
-# Chain-specific vocabulary (spec.md §11's "widened leak surface" risk): D7's enabler/gated
+# Chain-specific vocabulary (the "widened leak surface" risk): the enabler/gated
 # design admits a class of leak the generic list above cannot see -- phrasing that narrates "B
 # depends on A" or "there are exactly two things to find here", whether in abstract terms
 # (enabler, gated) or in this domain's own terms (the list shrinking is the ONLY scenario in
 # which A manifests, so naming it narrates the dependency just as plainly).
 CHAIN_LEAK='enabler|\bgated\b|unreachable until|dependent chain|depends on (a|b|it)|only reachable after|gameable|second (defect|bug)|exactly two (things|defects|bugs)|two things to find|\bshrinks?\b|\bshrunk\b'
 
-# Known collision, verified by hand ahead of this iteration (phases/02's 2026-09-07 amendment,
-# and re-verified directly above rather than trusted from that note): CHAIN_LEAK's shrink/shrunk
+# Known collision, verified by hand (and re-verified directly above rather than trusted from a note): CHAIN_LEAK's shrink/shrunk
 # terms match the load-bearing comment at paginate.mjs -- the only place in the tree naming the
 # scenario that exposes A -- which that amendment requires be KEPT verbatim (removing it would
 # make the fixture read as sanitised, its own tell). Neither obvious response is right: failing
@@ -723,7 +720,7 @@ CHAIN_LEAK='enabler|\bgated\b|unreachable until|dependent chain|depends on (a|b|
 # reworded, or removed, the count below stops being exactly 1 and this fails loudly instead of
 # the exemption silently widening to cover whatever text now sits there.
 #
-# WHOLE-LINE pin (-x), not a substring match (F-31, multipass-fixture review pass 2 on 2.3): -F
+# WHOLE-LINE pin (-x), not a substring match: -F
 # alone is a substring match, so APPENDING leak text to this line (e.g. "... there is nothing
 # Bug two is gated on bug one.") leaves the pinned substring intact -- exempt_count stays 1, the
 # pin reports ok, and the appended "gated" text is then silently filtered out along with the rest
@@ -748,7 +745,7 @@ else
 fi
 
 chain_hits=$(grep -rniE "$CHAIN_LEAK" "$MC" 2>/dev/null)
-# Anchored at line start (F-31): a plain `grep -vF "$exempt_line:"` matches the pin's path:line
+# Anchored at line start: a plain `grep -vF "$exempt_line:"` matches the pin's path:line
 # prefix ANYWHERE in the line, so a future absolute path that happens to contain "$exempt_line:"
 # as a substring elsewhere in its own content would also be filtered -- needs a checkout-varying
 # absolute path to actually collide, so unreachable in practice, but anchoring costs nothing.
@@ -765,12 +762,12 @@ fi
 # --- B1, one layer down, for multipass-code too: the RECONSTRUCTED repo, not just what ships ----
 # Mirrors task02's own reconstruction contract above: cp -> rename _somi to .somi -> git init +
 # commit -> assert the plan tree's four expected files (spec.md, progress.md, diary.md,
-# phases/01-backward-paging.md, R11) are tracked in the baseline commit.
+# the first phase-plan file) are tracked in the baseline commit.
 RM=$(mktemp -d) || { bad "mktemp -d failed"; exit 1; }
 : "${RM:?mktemp -d returned empty}"
 cp -r "$MC/." "$RM"/
 [ -d "$RM/_somi" ] && mv "$RM/_somi" "$RM/.somi"
-# F-33/F-34 (multipass-fixture review pass 2 on 2.3): git ls-tree HEAD reads the BASELINE COMMIT
+# git ls-tree HEAD reads the BASELINE COMMIT
 # itself, not the index (`git ls-files`, which `git add -A` alone already populates); the commit
 # subshell's own status is captured instead of discarded, so a failing `git commit` names itself;
 # and the tracked-file SET is compared literally, not just its count, so a rename is caught by name

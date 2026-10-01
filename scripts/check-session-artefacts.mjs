@@ -19,7 +19,8 @@
 // WHERE
 //   - code (`.mjs`, `.sh`) under hooks/ and scripts/: comment text only, so a string literal that
 //     legitimately mentions a decision tag is not flagged.
-//   - markdown under agents/, commands/, skills/: every line, with a narrower pattern, because
+//   - code under tests/scripts/ too (comments only, as above).
+//   - markdown under agents/, commands/, skills/, docs/, rules/, templates/: every line, with a narrower pattern, because
 //     those files teach the plan format and use `D1:` / `phase 1, iteration 1` as sample content.
 //
 // EXCLUSIONS are explicit and few (EXCLUDED below). To gate another tree, add one SCOPES row.
@@ -63,13 +64,18 @@ const MARKDOWN_PATTERN = new RegExp(
   ].join('|'),
 );
 
-// One row per gated tree. Adding `tests/scripts` later is a one-line change here.
+// One row per gated tree. Adding another tree is a one-line change here. Only `.md` is read for
+// markdown trees, so `templates/*.tmpl` (which carry sample decision ids for users to copy) is not.
 const SCOPES = [
   { dir: 'hooks', kind: 'code' },
   { dir: 'scripts', kind: 'code' },
   { dir: 'agents', kind: 'markdown' },
   { dir: 'commands', kind: 'markdown' },
   { dir: 'skills', kind: 'markdown' },
+  { dir: 'tests/scripts', kind: 'code' },
+  { dir: 'docs', kind: 'markdown' },
+  { dir: 'rules', kind: 'markdown' },
+  { dir: 'templates', kind: 'markdown' },
 ];
 
 // Repo-relative paths (file or directory prefix). The checker holds its own pattern definitions.

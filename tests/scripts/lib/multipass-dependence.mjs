@@ -1,18 +1,17 @@
 #!/usr/bin/env node
-// Dependence proof for multipass-code's A/B pair (decisions.md#d7, phases/02 2.2).
+// Dependence proof for multipass-code's A/B pair.
 // This is the BEHAVIOUR layer only -- see multipass-source-identity.mjs for the SOURCE layer.
 // Neither is sufficient alone (same two-layer split reference-pair.mjs's own header documents for
 // task02, generalized here from an insertion-shaped diff to mutant-b's replacement-shaped one):
 // this file can only see a difference some probed input actually exercises, so a hand-copy slip
 // in a validation branch no probe cursor ever trips (a neutered negative-offset guard, a
-// neutered string/empty-cursor guard, a neutered VERSION check -- multipass-fixture review, F-11)
+// neutered string/empty-cursor guard, a neutered VERSION check)
 // leaves SHIPPED_VS_MUTANT_B_DIFF=0 even though mutant-b's construction is wrong. The source layer
 // closes that: it asserts mutant-b's source is shipped's, plus EXACTLY one vocabulary-constrained
 // hunk (B's own return-line fix), so a change anywhere else in the file fails regardless of
 // whether any probed input would ever observe it.
 //
-// Four states, three independently observable plus one construction-only (phases/02's own
-// preamble): shipped (A present, B masked) and mutant-a (A fixed, B newly reachable) and control
+// Four states, three independently observable plus one construction-only: shipped (A present, B masked) and mutant-a (A fixed, B newly reachable) and control
 // (neither) are told apart by SOME probed input. mutant-b (B "fixed" alone, A still broken) is
 // asserted EQUAL to shipped, exactly, across the whole probed-input set -- that equality IS the
 // reachability proof: it fails if B ever becomes reachable pre-A-fix. A vacuous equality pass (too
@@ -97,8 +96,7 @@ function noBranchListPage(items, cursor, pageSize) {
 }
 // Swept over ALL 225 probes, not just the 40 boundary ones -- scoped to boundaryIdxs alone this
 // check is a tautology of SHIPPED_EXHIBITS_A (shipped.decodeCursor, called by noBranchListPage
-// too, throws before either listPage body runs on every one of those 40), and multipass-fixture
-// review F-10 measured it reporting a false "yes" on a widened-boundary mutant the equality check
+// too, throws before either listPage body runs on every one of those 40), and it was measured reporting a false "yes" on a widened-boundary mutant the equality check
 // (below) correctly caught. The null-cursor case needs its own branch: `mint(null)` would encode a
 // bogus non-null cursor rather than the real `cursor == null` no-cursor path noBranchListPage (and
 // shipped) special-case.
@@ -129,12 +127,12 @@ function brokenMutantB(items, cursor, pageSize) {
   return { items: slice, nextCursor: nextOffset < items.length ? shipped.encodeCursor(nextOffset) : null, remaining: items.length - nextOffset };
 }
 // Calls probeListPage itself (not a re-implementation of its body) so the self-check exercises
-// the SAME comparison path the real mutant-b check above uses -- multipass-fixture review F-15.
+// the SAME comparison path the real mutant-b check above uses .
 const brokenOutcomes = probes.map((p) => probeListPage({ listPage: brokenMutantB }, p.total, p.pageSize, p.offset));
 const brokenDiffCount = outcomes.shipped.reduce((n, v, i) => n + (v !== brokenOutcomes[i] ? 1 : 0), 0);
 
-// --- bounded adversarial sweep: no third shipped defect (phases/02's new exit criterion) --------
-// SCOPE DECISION (multipass-fixture review F-16, made not omitted): this sweep varies pageSize
+// --- bounded adversarial sweep: no third shipped defect --------
+// SCOPE DECISION: this sweep varies pageSize
 // and cursor payload, not `items`, and never calls encodeCursor directly. A string `items` does
 // produce an anomalous result (`listPage('abcdef', null, 2)` -> a string sliced into "items"),
 // but R1-R4 (backward paging, `spec.md` in the fixture's own tree) never hand listPage anything
@@ -177,7 +175,7 @@ if (!thirdDefect) {
 // for every field including a multi-word one (THIRD_DEFECT). Previously PROBES/BOUNDARY_PROBES
 // and HARNESS_SELF_CHECK/broken_diffs shared a line each, which is exactly what forced field()
 // into a stop-at-first-space extraction that silently truncated THIRD_DEFECT's own value
-// (multipass-fixture review F-17).
+//.
 console.log(`PROBES=${probes.length}`);
 console.log(`BOUNDARY_PROBES=${boundaryIdxs.length}`);
 console.log(`SHIPPED_EXHIBITS_A=${shippedExhibitsA ? 'yes' : 'no'}`);

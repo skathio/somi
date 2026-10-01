@@ -49,28 +49,27 @@ that floor.
 
 Three commands carry live-model corpus evidence: `/plan`, `/code`, and `/review` (the three task
 specs above). `/code-loop` carries a fourth, structurally different gate: its own convergence gate
-(a Mann-Whitney comparison of passes-to-approve, `decisions.md#d1`–`#d5`, unrelated to task
-criteria — see "The convergence gate" below) landed in phase 3. The other 21 get **smoke**:
+(a Mann-Whitney comparison of passes-to-approve, unrelated to task
+criteria — see "The convergence gate" below) has landed. The other 21 get **smoke**:
 `tests/evals/lib/smoke.mjs` installs the definition set for real and validates the *installed*
 frontmatter and that the installed tree carries every `DEFINITION_DIRS` entry — **not** every
-referenced path; that's `scripts/check-links.mjs`'s job (`decisions.md#d8`'s 2026-08-31 correction)
-— at zero model calls (`decisions.md#d8`).
+referenced path; that's `scripts/check-links.mjs`'s job — at zero model calls.
 
 Within these three corpus-tied commands, not every dimension a task scores can block a trim. A
 criterion is **gating** only if it is bidirectional (its executor can independently produce both
 `pass` and `fail`) *and* sound (closed enumeration, not pattern search over open-ended content) —
-`decisions.md#d11`'s settled classification, re-derived from `tests/evals/lib/classification.mjs`
+a settled classification, re-derived from `tests/evals/lib/classification.mjs`
 for this table, not copied from prose. A command with **fewer than half** its dimensions gating
-reads **partial**, not **gate** (`decisions.md#d8`'s floor rule); a command with **zero** gating
+reads **partial**, not **gate** (the floor rule); a command with **zero** gating
 dimensions reads **report-only** — a label distinct from `partial` because it implies no gating
-capability at all, not a smaller share of one (`decisions.md#d11`'s supersession).
+capability at all, not a smaller share of one (the zero-dimension exception).
 
 | Command | Coverage | Detail |
 |---|---|---|
 | `/plan` | partial | gate: S3 (1 of 5 dimensions, `boundaryRespected`); report-only: S1, S2, S6, S7 |
 | `/code` | partial | gate: S5 (1 of 4 dimensions, `scoreExpiryGuard`); report-only: S1, S3, S6 |
 | `/review` | report-only | report-only: S1, S4, S5, S7 (0 of 4 gating) |
-| `/code-loop` | gate | convergence gate (Mann-Whitney, D1–D5): `regression`/`no-regression`/`inconclusive` on passes-to-approve, N=15/arm — not a task-dimension ratio, see "The convergence gate" below |
+| `/code-loop` | gate | convergence gate (Mann-Whitney): `regression`/`no-regression`/`inconclusive` on passes-to-approve, N=15/arm — not a task-dimension ratio, see "The convergence gate" below |
 | `/ship-loop` | smoke | frontmatter + install check (below); its own convergence gate is **deferred**, not built — see "Two axes, not one" below |
 | `/adopt` | smoke | frontmatter + install check |
 | `/architecture-review` | smoke | frontmatter + install check |
@@ -93,35 +92,33 @@ capability at all, not a smaller share of one (`decisions.md#d11`'s supersession
 | `/test-strategy` | smoke | frontmatter + install check |
 | `/upgrade` | smoke | frontmatter + install check |
 
-**`/code` reads `partial`, not `gate`.** At 2 of 4 dimensions it would sit exactly at D8's 50%
+**`/code` reads `partial`, not `gate`.** At 2 of 4 dimensions it would sit exactly at the 50%
 floor and read `gate`; the user's 2026-08-28 demotion of task 02's audit-log criterion (S1) to
-report-only (`decisions.md#d11`'s Resolution — the matcher is a heuristic over open-ended shell
+report-only (the matcher is a heuristic over open-ended shell
 text, not closed enumeration, however closed the alias *set* it draws from is) took it to 1 of 4.
 An earlier draft of this table stated `gate` at "2 of 4, exactly at the floor" and was caught
-before it shipped (`F-69`) — publishing `gate` at 25% coverage is the precise overstatement the
+before it shipped — publishing `gate` at 25% coverage is the precise overstatement the
 floor rule exists to prevent.
 
-**Two axes, not one: `/ship-loop` is smoke-checked *and* its own gate is deferred.** D8's own
-Context originally counted `/ship-loop` among the gated commands while citing D9 — before D9 had
-actually decided anything (`decisions.md#d8`'s 2026-08-31 correction). D9's decision is
-"`/code-loop` only, in this work item"; `/ship-loop`'s real same-fixture baseline and live
-convergence gate are an explicit, tracked follow-up (`progress.md`'s "Deferred, not dropped"), not
+**Two axes, not one: `/ship-loop` is smoke-checked *and* its own gate is deferred.** An earlier
+draft counted `/ship-loop` among the gated commands before its gate had been decided on at all. The
+decision is "`/code-loop` only"; `/ship-loop`'s real same-fixture baseline and live
+convergence gate are an explicit, tracked follow-up (deferred, not dropped), not
 silently dropped and not silently absorbed into this work item's Definition of Done. Iteration 2.5
 closed the coverage hole this sequencing left — `/ship-loop` had **no coverage in either tier**
 until then. It is now smoke-checked exactly like any other un-gated command, and that is a
 different fact from the gate: the smoke check proves its frontmatter and install wiring are sound;
 it says nothing about convergence, and does not stand in for the deferred gate.
 
-**`/code-loop` had the identical hole once, for a different reason — now closed.** Before phase 3
-landed, its own convergence-gate implementation (`decisions.md#d1`–`#d5`) was `not-started`: no
+**`/code-loop` had the identical hole once, for a different reason — now closed.** Before the convergence gate
+landed, its implementation was `not-started`: no
 extractor, no rank procedure, no driver, no CLI. Labeling it `gate` then would have excluded it
 from smoke on the grounds it was already gated, for a mechanism that did not exist — the same
 defect this section exists to narrate about `/ship-loop`, one command over. Iterations 3.1–3.4 have
 since landed the extractor, the rank test, the driver, and a runnable CLI
 (`node tests/evals/convergence.mjs`, "The convergence gate" below), so `/code-loop` now reads
 `gate` on the strength of a real mechanism, not a promise. **The two commands are still not the
-same case**: `/ship-loop`'s gate is deferred *indefinitely* (D9 — no work item currently owns it,
-see `progress.md`'s "Deferred, not dropped"); `/code-loop`'s gate is this work item's own
+same case**: `/ship-loop`'s gate is deferred *indefinitely* (nothing currently owns it); `/code-loop`'s gate is this tool's own
 centrepiece, and it has landed.
 
 **The smoke tier covers 21 commands, not 20.** `/code-loop` moved OUT of it in 3.4 — the mirror of
@@ -270,7 +267,7 @@ the failure mode this corpus has rediscovered five times.
 ## Certification
 
 `--certify` gates on a **single** scope, `full` — not a choice among several. An earlier design let
-a maintainer certify a cheaper, narrower scope instead (`--scope task01`); `decisions.md#d11`
+a maintainer certify a cheaper, narrower scope instead (`--scope task01`); that flag was
 removed the flag outright once the classification narrowed enough that the only remaining narrower
 scope (`task01`, 1 gating dimension) cleared a genuinely-soft corpus **73.58%** of the time — worse
 than not gating at all, and not a defensible thing to call a certification target under any label.
@@ -298,7 +295,7 @@ occasional certification run.
 **The gating count fell from 3 to 2 without the total draw count changing.** `CERTIFY_N` rose from
 80 to 120 to hold the same 1.81% false-accept rate at one fewer gating dimension — the pooled
 binomial depends only on total draws, not on how many dimensions share them
-(`decisions.md#d11`, verified against every prior draw/dimension pairing before this one was
+(verified against every prior draw/dimension pairing before this one was
 trusted). What *did* change: one-soft-dimension clearance — the rate that actually reflects the
 gate doing its job — improved from 50.99% to **27.00%**, because the same 240 draws now
 concentrate on fewer, individually stronger dimensions. `tests/scripts/eval-runner.sh` reads this
@@ -325,7 +322,7 @@ consequences, all of which should be decided before more budget is spent:
    after the earlier runs have already been paid for.
 2. **N=20 across three tasks is likely out of reach** on this budget, and there is no cheaper scope
    left to fall back to for `--certify` — the `--scope task01` flag that once offered one was
-   removed (`decisions.md#d11`; task 01 alone can never clear the per-dimension floor on task 02's
+   removed (task 01 alone can never clear the per-dimension floor on task 02's
    own gating dimension). N reduced, with the consequent loss of discriminating power stated
    explicitly rather than absorbed, is the only lever left.
 3. **Every executed criterion is worth more than it looks.** It removes a judge call *and* a
@@ -336,7 +333,7 @@ consequences, all of which should be decided before more budget is spent:
 Measured the hard way. A 5-run batch produced four `exit 1` runs whose transcripts read
 **`You've hit your session limit`** — the runner spends the *same* budget as an interactive
 session, and a long working session leaves little for it. The convergence gate below detects this
-signature directly and stops rather than silently recording it as draw data (F-308).
+signature directly and stops rather than silently recording it as draw data.
 
 This inverts the obvious optimisation. **Parallelism does not help a quota-bound workload** — it
 reaches the limit sooner and fails more runs on the way. Concurrency is the right lever only when
@@ -349,9 +346,9 @@ latency is the bottleneck, and here it is not.
   models, disagreed on **1 of 6** criterion verdicts on the very first shard. A scorer that grades
   *differently* is not a saving: at N=20 one flipped verdict in twenty moves a dimension a full
   grade, and phase 4 would read that as a definition-set regression when only the scorer changed.
-  **Settled, not merely deferred**: once nothing judged can gate (`decisions.md#d7`, phase 2.4),
+  **Settled, not merely deferred**: once nothing judged can gate,
   a cross-model judge swap has no gating verdict left to validate, so there is nothing left to
-  revisit — `judge-agreement.mjs` and the `--judge-model` flag were removed outright (2.4c).
+  revisit — `judge-agreement.mjs` and the `--judge-model` flag were removed outright.
 
   The disagreement paid for itself anyway — see below.
 - **Task 01 criterion 6 is executed, not judged.** It is a file-list check against an allowlist —
@@ -388,7 +385,7 @@ Run the batches when quota is fresh, not at the end of a long session.
 A full certification is 240 draws. Per-run time is **highly variable — observed 3.4 to 13
 minutes** across timed runs, with a single isolated run measured at **10m 11s**. Budget ~10
 minutes and expect the spread; one definition set is on the order of **40 hours** — 240 agent runs,
-not 60 (`decisions.md#d11`'s 2026-08-29 correction) — and a trim comparison needs two.
+not 60 — and a trim comparison needs two.
 
 > Do not plan against a point estimate here, and do not take one from the fastest runs. The first
 > figure quoted for this — ~320 s — came from the two fastest pilots and was wrong by ~2×. Acting
@@ -445,11 +442,10 @@ stored alongside them, so a result file cannot disagree with itself.
 `/code-loop`'s own gate measures something different from everything above: not a task-dimension
 ratio, but a **Mann-Whitney comparison of passes-to-approve** (a run's own `pass` count, read
 straight off its loop-state JSON) between two definition sets, at **N=15 draws per arm**
-(`decisions.md#d2`) using a hand-rolled, **tie-conditional permutation test** — Monte Carlo
+using a hand-rolled, **tie-conditional permutation test** — Monte Carlo
 resampled, conditioned on the observed tie pattern rather than assuming distinct values
-(`decisions.md#d5`; zero runtime dependencies, D3). `/ship-loop`'s own same-fixture baseline and
-live gate are an explicit, tracked follow-up, not built here — see `progress.md`'s "Deferred, not
-dropped" for the reasoning, not restated in this section.
+(zero runtime dependencies). `/ship-loop`'s own same-fixture baseline and
+live gate are an explicit, tracked follow-up, not built here.
 
 A cap-breach (`max-passes-exceeded`, `diff-cap-exceeded`, `scope-expansion`, `circuit-breaker`,
 `user-stop` — the terminal statuses `commands/code-loop.md` documents) fails the comparison
@@ -460,7 +456,7 @@ bare pass/fail:
 | verdict | meaning |
 |---|---|
 | `regression` | `p < α` (0.05, one-sided) — the candidate's passes-to-approve are stochastically worse than the baseline's |
-| `no-regression` | `p ≥ α` **and** the observed effect's upper confidence bound excludes `REGRESSION_SHIFT` (`decisions.md#d16` — tightened from a full pass once the real same-fixture baseline measured mean 1.53: one pass there is a ~65% increase, not the ~47% it was against the old 2.14 mixed-history mean) — an equivalence claim, not merely "not significantly different". On integer pass counts every margin strictly between 0 and 1 is identical (D16's addendum): the equivalence test **credits ties to the candidate and tolerates nothing beyond them** — the literal value 0.5 only matters in that it is less than a full pass, not as a "half-pass" tolerance in its own right |
+| `no-regression` | `p ≥ α` **and** the observed effect's upper confidence bound excludes `REGRESSION_SHIFT` (tightened from a full pass once the real same-fixture baseline measured mean 1.53: one pass there is a ~65% increase, not the ~47% it was against the old 2.14 mixed-history mean) — an equivalence claim, not merely "not significantly different". On integer pass counts every margin strictly between 0 and 1 is identical (an addendum to the margin choice): the equivalence test **credits ties to the candidate and tolerates nothing beyond them** — the literal value 0.5 only matters in that it is less than a full pass, not as a "half-pass" tolerance in its own right |
 | `inconclusive` | everything else. Reported and blocks a trim, exactly like `cannotCertify` blocks the task corpus — `p ≥ α` alone is never read as `no-regression` |
 
 A draw still `running` after its wait budget (`--max-wait-attempts`, default 2 full `/code-loop`
@@ -480,15 +476,14 @@ provide), and `lastVerdict` (the verdict of pass `completedPasses`, when there i
 A spawned `claude` that hard-fails mid-draw is a THIRD outcome, distinct from both a censored draw
 (no wait budget was ever exhausted) and a malformed one (nothing about loop state itself is wrong)
 — detected from the invocation's own result and classified into one of three reasons
-(`HardInvocationFailureError`'s own `reason` field, F-323): **`session-limit`** (the text
+(`HardInvocationFailureError`'s own `reason` field): **`session-limit`** (the text
 `You've hit your session limit` — matched only when the draw's OWN resulting state does not
 already show a completed pass; under `--print`, a healthy draw's own closing summary is this
 invocation's stdout, and it must not be misread as the incident just because its prose happens to
-mention the phrase, F-324); **`spawn-error`** (a set spawn-level error, e.g. the process never
+mention the phrase); **`spawn-error`** (a set spawn-level error, e.g. the process never
 launched); **`nonzero-exit`** (any other non-zero exit). `timedOut` stays on the censoring path
 above, unaffected in all three cases. It stops the arm immediately: **no censor record, no
-replacement, and the driver exits non-zero** — a quota wall is an operator condition, not a datum
-(F-308). **What to do**, and it depends on the reason: for `session-limit`, wait for the reset the
+replacement, and the driver exits non-zero** — a quota wall is an operator condition, not a datum. **What to do**, and it depends on the reason: for `session-limit`, wait for the reset the
 message names, then re-invoke with the same `--source`/`--fixture`/`--runs` — every
 already-completed draw is a shard already on disk and is skipped, so nothing already paid for is
 redrawn. For `spawn-error`/`nonzero-exit`, the account is not necessarily the cause (a missing
@@ -496,7 +491,7 @@ redrawn. For `spawn-error`/`nonzero-exit`, the account is not necessarily the ca
 since there is no reset to wait for.
 
 Every comparison prints its own **live** power estimate, computed from the realized (post-exclusion)
-arm sizes — never D2's static 71.6% cited as a constant, since that would state the power the gate
+arm sizes — never a static 71.6% cited as a constant, since that would state the power the gate
 was *sized* for rather than the power a given comparison actually *had*.
 
 ```sh

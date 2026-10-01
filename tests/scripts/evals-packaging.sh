@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Guards phase 3's stated invariant risk: `npm test` stays hermetic, and the eval corpus never
-# ships to consumers. Iteration 3.4c owns this alone, deliberately separated from 3.4a/b so the
-# invariant is not spread through a large diff.
+# Guards the invariant that `npm test` stays hermetic and the eval corpus never ships to
+# consumers. Kept in its own file so the invariant is not spread through a large diff.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -61,7 +60,7 @@ fi
 have=$(node -e "const s=require('./package.json').scripts; process.stdout.write(s['eval:behavioral'] ?? 'MISSING')")
 check "an explicit eval:behavioral script exists" "$have" "node tests/evals/run.mjs"
 
-# Same pair, extended to the new entrypoint (3.4): the invocation-level check must name the file
+# Same pair, extended to the convergence entrypoint: the invocation-level check must name the file
 # convergence.mjs actually is, not just repeat run.mjs's own assertion under a different label --
 # that would pass unconditionally regardless of whether this module is reachable from npm test.
 have2=$(node -e "const s=require('./package.json').scripts; process.stdout.write(s['eval:convergence'] ?? 'MISSING')")

@@ -1,15 +1,14 @@
 #!/usr/bin/env node
-// Source-identity proof for multipass-code's mutant-a, mutant-b, and control (decisions.md#d7,
-// phases/02 2.2). This is the SOURCE layer -- see multipass-dependence.mjs for the BEHAVIOUR
+// Source-identity proof for multipass-code's mutant-a, mutant-b, and control This is the SOURCE layer -- see multipass-dependence.mjs for the BEHAVIOUR
 // layer. Neither is sufficient alone: multipass-dependence.mjs's 225-probe equality/inequality
 // sweeps can only see a difference SOME probed input actually exercises. Every probe cursor it
 // mints is well-formed (`v:1`, a non-negative integer offset) by construction, so a hand-copy slip
 // in a validation branch no probe ever trips -- a neutered negative-offset guard, a neutered
 // string/empty-cursor guard, a neutered VERSION check -- all leave the behaviour layer's own
-// diff counts unaffected (multipass-fixture review, F-11). This file closes that gap by asserting
+// diff counts unaffected. This file closes that gap by asserting
 // SOURCE identity instead of just behavioural identity, for all three hand-copied reference files:
-// mutant-a is scored against draws (F-11's well-formed-probe argument is a property of the probe
-// set, not of any one reference file -- multipass-fixture review pass 2, F-24), control likewise,
+// mutant-a is scored against draws (the well-formed-probe argument is a property of the probe
+// set, not of any one reference file), control likewise,
 // and mutant-b (construction-only, never scored) keeps the coverage it already had.
 //
 // tests/scripts/lib/reference-pair.mjs already solved a version of this problem for task02's
@@ -26,8 +25,7 @@
 // longest-common-subsequence diff, so it tolerates insertion, deletion, AND replacement, all
 // collapsed into hunks the same way `diff -u` reports them; the discipline is otherwise identical
 // to reference-pair.mjs's: exactly the expected number of contiguous hunks, each hunk a strict
-// 1-for-1 line replacement (not a deletion, not a multi-line splice -- multipass-fixture review
-// pass 2, F-19), every line in every hunk (both sides) constrained to a caller-supplied vocabulary.
+// 1-for-1 line replacement (not a deletion, not a multi-line splice), every line in every hunk (both sides) constrained to a caller-supplied vocabulary.
 //
 // Lives in a file rather than a `node -e "..."` block -- backticks/double-quotes inside a shell
 // string are live syntax (tests/scripts/lib/shell-embedded-js.mjs guards that class).
@@ -42,13 +40,13 @@ import { readFileSync } from 'node:fs';
 // comment).
 //
 // The `import` strip is applied to the SHIPPED side only (`stripImports: true`), not to any
-// reference file's side (multipass-fixture review pass 2, F-20). It exists to absorb shipped's own
+// reference file's side. It exists to absorb shipped's own
 // `paginate.mjs -> cursor.mjs` import line, which has no counterpart in a self-contained reference
 // file (mutant-a/mutant-b/control import nothing, the same convention task02-code-mutant.mjs uses
 // for token.mjs) -- stripping it from the shipped side only is what makes that an EXPECTED
 // structural difference rather than a spurious extra hunk. Stripping it from BOTH sides would also
 // erase the evidence of an import line a reference file was never supposed to have: prepending one
-// to a reference file previously passed silently (measured, F-20) because the old filter stripped
+// to a reference file previously passed silently because the old filter stripped
 // it back out again before the diff ever ran.
 const codeLines = (text, { stripImports = false } = {}) =>
   text
@@ -106,7 +104,7 @@ function diffHunks(a, b) {
  * @param {RegExp} vocab     every line inside every allowed hunk (both sides) must match
  * @param {number} expectedHunkCount  how many separate hunks this pair should differ by (mutant-a
  *   and mutant-b: 1 -- A's bound alone, or B's return alone; control: 2 -- both A's bound and B's
- *   return, since it fixes both loci -- multipass-fixture review pass 2, F-24)
+ *   return, since it fixes both loci)
  * @returns {string} 'ok', or a diagnostic string
  */
 export function assertVocabHunks(aLines, bLines, vocab, expectedHunkCount = 1) {
@@ -117,7 +115,7 @@ export function assertVocabHunks(aLines, bLines, vocab, expectedHunkCount = 1) {
     return `${hunks.length} separate hunks, not the expected ${expectedHunkCount}: ${hunks.map(locus).join(', ')}`;
   }
   for (const hunk of hunks) {
-    // A 1-for-1 replacement only -- not a deletion (F-19: a hunk with `added.length === 0` means
+    // A 1-for-1 replacement only -- not a deletion (a hunk with `added.length === 0` means
     // the line was REMOVED, not fixed, and the vocabulary check below runs over
     // `[...removed, ...added]`, so a pure deletion of B's line would otherwise satisfy a
     // vocabulary built only from the two REPLACEMENT forms without ever containing a stray line).
@@ -141,7 +139,7 @@ export const A_VOCAB = /^if \(payload\.offset (>=|>) total\) \{$/;
 // Anchored at both ends against the trimmed line; admits exactly two literal strings (shipped's
 // re-minted cursor, the fixed `null`), nothing else that could plausibly appear in this file.
 // Materially TIGHTER than the `EXPIRY_VOCAB` precedent it was previously compared to
-// (multipass-fixture review pass 2, F-25): `EXPIRY_VOCAB` (`reference-pair.mjs:27`) is an
+//: `EXPIRY_VOCAB` (`reference-pair.mjs:27`) is an
 // unanchored prefix alternation that also admits a bare `}` or a bare `nowMs` anywhere in the
 // file; this vocabulary admits only the two exact forms below, anchored start to end.
 export const B_VOCAB = /^return \{ items: \[\], nextCursor: (encodeCursor\(offset\)|null), remaining: 0 \};$/;
@@ -151,8 +149,7 @@ export const B_VOCAB = /^return \{ items: \[\], nextCursor: (encodeCursor\(offse
 // alternation as a whole) rather than restated as a fourth literal regex, so the two vocabularies
 // can never drift out of sync with the combined one if either is ever edited.
 //
-// Guard, not a comment (F-26, multipass-fixture review pass 3,
-// .somi/reviews/multipass-fixture/2026-09-08-2.1-pass3-approve.md): the original one-line
+// Guard, not a comment: the original one-line
 // `.replace(/^\^/, '').replace(/\$$/, '')` strips a trailing `$` unconditionally, so a vocabulary
 // not genuinely anchored `^...$` is silently corrupted into a valid-but-different regex instead
 // of failing loudly -- and this function's only two callers feed it AB_VOCAB's own inputs, the
@@ -173,8 +170,7 @@ export const B_VOCAB = /^return \{ items: \[\], nextCursor: (encodeCursor\(offse
 // unescaped `^` or `$` of its own -- exactly what an independently-anchored alternative
 // (`^bbb$`) sitting inside the body would be.
 //
-// Known scope limit, stated so the claim above matches it (F-37, multipass-fixture review pass 2
-// on 2.3): a TOP-LEVEL alternation whose alternatives carry no inner anchors of their own
+// Known scope limit, stated so the claim above matches it: a TOP-LEVEL alternation whose alternatives carry no inner anchors of their own
 // (`/^a|b$/` -> body `a|b`) passes this check even though it is not actually a single `^...$`
 // pattern -- `^` binds only to `a`, `$` only to `b` (it matches `axxx`, not only `a`). Contained,
 // not closed: every caller below wraps a vocabulary's stripped body in a non-capturing group
@@ -194,7 +190,7 @@ const unanchoredBody = (re) => {
   const body = s.slice(1, -1);
   // Strip every escaped character first (`\X`) -- an escaped `\^`/`\$` inside the body is a
   // literal character, not an anchor, and must not trip this check. Then strip every character
-  // CLASS span (`[...]`) too (F-32, multipass-fixture review pass 2 on 2.3): a `^` immediately
+  // CLASS span (`[...]`) too: a `^` immediately
   // after `[` negates the class rather than anchoring, and a `$` inside `[...]` is just the
   // literal character -- `[^)]` and `[$]` are not anchors and must be ACCEPTED, not rejected.
   // Without this, the check's own thrown message ("contains its own anchor") is a false
@@ -208,7 +204,7 @@ const unanchoredBody = (re) => {
 // Self-check (R12): proves the guard above CAN fail, not just that A_VOCAB/B_VOCAB currently
 // pass it. Exercises the two demonstrated hazard shapes (both must throw) plus the vocabularies
 // that must be ACCEPTED (neither must throw) -- the same shapes verified by hand in the comment
-// above, plus a negated character class (F-32) that a future field_ident vocabulary widening is
+// above, plus a negated character class that a future field_ident vocabulary widening is
 // likely to reach for (e.g. `[^\s)]`).
 export function unanchoredBodySelfCheck() {
   const mustThrow = [/^cost is \$/, /^aaa$|^bbb$/, /no leading anchor\$/];

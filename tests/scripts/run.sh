@@ -89,7 +89,7 @@ printf 'four\n' >> src/b.txt                     # weighted 8 > cap 6
 expect_exit "check-diff: over weighted cap exits 3" 3 \
   node "$LOOP" check-diff --slug demo --iteration 1.1
 
-# F-220: `git diff` reads the index and tracked work-tree paths, so a file git
+# `git diff` reads the index and tracked work-tree paths, so a file git
 # has never been told about is in NEITHER -- a brand-new file counted zero until
 # someone ran `git add`, and the cap under-measured by the whole size of every
 # file an iteration introduced. Silently, and in the direction that lets work
@@ -118,7 +118,7 @@ out="$(node "$LOOP" stats --slug demo --iteration 1.1)"
 check "finish: status recorded for the run ledger" \
   "$(jq -e '.status == "stopped-diff-cap"' <<<"$out" >/dev/null; echo $?)"
 
-# --- somi-loop: mid-loop cap re-resolution without --force (F-29) ---------------
+# --- somi-loop: mid-loop cap re-resolution without --force ---------------
 # commands/code-loop.md's documented remedy for a fired gate: "the user adjusts the
 # env var explicitly and re-runs — the loop does not 'decide' to widen its own
 # bounds." Before this fix, caps were resolved only at `init` and frozen into state:
@@ -230,7 +230,7 @@ check "F-29: finish's stdout surfaces cap_overrides too, not just the gitignored
 # (tests/evals/lib/convergence.mjs) nor commands/code-loop.md's documented status
 # list; a separate open item, not to be copied here.
 
-# --- somi-loop (plan): mirrors the code-loop F-29 block above for `--loop plan` -
+# --- somi-loop (plan): mirrors the code-loop block above for `--loop plan` -
 # Plan loops have exactly one hard gate (`max_passes`); `diff_cap_lines` always
 # short-circuits to 0 for the plan family in reresolveCap()/resolveInitCap(), so
 # `--diff-cap` must be provably inert regardless of what's passed — asserted below
@@ -358,7 +358,7 @@ expect_exit "somi-check: clean staged set passes" 0 node "$CHECK" --staged
 #
 # Everything above asserts *behavioral properties* (cap precedence, weighting,
 # recurrence semantics) — sufficient to gate this bash implementation, but it gives
-# Phase 1's Node port no byte-level "does this match?" target. This section runs a
+# the Node port no byte-level "does this match?" target. This section runs a
 # second, independent, fully-scripted scenario against ITS OWN throwaway repo (kept
 # separate from $REPO above, which by this point has accumulated a lot of
 # scenario-specific mutations — reusing it would couple golden ordering to the
@@ -368,7 +368,7 @@ expect_exit "somi-check: clean staged set passes" 0 node "$CHECK" --staged
 # Mode: `SOMI_GOLDEN_MODE=capture bash tests/scripts/run.sh` (re)writes the golden
 # files under tests/scripts/goldens/; the default, `check` (every normal dev/CI
 # run), replays the same scenario and fails loudly on any drift from what's
-# committed. Once Phase 1 points $LOOP/$FINDINGS at the Node CLIs, `check` mode
+# committed. Once $LOOP/$FINDINGS point at the Node CLIs, `check` mode
 # is exactly the parity gate: same scenario, same normalization, byte-for-byte
 # comparison — a divergence here is a real behavior regression, not noise.
 #

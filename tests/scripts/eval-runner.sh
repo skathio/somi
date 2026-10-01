@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Unit guard for tests/evals/run.mjs (iteration 3.4a).
+# Unit guard for tests/evals/run.mjs.
 #
 # Hermetic by construction: every case below is `--dry-run` or a direct function call. No model
-# invocation, no network, no credential. That is an exit criterion of phase 3, not a convenience.
+# invocation, no network, no credential. That is an exit criterion, not a convenience.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -46,11 +46,11 @@ for bad_in in "21, 20" "-1, 20" "5, 0" "1.5, 20"; do
   check "grade($bad_in) throws rather than grading" "$got" "RangeError"
 done
 
-# --- the comparison rule phase 4 gates on ------------------------------------------------------
+# --- the comparison rule the later gate depends on ------------------------------------------------------
 cmp_case() {
   # NOT `j ... | { read -r got; check ...; }` -- a pipeline runs its right side in a SUBSHELL, so
   # check()'s increments to pass/fail were discarded and all 8 cases below printed FAIL while the
-  # suite still reported 0 failed and exited 0. These are the compare() rule phase 4 gates on.
+  # suite still reported 0 failed and exited 0. These are the compare() rule the later gate depends on.
   local got
   got=$(j "const r = M.compare($2, $3); process.stdout.write(String(r.accepted) + ':' + r.regressions.length);")
   check "$1" "$got" "$4"
@@ -76,9 +76,9 @@ cmp_case "a dimension missing from the candidate is a regression" \
 cmp_case "two regressions are both reported" \
   "{t1:{S1:'pass',S2:'pass'}}" "{t1:{S1:'fail',S2:'unstable'}}" "false:2"
 
-# --- result-file shape: the contract phase 4 consumes -------------------------------------------
-# S3 is task 01's only GATING dimension (decisions.md#d11); S1/S2 are report-only, so this also
-# pins the split buildResult() now performs (2.4b) -- a report-only dimension must still be
+# --- result-file shape: the contract the later gate consumes -------------------------------------------
+# S3 is task 01's only GATING dimension; S1/S2 are report-only, so this also
+# pins the split buildResult() now performs -- a report-only dimension must still be
 # measured and graded, just under `reportOnly`, never under `dimensions`.
 shape=$( j "
   const src = { ref: 'HEAD', sha: 'abc123def456' };
@@ -166,9 +166,9 @@ case "$pre" in
 esac
 rm -f "$out"
 
-# --- 3.4b: fixture executor + mutation substitution --------------------------------------------
-# The three hand-written candidates under fixtures/_candidates/ are the acceptance criterion,
-# stated in the phase file. Each pins one outcome of scoreExpiryGuard()'s three steps.
+# --- fixture executor + mutation substitution --------------------------------------------
+# The three hand-written candidates under fixtures/_candidates/ are the acceptance criterion.
+# Each pins one outcome of scoreExpiryGuard()'s three steps.
 FX="$ROOT/tests/evals/fixtures"
 # `step` is asserted, not just the verdict. Without it, deleting the control check entirely
 # survived every case: `changed-surface` returns `non-attributable` either way -- at (b) because
@@ -222,7 +222,7 @@ check "scoring leaves the candidate tree untouched" \
      process.stdout.write(String(fs.readFileSync(p, 'utf8') === before));
    ")" "true"
 
-# --- 2.1: task 02's merged S5 criterion, overlaid from scoreExpiryGuard()'s VERDICT, not OBSERVED -
+# --- task 02's merged S5 criterion, overlaid from scoreExpiryGuard()'s VERDICT, not OBSERVED -
 # The Blocker this closes: an `observed`-based derivation leaves `observed` unset on the own-step
 # failure branch (scoreExpiryGuard's real return shape there carries no `observed` field at all),
 # so a candidate genuinely red on its own source would map to `null` and get silently discarded
@@ -268,8 +268,8 @@ check "a judge reply missing criterion 1 marks the anomaly on eg, rather than dr
   ")" "criterion 1 absent from the judge reply"
 
 # --- non-attributable: settled 2026-08-12 as ABSENT and RECORDED, not "null/defer" ---------------
-# The prior "null/defer" wording let a judge-authored `pass` decide gating dimension S5 (review
-# pass 1, Blocker F-42 -- decisions.md#d11's 2026-08-12 correction). The fix removes criterion 1
+# The prior "null/defer" wording let a judge-authored `pass` decide gating dimension S5 (a judge-authored verdict must never decide a gating
+# dimension). The fix removes criterion 1
 # from the array entirely on this branch, so toDimensions() -- which maps every criterion it is
 # GIVEN, judge-authored or not -- never sees it. Seeded at 'pass' below (opposite of a fail-safe
 # default): a regression back to "defer" shows up as an S5 key reappearing in `dims`.
@@ -286,8 +286,8 @@ check "mutant-non-attributable is EXCLUDED: criterion 1 removed, S5 never reache
   "$(nonattr "{ verdict: 'non-attributable', step: 'mutant', reason: 'red on the mutant, but from type-error', observed: 'type-error' }" fail)" \
   'false|{"S3":true}'
 
-# F-47/F-48 (review pass 2): exclusion is a first-class OUTCOME, not `perRun.length - n`, which
-# vanished S5 at 100% exclusion (F-47) and charged harness faults against every dim (F-48).
+# exclusion is a first-class OUTCOME, not `perRun.length - n`, which
+# vanished S5 at 100% exclusion and charged harness faults against every dim.
 check "a dimension excluded on every draw still emits a row (0/0), not silence (F-47)" \
   "$(j "
     const res = M.buildResult({ source: { ref: 'x', sha: 'd' }, tasks: { '02': [
@@ -317,13 +317,13 @@ check "a harness-faulted (empty-dimensions) draw does NOT inflate excluded on un
     process.stdout.write(s5.n + '/' + s5.passes + '/' + s5.excluded + '|' + s3.n + '/' + s3.passes + '/' + s3.excluded);
   ")" "1/1/0|1/1/0"
 
-# F-50: `'excluded'` is truthy, so the pre-fix `v ? '+' : '-'` printed an unmeasured gating
+# `'excluded'` is truthy, so the pre-fix `v ? '+' : '-'` printed an unmeasured gating
 # dimension as `S5+` -- identical to a pass. Mutation: reverting the ternary turns this red.
 check "the live progress line marks an excluded dimension as neither pass nor fail (F-50)" \
   "$(j "process.stdout.write(M.renderDimensions({ S5: 'excluded', S3: true, S1: false, S6: true }))")" \
   "S5~ S3+ S1- S6+"
 
-# --- F-49 (review pass 2): scoreExpiryGuard()'s catch must fail CLOSED, not silently return S5
+# --- scoreExpiryGuard()'s catch must fail CLOSED, not silently return S5
 # to the judge. The throw is real -- a --source ref predating the mutant/control fixtures throws.
 check "scoreExpiryGuard throws when the mutant/control fixtures do not exist (the catch's real precondition)" \
   "$(j "
@@ -341,7 +341,7 @@ check "a harness-fault disposition (step: 'harness') is removed from criteria ex
   ")" "false"
 
 # session.mjs (criterion 2, S3) must never be touched by ANY task 02 overlay -- report-only, per
-# decisions.md#d11's correction. Proven by running the SAME overlay call used above (which only
+# the classification. Proven by running the SAME overlay call used above (which only
 # ever looks up criterion n===1) and confirming criterion 2 is byte-identical to what the judge
 # said going in, regardless of what scoreExpiryGuard returned.
 check "session.mjs's criterion is untouched by the expiry-guard overlay (report-only, not gating)" \
@@ -361,8 +361,8 @@ check "sessionUntouched: touched" \
   "$(j "const B = await import('$ROOT/tests/evals/lib/boundary.mjs'); const r = B.sessionUntouched([{status:'M',path:'src/auth/session.mjs'}]); process.stdout.write(r.ok + '|' + r.touched)")" \
   "false|true"
 
-# --- 2.2: capture .somi/audit.log, wire task 02's S1 criterion (closes gap 2) -------------------
-# The load-bearing claim (decisions.md#d11): this fixture is npm-only, which is what confines the
+# --- capture .somi/audit.log, wire task 02's S1 criterion (closes gap 2) -------------------
+# The load-bearing claim: this fixture is npm-only, which is what confines the
 # invocation space to npm's own CLI forms. Checked directly against the fixture, not assumed.
 PKG02="$ROOT/tests/evals/fixtures/task02-code/package.json"
 if grep -q '"packageManager"' "$PKG02"; then
@@ -389,7 +389,7 @@ check "node --test with a trailing path still matches"         "$(alm "'node --t
 check "bare node <test file>, no --test flag at all, matches"  "$(alm "'node tests/auth/token.test.mjs'")" "true"
 check "an incidental flag does not produce a false negative"   "$(alm "'npm test -- --test-reporter=tap'")" "true"
 
-# Blocker F-57: `npm help test`/`npm help run-script`'s OWN documented aliases and interposed npm
+# `npm help test`/`npm help run-script`'s OWN documented aliases and interposed npm
 # global flags -- confirmed by execution to genuinely run the suite and score `false` pre-fix.
 check "npm tst matches (npm test's own documented alias)"       "$(alm "'npm tst'")" "true"
 check "npm rum test matches (npm run's own documented alias)"   "$(alm "'npm rum test'")" "true"
@@ -417,7 +417,7 @@ check "a non-matching command fails cleanly" \
 check "node on a non-test file does NOT match the bare-node form" \
   "$(alm "'node scripts/build.mjs'")" "false"
 
-# Major F-59: a CLAIM about running the suite (prose, a commit message) must not match, or this
+# a CLAIM about running the suite (prose, a commit message) must not match, or this
 # criterion passes the exact fabrication it exists to catch. Confirmed `true` (wrongly) pre-fix.
 check "a prose claim mentioning npm test does NOT match (F-59)" \
   "$(alm "'echo \"remember to run npm test later\"'")" "false"
@@ -427,7 +427,7 @@ check "a commit message claiming npm test ran does NOT match (F-59)" \
 check "cd /repo && npm test still matches (compound command, not a claim)" \
   "$(alm "'cd /repo && npm test'")" "true"
 
-# Blocker F-61: F-57's anchor fix was unmeasured in the false-negative direction -- each of these
+# The earlier anchor fix was unmeasured in the false-negative direction -- each of these
 # genuinely runs the fixture's suite (verified by execution) and scored `false` before this fix.
 check "CI=1 npm test matches (variable-assignment prefix)"          "$(alm "'CI=1 npm test'")" "true"
 check "NODE_ENV=test npm test matches (variable-assignment prefix)" "$(alm "'NODE_ENV=test npm test'")" "true"
@@ -435,13 +435,13 @@ check "time npm test matches (keyword position)"                    "$(alm "'tim
 check "if true; then npm test; fi matches (keyword position)"       "$(alm "'if true; then npm test; fi'")" "true"
 check "for f in a b; do npm test; done matches (keyword position)"  "$(alm "'for f in a b; do npm test; done'")" "true"
 check "cd /tmp/x && CI=1 npm test matches (separator + assignment, composed)" "$(alm "'cd /tmp/x && CI=1 npm test'")" "true"
-# Named residual (F-61): adding \`(\` to the separator class closes this but breaks the prose case
+# Named residual: adding \`(\` to the separator class closes this but breaks the prose case
 # below -- verified worse, so it stays open.
 check "(npm test) does NOT match -- named residual, not silently left (F-61)" "$(alm "'(npm test)'")" "false"
 check "the residual's own reason for staying open: a paren separator would break prose" "$(alm "'echo \"see (npm test) output\"'")" "false"
 
-# Blocker F-62: re-enumerated from npm's whole command surface (\`npm help\`), not the two
-# pages the F-57 miss was on. \`npm it\` confirmed by execution: runs all 3 tests, exit 0.
+# re-enumerated from npm's whole command surface (\`npm help\`), not the two
+# pages the earlier miss was on. \`npm it\` confirmed by execution: runs all 3 tests, exit 0.
 check "npm it matches (npm install-test's own documented alias)"            "$(alm "'npm it'")" "true"
 check "npm install-test matches"                                            "$(alm "'npm install-test'")" "true"
 check "npm cit matches (npm install-ci-test's own documented alias)"        "$(alm "'npm cit'")" "true"
@@ -478,7 +478,7 @@ check "empty content is malformed (null), not an empty pass" \
   "$(alp "''")" "null"
 check "garbage with no tab-delimited structure at all is malformed (null)" \
   "$(alp "'not an audit log at all'")" "null"
-# Corrected (Major F-64): isUnterminatedBash() no longer trusts a trailing quote as a termination
+# Corrected: isUnterminatedBash() no longer trusts a trailing quote as a termination
 # signal, so this now folds rather than drops -- count stays 1, command still matches (below).
 check "one unparseable line among good ones folds in (not dropped) -- count and match still hold" \
   "$(alp '`2026-08-26T12:00:00Z\tCALL\tBash\tcmd=\"npm test\"\nthis line has no tabs at all`')" \
@@ -489,7 +489,7 @@ check "one unparseable line among good ones folds in (not dropped) -- count and 
 check "an embedded literal tab inside the command stays inside command, not a false field split" \
   "$(alp '`2026-08-26T12:00:00Z\tCALL\tBash\tcmd=\"npm test\t--silent\"`')" \
   '1:[["Bash","npm test\t--silent"]]'
-# Major F-58: an embedded, unescaped NEWLINE fragments a multi-line Bash command across two
+# an embedded, unescaped NEWLINE fragments a multi-line Bash command across two
 # physical log lines -- traced through the real hook, the pre-fix parser dropped the fragment
 # carrying the invocation and a genuine `npm test` run scored `fail`. The fold recombines it.
 check "a multi-line Bash command (embedded newline) folds into ONE entry, invocation preserved (F-58)" \
@@ -502,13 +502,13 @@ check "the folded multi-line command is recognized as a real test invocation" \
     process.stdout.write(String(A.matchesTestInvocation(e[0].command)));
   ")" "true"
 
-# Major F-64: a multi-line command whose FIRST line ends in a literal quote (an ordinary git
+# a multi-line command whose FIRST line ends in a literal quote (an ordinary git
 # commit message before npm test) used to read as already-terminated -- traced through the real
-# hook, this dropped the invocation and scored a genuine run FAIL, F-58's own defect reopened.
-check "a quoted first line does NOT falsely read as terminated -- invocation preserved (F-64)" \
+# hook, this dropped the invocation and scored a genuine run FAIL, the multi-line defect reopened.
+check "a quoted first line does NOT falsely read as terminated -- invocation preserved" \
   "$(alp '`2026-08-27T00:00:00Z\tCALL\tBash\tcmd=\"git commit -m \"fix: reject expired tokens\"\nnpm test\"`')" \
   '1:[["Bash","git commit -m \"fix: reject expired tokens\"\nnpm test"]]'
-check "the recovered quoted-first-line command is recognized as a real test invocation (F-64)" \
+check "the recovered quoted-first-line command is recognized as a real test invocation" \
   "$(j "
     const A = await import('$ROOT/tests/evals/lib/audit-log.mjs');
     const e = A.parseAuditLog('2026-08-27T00:00:00Z\tCALL\tBash\tcmd=\"git commit -m \"fix: reject expired tokens\"\nnpm test\"');
@@ -516,7 +516,7 @@ check "the recovered quoted-first-line command is recognized as a real test invo
   ")" "true"
 # Proves dropping the quote check is safe: every line tries as a new entry FIRST, so a genuine
 # second command is never mistaken for a continuation of the first.
-check "two separate, complete Bash commands back to back stay two entries, not folded into one (F-64)" \
+check "two separate, complete Bash commands back to back stay two entries, not folded into one" \
   "$(alp '`2026-08-27T00:00:00Z\tCALL\tBash\tcmd=\"npm test\"\n2026-08-27T00:00:01Z\tCALL\tBash\tcmd=\"git status\"`')" \
   '2:[["Bash","npm test"],["Bash","git status"]]'
 
@@ -548,7 +548,7 @@ check "scoreTestInvocation: a null auditLog (absent/malformed) -> null, never fa
 rm -rf "$alwd"
 
 # --- overlay: EXECUTED overrides the judge whenever the log is readable; null falls back to the
-# judge (REPORT-ONLY, decisions.md#d11's 2026-08-28 correction -- supersedes F-56's "EXCLUDES") --
+# judge (REPORT-ONLY; this replaces the earlier "EXCLUDES" behaviour) --
 otv() { j "
   const crit = [{ n: 3, verdict: '$1', evidence: 'judge: prose' }];
   M.overlayTestInvocationVerdict(crit, $2);
@@ -557,7 +557,7 @@ otv() { j "
 check "log shows a match: overlays PASS even though the judge (reading prose) said fail" \
   "$(otv fail "'pass'")" \
   "pass|true|EXECUTED: .somi/audit.log shows a Bash entry matching the test-invocation alias set (not judged)"
-# THE case named in the phase file: a final message that CLAIMS tests ran, with a judge fooled by
+# THE motivating case: a final message that CLAIMS tests ran, with a judge fooled by
 # the prose into 'pass' -- the audit log overrules it.
 check "log shows no match: overlays FAIL even though the judge (fooled by a claim in the prose) said pass" \
   "$(otv pass "'fail'")" \
@@ -576,7 +576,7 @@ check "null with criterion 3 absent from the judge reply is also a no-op, not a 
     M.overlayTestInvocationVerdict(crit, null);
     process.stdout.write(String(crit.length) + '|' + crit[0].verdict);
   ")" "1|pass"
-# Minor: a judge reply OMITTING criterion 3 no longer stays silent -- a decided (non-null) verdict
+# a judge reply OMITTING criterion 3 no longer stays silent -- a decided (non-null) verdict
 # is APPENDED, so the executed verdict does not depend on the judge having emitted it at all.
 check "a judge reply missing criterion 3 appends the executed verdict rather than staying silent" \
   "$(j "
@@ -585,7 +585,7 @@ check "a judge reply missing criterion 3 appends the executed verdict rather tha
     process.stdout.write(String(crit.length) + '|' + crit[0].verdict + '|' + crit[1].n + '|' + crit[1].verdict + '|' + crit[1].executed);
   ")" "2|pass|3|fail|true"
 
-# Major F-63: the marking was entirely unpinned -- deleting it left the gate green. Pinned here as
+# the marking was entirely unpinned -- deleting it left the gate green. Pinned here as
 # the generic function it is (S1's own end-to-end pin retired with the report-only demotion above).
 check "markDimensionsExcluded marks every named dimension excluded, leaves the rest untouched (F-63)" \
   "$(j "
@@ -595,9 +595,9 @@ check "markDimensionsExcluded marks every named dimension excluded, leaves the r
   ")" '{"S3":true,"S6":false,"S5":"excluded","S1":"excluded"}'
 
 # --- installSomi() now registers the audit-log hook ---------------------------------------------
-# --- F-321/F-322: one quota detector, deliberately asymmetric -----------------------------------
-# F-321: run.mjs's quota check sat INSIDE `if (!run.ok)`, so a session-limit exit arriving with
-# status 0 was graded as draw data -- the same defect class as F-308 on the convergence side, where
+# --- one quota detector, deliberately asymmetric -----------------------------------
+# run.mjs's quota check sat INSIDE `if (!run.ok)`, so a session-limit exit arriving with
+# status 0 was graded as draw data -- the same defect class as on the convergence side, where
 # it was a Blocker. Hoisting the OLD broad regex would have been worse than the bug: these tasks run
 # an agent against this repo, whose docs discuss quota constantly, so every healthy draw would have
 # been discarded. The detector is therefore asymmetric, and these checks pin BOTH halves plus the
@@ -629,7 +629,7 @@ check "an unknown didWork never promotes an ok:true run to a quota exit" \
 check "a timeout is never a quota exit (it is the wait-cap path's business)" \
   "$(q "{ok:false,timedOut:true,stdout:'session limit',stderr:''}" "{didWork:false}")" "false"
 
-# F-322: one literal, not two. convergence.mjs must SOURCE it, not redeclare it.
+# one literal, not two. convergence.mjs must SOURCE it, not redeclare it.
 check "F-322: convergence.mjs re-exports install.mjs's SESSION_LIMIT_SIGNATURE rather than declaring its own" \
   "$(j "
     const C = await import('$ROOT/tests/evals/convergence.mjs');
@@ -664,9 +664,9 @@ check "the registered hook, invoked as Claude Code would invoke it, writes a mat
   "$(grep -c 'Bash.*cmd="npm test"' "$instw/.somi/audit.log" 2>/dev/null || echo 0)" "1"
 rm -rf "$instw"
 
-# --- 2.4b: the pooled certification gate, on the SETTLED 2-dimension corpus --------------------
-# Real task ids and their real GATING dim (task 01's S3, task 02's S5, decisions.md#d11) -- not the
-# pre-2.4b synthetic 13-dimension pool, which certify()'s new gating-only filter would ignore.
+# --- the pooled certification gate, on the SETTLED 2-dimension corpus --------------------
+# Real task ids and their real GATING dim (task 01's S3, task 02's S5) -- not the
+# earlier synthetic 13-dimension pool, which certify()'s new gating-only filter would ignore.
 mk() { j "
   const tasks = { '01': [], '02': [] };
   for (let r = 0; r < $2; r++) tasks['01'].push({ index: r, dimensions: { S3: r < $1 } });
@@ -722,7 +722,7 @@ check "SCOPES.full.draws equals (gating dims buildResult() actually emits for a 
   process.stdout.write(String(M.SCOPES.full.draws === n * M.CERTIFY_N) + '|' + n + '|' + M.CERTIFY_N + '|' + M.SCOPES.full.draws);
 ")" "true|2|120|240"
 
-# --- 2.4b acceptance points 7 and 8 (Blocker F-46): the per-dimension floor, both shapes a missing
+# --- 2.4b acceptance points 7 and 8: the per-dimension floor, both shapes a missing
 # observation takes, through the SAME mechanism. In both, pooled draws/failures look clean --
 # only the per-dimension floor (`d.n >= CERTIFY_N` for EVERY gating dim) can catch this.
 check "S5 present as {n:0, excluded:N} (100% exclusion) fails the floor though pooled draws/failures look clean" "$(j "
@@ -746,11 +746,11 @@ check "S5 absent from dimensions entirely (every task-02 draw returned no observ
 # run 19 does not discard eighteen paid-for runs, and a later invocation skips what is already on
 # disk. Tested by writing shards directly -- no model, no network.
 SHARD_SHA="testsha$(date +%s)"
-# Each task's shard uses its own real GATING dim (task 01's S3, task 02's S5, decisions.md#d11) --
+# Each task's shard uses its own real GATING dim (task 01's S3, task 02's S5) --
 # certify() reads exclusively from `dimensions`, so a shard tagged with any other dim would never
 # reach it.
 # Built through M.shardRecord() -- the SAME function main()'s drawing loop is meant to write
-# through (F-133) -- not a hand-built literal checked against a hand-built expectation.
+# through -- not a hand-built literal checked against a hand-built expectation.
 mk_shard() { j "
   const fs = await import('node:fs');
   const dim = '$1' === '01' ? 'S3' : 'S5';
@@ -765,7 +765,7 @@ mk_shard 01 2 false >/dev/null; mk_shard 02 0 true  >/dev/null
 check "shardRecord() produces the shape both the production writer and this fixture share (F-133)" \
   "$(j "process.stdout.write(JSON.stringify(M.shardRecord('s','01',{index:0})))")" \
   '{"sha":"s","taskId":"01","schema":2,"run":{"index":0}}'
-# F-136: the check above pins shardRecord()'s OWN shape, not that the live-agent-gated production
+# the check above pins shardRecord()'s OWN shape, not that the live-agent-gated production
 # write reaches it -- no test does. Pinned structurally: grepping the FULL `writeFileSync(shard,
 # ...)` prefix, not just `shardRecord(...)` alone, which used to also match the docstring's prose.
 check "main()'s drawing loop writes the shard through shardRecord(), not a parallel literal (F-136)" \
@@ -802,10 +802,10 @@ check "shard directory is removable and merge then fails loudly" \
   "$(j "try { M.mergeShards('$SHARD_SHA'); process.stdout.write('MERGED'); } catch { process.stdout.write('threw'); }")" \
   "threw"
 
-# --- 2.4c: mergeShards() skips a shard from a prior schema, with a clear message ----------------
-# SCHEMA_VERSION was bumped 1 -> 2 in 2.4b but nothing read it back -- this is the pass that gives
-# it a job. The REAL shard decisions.md#d7's Correction names by path (no `schema` field at all,
-# predates the mechanical-overlay guarantee 2.1-2.3 built) is copied into a throwaway SHA -- never
+# --- mergeShards() skips a shard from a prior schema, with a clear message ----------------
+# SCHEMA_VERSION was bumped 1 -> 2 but nothing read it back -- this is the pass that gives
+# it a job. The REAL shard the judge-retirement correction names by path (no `schema` field at all,
+# predates the mechanical-overlay guarantee) is copied into a throwaway SHA -- never
 # the original on disk, never mutated in place.
 legacysha="legacytest$(date +%s)"
 legacydir="$ROOT/tests/evals/results/$legacysha"
@@ -831,7 +831,7 @@ j "
 " >/dev/null
 check "a current-schema shard alongside a skipped legacy one still merges" \
   "$(node --input-type=module -e "const M = await import('$ROOT/$R'); process.stdout.write(String(M.certify(M.mergeShards('$legacysha')).draws));" 2>/dev/null)" "1"
-# F-143: the pass-1 Nit's fix was two halves -- stderr (pinned above via $legacyerr) and stdout,
+# the pass-1 Nit's fix was two halves -- stderr (pinned above via $legacyerr) and stdout,
 # the half that actually survives `--certify sha > cert.txt`. stdout only (2>/dev/null): a caller
 # reading just the redirected file must still see the pointer.
 legacycertout=$(node "$R" --certify "$legacysha" 2>/dev/null)
@@ -843,11 +843,11 @@ esac
 rm -rf "$legacydir"
 
 # --- 2.4c (fixed pass 2): the resume-read in main()'s drawing loop applies the SAME schema check
-# as mergeShards(), via the shared readShard() (F-131). A stale-schema shard used to be resumed
+# as mergeShards(), via the shared readShard(). A stale-schema shard used to be resumed
 # from silently, carrying judge-authored dimensions from before this version's semantics -- measured
 # on a copy of the same real legacy shard above, read back {"S2":true,...,"S3":true} with S3
-# judge-authored from before 2.1 wired boundaryRespected. Fixed: excluded and warned about, NOT
-# redrawn automatically (decisions.md#d7's settled answer -- a redraw is ~10 minutes of a live agent
+# judge-authored from before boundaryRespected was wired. Fixed: excluded and warned about, NOT
+# redrawn automatically (the settled answer -- a redraw is ~10 minutes of a live agent
 # run, the maintainer's call, not this loop's). Both indices below are already shard-backed, so the
 # drawing loop never falls through to a live agent or judge call; the `claude` stub only satisfies
 # preflight()'s `command -v` check.
@@ -858,13 +858,13 @@ echo 'unused -- every requested index is already shard-backed'
 STUB
 chmod +x "$resumebin/claude"
 resumedir="$ROOT/tests/evals/results/unversioned"
-# F-135: NOT a scratch namespace like every other shard test's $(date +%s) sha -- shardPath(null,
+# NOT a scratch namespace like every other shard test's $(date +%s) sha -- shardPath(null,
 # ...) always resolves here, and a real, quota-paid draw can genuinely live at this path. Move it
 # aside and restore it; an unconditional rm -rf would silently unpay a real run and report green.
 resumedir_backup=""
 if [ -d "$resumedir" ]; then
   resumedir_backup="$(mktemp -d)/unversioned"
-  # F-144: unchecked, a failed mv (e.g. TMPDIR full) leaves the real directory in place while the
+  # unchecked, a failed mv (e.g. TMPDIR full) leaves the real directory in place while the
   # rest of this block proceeds to write fixtures into it and rm -rf it below -- fail loud instead.
   mv "$resumedir" "$resumedir_backup" || { bad "F-135: could not move aside real results/unversioned -- refusing to proceed"; exit 1; }
   echo "  (moved aside real results/unversioned to $resumedir_backup for restore)"
@@ -907,7 +907,7 @@ check "a hedge with no date returns null (judge fallback)" "$(rep 'the proration
 check "the judge does NOT default to a cheaper model" \
   "$(j "process.stdout.write(String((await import('$ROOT/tests/evals/lib/score.mjs')).DEFAULT_JUDGE_MODEL))")" "null"
 
-# --- 2.4c: judge-agreement.mjs and --judge-model, D7's disposition finally executed -------------
+# --- judge-agreement.mjs and --judge-model: the judge machinery is removed -------------
 check "judge-agreement.mjs no longer exists" \
   "$(j "process.stdout.write(String((await import('node:fs')).existsSync('$ROOT/tests/evals/judge-agreement.mjs')))")" "false"
 case "$(node "$R" --judge-model sonnet --dry-run --source HEAD --tasks 01 --runs 1 2>&1; echo "EXIT:$?")" in
@@ -915,8 +915,8 @@ case "$(node "$R" --judge-model sonnet --dry-run --source HEAD --tasks 01 --runs
   *) bad "--judge-model is not a recognized flag (removed outright)" ;;
 esac
 
-# --- 2.4c: parseVerdict() rejects a judge reply with duplicate n --------------------------------
-# `criteria` is keyed by n, not positional (decisions.md#d11) -- a duplicate n is not a shape any
+# --- parseVerdict() rejects a judge reply with duplicate n --------------------------------
+# `criteria` is keyed by n, not positional -- a duplicate n is not a shape any
 # downstream consumer (toDimensions, the splice-based overlays) can safely reduce over. Mutated
 # from a genuinely well-formed reply, not hand-built already-broken, so a reversion of the check
 # below is provably what turns this red.
@@ -943,7 +943,7 @@ check "a touched source file is caught, and named" \
 check "a stray root file is caught" \
   "$(bnd "[{path:'NOTES.md'}]")" "false:NOTES.md"
 
-# --- 2.1: boundaryRespected's `slug` parameter, wired through (was accepted and never used) -----
+# --- boundaryRespected's `slug` parameter, wired through (was accepted and never used) -----
 bnd_slug() { j "
   const B = await import('$ROOT/tests/evals/lib/boundary.mjs');
   const r = B.boundaryRespected($1, { slug: $2 });
@@ -967,8 +967,8 @@ check "boundaryRespected ACCEPTS a write into the running draw's own slug direct
 check "boundaryRespected: null slug falls back to the broad prefix and ACCEPTS, does not reject" \
   "$(bnd_slug "[{path:'.somi/plans/other-slug/spec.md'}]" "null")" "true"
 
-# --- F-44: a slug with regex metacharacters behaves as a plain prefix, not a pattern -------------
-# Verified (review pass 1) that the OLD `new RegExp` version threw on `fix(auth`, false-failed the
+# --- a slug with regex metacharacters behaves as a plain prefix, not a pattern -------------
+# Verified that the OLD `new RegExp` version threw on `fix(auth`, false-failed the
 # draw's own write on `plan[1]`, and over-matched `a.b` against `aXb`. These pin all three
 # directions as a measurement, not a claim.
 check "a slug with regex metacharacters does not throw and accepts the draw's own write" \
@@ -1067,8 +1067,8 @@ check "the agent timeout leaves headroom over the observed 13-minute maximum" \
     process.stdout.write(String(Number(m[1].replace(/_/g,'')) >= 1500000));
   ")" "true"
 
-# --- 2.4b: SCOPES.task01 is REMOVED, not relabeled; SCOPES.full re-derived from CERTIFY_N -------
-# decisions.md#d11: at 1 gating dimension (S3 alone) the best available budget clears a
+# --- SCOPES.task01 is REMOVED, not relabeled; SCOPES.full re-derived from CERTIFY_N -------
+# At 1 gating dimension (S3 alone) the best available budget clears a
 # genuinely-soft corpus 73.58% of the time -- worse than not gating -- so `task01` is gone
 # entirely, and there is exactly one scope left.
 check "SCOPES.task01 no longer exists (removed, not merely relabeled)" \
@@ -1076,7 +1076,7 @@ check "SCOPES.task01 no longer exists (removed, not merely relabeled)" \
 check "CERTIFY_N is a distinct constant from BANDS.n (raising it must not touch routine trim draws)" \
   "$(j "process.stdout.write(M.CERTIFY_N + '|' + M.BANDS.n)")" "120|20"
 # The derived budget, pinned -- not a preference. Re-derived (not scaled) at 2 gating dimensions
-# (decisions.md#d11's 2026-08-28 demotion of task 02's S1): the same method lands on CERTIFY_N=120,
+# (after task 02's S1 was demoted to report-only): the same method lands on CERTIFY_N=120,
 # more per dimension than the prior 3-dimension figure (80), since the pooled false-accept target
 # is reached at the same total draw count (240) regardless of how many dimensions share it.
 check "SCOPES.full is derived from CERTIFY_N x 2 gating dimensions: 240 draws, budget 5, ~96.5%/~1.8% power" \
@@ -1108,7 +1108,7 @@ case "$certout" in
     bad "certify()'s 'enough draws: false' message names --runs \$CERTIFY_N exactly (got: ${certout:0:300})" ;;
 esac
 
-# --- F-112: certified-line parenthetical, UNDER FLOOR block, harnessFaults -- each left 215/0 ----
+# --- certified-line parenthetical, UNDER FLOOR block, harnessFaults -- each left 215/0 ----
 case "$certout" in
   *"certified:       false  (1 gating dimension(s) measured, false-accept 1.81% if all are soft, 27.00% if one alone)"*) ok "certify()'s 'certified:' line states the gating-dimension count and BOTH false-accept rates" ;;
   *) bad "certify()'s 'certified:' line states the gating-dimension count/both false-accept rates (got: ${certout:0:300})" ;;
@@ -1121,7 +1121,7 @@ case "$certout" in
   *"27.00% if one alone"*) ok "certify() states the SINGLE-soft-dimension false-accept rate, not only the joint one" ;;
   *) bad "certify() states the single-soft-dimension false-accept rate (got: ${certout:0:400})" ;;
 esac
-# spec.md §6 wants the gate's POWER printed on every run, not only its false-accept rate. The
+# The gate's POWER should be printed on every run, not only its false-accept rate. The
 # figure is `SCOPES.full.powerGood`, the converse error to the 1.81% on the `certified:` line --
 # so this asserts both that it prints and that it is not a second copy of the false-accept rate.
 case "$certout" in
@@ -1137,7 +1137,7 @@ case "$certout" in
   *"1 failure(s) across 1 draw(s)"*"  01 S3: 0/1"*"report-only 01 S1: 0/1"*) ok "certify()'s summary pools ONLY the gating row, and prints the report-only row after it" ;;
   *) bad "certify()'s summary pools ONLY the gating row, and prints the report-only row after it (got: ${certout:0:400})" ;;
 esac
-# F-114: {error:'timeout'} (the shape this check used to write) is not a shape a shard can ever
+# {error:'timeout'} (the shape this check used to write) is not a shape a shard can ever
 # carry -- runOnce()'s timeout/quota/judge-fault path always sets harnessFault:true, which the
 # drawing loop's write guard never persists. The one error a shard CAN carry unflagged is :680's.
 j "const fs = await import('node:fs'); fs.writeFileSync(M.shardPath('$CERT_SHA','01',1), JSON.stringify({sha:'$CERT_SHA',taskId:'01',schema:M.SCHEMA_VERSION,run:{index:1,dimensions:{},criteria:null,error:'no prompt found in the task spec'}}));" >/dev/null
@@ -1152,7 +1152,7 @@ rm -rf "$ROOT/tests/evals/results/$CERT_SHA"
 # thrown away. At ~90% of a usage cap per batch that is not affordable. Only a PARSE failure is
 # retried -- a quota outage is not, since the next call fails identically and burns budget proving
 # it. Asserted on the REAL classifier, exported as `isRetryableJudgeError` -- a hand-copied regex
-# literal here could not fail (F-137, closing the gap F-130 found).
+# literal here could not fail (a regression guard for the shared classifier).
 mal() { node --input-type=module -e "
   const S = await import('$ROOT/tests/evals/lib/score.mjs');
   process.stdout.write(String(S.isRetryableJudgeError('$1')));
@@ -1161,9 +1161,9 @@ check "an unparseable reply is retryable"        "$(mal 'judge reply is not vali
 check "a missing criteria array is retryable"    "$(mal 'judge reply has no criteria array')" "true"
 check "a quota outage is NOT retryable"          "$(mal 'quota exhausted')"                   "false"
 check "a generic exit is NOT retryable"          "$(mal 'judge exited 1')"                    "false"
-# F-130: asserted against the REAL `judge()`, spawning a stubbed `claude` end to end -- the only
+# asserted against the REAL `judge()`, spawning a stubbed `claude` end to end -- the only
 # check here that would catch a break in `judgeOnce()`'s own retry wiring, not just in the
-# classifier `mal()` now shares with it (F-137). Stub replies duplicate-n on the FIRST call,
+# classifier `mal()` now shares with it. Stub replies duplicate-n on the FIRST call,
 # well-formed on the SECOND; `judge()` must retry and return the second's verdict.
 dupbin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 cat > "$dupbin/claude" <<STUB
@@ -1194,11 +1194,11 @@ rm -rf "$dupbin"
 check "rescoreShards defaults its spec source to the repo, not a pinned tree" \
   "$(j "process.stdout.write(String(M.rescoreShards.length))")" "1"
 
-# --- 2.3: applyExecutedOverlays() -- the shared function closing gap 3 --------------------------
+# --- applyExecutedOverlays() -- the shared function closing gap 3 --------------------------
 # runOnce() and rescoreShards() now call ONE function for every executed-criterion overlay. Pinned
 # here with data shaped like the real, already-on-disk shard the gap was found against
 # (results/4ff4da62.../01-000.json: decisionsMd null, a fenced decisions-needed block in the
-# transcript, no `changed` field -- that shard predates this iteration's schema addition).
+# transcript, no `changed` field -- that shard predates the schema addition).
 aeo() { j "
   const BT = String.fromCharCode(96).repeat(3), NL = String.fromCharCode(10);
   const crit = $1;
@@ -1209,13 +1209,13 @@ aeo() { j "
 check "criterion 3 reproduces EXECUTED evidence from the transcript's fence alone (decisionsMd null, matching the real shard)" \
   "$(aeo "[{n:3,verdict:'fail',evidence:'judge'}]" 01 "{3:['S7']}" "{decisionsMd:null,transcript:[BT+'decisions-needed','D1: x','  Option A - y','    Pros: p','    Cons: q',BT,'no digits here'].join(NL)}")" \
   '[[3,"pass",true]]|{"S7":true}'
-# Blocker F-71 (pass 2 review): 'changed' absent used to leave the JUDGE's own verdict standing
-# for a GATING dimension -- D11 clause (1)'s exact door, reopened via a missing field instead of a
+# 'changed' absent used to leave the JUDGE's own verdict standing
+# for a GATING dimension -- the exact door a judge-authored gating verdict uses, reopened via a missing field instead of a
 # fresh judge call. Now spliced + excluded, the disposition S5 already uses for its own
 # non-attributable case. Reverting the `else` branch in applyExecutedOverlays() (the fix below)
 # turns this red: criterion 6 would stay in `criteria` as the judge's raw 'fail' and S3 would read
-# `false` instead of "excluded" -- a judge-authored gating verdict, exactly what F-71 closes.
-check "criterion 6 is EXCLUDED, not judge-authored, when 'changed' is absent -- a pre-2.3 shard (F-71)" \
+# `false` instead of "excluded" -- a judge-authored gating verdict, exactly what the fix closes.
+check "criterion 6 is EXCLUDED, not judge-authored, when 'changed' is absent -- an older shard" \
   "$(aeo "[{n:6,verdict:'fail',evidence:'judge'}]" 01 "{6:['S3']}" "{transcript:''}")" \
   '[]|{"S3":"excluded"}'
 check "criterion 6 reproduces EXECUTED evidence when 'changed' is present, correctly REJECTING an out-of-allowlist path" \
@@ -1233,11 +1233,11 @@ check "criterion 6 is APPENDED, not silently absent, when the judge's reply omit
 check "task 02's S5 is driven by the STORED expiryGuard, never recomputed -- excluded key always present, S1 reapplied alongside it (F-55/2.3)" \
   "$(aeo "[{n:1,verdict:'pass',evidence:'judge'},{n:3,verdict:'pass',evidence:'judge'}]" 02 "{1:['S5'],3:['S1']}" "{expiryGuard:{verdict:'non-attributable',step:'mutant',observed:'type-error'},testInvocation:'fail'}")" \
   '[[3,"fail",true]]|{"S1":false,"S5":"excluded"}'
-# Major (F-86, pass 4 review): the overlay's splice removes only the FIRST `n === 1` entry
+# the overlay's splice removes only the FIRST `n === 1` entry
 # (`findIndex` + `splice(i, 1)`), so a judge reply carrying criterion 1 TWICE leaves a second entry
 # standing with its own verdict. Outcome-sampling alone (`criteria.some(...)`) still finds that
-# survivor and stays silent -- S5 published the judge's own `true` on a gating dimension, D11
-# clause (1)'s exact door. Reverting the `expiryGuard.verdict` half of the fix above turns this red.
+# survivor and stays silent -- S5 published the judge's own `true` on a gating dimension, the same
+# door. Reverting the `expiryGuard.verdict` half of the fix above turns this red.
 check "S5 is EXCLUDED, not judge-authored, when the judge reply carries criterion 1 TWICE and expiryGuard is non-attributable (F-86)" \
   "$(aeo "[{n:1,verdict:'pass',evidence:'judge'},{n:1,verdict:'pass',evidence:'judge'}]" 02 "{1:['S5']}" "{expiryGuard:{verdict:'non-attributable',step:'mutant',observed:'type-error'}}")" \
   '[[1,"pass",null]]|{"S5":"excluded"}'
@@ -1256,13 +1256,13 @@ check "task 03 criterion 3 reproduces EXECUTED evidence from the stored transcri
   "$(aeo "[{n:3,verdict:'fail',evidence:'judge'}]" 03 "{3:['S1']}" "{transcript:'Filed against 2024-03-31.',task03Refs:{correct:(a,b,d)=>({net:1}),patched:(a,b,d)=>({net:2})}}")" \
   '[[3,"pass",true]]|{"S1":true}'
 
-# --- 2.3: rescoreShards() actually reapplies the overlays, end to end ----------------------------
+# --- rescoreShards() actually reapplies the overlays, end to end ----------------------------
 # judge() shells out to a real `claude` binary; stubbed here with a script returning a FIXED, WRONG
 # verdict for every criterion, so only a correctly-reapplied overlay can flip the result -- the
 # "mutate one call site, confirm red" proof for the call site runOnce() cannot pin (no test in this
 # hermetic suite reaches runOnce()'s own execution). Reverting rescoreShards to its pre-2.3 body
 # (plain toDimensions(verdict.criteria, tags), no overlay call) was verified by hand to turn this
-# red: false|false|false|true|false|false|false instead of the line below (7 fields since F-71 added 6 and 7).
+# red: false|false|false|true|false|false|false instead of the line below (7 fields since two more were added).
 rsbin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 cat > "$rsbin/claude" <<'STUB'
 #!/usr/bin/env bash
@@ -1278,10 +1278,10 @@ EOF
 cat > "$rsdir/02-000.json" <<'EOF'
 {"sha":"x","taskId":"02","run":{"index":0,"dimensions":{},"criteria":[],"error":null,"decisionsMd":null,"transcript":"t","expiryGuard":{"verdict":"non-attributable","step":"mutant","observed":"type-error"},"testInvocation":"fail"}}
 EOF
-# Blocker F-71's destructive-write proof: a shard shaped EXACTLY like the real, on-disk
+# The destructive-write proof: a shard shaped EXACTLY like the real, on-disk
 # results/4ff4da62.../01-003.json -- criterion 6 already EXECUTED, S3 already true, no `changed`/
 # `slug` field (the historical gap). The in-memory-only version of this proof is not enough
-# (F-71): the defect was a `writeFileSync` that overwrote real evidence on disk with no undo, so
+#: the defect was a `writeFileSync` that overwrote real evidence on disk with no undo, so
 # this reads the FILE back after rescoring, not just rescoreShards()'s return value.
 cat > "$rsdir/01-001.json" <<'EOF'
 {"sha":"x","taskId":"01","run":{"index":1,"dimensions":{"S3":true},"criteria":[{"n":3,"verdict":"pass","evidence":"EXECUTED against decisions.md: satisfied (not judged)","executed":true},{"n":6,"verdict":"pass","evidence":"EXECUTED: every changed path is inside the allowlist (slug-scoped: x) (not judged)","executed":true}],"error":null,"decisionsMd":null,"transcript":"no digits here"}}
@@ -1361,7 +1361,7 @@ case "$rptout" in
 esac
 check "a --report shard lands under results/<sha>/report/, structurally separate from the gating namespace mergeShards()/completedIndices() glob" \
   "$(j "process.stdout.write(String((await import('node:fs')).existsSync('$rptdir/report/02-000.json')))")" "true"
-# Minor (pass 1 review): the written report record is filtered to the report-only half before it
+# the written report record is filtered to the report-only half before it
 # touches disk -- applyExecutedOverlays() writes every TAGGED dimension, gating included, so an
 # unfiltered write would carry a GATING dimension's value (S5, here genuinely true) under this
 # pass's `schema: 2` stamp, the same stamp a real gating shard carries but a different, incompatible
@@ -1369,15 +1369,14 @@ check "a --report shard lands under results/<sha>/report/, structurally separate
 check "the written report shard excludes the gating dimension (S5), keeping only report-only ones under the gating schema stamp" \
   "$(j "process.stdout.write(String('S5' in JSON.parse((await import('node:fs')).readFileSync('$rptdir/report/02-000.json','utf8')).run.dimensions))")" \
   "false"
-# F-139: `schema: 2` alone still means two incompatible shapes -- readShard() would accept a
+# `schema: 2` alone still means two incompatible shapes -- readShard() would accept a
 # report record as current if anything ever pointed it at `report/`. `kind: 'report'` fixes that.
 check "the written report shard is discriminated from a gating shard by kind: 'report'" \
   "$(j "process.stdout.write(String(JSON.parse((await import('node:fs')).readFileSync('$rptdir/report/02-000.json','utf8')).kind))")" \
   "report"
 
-# --- 2.4c (fixed pass 2): --report honors --runs as a real cap on which shards it judges, not a
-# value that reaches the result shape while every shard on disk gets judged regardless (F-132,
-# decisions.md#d7's settled answer for the report pass's own N). Two more gating shards are added
+# --- --report honors --runs as a real cap on which shards it judges, not a
+# value that reaches the result shape while every shard on disk gets judged regardless (the settled answer for the report pass's own N). Two more gating shards are added
 # for indices 1 and 2; `--runs 1` must judge only index 0 (already report-shard-backed above) and
 # leave 1/2 untouched -- no report/02-001.json, no report/02-002.json.
 j "
@@ -1390,9 +1389,9 @@ check "--report honors --runs as a cap on which shards it judges (F-132)" \
   "$(ls "$rptdir/report" | wc -l | tr -d ' ')" "1"
 rm -rf "$rptbin" "$rptdir"
 
-# --- 2.4c (fixed pass 2): --report threads task03Refs exactly like --rescore does, so both print
+# --- --report threads task03Refs exactly like --rescore does, so both print
 # the SAME EXECUTED verdict for task 03's one report-only dimension (S1) rather than opposite ones
-# (F-129). The stub judge says criterion 3 PASSES; the cited date is a 30-day month, so the
+#. The stub judge says criterion 3 PASSES; the cited date is a 30-day month, so the
 # EXECUTED overlay must override it to FAIL on both paths -- a stub-agreeing fixture would not
 # discriminate a leaked docstring claim from a real fix.
 t3bin=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
@@ -1417,7 +1416,7 @@ check "--report's task-03 S1 matches --rescore's EXECUTED verdict on the same sh
 check "and both are the mechanical 'fail' the citation produces, not the stub judge's raw 'pass'" "$reportS1" "false"
 rm -rf "$t3bin" "$ROOT/tests/evals/results/$t3sha_a" "$ROOT/tests/evals/results/$t3sha_b"
 
-# --- Nit (pass 1 review): reportShards() on an unknown SHA throws a clear error, matching
+# --- Nit: reportShards() on an unknown SHA throws a clear error, matching
 # mergeShards()'s existsSync guard, not the raw "Command failed: ls" a bare execFileSync produces.
 check "reportShards() on an unknown SHA throws loudly, not with a raw 'ls' failure" \
   "$(j "try { await M.reportShards('${SHARD_SHA}-nope'); process.stdout.write('REPORTED'); } catch (e) { process.stdout.write(e.message); }")" \
@@ -1451,11 +1450,11 @@ partial=$( j "
 check "a partial run cannot certify, and reports its projection" "$partial" "false|false|144|false"
 
 # --- npm test must not invoke this runner ------------------------------------------------------
-# Structural, per phase 3's exit criteria: a `node --check` glob merely NAMING the directory is
+# Structural: a `node --check` glob merely NAMING the directory is
 # explicitly permitted; what is forbidden is executing it.
 # Scoped to what `npm test` reaches. package.json's eval:behavioral script references the runner
 # ON PURPOSE -- that is the escape hatch. The full invariant (packaging + hermeticity) is owned by
-# tests/scripts/evals-packaging.sh; this is the narrow version, kept here so 3.4a's own guard
+# tests/scripts/evals-packaging.sh; this is the narrow version, kept here so this file's own guard
 # fails if someone wires the runner into validate.sh.
 if grep -nE '(node|bash)[^|]*tests/evals/run\.mjs' scripts/validate.sh >/dev/null 2>&1; then
   bad "validate.sh does not execute the eval runner"
@@ -1463,12 +1462,12 @@ else
   ok "validate.sh does not execute the eval runner"
 fi
 
-# --- classification.mjs: the diff mechanism itself, unconditional (2.4a) -----------------------
+# --- classification.mjs: the diff mechanism itself, unconditional -----------------------
 # These need no file on disk -- they prove `diffClassification` can actually detect a changed
 # verdict and a missing row, and that it reports no difference for two copies of the same table.
 # That is necessary for the decisions.md comparison below to mean anything, but it is NOT the
 # drift check itself: these three run against synthetic tables built from CLASSIFICATION alone and
-# would stay green even if CLASSIFICATION had drifted from decisions.md#d11 completely.
+# would stay green even if CLASSIFICATION had drifted from the maintained classification table completely.
 check "classification.mjs: 15 criteria, no duplicate (task, criterion) pairs" \
   "$(j "
     const C = await import('$ROOT/tests/evals/lib/classification.mjs');
@@ -1500,12 +1499,11 @@ check "diffClassification: a missing row is caught" \
     process.stdout.write(String(C.diffClassification(truncated, C.CLASSIFICATION)));
   ")" "missing:01:6"
 
-# --- decisionsMdClassification's multi-table, append-order mechanism, unconditional (2.4a pass 2,
-# F-84/F-85; pass 4 adds a third case pinning F-88's verdict-cell throw) ---------------------------
-# D11's five corrections to date have every one of them been APPENDED as a new dated section, never
+# --- decisionsMdClassification's multi-table, append-order mechanism, unconditional (including the verdict-cell throw) ---------------------------
+# The classification's corrections to date have every one of them been APPENDED as a new dated section, never
 # an edit to prior text in place. These three cases pin that the parser actually behaves that way on
-# a synthetic (no file involved) D11-shaped span, not merely against today's decisions.md content.
-check "decisionsMdClassification: a later table's copy of a shared row wins over an earlier table's (F-85 -- was reversed)" \
+# a synthetic (no file involved) classification-shaped span, not merely against today's decisions.md content.
+check "decisionsMdClassification: a later table's copy of a shared row wins over an earlier table's (was reversed)" \
   "$(j "
     const C = await import('$ROOT/tests/evals/lib/classification.mjs');
     const text = [
@@ -1565,8 +1563,7 @@ check "decisionsMdClassification: an off-convention verdict spelling throws, not
     catch (e) { process.stdout.write(/unrecognized verdict cell/.test(e.message) ? 'threw' : 'wrong:' + e.message); }
   ")" "threw"
 
-# --- classification.mjs vs the live task specs: criterionTags(), tracked everywhere (2.4a pass 2,
-# F-87) -----------------------------------------------------------------------------------------
+# --- classification.mjs vs the live task specs: criterionTags(), tracked everywhere -----------------------------------------------------------------------------------------
 # tests/evals/tasks/*.md are TRACKED (unlike decisions.md), so this runs in CI and in a fresh
 # checkout -- three of CLASSIFICATION's four columns (task, criterion, dim) covered everywhere,
 # strictly more reach than the decisions.md-conditional check below can ever have. `verdict` stays
@@ -1592,7 +1589,7 @@ check "classification.mjs's (task, criterion, dim) triples match the live task s
     process.stdout.write(actual === expected ? 'match' : 'actual=' + actual + '|expected=' + expected);
   ")" "match"
 
-# --- classification.mjs vs decisions.md#d11's actual content: the real drift check (2.4a) -------
+# --- classification.mjs vs the maintained classification's actual content: the real drift check -------
 # `.somi/` is gitignored repo-wide (scripts/check-links.mjs's own header: "`git ls-files` can never
 # produce a path inside it") -- decisions.md exists only on a machine actively working this plan,
 # never in a clean checkout or in CI. So this runs in one of two modes, never a third: present, or
@@ -1600,11 +1597,11 @@ check "classification.mjs's (task, criterion, dim) triples match the live task s
 # absent decisions.md next to a PRESENT plan directory is not the expected-skip case -- that is a
 # real gap (a renamed/moved/deleted file on a machine this check is supposed to protect) and fails
 # loudly rather than reading identically to the honest CI skip. When present, it is genuinely
-# bidirectional -- verified by hand this pass (and pass 1): flipping one row's verdict in
+# bidirectional -- verified by hand this pass: flipping one row's verdict in
 # CLASSIFICATION with decisions.md untouched, and separately flipping the same row's verdict in
 # decisions.md with CLASSIFICATION untouched, each independently produced the `mismatch:...` line
 # the check below would print, in the opposite direction (got/want swapped) each time, then
-# reverted. Also verified this pass (F-84/F-85): appending a synthetic dated correction demoting
+# reverted. Also verified this pass: appending a synthetic dated correction demoting
 # `01|6` reds the check; flipping the SETTLED table's own copy of `01|6` reds it; flipping only the
 # ORIGINAL table's copy (now correctly superseded) does not. Neither direction is covered when
 # decisions.md is absent -- that gap is real and is not claimed to be closed by the checks above.
@@ -1628,24 +1625,22 @@ else
   echo "  (skipped: $D11_PLAN_DIR not present -- .somi/ is gitignored, this check only runs where the plan directory is on disk)"
 fi
 
-# --- 2.5: smoke.mjs -- D8 Option C, frontmatter-driven, zero-model-call smoke check for the
-# commands this work item does not gate with a live-model corpus -------------------------------
-# The 3 genuinely gated commands: /plan, /code, /review (the rebuilt task gate, this phase).
-# /code-loop's own convergence gate (D1-D5) isn't built yet (phase 3 not-started) -- labeling it
-# `gate` excluded it from smoke for a mechanism that does not exist (2.6 pass 1, Blocker F-163,
-# `phases/02-...md`'s 2.6 section carries the correction -- `decisions.md` untouched, out of this
-# pass's scope). It now joins THIS tier too, the same treatment `decisions.md#d8` already gives
-# /ship-loop for its own deferred (D9) gate. Commands on disk today minus the gated set is what
+# --- smoke.mjs -- frontmatter-driven, zero-model-call smoke check for the
+# commands the live-model corpus does not gate with a live-model corpus -------------------------------
+# The 3 genuinely gated commands: /plan, /code, /review (the rebuilt task gate).
+# /code-loop's own convergence gate was once unbuilt, and labeling it `gate` excluded it from smoke
+# for a mechanism that did not exist. It then joined THIS tier, the same treatment /ship-loop gets
+# for its own deferred gate. Commands on disk today minus the gated set is what
 # remains in the smoke tier -- both counted below, not assumed (currently 25 minus 4 = 21).
 #
-# F-162/F-167: this set used to be spelled independently at three sites (now three still --
+# this set used to be spelled independently at three sites (now three still --
 # GATED_COMMANDS_JS plus the two hardcoded expected.set('code-loop', ...)/('ship-loop', ...) rows
-# in 2.6's cross-check below, both deliberately NOT members of this set) -- one check widening its
-# own copy silently zeroed that check's coverage while the others stayed green (demonstrated in 2.5).
+# in the cross-check below, both deliberately NOT members of this set) -- one check widening its
+# own copy silently zeroed that check's coverage while the others stayed green (demonstrated before).
 #
-# 3.4: 'code-loop' MOVES INTO this set here -- its own convergence gate (D1-D5) now exists and has
+# 'code-loop' MOVES INTO this set here -- its own convergence gate now exists and has
 # a CLI (tests/evals/convergence.mjs), so it is no longer only frontmatter-and-install-checked. The
-# 2.6 cross-check below (F-170/F-175) flips its docs/EVALS.md label to `gate` the moment
+# 2.6 cross-check below flips its docs/EVALS.md label to `gate` the moment
 # tests/scripts/convergence-runner.sh exists -- keyed on THAT file rather than on this set, per its
 # own comment; this line is what actually removes it from the smoke tier's 21.
 GATED_COMMANDS_JS="new Set(['plan', 'code', 'review', 'code-loop'])"
@@ -1665,16 +1660,16 @@ check "discoverUngatedCommands() finds exactly the 21 D8 scopes this smoke check
 
 # The load-bearing negative constraint, made structural rather than trusted by intention (this
 # phase has twice needed a grep pin, not trust, to keep "no test reaches this site" honest --
-# 2.4a's F-136, 2.4c's judge-machinery deletion). Neither check names the model-invoking export in
+# the shard-write path, the judge-machinery deletion). Neither check names the model-invoking export in
 # this comment, on purpose -- a docstring quoting it as prose is exactly the false-positive shape
-# F-136 already caught once. Static, so neither survives a ROUTE change (a computed property name,
+# the shard-write pin already caught once. Static, so neither survives a ROUTE change (a computed property name,
 # or a call from elsewhere) -- the behavioral pin further below covers that.
 check "smoke.mjs imports ONLY installSomi and DEFINITION_DIRS from install.mjs" \
   "$(grep -c "from './install.mjs';" "$ROOT/tests/evals/lib/smoke.mjs")" "1"
 check "smoke.mjs never references install.mjs's model-invoking export, anywhere in the file" \
   "$(grep -c 'invokeCommand' "$ROOT/tests/evals/lib/smoke.mjs")" "0"
 
-# Behavioral pin (F-147): a stub `claude` on PATH proves NO route reaches the model -- not just
+# Behavioral pin: a stub `claude` on PATH proves NO route reaches the model -- not just
 # that the two static greps above hold. Every un-gated command is run through smokeCheck() with
 # the stub in front of the real binary; the sentinel it touches must stay absent no matter how
 # smoke.mjs got to this point.
@@ -1688,7 +1683,7 @@ stub_iters=$(PATH="$stub_bin:$PATH" node --input-type=module -e "
   const files = S.discoverUngatedCommands('$ROOT/commands', gated);
   for (const f of files) S.smokeCheck(f); process.stdout.write(String(files.length));
 " 2>/dev/null)
-# F-156: proves the loop iterated the shared gated-set constant for real (a throw before the final
+# proves the loop iterated the shared gated-set constant for real (a throw before the final
 # write also leaves this empty, subsuming the old exit-status check) -- not a stale count reused
 # from a different check.
 check "the stub-claude loop iterated all 21 currently un-gated commands, so ABSENT below can't mean it never ran" \
@@ -1696,7 +1691,7 @@ check "the stub-claude loop iterated all 21 currently un-gated commands, so ABSE
 check "no smokeCheck() call reaches a stub claude on PATH (sentinel stays absent)" \
   "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "ABSENT"
 
-# Positive control (F-155): proves the stub is reachable on PATH at all -- a bad mktemp/chmod would
+# Positive control: proves the stub is reachable on PATH at all -- a bad mktemp/chmod would
 # otherwise leave ABSENT true for the wrong reason, with the check reading green regardless.
 PATH="$stub_bin" claude >/dev/null 2>&1
 check "positive control: claude invoked directly under the same stub touches the sentinel" \
@@ -1706,7 +1701,7 @@ rm -rf "$stub_bin"
 check "CLAUDE_CODE_TOOLS allowlist is non-empty (D3: a literal constant, not a dependency)" \
   "$(j "const S = await import('$ROOT/tests/evals/lib/smoke.mjs'); process.stdout.write(String(S.CLAUDE_CODE_TOOLS.size > 0));")" "true"
 
-# The phase file's own acceptance criterion: smokeCheck() succeeds for every one of the 21
+# The acceptance criterion: smokeCheck() succeeds for every one of the 21
 # currently un-gated commands. Real commands are never mutated to make this pass (scope
 # discipline, stated in the coder's own brief) -- a real command failing here is a finding to
 # report, not a fixture to fix.
@@ -1720,9 +1715,9 @@ allpass=$(j "
 check "smokeCheck() succeeds for all 21 currently un-gated commands" "$allpass" "ALL PASS"
 
 # --- 2.5 acceptance: each of the four staged mutations fails with a SPECIFIC, ATTRIBUTABLE reason
-# -- named in the phase file's own acceptance criterion, not added at review. Staged against a
+# -- part of the acceptance criterion, not added at review. Staged against a
 # REAL, installed command file (pr.md, arbitrarily -- any un-gated command would do), never a
-# hand-built fixture (spec.md §7: "stage adversarial mutations against real, committed inputs").
+# hand-built fixture (adversarial mutations are staged against real, committed inputs).
 # `orig` is read once and held in memory -- copied aside, never `git checkout`'d -- and the mutant
 # lives only in a throwaway `installSomi()` temp dir that is removed at the end of every case;
 # `commands/pr.md` in the repo is never touched.
@@ -1747,7 +1742,7 @@ smoke_mutation_case() {
   check "$1" "$got" "$3"
 }
 
-# Control first (spec.md §7: every gate's suite asserts a healthy input is NOT rejected, not only
+# Control first (every gate's suite asserts a healthy input is NOT rejected, not only
 # that a degraded one is caught) -- proves the four failures below are attributable to each
 # specific mutation, not to something already wrong with the fixture itself.
 smoke_control=$(j "
@@ -1781,7 +1776,7 @@ smoke_mutation_case "staged failure 3/4: a re-added model: on a command fails, a
   "const mutated = orig.replace(/^---\$/m, '---\nmodel: sonnet');" \
   "model:pr.md: frontmatter declares 'model: sonnet' -- commands no longer declare a model of their own; the front door dispatches this command's paired agent at the agent's own declared cost/model instead"
 
-# F-148 fix, proven both ways: FrobnicateTool (not real, above) still fails; TodoWrite (real, but
+# The fix, proven both ways: FrobnicateTool (not real, above) still fails; TodoWrite (real, but
 # declared by no command in this repo today) now passes -- via the allowlist, not popularity. The
 # old, corpus-only predicate false-failed this case (the check taxed the first adopter of anything).
 smoke_todowrite=$(j "
@@ -1803,18 +1798,18 @@ smoke_todowrite=$(j "
 check "TodoWrite -- real, but declared by no other command -- passes via the allowlist" \
   "$smoke_todowrite" "PASS"
 
-# F-154: DEFINITION_DIRS pinned literally -- installSomi() and smokeCheck() both iterate this one
+# DEFINITION_DIRS pinned literally -- installSomi() and smokeCheck() both iterate this one
 # constant, so comparing the two sides against each other (as the mutation below does) can't catch
 # a dropped/renamed entry; only a pin against the literal value can.
 check "DEFINITION_DIRS is pinned literally" \
   "$(j "const { DEFINITION_DIRS } = await import('$ROOT/tests/evals/lib/install.mjs'); process.stdout.write(JSON.stringify(DEFINITION_DIRS));")" \
   '["commands","agents","skills","rules"]'
 
-# F-149's replacement: the path check no longer walks a command's body links (that duplicated
+# The replacement: the path check no longer walks a command's body links (that duplicated
 # scripts/check-links.mjs and reintroduced the fence-blindness it was rewritten to remove). It now
 # asserts the installed tree contains every install.mjs DEFINITION_DIRS entry -- staged here by
 # deleting the installed 'skills' dir before smokeCheck() re-installs from it. The `all 21` check
-# alone is blind to dropping 'skills' from DEFINITION_DIRS (F-154, verified) -- both sides iterate
+# alone is blind to dropping 'skills' from DEFINITION_DIRS -- both sides iterate
 # the same constant, so 0 of 21 go red there; staged failure 4/4 goes red on that drop too.
 smoke_missing_dir=$(j "
   const fs = await import('node:fs');
@@ -1834,17 +1829,17 @@ smoke_missing_dir=$(j "
 check "staged failure 4/4: the installed tree missing a DEFINITION_DIRS entry (skills/) fails, attributed to 'install'" \
   "$smoke_missing_dir" "install:MATCH"
 
-# --- 2.6: docs/EVALS.md's coverage table, cross-checked against classification.mjs and the live
+# --- docs/EVALS.md's coverage table, cross-checked against classification.mjs and the live
 # SCOPES -- not against a second document. A document-to-document comparison cannot see a
-# document-vs-code gap (2.4a's own lesson, applied here to a new pair: the doc and the code it
+# document-vs-code gap (the lesson applied here to a new pair: the doc and the code it
 # describes, not two hand-authored copies of the same fact). --------------------------------------
 
-# D8's per-command floor rule, D11's zero-dimension supersession: zero gating dimensions reads
+# The per-command floor rule, with its zero-dimension exception: zero gating dimensions reads
 # report-only, never partial (even though 0/total is also "fewer than half"); fewer than half reads
 # partial; half or more reads gate. The zero-dimension-label guard: a naive `< 0.5 -> partial` rule
 # with no zero branch would mislabel task 03 (0 of 4) as `partial`, implying gating capability it
-# does not have -- exactly the overstatement D11's supersession exists to forbid.
-check "coverage label floor rule: zero gating reads report-only, never partial (D11's zero-dimension guard); fewer-than-half reads partial; half-or-more reads gate" \
+# does not have -- exactly the overstatement the zero-dimension exception exists to forbid.
+check "coverage label floor rule: zero gating reads report-only, never partial (the zero-dimension guard); fewer-than-half reads partial; half-or-more reads gate" \
   "$(j "
     function labelFor(g, t) { if (g === 0) return 'report-only'; return (g / t) < 0.5 ? 'partial' : 'gate'; }
     const cases = [[0, 4], [0, 1], [1, 4], [2, 4], [1, 2], [3, 4]];
@@ -1871,7 +1866,7 @@ check "task-to-command mapping is derived from each task spec's own header, not 
 # unlike decisions.md, this runs unconditionally, no CI-skip branch) and compare every row against
 # a label derived from classification.mjs's live CLASSIFICATION table, not from this comment or
 # from decisions.md's prose. /code-loop and /ship-loop sit outside classification.mjs's data model
-# (no task spec, no criteria -- D1-D5's convergence gate and D9's deferral respectively) and are
+# (no task spec, no criteria -- the convergence gate and the deferred ship-loop gate respectively) and are
 # asserted directly for that stated reason, not derived from a table that was never built to cover
 # them; every other command name is read live off commands/*.md, so a 25th command or a rename
 # shows up as a missing/extra row rather than silently passing.
@@ -1977,7 +1972,7 @@ check "docs/EVALS.md's \`full\` scope row (draws, budget, all three power figure
     process.stdout.write(JSON.stringify(parsed) === JSON.stringify(expected) ? 'match' : 'parsed=' + JSON.stringify(parsed) + ' expected=' + JSON.stringify(expected));
   ")" "match"
 
-# F-164: the doc restates SCOPES.full.draws again in its own prose sentence, 95 lines below the
+# the doc restates SCOPES.full.draws again in its own prose sentence, 95 lines below the
 # pinned table above -- pin that copy too, or one number stays free to drift while the other is
 # checked (exactly how "260" survived next to a pinned "240").
 check "docs/EVALS.md's 'A full certification is N draws' sentence matches SCOPES.full.draws live" \
@@ -1991,10 +1986,10 @@ check "docs/EVALS.md's 'A full certification is N draws' sentence matches SCOPES
 # Both failure directions, shipped as permanent regression guards. Neither touches disk -- the
 # doc-direction case mutates a STRING copy of the real file's text in memory; the code-direction
 # case mutates a spread COPY of the real SCOPES.full object -- so neither risks corrupting a real
-# file if interrupted, per spec.md §7's "copy aside, never mutate in place" discipline applied to
+# file if interrupted, per the "copy aside, never mutate in place" discipline applied to
 # a check's own fixtures. Also verified this pass against the real files on disk directly (mutate
 # docs/EVALS.md, confirm red, restore from a copy; mutate a copy of run.mjs's CERTIFY_N, confirm
-# red, restore) -- reported in this iteration's summary, not re-run on every suite invocation.
+# red, restore) -- reported once at the time, not re-run on every suite invocation.
 check "the cross-check catches a wrong DOC number (240 -> 260), SCOPES held real" \
   "$(j "
     const fs = await import('node:fs');
@@ -2023,10 +2018,9 @@ check "the cross-check catches a wrong CODE number (SCOPES.full.draws mutated), 
     process.stdout.write(String(JSON.stringify(parsed) === JSON.stringify(expected)));
   ")" "false"
 
-# --- 3.1: convergence extractor -- reads /code-loop's loop-state JSON, classifies cap-breach ----
+# --- convergence extractor -- reads /code-loop's loop-state JSON, classifies cap-breach ----
 # (R3). Two independent extractors -- passesToApprove() (a pure field read) and capBreached() (a
-# status classifier); neither calls the other, matching the phase file's own "3.1/3.2 are
-# code-disjoint" framing one level down, inside 3.1 itself.
+# status classifier); neither calls the other, keeping the extractors code-disjoint from each other.
 CONV=tests/evals/lib/convergence.mjs
 cj() { node --input-type=module -e "const M = await import('$ROOT/$CONV'); $1" 2>&1; }
 
@@ -2045,7 +2039,7 @@ check "passesToApprove({pass:0}) is 0 (a real, valid boundary value -- not treat
   "$(cj "process.stdout.write(String(M.passesToApprove({pass:0})));")" "0"
 check "passesToApprove({pass:4}) is 4 (the ordinary case)" "$(cj "process.stdout.write(String(M.passesToApprove({pass:4})));")" "4"
 # passesToApprove() is deliberately status-blind -- a RUNNING loop's provisional pass count comes
-# back as-is; the caller (3.3's driver, not yet built) must gate on status/capBreached() separately
+# back as-is; the caller (the convergence driver) must gate on status/capBreached() separately
 # before treating it as a completed draw. Synthetic, not tied to any real file's live status, so
 # this stays a permanent, deterministic pin of the contract rather than depending on ambient state
 # that changes the moment a real loop finishes (see the guarded block below for why).
@@ -2060,11 +2054,11 @@ check "capBreached({status:'pending'}) is null (not a documented status at all)"
   "$(cj "process.stdout.write(String(M.capBreached({status:'pending'})));")" "null"
 check "capBreached({status:'diff-cap-exceded'}) is null (one-letter typo of a real breach status -- exact match, not fuzzy)" \
   "$(cj "process.stdout.write(String(M.capBreached({status:'diff-cap-exceded'})));")" "null"
-# F-181: the typo case above REMOVES a letter, so a loosened matcher (substring/prefix/case-fold/
+# the typo case above REMOVES a letter, so a loosened matcher (substring/prefix/case-fold/
 # trim) also returns null on it and passes -- it does not test exactness at all. These seven are
 # near-misses a loosened matcher would wrongly accept: the first three kill substring/prefix
 # containment (each embeds or extends a real status), 'DONE' kills case-folding and 'done ' kills
-# trimming -- both on the `done` arm. F-186: those two alone left the *breach*-set lookup's own
+# trimming -- both on the `done` arm. Those two alone left the *breach*-set lookup's own
 # case-fold/trim unmeasured -- `CAP_BREACH_STATUSES.has(status.toLowerCase())` and
 # `CAP_BREACH_STATUSES.has(status.trim())` both survived at 303/0, over-detecting a breach on
 # 'MAX-PASSES-EXCEEDED' where the module answers null. 'MAX-PASSES-EXCEEDED' kills case-folding and
@@ -2079,34 +2073,34 @@ check "capBreached({status:'done'}) is false"                "$(cj "process.stdo
 # Decision, made deliberately rather than defaulted into: a RUNNING loop is neither a confirmed
 # pass nor a confirmed breach. false would assert "confirmed clean" (not yet true); true would mark
 # a live loop as a cap failure it has not committed -- exactly the corpus-measuring-itself trap
-# named in this iteration's brief. null is the only answer that doesn't overclaim either way.
+# the standing design brief. null is the only answer that doesn't overclaim either way.
 check "capBreached({status:'running'}) is null, NOT false and NOT true (the deliberate 'not done != breached' decision)" \
   "$(cj "process.stdout.write(String(M.capBreached({status:'running'})));")" "null"
 # Every documented terminal cap-breach status, individually -- catches an implementation that only
 # recognises one or two of the five (`commands/code-loop.md`'s enum), not just the first tried.
-# F-187: derived from the module's own exported CAP_BREACH_STATUSES, not retyped -- a status added,
-# renamed, or dropped there is reflected here without a second edit. F-190 (pass 3): reflection is
+# derived from the module's own exported CAP_BREACH_STATUSES, not retyped -- a status added,
+# renamed, or dropped there is reflected here without a second edit. Reflection is
 # exactly why a RENAME went undetected -- `circuit-breaker` -> `circuit-breakers` passed 306/0,
 # because the loop derived both its subjects AND its only independent check (a count) from the same
 # constant under test. Pinned instead against `commands/code-loop.md`'s own enum -- a source of
 # truth outside the module that a rename cannot drag along with it -- via set-equality, which also
 # subsumes the count (an empty derivation compares "" against 5 real entries and fails loudly on
-# either side alone; F-196, pass 5: both sides empty at once -- un-export AND the doc anchor
+# either side alone; both sides empty at once -- un-export AND the doc anchor
 # renamed -- printed `ok` at 300/1 without the sentinel default on DOC_STATUSES below, which
-# breaks that symmetry). This is F-183's "vacuous zero-iteration pass" shape, closed here instead
+# breaks that symmetry). This is the "vacuous zero-iteration pass" shape, closed here instead
 # of by counting. Matches this file's own precedent at ~1803: every other command name is read
 # live off `commands/*.md`, not retyped, so drift between the module and the doc shows up here too,
 # not just drift within the module. Filtered on an identifier-safe allowlist -- letters, digits,
-# underscore, hyphen -- rather than the doc's `[a-z-]` alphabet (F-195, pass 5): sharing that
+# underscore, hyphen -- rather than the doc's `[a-z-]` alphabet: sharing that
 # alphabet as the filter was itself a blind spot -- a status outside it drops from both sides
 # symmetrically and set-equality still compares equal (measured: `quota-cap-2` added to the module
 # AND documented gives 306/0, the string asserted nowhere). An allowlist, not a denylist of just
 # whitespace/quote/backslash: measured on this un-export mutation's actual stderr, a bare
 # `file:///.../[eval1]:1` frame contains none of those three and would have slipped through as a
-# bogus status. The allowlist keeps F-192's actual concern -- stopping a failed import's stderr
+# bogus status. The allowlist keeps the actual concern -- stopping a failed import's stderr
 # from landing as a raw token inside the single-quoted JS literals below -- while still being
 # strictly wider than the doc's alphabet, so a real status outside `[a-z-]` surfaces as a
-# set-equality mismatch instead of vanishing from both sides. Also drops `mapfile` (F-190's Nit),
+# set-equality mismatch instead of vanishing from both sides. Also drops `mapfile` (a minor portability cleanup),
 # this script's only bash-4-only builtin.
 BREACH_STATUSES=()
 while IFS= read -r s; do
@@ -2119,15 +2113,15 @@ for s in "${BREACH_STATUSES[@]}"; do
   check "capBreached({status:'$s'}) is true (documented breach terminal)" \
     "$(cj "process.stdout.write(String(M.capBreached({status:'$s'})));")" "true"
 done
-# The phase file's own literal acceptance criterion: true against a synthetic file staged with
+# The literal acceptance criterion: true against a synthetic file staged with
 # status:"max-passes-exceeded" -- restated once more here as its own named check, not only folded
 # into the loop above, so this specific acceptance point has its own visible pass/fail line.
 check "capBreached() on a synthetic file staged with status:\"max-passes-exceeded\" is true (phase 3.1's own acceptance wording)" \
   "$(cj "process.stdout.write(String(M.capBreached({status:'max-passes-exceeded'})));")" "true"
 
-# --- breachReason() (D6, phase 2 iteration 2.4): the SPECIFIC cap-breach reason, not merely the
+# --- breachReason(): the SPECIFIC cap-breach reason, not merely the
 # boolean capBreached() already returns -- gates on capBreached() === true and strips the same
-# stopped-<reason> prefix (F-235) capBreached() already strips internally but never exposes.
+# stopped-<reason> prefix capBreached() already strips internally but never exposes.
 # multipass-fixture's own driver fix (tests/evals/convergence.mjs's fillArm()) threads THIS
 # function's return through the breach branch; these are the extractor's own direct tests, same
 # split as capBreached()/classifyDraw() above (the extractor is tested here; the driver call site
@@ -2144,9 +2138,9 @@ check "breachReason({status:'running'}) is null (neither converged nor breached 
 check "breachReason({status:'pending'}) is null (undocumented status, not a near-miss guess)" \
   "$(cj "process.stdout.write(String(M.breachReason({status:'pending'})));")" "null"
 # Every documented terminal cap-breach status, individually, in BOTH the bare and the documented
-# stopped-<reason> finish-path form (F-235) -- reuses BREACH_STATUSES (derived above, F-187/F-190,
+# stopped-<reason> finish-path form -- reuses BREACH_STATUSES (derived above
 # from the module's own exported CAP_BREACH_STATUSES, not retyped), so all five are covered, not
-# just the two the phase file names by example, and a status added/renamed/dropped there is
+# just the two named by example, and a status added/renamed/dropped there is
 # reflected here without a second edit.
 for s in "${BREACH_STATUSES[@]}"; do
   check "breachReason({status:'$s'}) is '$s' (bare form)" \
@@ -2155,20 +2149,19 @@ for s in "${BREACH_STATUSES[@]}"; do
     "$(cj "process.stdout.write(String(M.breachReason({status:'stopped-$s'})));")" "$s"
 done
 
-# --- Against the real population context.md §2.2 independently computed -------------------------
+# --- Against the real population the baseline was independently computed from -------------------------
 # .somi/ is gitignored (confirmed: .gitignore lines 3-4/8/34) -- .somi/somi-state/loop/ will not
-# exist on a fresh checkout or in a from-scratch CI clone, same precondition the D11 classification
+# exist on a fresh checkout or in a from-scratch CI clone, same precondition the classification
 # drift check above already handles. Guarded the same way, for the same reason.
 LOOPDIR="$ROOT/.somi/somi-state/loop"
 if [ -d "$LOOPDIR" ]; then
   # NAMED EXPLICITLY, not globbed. .somi/somi-state/loop/*.json has grown to 34 files since
-  # context.md §2.2 computed its baseline from 21 -- 11 of the new ones are THIS work item's own
-  # loop-state files (created by the very loops that ran phases 1-2, one of them this iteration's
-  # own in-progress state file). A glob over *.json today would silently validate against a
-  # DIFFERENT, still-growing population, not the one §2.2 independently computed. This list is
-  # §2.2's population, identified by name: composition cross-checked against §2.2's own breakdown
+  # the baseline was computed from 21 -- many of the new ones are the maintainers' own in-progress
+  # loop-state files. A glob over *.json today would silently validate against a
+  # DIFFERENT, still-growing population, not the one the baseline was independently computed from. This list is
+  # that population, identified by name: composition cross-checked against its own breakdown
   # before trusting it (9 code + 1 plan under context-economy-overhaul, 4 code + 1 plan under
-  # reasoning-craft, 5 code + 1 plan under somi-orchestrator = 21) and its values reproduce §2.2's
+  # reasoning-craft, 5 code + 1 plan under somi-orchestrator = 21) and its values reproduce the
   # stated mean (2.142857...) and sample sd (1.236354...) exactly -- verified below, not assumed.
   BASELINE_21=(
     context-economy-overhaul.1.1 context-economy-overhaul.1.2 context-economy-overhaul.1.3
@@ -2226,12 +2219,11 @@ if [ -d "$LOOPDIR" ]; then
     ")" \
     "true:21"
 
-  # The corpus grew a second way since §2.2: it now contains loop-state files that are neither
-  # done nor a cap-breach -- status:"running" (2 under context-economy-overhaul, plus this very
-  # iteration's own eval-corpus-rebuild.3.1.json). Discovered DYNAMICALLY, by count, rather than by
-  # naming these specific files: this iteration's own state file WILL flip to "done" the moment
-  # this loop finishes, so a check hardcoded to a fixed filename/count would go stale for a reason
-  # unrelated to correctness the moment this very iteration closes. The invariant under test
+  # The corpus grew a second way since: it now contains loop-state files that are neither
+  # done nor a cap-breach -- status:"running" (a few in-progress files). Discovered DYNAMICALLY, by count, rather than by
+  # naming these specific files: an in-progress state file WILL flip to "done" the moment
+  # its loop finishes, so a check hardcoded to a fixed filename/count would go stale for a reason
+  # unrelated to correctness the moment that loop closes. The invariant under test
   # (capBreached() is null for a real running file, never false or true) holds regardless of how
   # many such files exist at any given moment, including zero.
   running_check=$(cj "
@@ -2253,7 +2245,7 @@ if [ -d "$LOOPDIR" ]; then
       "$running_all_null" "true"
   fi
 
-  # F-183: the check above is SELF-SELECTING -- it discovers subjects by the exact string
+  # the check above is SELF-SELECTING -- it discovers subjects by the exact string
   # (o.status === 'running') it then asserts capBreached() classifies. If the schema renamed
   # 'running' to something else, zero files would match, running_count would read 0, and the block
   # above would print a skip rather than fail -- silent, not loud. Supplemented (not replaced) with
@@ -2261,7 +2253,7 @@ if [ -d "$LOOPDIR" ]; then
   # ones, independent of which specific string it discovers first. This is what actually catches a
   # status the module has never seen, and cannot silently skip -- an empty $LOOPDIR still passes
   # vacuously (nothing to violate), but a non-empty one with an unrecognised status always fails.
-  # F-187: 'done'/'running' are the two non-breach terminals this module itself recognises; the
+  # 'done'/'running' are the two non-breach terminals this module itself recognises; the
   # five breach terminals come from M.CAP_BREACH_STATUSES directly, not a third hardcoded copy.
   known_status_check=$(cj "
     const fs = await import('node:fs');
@@ -2282,14 +2274,13 @@ else
   echo "  (skipped: $LOOPDIR not present -- .somi/ is gitignored, this block only runs where real loop-state history is on disk)"
 fi
 
-# --- Mutation testing (spec.md §7): staged against COPIES of a real, COMMITTED loop-state file --
+# --- Mutation testing: staged against COPIES of a real, COMMITTED loop-state file --
 # never against the file itself, and never against inputs invented to be easy to pass. Runs
-# unconditionally -- unlike the block above, this one does NOT read $LOOPDIR (F-241, closed here
-# for 3.1's own mutation tests too: they used to read the same gitignored directory the 3.3a
-# review flagged, so this comment's "committed" claim was false the same way theirs was; a
+# unconditionally -- unlike the block above, this one does NOT read $LOOPDIR (these mutation tests
+# used to read the same gitignored directory, so a "committed" claim was false; a
 # contributor whose loop directory existed but lacked these two exact named files would also have
 # hit an unhandled read failure on this block, the same shape of machine-dependence, just not the
-# one the review happened to test). DONE_FIXTURE is `context-economy-overhaul.2.1.json`, committed
+# one a review happened to test). DONE_FIXTURE is `context-economy-overhaul.2.1.json`, committed
 # verbatim (pass=2, status=done).
 DONE_FIXTURE="$ROOT/tests/scripts/goldens/loop-state-done.json"
 scratch=$(mktemp -d)
@@ -2322,16 +2313,15 @@ check "...the fixture itself was never touched by that mutation -- capBreached()
 
 rm -rf "$scratch"
 
-# --- 3.2: tie-conditional Mann-Whitney U via Monte Carlo, with a real oracle (D3, D5) -----------
-# Two independent oracles, both required (phases/03-convergence-gating.md iteration 3.2 -- this
-# iteration's own oracle was rewritten twice and deleted once; see the phase file's revision
-# history for why a self-referential check is not trusted here). Oracle 1: published small-n
+# --- tie-conditional Mann-Whitney U via Monte Carlo, with a real oracle -----------
+# Two independent oracles, both required (an earlier self-referential oracle was rewritten twice and
+# deleted once, so a self-referential check is not trusted here). Oracle 1: published small-n
 # worked examples on UNTIED data, where the tie-conditional distribution this module computes and
 # the classic exact distribution agree (sources cited below). Oracle 2: brute-force permutation
 # enumeration on small TIED data (n1=n2=5 over {1,2,3}, C(10,5)=252 splits -- exhaustive, not
 # sampled), computed HERE, independently of mannWhitneyU's own code.
 MW=tests/evals/lib/mann-whitney.mjs
-# F-202: optional 2nd arg overrides the import path (defaults to the real file) -- lets the
+# optional 2nd arg overrides the import path (defaults to the real file) -- lets the
 # mutation section below import a scratch COPY instead, without touching every existing call site.
 mwj() { node --input-type=module -e "const M = await import('${2:-$ROOT/$MW}'); $1" 2>&1; }
 
@@ -2347,7 +2337,7 @@ for bad in "[], [1]" "[1], []" "[1,'a'], [1]" "[1], [NaN]" "[1], [Infinity]" "nu
 done
 check "a valid, minimal call does not throw (the validation above doesn't also reject healthy input)" \
   "$(mwj "try { M.mannWhitneyU([1],[2],{resamples:1000}); process.stdout.write('ok'); } catch (e) { process.stdout.write('THREW:'+e.constructor.name); }")" "ok"
-# F-216: every probe above sits on the REJECTING side of both thresholds, so neither accepting
+# every probe above sits on the REJECTING side of both thresholds, so neither accepting
 # edge (resamples===1, resamples===MAX_RESAMPLES) was ever exercised -- a >=-for-> slip and its
 # <=-for-< mirror both passed all 333 checks, measured. Reads M.MAX_RESAMPLES, not a literal, so
 # this can't drift if the cap is ever raised.
@@ -2382,19 +2372,19 @@ check "F-203: two mannWhitneyU calls seeded with the same mulberry32(seed) repro
   ")" "true"
 
 # --- Oracle 1: published worked examples on UNTIED data (known U and exact p from OUTSIDE this
-# module). Tolerance is DERIVED from the resample count under test (D3/D5's own "stated tolerance"
+# module). Tolerance is DERIVED from the resample count under test (the "stated tolerance"
 # requirement), never loosened to fit: the Monte Carlo standard error of a resampled proportion is
 # sqrt(p(1-p)/R); 5x that SE bounds a correct implementation's false-failure rate at ~5.7e-7
-# (two-sided z), tight enough that the 1.5-3.6x conservative bias this iteration exists to rule out
-# (D3/D5) would clear it by roughly two orders of magnitude, not a near-miss.
+# (two-sided z), tight enough that the 1.5-3.6x conservative bias this test exists to rule out
+# would clear it by roughly two orders of magnitude, not a near-miss.
 ORACLE_RESAMPLES=200000
 
-# F-201: shared enumeration helpers -- u() the same rank-sum computation as rankSumU, combos() a
+# shared enumeration helpers -- u() the same rank-sum computation as rankSumU, combos() a
 # k-combination generator, enumeratedP() "what fraction of every C(n,k) index-split is >= U",
 # computed HERE, independently of mannWhitneyU. Oracle 2 originally defined its own copy of
 # u()/combos() inline; shared here so oracle 1a/1b's cited p becomes p enumerated the same way,
 # not a second (or third) off-machine number the acceptance checks below have to trust.
-# F-205: run_mw_oracles() below deliberately does NOT reuse MW_ENUM -- it keeps its own cited
+# run_mw_oracles() below deliberately does NOT reuse MW_ENUM -- it keeps its own cited
 # trueP1/trueP2/0.5 so the mutation evidence stays independent of enumeratedP; the positive
 # control that follows it is what pins those three numbers correct.
 MW_ENUM='
@@ -2422,7 +2412,7 @@ MW_ENUM='
 # scipy.stats.mannwhitneyu(x, y, alternative='greater', method='exact') -- an unrelated,
 # independently-implemented realization of Mann & Whitney's (1947) own exact null-distribution
 # algorithm, not this module's code in any form: U=35, matching this module's own convention. Cited
-# below only as C(15,5)=3003; the exact p itself is now enumerated in-suite (F-201), not cited --
+# below only as C(15,5)=3003; the exact p itself is now enumerated in-suite, not cited --
 # reusing MW_ENUM removes the only place this suite trusted an off-machine tool. armA is the
 # smaller (y) arm, armB the larger (x) arm, matching this module's tested direction (armB
 # stochastically greater than armA).
@@ -2444,7 +2434,7 @@ check "oracle 1a (Hollander & Wolfe 1973 permeability data, untied): U matches e
 # convention oracle 1a does. The article's own rank-sum arithmetic (32/46, its own reversed-rank
 # convention) reproduces exactly as armA/armB's complementary pair (U_A+U_B=n1*n2=36, confirmed
 # while sourcing this example). Exact one-sided p cross-checked the same way as example 1 (SciPy,
-# method='exact'): U=25 (matching this module's convention); p enumerated in-suite (F-201), not
+# method='exact'): U=25 (matching this module's convention); p enumerated in-suite, not
 # cited -- see C(12,6)=924 below.
 check "C(12,6) = 924 (oracle 1b's own denominator, verified, not assumed)" \
   "$(node -e "let r=1; for (let i=0;i<6;i++) r=r*(12-i)/(i+1); process.stdout.write(String(Math.round(r)));")" "924"
@@ -2462,7 +2452,7 @@ check "oracle 1b (Wikipedia tortoise/hare, untied): U matches exactly, p (enumer
 # mannWhitneyU entirely -- the real oracle for the tie case, sharing none of the implementation's
 # own assumptions. n1=n2=5 over {1,2,3}: C(10,5)=252, exhaustively enumerable (verified below, not
 # assumed). armA=[1,1,2,3,3], armB=[1,2,2,3,3] -- ties both within and across arms, the shape the
-# untied DP recursion (D3's rejected original method) cannot represent at all.
+# untied DP recursion (the rejected original method) cannot represent at all.
 check "C(10,5) = 252 (oracle 2's own denominator, verified, not assumed)" \
   "$(node -e "let r=1; for (let i=0;i<5;i++) r=r*(10-i)/(i+1); process.stdout.write(String(Math.round(r)));")" "252"
 
@@ -2478,10 +2468,10 @@ MW_ORACLE2_SNIPPET="$MW_ENUM"'
 check "oracle 2 (brute-force enumeration, n1=n2=5 over {1,2,3}, all 252 splits): U matches exactly, p within 5x its own Monte Carlo SE of the enumerated exact p" \
   "$(mwj "$MW_ORACLE2_SNIPPET")" "true"
 
-# --- Mutation testing (spec.md §7): staged against a COPY of mann-whitney.mjs, never the tracked
-# file itself (F-202, following 3.1's own precedent at :2176-2210 -- "staged against COPIES ...
-# never against the files themselves"). Both mutants named in the phase file's own acceptance
-# criterion, each confirmed caught by re-implementations of all three oracles above (F-205:
+# --- Mutation testing: staged against a COPY of mann-whitney.mjs, never the tracked
+# file itself (following the earlier precedent -- "staged against COPIES ...
+# never against the files themselves"). Both mutants are part of the acceptance
+# criterion, each confirmed caught by re-implementations of all three oracles above (
 # deliberately independent of MW_ENUM's enumeratedP), not by a case the implementation was written
 # to satisfy. mwj's optional path argument (above) is what makes this a one-line change per call
 # site: the scratch copy is mutated and imported directly, so the real file is never written.
@@ -2491,8 +2481,8 @@ cp "$ROOT/$MW" "$MW_SCRATCH"
 trap 'rm -rf "$MW_SCRATCH_DIR"' EXIT
 
 run_mw_oracles() {
-  # F-199: returns 'ok1/ok2/ok3', not ok1&&ok2&&ok3 -- a conjunction can't tell "one oracle caught
-  # it" from "all three did", and 3.2's acceptance requires catching by more than a single check.
+  # returns 'ok1/ok2/ok3', not ok1&&ok2&&ok3 -- a conjunction can't tell "one oracle caught
+  # it" from "all three did", and the acceptance requires catching by more than a single check.
   # $1 (optional): import path, forwarded to mwj -- defaults to the real, unmutated file.
   mwj "
     const armA1 = [1.15, 0.88, 0.90, 0.74, 1.21];
@@ -2516,7 +2506,7 @@ run_mw_oracles() {
   " "${1:-}"
 }
 
-# F-198: positive control -- without this, any harness failure (a drifted literal, a typo in
+# positive control -- without this, any harness failure (a drifted literal, a typo in
 # armA3, a changed default) would leave both mutant checks reading "false/false/false" and
 # passing, indistinguishable from a real catch.
 check "positive control: pristine mann-whitney.mjs passes all three oracles" "$(run_mw_oracles)" "true/true/true"
@@ -2536,10 +2526,10 @@ node -e "
 "
 check "mutant 1 (off-by-one: B-side resample loop starts at n1+1, dropping one element) fails all three oracles (ok1/ok2/ok3)" \
   "$(run_mw_oracles "$MW_SCRATCH")" "false/false/false"
-cp "$ROOT/$MW" "$MW_SCRATCH"   # F-202: reset the scratch copy to pristine before mutant 2
+cp "$ROOT/$MW" "$MW_SCRATCH"   # reset the scratch copy to pristine before mutant 2
 
-# Mutant 2 -- sampling WITH replacement instead of without: the exact defect this phase's own
-# history names (D3's correction; 3.3's pass-4 finding, 'a bootstrap-with-replacement resampler').
+# Mutant 2 -- sampling WITH replacement instead of without: the exact defect an earlier
+# review named ('a bootstrap-with-replacement resampler').
 # Breaks tie-conditioning entirely -- every comparison draws independently from the full pool,
 # rather than resampling a fixed n1/n2 split of the pool's actual indices.
 node -e "
@@ -2578,44 +2568,39 @@ node -e "
 check "mutant 2 (sampling WITH replacement -- does not condition on the observed multiset) fails all three oracles (ok1/ok2/ok3)" \
   "$(run_mw_oracles "$MW_SCRATCH")" "false/false/false"
 
-# F-209: repeat the positive control against the TRACKED file (no path arg -> mwj's default)
+# repeat the positive control against the TRACKED file (no path arg -> mwj's default)
 # after both mutants -- closes the gap where a leaked write to the real file would silently
 # propagate through the next mutant's `cp` reset instead of being caught.
 check "positive control (after mutation): the tracked module is still pristine" "$(run_mw_oracles)" "true/true/true"
 
-# F-202: the check above is what pins "the real file was never written", not an argument for it;
+# the check above is what pins "the real file was never written", not an argument for it;
 # only $MW_SCRATCH was ever mutated. Cleanup: bash's `trap` for a signal REPLACES the handler, it
-# does not append (F-222, code-loop pass 1 review) -- so this registration alone would not survive
+# does not append -- so this registration alone would not survive
 # CVD_SCRATCH_DIR's own `trap` call below (:~2610), which is why THAT later registration names
 # BOTH scratch dirs rather than just its own, and is pinned by its own "names both" check right
 # after it. The combined trap removes both on any normal exit, including SIGINT/SIGTERM (a
 # SIGKILL bypasses any trap, leaking the scratch dir -- not the tracked file).
 
-# --- 3.3a+3.3b+3.3c: convergence gate DRIVER, all three carves -- D1-D5, R2/R3. 3.3's complete
-# module was coded and reviewed twice as one iteration (503 of 400, then 861 of a cap already
-# raised to 510) and split along its own section divider (phases/03-convergence-gating.md, split
-# banner above iteration 3.3): classifyDraw, fillArm, safeCleanup (3.3a, done, points 4 and 5),
-# compareArms, estimatePower, runComparison (3.3b, done, points 1, 2, 3 and 6), and
+# --- convergence gate DRIVER. The module is split along its own section divider:
+# classifyDraw, fillArm, safeCleanup; compareArms, estimatePower, runComparison; and
 # loopShardPath/resumeArm/prepareDrawDir/startDraw/drawArmForSha -- the resume/namespace layer and
-# the live-draw mechanism (3.3c, this pass, none of the six numbered points -- the workDir-contract
-# and resume-gap checks recorded in the phase file's Scope amendment). The module is complete
-# after this carve. Hermetic throughout: every case below is a direct function call against
+# the live-draw mechanism (the workDir-contract and resume-gap checks). Hermetic throughout: every case below is a direct function call against
 # synthetic/injected input, or a setup-only seam (prepareDrawDir), never a live /code-loop
-# invocation (R6; phase 4 is where the full driver is run against the model for real).
+# invocation (the full driver is run against the model for real only in a live batch).
 CVD=tests/evals/convergence.mjs
 cvj() { node --input-type=module -e "const M = await import('${2:-$ROOT/$CVD}'); $1" 2>&1; }
 
 echo "== convergence gate driver, classification + arm-filling + comparison/verdict + shards/live-draw (3.3a+3.3b+3.3c) =="
 
 # --- point 4 (first half): N_PER_ARM pinned as a literal, independent of any draw outcome -------
-check "N_PER_ARM is exactly 15 (D2)" "$(cvj "process.stdout.write(String(M.N_PER_ARM));")" "15"
-# D16: REGRESSION_SHIFT pinned as a literal too, same discipline -- the functional pin (does the
+check "N_PER_ARM is exactly 15" "$(cvj "process.stdout.write(String(M.N_PER_ARM));")" "15"
+# REGRESSION_SHIFT pinned as a literal too, same discipline -- the functional pin (does the
 # margin actually BITE at 0.5 and not at 1) lives further down, after the mutation-testing section,
 # since it needs $CVD_SCRATCH's revert-and-reassert idiom, not just a value read.
 check "REGRESSION_SHIFT is exactly 0.5 (D16)" "$(cvj "process.stdout.write(String(M.REGRESSION_SHIFT));")" "0.5"
 
 # --- point 5: classifyDraw distinguishes breach / done / running / malformed -- the two null
-# causes (F-184) told apart, not conflated under one null-means-skip catch-all --------------------
+# causes told apart, not conflated under one null-means-skip catch-all --------------------
 check "classifyDraw: a documented breach status is 'breach'" \
   "$(cvj "process.stdout.write(M.classifyDraw({status:'max-passes-exceeded', pass:6}).kind);")" "breach"
 check "classifyDraw: the SAME breach status written with commands/code-loop.md's documented 'stopped-<reason>' finish-path prefix is ALSO 'breach', not malformed/undetermined (F-235)" \
@@ -2630,7 +2615,7 @@ check "classifyDraw(null) is 'malformed'" "$(cvj "process.stdout.write(M.classif
 check "classifyDraw: status:done with an unreadable pass field is 'malformed', never silently 'done'" \
   "$(cvj "process.stdout.write(M.classifyDraw({status:'done', pass:'x'}).kind);")" "malformed"
 
-# --- F-235 (Major, found 2026-09-04 while closing 3.3's loop for the split): commands/code-loop.md
+# --- commands/code-loop.md
 # :136 documents `--status stopped-<reason>` as the STOP path's write; lib/convergence.mjs's
 # capBreached() matched only the bare <reason> forms, so a cap-breach recorded through the
 # DOCUMENTED path read null ("undetermined"), not true -- and classifyDraw() above inherited the
@@ -2647,12 +2632,12 @@ libj() { node --input-type=module -e "const M = await import('$lib_conv_scratch/
 check "capBreached: the bare reason and commands/code-loop.md's documented stopped-<reason> form both return true (F-235)" \
   "$(libj "process.stdout.write(String(M.capBreached({status:'max-passes-exceeded'})) + '/' + String(M.capBreached({status:'stopped-max-passes-exceeded'})));")" \
   "true/true"
-# Anchor text updated (F-46, pass-2 review): the strip this mutant targets moved into its own
+# Anchor text updated: the strip this mutant targets moved into its own
 # `stripStoppedPrefix()` helper, shared with breachReason() -- the anchor's own resilience covers a
 # change to lines AROUND it, not a change WITHIN the exact line it matches, so this needed a manual
-# update (the SAME "additive field collided with an existing anchor" shape D6's own Mutant B
-# already hit once in this iteration -- caught here by running the suite, not by inspection).
-# Occurrence-count guard adopted while already touching this anchor (F-49, pass-1 review).
+# update (the SAME "additive field collided with an existing anchor" shape Mutant B
+# already hit once -- caught here by running the suite, not by inspection).
+# Occurrence-count guard adopted while already touching this anchor.
 node -e "
   const fs = require('fs'); const p = '$lib_conv_scratch/convergence.mjs'; const s = fs.readFileSync(p, 'utf8');
   const FROM = 'const reason = stripStoppedPrefix(status);\n  if (CAP_BREACH_STATUSES.has(reason)) return true;';
@@ -2666,21 +2651,21 @@ check "mutant (F-235: stopped- prefix stripping removed) is caught -- the docume
   "null/true"
 rm -rf "$lib_conv_scratch"
 
-# --- F-241 (Major, 3.3a pass-2 review): staged against a COMMITTED fixture, not a live-directory
+# --- staged against a COMMITTED fixture, not a live-directory
 # scan -- the scan below is now an opportunistic supplement, never this assertion's only subject.
 # BREACH_FIXTURE is eval-corpus-rebuild.3.3.json, committed verbatim (status:"stopped-user-stop",
 # the DOCUMENTED stop-path write form, closed to that form via the real `somi-loop.mjs finish`
-# command per 3.3a's diary, not a hand-edit). Runs unconditionally -- in CI and on every
+# command not a hand-edit). Runs unconditionally -- in CI and on every
 # contributor's machine, regardless of whether $LOOPDIR exists or holds a stopped-* file, which is
-# almost none of them. F-247 (Minor, 3.3b pass-1 review, asked twice): anchored to a re-runnable
+# almost none of them. Anchored to a re-runnable
 # command rather than a snapshot count, since a snapshot goes stale as this corpus grows on its own
 # -- this line's earlier "36 of 37" (files NOT stopped-*) already read "37 of 38" one iteration
-# later. F-250 (pass-2): the command below reproduces the RARE side of that instead -- a stopped-*
+# later. The command below reproduces the RARE side of that instead -- a stopped-*
 # file, which is 1 of this repo's own 39 today. Reproduce with:
 #   node -e "const fs=require('fs'),d='.somi/somi-state/loop';const f=fs.readdirSync(d)
 #     .filter(x=>x.endsWith('.json'));let n=0;for(const x of f){try{if(/^stopped-/.test(
 #     JSON.parse(fs.readFileSync(d+'/'+x,'utf8')).status))n++}catch{}}console.log(n+'/'+f.length)"
-# F-242: not self-selecting -- the subject is a FIXED committed file, not one discovered by the
+# not self-selecting -- the subject is a FIXED committed file, not one discovered by the
 # predicate under test, and the raw `status` string is asserted alongside `kind` rather than only
 # the classifier's own output.
 BREACH_FIXTURE="$ROOT/tests/scripts/goldens/loop-state-breach.json"
@@ -2693,12 +2678,12 @@ check "classifyDraw on the committed cap-breach fixture is 'breach', raw status 
 
 LOOPDIR=".somi/somi-state/loop"
 if [ -d "$ROOT/$LOOPDIR" ]; then
-  # F-246 (Minor, 3.3b pass-1 review): the per-file parse below is wrapped in its OWN try/catch, not
+  # the per-file parse below is wrapped in its OWN try/catch, not
   # left to `cvj`'s outer 2>&1 capture -- one unparseable .json (a file killed mid-write) used to
   # throw out of JSON.parse, and the captured stack trace (non-empty) then satisfied `[ -n "$var" ]`
   # below, so the following check tried to read a FILE NAMED BY THE STACK TRACE and failed loudly on
   # the wrong thing. A malformed file is skipped here exactly like an unreadable one -- this scan is
-  # an opportunistic supplement (F-241) and must degrade gracefully on corruption, not just absence.
+  # an opportunistic supplement and must degrade gracefully on corruption, not just absence.
   running_real=$(cvj "
     const fs = await import('node:fs');
     const files = fs.readdirSync('$ROOT/$LOOPDIR').filter((f) => f.endsWith('.json'));
@@ -2716,12 +2701,12 @@ if [ -d "$ROOT/$LOOPDIR" ]; then
   else
     echo "  (skipped: no real status:\"running\" loop-state file on disk right now)"
   fi
-  # Opportunistic supplement to the committed fixture above, not a replacement for it (F-241).
-  # F-242: SELF-SELECTING, same shape running_real's own F-183 comment names above -- discovers by
+  # Opportunistic supplement to the committed fixture above, not a replacement for it.
+  # SELF-SELECTING, same shape running_real's own comment names above -- discovers by
   # the exact predicate (classifyDraw(...).kind === 'breach') it then asserts. An over-admitting
   # classifyDraw would pass this alone; the committed fixture's raw-status assertion is the one
   # that cannot be fooled that way. Degrades gracefully (skips, never fails) when absent OR
-  # malformed (F-246, same fix as running_real above -- the per-file parse gets its own try/catch
+  # malformed (same fix as running_real above -- the per-file parse gets its own try/catch
   # rather than relying on `.find()`'s single expression to short-circuit on a thrown parse).
   breach_real=$(cvj "
     const fs = await import('node:fs');
@@ -2744,8 +2729,8 @@ else
   echo "  (skipped: $LOOPDIR not present)"
 fi
 
-# Staged on a COPY of a real, COMMITTED loop-state file (spec.md §7's scorer discipline) -- F-241,
-# unconditional for the same reason the 3.1 block's mutation tests above are (DONE_FIXTURE, set
+# Staged on a COPY of a real, COMMITTED loop-state file (the scorer discipline),
+# unconditional for the same reason the mutation tests above are (DONE_FIXTURE, set
 # there, is reused rather than redefined).
 cvd_scratch=$(mktemp -d)
 check "mutation (status: done -> pemding, an unrecognised near-miss) on a COPY is malformed, not silently done" \
@@ -2796,11 +2781,11 @@ check "fillArm: a breach fails the WHOLE arm outright, even after usable draws w
     process.stdout.write(JSON.stringify({ breach: r.breach, arm: r.arm }));
   ")" '{"breach":true,"arm":[1]}'
 
-# --- D6 (phase 2, iteration 2.4): fillArm()'s breach branch threads the SPECIFIC cap-breach
-# reason, not just the boolean above -- before this iteration, all five CAP_BREACH_STATUSES read
-# identically as {breach:true}, undiagnosable at phase 3/4. The phase file's own literal acceptance
+# --- fillArm()'s breach branch threads the SPECIFIC cap-breach
+# reason, not just the boolean above -- before this change, all five CAP_BREACH_STATUSES read
+# identically as {breach:true}, undiagnosable downstream. The literal acceptance
 # wording, restated as its own named check: a stubbed loop-state carrying the documented
-# stopped-<reason> finish form (F-235) surfaces the BARE reason on fillArm()'s return.
+# stopped-<reason> finish form surfaces the BARE reason on fillArm()'s return.
 check "fillArm: breachReason is threaded through on a breach -- stopped-max-passes-exceeded surfaces as the bare 'max-passes-exceeded' (D6, phase file's own acceptance wording)" \
   "$(cvj "$CVD_HELPERS
     const r = M.fillArm(mkSeqDraw([[{status:'stopped-max-passes-exceeded', pass:6}]]), { n: 1, report: () => {} });
@@ -2811,10 +2796,9 @@ check "fillArm: same, for diff-cap-exceeded (the phase file's second named examp
     const r = M.fillArm(mkSeqDraw([[{status:'stopped-diff-cap-exceeded', pass:2}]]), { n: 1, report: () => {} });
     process.stdout.write(String(r.breachReason));
   ")" "diff-cap-exceeded"
-# All five, not just the two the phase file names by example (the gap this work item has spent all
-# week finding) -- both the bare and the documented stopped-<reason> form, driven end-to-end
+# All five, not just the two named by example (the gap that kept being found) -- both the bare and the documented stopped-<reason> form, driven end-to-end
 # through fillArm() itself, not just the lib extractor tested above. Reuses BREACH_STATUSES,
-# derived earlier from the module's own CAP_BREACH_STATUSES (F-187/F-190).
+# derived earlier from the module's own CAP_BREACH_STATUSES.
 for s in "${BREACH_STATUSES[@]}"; do
   check "fillArm: breachReason is '$s' on a bare '$s' breach status" \
     "$(cvj "$CVD_HELPERS
@@ -2846,8 +2830,7 @@ check "fillArm: breachReason is null on a clean, fully-filled successful arm" \
 # memory `state` local, THIS check fails loudly (an uncaught throw corrupts cvj's captured stdout,
 # which then fails to match), not silently. Detects exactly ONE failure mode -- a fresh read()
 # issued after cleanup() -- not a reorder that still uses the cached `state` local with no read()
-# call at all; nothing in fillArm() itself makes that second reorder impossible (F-45, pass-1
-# review: the prior name here claimed "by construction", a guarantee the mechanism doesn't
+# call at all; nothing in fillArm() itself makes that second reorder impossible (the prior name here claimed "by construction", a guarantee the mechanism doesn't
 # deliver). Mutant F below stages that exact reorder against a REAL startDraw()-shaped handle and
 # is the strongest available check for it short of a refactor.
 check "fillArm: breachReason is derived from the ALREADY-READ state, never a fresh read() issued after cleanup() -- the reason is never read from a spent handle: a post-cleanup read() throws" \
@@ -2867,9 +2850,9 @@ check "fillArm: breachReason is derived from the ALREADY-READ state, never a fre
 
 # 3.3c: startDraw() is the FIRST real cleanup() a draw handle ever carries (mkSeqDraw above has
 # none, so safeCleanup()'s `draw.cleanup?.()` was a silent no-op in every fillArm test above --
-# none of them could have caught F-226 recurring). This is the seam that matters now that a real,
+# none of them could have caught a recurrence). This is the seam that matters now that a real,
 # disk-touching cleanup exists to actually leave uncalled: 1.7 MB / 187 files per draw, ~51 MB per
-# certification (phase file, 3.3 pass-2 review). Verified on all four terminal paths a single draw
+# certification. Verified on all four terminal paths a single draw
 # can end on, not just the two (done/malformed) the existing reports/replaced assertions above
 # already exercise indirectly.
 CVD_HELPERS_CLEANUP='
@@ -2921,11 +2904,11 @@ check "runComparison: insufficient-draws (point 4) on a realized shortfall, meas
     const r = M.runComparison(mkSeqDraw(bl), mkSeqDraw(cd), { n: 2, maxWaitAttempts: 1, report: () => {} });
     process.stdout.write(JSON.stringify({ verdict: r.verdict, deficit: r.deficit }));
   ")" '{"verdict":"insufficient-draws","deficit":{"baseline":2,"candidate":0}}'
-# --- point 6 (Blocker F-221, code-loop pass 1 review): every OTHER check in this suite bounds a
+# --- point 6: every OTHER check in this suite bounds a
 # false ACCEPT; none bounded a false BLOCK. A one-line mutant (`verdict = 'inconclusive'` always)
 # passed points 1/2/4/5 AND the old membership assertion below, improving point 2 to 0.0000. Two
 # assertions close it -- the first is this rewritten check itself.
-# D16 (REGRESSION_SHIFT 1 -> 0.5): checked, not assumed -- this arm is TWO constant arms (every
+# margin change (REGRESSION_SHIFT 1 -> 0.5): checked, not assumed -- this arm is TWO constant arms (every
 # draw pass:2), so `shifted` is also constant, strictly less than `baseline` for ANY positive
 # shift; the tie-conditional rank test only sees a fully-separated ordering, which is identical at
 # shift=0.5 and shift=1 (verified directly: equivalence.p is bit-identical, 0.0002, at both). This
@@ -2937,9 +2920,9 @@ check "point 6 (1/2) -- a healthy, well-filled comparison returns no-regression 
     process.stdout.write(r.verdict);
   ")" "no-regression"
 
-# --- F-223 (Major, code-loop pass 1 review): the power statement and the top-level censoring
-# counts, both this iteration's own Observability deliverable and a phase exit criterion.
-check "runComparison's healthy-input result carries a LIVE power estimate in [0,1] (F-223 -- computed from THIS run's own realized arms, not D2's static 71.6% citation)" \
+# --- the power statement and the top-level censoring
+# counts, both an observability deliverable and an exit criterion.
+check "runComparison's healthy-input result carries a LIVE power estimate in [0,1] (computed from THIS run's own realized arms, not a static 71.6% citation)" \
   "$(cvj "$CVD_HELPERS
     const arm = Array.from({length:15}, () => [{status:'done',pass:2}]);
     const r = M.runComparison(mkSeqDraw(arm.slice()), mkSeqDraw(arm.slice()), { resamples: 5000, report: () => {}, powerTrials: 30, powerResamples: 500 });
@@ -2959,7 +2942,7 @@ check "runComparison surfaces stillRunning/replaced at the TOP level on the SUCC
     process.stdout.write(JSON.stringify({ stillRunning: r.stillRunning, replaced: r.replaced }));
   ")" '{"stillRunning":{"baseline":1,"candidate":0},"replaced":{"baseline":0,"candidate":0}}'
 
-# --- F-225 (Major, code-loop pass 1 review): convergence shards get their OWN namespace, OWN
+# --- convergence shards get their OWN namespace, OWN
 # schema, decoupled from run.mjs's SCHEMA_VERSION -- verified by execution, not merely by reading
 # the source, that the split actually removes the collision (the namespace-split option; see
 # convergence.mjs's own comment above LOOP_SCHEMA_VERSION for the "was schema:1 deliberate?"
@@ -2977,7 +2960,7 @@ check "convergence shards land under shardDir(sha)/convergence/ -- run.mjs's REA
     fs.rmSync(dir, { recursive: true, force: true });
     process.stdout.write(JSON.stringify([Object.keys(merged.tasks).length, merged.skippedShards.length]));
   ")" "[0,0]"
-# --- F-230 (Minor): resumeArm's nextIndex targets the first genuinely MISSING slot, not
+# --- resumeArm's nextIndex targets the first genuinely MISSING slot, not
 # done.length -- shards {0,2} present must never overwrite shard 2 or leave 1 unwritten forever.
 check "resumeArm: shards {0,2} present -- resume holds both, nextIndex fills the GAP at 1, never targets 2 (F-230)" \
   "$(cvj "
@@ -2994,8 +2977,8 @@ check "resumeArm: shards {0,2} present -- resume holds both, nextIndex fills the
   ")" '{"resume":[10,12],"nextIndex":1,"occupied":[0,2]}'
 # A corrupted shard (killed process mid-write) must not crash the read, must not silently push
 # garbage into an arm, and must not have its slot immediately overwritten either -- readShard's
-# own F-131 discipline, applied to THIS module's namespace, the third caller the pass-1 review
-# named as skipping it.
+# own discipline of refusing a stale-schema shard, applied to THIS module's namespace, the third caller
+# that had been skipping it.
 check "resumeArm: a corrupted shard is treated as absent from resume, without crashing, and its slot stays occupied (not silently overwritten) (F-225)" \
   "$(cvj "
     const fs = await import('node:fs'); const path = await import('node:path');
@@ -3007,7 +2990,7 @@ check "resumeArm: a corrupted shard is treated as absent from resume, without cr
     fs.rmSync(path.dirname(path.dirname(p)), { recursive: true, force: true });
     process.stdout.write(JSON.stringify({ resume: r.resume, nextIndex: r.nextIndex, occupied: [...r.occupied] }));
   ")" '{"resume":[],"nextIndex":1,"occupied":[0]}'
-# F-248 (Major, pass-1 review): resumeArm's occupied set means nothing if the CONSUMER re-collides
+# resumeArm's occupied set means nothing if the CONSUMER re-collides
 # with it -- writeNextShard is drawArmForSha's onDraw, exercised directly (no live draw, no quota).
 check "writeNextShard: n=5, shards {0,2} occupied, three sequential draws land exactly on the GAPS -- {1,3,4}, never re-touching 2 (F-248)" \
   "$(cvj "
@@ -3018,10 +3001,10 @@ check "writeNextShard: n=5, a corrupted-but-occupied shard 0 plus 1,2 valid -- t
     const fs = await import('node:fs'); const path = await import('node:path'); const sha = 'f248oob' + Date.now(); const occ = new Set([0, 1, 2]); let i = 3; i = M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7) + 1; i = M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7) + 1; let threw = false; try { M.writeNextShard(sha, M.TASK_ID, 5, occ, i, 7); } catch (e) { threw = /no free shard slot/.test(e.message); } const onDisk = fs.readdirSync(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))).filter(f => f.endsWith('.json')).length; fs.rmSync(path.dirname(path.dirname(M.loopShardPath(sha, M.TASK_ID, 0))), { recursive: true, force: true }); process.stdout.write(JSON.stringify([threw, onDisk]));
   ")" "[true,2]"
 
-# --- writeBreachRecord/breachRecordPath (D6, phase 2 iteration 2.4): persists fillArm()'s
+# --- writeBreachRecord/breachRecordPath: persists fillArm()'s
 # breachReason alongside the fixture-namespaced shard directory, generalizing writeCensorRecord's
 # existing per-fixture convention -- exercised directly (no live draw, no quota), same idiom as
-# writeNextShard's own F-248 tests just above.
+# writeNextShard's own tests just above.
 check "breachRecordPath: a real fixtureId lands INSIDE that fixture's own shard directory, as a breach/ sibling to the numbered shards (not the flat legacy bucket)" \
   "$(cvj "
     const path = await import('node:path');
@@ -3063,13 +3046,13 @@ check "writeBreachRecord: self-healing first-free-slot write, same idiom as writ
     fs.rmSync(runMod.shardDir(sha), { recursive: true, force: true });
     process.stdout.write(JSON.stringify({ seq0, seq1, firstUntouched: first.breachReason === 'circuit-breaker' }));
   ")" '{"seq0":0,"seq1":1,"firstUntouched":true}'
-# F-42 (Major, pass-1 review): unlike writeNextShard()/writeCensorRecord(), breach records are NEW
-# in this iteration -- there is no pre-F-284 legacy data sitting in a flat bucket for a defaulted
+# unlike writeNextShard()/writeCensorRecord(), breach records are NEW
+# -- there is no legacy fixture-less data sitting in a flat bucket for a defaulted
 # fixtureId to stay compatible with, so an omitted/null fixtureId is never a legitimate "unknown
-# fixture" read here. The prior version of this check entrenched exactly the F-285 hazard the
-# reviewer measured (a qualified write, an unqualified default-arg read, silently landing in a
+# fixture" read here. The prior version of this check entrenched exactly the hazard a
+# review measured (a qualified write, an unqualified default-arg read, silently landing in a
 # DIFFERENT directory with no error) -- replaced with the throw that closes it: a loud TypeError
-# at the call site instead of a quiet empty read at whatever future reader (phases/04) queries the
+# at the call site instead of a quiet empty read at whatever future reader queries the
 # wrong path.
 check "writeBreachRecord: fixtureId omitted throws -- no flat legacy bucket for breach records to fall back to (F-42)" \
   "$(cvj "
@@ -3092,11 +3075,11 @@ check "breachRecordPath: fixtureId omitted throws too -- same guard, reachable d
     process.stdout.write(String(threw));
   ")" "true"
 
-# F-43 (Major, pass-1 review): the fillArm() -> writeBreachRecord() ASSEMBLY drawArmForSha() uses,
+# the fillArm() -> writeBreachRecord() ASSEMBLY drawArmForSha() uses,
 # driven for real through fillArm() with a synthetic (non-live) draw handle -- no /code-loop
 # invocation, no quota spent. Mirrors convergence-runner.sh:461-476's identical censor-assembly
-# precedent (and :301/:596's own "the exact assembly drawArmForSha() uses" wiring tests) -- the
-# precedent this iteration's own pass-1 review found was checkably wrong to cite as untestable:
+# precedent (and the other "the exact assembly drawArmForSha() uses" wiring tests) -- the
+# precedent a review found was checkably wrong to cite as untestable:
 # that precedent tests exactly this shape of composition, hermetically, so this does too, threading
 # the REAL r.breachReason (not a literal) into the REAL writer at the REAL namespace.
 check "the exact assembly drawArmForSha() uses (fillArm's breach return + writeBreachRecord) persists a breached draw's specific reason, without a live draw (F-43)" \
@@ -3111,7 +3094,7 @@ check "the exact assembly drawArmForSha() uses (fillArm's breach return + writeB
     process.stdout.write(JSON.stringify({ breach: r.breach, persistedReason: rec ? rec.breachReason : null }));
   ")" '{"breach":true,"persistedReason":"diff-cap-exceeded"}'
 
-# --- F-227/F-228 (Minors, code-loop pass 1 review): prepareDrawDir() is startDraw()'s setup ONLY
+# --- prepareDrawDir() is startDraw()'s setup ONLY
 # (no invocation), the injection seam neither disclosed deviation had coverage through before this
 # -- the seam that would have caught the missing scripts/ copy by evidence, not by reasoning.
 check "prepareDrawDir: workDir contains scripts/somi-loop.mjs and .claude/commands/, zero model calls (F-227)" \
@@ -3132,7 +3115,7 @@ check "prepareDrawDir: throws when scripts/ is missing at the source, named and 
     process.stdout.write(String(threw));
   ")" "true"
 
-# --- F-229 (Minor): drawArmForSha() preflights before any work, matching run.mjs's own precedent
+# --- drawArmForSha() preflights before any work, matching run.mjs's own precedent
 # (:150-165 above) -- simulated the same way, by stripping PATH/HOME so neither the CLI nor a
 # credential resolves, never by mocking preflight() itself.
 NODE_BIN=$(command -v node)
@@ -3146,11 +3129,11 @@ case "$cvd_preflight" in
   *) bad "drawArmForSha preflights the CLI and credential before spending any quota (F-229) (got: ${cvd_preflight:0:80})" ;;
 esac
 
-# --- Mutation testing (spec.md §7): staged against a COPY of convergence.mjs, never the tracked
-# file, following 3.2's own MW_SCRATCH precedent -- one scratch dir, reset via `cp` between mutants.
+# --- Mutation testing: staged against a COPY of convergence.mjs, never the tracked
+# file, following the mann-whitney scratch-copy precedent -- one scratch dir, reset via `cp` between mutants.
 CVD_SCRATCH_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 CVD_SCRATCH="$CVD_SCRATCH_DIR/convergence.mjs"
-# F-222 (Major, code-loop pass 1 review): `trap ... EXIT` REPLACES the handler, it does not
+# `trap ... EXIT` REPLACES the handler, it does not
 # append -- registering `rm -rf "$CVD_SCRATCH_DIR"' alone here would silently drop :2380's
 # MW_SCRATCH_DIR cleanup (measured: baseline d9421b3's runner cleans it, this one did not, until
 # this line named both). Name every scratch dir the suite has created so far, not just this one.
@@ -3171,20 +3154,20 @@ ln -s "$ROOT/tests/evals/run.mjs" "$CVD_SCRATCH_DIR/run.mjs"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
 # CVD_SIM: shared population/trial-loop preamble for points 1, 2 and 6, and for mutant D's second
-# check below (all draw from D5's own tied historical MIXED-HISTORY histogram,
+# check below (all draw from the tied historical MIXED-HISTORY histogram,
 # {1:9,2:4,3:5,4:2,5:1}, sd~1.24). Defined here, before the mutation section, since mutant D needs
 # it too.
-# F-233 (Nit, code-loop pass 1 review): TWO independent seeded streams, not one shared between arm
+# TWO independent seeded streams, not one shared between arm
 # generation and the rank test's own resampling -- compareArms() short-circuits on p < alpha, so a
 # single shared stream let the number of rng() calls consumed per trial depend on that trial's own
 # outcome, and no single trial could be replayed in isolation. dataRng draws the synthetic arms;
 # testRng is the ONLY stream compareArms()/mannWhitneyU ever consumes.
 #
-# F-309 (pass-2 review, 2026-09-14): D15 measured that this is NOT the population phase 4's real
-# /code-loop draws are shaped like -- D13's real baseline (decisions.md#d13) has sd 0.5164,
+# it was measured that this is NOT the population a real
+# /code-loop draws are shaped like -- the real baseline has sd 0.5164,
 # materially tighter than this histogram's ~1.24. Every target/floor computed under CVD_SIM below
 # is calibrated to THIS wider, tied-mixed-history population, and states how the verdict logic
-# behaves under HIGH VARIANCE -- a genuine, deliberately kept stress case -- not what the D16-gated
+# behaves under HIGH VARIANCE -- a genuine, deliberately kept stress case -- not what the margin-gated
 # comparison the real gate runs actually accepts or rejects on real draws. Read a CVD_SIM
 # target/floor as "how the logic holds up under stress," never as a claim about the operative
 # gate's real accept rate; CVD_SIM_D13 below (bootstrapped from the real baseline) is what states
@@ -3200,22 +3183,22 @@ CVD_SIM='
   const T = 600, RESAMPLES = 3000, N = 15;
 '
 
-# CVD_SIM_D13: same shared preamble SHAPE as CVD_SIM (F-233's two-independent-streams discipline),
-# but the population is bootstrap-resampled WITH REPLACEMENT from D13's real measured 15-draw
-# baseline arm (decisions.md#d13: [2,1,2,1,2,1,1,2,1,1,2,2,2,1,2], mean 1.5333, sd 0.5164) instead
-# of D5's mixed-history histogram -- the population the D16-gated /code-loop comparison actually
-# draws from (F-309). `dataRng` draws the bootstrap sample (both baseline's and candidate's shared
+# CVD_SIM_D13: same shared preamble SHAPE as CVD_SIM (the two-independent-streams discipline),
+# but the population is bootstrap-resampled WITH REPLACEMENT from the real measured 15-draw
+# baseline arm ([2,1,2,1,2,1,1,2,1,1,2,2,2,1,2], mean 1.5333, sd 0.5164) instead
+# of the mixed-history histogram -- the population the margin-gated /code-loop comparison actually
+# draws from. `dataRng` draws the bootstrap sample (both baseline's and candidate's shared
 # draws, same convention as CVD_SIM's `drawArm`); `bumpRng` is a THIRD independent stream, used only
 # by the point-2 analogue further down, for the "gains a pass with probability 0.5" degradation
-# model D15/D16's own resampling scripts used to report "+0.5 pass"
-# (runs/2026-09-14-4.2-power-resample*.mjs) -- kept separate from `dataRng` for the same reason
-# F-233 separates `dataRng` from `testRng`: no single stream's call count may depend on another
+# model the earlier resampling scripts used to report "+0.5 pass"
+# (the earlier resampling scripts) -- kept separate from `dataRng` for the same reason
+# the suite separates `dataRng` from `testRng`: no single stream's call count may depend on another
 # draw's own outcome. `testRng` is the ONLY stream compareArms()/mannWhitneyU ever consumes, same
-# as CVD_SIM. Independently derived by Monte Carlo, not copied from D15/D16's own scripts (which
-# share one rng stream where this suite's F-233 discipline keeps three -- a design difference, NOT
-# the reason the two readings differ; the point-2 analogue below carries the arithmetic, F-318), so
-# the two are expected to agree in magnitude, not to the decimal, as independent estimates -- checked: this harness's own CVD_SIM point-6-equivalent measurement of D16's already-
-# published 0.4250 (margin 0.5, D5 population) reproduces bit-for-bit (see point 6 below), which is
+# as CVD_SIM. Independently derived by Monte Carlo, not copied from the earlier scripts (which
+# share one rng stream where this suite's discipline keeps three -- a design difference, NOT
+# the reason the two readings differ; the point-2 analogue below carries the arithmetic), so
+# the two are expected to agree in magnitude, not to the decimal, as independent estimates -- checked: this harness's own CVD_SIM point-6-equivalent measurement of the already-
+# published 0.4250 (margin 0.5, historical population) reproduces bit-for-bit (see point 6 below), which is
 # the cross-check that this harness is faithful to the real module before trusting new numbers from it.
 CVD_SIM_D13='
   const MWmod = await import("'"$ROOT"'/tests/evals/lib/mann-whitney.mjs");
@@ -3228,7 +3211,7 @@ CVD_SIM_D13='
   const T = 600, RESAMPLES = 3000, N = 15;
 '
 
-# Mutant A -- reintroduces F-182: collapses capBreached()'s null (running OR malformed) into the
+# Mutant A -- reintroduces the running-as-done defect: collapses capBreached()'s null (running OR malformed) into the
 # non-breach/done branch -- the natural-but-wrong `if (!capBreached(o)) arm.push(...)` shape.
 node -e "
   const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
@@ -3241,20 +3224,20 @@ check "mutant A (F-182: null collapsed into done) is caught -- a running loop's 
   "$(cvj "process.stdout.write(M.classifyDraw({status:'running', pass:0}).kind);" "$CVD_SCRATCH")" "done"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
-# Mutant B -- reintroduces F-194: exhausting the wait budget re-draws a FRESH handle instead of
+# Mutant B -- reintroduces the re-draw defect: exhausting the wait budget re-draws a FRESH handle instead of
 # stopping, re-rolling exactly the censored draw and pulling the arm mean down.
-# Anchored on the return statement alone, not the surrounding block (F-276, phase 4 iteration 4.4,
+# Anchored on the return statement alone, not the surrounding block (a later change
 # added a diagnostic censor record and a comment ahead of this same return inside convergence.mjs's
 # own scope) -- narrowing the anchor here keeps this guard resilient to that kind of addition
-# without needing to track every line around it. Anchor text updated (D6, phase 2 iteration 2.4)
+# without needing to track every line around it. Anchor text updated
 # for the additive `breachReason: null` field this same return statement now also carries -- the
 # anchor's OWN resilience covers a change to lines AROUND it, not a change WITHIN the exact
 # return statement it matches, so this one line's text needed a manual update; what the check
 # below asserts (arm/waitExhausted) is unchanged.
-# Occurrence count asserted, not just presence (F-49, pass-1 review): this iteration's own anchor
+# Occurrence count asserted, not just presence: an anchor
 # edit (above) demonstrated a bare .includes() guard can silently match the wrong thing once a
-# nearby line changes -- adopting the same discipline the F-284/F-285 anchors already use
-# (convergence-runner.sh:653/689/770), not just a presence check.
+# nearby line changes -- adopting the same discipline the fixture-identity anchors already use
+# (see convergence-runner.sh), not just a presence check.
 node -e "
   const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
   const FROM = 'return { breach: false, arm, stillRunning, replaced, waitExhausted: true, censor, breachReason: null };';
@@ -3275,11 +3258,11 @@ cp "$ROOT/$CVD" "$CVD_SCRATCH"
 # whenever p >= alpha (the exact "p >= alpha alone is no-regression" shape spec.md forbids). Arms
 # below are a real inconclusive pair under the PRISTINE module (primary.p=0.137, unaffected by
 # REGRESSION_SHIFT since `shift` is never read before the primary-test return; equiv.p=0.084 at
-# the pre-D16 margin of 1, re-measured at ~0.38 under D16's 0.5 -- both readings >= alpha, so this
+# the previous margin of 1, re-measured at ~0.38 under the new 0.5 -- both readings >= alpha, so this
 # is still a genuine inconclusive pair at the new margin, just less marginal -- found by
 # simulation, not hand-picked to be easy), so the mutant's forced flip to 'no-regression' is a
 # visible change from the correct verdict, not masked by an earlier primary-regression return.
-# F-313 (Nit, pass-2 review): the paragraph above ASSERTED the pristine premise only in prose --
+# the paragraph above ASSERTED the pristine premise only in prose --
 # closed with a direct check, against the tracked module, before the mutation below is applied.
 check "mutant C's pair is a genuine inconclusive pair UNDER THE UNMODIFIED module (F-313) -- the premise the mutation below is supposed to visibly change, checked directly rather than only claimed in a comment" \
   "$(cvj "
@@ -3302,7 +3285,7 @@ check "mutant C ('p >= alpha alone is no-regression') is caught -- a real inconc
   " "$CVD_SCRATCH")" "no-regression"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
-# Mutant D (F-221, Blocker, code-loop pass 1 review) -- reintroduces the NEVER-ACCEPTS direction:
+# Mutant D -- reintroduces the NEVER-ACCEPTS direction:
 # a gate that can never return no-regression. Every other check in this suite bounds a false
 # ACCEPT; this is the direction only point 6 (below) bounds. Short-circuits compareArms() to a
 # hardcoded verdict -- the rest of the function body is then dead code, which is fine, this is a
@@ -3324,7 +3307,7 @@ check "mutant D is ALSO caught by point 6's SECOND half -- the no-regression rat
   "$(cvj "$CVD_SIM
     process.stdout.write(String(M.estimatePower(drawOne, N, { rng: testRng, resamples: RESAMPLES, trials: 50 })));
   " "$CVD_SCRATCH")" "0"
-# F-309 (pass-2 review): the never-accepting direction is caught the SAME way on the D13-population
+# the never-accepting direction is caught the SAME way on the baseline-population
 # analogue (defined below) -- staged here, on the SAME mutant, rather than re-mutating a second
 # scratch copy, since the mutation itself doesn't depend on which population later draws from it.
 check "mutant D is ALSO caught by the D13-population point 6 analogue (F-309) -- the healthy-pair no-regression rate collapses to 0 there too, independent of which population is used" \
@@ -3342,10 +3325,10 @@ check "positive control: the tracked convergence.mjs is pristine after all four 
     process.stdout.write(M.classifyDraw({status:'running', pass:0}).kind + '/' + M.compareArms(a, b, { resamples: 20000 }).verdict + '/' + JSON.stringify({ arm: fr.arm, waitExhausted: fr.waitExhausted }));
   ")" 'running/inconclusive/{"arm":[],"waitExhausted":true}'
 
-# Mutant E (D6, phase 2 iteration 2.4) -- the literal PRE-FIX code path: fillArm()'s breach branch
-# reverted to dropping breachReason entirely, exactly as it read before this iteration
+# Mutant E -- the literal PRE-FIX code path: fillArm()'s breach branch
+# reverted to dropping breachReason entirely, exactly as it read before the fix
 # (`return { breach: true, arm, stillRunning, replaced, waitExhausted: false, censor: null };`,
-# quoted verbatim in the phase file's own Scope). R12's own "shown to fail, shown to pass"
+# as it read before). The "shown to fail, shown to pass"
 # discipline, applied here as a genuine mutation-test rather than only the direct checks above.
 node -e "
   const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
@@ -3368,8 +3351,7 @@ check "mutant E reverted -- the tracked convergence.mjs's breach branch threads 
 
 # Mutant F -- an INTENTIONALLY-BROKEN threading, distinct from mutant E's plain omission: reads
 # the reason via a FRESH draw.read() issued AFTER safeCleanup(draw), instead of the
-# already-captured `state` local -- the exact ordering mistake the phase file's own "Watch for"
-# warns against (a naive re-read after the workDir is gone). startDraw()'s real read() returns
+# already-captured `state` local -- the exact ordering mistake to watch for (a naive re-read after the workDir is gone). startDraw()'s real read() returns
 # `null` once statePath no longer exists (existsSync guard), so this mutant's breachReason
 # collapses to null on every real breach -- caught by the SAME direct check already used for the
 # stopped-<reason> case above, no new assertion shape needed.
@@ -3410,16 +3392,16 @@ check "mutant F reverted -- the same post-cleanup-null handle now correctly read
     process.stdout.write(String(r.breachReason));
   " "$CVD_SCRATCH")" "max-passes-exceeded"
 
-# --- D16 pin: the margin's EFFECT, not just its literal value -- a fixed baseline/candidate pair
+# --- margin pin: the margin's EFFECT, not just its literal value -- a fixed baseline/candidate pair
 # that reads no-regression at shift=1 and reads something else at the DEFAULT shift (module's own
-# REGRESSION_SHIFT). `baseline` is D13's real measured 15-draw arm ([2,1,2,1,2,1,1,2,1,1,2,2,2,1,2],
-# decisions.md#d15); `candidate` bumps its first 4 draws by one pass each -- found by grid search
+# REGRESSION_SHIFT). `baseline` is the real measured 15-draw arm ([2,1,2,1,2,1,1,2,1,1,2,2,2,1,2],
+# ); `candidate` bumps its first 4 draws by one pass each -- found by grid search
 # over "how many draws bumped" (0/2 draws: no-regression at both margins; 8+: regression at both,
 # shift never even read; 4 draws is the band between, verified stable across 5 independent rng
 # seeds before picking it). A fixed `rng` (mulberry32) makes this deterministic -- Math.random()
 # would make a boundary-straddling pair flaky across runs, unlike Mutant C's pair above, which only
 # needs a stable VERDICT under a mutant that ignores the data outright.
-# D16 addendum (F-311, 2026-09-14 pass 2): this pin's (1/2)-vs-(2/2) contrast only proves the
+# Addendum: this pin's (1/2)-vs-(2/2) contrast only proves the
 # constant separates a margin of 1 from something strictly BELOW 1 -- on integer pass counts every
 # value in (0,1) is functionally identical (`c - s < b` <=> `c <= b`), so this pin cannot and does
 # not claim 0.5 itself is a meaningful tolerance; it would read identically if the module held 0.25
@@ -3441,7 +3423,7 @@ check "D16 pin (2/2): the SAME pair through the DEFAULT shift (no opts.shift -- 
     const r = M.compareArms(baseline, candidate, { resamples: 20000, rng: MWmod.mulberry32(20260914) });
     process.stdout.write(r.verdict);
   ")" "inconclusive"
-# Staged: revert REGRESSION_SHIFT to 1 (pre-D16) on the scratch copy and show pin (2/2) turns red --
+# Staged: revert REGRESSION_SHIFT to 1 (the previous margin) on the scratch copy and show pin (2/2) turns red --
 # once the constant is 1 again, the DEFAULT-shift call becomes identical to pin (1/2)'s explicit
 # shift:1 call, so it reads no-regression instead of the expected inconclusive.
 node -e "
@@ -3458,8 +3440,8 @@ check "mutant (REGRESSION_SHIFT reverted to 1) is caught -- pin (2/2) now reads 
   " "$CVD_SCRATCH")" "no-regression"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
-# --- F-310 (Minor, pass-2 review): confirm, by direct execution, that CVD_SIM's own point-6 floor
-# barely discriminates a moderately over-conservative gate -- mutating ALPHA (D5) to 0.025 on a
+# --- confirm, by direct execution, that CVD_SIM's own point-6 floor
+# barely discriminates a moderately over-conservative gate -- mutating ALPHA to 0.025 on a
 # scratch copy and re-running CVD_SIM's own point-6 trial loop (unchanged T=600/RESAMPLES=3000,
 # committed seeds) below. The review's own report cited this mutant as "passing only by
 # floating-point rounding" (power 0.3000 read as >= a 0.30000000000000004 floor); reproduced here
@@ -3472,7 +3454,7 @@ cp "$ROOT/$CVD" "$CVD_SCRATCH"
 # mutant through -- the floor has essentially ZERO real margin against this specific mutant either
 # way, which is the actual defect this comment records. Not staged as a `check` -- there is nothing
 # stable to gate on a margin this thin; the committed guard against the underlying weakness is the
-# D13-population mutant staged right after, which has a real (non-hair-width) margin instead.
+# baseline-population mutant staged right after, which has a real (non-hair-width) margin instead.
 node -e "
   const fs = require('fs'); const p = '$CVD_SCRATCH'; const s = fs.readFileSync(p, 'utf8');
   const FROM = 'export const ALPHA = 0.05; // D5.';
@@ -3488,13 +3470,13 @@ F310_CONFIRM=$(cvj "$CVD_SIM
 echo "  (F-310 confirm -- CVD_SIM point 6 under ALPHA=0.025 mutant: $F310_CONFIRM)"
 cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
-# F-314 (Major, pass-2 review): the ALPHA=0.01 mutant staged here was reasoned about BACKWARDS --
-# "0.01 is stricter than F-310's own 0.025, so at least as hard a case" is wrong: a LOWER alpha
+# the ALPHA=0.01 mutant staged here was reasoned about BACKWARDS --
+# "0.01 is stricter than the earlier 0.025, so at least as hard a case" is wrong: a LOWER alpha
 # suppresses `equivalence.p < alpha` MORE, so the healthy-pair no-regression rate FALLS further,
 # which makes 0.01 the EASIER mutant to catch, not the harder one. Measured directly at the OLD
 # T=600/RESAMPLES=3000: pristine 0.8300, ALPHA=0.025 -> 0.7283 (passed the OLD 0.6954 floor -- NOT
-# caught), ALPHA=0.01 -> 0.6150 (caught). The case F-310 actually named -- 0.025 -- escaped this
-# guard exactly as it escaped CVD_SIM's own, and `progress.md` reported F-310 fixed regardless.
+# caught), ALPHA=0.01 -> 0.6150 (caught). The case actually intended -- 0.025 -- escaped this
+# guard exactly as it escaped CVD_SIM's own, though it was reported fixed regardless.
 #
 # The root cause is the floor's WIDTH, not its target: 5x its own Monte Carlo SE at T=600 is
 # +/-0.0846 around 0.78, ~8 SE below the true ~0.83 rate -- room enough for a moderately
@@ -3529,16 +3511,15 @@ cp "$ROOT/$CVD" "$CVD_SCRATCH"
 
 # --- points 1, 2 and 6: Monte-Carlo property bounds on the verdict logic built atop the already-
 # oracle-verified rank procedure (3.2 owns rank-procedure correctness; this does not re-check it).
-# All three draw from D5's own tied historical histogram ({1:9,2:4,3:5,4:2,5:1}) via CVD_SIM,
+# All three draw from the tied historical histogram ({1:9,2:4,3:5,4:2,5:1}) via CVD_SIM,
 # defined above (before the mutation section, since mutant D's second check needs it too). Trial/
-# resample counts are stated so every tolerance is derived, never loosened to fit (spec.md §7).
+# resample counts are stated so every tolerance is derived, never loosened to fit.
 #
-# D16 (REGRESSION_SHIFT 1 -> 0.5): point 1's target is UNCHANGED -- `regression` is decided from
+# margin change (REGRESSION_SHIFT 1 -> 0.5): point 1's target is UNCHANGED -- `regression` is decided from
 # `primary.p < alpha` alone, before `compareArms()` ever reads `shift` (see the early return above
-# `shifted` is computed), so this rate is a function of ALPHA and D5's sigma only, never the margin.
+# `shifted` is computed), so this rate is a function of ALPHA and the historical sigma only, never the margin.
 # Checked directly, not assumed: re-run against the tracked module with shift explicitly 1 and 0.5,
-# both gave 0.0367 to four decimals, same seeds. Left as-is; this is the D2-sigma case this
-# iteration's own instructions say to leave alone and note, not re-derive.
+# both gave 0.0367 to four decimals, same seeds. Left as-is; this is the original-sigma case, left alone and noted rather than re-derived.
 POINT1=$(cvj "$CVD_SIM
   let regressions = 0;
   for (let t = 0; t < T; t++) {
@@ -3552,7 +3533,7 @@ echo "  (point 1 measured: $POINT1)"
 check "point 1 -- one-sided size bound: empirical regression rate on UNSHIFTED (null) pairs <= 0.05 + 5x its own Monte Carlo SE, T=600 (one-sided, not a tight two-sided interval; margin-invariant, D16 -- see comment above)" \
   "$(echo "$POINT1" | awk '{print $2}')" "true"
 
-# D16: this bound DOES depend on the margin, and is re-derived, not left in place. The scenario is
+# Margin change: this bound DOES depend on the margin, and is re-derived, not left in place. The scenario is
 # unchanged (a genuinely +1-pass-degraded arm) but the margin no longer sits AT that effect size --
 # at REGRESSION_SHIFT=1 the shifted candidate reduces to a resample of the baseline's own
 # distribution (a null test, false-accept rate near ALPHA, which is why the old target was 0.08).
@@ -3560,7 +3541,7 @@ check "point 1 -- one-sided size bound: empirical regression rate on UNSHIFTED (
 # reads significant. Re-measured (this exact CVD_SIM population/seeds, module REGRESSION_SHIFT=0.5):
 # 0.33% at T=600; independently reconfirmed across 5 other seed/resample/trial-count combinations
 # (T up to 6000) at 0.20%-0.33%, never above -- the range this target is drawn from, same method
-# phase 3 used to set the original 0.08 from its own "4.7-8% depending on resample count" scan.
+# used to set the original 0.08 from its own "4.7-8% depending on resample count" scan.
 # Target 0.005 sits above every measured reading, not fitted to the committed run's own 0.33%.
 POINT2=$(cvj "$CVD_SIM
   let falseAccepts = 0;
@@ -3575,36 +3556,36 @@ echo "  (point 2 measured: $POINT2)"
 check "point 2 -- bound the false no-regression rate on truly-shifted (+1 pass, degraded) arms: <= 0.005 + 5x its own Monte Carlo SE, T=600 -- re-derived for D16's 0.5 margin (was 0.08 at margin 1; see comment above), the number the three-state verdict exists to control" \
   "$(echo "$POINT2" | awk '{print $2}')" "true"
 
-# point 6's SECOND half (F-221, Blocker): a lower bound on the no-regression rate for UNSHIFTED
+# point 6's SECOND half: a lower bound on the no-regression rate for UNSHIFTED
 # (healthy) pairs -- the direction NOTHING else in this suite bounds. Reuses estimatePower()
-# itself (built once inside convergence.mjs, F-223), not a hand-rolled reimplementation of the
+# itself (built once inside convergence.mjs), not a hand-rolled reimplementation of the
 # same trial loop -- CVD_SIM's own `drawOne` is passed straight through.
 #
-# D16: the old floor was D2's own STATED normal-approximation power for a +1-pass shift (0.716),
+# Margin change: the old floor was the original STATED normal-approximation power for a +1-pass shift (0.716),
 # which happened to sit within ~1 point of this test's own tie-conditional measurement (~0.72) at
 # margin 1 -- a coincidence of that specific margin, not a property of the method. At margin
-# 0.5 the same normal-approximation formula (d = 0.5/1.236354, n=15, decisions.md#d2's own
+# 0.5 the same normal-approximation formula (d = 0.5/1.236354, n=15, the original
 # Phi(d*sqrt(n/2) - z_0.05)) predicts ~29.6% -- but the ACTUAL tie-conditional Monte Carlo rate
-# (the real, in-use test, D3/D5) measures materially higher: 39.8%-42.65% across 5 independent
+# (the real, in-use test) measures materially higher: 39.8%-42.65% across 5 independent
 # seed/resample/trial-count combinations, including the committed seeds' own 42.5%. The normal
-# approximation is known invalid for this heavily-tied integer data (D3's own correction) -- more
+# approximation is known invalid for this heavily-tied integer data (a known correction) -- more
 # so the smaller the effect, since ties dominate a smaller shift more. The floor below is derived
 # from the MEASURED range -- target 0.40 is CLOSE to that range, NOT below every reading in it (the
-# lowest scan, 39.8%, sits below 0.40 -- corrected here, F-312: an earlier pass-1 version of this
+# lowest scan, 39.8%, sits below 0.40 -- corrected here: an earlier version of this
 # comment claimed the opposite, "sits at/below every reading," which was false by inspection of its
 # own cited numbers). The real safety margin is the floor's own 5x-Monte-Carlo-SE subtraction (0.40
 # -> 0.30), which every one of the 39.8%-42.65% readings clears comfortably; the target itself is
 # not, and does not need to be, a lower bound on the scan -- only the floor does that job.
 #
-# F-309/F-310 (pass-2 review): this is CVD_SIM's stress-case population (D5, sd~1.24) -- see the
+# this is CVD_SIM's stress-case population (sd~1.24) -- see the
 # relabeling comment at CVD_SIM's own definition above. This floor is also known WEAK against a
 # moderately over-conservative gate specifically: an ALPHA=0.025 mutant measures 180/600=0.3000
 # here, against a floor of 0.30000000000000004 -- one ULP-scale hair below it (verified above: this
 # specific committed run is barely CAUGHT, not a silent pass, but a single trial's outcome either
 # way, 179 or 181 of 600, would flip the verdict). Effectively zero real margin either direction,
-# which is the actual weakness -- not fixed here since CVD_SIM is the deliberate stress case (F-309).
-# The D13-population analogue below does not share this weakness -- staged against the SAME
-# ALPHA=0.025 mutant that nearly slipped past CVD_SIM's own floor here (F-314: not the easier
+# which is the actual weakness -- not fixed here since CVD_SIM is the deliberate stress case.
+# The baseline-population analogue below does not share this weakness -- staged against the SAME
+# ALPHA=0.025 mutant that nearly slipped past CVD_SIM's own floor here (not the easier
 # ALPHA=0.01 substitute this comment cited before), at a widened T=3000/RESAMPLES=1500 (the floor's
 # WIDTH, not its target, was the actual gap), it is caught with a real (non-hair-width) margin,
 # 0.7120 against a 0.7422 floor -- ~90 trials at T=3000, not a single-trial hair.
@@ -3618,30 +3599,29 @@ echo "  (point 6 measured: $POINT6)"
 check "point 6 (2/2) -- lower bound on the no-regression rate for UNSHIFTED (healthy) pairs, >= 0.40 (measured tie-conditional floor, D16 -- was D2's stated 0.716 at margin 1) minus 5x its own Monte Carlo SE, T=600 -- bounds the direction F-221 found unbounded" \
   "$(echo "$POINT6" | awk '{print $2}')" "true"
 
-# --- D13-population analogues (F-309, pass-2 review, 2026-09-14): D15 measured that D13's real
-# baseline (decisions.md#d13, [2,1,2,1,2,1,1,2,1,1,2,2,2,1,2], mean 1.5333, sd 0.5164) is the
-# population the D16-gated /code-loop comparison actually draws from, NOT D5's wider mixed-history
+# --- baseline-population analogues: it was measured that the real
+# baseline ([2,1,2,1,2,1,1,2,1,1,2,2,2,1,2], mean 1.5333, sd 0.5164) is the
+# population the margin-gated /code-loop comparison actually draws from, NOT the wider mixed-history
 # one CVD_SIM uses (point 2/6 above). Re-derived independently here by bootstrap resampling
-# (CVD_SIM_D13, defined near CVD_SIM above), own committed seeds. T differs per check (F-317,
-# pass-3 review): the point-2 analogue below runs at the preamble's own T=600/RESAMPLES=3000; the
-# point-6 analogue runs at T=3000/RESAMPLES=1500, widened by F-314 because the floor's width
-# depends on T alone. Not copied from D15/D16's own runs/2026-09-14-4.2-power-resample*.mjs scripts
-# (which share one rng stream where this suite's F-233 discipline keeps three -- a design
+# (CVD_SIM_D13, defined near CVD_SIM above), own committed seeds. T differs per check: the point-2 analogue below runs at the preamble's own T=600/RESAMPLES=3000; the
+# point-6 analogue runs at T=3000/RESAMPLES=1500, widened because the floor's width
+# depends on T alone. Not copied from the earlier resampling scripts
+# (which share one rng stream where this suite's discipline keeps three -- a design
 # difference, NOT the reason the two readings differ; see the point-2 analogue's own note below),
 # so the two are expected to agree in MAGNITUDE, not to the decimal, as independent Monte Carlo
 # estimates of the same quantity.
 
-# D13 point 6 analogue: healthy-pair (no injected degradation) no-regression rate.
+# baseline point 6 analogue: healthy-pair (no injected degradation) no-regression rate.
 #
-# F-314 (Major, pass-2 review): T/RESAMPLES for THIS check widened from the shared CVD_SIM_D13
+# T/RESAMPLES for THIS check widened from the shared CVD_SIM_D13
 # preamble's T=600/RESAMPLES=3000 to T=3000/RESAMPLES=1500 -- trials raised, resamples traded down,
 # ~2.5x wall cost (single-digit seconds); the floor's width depends on T alone
 # -- the floor's WIDTH, not its target, was what let a moderately over-conservative gate
-# (ALPHA=0.025, F-310's own case) escape at T=600: 5x this floor's own Monte Carlo SE there is
+# (ALPHA=0.025, the intended case) escape at T=600: 5x this floor's own Monte Carlo SE there is
 # 0.0846, ~8 SE below the true ~0.83 rate, room enough to hide a real weakening of the gate's own
 # strictness. At T=3000 the same 5x SE shrinks to ~0.0378 -- see the ALPHA mutant staged against
-# this exact check, in the mutation section above (F-314 for the full derivation and the
-# subsumption of the easier ALPHA=0.01 substitute).
+# this exact check, in the mutation section above (it also subsumes the
+# easier ALPHA=0.01 substitute).
 #
 # Re-scanned at the new T (my own scan, not pasted from the review): 10 independent
 # seed/resample/trial-count combinations, T in [1500,4000], resamples in [1000,1800]: range
@@ -3649,7 +3629,7 @@ check "point 6 (2/2) -- lower bound on the no-regression rate for UNSHIFTED (hea
 # expected, since a larger T narrows precision, not the expected value). Target stays 0.78. It sits
 # below every reading in THIS scan, but that is not relied on as a guaranteed property of the
 # population -- the "strictly below" framing this comment used to make is exactly the overclaim
-# `F-312`/`F-315` found elsewhere in this file (a wider scan can always turn up a lower reading, as
+# found elsewhere in this file (a wider scan can always turn up a lower reading, as
 # it did for the CVD_SIM point 6 target and for this same target at the old T=600 width). The real
 # safety margin is the floor's own 5x-Monte-Carlo-SE subtraction (0.78 -> ~0.7422 at T=3000), which
 # every one of the 10 readings above clears with real room (>=0.0425).
@@ -3664,32 +3644,32 @@ echo "  (D13 point 6 analogue measured, T=3000/RESAMPLES=1500: $D13_POINT6)"
 check "D13-population point 6 analogue -- lower bound on the no-regression rate for UNSHIFTED (healthy) pairs drawn from the REAL baseline population, >= 0.78 minus 5x its own Monte Carlo SE, T=3000 (F-309/F-314: this is what the operative D16 gate's real accept rate looks like, not CVD_SIM's stress-case figure)" \
   "$(echo "$D13_POINT6" | awk '{print $2}')" "true"
 
-# D13 point 2 analogue: false no-regression rate under a genuinely +0.5-pass DEGRADED candidate --
-# the SAME "each draw gains a pass with probability 0.5" model D15/D16's own resampling used to
-# report "+0.5 pass" (distinct from points 1/2's own flat +1 CVD_SIM shift above, which models D2's
-# original H1). Scanned across 8 independent seed/resample/trial-count combinations: range measured
+# baseline point 2 analogue: false no-regression rate under a genuinely +0.5-pass DEGRADED candidate --
+# the SAME "each draw gains a pass with probability 0.5" model the earlier resampling used to
+# report "+0.5 pass" (distinct from points 1/2's own flat +1 CVD_SIM shift above, which models the
+# original alternative hypothesis). Scanned across 8 independent seed/resample/trial-count combinations: range measured
 # [0.0533, 0.0883] (committed seeds: 0.0767). Target set to 0.10, strictly ABOVE every reading in
-# that scan -- comfortably clear of D16's own cited ~5.3%.
+# that scan -- comfortably clear of the earlier cited ~5.3%.
 #
-# F-316 (Minor, pass-2 review): a prior version of this comment attributed the gap between this
-# harness's reading (0.0767) and D16's cited ~5.3% to rng-stream discipline (three independent
-# streams here vs. one shared stream in D15/D16's own script). Wrong on two counts, checked
+# a prior version of this comment attributed the gap between this
+# harness's reading (0.0767) and the earlier cited ~5.3% to rng-stream discipline (three independent
+# streams here vs. one shared stream in the earlier script). Wrong on two counts, checked
 # directly rather than assumed. (1) The degradation model does NOT differ: both apply
-# `Bernoulli(0.5) + 1` to the same bootstrapped draw (`bumpRng() < 0.5 ? 1 : 0` here;
-# `rng() < 0.5 ? v+1 : v` in `runs/2026-09-14-4.2-power-resample.mjs` -- read side by side, not
+# a Bernoulli draw with p=0.5, plus 1, to the same bootstrapped draw (`bumpRng() < 0.5 ? 1 : 0` here;
+# `rng() < 0.5 ? v+1 : v` in the earlier resampling script -- read side by side, not
 # just described). (2) Stream-sharing reads HIGHER than three streams, not lower -- the opposite
 # sign a "three streams understate it" story would need: an independent scan (shared-stream mean
 # 0.0700 across 10 seeds vs. three-stream mean 0.0680 across 10 combinations, both at
 # T=600/RESAMPLES=3000) shows no systematic direction from stream count at all.
 #
-# The gap is Monte Carlo noise, not methodology. D16's cited 5.3% is 16 of 300 trials at its own
+# The gap is Monte Carlo noise, not methodology. The earlier cited 5.3% is 16 of 300 trials at its own
 # script's defaults (SE = sqrt(0.053*0.947/300) ~= 1.3%); re-running that SAME script
-# (`runs/2026-09-14-4.2-power-resample.mjs`, unedited, its own defaults) just now gives **7.0%** --
+# (the earlier resampling script, unedited, its own defaults) just now gives **7.0%** --
 # about 1.3 SE from the recorded 5.3%, i.e. ordinary trial-to-trial noise at TRIALS=300, not a
 # discrepancy needing a cause. This harness's own three-stream committed reading is 0.0767; an
 # independent 10+10-seed scan combining both stream disciplines spans [0.0483, 0.0850]. All of this
 # sits well inside the target's own 0.10 bound. The three-independent-streams discipline itself
-# stays (F-233's own no-shared-call-count-dependency reasoning, restated at CVD_SIM_D13's
+# stays (the no-shared-call-count-dependency reasoning, restated at CVD_SIM_D13's
 # definition above) -- it is a design choice made for its own reason, not an explanation for a
 # discrepancy that turned out to be ordinary sampling noise.
 D13_POINT2=$(cvj "$CVD_SIM_D13

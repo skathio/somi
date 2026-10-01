@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Phase 4 exit criterion: a `rules/` trim that removes or reworsds a digest bullet must update
+// Exit criterion for trimming rules/: a `rules/` trim that removes or reworsds a digest bullet must update
 // tests/hooks/cases/inject-workflow-context.json's marker in the SAME attempt.
 //
-// Why this needs a guard rather than a note. Phase 1 added a fixture PAIR on that bullet — a
+// Why this needs a guard rather than a note. The hook tests carry a fixture PAIR on that bullet — a
 // positive assertion (the digest contains it) and a negative one (Tier 2 is omitted when the
 // markers are malformed). Trim the bullet away and the positive assertion pins a substring that
 // no longer exists anywhere, so it fails loudly... but only if some case still expects it to be
 // PRESENT. The cases that merely carry it as incidental context go quietly vacuous, and the pair
 // stops testing the thing it was built for while the suite stays green.
 //
-// Phase 4's own scope note calls this out: the trim candidates include `rules/`, which is where
+// Trimming is the risk: the trim candidates include `rules/`, which is where
 // the digest comes from. The guard exists so the coupling is mechanical rather than remembered.
 
 import { readFileSync } from 'node:fs';

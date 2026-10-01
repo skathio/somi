@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Unit guard for tests/evals/convergence.mjs's CLI section (phase 3, iteration 3.4): argument
+# Unit guard for tests/evals/convergence.mjs's CLI section: argument
 # parsing, --dry-run's shape/zero-model-call contract, --merge/--certify's shard-fold report, and
-# F-251's sha boundary check.
+# the sha boundary check.
 #
 # Hermetic by construction: every case here is --dry-run, --merge/--certify (read-only, no
 # --source resolution, no credential), or a direct call into an exported CLI helper -- never a
-# live /code-loop draw. eval-runner.sh already covers 3.1-3.3's non-CLI logic (the extractor, the
+# live /code-loop draw. eval-runner.sh already covers the non-CLI logic (the extractor, the
 # rank test, classifyDraw/fillArm/compareArms/the shard/resume layer); this file is scoped to what
-# 3.4 alone adds, so the two stay disjoint rather than duplicating each other.
+# the CLI alone adds, so the two stay disjoint rather than duplicating each other.
 #
-# Exception (phase 4, iteration 4.1 pass 2, F-267): terminalVerdict()/writeNextShard()'s new
+# Exception: terminalVerdict()/writeNextShard()'s new
 # `verdict` param/makeShardWriter() are shard/resume-layer additions, eval-runner.sh's stated home
-# -- pinned here instead because this pass's own scope is exactly these three files, not
+# -- pinned here instead because the scope here was exactly these three files, not
 # eval-runner.sh. Still fully hermetic (synthetic loop-state objects and scratch shas only, per
 # this pass's own instruction not to spend a live draw), so it belongs with everything else in
 # this file that shares that property, disjointness convention notwithstanding.
@@ -31,9 +31,9 @@ cj() { node --input-type=module -e "const M = await import('$ROOT/$CVD'); $1" 2>
 
 echo "== convergence gate CLI (3.4) =="
 
-# --- F-251: sha is a documented CLI input surface now; validateSha() is the boundary check ------
+# --- sha is a documented CLI input surface now; validateSha() is the boundary check ------
 # `sha` reaches join() inside loopShardPath()/loopShardDir() unvalidated -- these cases pin the
-# boundary check itself, both directions (spec.md §7: a gate's suite must not only catch the bad
+# boundary check itself, both directions (a gate's suite must not only catch the bad
 # input, it must also let a genuinely conforming one through).
 check "validateSha accepts a real (40-char) git sha" \
   "$(cj "process.stdout.write(M.validateSha('7c0ac2615fe6a14e3135d645645c59f1e38bd3bf'))")" \
@@ -68,11 +68,11 @@ escape_check=$(cj "
 check "loopShardPath() itself has no traversal guard -- a raw '../../../tmp/f251-probe' sha resolves OUTSIDE results/ (this is what validateSha() at the CLI boundary exists to prevent)" \
   "$escape_check" "true"
 
-# Staged against a SCRATCH COPY, never the tracked file (spec.md §7): neuter validateSha()'s own
+# Staged against a SCRATCH COPY, never the tracked file: neuter validateSha()'s own
 # regex test so it can never throw, then drive the REAL CLI entrypoint (`--merge`) against it with
 # the same traversal string above. The mutant must reach loopShardPath() with the traversal intact
 # -- caught by checking the mutant's own reportArm() computes a path outside results/, the exact
-# consequence F-251 names. Reverting restores the guard; the pristine file is checked last so this
+# consequence the boundary check exists to prevent. Reverting restores the guard; the pristine file is checked last so this
 # suite ends by re-confirming the shipped behaviour, not the mutant's.
 F251_SCRATCH_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 trap 'rm -rf "$F251_SCRATCH_DIR"' EXIT
@@ -118,7 +118,7 @@ check "--dry-run --runs 5 threads the requested count through" \
   "$(node "$CVD" --dry-run --source HEAD --runs 5 | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).runsRequested)))")" \
   "5"
 
-# --- F-300: --dry-run echoes the wait budget a live draw would actually use -- previously silent
+# --- --dry-run echoes the wait budget a live draw would actually use -- previously silent
 # on it, so nothing confirmed a --max-wait-attempts value (or the implied default above) was the
 # one that would apply before spending quota on the real draw.
 check "--dry-run --max-wait-attempts 6 echoes the SUPPLIED value, not the default" \
@@ -127,7 +127,7 @@ check "--dry-run --max-wait-attempts 6 echoes the SUPPLIED value, not the defaul
 
 # Mutation: prove the dry-run echo can actually fail to reflect the real value. Staged on a scratch
 # copy, never the tracked file. Unversioned source (--source ., sha null) so this stays hermetic
-# and quick, the same choice the F-284 pin mutation test below makes for the same reason.
+# and quick, the same choice the fixture-pin mutation test below makes for the same reason.
 F300_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 trap 'rm -rf "$F300_MUT_DIR"' EXIT
 F300_MUT="$F300_MUT_DIR/convergence.mjs"
@@ -156,7 +156,7 @@ node "$CVD" --dry-run --source HEAD >/dev/null
 wt_after=$(git worktree list | wc -l | tr -d ' ')
 check "--dry-run cleans up its resolved worktree (no leak)" "$wt_after" "$wt_before"
 
-# --- --dry-run: zero model calls, proven by execution (F-147's own technique), not by reading ---
+# --- --dry-run: zero model calls, proven by execution (the same technique as eval-runner.sh), not by reading ---
 # A stub `claude` on PATH proves NO route reaches the model -- not just that reading the dry-run
 # branch shows no invokeCommand() call.
 stub_bin=$(mktemp -d)
@@ -166,15 +166,15 @@ chmod +x "$stub_bin/claude"
 PATH="$stub_bin:$PATH" node "$CVD" --dry-run --source HEAD >/dev/null 2>&1
 check "no route from --dry-run reaches a stub claude on PATH (sentinel stays absent)" \
   "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "ABSENT"
-# Positive control (F-155's own technique): proves the stub is reachable on PATH at all.
+# Positive control (same technique as eval-runner.sh): proves the stub is reachable on PATH at all.
 PATH="$stub_bin" claude >/dev/null 2>&1
 check "positive control: claude invoked directly under the same stub touches the sentinel" \
   "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "TOUCHED"
 rm -rf "$stub_bin"
 
 # --- live mode preflights BEFORE resolveSource's worktree checkout ------------------------------
-# Simulated by stripping PATH/HOME so neither the CLI nor a credential resolves (eval-runner.sh's
-# own F-229 technique), never by mocking preflight() itself. A worktree created despite this would
+# Simulated by stripping PATH/HOME so neither the CLI nor a credential resolves (the same technique as
+# eval-runner.sh), never by mocking preflight() itself. A worktree created despite this would
 # mean the CLI paid for a checkout it could never use.
 NODE_BIN=$(command -v node)
 wt_before2=$(git worktree list | wc -l | tr -d ' ')
@@ -213,10 +213,10 @@ check "--merge on a sha with zero shards on disk reports 0/N, mean/sd n/a rather
 check "--merge with an invalid sha is rejected before anything is read (F-251, at the CLI itself)" \
   "$(node "$CVD" --merge '../../../etc/passwd' >/dev/null 2>&1; echo $?)" "1"
 
-# --- F-267: shards carry the loop's terminal verdict alongside its pass count -------------------
-# Phase 4 iteration 4.1's first live batch (diary.md, 2026-09-05) showed task02-code sitting at
+# --- shards carry the loop's terminal verdict alongside its pass count -------------------
+# The first live batch showed task02-code sitting at
 # the pass-count floor (arm [1,1,1], mean 1.0, sd 0.0) with no retained artifact able to say WHY
-# -- the shard carried only `pass`, and cleanup() (F-226) correctly destroys the workDir the
+# -- the shard carried only `pass`, and cleanup() correctly destroys the workDir the
 # instant a draw completes. terminalVerdict() (lib/convergence.mjs) is the read side;
 # writeNextShard()'s new `verdict` param and makeShardWriter() (this module) are the write side
 # that threads it into the shard.
@@ -224,8 +224,8 @@ LCONV=tests/evals/lib/convergence.mjs
 lj() { node --input-type=module -e "const L = await import('$ROOT/$LCONV'); $1" 2>&1; }
 
 # terminalVerdict() fails safe, same posture as passesToApprove()/capBreached() -- those two's own
-# extractor-level tests live in eval-runner.sh's "3.1" section; terminalVerdict() is pinned here
-# instead per this file's own F-267 exception above.
+# extractor-level tests live in eval-runner.sh's extractor section; terminalVerdict() is pinned here
+# instead per this file's own exception above.
 check "terminalVerdict(null) is null (fails safe)" \
   "$(lj "process.stdout.write(String(L.terminalVerdict(null)));")" "null"
 check "terminalVerdict(undefined) is null" \
@@ -272,7 +272,7 @@ check "pristine lib/convergence.mjs (mutation reverted -- a fresh copy, not the 
 rm -rf "$F267_MUT_DIR"
 trap - EXIT
 
-# --- F-268: terminalVerdict() alone can't tell a real coder/reviewer round trip from a loop that
+# --- terminalVerdict() alone can't tell a real coder/reviewer round trip from a loop that
 # approved an untouched tree ({pass:1, verdict:'approve'} is exactly what a do-nothing loop would
 # also write) -- terminalOutcome() widens the extraction to the whole terminal entry. Same
 # fail-safe posture, each field independently null -- a missing count reads as "unknown", not 0.
@@ -293,7 +293,7 @@ check "terminalOutcome: wrong-typed/negative counts are not coerced -- null, not
   '{"verdict":"approve","blockers":null,"majors":null,"diffLines":null}'
 
 # --- writeNextShard(): the new `verdict` parameter, and backward compatibility for every
-# pre-F-267 6-arg call site (this file's own MERGE_SHA writes above, eval-runner.sh's F-248 tests) -
+# pre-verdict 6-arg call site (this file's own MERGE_SHA writes above, eval-runner.sh's shard-write tests) -
 F267_SHA1="f267verdict$(date +%s)"
 verdict_written=$(cj "
   const fs = await import('node:fs');
@@ -383,11 +383,11 @@ rm -rf "$F267_C1_DIR"
 trap - EXIT
 rm -rf "$ROOT/tests/evals/results/$F267_LEGACY_SHA"
 
-# --- F-276: a censored draw retains a diagnostic record (elapsed wall-clock, wait attempts, ------
-# last-seen loop state) -- phase 4 iteration 4.4. 4.1's own first live batch showed three draws
+# --- a censored draw retains a diagnostic record (elapsed wall-clock, wait attempts, ------
+# last-seen loop state) -- the first live batch showed three draws
 # read back as still-`running`; once the wait budget is exhausted, fillArm() previously discarded
 # the last-read state entirely -- no shard is written and the workDir is cleaned up, so "the loop
-# was genuinely slow" (cost-correlated, F-185) and "the subprocess died in thirty seconds"
+# was genuinely slow" (cost-correlated) and "the subprocess died in thirty seconds"
 # (uncorrelated with cost) were indistinguishable from any retained artifact. censoredDrawSnapshot()
 # (lib/convergence.mjs) is the read side; fillArm()'s new `censor` field and writeCensorRecord()
 # (this module) are the write side. Does NOT change what counts as a usable draw or the censoring
@@ -405,9 +405,8 @@ MK_SEQ_DRAW='
 # censoredDrawSnapshot() fails safe, same posture as terminalVerdict()/terminalOutcome() above --
 # always an object (the caller only calls this once a censoring event is already known to have
 # happened); status/historyEmpty independently null on an unrecognised shape, stateReadable always
-# a determinate boolean (F-279, code-loop pass 2 review). `pass`/`lastVerdict` (F-294/F-295, phase
-# 4 iteration 4.6) added below, same fail-safe posture -- see the function's own docstring.
-# `completedPasses` (F-296, pass-1 review) added alongside: `pass` alone is the pass most recently
+# a determinate boolean. `pass`/`lastVerdict` are added below, same fail-safe posture -- see the function's own docstring.
+# `completedPasses` added alongside: `pass` alone is the pass most recently
 # STARTED, possibly still in progress, never "the last completed pass" -- `completedPasses`
 # (`history.length`) is the disambiguator that says which pass `lastVerdict` actually belongs to.
 check "censoredDrawSnapshot(null) is {status:null,historyEmpty:null,stateReadable:false,pass:null,completedPasses:null,lastVerdict:null} (fails safe)" \
@@ -437,17 +436,17 @@ check "censoredDrawSnapshot: wrong-typed status/history are not coerced -- null,
 check "F-279: stateReadable now separates 'no readable state at all' (null) from 'state read but malformed' ({status:7,...}) -- previously both collapsed to the identical {status:null,historyEmpty:null} record" \
   "$(lj "process.stdout.write(JSON.stringify([L.censoredDrawSnapshot(null).stateReadable, L.censoredDrawSnapshot({status:7,history:'nope'}).stateReadable]));")" \
   '[false,true]'
-# F-294/F-295: a draw that HAS iterated (a real top-level pass count, a real prior verdict in
+# a draw that HAS iterated (a real top-level pass count, a real prior verdict in
 # history) surfaces the new fields with real, non-null values -- not merely a null-shaped
 # addition every case above would also pass if pass/lastVerdict were wired to always return null.
 # This case's history has exactly ONE entry (completedPasses:1), so `pass:2` reads as "mid-pass 2"
-# -- lastVerdict belongs to the ALREADY-completed pass 1, not to `pass` itself (F-296).
+# -- lastVerdict belongs to the ALREADY-completed pass 1, not to `pass` itself.
 check "censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'approve-with-comments'}]}) reports the real pass count and the real last verdict; completedPasses:1 -- pass 2 is still IN PROGRESS, one pass behind pass" \
   "$(lj "process.stdout.write(JSON.stringify(L.censoredDrawSnapshot({status:'running',pass:2,history:[{pass:1,verdict:'approve-with-comments'}]})));")" \
   '{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":1,"lastVerdict":"approve-with-comments"}'
-# F-296/F-297: the OTHER ambiguous case `pass` alone cannot distinguish from the one above -- pass 2
+# the OTHER ambiguous case `pass` alone cannot distinguish from the one above -- pass 2
 # has ALSO just been recorded (completedPasses:2 == pass), and lastVerdict is pass 2's OWN verdict,
-# not pass 1's. Two-entry history with DIFFERING verdicts also closes F-297 (a mutant reading
+# not pass 1's. Two-entry history with DIFFERING verdicts also closes the terminal-entry case (a mutant reading
 # history[0] instead of the terminal entry would report 'request-changes', the FIRST verdict, not
 # 'approve-with-comments').
 check "censoredDrawSnapshot({status:'running',pass:2,history:[pass1,pass2]}) -- completedPasses:2 (pass 2 already recorded), lastVerdict is pass 2's OWN verdict (the LAST entry), not pass 1's -- the case F-296's disambiguation exists to distinguish from the completedPasses:1 case above" \
@@ -479,7 +478,7 @@ check "pristine lib/convergence.mjs (mutation reverted -- a fresh copy, not the 
 rm -rf "$F295_MUT_DIR"
 trap - EXIT
 
-# Mutation: prove completedPasses can actually fail to be extracted (F-296) -- forced null, the
+# Mutation: prove completedPasses can actually fail to be extracted -- forced null, the
 # exact ambiguity this field exists to resolve. Staged on a scratch copy, never the tracked file.
 F296_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 trap 'rm -rf "$F296_MUT_DIR"' EXIT
@@ -504,7 +503,7 @@ check "pristine lib/convergence.mjs (mutation reverted -- a fresh copy, not the 
 rm -rf "$F296_MUT_DIR"
 trap - EXIT
 
-# Mutation: prove lastVerdict actually reads the TERMINAL entry, not the first one (F-297) -- every
+# Mutation: prove lastVerdict actually reads the TERMINAL entry, not the first one -- every
 # censoredDrawSnapshot() case above the two-entry one has at most ONE history entry, so a mutant
 # that reads history[0] instead of the last entry is indistinguishable from the correct
 # implementation on all of them; only the differing-verdicts two-entry case above can tell them
@@ -606,7 +605,7 @@ check "the exact assembly drawArmForSha() uses (fillArm's censor return + writeC
   "$wiring_censor" '{"arm":[],"waitExhausted":true,"persisted":{"status":"running","historyEmpty":true,"stateReadable":true,"pass":null,"completedPasses":0,"lastVerdict":null}}'
 rm -rf "$ROOT/tests/evals/results/$F276_WIRING_SHA"
 
-# F-294/F-295: the SAME real assembly, but the synthetic draw HAS iterated (a real pass count, a
+# the SAME real assembly, but the synthetic draw HAS iterated (a real pass count, a
 # real prior verdict) -- proving pass/lastVerdict aren't just structurally present-and-null through
 # this path, they carry the REAL returned snapshot's values end to end.
 F295_WIRING_SHA="f295wiring$(date +%s)"
@@ -624,7 +623,7 @@ check "F-295: a censored draw that HAS iterated persists BOTH new fields with re
   "$wiring_pass_verdict" '{"persisted":{"status":"running","historyEmpty":false,"stateReadable":true,"pass":2,"completedPasses":1,"lastVerdict":"approve-with-comments"}}'
 rm -rf "$ROOT/tests/evals/results/$F295_WIRING_SHA"
 
-# F-296: the SAME real assembly again, but with a two-entry history whose verdicts differ --
+# the SAME real assembly again, but with a two-entry history whose verdicts differ --
 # completedPasses:2 (pass 2 already recorded, not merely in progress) and lastVerdict is pass 2's
 # OWN verdict, distinguishing this real end-to-end case from the completedPasses:1 case above the
 # same way the two unit-level censoredDrawSnapshot() cases distinguish each other.
@@ -685,7 +684,7 @@ check "--help prints usage naming every documented flag" "$help_flags_present" "
 check "an unknown argument exits non-zero" "$(node "$CVD" --bogus >/dev/null 2>&1; echo $?)" "1"
 check "--runs 0 is rejected (must be a positive integer)" "$(node "$CVD" --dry-run --runs 0 >/dev/null 2>&1; echo $?)" "1"
 check "--runs -1 is rejected" "$(node "$CVD" --dry-run --runs -1 >/dev/null 2>&1; echo $?)" "1"
-# F-294: same validation SHAPE as --runs above, not a second hand-rolled check.
+# same validation SHAPE as --runs above, not a second hand-rolled check.
 check "--max-wait-attempts 0 is rejected (must be a positive integer)" "$(node "$CVD" --dry-run --max-wait-attempts 0 >/dev/null 2>&1; echo $?)" "1"
 check "--max-wait-attempts -1 is rejected" "$(node "$CVD" --dry-run --max-wait-attempts -1 >/dev/null 2>&1; echo $?)" "1"
 check "--max-wait-attempts 1.5 is rejected (not an integer)" "$(node "$CVD" --dry-run --max-wait-attempts 1.5 >/dev/null 2>&1; echo $?)" "1"
@@ -693,10 +692,10 @@ check "--max-wait-attempts 3 is accepted" "$(node "$CVD" --dry-run --max-wait-at
 for flag in --source --fixture --runs --model --max-wait-attempts --merge --certify; do check "$flag with no operand is rejected, not silently defaulted (F-252/F-253)" "$(node "$CVD" "$flag" >/dev/null 2>&1; echo $?)" "1"; done
 for flag in --merge --certify; do check "$flag with an empty operand is rejected (F-259)" "$(node "$CVD" "$flag" "" >/dev/null 2>&1; echo $?)" "1"; done
 
-# --- F-263: --fixture/--source/--model have exactly ONE defender (val()'s own `v === ''` clause),
+# --- --fixture/--source/--model have exactly ONE defender (val()'s own `v === ''` clause),
 # no downstream validator the way --merge/--certify have (val() + the `!== null` guard +
-# validateSha()) -- so this case, unlike F-259's, had no committed test at all before this pass.
-for flag in --source --fixture --model; do check "$flag with an empty operand is rejected (F-261)" "$(node "$CVD" --dry-run "$flag" "" >/dev/null 2>&1; echo $?)" "1"; done
+# validateSha()) -- so this case, unlike the --merge case, had no committed test at all before this pass.
+for flag in --source --fixture --model; do check "$flag with an empty operand is rejected" "$(node "$CVD" --dry-run "$flag" "" >/dev/null 2>&1; echo $?)" "1"; done
 check "--fixture -h is rejected as a flag-shaped operand, not silently accepted as a literal value (F-262)" \
   "$(node "$CVD" --dry-run --fixture -h >/dev/null 2>&1; echo $?)" "1"
 check "--max-wait-attempts with an empty operand is rejected (F-294, same val() layer as --runs)" \
@@ -714,8 +713,8 @@ PATH="$stub_bin" claude >/dev/null 2>&1
 check "positive control: same stub still reachable (F-259 re-confirmation)" "$([ -e "$stub_sentinel" ] && echo TOUCHED || echo ABSENT)" "TOUCHED"
 rm -rf "$stub_bin"
 
-# Mutation: prove the F-261 cases above actually depend on val()'s `v === ''` clause -- the
-# reviewer's own measurement was that today they would NOT redden if it were removed. Staged on a
+# Mutation: prove the empty-operand cases above actually depend on val()'s `v === ''` clause -- the
+# measurement was that they would NOT redden if it were removed. Staged on a
 # scratch copy, never the tracked file.
 F263_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 trap 'rm -rf "$F263_MUT_DIR"' EXIT
@@ -739,9 +738,8 @@ check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the muta
 rm -rf "$F263_MUT_DIR"
 trap - EXIT
 
-# --- F-294: --max-wait-attempts reaches fillArm(), not just parseArgs() -------------------------
-# "This repo has repeatedly had flags that parse correctly and do nothing" (phase 4 iteration
-# 4.6's own instruction) -- so this drives the REAL parseArgs() output into the REAL fillArm(),
+# --- --max-wait-attempts reaches fillArm(), not just parseArgs() -------------------------
+# "This repo has repeatedly had flags that parse correctly and do nothing" (a standing instruction) -- so this drives the REAL parseArgs() output into the REAL fillArm(),
 # rather than asserting only that parseArgs() produces the right field under the right key. A
 # synthetic single-slot arm reports 'running' three times before completing: at the DEFAULT budget
 # (DEFAULT_MAX_WAIT_ATTEMPTS = 2) it exhausts (waitAttempts 3 > 2); parsed through
@@ -763,7 +761,7 @@ check "--max-wait-attempts 5 (parsed via the real parseArgs()): the SAME synthet
     process.stdout.write(JSON.stringify({ waitExhausted: r.waitExhausted, arm: r.arm }));
   ")" '{"waitExhausted":false,"arm":[1]}'
 
-# --- F-298 (pass-1 review): the anchor above USED TO BE a `grep -c` for the literal substring
+# --- the anchor above USED TO BE a `grep -c` for the literal substring
 # 'maxWaitAttempts: args.maxWaitAttempts' -- a substring match a mutant can satisfy while changing
 # what the code DOES: `args.maxWaitAttempts && 0` still contains that exact text (the review's own
 # measurement: this mutant survived the full 134/0 suite untouched) while silently collapsing any
@@ -877,7 +875,7 @@ check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the muta
 rm -rf "$F294_WIRING_MUT_DIR"
 trap - EXIT
 
-# --- F-284 (first defect): the shard namespace carries no fixture identity, phase 4 iteration 4.5.
+# --- the shard namespace carries no fixture identity.
 # Before this, loopShardPath() took no fixture component at all -- task02's draw 0 and a NEW
 # fixture's draw 0 landed at the byte-identical path, and resumeArm() folded both as one arm,
 # mixing two fixtures' draws into a single mean/sd. Demonstrated below by construction, then by a
@@ -906,7 +904,7 @@ check "writeNextShard: the record itself carries fixture identity (F-284), not o
 rm -rf "$ROOT/tests/evals/results/$F284_SHA"
 
 # makeShardWriter()/writeNextShard(): fixtureId threads through the EXACT assembly drawArmForSha()
-# uses, without a live draw -- same style as the F-267/F-268 wiring checks above.
+# uses, without a live draw -- same style as the shard-verdict wiring checks above.
 F284_WIRING_SHA="f284wiring$(date +%s)"
 check "the exact assembly drawArmForSha() uses threads fixtureId into both the shard's path and its record" \
   "$(cj "
@@ -920,9 +918,9 @@ check "the exact assembly drawArmForSha() uses threads fixtureId into both the s
   ")" '{"shardAtFixturePath":true,"recordFixture":"task02-code"}'
 rm -rf "$ROOT/tests/evals/results/$F284_WIRING_SHA"
 
-# writeCensorRecord() also records fixture identity (F-284) -- the censored/ evidence stream gets
+# writeCensorRecord() also records fixture identity -- the censored/ evidence stream gets
 # the same honesty about which fixture it came from, even though (unlike numbered shards) it stays
-# unqualified by directory, since nothing folds censor records back into an arm (F-283, open).
+# unqualified by directory, since nothing folds censor records back into an arm (a known gap).
 F284_CENSOR_SHA="f284censor$(date +%s)"
 check "writeCensorRecord(..., fixtureId) persists it alongside the censor payload" \
   "$(cj "
@@ -932,9 +930,9 @@ check "writeCensorRecord(..., fixtureId) persists it alongside the censor payloa
   ")" "task02-code"
 rm -rf "$ROOT/tests/evals/results/$F284_CENSOR_SHA"
 
-# Legacy shards (every shard written before this iteration, including the five quota-paid ones
-# D12 rests on) carry NO fixture key at all -- taken to mean UNKNOWN, never assumed to be
-# task02-code (D9's default) or any other fixture. Staged as a synthetic legacy shard so this stays
+# Legacy shards (every shard written before fixture identity existed, including the five quota-paid ones
+# the committed baseline rests on) carry NO fixture key at all -- taken to mean UNKNOWN, never assumed to be
+# task02-code (the default) or any other fixture. Staged as a synthetic legacy shard so this stays
 # hermetic and portable across clones/CI that don't carry the real, gitignored quota-paid data.
 F284_LEGACY_SHA="f284legacy$(date +%s)"
 cj "
@@ -950,7 +948,7 @@ check "the SAME legacy shard is invisible when a REAL fixtureId is asked for -- 
 rm -rf "$ROOT/tests/evals/results/$F284_LEGACY_SHA"
 
 # Mutation: revert loopShardPath() to its pre-fix shape (fixtureId accepted but ignored) and
-# reproduce the EXACT collision the phase file demonstrates by hand -- two different fixtures'
+# reproduce the EXACT collision the original defect demonstrated by hand -- two different fixtures'
 # draw 0 landing at the byte-identical path. Staged on a scratch copy, never the tracked file.
 # Occurrence count asserted, not just presence (standing discipline): this exact anchor is unique
 # in the file, unlike e.g. `mkdirSync(dirname(p), { recursive: true });`, which occurs twice and
@@ -973,7 +971,7 @@ mutant_collision=$(node --input-type=module -e "
   const M = await import('$F284_MUT');
   process.stdout.write(String(M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code') === M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code-degraded')));
 ")
-check "mutant (F-284: fixtureId ignored, the pre-fix shape) reproduces the EXACT collision the phase file demonstrates by hand -- task02's draw 0 and a NEW fixture's draw 0 land at the SAME path" \
+check "mutant (F-284: fixtureId ignored, the pre-fix shape) reproduces the EXACT collision the original defect demonstrated by hand -- task02's draw 0 and a NEW fixture's draw 0 land at the SAME path" \
   "$mutant_collision" "true"
 pristine_collision=$(cj "process.stdout.write(String(M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code') === M.loopShardPath('$F284_SHA', M.TASK_ID, 0, 'task02-code-degraded')));")
 check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the mutated scratch file) no longer collides" \
@@ -981,7 +979,7 @@ check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the muta
 rm -rf "$F284_MUT_DIR"
 trap - EXIT
 
-# --- F-285 (Blocker): --merge/--certify ignored --fixture entirely, so a fixture-qualified arm on
+# --- --merge/--certify ignored --fixture entirely, so a fixture-qualified arm on
 # disk silently underreported as 0/N through the unqualified read -- disjoint from the write side.
 F285_SHA="f285$(date +%s)"
 cj "const occ = new Set(); M.writeNextShard('$F285_SHA', M.TASK_ID, 5, occ, 0, 4, null, null, 'tests/evals/fixtures/task02-code');" >/dev/null
@@ -990,7 +988,7 @@ check "--merge --fixture <id> folds that fixture's own arm, [4] -- the read side
 check "--merge WITHOUT --fixture on the SAME sha now WARNS a fixture-qualified sibling exists, instead of silently reading 0/N (F-285)" \
   "$(node "$CVD" --merge "$F285_SHA" --runs 5 2>&1 >/dev/null | grep -c 'also has fixture-qualified draws')" "1"
 
-# Mutation: drop --fixture from reportArm()'s call site, reproducing F-285's disjoint read.
+# Mutation: drop --fixture from reportArm()'s call site, reproducing the disjoint read.
 F285_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 trap 'rm -rf "$F285_MUT_DIR"' EXIT
 F285_MUT="$F285_MUT_DIR/convergence.mjs"
@@ -1015,7 +1013,7 @@ rm -rf "$F285_MUT_DIR"
 trap - EXIT
 rm -rf "$ROOT/tests/evals/results/$F285_SHA"
 
-# --- F-284 (second defect): --fixture is now pinned to the drawn SHA's own worktree, refused (not
+# --- --fixture is now pinned to the drawn SHA's own worktree, refused (not
 # warned) if it escapes that tree or is git-dirty there. assertFixturePinned() is the guard;
 # resolveFixtureDir()/drawArmForSha() are its call sites.
 PIN_SRC=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
@@ -1045,11 +1043,11 @@ check "assertFixturePinned: the SAME dirty worktree is NOT checked when the sour
   "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC/fixtures/task02-code', null); process.stdout.write('ok'); } catch (e) { process.stdout.write('threw: ' + e.message); }")" \
   "ok"
 
-# F-286: --fixture IS sourceDir -- relative() returns '', join()'s no-op aliases onto the bucket.
+# --fixture IS sourceDir -- relative() returns '', join()'s no-op aliases onto the bucket.
 check "assertFixturePinned: --fixture . (rel === '') is refused, not aliased onto the unqualified bucket (F-286)" \
   "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC', null); process.stdout.write('NO THROW'); } catch { process.stdout.write('threw'); }")" \
   "threw"
-mkdir -p "$PIN_SRC/..scratch" # F-287: a CONTAINED sibling merely named like a parent ref
+mkdir -p "$PIN_SRC/..scratch" # a CONTAINED sibling merely named like a parent ref
 check "assertFixturePinned: a CONTAINED dir named ..scratch is accepted, not falsely refused as an escape (F-287)" \
   "$(cj "try { M.assertFixturePinned('$PIN_SRC', '$PIN_SRC/..scratch', null); process.stdout.write('ok'); } catch (e) { process.stdout.write('threw: ' + e.message); }")" \
   "ok"
@@ -1064,7 +1062,7 @@ dryrun_pinned_fixture=$(printf '%s' "$dryrun_pinned" | node -e "let s='';process
 check "--dry-run --fixture <source-relative path> resolves to a path INSIDE the checked-out worktree, not \$ROOT (F-284 actually took effect, not merely accepted)" \
   "$(case "$dryrun_pinned_fixture" in "$ROOT"/*) echo "still-rooted-at-ROOT" ;; *task02-code) echo "inside-worktree" ;; *) echo "unexpected: $dryrun_pinned_fixture" ;; esac)" \
   "inside-worktree"
-# F-288: assert the MESSAGE -- git itself refuses an out-of-worktree pathspec independent of our
+# assert the MESSAGE -- git itself refuses an out-of-worktree pathspec independent of our
 # guard, so exit 1 alone can't attribute the refusal (neutering the check below still exits 1).
 escape_head_out=$(node "$CVD" --dry-run --source HEAD --fixture /tmp 2>&1 >/dev/null)
 check "--dry-run --fixture <path escaping the resolved source tree> is refused BY OUR OWN GUARD, not merely exit 1 (F-288)" \
@@ -1098,9 +1096,9 @@ check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the muta
 rm -rf "$F284_PIN_MUT_DIR"
 trap - EXIT
 
-# --- F-289: committed hash baseline for the five quota-paid shards D12 rests on (results/ is
+# --- committed hash baseline for the five quota-paid shards the baseline rests on (results/ is
 # gitignored, so a git-diff check there is vacuously empty) -- MANIFEST.sha256 (`git add -f`'d past
-# the ignore) is verified when present, skipped VISIBLY when absent (F-237), never silently.
+# the ignore) is verified when present, skipped VISIBLY when absent, never silently.
 CONV_DIR="$ROOT/tests/evals/results/39411eb4d2785c47e1491e0b6c54be174a3ac753/convergence"
 conv_n=$(ls "$CONV_DIR"/loop-code-loop-*.json 2>/dev/null | wc -l | tr -d ' ')
 if [ "$conv_n" = "5" ]; then
@@ -1115,7 +1113,7 @@ fi
 # tracked files (sha256sum -c is external, already battle-tested, not re-proven here) -- corrupt
 # flips OK to FAILED, restore flips back; real shards hashed identical before/after. Coder's report.
 
-# --- F-308: a session-limit (or other hard-invocation-failure) exit must not be recorded as draw --
+# --- a session-limit (or other hard-invocation-failure) exit must not be recorded as draw --
 # data. `startDraw()`'s `retry` used to discard `invokeCommand()`'s result outright, so a spawned
 # `claude` that hit the account's session limit read as `malformed` (before loop state existed) or
 # `running` (after) -- both a harness-EXTERNAL condition misrecorded as a fact about the definition
@@ -1145,7 +1143,7 @@ check "isHardInvocationFailure: undefined/null (every EXISTING synthetic handle 
 check "isHardInvocationFailure({}): an invocation object with NO recognizable field actually set reads the same as no info (F-326 -- the docstring's promise, now true of the code: status must be genuinely present and non-zero to count, not merely undefined !== 0)" \
   "$(cj "process.stdout.write(String(M.isHardInvocationFailure({})));")" "false"
 
-# Staged: revert the F-326 fix (invocation.status ?? 0 -> bare invocation.status) and confirm the
+# Staged: revert the status fix (invocation.status ?? 0 -> bare invocation.status) and confirm the
 # {} case above flips from false to true -- undefined !== 0 reads as a failure again.
 F326_MUT_DIR=$(mktemp -d) || { bad "mktemp failed"; exit 1; }
 trap 'rm -rf "$F326_MUT_DIR"' EXIT
@@ -1215,7 +1213,7 @@ check "isHardInvocationFailure: status GENUINELY omitted (undefined) but every o
 # completed pass -- a healthy draw's own closing summary IS this invocation's stdout under
 # --print, and can echo SESSION_LIMIT_SIGNATURE as prose (about this very guard) without that
 # being the incident. status/error stay unconditional regardless of state, checked separately
-# above. Uses the committed `done` golden (tests/scripts/goldens/loop-state-done.json, F-241) --
+# above. Uses the committed `done` golden (tests/scripts/goldens/loop-state-done.json) --
 # real data, not a hand-typed shape that could drift from what classifyDraw() actually requires.
 F324_DONE_STATE=$(node -e "process.stdout.write(JSON.stringify(JSON.parse(require('fs').readFileSync('$ROOT/tests/scripts/goldens/loop-state-done.json','utf8'))))")
 check "isHardInvocationFailure: text match ALONE is suppressed when the resulting state already shows a completed draw (a real 'done' golden, pass 2) -- the false-positive surface F-324 exists to close" \
@@ -1278,7 +1276,7 @@ check "fillArm: timedOut:true stays on the EXISTING running/censor path -- never
   ")" '{"waitExhausted":true,"censorPresent":true}'
 
 # The exact assembly drawArmForSha() uses (makeShardWriter -> fillArm -> conditional persistence),
-# same style as the F-267/F-276/F-284 wiring checks above: (a) the arm stops (throws), (b) no censor
+# same style as the shard/censor/fixture wiring checks above: (a) the arm stops (throws), (b) no censor
 # record is written, (c) no replacement/shard slot is consumed -- resumeArm() sees nothing.
 F308_SHA="f308quota$(date +%s)"
 f308_assembly=$(node --input-type=module -e "
@@ -1310,8 +1308,8 @@ check "the exact assembly drawArmForSha() uses: a quota-exhausted opening invoca
   '{"threwHardFailure":true,"shardExists":false,"censorDirExists":false,"resume":[]}'
 rm -rf "$ROOT/tests/evals/results/$F308_SHA"
 
-# "The driver exits non-zero" (the phase file's own acceptance point d), proven WITHOUT a live-mode
-# CLI invocation of this file's own --source/--fixture/--runs shape -- evals-packaging.sh's F-256
+# "The driver exits non-zero" (the acceptance point for the driver), proven WITHOUT a live-mode
+# CLI invocation of this file's own --source/--fixture/--runs shape -- evals-packaging.sh's
 # check audits every CLI call in this file for a dry-run/merge/certify/help/negative-argument
 # exemption specifically so nothing here can reach a real model unnoticed, and a PATH-stubbed live
 # call would need a whole new exemption category to stay honestly covered by that audit. Proven two
@@ -1327,7 +1325,7 @@ F308_MAIN_CATCH='.catch((err) => { process.stderr.write(`convergence: ${err.mess
 check "the module-level .catch(...) chain (below main()'s own closing brace) is present exactly once -- this alone is a PRESENCE fact, not proof that nothing upstream of it intercepts a hard-invocation-failure throw first (see F-320's absence checks below for that)" \
   "$(grep -cF "$F308_MAIN_CATCH" "$ROOT/$CVD")" "1"
 
-# F-320 (4.8 pass-2 review): the presence check above was staged against wrapping main()'s own
+# the presence check above was staged against wrapping main()'s own
 # drawArmForSha() call in `catch (e) { if (e instanceof HardInvocationFailureError) return 0; throw
 # e; }` -- exit 0 on a quota wall, violating acceptance (c)/(d) -- and stayed green: a PRESENCE count
 # cannot prove an ABSENCE. Fixed with absence assertions in the two places such a catch could be
@@ -1338,10 +1336,10 @@ check "the module-level .catch(...) chain (below main()'s own closing brace) is 
 extract_fn_body() {
   # $1 = file, $2 = a substring unique to the FIRST line of the body to extract. Prints from that
   # line through the next column-0 '}' (inclusive) -- the same brace-flush-left convention this
-  # file's own mutation-staging code relies on elsewhere (e.g. the F-251 scratch-copy checks above).
+  # file's own mutation-staging code relies on elsewhere (e.g. the sha scratch-copy checks above).
   awk -v pat="$2" 'index($0, pat) && !p {p=1} p{print} p && /^}/{exit}' "$1"
 }
-# F-328 (4.8 pass-2 review): extract_fn_body prints NOTHING when its anchor matches no line, and
+# extract_fn_body prints NOTHING when its anchor matches no line, and
 # `grep -c` over nothing is 0 -- which is exactly what the check below asserts, so a drifted anchor
 # (e.g. the signature gaining `async`) would pass green forever. Link C is already controlled by its
 # paired mutant check asserting 1; link A had nothing. Pin the extraction non-empty first.
@@ -1355,7 +1353,7 @@ main_live_catches=$(extract_fn_body "$ROOT/$CVD" "Checked BEFORE resolveSource's
 check "main()'s live-draw branch (awk-extracted from its own preflight comment through main()'s closing brace) has zero catch clauses -- nothing here could intercept drawArmForSha()'s F-308 throw before it reaches the module-level .catch() above (link C, the gap F-320 named, is now closed structurally)" \
   "$main_live_catches" "0"
 
-# Staged against the EXACT mutation F-320 named: wrap main()'s own drawArmForSha() call so a
+# Staged against the EXACT mutation that exposed the gap: wrap main()'s own drawArmForSha() call so a
 # HardInvocationFailureError exits 0 instead of propagating. The presence check above (re-run here
 # on the mutant) must stay green, unchanged -- reproducing why it was insensitive; the new
 # live-draw-branch absence check must go red.
@@ -1386,7 +1384,7 @@ check "pristine convergence.mjs (a fresh read of the tracked file, not the mutat
   "$pristine_320_live" "0"
 
 # Mutation 1 (the load-bearing one): remove BOTH failOnHardInvocationFailure() call sites in
-# fillArm() -- reproduces the EXACT pre-fix bug this iteration exists to close: a session-limit
+# fillArm() -- reproduces the EXACT pre-fix bug this guard exists to catch: a session-limit
 # exit falls through to classifyDraw(null), reads 'malformed', and after maxReplacements is
 # exhausted throws the OLD generic harness-fault Error, not HardInvocationFailureError. Staged on a
 # scratch copy, never the tracked file.
@@ -1426,9 +1424,9 @@ rm -rf "$F308_GUARD_MUT_DIR"
 trap - EXIT
 
 # Mutation 2: neuter isHardInvocationFailure()'s TEXT-match branch alone (status/error checks left
-# intact). Correction (4.8 pass-2 review): no observed session-limit incident records its exit
-# status through THIS harness's OWN invocation capture -- the pre-F-308 code discarded that value
-# outright, which is the defect F-308 exists to fix -- so the status:0/error:null pairing used
+# intact). Correction: no observed session-limit incident records its exit
+# status through THIS harness's OWN invocation capture -- the old code discarded that value
+# outright, which is the defect being guarded -- so the status:0/error:null pairing used
 # below is an ASSUMED test shape, not an evidenced one (a prior version of this comment claimed
 # otherwise). `run.mjs:733-740` records a real counter-example the other way: four session-limit
 # exits it caught arrived `ok:false` via its own `!run.ok` gate. The text branch is therefore the
