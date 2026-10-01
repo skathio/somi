@@ -5,6 +5,30 @@ where you want a **standalone** DoD outside the SoMi `.somi/plans/<slug>/` artif
 team-level "shipping standard" checklist). For most work items, fill out §12 of `spec.md`
 directly and ignore this file.
 
+## Minimum-evidence standard
+
+A box may be ticked only against evidence of a **stated kind** and a **stated quantity**. Write both
+next to the criterion before you start, not after the result is in.
+
+- **Kind** — a named test, a command and its expected output, or a described manual exercise.
+  "Verify before ticking" is not a standard: it names no evidence, so any result satisfies it.
+- **Quantity** — one run or N runs; one file or every file in a set; one host or each supported
+  host. State N, and say why N is enough to tell "works" from "fails some of the time".
+- Evidence of the wrong kind, or too small a quantity, does **not** satisfy the criterion even when
+  it is green. A passing result that could not have failed proves nothing.
+
+Worked example — a latency claim:
+
+- Weak: `[ ] Checkout p95 latency is under 300 ms (verified).`
+  Ticked after two runs, both under 300 ms. If the real failure rate is around 40%, two runs
+  pass together about a third of the time, so the green result says almost nothing.
+- Fixed: `[ ] Checkout p95 latency is under 300 ms. Evidence: load-test command <cmd>, 20 runs on
+  the staging host, p95 reported per run; all 20 under 300 ms. Fewer than 20 runs, or a run on a
+  developer machine, does not count.`
+
+If the evidence you can produce is smaller than the criterion needs, leave the box unticked and
+say what is missing.
+
 ## Functional
 
 - [ ] All planned iterations landed (per `phases/`).
