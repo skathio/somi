@@ -6,6 +6,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.0.1] — 2026-10-01 — fix: agent dispatch failing on Windows checkouts with CRLF line endings
+
+**Patch — bug fix** ([#28](https://github.com/skathio/somi/issues/28)). On a Windows clone with
+`core.autocrlf=true`, every agent file was checked out with CRLF line endings. The resolver behind
+`somi_resolve` and `scripts/somi-dispatch.mjs` split frontmatter on `\n` only, so the `---\r`
+delimiter never matched and every agent failed with exit 66, "declares no `cost:` in its
+frontmatter". The front door could start no agent.
+
+- **Resolver:** `scripts/lib/dispatch-resolver.mjs` splits frontmatter on `\r?\n`. A regression
+  test in `tests/scripts/somi-dispatch.sh` resolves an agent from a CRLF copy of the install.
+- **`.gitattributes`** (new): `* text=auto eol=lf`, so checkouts get LF on every OS.
+- **`scripts/validate.sh`:** its three frontmatter `awk` parsers strip a trailing CR, so the
+  validator gives the same verdict on a CRLF checkout.
+
+The runtime hooks already split on `\r?\n` and were unaffected.
+
+No migration action required. An existing Windows clone keeps its CRLF files until they are
+re-checked out; the resolver fix covers it either way.
+
+## [3.0.0] — 2026-10-01 — feat!: agent cost tiers and a front door that dispatches
+
 **Major — 3.0.0.** Breaking: the cost-tier model, command frontmatter and `/refactor` changes listed
 under `somi-3-0-rework` below (each with migration steps), and `skills/test-strategy/` renamed to
 `skills/testing-playbook/` (the `/test-strategy` command is unchanged). Per `docs/VERSIONING.md`, a rename is MAJOR
