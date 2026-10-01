@@ -54,10 +54,11 @@ function err(code, message) {
 
 // Extracts one field's raw value from the frontmatter block (the lines between the first two
 // literal `---` delimiters) — same block scripts/validate.sh's cost_of()/model_of() awk parses.
+// Splits on CRLF too: a Windows checkout with core.autocrlf turns `---` into `---\r` (#28).
 function frontmatterField(content, field) {
   const re = new RegExp(`^${field}:\\s*(.*)$`);
   let dashes = 0;
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r?\n/)) {
     if (line === '---') {
       dashes++;
       if (dashes >= 2) break;

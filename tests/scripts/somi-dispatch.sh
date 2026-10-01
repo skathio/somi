@@ -350,5 +350,17 @@ out="$(run "$R_ORIGIN" resolve --agent coder)"    # a later bare call: state now
 check "a later call: ceiling_source is 'state' but ceiling_origin still says 'config' -- actionable" \
   "$(field "$out" ceiling_source),$(field "$out" ceiling_origin)" "state,config"
 
+# --- CRLF checkout (#28): a Windows clone with core.autocrlf rewrites agent files to CRLF; the
+# frontmatter delimiter is then `---\r`, which must still parse. Run a copy of the install whose
+# agent files are CRLF. -----------------------------------------------------------------------------
+CRLF_INSTALL="$(fresh)"
+cp -R "$ROOT_REPO/scripts" "$ROOT_REPO/agents" "$CRLF_INSTALL/"
+for f in "$CRLF_INSTALL"/agents/*.md; do sed -i 's/$/\r/' "$f"; done
+crlf_rc=0
+out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CRLF_INSTALL/scripts/somi-dispatch.mjs" resolve --agent planner --host copilot 2>&1)" || crlf_rc=$?
+check "CRLF agent files: resolve exits 0 (was 66, 'declares no cost:')" "$crlf_rc" "0"
+[ "$crlf_rc" = 0 ] && check "CRLF agent files: planner's supported set parses without a trailing CR" \
+  "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" "low,medium"
+
 echo "somi-dispatch tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

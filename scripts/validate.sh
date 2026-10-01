@@ -198,10 +198,10 @@ echo "==> Validating cost-tier declarations..."
 # the agent's own frontmatter is where high is truthfully declared, once -- and a cost: high agent
 # Tasking a cost: low, medium helper does not pull that helper up to high either.
 cost_of() {
-  awk '/^---$/{c++} c==1 && /^cost:[[:space:]]*/{sub(/^cost:[[:space:]]*/,""); print; exit}' "$1"
+  awk '{sub(/\r$/,"")} /^---$/{c++} c==1 && /^cost:[[:space:]]*/{sub(/^cost:[[:space:]]*/,""); print; exit}' "$1"
 }
 model_of() {
-  awk '/^---$/{c++} c==1 && /^model:[[:space:]]*/{sub(/^model:[[:space:]]*/,""); print; exit}' "$1"
+  awk '{sub(/\r$/,"")} /^---$/{c++} c==1 && /^model:[[:space:]]*/{sub(/^model:[[:space:]]*/,""); print; exit}' "$1"
 }
 cost_failed=0
 
@@ -601,7 +601,7 @@ parity_failed=0
 for f in skills/*/SKILL.md; do
   [ -f "$f" ] || continue
   dir="$(basename "$(dirname "$f")")"
-  declared="$(awk '/^---$/{c++; next} c==1 && /^name:[[:space:]]*/{sub(/^name:[[:space:]]*/,""); gsub(/^["'"'"']|["'"'"']$/,""); sub(/[[:space:]]+$/,""); print; exit}' "$f")"
+  declared="$(awk '{sub(/\r$/,"")} /^---$/{c++; next} c==1 && /^name:[[:space:]]*/{sub(/^name:[[:space:]]*/,""); gsub(/^["'"'"']|["'"'"']$/,""); sub(/[[:space:]]+$/,""); print; exit}' "$f")"
   if [ "$dir" != "$declared" ]; then
     echo "SKILL NAME PARITY: skills/$dir/SKILL.md declares name: '$declared' (expected '$dir')" >&2
     parity_failed=1
