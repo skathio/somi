@@ -1,5 +1,5 @@
 ---
-description: Feature / user-story design on an existing codebase — a `cost: high` pass that reads the repo deeply, resolves the expensive-to-reverse decisions with you, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching. Sits between /discover (whole product) and /plan (sequencing).
+description: "Feature / user-story design on an existing codebase — a `cost: high` pass that reads the repo deeply, resolves the expensive-to-reverse decisions with you, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching. Sits between /discover (whole product) and /plan (sequencing)."
 argument-hint: <feature or user story to design>
 allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebSearch, WebFetch, Bash
 ---

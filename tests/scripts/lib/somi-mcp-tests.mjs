@@ -63,7 +63,7 @@ async function run() {
 
     const list = await client.request('tools/list', {});
     const names = (list.tools || []).map((t) => t.name).sort();
-    check('tools/list carries exactly somi_resolve, somi_command, and somi_skill', names, ['somi_command', 'somi_resolve', 'somi_skill']);
+    check('tools/list carries exactly somi_resolve, somi_command, somi_skill and somi_agent', names, ['somi_agent', 'somi_command', 'somi_resolve', 'somi_skill']);
 
     const ping = await client.request('ping', {});
     check('ping returns an empty result', ping, {});
@@ -154,6 +154,21 @@ async function run() {
 
     const unknownSkill = await toolCall(client, 'somi_skill', { name: 'not-a-real-skill' });
     check('somi_skill rejects an unknown skill name', unknownSkill.isError, true);
+  });
+
+  // --- somi_agent: the agent's instructions without frontmatter, same allowlist ------------
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const r = await toolCall(client, 'somi_agent', { name: 'reviewer' });
+    check('somi_agent returns agents/reviewer.md content, not an error', r.isError, undefined);
+    check('the returned text starts at the body: no frontmatter, no model: line', /^---|^model:/m.test(toolText(r)), false);
+    check('the returned text is really the reviewer body', toolText(r).length > 1000 && /reviewer/i.test(toolText(r)), true);
+
+    const bad1 = await toolCall(client, 'somi_agent', { name: '../agents/reviewer' });
+    check('somi_agent rejects a path-traversal name with the usage code (64)', /\(exit 64\)/.test(toolText(bad1)), true);
+
+    const unknown = await toolCall(client, 'somi_agent', { name: 'not-a-real-agent' });
+    check('somi_agent rejects an unknown agent with exit 65', /\(exit 65\)/.test(toolText(unknown)), true);
   });
 
   // --- unknown tool name -> JSON-RPC error, not a tool result -------------------------------

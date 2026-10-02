@@ -1,6 +1,6 @@
 ---
 description: Strict, skeptical, fresh-context review of the current changes — or a plan, a high-cost design+brief, an ADR, a PR, or an arbitrary diff. Severity-graded findings, evidence-driven, will reject weak solutions. Output lands under .somi/reviews/<slug>/.
-argument-hint: <slug> | <diff range> | <PR #> | <file path> | "plan <slug>" | "design <slug>"
+argument-hint: "<slug> | <diff range> | <PR #> | <file path> | \"plan <slug>\" | \"design <slug>\""
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 ---
 

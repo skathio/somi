@@ -51,6 +51,10 @@ echo "==> Session-artefact gate tests..."
 # honours its explicit exclusions.
 bash tests/scripts/check-session-artefacts.sh
 
+echo "==> Frontmatter gate tests..."
+# Guards scripts/check-frontmatter.mjs: the plain-scalar forms YAML rejects fail, quoted ones pass.
+bash tests/scripts/check-frontmatter.sh
+
 echo "==> File-size budget gate tests..."
 # Guards scripts/check-size-budget.mjs: an un-ledgered oversized file fails, a ledgered file may
 # shrink but not grow, a stale entry warns, a malformed ledger fails loudly.
@@ -171,18 +175,9 @@ case "$coupling" in
 esac
 
 echo "==> Validating agent/command/skill frontmatter..."
-failed=0
-while IFS= read -r f; do
-  if ! grep -q '^---' "$f"; then
-    echo "MISSING FRONTMATTER: $f" >&2
-    failed=1
-  fi
-done < <(
-  for dir in agents commands skills/*/; do
-    [ -d "$dir" ] && find "$dir" -name '*.md' -type f
-  done
-)
-if [ "$failed" -ne 0 ]; then
+# Present, and every line a YAML parser accepts (Copilot skips an agent whose frontmatter it can't
+# parse). Rules live in scripts/check-frontmatter.mjs.
+if ! node scripts/check-frontmatter.mjs; then
   exit 1
 fi
 

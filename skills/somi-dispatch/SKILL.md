@@ -126,7 +126,11 @@ candidates — to match the resolved `tier`: the lightest visible model for `low
 — this pick applies only when the resolver reported none. **If no model identifiers are visible to
 you this turn, pass no model at all and say so**: the agent then runs on its own frontmatter
 `model:` or the session's own model, and `cost.mapping` is how a project binds tiers to specific
-models on this host — never invent an identifier you cannot actually see. If the host then rejects
+models on this host — never invent an identifier you cannot actually see. **The host's own
+instructions win over this pick:** if they say not to set a model unless the user names one, pass
+none, and say the agent runs on the host's model rather than at the resolved tier, and that
+`cost.mapping` is how to bind one. `null` is expected on Copilot, which has no shipped mapping
+because its model ids vary by plan and editor. If the host then rejects
 a model you *did* pick yourself, retry the same dispatch once without it and say you're doing so
 (§5 below) — never silently pass nothing while claiming a choice was made, and never retry more
 than once.
@@ -186,6 +190,12 @@ still not once for the whole command, and each still gets its own `project_dir`,
    dispatch once without a model argument and say you're doing so. A model that came from the
    project's own `cost.mapping` is never retried this way — if the host rejects a **mapped** model,
    fail loudly and say so.
+5. **If the host rejects the agent type itself** (e.g. Copilot's `Unknown agent_type: coder`: its
+   subagent tool accepts only built-in types, not plugin agents), call
+   `somi_agent({name: "<agent name>"})` for that agent's instructions and start the host's built-in
+   general-purpose subagent instead. Its prompt is that text, then the briefing from steps 1 and 3;
+   pass the same model. Say once per session that agents run this way on this host. Never adopt
+   the agent's role inline instead: a reviewer has to start from a fresh context.
 
 **A dispatched agent's own checkpoints stay in force.** Resolving and starting it never itself
 authorizes an outward-facing action a checkpoint still gates — a `gh pr create` confirmation, an

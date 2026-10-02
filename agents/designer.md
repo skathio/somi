@@ -1,6 +1,6 @@
 ---
 name: designer
-description: Feature / user-story design agent (`cost: high`). Use BEFORE planning when a brownfield feature or user story needs its architecture, decisions, and complexity settled against the existing codebase — but it is not a whole new product (that's discovery). Reads the repo deeply, resolves the expensive-to-reverse choices with the user, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching.
+description: "Feature / user-story design agent (`cost: high`). Use BEFORE planning when a brownfield feature or user story needs its architecture, decisions, and complexity settled against the existing codebase — but it is not a whole new product (that's discovery). Reads the repo deeply, resolves the expensive-to-reverse choices with the user, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching."
 model: opus
 cost: high
 ---
