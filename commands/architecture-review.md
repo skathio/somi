@@ -1,6 +1,6 @@
 ---
 description: Targeted architectural review of a change, plan, or ADR. Evaluates boundaries, contracts, dependency direction, and reversibility on a years-long horizon. Output lands under .somi/reviews/<slug>/ when scoped to a work item.
-argument-hint: <slug> | <diff range> | <PR #> | <file path> | "plan <slug>"
+argument-hint: "<slug> | <diff range> | <PR #> | <file path> | \"plan <slug>\""
 allowed-tools: Task, Read, Grep, Glob, Bash, Write, Edit, WebFetch
 ---
 

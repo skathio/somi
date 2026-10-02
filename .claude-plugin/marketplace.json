@@ -13,7 +13,7 @@
         "url": "https://github.com/skathio/somi.git"
       },
       "description": "Multi-agent engineering workflow: discover/design → plan → code → review. Agents declare their own cost tiers and a per-session ceiling selects among them; SOLID, OWASP and clean-code guardrails.",
-      "version": "3.0.1",
+      "version": "3.1.0",
       "tags": ["workflow", "agents", "review", "security"],
       "homepage": "https://github.com/skathio/somi"
     }

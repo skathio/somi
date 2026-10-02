@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // somi-mcp.mjs — a zero-dependency stdio MCP server bundling scripts/lib/dispatch-resolver.mjs's
 // resolveDispatch() as the `somi_resolve` tool, plus a command-procedure text reader as the
-// `somi_command` tool and a skill-text reader as the `somi_skill` tool. Both Claude Code and
+// `somi_command` tool, a skill-text reader as the `somi_skill` tool and an agent-instructions
+// reader as the `somi_agent` tool. Both Claude Code and
 // Copilot CLI launch a plugin's bundled MCP server with its root already expanded
 // (${CLAUDE_PLUGIN_ROOT} / ${PLUGIN_ROOT}), so a prompt calling these tools never needs to know
 // where SoMi is installed — unlike scripts/somi-dispatch.mjs, which a prompt can only shell out to
@@ -173,6 +174,21 @@ const TOOLS = [
       required: ['name'],
     },
   },
+  {
+    name: 'somi_agent',
+    description:
+      "Read a SoMi agent's instructions (agents/<name>.md, frontmatter removed) from the install " +
+      "root. For a host whose subagent tool cannot start a plugin agent by name (Copilot's task " +
+      'tool accepts only its built-in types): start a built-in general-purpose subagent with this ' +
+      'text as the start of its prompt, and the model somi_resolve returned.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'agent name, e.g. "reviewer" (matches ^[a-z][a-z0-9-]*$)' },
+      },
+      required: ['name'],
+    },
+  },
 ];
 
 // --- tool implementations --------------------------------------------------------------------
@@ -216,46 +232,41 @@ async function callSomiResolve(args) {
   return textResult(JSON.stringify(outcome.result));
 }
 
-function callSomiCommand(args) {
-  const name = args?.name;
-  // JSON.stringify, not a bare template-literal interpolation -- an object-shaped `name` (e.g.
-  // `{toString: null}`) throws INSIDE `${name}`, which would surface as an unrelated internal
-  // error (-32603) instead of this 64.
+// One reader for every install-root text tool. The name is checked against AGENT_NAME_RE BEFORE
+// any path is built, so a traversal payload (`../x`, `a/b`) is a 64 and never reaches path.join.
+// JSON.stringify, not a template interpolation, for the invalid name: an object-shaped `name`
+// (e.g. `{toString: null}`) throws inside `${name}` and would surface as an unrelated -32603.
+function readInstallText(prog, kind, name, relPath) {
   if (typeof name !== 'string' || !AGENT_NAME_RE.test(name)) {
-    return textResult(`somi-command: invalid name ${JSON.stringify(name)} (expected ${AGENT_NAME_RE}) (exit ${EXIT_USAGE})`, true);
+    return { error: textResult(`${prog}: invalid name ${JSON.stringify(name)} (expected ${AGENT_NAME_RE}) (exit ${EXIT_USAGE})`, true) };
   }
-  const cmdPath = path.join(installRoot(), 'commands', `${name}.md`);
-  let content;
+  const filePath = path.join(installRoot(), ...relPath(name));
   try {
-    content = fs.readFileSync(cmdPath, 'utf8');
+    return { content: fs.readFileSync(filePath, 'utf8') };
   } catch (e) {
     if (e.code === 'ENOENT') {
-      return textResult(`somi-command: unknown command "${name}" (no ${cmdPath}) (exit ${EXIT_UNKNOWN_AGENT})`, true);
+      return { error: textResult(`${prog}: unknown ${kind} "${name}" (no ${filePath}) (exit ${EXIT_UNKNOWN_AGENT})`, true) };
     }
     throw e;
   }
-  return textResult(content);
 }
 
-// Mirrors callSomiCommand exactly -- same allowlist regex, checked BEFORE the path is ever built,
-// so a traversal payload (`../x`) is rejected by AGENT_NAME_RE (no `/`, no `.`) and never reaches
-// path.join at all; only the two path segments (commands/ vs skills/.../SKILL.md) differ.
+function callSomiCommand(args) {
+  const r = readInstallText('somi-command', 'command', args?.name, (n) => ['commands', `${n}.md`]);
+  return r.error ?? textResult(r.content);
+}
+
 function callSomiSkill(args) {
-  const name = args?.name;
-  if (typeof name !== 'string' || !AGENT_NAME_RE.test(name)) {
-    return textResult(`somi-skill: invalid name ${JSON.stringify(name)} (expected ${AGENT_NAME_RE}) (exit ${EXIT_USAGE})`, true);
-  }
-  const skillPath = path.join(installRoot(), 'skills', name, 'SKILL.md');
-  let content;
-  try {
-    content = fs.readFileSync(skillPath, 'utf8');
-  } catch (e) {
-    if (e.code === 'ENOENT') {
-      return textResult(`somi-skill: unknown skill "${name}" (no ${skillPath}) (exit ${EXIT_UNKNOWN_AGENT})`, true);
-    }
-    throw e;
-  }
-  return textResult(content);
+  const r = readInstallText('somi-skill', 'skill', args?.name, (n) => ['skills', n, 'SKILL.md']);
+  return r.error ?? textResult(r.content);
+}
+
+// The agent's instructions without its frontmatter: a host that cannot start a plugin agent by
+// type (Copilot's task tool) starts a built-in general-purpose subagent with this text instead, and
+// the frontmatter's `model:` would contradict the tier somi_resolve just selected.
+function callSomiAgent(args) {
+  const r = readInstallText('somi-agent', 'agent', args?.name, (n) => ['agents', `${n}.md`]);
+  return r.error ?? textResult(r.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trimStart());
 }
 
 // Returns null for an unrecognized tool name — the caller turns that into a JSON-RPC error, since
@@ -266,6 +277,7 @@ async function callTool(name, args) {
     case 'somi_resolve': return await callSomiResolve(args || {});
     case 'somi_command': return callSomiCommand(args || {});
     case 'somi_skill': return callSomiSkill(args || {});
+    case 'somi_agent': return callSomiAgent(args || {});
     default: return null;
   }
 }

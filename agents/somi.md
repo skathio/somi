@@ -83,8 +83,8 @@ in the agent's briefing. That is the floor that must hold regardless of whether 
 loads — a failure to load the skill is never a cue to skip resolution.
 
 For everything else — the fallback order when `somi_resolve` can't be reached at all, the exit-code
-mapping, the `low`-ceiling announcement, the no-mapped-model pick, the retry rule, and the
-concurrent-batch exception — load [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md)
+mapping, the `low`-ceiling announcement, the no-mapped-model pick, the retry rule, starting an agent
+through `somi_agent` when the host rejects its type (Copilot), and the concurrent-batch exception — load [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md)
 (the bundled `somi_skill` tool, called as `somi_skill({name: "somi-dispatch"})`, when a relative
 link can't be followed from this project, or `somi:somi-dispatch` here on Claude Code) at the
 moment Step 5's live run of the command's own procedure reaches a point that starts an agent —

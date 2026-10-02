@@ -1,5 +1,5 @@
 ---
-description: Continuous design→execution pipeline. Optionally front-loads a `cost: high` action (/discover|/design|/refactor-design) to compile a brief, gates ONE human checkpoint at the brief handoff — once that brief exists, before planning consumes it — then runs /plan-loop → /code-loop to completion under bounded caps. Never fully gateless — a cold start with no design action gates after /plan-loop instead.
+description: "Continuous design→execution pipeline. Optionally front-loads a `cost: high` action (/discover|/design|/refactor-design) to compile a brief, gates ONE human checkpoint at the brief handoff — once that brief exists, before planning consumes it — then runs /plan-loop → /code-loop to completion under bounded caps. Never fully gateless — a cold start with no design action gates after /plan-loop instead."
 argument-hint: <problem statement>
 allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---

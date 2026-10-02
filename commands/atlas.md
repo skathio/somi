@@ -1,6 +1,6 @@
 ---
-description: Build or refresh the Repo Atlas (.somi/atlas.md) — one `cost: high` deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later /design, cold /plan, /refactor-design, and /impact.
-argument-hint: [nothing — build or refresh] | refresh
+description: "Build or refresh the Repo Atlas (.somi/atlas.md) — one `cost: high` deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later /design, cold /plan, /refactor-design, and /impact."
+argument-hint: "[nothing — build or refresh] | refresh"
 allowed-tools: Task, Read, Bash
 ---
 

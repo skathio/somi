@@ -1,6 +1,6 @@
 ---
 name: refactor-designer
-description: Large-refactor scope design agent (`cost: high`). Use when a refactor is too big for one safe diff — it spans many modules, needs a migration, or changes a shared shape. Identifies and designs the refactor scope, maps seams and risks, confirms test-coverage gaps, and compiles a dense brief.md that /plan-loop → /code-loop execute against.
+description: "Large-refactor scope design agent (`cost: high`). Use when a refactor is too big for one safe diff — it spans many modules, needs a migration, or changes a shared shape. Identifies and designs the refactor scope, maps seams and risks, confirms test-coverage gaps, and compiles a dense brief.md that /plan-loop → /code-loop execute against."
 model: opus
 cost: high
 ---
