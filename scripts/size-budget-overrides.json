@@ -42,7 +42,7 @@
   {
     "file": "tests/evals/run.mjs",
     "budget": 500,
-    "current_size": 1433,
+    "current_size": 1380,
     "source": "e3243d6",
     "at": "2026-10-01",
     "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."

@@ -112,6 +112,42 @@ else
   ok "tests/evals absent (published tarball) - syntax-check scope assertion skipped"
 fi
 
+# --- NFR-13: eval entrypoints import only from ./lib/ ------------------------------------------
+# An entrypoint (the file with the main guard) importing a sibling entrypoint is what forced
+# lib/source.mjs out of run.mjs. Static `import`/`export ... from` statements only, anchored at
+# column 0, so a comment or string that merely mentions an import cannot trip or satisfy it.
+# Skipped in a published tarball, where tests/evals is absent BY DESIGN.
+if [ -d tests/evals ]; then
+  nfr13=$(node --input-type=module -e "
+    import { readdirSync, readFileSync } from 'node:fs';
+    const bad = []; let entry = 0, rel = 0;
+    for (const f of readdirSync('tests/evals').filter((n) => n.endsWith('.mjs'))) {
+      const src = readFileSync('tests/evals/' + f, 'utf8');
+      if (!src.includes('import.meta.url === pathToFileURL(')) continue;
+      entry++;
+      for (const m of src.matchAll(/^(?:import|export)\b[^'\";]*?['\"]([^'\"]+)['\"]\s*;/gm)) {
+        if (!m[1].startsWith('.')) continue;
+        rel++;
+        if (!m[1].startsWith('./lib/') || m[1].includes('..')) bad.push(f + ' -> ' + m[1]);
+      }
+    }
+    process.stdout.write(entry >= 2 && rel >= 2 ? bad.join(';') || 'CLEAN' : 'VACUOUS ' + entry + '/' + rel);")
+  check "every tests/evals/*.mjs entrypoint imports only ./lib/ (NFR-13)" "$nfr13" "CLEAN"
+
+  # lib/source.mjs sits one directory deeper than run.mjs did; a wrong '..' count would silently
+  # move the results directory, so the expected path is computed here independently.
+  shard=$(node --input-type=module -e "
+    import { resolve } from 'node:path';
+    const src = await import('./tests/evals/lib/source.mjs');
+    const run = await import('./tests/evals/run.mjs');
+    const want = resolve('tests/evals/results/abc1234');
+    process.stdout.write(JSON.stringify([src.shardDir('abc1234') === want, run.shardDir === src.shardDir,
+      run.resolveSource === src.resolveSource, run.fixtureFor === src.fixtureFor]));")
+  check "lib/source.mjs shardDir lands in tests/evals/results/<sha>; run.mjs re-exports the same functions" "$shard" "[true,true,true,true]"
+else
+  ok "tests/evals absent (published tarball) - NFR-13 import pin skipped"
+fi
+
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
