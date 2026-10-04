@@ -158,6 +158,10 @@ echo "==> Eval packaging & hermeticity..."
 # syntax-check it, so a "no mention" rule would be self-contradicting.
 bash tests/scripts/evals-packaging.sh
 
+echo "==> Eval gate rule tests..."
+# One glob (D-P3): later iterations add tests/scripts/eval-gate-*.sh files, never a validate.sh block.
+if [ -d tests/evals ]; then for t in tests/scripts/eval-gate-*.sh; do bash "$t"; done; else echo "  (skipped: tests/evals not packaged)"; fi
+
 echo "==> Digest-marker / hook-fixture coupling..."
 # A `rules/` trim that removes or rewords a digest bullet must update
 # tests/hooks/cases/inject-workflow-context.json's Tier-2 marker in the SAME attempt. The fixture

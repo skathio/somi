@@ -1,6 +1,7 @@
 // Definition-set source resolution and on-disk path anchors, split out of run.mjs so every
 // eval entrypoint can import them from lib/ without importing a sibling entrypoint (NFR-13).
-// Moved verbatim apart from the two path anchors, which are one directory deeper here.
+// HERE and REPO resolve relative to lib/ (not tests/evals/ as in run.mjs), so REPO is three levels
+// up; the bodies are otherwise unchanged. evals-packaging.sh pins the resulting results path.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';

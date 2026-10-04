@@ -347,7 +347,7 @@ fi
 # contract above) is ever broadened from the resolved per-task directory to the fixtures root --
 # the same shape as the $WORK-must-be-outside-the-checkout leak fixtures/README.md:47-51 already
 # names ("the bug and the leak were the same character").
-# Nothing above inspects run.mjs. Two greps narrow it (the `startsWith` filter now lives in lib/source.mjs) -- facts about
+# Nothing above inspects run.mjs. Two greps narrow it (`startsWith` moved to lib/source.mjs) -- facts about
 # the source text, not a parse of it -- plus a pinned occurrence count. Two greps alone would pass
 # an ADDED, broader copy sitting right next to an untouched anchor line (both greps still match),
 # which is the silent case: the per-task copy still lands correctly, the run behaves normally, and

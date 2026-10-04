@@ -22,7 +22,7 @@ if [ -z "$pack" ]; then
 else
   ok "npm pack --dry-run produced output"
   n_total=$(printf '%s' "$pack" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s)[0].files.length)))")
-  for pat in 'tests/evals/' 'evals/fixtures' 'evals/tasks' 'evals/run.mjs' 'rubric.md' 'evals-fixtures.sh'; do
+  for pat in 'tests/evals/' 'evals/fixtures' 'evals/tasks' 'evals/run.mjs' 'rubric.md' 'evals-fixtures.sh' 'eval-gate'; do
     n=$(printf '%s' "$pack" | node -e "
       let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
         const f=JSON.parse(s)[0].files.filter(x=>x.path.includes(process.argv[1]));
@@ -112,27 +112,52 @@ else
   ok "tests/evals absent (published tarball) - syntax-check scope assertion skipped"
 fi
 
-# --- NFR-13: eval entrypoints import only from ./lib/ ------------------------------------------
-# An entrypoint (the file with the main guard) importing a sibling entrypoint is what forced
-# lib/source.mjs out of run.mjs. Static `import`/`export ... from` statements only, anchored at
-# column 0, so a comment or string that merely mentions an import cannot trip or satisfy it.
+# --- NFR-13: eval entrypoints import only from ./lib/; libs import only siblings ----------------
+# An entrypoint importing a sibling entrypoint is what forced lib/source.mjs out of run.mjs. Every
+# top-level tests/evals/*.mjs is an entrypoint (the set is pinned below, so adding one forces this
+# test to be revisited). The scan is textual, not a parse: it finds `import ... from`, bare
+# `import '...'` and `export ... from` at a line start (indented or not) or right after a `;`, with
+# or without a trailing `;` and with or without `with {...}` attributes. A `//` comment or a string
+# on the same line is not matched; starless block comments and template literals can be. A dynamic
+# `import(...)` or an import hidden behind unusual formatting could still slip past, so this is a
+# tripwire, not a proof.
 # Skipped in a published tarball, where tests/evals is absent BY DESIGN.
 if [ -d tests/evals ]; then
   nfr13=$(node --input-type=module -e "
     import { readdirSync, readFileSync } from 'node:fs';
-    const bad = []; let entry = 0, rel = 0;
-    for (const f of readdirSync('tests/evals').filter((n) => n.endsWith('.mjs'))) {
-      const src = readFileSync('tests/evals/' + f, 'utf8');
-      if (!src.includes('import.meta.url === pathToFileURL(')) continue;
-      entry++;
-      for (const m of src.matchAll(/^(?:import|export)\b[^'\";]*?['\"]([^'\"]+)['\"]\s*;/gm)) {
-        if (!m[1].startsWith('.')) continue;
-        rel++;
-        if (!m[1].startsWith('./lib/') || m[1].includes('..')) bad.push(f + ' -> ' + m[1]);
-      }
+    const specs = (src) => [
+      ...src.matchAll(/(?:^|;)\s*(?:import|export)(?![\w\$.])[^'\";]*?\bfrom\s*['\"]([^'\"]+)['\"]/gm),
+      ...src.matchAll(/(?:^|;)\s*import\s*['\"]([^'\"]+)['\"]/gm),
+    ].map((m) => m[1]).filter((x) => x.startsWith('.'));
+    const entryBad = (x) => !x.startsWith('./lib/') || x.includes('..');
+    const libBad = (x) => !x.startsWith('./') || x.includes('..');
+    // The scanner must catch the shapes it exists for; these are synthetic, so no repo file is mutated.
+    const mutants = [
+      [entryBad, \"import { a } from '../x.mjs'\"],
+      [entryBad, \"import a from './convergence.mjs'\"],
+      [entryBad, \"  import a from './other.mjs'\"],
+      [entryBad, \"import j from './j.json' with { type: 'json' }\"],
+      [entryBad, \"import './side.mjs'\"],
+      [entryBad, \"import a from './lib/a.mjs'; import b from './b.mjs'\"],
+      [libBad, \"import { run } from '../run.mjs'\"],
+    ];
+    const blind = mutants.filter(([bad, src]) => !specs(src).some(bad)).map(([, src]) => src);
+    const top = readdirSync('tests/evals').filter((n) => n.endsWith('.mjs')).sort();
+    const found = [];
+    let rel = 0, libs = 0;
+    for (const f of top) for (const x of specs(readFileSync('tests/evals/' + f, 'utf8'))) {
+      rel++; if (entryBad(x)) found.push(f + ' -> ' + x);
     }
-    process.stdout.write(entry >= 2 && rel >= 2 ? bad.join(';') || 'CLEAN' : 'VACUOUS ' + entry + '/' + rel);")
-  check "every tests/evals/*.mjs entrypoint imports only ./lib/ (NFR-13)" "$nfr13" "CLEAN"
+    for (const f of readdirSync('tests/evals/lib').filter((n) => n.endsWith('.mjs'))) {
+      libs++;
+      for (const x of specs(readFileSync('tests/evals/lib/' + f, 'utf8'))) if (libBad(x)) found.push('lib/' + f + ' -> ' + x);
+    }
+    const out = [];
+    if (top.join() !== 'convergence.mjs,run.mjs') out.push('ENTRYPOINT SET ' + top.join());
+    if (blind.length) out.push('SCANNER BLIND TO ' + blind.join(' | '));
+    if (rel < 2 || libs < 10) out.push('VACUOUS ' + rel + '/' + libs);
+    process.stdout.write(out.concat(found).join(';') || 'CLEAN');")
+  check "tests/evals entrypoints import only ./lib/, and lib files only siblings (NFR-13)" "$nfr13" "CLEAN"
 
   # lib/source.mjs sits one directory deeper than run.mjs did; a wrong '..' count would silently
   # move the results directory, so the expected path is computed here independently.

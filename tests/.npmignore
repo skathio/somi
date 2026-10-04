@@ -8,3 +8,7 @@ evals/
 # The guard is inert without its subject: shipped alone it fails ~28 assertions against a tree
 # that is not in the package. Full packaging story is 3.4c.
 scripts/evals-fixtures.sh
+
+# Same reason, for the eval gate's decision-rule tests: their subject (tests/evals/lib) is not shipped.
+# Patterns here are relative to tests/, so this is scripts/, not tests/scripts/.
+scripts/eval-gate-*.sh
