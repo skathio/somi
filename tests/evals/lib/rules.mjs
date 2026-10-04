@@ -2,7 +2,7 @@
 // `{verdict, reason}` object, or `null` for an input shape it was not written for -- never a throw,
 // so a malformed record cannot be mistaken for a verdict.
 
-const ARM_SIZE = 9; // 3 tasks x 3 valid draws
+export const ARM_SIZE = 9; // 3 tasks x 3 valid draws
 const ARM_FAIL_AT = 4; // an arm FAILs iff failures >= this (statistical-design.md section 3)
 
 // The per-draw outcome tokens an arm may carry. `over-budget` (FR-7 rules 4-5, reported as the

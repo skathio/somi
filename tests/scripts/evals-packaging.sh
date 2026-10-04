@@ -22,7 +22,7 @@ if [ -z "$pack" ]; then
 else
   ok "npm pack --dry-run produced output"
   n_total=$(printf '%s' "$pack" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s)[0].files.length)))")
-  for pat in 'tests/evals/' 'evals/fixtures' 'evals/tasks' 'evals/run.mjs' 'rubric.md' 'evals-fixtures.sh' 'eval-gate'; do
+  for pat in 'tests/evals/' 'evals/fixtures' 'evals/tasks' 'evals/run.mjs' 'rubric.md' 'evals-fixtures.sh' 'eval-gate' 'budget-crosscheck'; do
     n=$(printf '%s' "$pack" | node -e "
       let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
         const f=JSON.parse(s)[0].files.filter(x=>x.path.includes(process.argv[1]));

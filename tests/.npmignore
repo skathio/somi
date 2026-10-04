@@ -12,3 +12,7 @@ scripts/evals-fixtures.sh
 # Same reason, for the eval gate's decision-rule tests: their subject (tests/evals/lib) is not shipped.
 # Patterns here are relative to tests/, so this is scripts/, not tests/scripts/.
 scripts/eval-gate-*.sh
+
+# The opt-in manual cross-checks read the gitignored requirements folder; they are never run by
+# npm test and must not ship. Relative to tests/, as above.
+scripts/manual/
