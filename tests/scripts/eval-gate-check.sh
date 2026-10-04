@@ -17,8 +17,10 @@ JS=$(cat <<'EOF'
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { MAPPING, checkVerdicts, readRecordsFile } from './tests/evals/lib/gate-check.mjs';
+import { clean } from './tests/evals/gate-check.mjs';
+import { assertCleanTree, baselineTagDigest, definitionSetDigest } from './tests/evals/lib/definition-set.mjs';
 import { TRIAGE_RESULTS } from './tests/evals/lib/triage.mjs';
 import { abortedRecord, sealRecord } from './tests/evals/lib/verdict-record.mjs';
 const res = [];
@@ -162,6 +164,114 @@ check('a __proto__ key, raw or escaped -> null', [put('p1', '{"__proto__":{"x":1
 const big = put('big', L0.repeat(Math.ceil((32 * 1024 * 1024 + 1) / L0.length)));
 check('a file over the 32 MiB cap is refused (valid lines, so only the size guards refuse it)', readRecordsFile(big), null);
 
+// The entrypoint, run as a child process against temp stores and temp git repositories.
+const ENTRY = path.resolve('tests/evals/gate-check.mjs');
+const cli = (args, env = {}) => { const r = spawnSync(process.execPath, [ENTRY, ...args], { encoding: 'utf8', env: { ...process.env, ...env } }); return { code: r.status, first: r.stdout.split('\n')[0], lines: r.stdout.split('\n').length - 1, err: r.stderr }; };
+const store = (name, list) => { const p = path.join(dir, name); fs.writeFileSync(p, lines(list), { mode: 0o600 }); return p; };
+const pure = (specs, extra = ['--baseline-tag', 'none']) => cli(['--records', store('c' + Math.random(), mk(specs)), '--digest', D, ...extra]);
+// Fixture git: no user, system or environment configuration reaches it (a developer's tag.gpgSign cannot crash the suite).
+const GENV = { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: 'C', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+const gx = (cwd, ...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'init.defaultBranch=main', '-c', 'core.hooksPath=/dev/null', '-c', 'tag.gpgSign=false', '-c', 'commit.gpgSign=false', ...a], { cwd, encoding: 'utf8', env: GENV, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+const repo = () => { const r = fs.mkdtempSync(path.join(process.env.TMP, 'repo-')); gx(r, 'init', '-q'); fs.mkdirSync(path.join(r, 'commands')); return r; };
+const commit = (r, text, ...tags) => { fs.writeFileSync(path.join(r, 'commands', 'a.md'), text); gx(r, 'add', '-A'); gx(r, 'commit', '-q', '-m', text); for (const t of tags) gx(r, 'tag', t); return definitionSetDigest(r, 'HEAD'); };
+
+check('CLI: ready exits 0, stdout carries a stable first line, the override line and the instrument digest, stderr is empty', [pure([pass()]).code, pure([pass()]).first.startsWith('ready: pass'), pure([pass()]).lines, pure([pass()]).err], [0, true, 3, '']);
+check('CLI: not-ready (block) exits 1 with a first line that starts not-ready: block', [pure([block()], ['--baseline-tag', T]).code, pure([block()], ['--baseline-tag', T]).first.startsWith('not-ready: block')], [1, true]);
+const cutRun = cli(['--records', store('cut', [mid[0], mid[2]]), '--digest', D, '--baseline-tag', 'none']);
+check('CLI: a deleted middle record exits 1 with invalid: broken chain at 1', [cutRun.code, cutRun.first.startsWith('invalid: broken chain at 1')], [1, true]);
+const junk = path.join(dir, 'junk'); fs.writeFileSync(junk, 'not json\n', { mode: 0o600 });
+const junkRuns = [cli(['--records', junk, '--digest', D, '--baseline-tag', 'none']), cli(['--records', path.join(dir, 'missing'), '--digest', D, '--baseline-tag', 'none'])];
+check('CLI: a malformed or missing store exits 2 with invalid, never 0', junkRuns.map((r) => [r.code, r.first.startsWith('invalid')]), [[2, true], [2, true]]);
+const g = store('good', R0);
+const usage = [[], ['--digest', D], ['--records', g, '--bogus', 'x'], ['--records', g, '--records', g], ['--records'], ['--records', g, '--digest'], ['--records', '--digest', D], ['--records', g, '--digest', '--genesis'], ['--records', g, 'extra'], ['--records', g, '--digest', 'abc'], ['--records', g, '--genesis', D.toUpperCase()], ['--records', g, '--head-anchor', 'x'], ['--records', g, '--baseline-tag', 'NONE'], ['--records', g, '--help'], ['--help', 'x'], ['-h'], ['--records', g, '--repo', '-x'], ...['--records', '--digest', '--baseline-tag', '--genesis', '--head-anchor', '--repo'].map((f) => (f === '--records' ? ['--records', ''] : ['--records', g, f, '']))].map((a) => cli(a));
+check('CLI: every usage error (none, unknown, duplicate, valueless, empty or flag-like value, positional, bad hash, --help mixed) exits 2 with invalid', usage.map((r) => [r.code, r.first.startsWith('invalid: usage error')]), usage.map(() => [2, true]));
+const help = cli(['--help']);
+check('CLI: --help exits 0 and prints usage', [help.code, help.first.startsWith('usage:')], [0, true]);
+const bl2 = (tag) => pure([inc()], ['--baseline-tag', tag]);
+check('CLI: a record baseline equal to the given tag is ready; another tag, or none, is exit 1 not-ready', [bl2(T).code, bl2(F).code, bl2(F).first.startsWith('not-ready: baseline is not the latest v* tag'), bl2('none').code, bl2('none').first.startsWith('not-ready: baseline is not')], [0, 1, true, 1, true]);
+
+// Tag selection in real repositories: v1.10.0 sorts after v1.9.0, and a tag on the candidate's own tree is never the baseline.
+const S = repo();
+const dA = commit(S, 'a', 'v1.9.0'); const c1 = gx(S, 'rev-parse', 'HEAD');
+const dB = commit(S, 'b', 'v1.10.0');
+const dC = commit(S, 'c', 'v1.11.0');
+const tagsDir = path.join(S, '.git', 'refs', 'tags');
+const hostile = ['v99.0.0-$(touch PWNED)', 'v-x', 'v--help', 'v98.0 sp', 'v97.0\nx', 'v96.0.0;x'];
+for (const h of hostile) fs.writeFileSync(path.join(tagsDir, h), c1 + '\n');
+gx(S, 'tag', 'v50.0.0', gx(S, 'rev-parse', 'HEAD:commands/a.md'));
+gx(S, 'checkout', '-q', '--orphan', 'orph'); fs.writeFileSync(path.join(S, 'commands', 'a.md'), 'orphan'); gx(S, 'add', '-A'); gx(S, 'commit', '-q', '-m', 'orphan'); gx(S, 'tag', 'v999999999.0.0'); gx(S, 'checkout', '-q', '-f', 'main');
+const sel = baselineTagDigest(S, dC);
+check('the baseline is the latest merged differing release by version order; an unmerged orphan tag, the own-tree tag, hostile names and a blob tag are skipped', [sel, fs.existsSync(path.join(S, 'PWNED')), fs.existsSync(path.join(process.cwd(), 'PWNED'))], [{ ok: true, digest: dB }, false, false]);
+check('a clean tree on the candidate tag and an older tag as the record baseline: ready; the oldest tag as baseline: not-ready', [cli(['--records', store('s1', mk([inc({ digest: dC, candidate: arm(5, { digest: dC }), baseline: arm(5, { digest: dB }), baseline_digest: dB })])), '--repo', S]).code, cli(['--records', store('s2', mk([inc({ digest: dC, candidate: arm(5, { digest: dC }), baseline: arm(5, { digest: dA }), baseline_digest: dA })])), '--repo', S]).code], [0, 1]);
+const O = repo(); const dO = commit(O, 'only', 'v1.0.0');
+const own = cli(['--records', store('o1', mk([pass({ digest: dO, candidate: arm(1, { digest: dO }) })])), '--repo', O]);
+const ownB = cli(['--records', store('o2', mk([inc({ digest: dO, candidate: arm(5, { digest: dO }), baseline: arm(5, { digest: dO }), baseline_digest: dO })])), '--repo', O]);
+check('only the candidate\'s own release tag: the baseline is none (a baseline-free pass is ready; a record claiming that tag as baseline is not)', [baselineTagDigest(O, dO), own.code, ownB.code, ownB.first.startsWith('not-ready: baseline is not')], [{ ok: true, digest: null }, 0, 1, true]);
+const N = repo(); const dN = commit(N, 'none');
+check('no v* tag: none, a record that claims a baseline is exit 1, a baseline-free pass is exit 0', [baselineTagDigest(N, dN), cli(['--records', store('n1', mk([inc({ digest: dN, candidate: arm(5, { digest: dN }), baseline: arm(5, { digest: F }), baseline_digest: F })])), '--repo', N]).code, cli(['--records', store('n2', mk([pass({ digest: dN, candidate: arm(1, { digest: dN }) })])), '--repo', N]).code], [{ ok: true, digest: null }, 1, 0]);
+const P = repo(); commit(P, 'p1', 'v1.0.0'); commit(P, 'p2', 'v1.1.0-rc1'); const dP2 = commit(P, 'p3', 'v1.1.0-rc2');
+const dP1 = definitionSetDigest(P, 'v1.0.0'); const Q = repo(); commit(Q, 'q1', 'v1.0.0-rc1'); const dQ = commit(Q, 'q2');
+check('a pre-release is never a baseline: the candidate on rc2 with rc1 present selects v1.0.0; only pre-releases give none', [baselineTagDigest(P, dP2), baselineTagDigest(Q, dQ)], [{ ok: true, digest: dP1 }, { ok: true, digest: null }]);
+const W = repo(); commit(W, 'w1', 'v1.0.0'); const dW2 = commit(W, 'w2'); gx(W, 'tag', '-a', 'v1.5.0', '-m', 'one', 'HEAD'); gx(W, 'tag', '-a', 'v2.0.0', '-m', 'two', 'v1.5.0^{tag}'); const dW = commit(W, 'w3');
+check('a tag that points at an annotated tag (nested) peels to its commit and is selected, not skipped', [gx(W, 'cat-file', '-t', gx(W, 'cat-file', '-p', 'v2.0.0').split('\n')[0].slice(7)), baselineTagDigest(W, dW)], ['tag', { ok: true, digest: dW2 }]);
+const fakeBin = path.join(dir, 'fakebin'); fs.mkdirSync(fakeBin); fs.writeFileSync(path.join(fakeBin, 'git'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+const noGit = (extra) => cli(['--records', store('ng' + Math.random(), mk([pass()])), ...extra], { PATH: fakeBin });
+const failed = [noGit(['--digest', D]), noGit(['--digest', D, '--repo', N]), cli(['--records', g, '--repo', path.join(dir, 'nope')]), cli(['--records', g, '--digest', D, '--repo', dir])];
+check('a git failure or a non-repository is exit 1 not-ready and never none or ready, even for a record that is ready under none', [failed.map((r) => r.code), failed.map((r) => r.first.startsWith('not-ready: '))], [[1, 1, 1, 1], Array(4).fill(true)]);
+check('the helper refuses on git failure and a non-repo, and is null for malformed arguments', [[dir, path.join(dir, 'nope')].map((r) => baselineTagDigest(r, dN)?.ok), [5, '', undefined].map((r) => baselineTagDigest(r, dN)), baselineTagDigest(N, 'abc')], [[false, false], [null, null, null], null]);
+fs.writeFileSync(path.join(N, 'commands', 'dirty.md'), 'x');
+const dirty = cli(['--records', store('d1', mk([pass({ digest: dN, candidate: arm(1, { digest: dN }) })])), '--repo', N]);
+check('a dirty tree is exit 1 not-ready naming the path, and --digest skips that check', [dirty.code, dirty.first.startsWith('not-ready: dirty definition-set path "commands/dirty.md"'), assertCleanTree(N).ok, cli(['--records', store('d2', mk([pass({ digest: dN, candidate: arm(1, { digest: dN }) })])), '--repo', N, '--digest', dN, '--baseline-tag', 'none']).code], [1, true, false, 0]);
+
+// Fail-closed tag branches: a missing commit object, a tree git cannot digest, an exhausted tag budget.
+const X = repo(); commit(X, 'x1', 'v1.0.0'); const x1 = gx(X, 'rev-parse', 'HEAD'); const dX = commit(X, 'x2');
+fs.rmSync(path.join(X, '.git', 'objects', x1.slice(0, 2), x1.slice(2)));
+const Y = repo(); fs.mkdirSync(path.join(Y, 'commands'), { recursive: true }); fs.symlinkSync('a.md', path.join(Y, 'commands', 'ln')); commit(Y, 'y1', 'v1.0.0'); fs.rmSync(path.join(Y, 'commands', 'ln')); const dY = commit(Y, 'y2');
+const Z = repo(); const dZ = commit(Z, 'z'); const zc = gx(Z, 'rev-parse', 'HEAD');
+for (let i = 1; i <= 65; i++) fs.writeFileSync(path.join(Z, '.git', 'refs', 'tags', `v1.0.${i}`), zc + '\n');
+const refused = [baselineTagDigest(X, dX), baselineTagDigest(Y, dY), baselineTagDigest(Z, dZ)];
+check('a tag whose commit object is gone, a tag whose tree has a symlink, and 65 tags on the own tree each refuse (ok:false), never none', [refused.map((r) => r.ok), refused[1].reason, refused[2].reason?.includes('no baseline among')], [[false, false, false], 'could not digest the tree of tag v1.0.0', true]);
+check('the same three through the CLI are exit 1 not-ready', [[X, dX], [Y, dY], [Z, dZ]].map(([r, d]) => cli(['--records', store('rf' + Math.random(), mk([pass({ digest: d, candidate: arm(1, { digest: d }) })])), '--repo', r, '--digest', d]).code), [1, 1, 1]);
+
+// An annotated tag whose commit is gone hides behind its intact tag object, and --merged=HEAD then drops it
+// without an error: v1.9.0 (intact maintenance branch) must not become the baseline. Run with and without a commit-graph.
+const gone = (graph) => {
+  const R = repo(); commit(R, 'g1'); gx(R, 'checkout', '-q', '-b', 'maint'); fs.writeFileSync(path.join(R, 'commands', 'm.md'), 'maint'); gx(R, 'add', '-A'); gx(R, 'commit', '-q', '-m', 'maint'); gx(R, 'tag', 'v1.9.0');
+  gx(R, 'checkout', '-q', 'main'); commit(R, 'g2'); gx(R, 'tag', '-a', 'v2.0.0', '-m', 'two'); gx(R, 'merge', '-q', '--no-edit', 'maint'); const d = commit(R, 'g3');
+  const c = gx(R, 'rev-parse', 'v2.0.0^{commit}'); if (graph) gx(R, 'commit-graph', 'write', '--reachable');
+  fs.rmSync(path.join(R, '.git', 'objects', c.slice(0, 2), c.slice(2)));
+  let walks = true; try { gx(R, 'rev-list', 'HEAD'); } catch { walks = false; }
+  return [walks, baselineTagDigest(R, d), cli(['--records', store('gn' + graph, mk([pass({ digest: d, candidate: arm(1, { digest: d }) })])), '--repo', R, '--digest', d]).code];
+};
+check('an annotated tag with its commit deleted (with and without a commit-graph): git cannot walk HEAD, the helper refuses with ok:false and the CLI exits 1', [gone(false), gone(true)].map(([w, r, c]) => [w, r.ok, r.reason?.startsWith('the object store is incomplete'), c]), Array(2).fill([false, false, true, 1]));
+const V = repo(); commit(V, 'v1', 'v2'); const dV2 = commit(V, 'v2', 'v2.0.0'); const dVc = commit(V, 'v3');
+check('equal versions are ordered by name: v2.0.0 wins over v2', baselineTagDigest(V, dVc), { ok: true, digest: dV2 });
+
+// HEAD moving between the two digests is refused: a git wrapper makes a commit right after the first ls-tree.
+const H = repo(); const dH = commit(H, 'h1'); const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
+const cnt = path.join(dir, 'cnt');
+fs.writeFileSync(path.join(fakeBin, 'git'), `#!/bin/sh\nif [ "$(echo " $* " | grep -c ' ls-tree ')" = 1 ] && [ ! -e ${cnt} ]; then : > ${cnt}; ${realGit} "$@"; r=$?; echo h2 > ${H}/commands/a.md; ${realGit} -C ${H} add -A; ${realGit} -C ${H} -c user.name=t -c user.email=t@t -c commit.gpgSign=false commit -q -m h2; exit $r; fi\nexec ${realGit} "$@"\n`, { mode: 0o755 });
+const moved = cli(['--records', store('hm', mk([pass({ digest: dH, candidate: arm(1, { digest: dH }) })])), '--repo', H, '--baseline-tag', 'none'], { PATH: fakeBin + ':' + process.env.PATH });
+check('a HEAD that moves between the two digests is not-ready: HEAD moved, never ready', [moved.code, moved.first, definitionSetDigest(H, 'HEAD') === dH], [1, 'not-ready: HEAD moved while the check ran', false]);
+fs.writeFileSync(path.join(fakeBin, 'git'), `#!/bin/sh\ncase " $* " in *" cat-file "*) exit 1;; esac\nexec ${realGit} "$@"\n`, { mode: 0o755 });
+const noType = cli(['--records', g, '--repo', S, '--digest', dC], { PATH: fakeBin + ':' + process.env.PATH });
+check('a git failure while resolving one tag is exit 1 naming the tag, never a skipped tag', [noType.code, noType.first.startsWith('not-ready: git could not resolve tag v')], [1, true]);
+const undecided = spawnSync(process.execPath, ['--input-type=module', '-e', `process.argv[1] = '/nonexistent/gate-check-main'; await import(${JSON.stringify(ENTRY)});`], { encoding: 'utf8' });
+check('a main-module test that cannot be decided still runs the check: usage output and exit 2, not a silent 0', [undecided.status, undecided.stdout.split('\n')[0]], [2, 'invalid: usage error']);
+
+// Overrides are named on a ready result; the neutraliser and its cap.
+check('a ready result with --digest, --baseline-tag and --repo prints override: with each one used, in order', [pure([pass()]).lines, cli(['--records', store('ov', mk([pass()])), '--digest', D, '--baseline-tag', 'none']).first, execFileSync(process.execPath, [ENTRY, '--records', store('ov2', mk([pass()])), '--digest', D, '--baseline-tag', 'none', '--repo', N], { encoding: 'utf8' }).split('\n')[1]], [3, 'ready: pass: candidate arm passes (candidate 1/9 failures)', 'override: digest,baseline-tag,repo']);
+check('clean() maps every control, bidi and non-ASCII character to ?, and caps a line at 300 characters', [clean('a\tb‮\x1b[31mé\r\n'), clean('x'.repeat(1000)).length, clean(undefined)], ['a?b??[31m???', 300, 'undefined']);
+
+// The main guard: a symlinked directory or file must still run the check (a silent exit 0 would be a pass).
+const tl = fs.mkdtempSync(path.join(process.env.TMP, 'lnk-'));
+fs.symlinkSync(path.resolve('tests/evals'), path.join(tl, 'evals')); fs.symlinkSync(ENTRY, path.join(tl, 'gc.mjs'));
+const viaLinks = [['evals', 'gate-check.mjs'], ['gc.mjs']].map((p) => path.join(tl, ...p)).flatMap((e) => [[], ['--records', '/nonexistent']].map((a) => { const r = spawnSync(process.execPath, [e, ...a], { encoding: 'utf8' }); return [r.status, r.stdout.split('\n')[0]]; }));
+check('through a symlinked directory and a symlinked file: no arguments is exit 2 with the usage line, a missing store is exit 2 invalid', viaLinks, [[2, 'invalid: usage error'], [2, 'invalid: unreadable record store'], [2, 'invalid: usage error'], [2, 'invalid: unreadable record store']]);
+const watch = () => fs.readdirSync(dir).join();
+const before2 = watch(); cli(['--records', g, '--digest', D, '--baseline-tag', 'none']);
+check('the entrypoint writes nothing into the store directory', watch(), before2);
+
 for (const [ok, name, got, want] of res) console.log((ok ? 'ok' : 'FAIL') + '\t' + name + (ok ? '' : ' (want ' + JSON.stringify(want) + ', got ' + JSON.stringify(got) + ')'));
 EOF
 )
@@ -176,7 +286,7 @@ while IFS=$'\t' read -r status name; do
   esac
 done <<< "$out"
 ran=$((pass + fail))
-[ "$ran" -ge 62 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 62 written"; }
+[ "$ran" -ge 89 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 89 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

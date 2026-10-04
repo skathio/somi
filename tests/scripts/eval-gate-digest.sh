@@ -43,7 +43,7 @@ const A = mk(FILES);
 const base = D(A, 'HEAD');
 check('the six directories, frozen', [Object.isFrozen(DEFINITION_SET_DIRS), [...DEFINITION_SET_DIRS]], [true, ['commands', 'agents', 'skills', 'rules', 'scripts', 'hooks']]);
 check('install.mjs DEFINITION_DIRS is a subset of the constant', DEFINITION_DIRS.every((d) => DEFINITION_SET_DIRS.includes(d)), true);
-check('the module exposes five names and no function takes a workspace path', Object.keys(ds).sort(), ['DEFINITION_SET_DIRS', 'assertCleanTree', 'committedEntries', 'definitionSetDigest', 'digestEntries']);
+check('the module exposes six names and no function takes a workspace path', Object.keys(ds).sort(), ['DEFINITION_SET_DIRS', 'assertCleanTree', 'baselineTagDigest', 'committedEntries', 'definitionSetDigest', 'digestEntries']);
 // The digest against an independent pipeline.
 const oid = (p) => G(A, 'rev-parse', `HEAD:${p}`);
 const order = ['agents/a.md', 'commands/c.md', 'hooks/h.mjs', 'rules/r.md', 'scripts/x.mjs', 'skills/s/SKILL.md'];

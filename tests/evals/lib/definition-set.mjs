@@ -173,3 +173,63 @@ export function assertCleanTree(repo) {
     return { ok: false, reason: 'git could not report the tree state' };
   }
 }
+
+// Release tags: `v<N>[.<N>...]` and nothing else. A pre-release (`v1.3-rc1`) is never a baseline, and no
+// other name is ever handed to git.
+const RELEASE_TAG = /^v[0-9]{1,9}(?:\.[0-9]{1,9}){0,3}$/;
+const MAX_TAGS = 64;
+
+// Version order, ascending: the numeric parts compare as numbers (v1.10.0 after v1.9.0, a missing part is
+// 0); equal versions (v2 and v2.0.0) are ordered by name, so v2.0.0 is the later one and the order is total.
+function byVersion(a, b) {
+  const xa = a.slice(1).split('.').map(Number);
+  const xb = b.slice(1).split('.').map(Number);
+  for (let i = 0; i < Math.max(xa.length, xb.length); i++) {
+    const d = (xa[i] ?? 0) - (xb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The baseline for a release check: `{ok:true, digest}` where `digest` is the definition-set digest of the
+ * latest release tag whose digest differs from `candidate` (a tag on the candidate's own tree is never a
+ * baseline), or `null` when there is no such tag; `{ok:false, reason}` on any git failure, so "no tag" is
+ * never reported when git failed; `null` for a malformed argument. Only tags merged into HEAD are listed
+ * (a tag on an unrelated or unmerged commit cannot choose the baseline), only names matching RELEASE_TAG
+ * are used, and a tag counts when it peels to a commit through any number of annotated tags. At most
+ * MAX_TAGS are examined, and running out of that budget without an answer is a refusal, not "none".
+ */
+export function baselineTagDigest(repo, candidate) {
+  try {
+    if (!isRepoArg(repo) || typeof candidate !== 'string' || !/^[0-9a-f]{64}$/.test(candidate)) return null;
+    const top = topLevel(repo);
+    // --merged=HEAD silently drops a tag whose commit is unreadable. Two probes make git fail instead, so a
+    // MISSING object refuses: walking HEAD's history (an annotated tag whose commit is gone hides behind its
+    // intact tag object) and reading every tag's type (a missing tag object). A present object whose content
+    // was rewritten (hash mismatch) is still dropped by --merged: deliberate local tampering, a named residual.
+    if (!top) return { ok: false, reason: 'git could not list the release tags' };
+    if (!git(top, ['rev-list', '--quiet', 'HEAD'])) return { ok: false, reason: "the object store is incomplete: git could not walk HEAD's history" };
+    const intact = git(top, ['for-each-ref', '--format=%(objecttype)', 'refs/tags/v*']);
+    const listed = intact && git(top, ['for-each-ref', '--merged=HEAD', '--format=%(refname)', 'refs/tags/v*']);
+    if (!listed) return { ok: false, reason: 'git could not list the release tags' };
+    const tags = [];
+    for (const line of listed.toString('utf8').split('\n')) {
+      const m = /^refs\/tags\/(\S+)$/.exec(line);
+      if (m && RELEASE_TAG.test(m[1])) tags.push(m[1]);
+    }
+    tags.sort(byVersion).reverse();
+    for (const tag of tags.slice(0, MAX_TAGS)) {
+      const type = git(top, ['cat-file', '-t', `refs/tags/${tag}^{}`]);
+      if (!type) return { ok: false, reason: `git could not resolve tag ${tag}` };
+      if (type.toString('latin1').trim() !== 'commit') continue;
+      const entries = committedEntries(top, `refs/tags/${tag}`);
+      if (!entries) return { ok: false, reason: `could not digest the tree of tag ${tag}` };
+      const digest = digestEntries(entries); // null: a release with no definition set, never a baseline
+      if (digest !== null && digest !== candidate) return { ok: true, digest };
+    }
+    return tags.length > MAX_TAGS ? { ok: false, reason: `no baseline among the newest ${MAX_TAGS} release tags` } : { ok: true, digest: null };
+  } catch {
+    return { ok: false, reason: 'git could not list the release tags' };
+  }
+}
