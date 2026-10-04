@@ -32,8 +32,8 @@ export const TRIAGE_RESULTS = Object.freeze([
   'refused: drift',
   'refused: no-baseline',
 ]);
-const KINDS = ['verdict', 'aborted'];
-const CANDIDATE_RESULTS = ['FAIL', 'pass', null];
+export const KINDS = Object.freeze(['verdict', 'aborted']);
+export const CANDIDATE_RESULTS = Object.freeze(['FAIL', 'pass', null]);
 
 // A property read counts only when the property is the object's own (never inherited).
 const own = (o, k) => (Object.hasOwn(o, k) ? o[k] : undefined);
