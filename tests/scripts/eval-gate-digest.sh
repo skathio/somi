@@ -97,6 +97,8 @@ check('an ignored file in a definition-set directory is dirty (a draw would inst
 check('an index entry hidden by assume-unchanged or skip-worktree is refused though status is silent', ['--assume-unchanged', '--skip-worktree'].map((f) => dirty((d) => { put(d, 'scripts/x.mjs', 'edit'); G(d, 'update-index', f, 'scripts/x.mjs'); })), Array(2).fill([false, 'index entry hidden from status "scripts/x.mjs"']));
 check('a control character in a dirty name is quoted, never printed raw', dirty((d) => put(d, 'rules/a\u001b[2Jb', 'x')), [false, 'dirty definition-set path "rules/a\\u001b[2Jb"']);
 check('a dirty submodule entry (gitlink with a different commit) is dirty', dirty((d) => { G(d, 'update-index', '--add', '--cacheinfo', `160000,${s1},skills/sub`); }), [false, 'dirty definition-set path "skills/sub"']);
+const SM = mk({ x: '1' }); const SD = mk(FILES); G(SD, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', SM, 'skills/sub'); G(SD, 'config', '-f', '.gitmodules', 'submodule.skills/sub.ignore', 'all'); commit(SD); put(SD, 'skills/sub/x', 'edited');
+check('an edited submodule worktree is dirty although .gitmodules says ignore=all (plain status is blind to it)', [G(SD, 'status', '--porcelain'), assertCleanTree(SD)], ['', { ok: false, reason: 'dirty definition-set path "skills/sub"' }]);
 const GA = mk(FILES); put(GA, 'x/.gitattributes', 'a'); put(GA, '.gitattributes2', 'b'); commit(GA); const g1 = D(GA, 'HEAD'); put(GA, '.gitattributes', '* text eol=crlf\n'); commit(GA);
 check('no root .gitattributes digests as before and a nested or look-alike one changes nothing; the root one changes the digest and is accepted as an entry', [D(mk(FILES), 'HEAD') === base, g1 === base, HEX.test(D(GA, 'HEAD')) && D(GA, 'HEAD') !== g1, HEX.test(digestEntries([entry('100644', 'blob', s1, '.gitattributes')]))], [true, true, true, true]);
 check('an uncommitted edit of the root .gitattributes, or a new untracked one, is dirty', [(put(GA, '.gitattributes', 'edit'), assertCleanTree(GA)), dirty((d) => put(d, '.gitattributes', 'n'))], [{ ok: false, reason: 'dirty definition-set path ".gitattributes"' }, [false, 'dirty definition-set path ".gitattributes"']]);
@@ -162,7 +164,7 @@ while IFS=$'\t' read -r status name; do
   esac
 done <<< "$out"
 ran=$((pass + fail))
-[ "$ran" -ge 44 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 44 written"; }
+[ "$ran" -ge 45 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 45 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

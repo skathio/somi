@@ -131,6 +131,8 @@ check('bad history records -> null', [
 check('sparse history -> null', v({ history: sparse([rec(), rec(), rec(), rec(), rec(), rec()]) }), null);
 check('malformed history -> null even when the candidate passes', v({ candidate: arm(0), baseline: null, history: [{}] }), null);
 check('rerunAllowed: bad history / digest / throwing -> null', [rerunAllowed(undefined, 'd1'), rerunAllowed([{}], 'd1'), rerunAllowed([rec({ rerun_of: 'h0' })], 'd1'), rerunAllowed([], ''), rerunAllowed([], undefined), rerunAllowed([], 5), safe(() => rerunAllowed(thrower, 'd1')), rerunAllowed(new Array(2), 'd1')], Array(8).fill(null));
+check('rerunAllowed: an aborted FAIL then a verdict is two uses', rerunAllowed([aborted('FAIL'), rec()], 'd1')?.reason, '2 rerun(s) already used for this digest, 1 allowed');
+check('rerunAllowed: a refused verdict then a verdict uses the rerun (a refused run may have hidden a FAIL)', [rerunAllowed([rec({ triage_result: 'refused: drift' })], 'd1')?.verdict, rerunAllowed([rec({ triage_result: 'refused: drift' }), rec()], 'd1')?.reason], ['allowed', '1 rerun(s) already used for this digest, 1 allowed']);
 check('rerunAllowed: a missing aborted candidate_result is not read as unused -> null', rerunAllowed([{ digest: 'd1', kind: 'aborted', rerun_of: null, rerun_reason: null }], 'd1'), null);
 check('rerunAllowed: a flipping record getter is read once', safe(() => { let c = 0; const o = rec({ rerun_of: 'h0', rerun_reason: 'r' }); Object.defineProperty(o, 'rerun_of', { get() { return c++ === 0 ? 'h0' : null; } }); return rerunAllowed([o], 'd1')?.verdict; }), 'refused');
 
@@ -168,7 +170,7 @@ while IFS=$'\t' read -r status name; do
   esac
 done <<< "$out"
 ran=$((pass + fail))
-[ "$ran" -ge 95 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 95 written"; }
+[ "$ran" -ge 97 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 97 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

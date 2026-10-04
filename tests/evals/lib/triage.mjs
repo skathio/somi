@@ -174,14 +174,14 @@ export function triage(input) {
 }
 
 /**
- * One reasoned rerun per digest (FR-34). Each record for `digest` uses the rerun when it is marked
- * as one (`rerun_of` set), is an `aborted` record after a candidate FAIL (FR-0b), or is a `verdict`
- * following an earlier `verdict` or aborted FAIL for the same digest, marked or not: an unmarked
- * repeat is still a re-roll. Each record counts once. The first verdict uses nothing; `allowed` while
- * none is used, `refused` once one is (so an aborted FAIL then a verdict is two uses). It does not
- * ask whether a rerun makes sense (the latest verdict being a block is the caller's question).
+ * Reruns already used for `digest` (FR-34), as a count, or `null` for a bad history. Each record for
+ * `digest` uses the rerun when it is marked as one (`rerun_of` set), is an `aborted` record after a
+ * candidate FAIL (FR-0b), or is a `verdict` following an earlier `verdict` or aborted FAIL for the
+ * same digest, marked or not: an unmarked repeat is still a re-roll. Each record counts once, so an
+ * aborted FAIL then a verdict is two uses. A `refused:*` verdict is a verdict here: a refused run may
+ * have hidden a candidate FAIL, so a verdict after it uses the rerun (fails safe).
  */
-export function rerunAllowed(history, digest) {
+export function rerunsUsed(history, digest) {
   try {
     const records = copyHistory(history);
     if (!records || !isText(digest)) return null;
@@ -193,12 +193,22 @@ export function rerunAllowed(history, digest) {
       if (r.rerun || abortedFail || (r.kind === 'verdict' && prior)) used++;
       if (r.kind === 'verdict' || abortedFail) prior = true;
     }
-    return {
-      verdict: used === 0 ? 'allowed' : 'refused',
-      rule_id: 'rerun-once',
-      reason: `${used} rerun(s) already used for this digest, 1 allowed`,
-    };
+    return used;
   } catch {
     return null;
   }
+}
+
+/**
+ * One reasoned rerun per digest (FR-34): `allowed` while `rerunsUsed` is 0, `refused` once one is. It
+ * does not ask whether a rerun makes sense (the latest verdict being a block is the caller's question).
+ */
+export function rerunAllowed(history, digest) {
+  const used = rerunsUsed(history, digest);
+  if (used === null) return null;
+  return {
+    verdict: used === 0 ? 'allowed' : 'refused',
+    rule_id: 'rerun-once',
+    reason: `${used} rerun(s) already used for this digest, 1 allowed`,
+  };
 }
