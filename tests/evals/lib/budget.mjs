@@ -19,7 +19,8 @@
 // drawVerdictByBudget({costUsd, durationMin}) -> {verdict, rule_id: 'draw-budget', outcome, reasons[], reason}
 //   costUsd and durationMin are finite numbers >= 0 (USD, MINUTES: the same field names and units as
 //   probeDecision, so milliseconds cannot be passed by mistake). Both comparisons are strict `>`:
-//   exactly $8.00 or exactly 40:00 is within budget. Verdict `within-budget` or `fail: over-budget`
+//   exactly $8.00 or exactly 40:00 is within budget. Money is compared in whole cents (a half-cent
+//   tolerance: $8.004 is within budget, $8.005 over). Verdict `within-budget` or `fail: over-budget`
 //   (over budget is a failed draw). `outcome` is the arm token for armVerdict: `over-budget` (a member of
 //   FAIL_OUTCOMES, so the arm counts it as a failure) or `null` when within budget.
 //
@@ -157,7 +158,7 @@ export function envelopeStep(input) {
       const reasons = fired.map(([, text]) => text);
       return { verdict: `abort: ${fired[0][0]}`, rule_id, ceilingUsd: inFlightCeilingUsd, reasons, reason: reasons.join('; ') };
     }
-    const ok = `${invalidReplacements + needed}/${runDraws} draws, elapsed ${elapsedMs} ms <= ${RUN_MS} ms, spend ${usd(spendUsd)} <= ${usd(perRunUsd)}`;
+    const ok = `${invalidReplacements + needed} needed of ${runDraws} allowed, ${launched} launched, elapsed ${elapsedMs} ms <= ${RUN_MS} ms, spend ${usd(spendUsd)} <= ${usd(perRunUsd)}`;
     return { verdict: 'continue', rule_id, ceilingUsd: inFlightCeilingUsd, reasons: [ok], reason: ok };
   } catch {
     return null;

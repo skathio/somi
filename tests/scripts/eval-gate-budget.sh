@@ -72,7 +72,8 @@ check('draw result shape', Object.keys(draw()), ['verdict', 'rule_id', 'outcome'
 const over = draw({ costUsd: 9 });
 check('outcome: over-budget is an arm token, within-budget is null', [over.outcome, ARM_OUTCOMES.includes(over.outcome), draw().outcome], ['over-budget', true, null]);
 check('armVerdict counts the over-budget token as a failure (4 of 9 fails the arm)', armVerdict([over.outcome, over.outcome, over.outcome, over.outcome, ...Array(5).fill('pass')])?.verdict, 'FAIL');
-check('money is compared in whole cents: \$8.004 is within, \$8.006 is over', [dv({ costUsd: 8.004 }), dv({ costUsd: 8.006 })], ['within-budget', 'fail: over-budget']);
+check('money is compared in whole cents (half-cent tolerance): \$8.004 is within, \$8.005 and \$8.006 are over', [dv({ costUsd: 8.004 }), dv({ costUsd: 8.005 }), dv({ costUsd: 8.006 })], ['within-budget', 'fail: over-budget', 'fail: over-budget']);
+check('zero cost and duration are within budget (a draw may cost nothing)', dv({ costUsd: 0, durationMin: 0 }), 'within-budget');
 check('draw: bad costUsd / durationMin (missing, NaN, Infinity, negative, string) -> null', ['costUsd', 'durationMin'].flatMap((f) => [undefined, NaN, Infinity, -1, '5'].map((v) => dv({ [f]: v }))), Array(10).fill(null));
 check('draw: null / non-object / throwing input -> null', [drawVerdictByBudget(null), drawVerdictByBudget(undefined), drawVerdictByBudget('x'), safe(() => drawVerdictByBudget(thrower))], [null, null, null, null]);
 let reads = 0;
@@ -84,6 +85,8 @@ const H4 = 4 * 3600 * 1000;
 const env = (o = {}) => envelopeStep({ draws: 5, invalidReplacements: 0, elapsedMs: 1000, spendUsd: 40, inFlight: 0, ...o });
 const ev = (o) => env(o)?.verdict ?? null;
 check('clean mid-run -> continue', ev(), 'continue');
+check('the very first call of a run (everything 0) -> continue', ev({ draws: 0, invalidReplacements: 0, elapsedMs: 0, spendUsd: 0, inFlight: 0 }), 'continue');
+check('continue reason says how many draws are needed of the 18 and how many are launched, not N/18 progress', [env().reason, ev({ draws: 16, invalidReplacements: 1, inFlight: 1 }) && env({ draws: 16, invalidReplacements: 1, inFlight: 1 }).reason], ['9 needed of 18 allowed, 5 launched, elapsed 1000 ms <= 14400000 ms, spend \$40.00 <= \$144.00', '18 needed of 18 allowed, 18 launched, elapsed 1000 ms <= 14400000 ms, spend \$40.00 <= \$144.00']);
 check('continue carries the \$168 ceiling', env().ceilingUsd, 168);
 check('envelope result shape', Object.keys(env()), ['verdict', 'rule_id', 'ceilingUsd', 'reasons', 'reason']);
 // draws: valid + invalid + in flight, strictly more than 18.
@@ -156,7 +159,7 @@ printf '%s' "$code" | grep -q "node:fs\|readFile"; chk "budget.mjs imports no fi
 grep -qx 'scripts/manual/' tests/.npmignore; chk "tests/.npmignore keeps scripts/manual/ out of the tarball" $?
 
 ran=$((pass + fail))
-[ "$ran" -ge 107 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 107 written"; }
+[ "$ran" -ge 110 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 110 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
