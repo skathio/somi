@@ -37,3 +37,33 @@ export function armVerdict(outcomes) {
     return null;
   }
 }
+
+const SMOKE_SIZE = 5;
+const SMOKE_MAX_FAILS = 1; // admit iff failures <= this (statistical-design.md section 4, FR-14)
+
+/**
+ * Smoke admission over exactly 5 outcomes drawn from ARM_OUTCOMES: admitted iff at most 1 failure
+ * and no Stage 0. `stage0` must be a boolean -- a missing flag must not read as "no Stage 0".
+ * Same `null` contract as armVerdict: wrong count, hole, unknown token, bad flag, throwing access.
+ */
+export function smokeAdmit(draws, opts) {
+  try {
+    const stage0 = opts?.stage0; // read inside the try: a null or throwing options object must yield null
+    if (!Array.isArray(draws) || draws.length !== SMOKE_SIZE || typeof stage0 !== 'boolean') return null;
+    const outcomes = [];
+    for (let i = 0; i < SMOKE_SIZE; i++) {
+      if (!Object.hasOwn(draws, i)) return null;
+      outcomes.push(draws[i]);
+    }
+    if (!outcomes.every((o) => ARM_OUTCOMES.includes(o))) return null;
+    const failures = outcomes.filter((o) => FAIL_OUTCOMES.includes(o)).length;
+    const admitted = failures <= SMOKE_MAX_FAILS && !stage0;
+    return {
+      verdict: admitted ? 'admit' : 'reject',
+      rule_id: 'smoke-5-1',
+      reason: `${failures}/${SMOKE_SIZE} failures ${failures <= SMOKE_MAX_FAILS ? '<=' : '>'} ${SMOKE_MAX_FAILS}, ${stage0 ? 'Stage 0 seen' : 'no Stage 0'}`,
+    };
+  } catch {
+    return null;
+  }
+}

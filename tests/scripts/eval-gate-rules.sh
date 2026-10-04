@@ -56,7 +56,7 @@ check('every ARM_OUTCOMES token is accepted; FAIL_OUTCOMES are exactly the failu
   ARM_OUTCOMES.map((t) => armVerdict([t, ...arm(0).slice(1)])?.reason.slice(0, 3)).join(),
   ARM_OUTCOMES.map((t) => (FAIL_OUTCOMES.includes(t) ? '1/9' : '0/9')).join());
 check('unexpected-pause counts as a failure', armVerdict(arm(4, 'unexpected-pause'))?.verdict, 'FAIL');
-check('FAIL_OUTCOMES is ARM_OUTCOMES minus pass', FAIL_OUTCOMES.join(), ARM_OUTCOMES.filter((t) => t !== 'pass').join());
+check('the vocabulary is pinned literally, in order', [ARM_OUTCOMES.join(), FAIL_OUTCOMES.join()], ['pass,fail,over-budget,unexpected-pause', 'fail,over-budget,unexpected-pause']);
 check('non-array -> null', [armVerdict(undefined), armVerdict(null), armVerdict('x'.repeat(9))], [null, null, null]);
 
 // The lib's own pmf/tail are judged against the test-local reference, not the reverse.
