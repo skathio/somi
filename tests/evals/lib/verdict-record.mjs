@@ -4,11 +4,11 @@
 // answers differently on a second read cannot change what was validated.
 //
 // Record (flat; EXACTLY these keys, nothing else is stored, so a secret-like extra field is refused):
-//   schema_version 1; kind 'verdict' | 'aborted'; digest, rule, tier_config, instrument_digest,
-//   cli_version (text, see below); tasks [{id, hash}] and model_ids [string], both non-empty;
-//   candidate / baseline: an arm {outcomes, cli, models, digest} (the shape triage reads) or null;
+//   schema_version 1; kind 'verdict' | 'aborted'; digest, instrument_digest: 64-hex; rule: one of RECORD_RULES;
+//   tier_config, cli_version (text, see below); tasks [{id, hash}] and model_ids [string], both non-empty;
+//   candidate / baseline: an arm {outcomes, cli, models, digest: 64-hex} (the shape triage reads) or null;
 //   cost_candidate_usd / cost_baseline_usd: the two cost legs, finite numbers >= 0 (baseline 0 when
-//   no baseline arm ran); baseline_digest: string | null; rerun_of / rerun_reason: both null or both
+//   no baseline arm ran); baseline_digest: 64-hex | null; rerun_of / rerun_reason: both null or both
 //   non-empty strings; prev_record_hash: 64-hex | null; record_hash: 64-hex.
 //   A `verdict` carries triage_result (TRIAGE_RESULTS) and complete arms (9 draws, with 9 `cli` and 9
 //   `models` entries); an `aborted` record carries candidate_result ('FAIL' | 'pass' | null) instead
@@ -68,6 +68,7 @@ import { ARM_OUTCOMES, ARM_SIZE, armVerdict } from './rules.mjs';
 import { KINDS, TRIAGE_RESULTS } from './triage.mjs';
 
 export const SCHEMA_VERSION = 1;
+export const RECORD_RULES = Object.freeze(['pooled-9-4']); // a smoke result is never a verdict
 const MAX_DEPTH = 16;
 const MAX_BYTES = 32 * 1024 * 1024;
 const MAX_LINE = 64 * 1024;
@@ -148,7 +149,7 @@ function copyArm(arm, complete) {
   const outcomes = denseCopy(s.outcomes);
   const cli = denseCopy(s.cli);
   const models = denseCopy(s.models);
-  if (!outcomes || !cli || !models || !isText(s.digest)) return null;
+  if (!outcomes || !cli || !models || !isHash(s.digest)) return null;
   const n = outcomes.length;
   if (n < 1 || n > ARM_SIZE || cli.length !== n || models.length !== n || (complete && n !== ARM_SIZE)) return null;
   if (!outcomes.every((o) => ARM_OUTCOMES.includes(o)) || !cli.every(isText) || !models.every(isText)) return null;
@@ -184,8 +185,8 @@ function copyRecord(rec, needHash) {
   const candidate = s.candidate === null ? null : copyArm(s.candidate, complete);
   const baseline = s.baseline === null ? null : copyArm(s.baseline, complete);
   if ((s.candidate !== null && !candidate) || (s.baseline !== null && !baseline) || (complete && !candidate)) return null;
-  const ok = [s.digest, s.rule, s.tier_config, s.instrument_digest, s.cli_version].every(isText)
-    && isTextOrNull(s.baseline_digest) && isUsd(s.cost_candidate_usd) && isUsd(s.cost_baseline_usd)
+  const ok = [s.digest, s.instrument_digest].every(isHash) && RECORD_RULES.includes(s.rule) && [s.tier_config, s.cli_version].every(isText)
+    && (s.baseline_digest === null || isHash(s.baseline_digest)) && isUsd(s.cost_candidate_usd) && isUsd(s.cost_baseline_usd)
     && isTextOrNull(s.rerun_of) && isTextOrNull(s.rerun_reason) && (s.rerun_of === null) === (s.rerun_reason === null)
     && (s.prev_record_hash === null || isHash(s.prev_record_hash)) && (!hashed || isHash(s.record_hash))
     && (complete ? TRIAGE_RESULTS.includes(s.triage_result) : s.candidate_result === armResult(candidate));

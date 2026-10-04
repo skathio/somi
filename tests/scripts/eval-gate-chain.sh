@@ -34,21 +34,23 @@ out=$(node --input-type=module -e "
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { abortedRecord, appendRecord, canonicalJson, recordHash, sealRecord, validateRecord, verifyChain } from './tests/evals/lib/verdict-record.mjs';
+import { RECORD_RULES, abortedRecord, appendRecord, canonicalJson, recordHash, sealRecord, validateRecord, verifyChain } from './tests/evals/lib/verdict-record.mjs';
 import { triage, rerunAllowed, TRIAGE_RESULTS } from './tests/evals/lib/triage.mjs';
+import { armVerdict } from './tests/evals/lib/rules.mjs';
 const res = [];
 const ser = (x) => JSON.stringify(x, (key, v) => (v === undefined ? 'UNDEFINED' : v)); // undefined stays distinct from null
 const check = (name, got, want) => res.push([ser(got) === ser(want), name, got, want]);
 const safe = (f) => { try { return f(); } catch { return 'THREW'; } };
+const hx = (label) => createHash('sha256').update(label).digest('hex'); // a valid 64-hex digest from a short label
 
-const arm = (fails = 1, o = {}) => ({ outcomes: [...Array(fails).fill('fail'), ...Array(9 - fails).fill('pass')], cli: Array(9).fill('1.0.0'), models: Array(9).fill('m-a'), digest: 'd1', ...o });
+const arm = (fails = 1, o = {}) => ({ outcomes: [...Array(fails).fill('fail'), ...Array(9 - fails).fill('pass')], cli: Array(9).fill('1.0.0'), models: Array(9).fill('m-a'), digest: hx('d1'), ...o });
 const base = (o = {}) => ({
-  schema_version: 1, kind: 'verdict', digest: 'd1', rule: 'pooled-9-4', tasks: [{ id: 't1', hash: 'h1' }, { id: 't2', hash: 'h2' }],
-  tier_config: 'tier-a', instrument_digest: 'inst', cli_version: '1.0.0', model_ids: ['m-a'], candidate: arm(), baseline: null,
+  schema_version: 1, kind: 'verdict', digest: hx('d1'), rule: 'pooled-9-4', tasks: [{ id: 't1', hash: 'h1' }, { id: 't2', hash: 'h2' }],
+  tier_config: 'tier-a', instrument_digest: hx('inst'), cli_version: '1.0.0', model_ids: ['m-a'], candidate: arm(), baseline: null,
   cost_candidate_usd: 12.5, cost_baseline_usd: 0, baseline_digest: null, triage_result: 'pass', rerun_of: null, rerun_reason: null,
   prev_record_hash: null, ...o,
 });
-const chain = (n = 4) => { const out = []; let prev = null; for (let i = 0; i < n; i++) { const r = sealRecord(base({ digest: 'd' + i, prev_record_hash: prev })); out.push(r); prev = r.record_hash; } return out; };
+const chain = (n = 4) => { const out = []; let prev = null; for (let i = 0; i < n; i++) { const r = sealRecord(base({ digest: hx('d' + i), prev_record_hash: prev })); out.push(r); prev = r.record_hash; } return out; };
 const C = chain();
 const genesis = C[0].record_hash;
 const head = C[3].record_hash;
@@ -102,16 +104,16 @@ check('the hash input is the canonical bytes of the record without record_hash (
 check('record_hash is not part of its own input: sealed and unsealed hash agree', [sealRecord(R).record_hash === recordHash(R), recordHash(sealRecord(R)) === recordHash(R)], [true, true]);
 const fields = Object.keys(R);
 check('dropping any one field is refused: null, never the hash of the shorter record', fields.map((k) => { const drop = { ...R }; delete drop[k]; return recordHash(drop) !== recordHash(R); }).every(Boolean), true);
-const changes = { digest: 'dx', rule: 'r2', tier_config: 'tier-b', instrument_digest: 'i2', cli_version: '2', model_ids: ['m-b'], cost_candidate_usd: 13, cost_baseline_usd: 1, baseline_digest: 'bd', triage_result: 'block', rerun_of: 'x', rerun_reason: 'y', prev_record_hash: 'a'.repeat(64), tasks: [{ id: 't1', hash: 'h9' }], candidate: arm(2), baseline: arm(3), schema_version: 2 };
+const changes = { digest: hx('dx'), rule: 'other-rule', tier_config: 'tier-b', instrument_digest: hx('i2'), cli_version: '2', model_ids: ['m-b'], cost_candidate_usd: 13, cost_baseline_usd: 1, baseline_digest: hx('bd'), triage_result: 'block', rerun_of: 'x', rerun_reason: 'y', prev_record_hash: 'a'.repeat(64), tasks: [{ id: 't1', hash: 'h9' }], candidate: arm(2), baseline: arm(3), schema_version: 2 };
 check('every stored field, edited alone, changes the hash or is refused (the unchanged ones are listed)', Object.keys(changes).filter((k) => { const h = recordHash({ ...R, [k]: changes[k] }); return h === recordHash(R); }), []);
 check('rerun_of / rerun_reason edited together change the hash', recordHash({ ...R, rerun_of: 'x', rerun_reason: 'y' }) !== recordHash(R), true);
 check('a task id, a task hash, a model id, an arm digest, one cli entry, one outcome each change the hash', [
   recordHash({ ...R, tasks: [{ id: 't9', hash: 'h1' }, R.tasks[1]] }), recordHash({ ...R, tasks: [{ id: 't1', hash: 'h9' }, R.tasks[1]] }), recordHash({ ...R, model_ids: ['m-z'] }),
-  recordHash({ ...R, candidate: arm(1, { digest: 'z' }) }), recordHash({ ...R, candidate: arm(1, { cli: ['1.0.1', ...Array(8).fill('1.0.0')] }) }), recordHash({ ...R, candidate: arm(1, { models: ['m-b', ...Array(8).fill('m-a')] }) }), recordHash({ ...R, candidate: arm(2) }),
+  recordHash({ ...R, candidate: arm(1, { digest: hx('z') }) }), recordHash({ ...R, candidate: arm(1, { cli: ['1.0.1', ...Array(8).fill('1.0.0')] }) }), recordHash({ ...R, candidate: arm(1, { models: ['m-b', ...Array(8).fill('m-a')] }) }), recordHash({ ...R, candidate: arm(2) }),
 ].every((h) => h !== null && h !== recordHash(R)), true);
 check('1, 1.0 and 1e0 are one number; 0.3 and 0.1+0.2 are two, not rounded together', [recordHash({ ...R, cost_candidate_usd: 1 }) === recordHash({ ...R, cost_candidate_usd: 1.0 }), recordHash({ ...R, cost_candidate_usd: 1 }) === recordHash({ ...R, cost_candidate_usd: 1e0 }), recordHash({ ...R, cost_candidate_usd: 0.3 }) !== recordHash({ ...R, cost_candidate_usd: 0.1 + 0.2 })], [true, true, true]);
 check('the hash survives a file round trip (stringify, parse, same hash)', recordHash(JSON.parse(JSON.stringify(sealRecord(R)))), recordHash(R));
-check('unicode in a string field is hashed as UTF-8 and distinct strings differ', [recordHash({ ...R, rule: 'é' }) !== recordHash({ ...R, rule: 'é' }), recordHash({ ...R, rule: '😀' }) !== null], [true, true]);
+check('unicode in a string field is hashed as UTF-8 and distinct strings differ', [recordHash({ ...R, tier_config: 'é' }) !== recordHash({ ...R, tier_config: 'é' }), recordHash({ ...R, tier_config: '😀' }) !== null], [true, true]);
 
 // Validation: allowlist, required fields, schema version.
 const sealed = sealRecord(R);
@@ -122,7 +124,7 @@ check('an extra field, secret-like or not, is rejected (also nested)', [validate
 check('an inherited or __proto__ field is not read as a record field', [validateRecord(Object.create(sealed)), validateRecord(JSON.parse(JSON.stringify(sealed).replace('{', '{\"__proto__\":{\"x\":1},'))), validateRecord(Object.assign(Object.create({ rule: 'r' }), (({ rule, ...x }) => x)(sealed)))], [null, null, null]);
 check('a verdict cannot carry candidate_result and an aborted record cannot carry triage_result', [validateRecord({ ...sealed, candidate_result: null }), validateRecord({ ...sealed, kind: 'aborted' })], [null, null]);
 const ab = (c, o = {}) => { const { triage_result, ...rest } = R; return sealRecord({ ...rest, kind: 'aborted', candidate_result: c, ...o }); };
-const part = (...o) => ({ outcomes: o, cli: o.map(() => '1'), models: o.map(() => 'm'), digest: 'd1' });
+const part = (...o) => ({ outcomes: o, cli: o.map(() => '1'), models: o.map(() => 'm'), digest: hx('d1') });
 const k = (n, f) => part(...Array(f).fill('fail'), ...Array(n - f).fill('pass'));
 check('aborted records validate with candidate_result FAIL / pass / null and a partial or null arm', [ab('FAIL', { candidate: arm(4) }), ab('pass'), ab(null, { candidate: k(3, 3) }), ab('FAIL', { candidate: arm(4, { outcomes: ['fail', 'fail', 'fail', 'fail'], cli: Array(4).fill('1'), models: Array(4).fill('m') }) }), ab(null, { candidate: null })].map((r) => r !== null && validateRecord(r) !== null), Array(5).fill(true));
 check('aborted: a bad candidate_result (fail, undefined, 1) or mismatched partial lengths -> null', [ab('fail'), ab(undefined), ab(1), ab('pass', { candidate: arm(1, { cli: Array(8).fill('1') }) }), ab('pass', { candidate: arm(1, { outcomes: Array(10).fill('pass') }) })], Array(5).fill(null));
@@ -136,11 +138,14 @@ check('rerun_of / rerun_reason: both null or both text; one, empty or typed wron
 check('missing or mistyped common fields -> null', fields.map((k) => { const m = { ...R }; delete m[k]; return sealRecord(m); }), Array(fields.length).fill(null));
 check('bad scalars: empty text, negative / NaN / Infinity / -0 / string cost, bad prev hash, empty tasks and model_ids -> null', [rr({ digest: '' }), rr({ rule: 5 }), rr({ cost_candidate_usd: -1 }), rr({ cost_baseline_usd: NaN }), rr({ cost_candidate_usd: Infinity }), rr({ cost_candidate_usd: -0 }), rr({ cost_candidate_usd: '1' }), rr({ prev_record_hash: 'xyz' }), rr({ prev_record_hash: 'A'.repeat(64) }), rr({ tasks: [] }), rr({ model_ids: [] }), rr({ model_ids: [''] }), rr({ tasks: [{ id: '', hash: 'h' }] }), rr({ baseline_digest: '' })], Array(14).fill(null));
 check('non-object, array, null, throwing and Proxy-throwing input -> null for all four functions', [null, undefined, 5, 'x', [], thrower].flatMap((v) => [safe(() => validateRecord(v)), safe(() => recordHash(v)), safe(() => sealRecord(v))]), Array(18).fill(null));
-check('a record getter that flips is read once (validated copy and hash agree)', safe(() => { let c = 0; const o = { ...R }; Object.defineProperty(o, 'rule', { get() { return c++ === 0 ? 'r1' : 5; } }); return sealRecord(o)?.rule; }), 'r1');
+check('a record getter that flips is read once (validated copy and hash agree)', safe(() => { let c = 0; const o = { ...R }; Object.defineProperty(o, 'rule', { get() { return c++ === 0 ? 'pooled-9-4' : 5; } }); return sealRecord(o)?.rule; }), 'pooled-9-4');
 check('arrays with a Proxy length that flips are decided on one copy', safe(() => { let c = 0; return sealRecord({ ...R, tasks: new Proxy(R.tasks.slice(), { get(t, k) { return k === 'length' ? (c++ === 0 ? 2 : 0) : t[k]; } }) })?.tasks.length; }), 2);
 check('sparse arrays (tasks, model_ids, outcomes, cli, models) -> null', [rr({ tasks: new Array(2) }), rr({ model_ids: new Array(1) }), ...['outcomes', 'cli', 'models'].map((f) => { const a = arm(1); delete a[f][4]; return rr({ candidate: a }); })], Array(5).fill(null));
 check('non-array where an array is required -> null', [rr({ tasks: { length: 1, 0: R.tasks[0] } }), rr({ model_ids: 'm-a' }), rr({ candidate: arm(1, { outcomes: 'x'.repeat(9) }) })], [null, null, null]);
 
+const dset = (v) => [rr({ digest: v }), rr({ instrument_digest: v }), rr({ baseline_digest: v }), rr({ candidate: arm(1, { digest: v }) }), rr({ baseline: arm(1, { digest: v }) })];
+check('digest, instrument_digest, baseline_digest and both arm digests: 64 lowercase hex accepted; 63 / 65 chars, uppercase, non-hex, a label, empty, a trailing newline and a leading space refused; a null baseline_digest stays valid, undefined does not', [dset(hx('v')).every((r) => r !== null), ...[hx('v').slice(1), hx('v') + '0', hx('v').toUpperCase(), 'g' + hx('v').slice(1), 'd1', '', hx('v') + '\\n', ' ' + hx('v')].map((v) => dset(v).every((r) => r === null)), rr({ baseline_digest: null }) !== null, rr({ baseline_digest: undefined })], [true, ...Array(8).fill(true), true, null]);
+check('rule: only pooled-9-4 (the id armVerdict emits, so the two cannot drift) is accepted; smoke-5-1, an unknown id, wrong case, padding, a newline, a non-string and an inherited name are refused', [Object.isFrozen(RECORD_RULES), RECORD_RULES.includes(armVerdict(Array(9).fill('pass')).rule_id), RECORD_RULES.every((r) => rr({ rule: r }) !== null), ...['smoke-5-1', 'r2', '', 'POOLED-9-4', 'pooled-9-4 ', 'pooled-9-4\\n', 5, null, undefined, '__proto__', 'constructor'].map((v) => rr({ rule: v }))], [true, true, true, ...Array(11).fill(null)]);
 // Aborted: candidate_result must agree with the partial candidate arm, on both sides of each boundary.
 const acc = (cr, c, o = {}) => ab(cr, { candidate: c, ...o }) !== null;
 check('FAIL exactly at 4 failures: 3 of 3 takes null only, 4 of 4 takes FAIL only', [acc('FAIL', part('fail', 'fail', 'fail')), acc(null, part('fail', 'fail', 'fail')), acc('pass', part('fail', 'fail', 'fail')), acc('FAIL', k(4, 4)), acc(null, k(4, 4)), acc('pass', k(4, 4))], [false, true, false, true, false, false]);
@@ -149,7 +154,7 @@ check('pass only when failures plus undrawn draws stay below 4 (6 draws: 0 fails
 check('a null candidate arm takes null only; an aborted arm with 0 draws is refused (candidate or baseline), 1 draw is fine', [acc(null, null), acc('FAIL', null), acc('pass', null), acc(null, part()), acc(null, null, { baseline: part() }), acc(null, null, { baseline: part('fail') })], [true, false, false, false, false, true]);
 check('each validator guard rejects its bad value: task hash, arm digest, instrument_digest, record_hash format, cost_baseline_usd range, a sealed input to sealRecord, a 10-entry aborted arm', [rr({ tasks: [{ id: 't1', hash: '' }] }), rr({ candidate: arm(1, { digest: '' }) }), rr({ instrument_digest: '' }), validateRecord({ ...sealed, record_hash: 'xyz' }), rr({ cost_baseline_usd: -1 }), sealRecord(sealed), ab('pass', { candidate: part(...Array(10).fill('pass')) })], Array(7).fill(null));
 const unsafeText = ['m\\n', 'a\\u001b[2J', 'x\\u202ey', 'a\\u200bb', 'a\\u2028b', 'a\\u2029b', 'a\\ud800b', 'a\\u0085b', 'a\\u009bb', 'a\\u0000b', 'a\\u200db'];
-const inFields = (v) => [rr({ rule: v }), rr({ model_ids: [v] }), rr({ candidate: arm(1, { cli: [v, ...Array(8).fill('1')] }) }), rr({ candidate: arm(1, { models: [v, ...Array(8).fill('m')] }) }), rr({ tasks: [{ id: v, hash: 'h' }] }), rr({ tasks: [{ id: 't', hash: v }] }), rr({ rerun_of: v, rerun_reason: 'w' }), rr({ baseline_digest: v })];
+const inFields = (v) => [rr({ tier_config: v }), rr({ model_ids: [v] }), rr({ candidate: arm(1, { cli: [v, ...Array(8).fill('1')] }) }), rr({ candidate: arm(1, { models: [v, ...Array(8).fill('m')] }) }), rr({ tasks: [{ id: v, hash: 'h' }] }), rr({ tasks: [{ id: 't', hash: v }] }), rr({ rerun_of: v, rerun_reason: 'w' }), rr({ cli_version: v })];
 check('text fields refuse newline, ESC, C1, RLO, zero-width space and joiner, U+2028 / U+2029, a lone surrogate and NUL, in every field kind', unsafeText.flatMap(inFields), Array(unsafeText.length * 8).fill(null));
 const long = (n) => 'r'.repeat(n);
 check('text is 1 to 512 UTF-16 code units: 512 accepted, 513 refused (256 emoji = 512 units accepted, 257 refused), in every field kind; ordinary unicode (accents, emoji, CJK) is accepted', [[...inFields(long(512)), ...inFields('😀'.repeat(256)), ...['é', '😀', '日本語'].flatMap(inFields)].every((r) => r !== null), [...inFields(long(513)), ...inFields('😀'.repeat(257))].every((r) => r === null)], [true, true]);
@@ -170,14 +175,14 @@ check('abortedRecord derives candidate_result: 3 of 3 failed -> null, no arm -> 
 const { digest: _d, ...noDigest } = AF;
 check('abortedRecord refuses a caller kind / candidate_result / prev_record_hash / record_hash, a missing field, a bad or absent arm, junk input', [mk({ kind: 'aborted' }), mk({ candidate_result: 'FAIL' }), mk({ prev_record_hash: null }), mk({ record_hash: 'a'.repeat(64) }), abortedRecord(noDigest), mk({ candidate: part() }), mk({ candidate: undefined }), abortedRecord(null), safe(() => abortedRecord(thrower))], Array(9).fill(null));
 check('abortedRecord: rerun_of and rerun_reason pass through together; one alone -> null', [mk({ rerun_of: 'h', rerun_reason: 'w' })?.rerun_of, mk({ rerun_of: 'h' })], ['h', null]);
-check('rerunAllowed counts an early-FAIL abort as used and an undecided abort as not', [rerunAllowed([sealRecord(mf)], 'd1')?.verdict, rerunAllowed([sealRecord(mk({ candidate: k(3, 3) }))], 'd1')?.verdict], ['refused', 'allowed']);
+check('rerunAllowed counts an early-FAIL abort as used and an undecided abort as not', [rerunAllowed([sealRecord(mf)], hx('d1'))?.verdict, rerunAllowed([sealRecord(mk({ candidate: k(3, 3) }))], hx('d1'))?.verdict], ['refused', 'allowed']);
 
 // Compatibility with triage.mjs: every record it needs is accepted, and what it rejects is rejected.
 const hist = [sealRecord(R), ab('FAIL', { candidate: arm(4) }), ab('pass'), ab(null, { candidate: null }), sealRecord({ ...R, rerun_of: 'h0', rerun_reason: 'flaky' }), ...TRIAGE_RESULTS.map((t) => sealRecord({ ...R, triage_result: t }))];
 const passIn = { candidate: arm(0, { digest: 'cand' }), baseline: null, tagBaselineDigest: null };
 check('every record shape triage reads is accepted by validateRecord', hist.map((r) => r !== null && validateRecord(r) !== null), hist.map(() => true));
-check('validated records feed triage and rerunAllowed without null', [triage({ ...passIn, history: hist })?.verdict, rerunAllowed(hist, 'd1')?.verdict], ['pass', 'refused']);
-check('each record alone is accepted by triage and rerunAllowed', hist.map((r) => triage({ ...passIn, history: [r] }) !== null && rerunAllowed([r], 'd1') !== null), hist.map(() => true));
+check('validated records feed triage and rerunAllowed without null', [triage({ ...passIn, history: hist })?.verdict, rerunAllowed(hist, hx('d1'))?.verdict], ['pass', 'refused']);
+check('each record alone is accepted by triage and rerunAllowed', hist.map((r) => triage({ ...passIn, history: [r] }) !== null && rerunAllowed([r], hx('d1')) !== null), hist.map(() => true));
 check('a chain of validated records is accepted by triage as history', triage({ ...passIn, history: C })?.verdict, 'pass');
 const mutate = (f) => { const m = { ...sealed }; f(m); return m; };
 const rejected = [
@@ -208,7 +213,7 @@ const probe = (mode, f, rec, opts) => safe(() => JSON.parse(execFileSync(process
 const f1 = af('s.jsonl');
 const missing = appendRecord(f1, base());
 check('a missing store is refused when create is not requested, and nothing is created', [missing?.ok, missing?.reason, fs.existsSync(f1)], [false, 'store is missing and create was not requested', false]);
-const a1 = [0, 1, 2].map((i) => appendRecord(f1, base({ digest: 'a' + i }), i === 0 ? { create: true } : undefined));
+const a1 = [0, 1, 2].map((i) => appendRecord(f1, base({ digest: hx('a' + i) }), i === 0 ? { create: true } : undefined));
 const L1 = lines(f1);
 check('append x3 (the first with create: true): each ok with a growing length, 3 lines on disk, verifyChain accepts them', [a1.map((a) => a?.ok), a1.map((a) => a?.length), V(L1)?.ok, V(L1)?.head === a1[2]?.record?.record_hash], [[true, true, true], [1, 2, 3], true, true]);
 check('first appended record has prev_record_hash null, each later one links to the one before', [L1[0]?.prev_record_hash, L1[1]?.prev_record_hash === L1[0]?.record_hash, L1[2]?.prev_record_hash === L1[1]?.record_hash], [null, true, true]);
@@ -301,9 +306,9 @@ check('malformed file or record -> null (non-string, empty or NUL path; null / e
 check('a refused record leaves no file behind', fs.existsSync(f5), false);
 let gc = 0;
 const flip = base();
-Object.defineProperty(flip, 'rule', { get() { return gc++ === 0 ? 'r1' : 5; } });
+Object.defineProperty(flip, 'rule', { get() { return gc++ === 0 ? 'pooled-9-4' : 5; } });
 const f6 = af('g.jsonl');
-check('a record getter that flips is read once: the line holds the validated value and verifies', [appendRecord(f6, flip, { create: true })?.ok, lines(f6)[0]?.rule, V(lines(f6))?.ok, gc], [true, 'r1', true, 1]);
+check('a record getter that flips is read once: the line holds the validated value and verifies', [appendRecord(f6, flip, { create: true })?.ok, lines(f6)[0]?.rule, V(lines(f6))?.ok, gc], [true, 'pooled-9-4', true, 1]);
 const tail4 = lines(f1)[3]?.record_hash;
 const stale = base({ prev_record_hash: 'f'.repeat(64) });
 const r7 = appendRecord(f1, stale);
@@ -323,7 +328,7 @@ while IFS=$'\t' read -r status name; do
   esac
 done <<< "$out"
 ran=$((pass + fail))
-[ "$ran" -ge 117 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 117 written"; }
+[ "$ran" -ge 119 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 119 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
