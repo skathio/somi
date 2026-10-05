@@ -52,7 +52,7 @@ const HEX = /^[0-9a-f]{64}$/;
 const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const byBytes = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 // Printable ASCII only, so a hostile name can never inject a control character into a reason.
-const esc = (v) => [...(Buffer.isBuffer(v) ? v : Buffer.from(String(v)))].map((b) => (b >= 0x20 && b < 0x7f && b !== 0x25 && b !== 0x5c ? String.fromCharCode(b) : `%${b.toString(16).padStart(2, '0').toUpperCase()}`)).join('');
+export const esc = (v) => [...(Buffer.isBuffer(v) ? v : Buffer.from(String(v)))].map((b) => (b >= 0x20 && b < 0x7f && b !== 0x25 && b !== 0x5c ? String.fromCharCode(b) : `%${b.toString(16).padStart(2, '0').toUpperCase()}`)).join('');
 class Refusal { constructor(reason, path) { this.reason = reason; this.path = path; } }
 const stop = (reason, path) => { throw new Refusal(reason, path); };
 
@@ -60,7 +60,7 @@ function validName(s) {
   return typeof s === 'string' && s !== '' && s !== '.' && s !== '..' && Buffer.byteLength(s) <= MAX_NAME_BYTES
     && !BAD_CHARS.test(s) && !LONE_SURROGATE.test(s) && s.normalize('NFC') === s;
 }
-const validPath = (p) => typeof p === 'string' && Buffer.byteLength(p) <= MAX_PATH_BYTES && p.split('/').every(validName);
+export const validPath = (p) => typeof p === 'string' && Buffer.byteLength(p) <= MAX_PATH_BYTES && p.split('/').every(validName);
 const sameKeys = (o, keys) => { const k = Reflect.ownKeys(o); return k.length === keys.length && keys.every((x) => k.includes(x)); };
 // Dense plain copy (`length` and each slot read once), or null.
 function dense(arr, max = MAX_LIST) {

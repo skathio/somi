@@ -37,7 +37,7 @@ const inChild = (dir) => { const r = spawnSync(process.execPath, ['--input-type=
 const sha = (p) => spawnSync('sha256sum', [p], { encoding: 'utf8' }).stdout.split(' ')[0];
 const refuse = (reason, path) => ({ ok: false, reason, path });
 const names = (r) => r.files.map((e) => e[0]);
-check('the module exposes six names; the caps are the documented numbers', [Object.keys(M).sort(), M.MAX_ENTRIES, M.MAX_DEPTH, M.MAX_FILE_BYTES, M.MAX_TOTAL_BYTES], [['MAX_DEPTH', 'MAX_ENTRIES', 'MAX_FILE_BYTES', 'MAX_TOTAL_BYTES', 'lstatManifest', 'scopeVerdict'], 20000, 32, 16777216, 268435456]);
+check('the module exposes eight names; the caps are the documented numbers', [Object.keys(M).sort(), M.MAX_ENTRIES, M.MAX_DEPTH, M.MAX_FILE_BYTES, M.MAX_TOTAL_BYTES], [['MAX_DEPTH', 'MAX_ENTRIES', 'MAX_FILE_BYTES', 'MAX_TOTAL_BYTES', 'esc', 'lstatManifest', 'scopeVerdict', 'validPath'], 20000, 32, 16777216, 268435456]);
 const A = tree({ 'b.txt': 'hello\n', 'sub/c.txt': 'c', 'empty': '' });
 const ra = L(A); const [wf, lf] = rec(); L(A, { fs: wf });
 check('every file is opened with O_NOFOLLOW and O_NONBLOCK set', [lf.flags.length, lf.flags.every((fl) => (fl & fs.constants.O_NOFOLLOW) && (fl & fs.constants.O_NONBLOCK))], [3, true]);
