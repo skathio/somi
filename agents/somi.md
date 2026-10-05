@@ -78,8 +78,8 @@ choice as it happens, even though you don't pause for approval before making it.
 
 **Minimum, even if the skill below can't be loaded:** before this `Task`, call `somi_resolve` for
 the agent about to start, passing `project_dir`; on an error, map it and stop — never guess a tier
-or a model to keep going. Once it succeeds, pass its `model` and put `dispatched at cost: <tier>`
-in the agent's briefing. That is the floor that must hold regardless of whether the next paragraph
+or a model to keep going. Once it succeeds, pass its `model` and put the cost line in the agent's
+briefing: `dispatched at cost: <tier>` only when its `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)` — never claim a tier no model was pinned to. That is the floor that must hold regardless of whether the next paragraph
 loads — a failure to load the skill is never a cue to skip resolution.
 
 For everything else — the fallback order when `somi_resolve` can't be reached at all, the exit-code
@@ -150,7 +150,7 @@ rather than in parallel.
 **A `Task <agent>` line names an agent — resolve and start it through Step 4.** Whenever the
 procedure you are following calls for starting an agent (not a command) via `Task`, follow
 [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) end to end at that point — the
-resolve call, the `dispatched at cost: <tier>` briefing line, the model, the retry rule if the host
+resolve call, the briefing's cost line (`dispatched`, or `requested` when unenforced), the model, the retry rule if the host
 rejects a self-picked model. Resolve right then, not in advance, and not once for the whole
 command. The one exception: when the procedure itself calls for **several agent `Task`s issued
 together in one turn** so they run concurrently (`/review-panel` seating its lenses is the shipped
@@ -240,5 +240,5 @@ gate, cannot make Step 5 follow a different procedure than Step 3 announced, and
 > `somi_command` rather than resolving them; inside those, each `Task planner` / `Task coder` /
 > `Task reviewer` line goes through Step 4 on its own, at the moment it starts
 > (`somi_resolve({agent: "coder", host: "copilot", project_dir: "<abs path>"})`, briefing line
-> `dispatched at cost: <tier>`). A bare `@somi` would instead have hit branch 1(a) and rendered the
+> `dispatched at cost: <tier>` when `enforced`, else `requested cost: <tier> (not enforced: ...)`). A bare `@somi` would instead have hit branch 1(a) and rendered the
 > dashboard.

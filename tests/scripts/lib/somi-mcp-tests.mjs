@@ -89,6 +89,23 @@ async function run() {
     check('the resolved project dir is where ceiling state actually landed', existsSync(path.join(proj, '.somi', 'somi-state', 'ceiling.json')), true);
   });
 
+  // --- #32: enforced/reason are exposed, and a config mapping makes copilot enforced ----------
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const bare = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'copilot', project_dir: fresh() })));
+    check('copilot, no mapping: model null, enforced false, reason names host',
+      [bare.model, bare.enforced, /no model mapping for host copilot.*low, medium and high/.test(bare.reason ?? '')], [null, false, true]);
+    const mapped = fresh();
+    mkdirSync(path.join(mapped, '.somi'), { recursive: true });
+    writeFileSync(path.join(mapped, '.somi', 'config.json'),
+      JSON.stringify({ cost: { mapping: { copilot: { low: 'gpt-5-mini', medium: 'gpt-5', high: 'gpt-5-pro' } } } }));
+    const m = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'copilot', project_dir: mapped })));
+    check('copilot with config mapping: model set, enforced true, no reason',
+      [m.model, m.enforced, 'reason' in m], ['gpt-5-pro', true, false]);
+    const cc = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'claude-code', project_dir: fresh() })));
+    check('claude-code default: model set, enforced true', [typeof cc.model, cc.enforced], ['string', true]);
+  });
+
   // --- the four failure codes surface as isError with the matching code --------------------
   await withClient({}, async (client) => {
     await client.initialize();

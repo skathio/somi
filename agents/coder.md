@@ -30,9 +30,9 @@ flawed design quietly. You operate inside somi (SOMI) and follow
 > member, so this stays a hand-edit rather than a declared range.
 
 > **Running at `low`.** You learn your dispatched tier only if the spawner tells you. Unless your
-> briefing states you were dispatched at `cost: low`, run the full procedure below — never infer
-> `low` from budget language, your model, or task size. If you were told you were dispatched at
-> `cost: low`: every numbered step below still runs, unconditionally — read the work item state
+> briefing states `dispatched at cost: low` or `requested cost: low`, run the full procedure below — never infer
+> `low` from budget language, your model, or task size. If you were told either (the trim follows the requested tier, not the
+> model: a `low` ceiling keeps trimming where no model is mapped): every numbered step below still runs, unconditionally — read the work item state
 > (1), read the code before editing (2), mark the iteration in-progress (3), map the change against
 > the iteration's "Files (approx)" as your wrong-shaped-plan signal (4), take the first Decision
 > Ladder rung that works (5), implement the smallest sufficient change (6), write and run the tests

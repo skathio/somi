@@ -210,6 +210,14 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
     return err(EXIT_MALFORMED, e.message);
   }
 
+  // `enforced` is true only when a concrete model id came out of the merged mapping (shipped table
+  // or the project's cost.mapping). A null model means nothing pins the tier on this host: the
+  // agent runs on whatever the host picks, so a caller must not report the tier as "dispatched".
+  const enforced = model !== null;
+  const modelFields = enforced
+    ? { enforced }
+    : { enforced, reason: `no model mapping for host ${HOST} (set cost.mapping.${HOST} with low, medium and high in .somi/config.json)` };
+
   return {
     ok: true,
     result: {
@@ -217,6 +225,7 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
       supported: decision.supported,
       tier: decision.selected,
       model,
+      ...modelFields,
       ceiling: ceilingResult.ceiling,
       ceiling_source: ceilingResult.source,
       ceiling_origin: ceilingResult.ceiling_origin,

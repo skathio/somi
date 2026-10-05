@@ -35,7 +35,7 @@ procedure live instead of Tasking a single agent to carry it out. Either way, ev
 procedure starts — one `Task` call per agent — resolves its cost tier and model first, through
 `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill, served over the
 bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP isn't reachable), and
-the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling **selects**
+the spawned agent's briefing states `dispatched at cost: <tier>` when a model was enforced, or `requested cost: <tier> (not enforced: no mapped model)` when none was. The session ceiling **selects**
 the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
 declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
 

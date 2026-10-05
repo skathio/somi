@@ -8,6 +8,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 _Nothing yet._
 
+## [3.1.1] — 2026-10-05 — fix: unenforced cost tier reported as dispatched on Copilot
+
+**Patch — bug fix** ([#32](https://github.com/skathio/somi/issues/32)). On Copilot `somi_resolve`
+returns `model: null` for every tier (no shipped mapping), so a `cost: high` agent such as
+`designer` ran on the host's medium-cost model while its briefing said `dispatched at cost: high`.
+The user was told nothing.
+
+### Fixed
+
+- **`somi_resolve` reports whether the tier is enforced.** The result gains `enforced: boolean`,
+  true only when a concrete model id was resolved from a mapping (the shipped table or the
+  project's `cost.mapping`), and a `reason` string when it is false (for example `no model mapping
+  for host copilot (set cost.mapping.copilot with low, medium and high ...)`). Existing fields are unchanged. Same output from the MCP tool and the CLI.
+- **A briefing never claims an unenforced tier.** The dispatch skill, every command and agent that
+  names the cost line, and the front door now state `dispatched at cost: <tier>` only for enforced
+  dispatches, and `requested cost: <tier> (not enforced: no mapped model)` otherwise. For a
+  high-tier agent dispatched unenforced the orchestrator is also instructed to print one
+  user-visible notice per agent type per session, naming the fix (map all three tiers under
+  `cost.mapping.<host>`, since a host named there replaces its whole tier map). That notice is a
+  prompt instruction, not something the code guarantees.
+- **Low-tier trimming is unchanged without a mapping.** `coder`, `planner` and `refactorer` take
+  their "Running at `low`" trim from either `dispatched at cost: low` or `requested cost: low`: the
+  trim is about the procedure, not the model, so a `low` ceiling keeps trimming on Copilot.
+- **Which rule wins on a null mapping is now stated:** a `cost.mapping` entry in
+  `.somi/config.json` (it counts as the user naming the model), then the host's "do not set
+  `model`" guidance, then the soft pick-strongest-visible.
+- **Docs:** `docs/USAGE.md` gains "Pinning models per tier on Copilot" with an example
+  `cost.mapping.copilot` block, and says `cost.ceiling` is an upper bound, not a model request.
+
+Not changed: with no mapping nothing pins a model, and the agent still runs on whatever the host
+gives it. This release makes that visible; it does not pick a model or prompt for one. Unenforced
+medium- and low-tier agents get only the briefing line, not the notice. A guided model picker,
+ordered preference lists and a `validate.sh` warning remain follow-ups.
+
+No migration action required. To pin models on Copilot, set `cost.mapping.copilot`.
+
 ## [3.1.0] — 2026-10-02 — fix: SoMi agents unusable on GitHub Copilot
 
 **Minor — one new MCP tool, plus fixes** ([#30](https://github.com/skathio/somi/issues/30)).

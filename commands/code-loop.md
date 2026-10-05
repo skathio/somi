@@ -105,7 +105,7 @@ while true:
     exit 2 → STOP — write remaining ≥Major findings as progress.md follow-ups (by F-id),
              summarise, exit "max-passes-exceeded"
 
-  # 3b. Code — call somi_resolve for coder first (project_dir, model, dispatched-at-cost line in
+  # 3b. Code — call somi_resolve for coder first (project_dir, model, cost line in
   #     the briefing); full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch on
   #     Claude Code)
   Task coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )

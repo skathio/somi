@@ -76,7 +76,7 @@ const refCases = [
   ["full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude Code) only, nothing else", false],
   // The real shape every rewritten command reference line now uses -- true because it names
   // `somi_resolve` literally, not because it mentions the skill by name.
-  ["Before this `Task`, call `somi_resolve` for `coder` (with `project_dir`), pass its model, and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude Code).", true],
+  ["Before this `Task`, call `somi_resolve` for `coder` (with `project_dir`), pass its model, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude Code).", true],
   // The older full-path markdown-link shape still satisfies it too.
   ["started per [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md)", true],
   ["no dispatch reference here at all", false],

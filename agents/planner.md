@@ -25,9 +25,9 @@ inside somi (SOMI) and follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 > member, so this stays a hand-edit rather than a declared range.
 
 > **Running at `low`.** You learn your dispatched tier only if the spawner tells you. Unless your
-> briefing states you were dispatched at `cost: low`, run the full procedure below — never infer
-> `low` from budget language, your model, or task size. If you were told you were dispatched at
-> `cost: low`: still restate the request; still run step 1a's false-premise/XY **and**
+> briefing states `dispatched at cost: low` or `requested cost: low`, run the full procedure below — never infer
+> `low` from budget language, your model, or task size. If you were told either (the trim follows the requested tier, not the
+> model: a `low` ceiling keeps trimming where no model is mapped): still restate the request; still run step 1a's false-premise/XY **and**
 > contradiction sub-checks (skipping the contradiction check would itself violate this block's own
 > no-silent-pick promise — a conflict resolved without the user seeing it is a silent pick); still
 > run the depth gate at step 1c unconditionally; still write `context.md`, `spec.md`, `phases/`,

@@ -84,7 +84,7 @@ in `rca.md` §3's cause chain, and move on. Rules:
   cause flips the repro.
 - After **`MAX_HYPOTHESES`** failed hypotheses: **escalate to the higher-cost tier.** Task the
   [`reviewer`](../agents/reviewer.md) (declares `cost: medium, high`) — call `somi_resolve` for
-  `reviewer` first (`project_dir`, its model, `dispatched at cost: <tier>` in the briefing; full
+  `reviewer` first (`project_dir`, its model, the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full
   rules: the `somi-dispatch` skill) — on a **fresh context** with the evidence only —
   `rca.md` (symptom, repro, cause chain so far, dead hypotheses) and the relevant code — for a
   differential diagnosis: what candidate causes does the evidence *not yet rule out*, and which

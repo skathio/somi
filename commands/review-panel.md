@@ -74,7 +74,7 @@ the panel's value (it shows the surface was considered, not ignored).
 
 Issue the seated lenses as **multiple `Task` calls in a single turn** so they run concurrently —
 call `somi_resolve` for each lens back-to-back immediately before the batch (each call's own
-`project_dir`, model, and `dispatched at cost: <tier>` in that lens's own briefing — this is the
+`project_dir`, model, and cost line (`dispatched at cost: <tier>` only when `enforced`, else `requested cost: <tier> (not enforced: no mapped model)`) in that lens's own briefing — this is the
 concurrent-batch case the `somi-dispatch` skill's §5 names explicitly). Give each the *same* scoped
 diff and work-item context, and each its own briefing:
 
