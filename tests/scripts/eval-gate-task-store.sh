@@ -19,7 +19,7 @@ export TMP
 CODE=$(cat <<'EOS'
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-const { validateTaskJson: V, declaredScope: DS, taskHash: H } = await import(`${process.env.LIB}/task-store.mjs`);
+const { validateTaskJson: V, declaredScope: DS, taskHash: H, canaryCheck: C } = await import(`${process.env.LIB}/task-store.mjs`);
 const res = [];
 const check = (name, got, want) => res.push([JSON.stringify(got) === JSON.stringify(want), name, got, want]);
 const T = process.env.TMP;
@@ -115,6 +115,41 @@ check('a task.json that fstat does not call a regular file is refused', inject(t
 const [okI, logI] = inject(tree(FIX), {});
 check('with a faithful injected fs the hash is the same, and the parse open sets O_NOFOLLOW and O_NONBLOCK', [okI.hash === h0.hash, logI.flags.length, (logI.flags[0] & fs.constants.O_NOFOLLOW) !== 0, (logI.flags[0] & fs.constants.O_NONBLOCK) !== 0], [true, 1, true, true]);
 check('a malformed injected fs is a refusal', [H(tree(FIX), { fs: {} }).ok, H(tree(FIX), { x: 1 }).ok], [false, false]);
+// Canary check. The canary is the validated one in the hashed task.json; the caller supplies none.
+const CAN = 'canary_0123456789ab';
+const GOODT = { 'task.json': TJ, 'fixture/a.txt': 'alpha\n', 'hidden/h.mjs': `// ${CAN}\n`, 'oracle/o.mjs': `x ${CAN}`, 'oracle2/o.mjs': `${CAN}` };
+const { 'fixture/a.txt': _drop, ...noFixture } = GOODT;
+const cc = (files) => C(tree({ ...GOODT, ...files }));
+const without = (...paths) => { const d = tree(GOODT); for (const p of paths) fs.rmSync(`${d}/${p}`, { recursive: true }); return C(d); };
+const rs = (r) => (r.ok ? 'ACCEPTED' : r.reason);
+const goodDir = tree(GOODT);
+check('an all-good tree is ok and its hash is exactly taskHash\'s', [C(goodDir).ok, C(goodDir).hash === H(goodDir).hash], [true, true]);
+check('a hidden, oracle or oracle2 file without the canary is refused naming the file', [cc({ 'hidden/h2.mjs': 'no' }), cc({ 'oracle/p.mjs': 'no' }), cc({ 'oracle2/p.mjs': '' })].map(rs), ['hidden/h2.mjs: missing the canary', 'oracle/p.mjs: missing the canary', 'oracle2/p.mjs: missing the canary']);
+check('the canary is case-sensitive, and split by a newline, a NUL or a space it does not count', ['CANARY_0123456789AB', 'canary_01234\n56789ab', 'canary_01234\u000056789ab', 'canary_01234 56789ab'].map((c) => rs(cc({ 'hidden/h2.mjs': c }))), Array(4).fill('hidden/h2.mjs: missing the canary'));
+check('a fixture file holding the canary, or a fixture file name holding it, is refused naming the file', [rs(cc({ 'fixture/b/x.txt': `see ${CAN}` })), rs(cc({ [`fixture/${CAN}.txt`]: 'x' }))], ['fixture/b/x.txt: candidate-visible file contains the canary', `fixture/${CAN}.txt: the path contains the canary`]);
+check('a brief or a statement holding the canary is refused', [rs(C(tree({ ...GOODT, 'task.json': TJ.replace('"b"', `"see ${CAN}"`) }))), rs(C(tree({ ...GOODT, 'task.json': TJ.replace('"one"', `"${CAN}"`) })))], ['brief: contains the canary', 'statements: a line contains the canary']);
+for (const [dn, f] of [['hidden', 'hidden/h.mjs'], ['oracle', 'oracle/o.mjs'], ['oracle2', 'oracle2/o.mjs']]) check(`${dn}/ with no file (emptied or removed) is refused naming it`, [without(f), without(dn)].map(rs), [`dir: empty directory at ${dn}`, `${dn}/: has no files (a check over nothing proves nothing)`]);
+check('the needle is the whole canary: one byte fewer at either end is not enough', [cc({ 'hidden/h2.mjs': CAN.slice(0, -1) }), cc({ 'hidden/h2.mjs': CAN.slice(1) })].map(rs), Array(2).fill('hidden/h2.mjs: missing the canary'));
+check('only the root task.json is skipped: hidden/task.json and hidden/x.json without the canary are named', [cc({ 'hidden/task.json': '{}' }), cc({ 'hidden/x.json': '{}' })].map(rs), ['hidden/task.json: missing the canary', 'hidden/x.json: missing the canary']);
+check('the canary in any directory name is refused, under fixture/ and under hidden/ (even when the file holds it)', [cc({ [`fixture/${CAN}/x.txt`]: 'x' }), cc({ [`hidden/${CAN}/x.mjs`]: CAN })].map(rs), [`fixture/${CAN}/x.txt: the path contains the canary`, `hidden/${CAN}/x.mjs: the path contains the canary`]);
+check('the canary in a declared source, test_dir or root_files path is refused naming the field', [['"s.mjs"', `"s${CAN}.mjs"`], ['"test"', `"t/${CAN}"`], ['"root_files":[]', `"root_files":["${CAN}"]`]].map(([a, b]) => rs(C(tree({ ...GOODT, 'task.json': TJ.replace(a, b) })))), ['source: a declared path contains the canary', 'test_dir: a declared path contains the canary', 'root_files: a declared path contains the canary']);
+check('a task with no fixture/ directory is accepted (greenfield)', C(tree(noFixture)).ok, true);
+const bin = Buffer.concat([Buffer.from([0xff, 0xfe, 0x00, 0x80]), Buffer.from(CAN), Buffer.from([0xc3, 0x28, 0x00])]);
+check('a binary invalid-UTF-8 hidden file holding the canary is found; the same bytes under fixture are refused', [rs(cc({ 'hidden/bin.dat': bin })), rs(cc({ 'fixture/bin.dat': bin }))], ['ACCEPTED', 'fixture/bin.dat: candidate-visible file contains the canary']);
+check('a 300 KiB hidden file with the canary at the end is found (no chunk boundary, size cap is the manifest cap)', rs(cc({ 'hidden/big.dat': Buffer.concat([Buffer.alloc(300 * 1024, 0x61), Buffer.from(CAN)]) })), 'ACCEPTED');
+check('an unexpected top-level directory or file is refused naming it, nop and mutants included', [cc({ 'nop/x': CAN }), cc({ 'notes.txt': CAN }), cc({ 'mutants/m': CAN })].map(rs), ['dir: unexpected top-level entry at nop/x', 'dir: unexpected top-level entry at notes.txt', 'dir: unexpected top-level entry at mutants/m']);
+check('a top-level FILE named like a layout directory is refused', rs(C(tree({ ...noFixture, fixture: 'x' }))), 'dir: unexpected top-level entry at fixture');
+check('a hostile top-level name is escaped in the reason', /^[\x20-\x7e]+$/.test(rs(cc({ ['zz\u001b[0m']: 'x' }))), true);
+const lk = tree(GOODT); fs.symlinkSync('h.mjs', `${lk}/hidden/ln`);
+check('a symlink in hidden/, an invalid task.json, a missing directory and a caller-supplied canary are refusals', [rs(C(lk)), rs(C(tree({ ...GOODT, 'task.json': TJ.replace('node-test', 'jest') }))), rs(C(`${T}/absent`)), rs(C(tree(GOODT), CAN)), rs(C(5))], ['dir: manifest refused: symlink at hidden/ln', 'runner: must be one of node-test, playwright', 'dir: manifest refused: io-error at .', 'dir: not a usable directory argument', 'dir: not a usable directory argument']);
+// The same read discipline as task.json: a swap after the walk, a non-regular fstat and the open flags.
+const hinj = (h) => { const d = tree(GOODT); let opens = 0; const flags = []; const w = { ...fs, constants: fs.constants,
+  openSync: (p, fl, ...a) => { if (p.endsWith('/hidden/h.mjs') && ++opens === 2) { flags.push(fl); h.swap?.(p); } return fs.openSync(p, fl, ...a); },
+  fstatSync: (fd, o) => { const st = fs.fstatSync(fd, o); return h.notFile && !o?.bigint && opens === 2 ? { isFile: () => false, size: st.size } : st; } }; return [C(d, { fs: w }), flags]; };
+check('a hidden file swapped for other same-size bytes without the canary after the walk is refused as changed', rs(hinj({ swap: (p) => fs.writeFileSync(p, `// ${'x'.repeat(CAN.length)}\n`) })[0]), 'hidden/h.mjs: unreadable, too large or changed since it was hashed');
+check('a hidden file that fstat does not call regular is refused', rs(hinj({ notFile: true })[0]), 'hidden/h.mjs: unreadable, too large or changed since it was hashed');
+const [okH, flH] = hinj({});
+check('with a faithful injected fs the read open sets O_NOFOLLOW and O_NONBLOCK', [okH.ok, flH.length, (flH[0] & fs.constants.O_NOFOLLOW) !== 0, (flH[0] & fs.constants.O_NONBLOCK) !== 0], [true, 1, true, true]);
 for (const [ok, name, got, w] of res) console.log((ok ? 'ok' : 'FAIL') + '\t' + name + (ok ? '' : ' (want ' + JSON.stringify(w) + ', got ' + JSON.stringify(got) + ')'));
 EOS
 )
@@ -137,6 +172,23 @@ mutant() { # file, from, to
   if suite "$d" | grep -q '^FAIL'; then pass=$((pass+1)); printf '  ok   mutation caught: %s\n' "$4"; else fail=$((fail+1)); printf '  FAIL mutation survived: %s\n' "$4"; fi
 }
 nm=0
+mutant task-store.mjs 'if (brief.includes(canary))' 'if (false)' "brief canary check"
+mutant task-store.mjs 'statements.some((t) => t.includes(canary))' 'false' "statement canary check"
+mutant task-store.mjs 'if (p.includes(canary)) return' 'if (false) return' "file-name canary check"
+mutant task-store.mjs "|| !LAYOUT.includes(top)" "" "unknown top-level directory refusal"
+mutant task-store.mjs "!p.includes('/') ||" "" "top-level file refusal"
+mutant task-store.mjs '!== fileHash) return refuse(esc(p)' '=== "x") return refuse(esc(p)' "canary read hash compare"
+mutant task-store.mjs "top === 'fixture' ? has : !has" "!has" "fixture must not hold the canary"
+mutant task-store.mjs "top === 'fixture' ? has : !has" "has" "hidden must hold the canary"
+mutant task-store.mjs "none === undefined ? { ok: true, hash" "true ? { ok: true, hash" "vacuous pass refusal"
+mutant task-store.mjs "HIDDEN_DIRS.find((d) => !found.has(d))" "LAYOUT.find((d) => !found.has(d))" "greenfield: fixture/ not required"
+mutant task-store.mjs "hash: digest(l.m.files) } : refuse" "hash: '0'.repeat(64) } : refuse" "canaryCheck hash"
+mutant task-store.mjs "paths.some((x) => x.includes(canary))" "false" "declared path canary check"
+mutant task-store.mjs "if (p === 'task.json') continue;" "if (p.endsWith('task.json')) continue;" "task.json skip is the exact root path"
+mutant task-store.mjs "if (p.includes(canary)) return" "if (p.split('/').pop().includes(canary)) return" "directory-name canary check"
+mutant task-store.mjs "Buffer.from(canary)" "Buffer.from(canary.slice(1))" "needle is the whole canary"
+mutant task-store.mjs '/${p}`, MAX_FILE_BYTES)' '/${p}`)' "canary read size cap"
+mutant task-store.mjs "bytes.includes(needle)" "bytes.toString('utf8').normalize('NFKC').toLowerCase().includes(canary.toLowerCase())" "case-sensitive byte search"
 mutant task-store.mjs "esc(String(extra).slice(0, 64)).slice(0, 64)" "String(extra)" "unknown key escape and cut"
 mutant task-store.mjs "{ fatal: true }" "{ fatal: false }" "fatal UTF-8 decode"
 mutant task-store.mjs "!== entry[1]" "=== 'x'" "readSmall hash compare"
@@ -171,12 +223,12 @@ mutant task-store.mjs "PREFIX = 'somi-task-v1" "PREFIX = 'somi-task-v2" "hash pr
 mutant task-store.mjs '`${p}\0${fileHash}\0`' '`${p}\0`' "file content in the hash"
 mutant task-store.mjs '`${p}\0${fileHash}\0`' '`${fileHash}\0`' "file path in the hash"
 mutant task-store.mjs '`${p}\0${fileHash}\0`' '`${p}${fileHash}`' "NUL separators"
-mutant task-store.mjs "st.size > MAX_JSON_BYTES" "false" "task.json size cap"
+mutant task-store.mjs "st.size > max" "false" "task.json size cap"
 mutant manifest.mjs "s.normalize('NFC') === s" "true" "NFC rule in the shared path check"
 mutant manifest.mjs "!BAD_CHARS.test(s) && " "" "name character rule in the shared path check"
 
 ran=$((pass + fail))
-[ "$ran" -ge 109 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 109 written"; }
+[ "$ran" -ge 148 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 148 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
