@@ -665,10 +665,40 @@ A shipped mapping resolves a single, already-*selected* cost tier and a host to 
 `cost.mapping` overrides it — `mergeHostMapping(HOST_MODELS, config.cost.mapping)` builds the
 effective mapping to pass as `resolveModel`'s third argument, replacing a named host's whole tier
 map rather than merging it tier-by-tier. A host absent from the mapping gets no override — the
-caller omits the model argument and that host's own default applies. An unrecognized `cost` value,
+caller omits the model argument and that host's own default applies (`somi_resolve` then reports
+`enforced: false` — see [Pinning models per tier on Copilot](#pinning-models-per-tier-on-copilot)). An unrecognized `cost` value,
 a mapped host missing the requested tier, or a mapping override shaped as anything but a plain
 object (including a `__proto__` key — `JSON.parse` can give one a genuine own property, unlike
 object-literal syntax) throws rather than silently resolving to the wrong model.
+
+### Pinning models per tier on Copilot
+
+SoMi ships a model mapping only for Claude Code. On Copilot nothing pins a tier to a model, so
+`somi_resolve` returns `"model": null, "enforced": false` and a `reason`, and every agent runs on
+whatever model the host picks — a `cost: high` agent included. The briefing then says
+`requested cost: high (not enforced: no mapped model)`, and the orchestrator is instructed to print one
+notice per high-tier agent type per session. `dispatched at cost: <tier>` is used only when a model
+was actually pinned.
+
+To pin models, name them in `.somi/config.json` using ids your Copilot plan and editor list in
+its model picker (the ids below are examples, not a recommendation):
+
+```json
+{
+  "cost": {
+    "mapping": {
+      "copilot": { "low": "gpt-5-mini", "medium": "gpt-5", "high": "gpt-5-pro" }
+    }
+  }
+}
+```
+
+Give all three tiers: a host named in `cost.mapping` replaces its whole tier map. A configured
+mapping counts as the user naming the model, so it takes precedence over a host rule such as "do
+not set `model` unless the user names one". With it, `somi_resolve` returns `"enforced": true`.
+
+`cost.ceiling` is an **upper bound, not a model request**: `high` (the default) means "no
+restriction", not "use a high model". Only `cost.mapping` turns a tier into a model.
 
 ### Session ceiling
 
@@ -786,17 +816,20 @@ every shipped entry resolves for every tier — and that stays exit `66`.
 On success it prints one JSON object and exits 0 — `agent`, `supported` (the normalized declared
 set), `tier` (what `decideDispatch` selected), `model` (what the effective mapping resolves that
 tier and host to today — this doc names the tier, not the model, for the same reason the rest of
-this section does), `ceiling`, `ceiling_source`, and `ceiling_origin`:
+this section does), `ceiling`, `ceiling_source`, `ceiling_origin`, and `enforced` (`true` only when `model` is a concrete id; when
+`false`, a `reason` string is added too):
 
 ```json
-{"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "ceiling": "high", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "enforced": true, "ceiling": "high", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
-`model` is `null` for a host absent from the mapping — this call makes no guess. The **caller** is
-expected to do something with that `null` rather than pass nothing on: pick one of the models
-available on that host itself, matching the resolved tier (lightest for `low`, strongest for
-`high`), and disclose plainly that the pick is its own judgment, not the mapping's answer — never
-silently omit a model while a tier was still selected, and never invent one without saying so.
+`model` is `null` for a host absent from the mapping — this call makes no guess — and the result
+then carries `"enforced": false` and a `reason`. The **caller** settles that `null` in a fixed
+order: a `cost.mapping` entry (already applied, so not null), then the host's own "do not set a
+model unless the user names one" guidance (pass none), then its own pick of a visible model for the
+tier, disclosed as its choice. Whatever it does, the briefing's cost line reports it:
+`dispatched at cost: <tier>` only when `enforced`, else `requested cost: <tier> (not enforced: no
+mapped model)`.
 `ceiling_source` is one of `cli`, `env`, `config`, `state`, `default`: `resolveCeiling` reports this
 on every call, not only when a ceiling actually moves. `ceiling_origin` is a companion field naming
 what actually produced the value now in force, and it survives every later bare call the way

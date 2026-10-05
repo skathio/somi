@@ -33,7 +33,7 @@ than a mode flag; see [`agents/refactorer.md`](../agents/refactorer.md)'s `> **C
    `test-strategist` first.
 3. **Brief the `refactorer` agent** ([`agents/refactorer.md`](../agents/refactorer.md)) — before
    this `Task`, call `somi_resolve` for `refactorer` (with `project_dir`), pass its model, and put
-   `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+   the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
    (`somi_skill`, or `somi:somi-dispatch` on Claude Code) — with the smell, the target
    files, and the destination shape.
 4. **The agent performs small, named refactor steps** with tests green between each.

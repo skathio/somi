@@ -136,6 +136,53 @@ check "copilot mapped via project config: model is the mapped medium entry" "$(f
 out="$(run "$(fresh)" resolve --agent coder --host copilot)"
 check "copilot with no project mapping: model is null" "$(field "$out" model)" "null"
 
+# #32: `enforced` is true only when a concrete model id was resolved; otherwise false with a reason.
+out="$(run "$(fresh)" resolve --agent designer --host copilot)"
+check "copilot, no mapping, high agent: model is null" "$(field "$out" model)" "null"
+check "copilot, no mapping: enforced is false" "$(field "$out" enforced)" "false"
+case "$(field "$out" reason)" in
+  *"low, medium and high"*) ok "copilot, no mapping: reason tells the user to map all three tiers" ;;
+  *) bad "copilot, no mapping: reason tells the user to map all three tiers (got '$(field "$out" reason)')" ;;
+esac
+case "$(field "$out" reason)" in
+  *"no model mapping for host copilot"*) ok "copilot, no mapping: reason names the host" ;;
+  *) bad "copilot, no mapping: reason names the host (got '$(field "$out" reason)')" ;;
+esac
+out="$(run "$R_MAP" resolve --agent designer --host copilot)"
+check "copilot with a config mapping: model is the mapped high entry" "$(field "$out" model)" "gpt-5-pro"
+check "copilot with a config mapping: enforced is true" "$(field "$out" enforced)" "true"
+check "copilot with a config mapping: no reason key" "$(field "$out" reason)" "undefined"
+out="$(run "$(fresh)" resolve --agent designer --host claude-code)"
+check "claude-code default: enforced is true" "$(field "$out" enforced)" "true"
+
+# #32: the dispatch skill keeps the honesty rule -- a text-level guard so it cannot be edited away.
+SKILL="$ROOT_REPO/skills/somi-dispatch/SKILL.md"
+skill_flat="$(tr '\n' ' ' < "$SKILL" | tr -s ' ')" # phrases may be line-wrapped in the source
+if printf '%s' "$skill_flat" | grep -qF 'requested cost: <tier> (not enforced: no mapped model)' \
+   && printf '%s' "$skill_flat" | grep -qF 'reserved for enforced dispatches' \
+   && printf '%s' "$skill_flat" | grep -qF 'which rule wins' \
+   && printf '%s' "$skill_flat" | grep -qF 'ONE user-visible line per agent type per session'; then
+  ok "dispatch skill carries the requested-cost line, the rule order, and the unenforced notice"
+else
+  bad "dispatch skill is missing the requested-cost line, the rule order, or the unenforced notice (#32)"
+fi
+# Newline-insensitive: a phrase wrapped across two source lines must still be seen. Any file naming
+# the enforced line must also name the unenforced one; the three trimming agents must honour both.
+unguarded=""
+for c in "$ROOT_REPO"/commands/*.md "$ROOT_REPO"/agents/*.md; do
+  flat="$(tr '\n' ' ' < "$c" | tr -s ' ')"
+  case "$flat" in *'dispatched at cost:'*) case "$flat" in *'requested cost:'*) ;; *) unguarded="$unguarded $(basename "$c")" ;; esac ;; esac
+done
+check "every command/agent naming 'dispatched at cost:' also names the unenforced 'requested cost' line" "$unguarded" ""
+trim_missing=""
+for a in coder planner refactorer; do
+  flat="$(tr '\n' ' ' < "$ROOT_REPO/agents/$a.md" | tr -s ' ')"
+  case "$flat" in *'dispatched at cost: low` or `requested cost: low'*) ;; *) trim_missing="$trim_missing $a" ;; esac
+done
+check "coder/planner/refactorer trim on 'requested cost: low' as well as 'dispatched at cost: low'" "$trim_missing" ""
+check "the unenforced briefing line reads 'no mapped model' everywhere" \
+  "$(grep -rlE 'running on the host model' "$ROOT_REPO/commands" "$ROOT_REPO/agents" "$ROOT_REPO/skills" "$ROOT_REPO/docs" | tr '\n' ' ')" ""
+
 # A project mapping can override a single claude-code tier; designer (cost: high, no cheaper mode)
 # always selects high, isolating the override to exactly the tier it names.
 R_OVERRIDE="$(fresh)"; mkdir -p "$R_OVERRIDE/.somi"
@@ -328,11 +375,11 @@ case "$envbad_msg" in
   *) bad "the bad SOMI_COST_CEILING error is unclear (got: $envbad_msg)" ;;
 esac
 
-# --- output shape: exactly the seven documented fields, and a real JSON array for `supported` -----
+# --- output shape: exactly the documented fields (`enforced` added by #32; `reason` only when unenforced), and a real JSON array for `supported` -----
 out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
-check "JSON output carries exactly agent/ceiling/ceiling_origin/ceiling_source/model/supported/tier" \
+check "JSON output carries exactly agent/ceiling/ceiling_origin/ceiling_source/enforced/model/supported/tier" \
   "$(node -e 'process.stdout.write(Object.keys(JSON.parse(process.argv[1])).sort().join("|"))' "$out")" \
-  "agent|ceiling|ceiling_origin|ceiling_source|model|supported|tier"
+  "agent|ceiling|ceiling_origin|ceiling_source|enforced|model|supported|tier"
 check "coder's supported set is exactly [low, medium], echoing its declared frontmatter" \
   "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" \
   "low,medium"
