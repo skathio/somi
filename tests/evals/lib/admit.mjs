@@ -7,7 +7,9 @@
 //   canary     canaryCheck(taskDir) is ok (its hash is returned).
 //   oracle     fixture/ plus oracle/ (oracle files win) scores green === total with unique test names: that list is
 //              what every later run is scored against (a name the oracle did not report is an integrity refusal).
-//   oracle2    fixture/ plus oracle2/ scores green === total.   nop   fixture/ alone scores green 0.
+//   oracle2    fixture/ plus oracle2/ scores green === total.
+//   nop        on fixture/ alone every test whose name contains the tag [regression] must pass (it guards behaviour that
+//              already exists) and every other test must fail, and not every test may pass: nothing would be left to implement.
 //   mutant     each {name, file, find, replace} is checked up front, before any run (a file under oracle/, `find` once),
 //              applied to the oracle's file, and must score green < total; `mutantsKilled` lists {name, failed}.
 //   stability  `repeats` (1..50) oracle runs in one workspace all score green === total (state left by a run shows).
@@ -25,6 +27,7 @@ import { scoreHidden } from './score-hidden.mjs';
 
 const MAX_MUTANTS = 64;
 const MAX_REPEATS = 50;
+const REGRESSION = /\[regression\]/;
 const NAME = /^[A-Za-z0-9._-]{1,64}$/;
 const refuse = (rule, why) => ({ ok: false, reason: `${rule}: ${why}` });
 
@@ -75,7 +78,10 @@ export function admitTask(taskDir, opts = {}) {
     const second = strict('oracle2', workspace(['fixture', 'oracle2'])); if (!second.ok) return second;
     if (second.green !== total) return refuse('oracle2', `scores ${second.green}/${total}, failing ${second.failed.join(', ')}`);
     const nop = strict('nop', workspace(['fixture'])); if (!nop.ok) return nop;
-    if (nop.green !== 0) return refuse('nop', `the fixture alone scores ${nop.green}/${total}, it must score 0/${total}`);
+    const passedOnNop = new Set(first.names.filter((n) => !nop.failed.includes(n)));
+    const wrong = first.names.filter((n) => REGRESSION.test(n) !== passedOnNop.has(n));
+    if (wrong.length > 0) return refuse('nop', `on the fixture alone every [regression] test must pass and every other test must fail; wrong: ${wrong.join(', ')}`);
+    if (nop.green >= total) return refuse('nop', 'every test passes on the fixture alone, so nothing is left to implement');
     const killed = [];
     for (const mu of prepared) {
       const res = strict('mutant', workspace(['fixture', 'oracle'], (ws) => fs.writeFileSync(path.join(ws, mu.file), mu.mutated)));

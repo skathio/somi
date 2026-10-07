@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Finance wants to download the orders as a CSV file they can open in Excel. Add GET /orders/export.csv, which sends that file.",
+    "The file starts with a header row, then has one row per order, with these columns in this order and exactly these header names: id, created_at, customer, status, total, currency.",
+    "The export contains every order that matches the filters, however many there are. It is one file, not pages: the paging options of the order list do not apply to it. Rows come in the same order as in the order list.",
+    "The export understands the same filters as the order list (status, from, to), with exactly the same meaning. A filter value the list would refuse is refused the same way.",
+    "total is shown as a decimal amount with two decimal places (for example 19.99), also for refunds, and never as a number of cents. id, created_at, status and currency show the same values the JSON API shows.",
+    "The file must open correctly in Excel, and every cell must show what the data says, whatever a customer typed as their name.",
+    "The browser saves the response as a file, named after the day of the export (for example orders-2025-03-14.csv).",
+    "A search with no matching orders still gives a valid file.",
+    "Everything that exists today keeps working exactly as it does now.",
+    "The README documents the new endpoint.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-H1-4d7e1b92c0a85f36",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add GET /orders/export.csv to the orders service as the numbered ticket statements describe, document it in the README and add tests under test/. Follow the conventions already in the code. Change only what the ticket needs."
+}

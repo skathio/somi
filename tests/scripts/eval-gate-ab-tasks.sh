@@ -38,8 +38,10 @@ if (want('admit')) { const ok = A(task(), { ...opt, mutants: [MU] });
   on('canary') && check('canary: a hidden file without the canary is refused', head(A(task({ 'hidden/y.test.mjs': 'import test from "node:test"; test("y", () => {});' }), opt), 56), 'canary: hidden/y.test.mjs: missing the canary');
   on('oracle') && check('oracle: an oracle that fails a test is refused naming the score', head(A(task({ 'oracle/add.mjs': `export const add = (a, b) => a + b + (a === 0 ? 1 : 0); // ${CAN}\n` }), opt), 18), 'oracle: scores 3/4');
   on('oracle2') && check('oracle2: a second oracle that disagrees on a test is refused', head(A(task({ 'oracle2/add.mjs': `export const add = (a, b) => (a === 0 ? 1 : a + b); // ${CAN}\n` }), opt), 19), 'oracle2: scores 3/4');
-  on('nop') && check('nop: a fixture that already solves the task scores above 0 and is refused', head(A(task({ 'fixture/add.mjs': 'export const add = (a, b) => a + b;\n' }), opt), 40), 'nop: the fixture alone scores 4/4, it mu');
+  on('nop') && check('nop: a fixture that already solves the task scores above 0 and is refused', head(A(task({ 'fixture/add.mjs': 'export const add = (a, b) => a + b;\n' }), opt), 40), 'nop: on the fixture alone every [regress');
   on('alarm') && check('a suite that changes the task material while it runs is refused by the scorer alarm', rs(A(tree({ ...GOOD, 'hidden/x.test.mjs': suite(`  it('touch', () => fs.appendFileSync(${JSON.stringify(`${T}/t${n}/fixture/package.json`)}, ' '));\n`) }), opt)), 'oracle: task material changed during the run'); on('strict') && check('a hanging second oracle is scored 0/4 by the strict run, not excluded as a timeout', head(A(task({ 'oracle2/add.mjs': `setInterval(() => {}, 1e6); await new Promise(() => {}); // ${CAN}\n` }), { ...opt, timeoutMs: 2500 }), 18), 'oracle2: scores 0/');
+  const nopTask = (extra) => A(task({ 'hidden/x.test.mjs': suite(extra) }), opt); const allReg = `// ${CAN}\nimport { it } from 'node:test';\nit('[regression] a', () => {});\nit('[regression] b', () => {});\n`;
+  on('nop') && check('on the fixture alone every [regression] test must pass and every other test must fail, and not every test may pass', [nopTask("  it('[regression] always', () => {});\n").ok, ...["  it('[regression] needs the module', () => { call(1, 2); });\n", "  it('plain always', () => {});\n", "  it('[functional] regression always', () => {});\n"].map((e) => head(nopTask(e), 4)), head(A(task({ 'hidden/x.test.mjs': allReg }), opt), 4)], [true, 'nop:', 'nop:', 'nop:', 'nop:']);
   on('happy') && check('the oracle overwrites a fixture file of the same path (a stub in the fixture does not shadow it)', A(task(), opt).ok, true); }
 if (want('mutants')) { const m = (mu, extra) => rs(A(task(), { ...opt, mutants: [{ ...MU, ...mu }], ...extra }));
   on('mutants') && check('mutant: find absent -> occurs 0 times; find present twice -> occurs 2 times', [m({ find: 'zzz' }), m({ find: 'a' })].map((r) => r.slice(0, 40)), ['mutant: sub: find occurs 0 times, it must', 'mutant: sub: find occurs 6 times, it must'.replace('6', String(ORACLE.split('a').length - 1))].map((r) => r.slice(0, 40)));
@@ -118,7 +120,9 @@ mutant() { # group, file, from, to, label (runs in the background, at most JOBS 
 mutant admit:canary admit.mjs "if (!canary.ok) return" "if (false) return" "canary rule"
 mutant admit:oracle admit.mjs "if (first.green !== first.total)" "if (false)" "oracle rule"
 mutant admit:oracle2 admit.mjs "second.green !== total" "false" "oracle2 rule"
-mutant admit:nop admit.mjs "nop.green !== 0" "false" "nop rule"
+mutant admit:nop admit.mjs "REGRESSION.test(n) !== passedOnNop.has(n)" "false" "nop rule: regression tests pass, all others fail"
+mutant admit:nop admit.mjs "nop.green >= total" "false" "nop rule: not every test may pass"
+mutant admit:nop admit.mjs "const REGRESSION = /\\[regression\\]/;" "const REGRESSION = /regression/;" "the regression tag is matched as [regression]"
 mutant admit:happy admit.mjs "workspace(['fixture', 'oracle'])" "workspace(['oracle', 'fixture'])" "oracle files win over the fixture"
 mutant mutants:mutants admit.mjs "if (count !== 1)" "if (count < 1)" "find must occur exactly once"
 mutant mutants:survive admit.mjs "if (res.green === res.total)" "if (false)" "a surviving mutant is refused"
@@ -174,7 +178,7 @@ mutant env score-hidden.mjs "TZ: SCORE_TZ" "TZ: process.env.TZ" "pinned time zon
 wait
 for i in "${!dirs[@]}"; do r=$(cat "${dirs[$i]}.out" 2>/dev/null); if [ "$r" = CAUGHT ]; then pass=$((pass+1)); printf '  ok   mutation caught: %s\n' "${labels[$i]}"; else fail=$((fail+1)); printf '  FAIL mutation %s: %s\n' "${r:-lost}" "${labels[$i]}"; fi; done
 ran=$((pass + fail))
-[ "$ran" -ge 96 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 96 written"; }
+[ "$ran" -ge 100 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 100 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
