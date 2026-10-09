@@ -13,6 +13,12 @@
 //   mutant     each {name, file, find, replace} is checked up front, before any run (a file under oracle/, `find` once),
 //              applied to the oracle's file, and must score green < total; `mutantsKilled` lists {name, failed}.
 //   stability  `repeats` (1..50) oracle runs in one workspace all score green === total (state left by a run shows).
+//   setup      an optional hidden/setup.mjs is run as `node hidden/setup.mjs <workspace>` in every workspace right after the
+//              fixture and oracle files are copied (oracle, oracle2, nop, mutants, stability), for files git cannot hold on every
+//              host (names with < > " ? and the like): it creates them from a table. A child process, argv array, a small
+//              environment, a 20 s limit; a non-zero exit, a timeout or a spawn error refuses the task. POSIX only: on Windows a
+//              task with a setup is refused with the reason saying so (the task is not run there, it does not fail). The live
+//              driver must call the same setup before it takes the 'before' manifest snapshot, so the files are not candidate changes.
 // Workspaces come from the manifest's file list (links are refused there), each in a fresh 0700 directory of
 // os.tmpdir() removed by explicit path afterwards. The hidden suite runs from taskDir/hidden and taskDir is passed to the
 // scorer, which alarms if the task changes during a run. The returned hash is for the draw driver to pass to the scorer
@@ -21,6 +27,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { esc, lstatManifest, validPath } from './manifest.mjs';
 import { canaryCheck } from './task-store.mjs';
 import { scoreHidden } from './score-hidden.mjs';
@@ -30,6 +37,8 @@ const MAX_REPEATS = 50;
 const REGRESSION = /\[regression\]/;
 const NAME = /^[A-Za-z0-9._-]{1,64}$/;
 const refuse = (rule, why) => ({ ok: false, reason: `${rule}: ${why}` });
+const SETUP_MS = 20000;
+class SetupFailure extends Error {}
 
 
 /** See the header. */
@@ -44,6 +53,8 @@ export function admitTask(taskDir, opts = {}) {
     if (!canary.ok) return refuse('canary', canary.reason);
     const m = lstatManifest(taskDir); const root = taskDir.replace(/\/+$/, '') || '/';
     if (!m?.ok) return refuse('canary', 'the task directory changed while it was being read');
+    const setup = m.files.some((e) => e[0] === 'hidden/setup.mjs');
+    if (setup && process.platform === 'win32') return refuse('setup', 'the task needs a POSIX host and is skipped on this one');
     const under = (dir) => m.files.map((e) => e[0]).filter((p) => p.startsWith(`${dir}/`));
     // Fresh workspace holding the given task directories' files in order (later ones overwrite earlier ones).
     const workspace = (dirs, edit) => {
@@ -53,6 +64,10 @@ export function admitTask(taskDir, opts = {}) {
         const to = path.join(ws, p.slice(d.length + 1));
         fs.mkdirSync(path.dirname(to), { recursive: true });
         fs.copyFileSync(`${root}/${p}`, to);
+      }
+      if (setup) {
+        const r = spawnSync(process.execPath, [path.resolve(root, 'hidden/setup.mjs'), ws], { cwd: ws, env: { PATH: process.env.PATH ?? '', HOME: ws }, stdio: 'ignore', timeout: SETUP_MS, killSignal: 'SIGKILL' });
+        if (r.error || r.status !== 0) throw new SetupFailure(r.error ? 'the setup could not run to the end' : `the setup exited with ${r.status}`);
       }
       edit?.(ws);
       return ws;
@@ -95,8 +110,8 @@ export function admitTask(taskDir, opts = {}) {
       if (again.green !== total) return refuse('stability', `run ${i + 1} scored ${again.green}/${again.total} where the first scored ${first.green}/${first.total}`);
     }
     return { ok: true, hash: canary.hash, names: first.names, total, repeats, mutantsKilled: killed };
-  } catch {
-    return refuse('run', 'the task could not be admitted');
+  } catch (e) {
+    return e instanceof SetupFailure ? refuse('setup', e.message) : refuse('run', 'the task could not be admitted');
   } finally {
     for (const ws of made) try { fs.rmSync(ws, { recursive: true, force: true }); } catch { /* disposable */ }
   }

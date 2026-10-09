@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Bug report from the scheduling team: now and then a weekly schedule lists a day in the wrong week. Example: the rule { freq: 'weekly', interval: 2, byWeekday: ['sun', 'wed'], start: '2025-03-02' } (every second week, on Sunday and Wednesday, starting on Sunday 2 March 2025, with weeks that begin on Monday as the README says), asked with occurrences(rule, { to: '2025-04-05' }).",
+    "We expected 2025-03-02, 2025-03-12, 2025-03-16, 2025-03-26 and 2025-03-30. Once we got 2025-03-02, 2025-03-05, 2025-03-16, 2025-03-19, 2025-03-30 and 2025-04-02: the Wednesdays came one week too early. At that moment occursOn agreed with the wrong list: it said 2025-03-12 is not a day of the rule and 2025-03-05 is.",
+    "We cannot make it happen on demand. Asked right after a restart, the same rule gives the right days, and the same question later in the day usually does too. We only know that it happened on a day when the US office had been using the shared calendar, and that it went away again after the service was restarted.",
+    "The first wrong day was close to the clock change of 9 March in our US office, so we first suspected daylight saving time, but we have not checked. Our monthly schedules on the 31st also look odd in February at first sight, though they match the README.",
+    "We expect the same can happen with other weekly schedules, not only this one. Fix the cause, not just this example.",
+    "Whatever the library was asked before, and however often a rule is asked about, each rule must give the days the README defines, in both functions.",
+    "Everything that works today keeps working exactly as it does now: the other kinds of rules, the window and limit, count and until, the errors and their codes, and the weekly schedules that are already right.",
+    "Add a test to test/ that fails on the current code because of this bug.",
+    "Keep the change focused on the cause of this bug. The README stays as it is unless the fix makes a sentence in it untrue."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-H6-c3a91e5d7b204f68",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Fix the bug described by the numbered ticket statements in the recurrence library, add a test for it under test/, and follow the conventions in the README. Change only what the bug needs."
+}

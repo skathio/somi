@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Accounts need a currency and transfers can carry a memo. Ledger database files written by the current version must keep working with the new version, with every account, balance and transfer as it was.",
+    "Accounts that exist today are in US dollars (USD) and transfers that exist today have no memo. createAccount takes an optional currency, USD when omitted: three capital letters, anything else is refused with invalid_currency. Accounts show their currency.",
+    "transfer takes an optional memo: free text of up to 200 characters, kept exactly as given. A transfer without a memo has memo null. A longer memo, or one that is not text, is refused with invalid_memo. Transfer records show the memo.",
+    "Money moves only between accounts of the same currency. Any other transfer is refused with currency_mismatch and changes nothing.",
+    "A file written by a newer version than this one is refused with unsupported_schema and left untouched. A brand-new file is created ready for the new features.",
+    "transferBatch(transfers) applies a list of transfers all or nothing and returns the transfer records in order. Transfers are applied in the order given.",
+    "Each transfer in a batch is checked as a single transfer is and fails with the same error code. The error also carries index: the 0-based position of the offending transfer in the list. When several transfers would fail, the first one in the list is reported.",
+    "A batch holds at most 500 transfers. An empty batch is valid and returns an empty list. More than 500 transfers, or anything that is not a list, is refused with invalid_batch and nothing is applied.",
+    "Balances stay between 0 and 9007199254740991 cents, single transfers and batches alike: a transfer that would take an account above that is refused with balance_overflow, below zero with insufficient_funds.",
+    "Everything that exists today keeps working exactly as it does now.",
+    "The README documents the changes, and the new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-H2-9c3f5a1e7b2d4806",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Extend the ledger library as the numbered ticket statements describe: currency and memo with an in-place upgrade of existing database files, and transferBatch. Document it in the README and add tests under test/. Follow the conventions already in the code and the README. Change only what the ticket needs."
+}

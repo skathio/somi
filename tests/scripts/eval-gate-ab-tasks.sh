@@ -42,6 +42,9 @@ if (want('admit')) { const ok = A(task(), { ...opt, mutants: [MU] });
   on('alarm') && check('a suite that changes the task material while it runs is refused by the scorer alarm', rs(A(tree({ ...GOOD, 'hidden/x.test.mjs': suite(`  it('touch', () => fs.appendFileSync(${JSON.stringify(`${T}/t${n}/fixture/package.json`)}, ' '));\n`) }), opt)), 'oracle: task material changed during the run'); on('strict') && check('a hanging second oracle is scored 0/4 by the strict run, not excluded as a timeout', head(A(task({ 'oracle2/add.mjs': `setInterval(() => {}, 1e6); await new Promise(() => {}); // ${CAN}\n` }), { ...opt, timeoutMs: 2500 }), 18), 'oracle2: scores 0/');
   const nopTask = (extra) => A(task({ 'hidden/x.test.mjs': suite(extra) }), opt); const allReg = `// ${CAN}\nimport { it } from 'node:test';\nit('[regression] a', () => {});\nit('[regression] b', () => {});\n`;
   on('nop') && check('on the fixture alone every [regression] test must pass and every other test must fail, and not every test may pass', [nopTask("  it('[regression] always', () => {});\n").ok, ...["  it('[regression] needs the module', () => { call(1, 2); });\n", "  it('plain always', () => {});\n", "  it('[functional] regression always', () => {});\n"].map((e) => head(nopTask(e), 4)), head(A(task({ 'hidden/x.test.mjs': allReg }), opt), 4)], [true, 'nop:', 'nop:', 'nop:', 'nop:']);
+  const NEED = `import fs from 'node:fs'; export const add = (a, b) => a + b + Number(fs.readFileSync(new URL('./k.txt', import.meta.url), 'utf8')) - 5; // ${CAN}\n`;
+  const withSetup = (extra = {}) => task({ 'oracle/add.mjs': NEED, 'oracle2/add.mjs': NEED, 'hidden/setup.mjs': `// ${CAN}\nimport fs from 'node:fs';\nfs.writeFileSync(process.argv[2] + '/k.txt', '5');\n`, ...extra });
+  on('setup') && check('setup: hidden/setup.mjs runs in every workspace (an oracle and a second oracle that need its file are admitted), a failing setup is refused, and without one the same oracle fails', [A(withSetup(), opt).ok, head(A(withSetup({ 'hidden/setup.mjs': `// ${CAN}\nprocess.exit(3);\n` }), opt), 6), head(A(task({ 'oracle/add.mjs': NEED, 'oracle2/add.mjs': NEED }), opt), 7)], [true, 'setup:', 'oracle:']);
   on('happy') && check('the oracle overwrites a fixture file of the same path (a stub in the fixture does not shadow it)', A(task(), opt).ok, true); }
 if (want('mutants')) { const m = (mu, extra) => rs(A(task(), { ...opt, mutants: [{ ...MU, ...mu }], ...extra }));
   on('mutants') && check('mutant: find absent -> occurs 0 times; find present twice -> occurs 2 times', [m({ find: 'zzz' }), m({ find: 'a' })].map((r) => r.slice(0, 40)), ['mutant: sub: find occurs 0 times, it must', 'mutant: sub: find occurs 6 times, it must'.replace('6', String(ORACLE.split('a').length - 1))].map((r) => r.slice(0, 40)));
@@ -93,7 +96,16 @@ if (want('env')) { process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sk-test-secret'; proce
   const keys = Object.keys(seen.env).filter((k) => !['NODE_TEST_CONTEXT', 'NODE_TEST_WORKER_ID'].includes(k)).sort(); check('the suite sees only PATH, HOME, TZ, LC_ALL and TASK_WORKSPACE: no token, API key, NODE_OPTIONS or other host variable', [r.ok, keys, seen.env.TZ, seen.env.LC_ALL, seen.env.TASK_WORKSPACE === fs.realpathSync(w), Object.values(seen.env).some((v) => /sk-test|max-old-space/.test(v))], [true, ['HOME', 'LC_ALL', 'PATH', 'TASK_WORKSPACE', 'TZ'], SCORE_TZ, 'C', true, false]); check('the time zone is pinned (a March 8 noon in Los Angeles is PDT, 420 minutes) and the cwd is not the workspace', [seen.off, seen.cwd !== fs.realpathSync(w), seen.env.HOME === seen.cwd], [420, true, true]); }
 if (want('real')) { const dirs = fs.existsSync('tests/evals/ab') ? fs.readdirSync('tests/evals/ab', { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort() : [];
   if (dirs.length === 0) console.log('ok\t(no tests/evals/ab/<task>/ yet: real-task admission has nothing to check)');
-  for (const d of dirs) { const mf = `tests/evals/ab/${d}.mutants.json`; const r = A(`tests/evals/ab/${d}`, { mutants: fs.existsSync(mf) ? JSON.parse(fs.readFileSync(mf, 'utf8')) : [], repeats: 20 }); check(`real task ${d} is admitted (${r.ok ? `${r.total} tests, ${r.mutantsKilled.length} mutants killed` : r.reason})`, r.ok, true); } }
+  // one worker thread per task (admission is synchronous and spawns many children): the tasks run side by side.
+  // 3 repeats keep the per-commit gate quick; EVAL_AB_FULL=1 runs the 20 repeats the pre-draw admission needs.
+  const repeats = process.env.EVAL_AB_FULL === '1' ? 20 : 3;
+  const { Worker } = await import('node:worker_threads'); const { pathToFileURL } = await import('node:url'); const path = await import('node:path');
+  const admitUrl = pathToFileURL(path.resolve(`${process.env.LIB}/admit.mjs`)).href;
+  const code = `import { workerData as x, parentPort as p } from 'node:worker_threads'; import(x.url).then((m) => p.postMessage(m.admitTask(x.dir, x.opts))).catch((e) => p.postMessage({ ok: false, reason: String(e) }));`;
+  const admitOne = (d) => new Promise((resolve) => { const mf = `tests/evals/ab/${d}.mutants.json`; const opts = { mutants: fs.existsSync(mf) ? JSON.parse(fs.readFileSync(mf, 'utf8')) : [], repeats };
+    const w = new Worker(code, { eval: true, workerData: { url: admitUrl, dir: `tests/evals/ab/${d}`, opts } }); w.once('message', (m) => resolve(m)); w.once('error', (e) => resolve({ ok: false, reason: String(e) })); });
+  const results = await Promise.all(dirs.map(admitOne));
+  dirs.forEach((d, i) => { const r = results[i]; check(`real task ${d} is admitted (${r.ok ? `${r.total} tests, ${r.mutantsKilled.length} mutants killed` : r.reason})`, r.ok, true); }); }
 flush();
 EOS
 )
@@ -128,6 +140,8 @@ mutant mutants:mutants admit.mjs "if (count !== 1)" "if (count < 1)" "find must 
 mutant mutants:survive admit.mjs "if (res.green === res.total)" "if (false)" "a surviving mutant is refused"
 mutant mutants:mutants admit.mjs "|| !oracleFiles.has(file)" "" "mutant file must be an oracle file"
 mutant mutants:dup admit.mjs "|| prepared.some((q) => q.name === mu.name)" "" "mutant names are unique"
+mutant admit:setup admit.mjs "if (setup) {" "if (false) {" "the setup is run in each workspace"
+mutant admit:setup admit.mjs "r.error || r.status !== 0" "false" "a failing setup is refused"
 mutant stability admit.mjs "if (again.green !== total)" "if (false)" "stability rule"
 mutant arguments admit.mjs "|| repeats < 1 ||" "||" "repeats lower bound"
 mutant score:refuse score-hidden.mjs 'if (!expect) throw new Fault(`load:' 'if (false) throw new Fault(`load:' "a file that fails to load is refused"

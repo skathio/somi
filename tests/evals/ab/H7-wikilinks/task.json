@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "The wiki authors want to link to other wiki pages by typing the page name in double square brackets, like [[Project Plan]]. In the page the words Project Plan become a link to that page, whose address is /wiki/ followed by the page name.",
+    "They can also type [[Project Plan|our plan]] to show other words, such as our plan, for the same page. If they leave the words after the bar empty, the page name is shown.",
+    "A page name sometimes gets long enough to wrap onto the next line of a paragraph. That must still be one link to the same page as when it is typed on one line, and extra spaces or line breaks inside a name make no difference.",
+    "Page names can be anything the authors type: titles with punctuation, numbers, accents, other alphabets, quotes, symbols. Every one must show on the page exactly as typed and lead to its own page.",
+    "Wiki links work wherever text is already formatted, including headings and list items, and next to ordinary links and emphasis. The words of a link can themselves be formatted, and a wiki link can sit inside emphasis.",
+    "Text in code (inline or fenced blocks) stays exactly as typed, including double brackets.",
+    "When someone types brackets that do not make a link, they just see what they typed, and the links around it still work. Brackets with no page name in them do not make a link.",
+    "Everything that exists today keeps working exactly as it does now.",
+    "The README documents wiki links. The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-H7-3b8f60d2a1c479e5",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add wiki links ([[Page]] and [[Page|shown text]]) to the markdown renderer as the numbered ticket statements describe, document them in the README and add tests under test/. Follow the conventions already in the code and the README. Change only what the ticket needs."
+}

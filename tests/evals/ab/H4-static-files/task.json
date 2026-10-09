@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Colleagues want to hand files around through a browser. Add GET /files/<name>, which sends the named file from the shared folder (the shared/ directory of the service).",
+    "Folders inside the shared folder work the same way, to any depth: GET /files/<folder>/<name> sends a file that is in a folder.",
+    "GET /files/ shows a web page that lists what is in the shared folder, and GET /files/<folder>/ does the same for a folder. Each entry shows its name and, for a file, its size in bytes. The name is a link that opens the file or the folder.",
+    "The link of every entry opens that entry, whatever it is called.",
+    "In every listing the entries come in the order the README describes for file lists.",
+    "A file arrives exactly as it is stored, whatever its kind or size, with the content type that fits it (for example text, JSON, CSV, PNG, PDF; a kind we do not know is sent as a generic binary file). Text follows the README's rule for text.",
+    "Large files can be fetched in parts, so that an interrupted download can continue: a client that asks for a range of bytes gets just those bytes, and a range that does not exist in the file is refused in the standard way.",
+    "Anything that does not exist gives the usual not-found answer, and a method other than GET on these addresses gets the usual wrong-method answer.",
+    "Everything that exists today keeps working exactly as it does now.",
+    "The README documents the new addresses.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-H4-9b3f2a61d07e4c58",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add the file download and folder listing addresses under /files/ to the share service as the numbered ticket statements describe, document them in the README and add tests under test/. Follow the conventions already in the code. Change only what the ticket needs."
+}
