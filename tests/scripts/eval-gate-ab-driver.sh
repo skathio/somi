@@ -210,7 +210,11 @@ console.log(JSON.stringify({repo:ex(e.REPO+'/package.json'),dotclaude:ex(e.REAL_
     } else if (mode === 'fd') {
       const e = JSON.parse(fs.readFileSync(`${somi.tmp}/env.json`, 'utf8')); const f = JSON.parse(fs.readFileSync(`${somi.tmp}/fd.json`, 'utf8'));
       check('--token-fd: the token reaches the child only through descriptor 3, the environment holds the descriptor variable and no token', both((r) => r.outcome === 'scored') && Object.keys(e).sort().join() === 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR,CLAUDE_CONFIG_DIR,HOME,LANG,PATH' && e.CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR === '3' && !Object.values(e).includes('<TOKEN>') && f.match === true);
-    } else if (mode === 'over-budget') check('subtype error_max_budget_usd is over-budget in both arms and still scored', both((r) => r.outcome === 'over-budget' && r.green < r.total));
+    } else if (mode === 'perarm') {
+      const cs = calls(somi); const cb = calls(bare); const cap = (c) => c[c.indexOf('--max-budget-usd') + 1];
+      check('per-arm cap: the bare arm keeps --budget-per-draw, the SoMi first call and its resume use --budget-somi (cap minus spend)', cap(cb[0]) === '8.00' && cap(cs[0]) === '5.00' && cap(cs[1]) === '4.50' && /2 draw|bare x \$8 \+ 1 SoMi x \$5 = \$13\.00/.test(log()) && bare.outcome === 'scored' && somi.outcome === 'scored');
+    } else if (mode === 'perarm-time') check('per-arm time: only the SoMi deadline (--timeout-somi-min) cuts the SoMi draw; the bare arm keeps --timeout-min', somi.outcome === 'invalid' && somi.reason === 'timeout' && bare.outcome === 'scored');
+    else if (mode === 'over-budget') check('subtype error_max_budget_usd is over-budget in both arms and still scored', both((r) => r.outcome === 'over-budget' && r.green < r.total));
     else if (mode === 'leak') check('a canary, an oracle path, a hidden path and tests/evals/ab in a tool result make the draw invalid and name the patterns', both((r) => r.outcome === 'invalid' && /^leak:/.test(r.reason) && ['canary', 'task-oracle', 'task-hidden', 'ab-path'].every((p) => r.reason.includes(p))) && !somi.reason.includes(CANARY));
     else if (mode === 'silent-copy') check('an oracle file copied with its canary intact is a leak even though the stream is clean', both((r) => r.outcome === 'invalid' && r.reason === 'leak:canary-in-file'));
     else if (mode === 'hang') {
@@ -252,6 +256,8 @@ for m in $MODES; do
   cli "$m" "$ROOT" "$(mkstub "$m" "$m" 41001)" "$TMP/eval.env" "${extra[@]}"
 done
 cli slowpause "$ROOT" "$(mkstub slowpause slowpause 0)" "$TMP/eval.env" --timeout-min 0.04
+cli perarm "$ROOT" "$(mkstub perarm pause 0)" "$TMP/eval.env" --budget-somi 5
+cli perarm-time "$ROOT" "$(mkstub perarm-time slowpause 0)" "$TMP/eval.env" --timeout-min 5 --timeout-somi-min 0.04
 cli fd "$ROOT" "$(mkstub fd fd 0)" "$TMP/eval.env" --token-fd
 cli spawn-error "$ROOT" "$TMP/no-such-claude" "$TMP/eval.env"
 cli envmode "$ROOT" "$(mkstub envmode solve 0)" "$TMP/eval644.env"
@@ -303,14 +309,16 @@ mutant envmode $DR "(l.mode & 0o077) !== 0" "false" "the env file mode check"
 mutant task-changed tests/scripts/manual/ab-experiment.mjs "if (halt) st.halt = halt;" "" "a scorer halt stops the run"
 mutant task-changed $DR "return \`\${row.draw}: \${sc.reason}\`; }" "return null; }" "a scorer fault halts"
 mutant fd $DR "fdToken: tokenFd ? token : null" "fdToken: null" "the token fd is written"
-mutant hang tests/scripts/manual/ab-experiment.mjs "if (!run.result && !run.error) Object.assign(row, { costUsd: args.budgetPerDraw, costEstimated: true });" "" "a draw without a result is charged its cap"
+mutant hang tests/scripts/manual/ab-experiment.mjs "if (!run.result && !run.error) Object.assign(row, { costUsd: capOf(d.arm), costEstimated: true });" "" "a draw without a result is charged its cap"
+mutant perarm tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.budgetSomi : args.budgetPerDraw)" "args.budgetPerDraw" "the SoMi arm's own dollar cap"
+mutant perarm-time tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.timeoutSomiMin : args.timeoutMin)" "args.timeoutMin" "the SoMi arm's own time limit"
 mutant sigint tests/scripts/manual/ab-experiment.mjs "for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'])" "for (const sig of ['SIGTERM'])" "SIGINT is handled"
 
 wait
 pass=0; fail=0
 tally() { while IFS=$'\t' read -r status name; do case "$status" in ok) pass=$((pass+1)); printf '  ok   %s\n' "$name" ;; FAIL) fail=$((fail+1)); printf '  FAIL %s\n' "$name" ;; *) [ -n "$status" ] && { fail=$((fail+1)); printf '  FAIL unexpected output: %s\n' "$status $name"; } ;; esac; done; }
 tally < <(verify "$ROOT" unit unit)
-for m in $MODES fd slowpause spawn-error envmode budget-stop task-changed; do tally < <(verify "$ROOT" "$m" "$m" 41001); done
+for m in $MODES perarm perarm-time fd slowpause spawn-error envmode budget-stop task-changed; do tally < <(verify "$ROOT" "$m" "$m" 41001); done
 tally < <(verify "$ROOT" sigint sigint 41002)
 real=(); for p in "$TMP"/o-* "$TMP"/t-*; do case "${p##*/}" in ?-mu[0-9]*|*.log|*.err|*.rc) ;; *) [ -d "$p" ] && real+=("$p") ;; esac; done
 tally < <(verify "$ROOT" disk disk 0 "$(IFS=:; echo "${real[*]}")")
@@ -333,10 +341,12 @@ mkdir -p "$TMP/o-full"; echo x > "$TMP/o-full/f"
 refuse "a non-empty --out is refused" "is not empty" $G --model test-model --out "$TMP/o-full" --tasks T1-proration --only T1-proration:bare --env-file "$TMP/eval.env" --sandbox off --claude "$TMP/no-such-claude" --plugin-dir "$PLUGIN"
 refuse "the real claude without a sandbox is refused unless --unsafe-no-sandbox" "needs --unsafe-no-sandbox" $G --model test-model --out "$TMP/o-nosb" --tasks T1-proration --only T1-proration:bare --env-file "$TMP/eval.env" --sandbox off
 refuse "a plan over the total budget is refused before anything starts (worst case printed)" "exceeds --budget-total" $G --model test-model --out "$TMP/o-plan" --budget-total 50 --env-file "$TMP/eval.env"
-grep -Eq 'worst case: [0-9]+ x [$]8 = ' "$TMP/r.log" 2>/dev/null; [ ! -e "$TMP/o-plan" ] && { pass=$((pass+1)); echo "  ok   the worst case was printed and no output directory was made"; } || { fail=$((fail+1)); echo "  FAIL plan output"; }
+grep -Eq 'worst case: [0-9]+ bare x [$]8 [+] [0-9]+ SoMi x [$]8 = ' "$TMP/r.log" 2>/dev/null; [ ! -e "$TMP/o-plan" ] && { pass=$((pass+1)); echo "  ok   the worst case was printed and no output directory was made"; } || { fail=$((fail+1)); echo "  FAIL plan output"; }
 refuse "a token already in the driver's own environment is refused" "already in the environment" env CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" $G --model test-model --dry-run
 mkdir "$TMP/t-dry"; TMPDIR="$TMP/t-dry" $G --model test-model --dry-run --force-budget --budget-total 50 --tasks T1-proration,H4-static-files --out "$TMP/o-dry" --claude "$TMP/no-such-claude" > "$TMP/dry.log" 2>&1; rc=$?
 if [ "$rc" -eq 0 ] && grep -q "prepared H4-static-files-somi: " "$TMP/dry.log" && grep -q "dry run: no claude call" "$TMP/dry.log" && [ ! -e "$TMP/o-dry" ] && [ -z "$(ls -A "$TMP/t-dry")" ]; then pass=$((pass+1)); echo "  ok   dry run: workspaces (setup included) are prepared and removed, no claude call, no results"; else fail=$((fail+1)); echo "  FAIL dry run (rc $rc)"; fi
+$G --model test-model --dry-run --tasks H1-csv-export,H7-wikilinks --budget-per-draw 8 --budget-somi 24 --timeout-somi-min 60 > "$TMP/dry2.log" 2>&1; rc=$?
+if [ "$rc" -eq 0 ] && grep -q 'worst case: 2 bare x \$8 + 2 SoMi x \$24 = \$64.00' "$TMP/dry2.log" && grep -q 'SoMi draw 60 min' "$TMP/dry2.log" && ! grep -q noise "$TMP/dry2.log"; then pass=$((pass+1)); echo "  ok   per-arm limits are accepted and summed in the plan; no noise draws when --tasks is given"; else fail=$((fail+1)); echo "  FAIL per-arm plan (rc $rc)"; fi
 if [ "$(cat "$TMP/o-envlink.rc" 2>/dev/null)" = 2 ] && [ ! -e "$TMP/o-envlink/results.jsonl" ]; then pass=$((pass+1)); echo "  ok   an env file that is a symlink is refused"; else fail=$((fail+1)); echo "  FAIL symlinked env file"; fi
 git check-ignore -q .somi/ab-results/x && { pass=$((pass+1)); echo "  ok   the default results directory is gitignored"; } || { fail=$((fail+1)); echo "  FAIL default output directory is not ignored"; }
 grep -q '^scripts/manual/' tests/.npmignore && { pass=$((pass+1)); echo "  ok   tests/scripts/manual/ is excluded from the package"; } || { fail=$((fail+1)); echo "  FAIL manual/ is not in tests/.npmignore"; }

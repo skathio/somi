@@ -5,10 +5,14 @@
 // excludes manual/).
 //
 //   node tests/scripts/manual/ab-experiment.mjs --model ALIAS [--tasks a,b] [--out DIR] [--concurrency 3]
-//     [--budget-per-draw 8] [--budget-total 130] [--timeout-min 40] [--seed 1] [--noise T1-proration:2] [--only task:arm,..]
+//     [--budget-per-draw 8] [--budget-somi USD] [--budget-total 130] [--timeout-min 40] [--timeout-somi-min MIN] [--seed 1] [--noise T1-proration:2] [--only task:arm,..]
 //     [--claude claude] [--env-file .somi/eval.env] [--sandbox auto|off] [--unsafe-no-sandbox] [--plugin-dir DIR] [--token-fd]
 //     [--dry-run] [--force-budget] [--report-only results.jsonl]
 //
+//   --budget-somi, --timeout-somi-min  the SoMi arm's own dollar cap and time limit (default: the --budget-per-draw and --timeout-min
+//                 values). The bare arm always uses --budget-per-draw and --timeout-min. The plan, the worst case, the budget-total
+//                 check, the resume budget and the deadline all use the arm's own values. The spend in the log lines is the running
+//                 total over all finished draws of the run, not the cost of the draw named on the line.
 //   --model       required; the model name is never defaulted in code.
 //   --sandbox     auto (default): bubblewrap must work or the run is refused, unless --unsafe-no-sandbox. off: no sandbox; allowed
 //                 for a stub --claude, refused for the real one without --unsafe-no-sandbox.
@@ -21,7 +25,7 @@
 //   call can overshoot it, and a draw that ends without a result is charged its whole cap.
 //
 // The draw order is a seeded shuffle of all draws (mulberry32). The order index in each row is the run order the pre-registered
-// rule reads. Before each draw the cumulative spend plus the cap of every draw in flight plus this draw's cap must fit the total
+// rule reads. Before each draw the cumulative spend plus the cap of every draw in flight plus this draw's own cap must fit the total
 // budget, otherwise the remaining draws are recorded as budget-stop. A scorer fault, a changed task or a tampered harness HALTS the
 // run. The token is read once into a local variable, handed to the child and the stream sink only, and is in no row, log line or
 // kept file. Workspaces live under the OS temp directory and are kept for inspection; remove them by path.
@@ -39,7 +43,7 @@ import { buildReport } from '../../evals/lib/ab-report.mjs';
 
 const REPO = path.resolve(import.meta.dirname, '../../..');
 const AB = path.join(REPO, 'tests/evals/ab');
-const FLAGS = new Set(['tasks', 'out', 'concurrency', 'budget-per-draw', 'budget-total', 'timeout-min', 'seed', 'noise', 'only', 'claude', 'env-file', 'report-only', 'model', 'sandbox', 'plugin-dir']);
+const FLAGS = new Set(['tasks', 'out', 'concurrency', 'budget-per-draw', 'budget-total', 'timeout-min', 'seed', 'noise', 'only', 'claude', 'env-file', 'report-only', 'model', 'sandbox', 'plugin-dir', 'budget-somi', 'timeout-somi-min']);
 const SWITCHES = new Set(['dry-run', 'force-budget', 'unsafe-no-sandbox', 'token-fd']);
 const NAME = /^[A-Za-z0-9._-]{1,64}$/;
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]{0,63}$/;
@@ -59,7 +63,7 @@ function parseArgs(argv) {
   }
   const num = (k, d, min) => { const v = a[k] === undefined ? d : Number(a[k]); if (!Number.isFinite(v) || v < min) die(`--${k} must be a number >= ${min}`); return v; };
   if (a.sandbox !== undefined && !['auto', 'off'].includes(a.sandbox)) die('--sandbox must be auto or off');
-  return { ...a, concurrency: Math.floor(num('concurrency', 3, 1)), budgetPerDraw: num('budget-per-draw', 8, 0.1), budgetTotal: num('budget-total', 130, 0.1), timeoutMin: num('timeout-min', 40, 0.001), seed: Math.floor(num('seed', 1, 0)) };
+  return { ...a, concurrency: Math.floor(num('concurrency', 3, 1)), budgetPerDraw: num('budget-per-draw', 8, 0.1), budgetTotal: num('budget-total', 130, 0.1), timeoutMin: num('timeout-min', 40, 0.001), budgetSomi: num('budget-somi', a['budget-per-draw'] === undefined ? 8 : Number(a['budget-per-draw']), 0.1), timeoutSomiMin: num('timeout-somi-min', a['timeout-min'] === undefined ? 40 : Number(a['timeout-min']), 0.001), seed: Math.floor(num('seed', 1, 0)) };
 }
 
 const readRows = (file) => fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
@@ -74,7 +78,9 @@ async function main() {
   const taskNames = args.tasks ? args.tasks.split(',') : fs.readdirSync(AB, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
   if (taskNames.length === 0 || new Set(taskNames).size !== taskNames.length) die('--tasks must name each task once');
   if (taskNames.some((t) => !NAME.test(t) || !fs.existsSync(path.join(AB, t, 'task.json')))) die('--tasks names a directory under tests/evals/ab that has no task.json');
-  const noiseSpec = args.noise ?? (args.only ? '' : 'T1-proration:2');
+  const noiseSpec = args.noise ?? (args.only || args.tasks ? '' : 'T1-proration:2');
+  const capOf = (arm) => (arm === 'somi' ? args.budgetSomi : args.budgetPerDraw);
+  const minutesOf = (arm) => (arm === 'somi' ? args.timeoutSomiMin : args.timeoutMin);
   const noise = noiseSpec === '' ? [] : noiseSpec.split(',').map((s) => { const [task, n] = s.split(':'); return { task, n: Number(n) }; });
   if (noise.some((x) => !taskNames.includes(x.task) || !Number.isInteger(x.n) || x.n < 0 || x.n > 10)) die('--noise must be task:count with a selected task and a count of 0 to 10');
 
@@ -87,11 +93,11 @@ async function main() {
     draws = draws.filter((d) => d.noise || want.includes(`${d.task}:${d.arm}`));
   }
   draws = seededShuffle(draws, args.seed).map((d, order) => ({ ...d, order }));
-  const worst = draws.length * args.budgetPerDraw;
+  const worst = draws.reduce((sum, d) => sum + capOf(d.arm), 0);
   console.log(`plan: ${draws.length} draw(s) over ${taskNames.length} task(s), model ${args.model}, seed ${args.seed}, concurrency ${args.concurrency}`);
-  console.log(`worst case: ${draws.length} x $${args.budgetPerDraw} = $${worst.toFixed(2)} against a total budget of $${args.budgetTotal}`);
-  console.log(`time: each draw gets ${args.timeoutMin} min for all its turns (the hard bound); a single call can overshoot its dollar cap, and a draw ending without a result is charged the whole cap`);
-  for (const d of draws) console.log(`  ${String(d.order).padStart(2)} ${d.id}`);
+  console.log(`worst case: ${draws.filter((d) => d.arm === 'bare').length} bare x $${args.budgetPerDraw} + ${draws.filter((d) => d.arm === 'somi').length} SoMi x $${args.budgetSomi} = $${worst.toFixed(2)} against a total budget of $${args.budgetTotal}`);
+  console.log(`time: each bare draw gets ${args.timeoutMin} min and each SoMi draw ${args.timeoutSomiMin} min for all their turns (the hard bound); a single call can overshoot its dollar cap, and a draw ending without a result is charged the whole cap`);
+  for (const d of draws) console.log(`  ${String(d.order).padStart(2)} ${d.id} (cap $${capOf(d.arm)}, ${minutesOf(d.arm)} min)`);
   if (worst > args.budgetTotal && !args['force-budget']) die(`the worst case $${worst.toFixed(2)} exceeds --budget-total $${args.budgetTotal}; lower --budget-per-draw or pass --force-budget`);
 
   // Admission up front: a task that is not admitted costs nothing, and its name list is what every draw is scored against.
@@ -153,12 +159,12 @@ async function main() {
     console.log(`start ${d.id}`);
     try {
       const { ws, before } = prepareWorkspace({ taskDir: t.dir, tmp });
-      const run = await runDraw({ model: args.model, arm: d.arm, prompt: armPrompt(d.arm, taskText(t.task)), budget: args.budgetPerDraw, timeoutMs: args.timeoutMin * 60000, claude, env: childEnv({ token, tmp, tokenFd: args['token-fd'] }), cwd: ws, plugin, drawDir, token, tokenFd: args['token-fd'], canary: t.task.canary, task: d.task, absAb: AB, ownTmp: tmp, sandbox: sandboxOn ? specFor(d.arm) : null, kills });
+      const run = await runDraw({ model: args.model, arm: d.arm, prompt: armPrompt(d.arm, taskText(t.task)), budget: capOf(d.arm), timeoutMs: minutesOf(d.arm) * 60000, claude, env: childEnv({ token, tmp, tokenFd: args['token-fd'] }), cwd: ws, plugin, drawDir, token, tokenFd: args['token-fd'], canary: t.task.canary, task: d.task, absAb: AB, ownTmp: tmp, sandbox: sandboxOn ? specFor(d.arm) : null, kills });
       fs.writeFileSync(path.join(drawDir, 'stderr.txt'), run.stderr, { mode: 0o600 });
       const after = lstatManifest(ws);
       run.leaks = [...new Set([...run.leaks, ...inspectDraw({ ws, cfg: path.join(tmp, 'cfg'), after, drawDir, token, canary: t.task.canary, absAb: AB })])].sort();
-      Object.assign(row, classify({ run, arm: d.arm, budget: args.budgetPerDraw }), { costUsd: run.cost, durationMs: run.wallMs, resumes: run.resumes, turns: run.turns, models: run.models });
-      if (!run.result && !run.error) Object.assign(row, { costUsd: args.budgetPerDraw, costEstimated: true });
+      Object.assign(row, classify({ run, arm: d.arm, budget: capOf(d.arm) }), { costUsd: run.cost, durationMs: run.wallMs, resumes: run.resumes, turns: run.turns, models: run.models });
+      if (!run.result && !run.error) Object.assign(row, { costUsd: capOf(d.arm), costEstimated: true });
       if (st.interrupted) Object.assign(row, { outcome: 'invalid', reason: 'interrupted' });
       const sv = scopeVerdict({ before, after, declared: declaredScope(t.task) });
       row.scope = sv ? { ok: sv.verdict === 'in-scope', reason: sv.reason } : { ok: false, reason: 'the scope check refused its arguments' };
@@ -172,12 +178,12 @@ async function main() {
   const worker = async () => {
     for (let d = queue.shift(); d; d = queue.shift()) {
       let row;
-      if (st.halt || st.interrupted || st.spent + st.reserved + args.budgetPerDraw > args.budgetTotal) {
+      if (st.halt || st.interrupted || st.spent + st.reserved + capOf(d.arm) > args.budgetTotal) {
         row = { draw: d.id, task: d.task, arm: d.arm, noise: d.noise, order: d.order, outcome: 'budget-stop', reason: st.halt ? 'halted' : st.interrupted ? 'interrupted' : 'budget', green: 0, total: 0 };
       } else {
-        st.reserved += args.budgetPerDraw;
+        st.reserved += capOf(d.arm);
         row = await doDraw(d);
-        st.reserved -= args.budgetPerDraw; st.spent += row.costUsd;
+        st.reserved -= capOf(d.arm); st.spent += row.costUsd;
       }
       fs.appendFileSync(resultsFile, `${JSON.stringify(row)}\n`, { mode: 0o600 });
       console.log(`done ${row.draw}: ${row.outcome}${row.reason ? ` (${row.reason})` : ''} ${row.green}/${row.total} $${(row.costUsd ?? 0).toFixed(2)} spent $${st.spent.toFixed(2)}`);
