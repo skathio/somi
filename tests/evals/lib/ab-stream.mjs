@@ -27,6 +27,9 @@ const WIN = 12;
 const MAX_WALK = 100000;
 const SK = /sk-ant-[A-Za-z0-9_-]{4,}/g;
 const MARK = '[REDACTED]';
+// The account's usage window ran out: the CLI ends the call as a success with this text, or reports a rejected rate-limit event.
+const LIMIT_TEXT = /hit your (session|weekly|usage|five.hour) limit|usage limit|resets \d/i;
+const RESET_TEXT = /resets [^\n"·]{1,60}/i;
 const winCache = new Map();
 const windowsOf = (token) => {
   if (!token) return [];
@@ -56,7 +59,8 @@ const parse = (l) => { try { const v = JSON.parse(l); return typeof v === 'objec
 export function createSink(file, { token, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES }) {
   const fd = fs.openSync(file, 'a', 0o600);
   let dec = new StringDecoder('utf8');
-  const s = { bytes: 0, capped: false, leaks: new Set(), result: null, text: '' };
+  const s = { bytes: 0, capped: false, leaks: new Set(), result: null, text: '', limit: false, reset: null };
+  const limitText = (t) => { if (typeof t === 'string' && LIMIT_TEXT.test(t)) { s.limit = true; s.reset ??= RESET_TEXT.exec(t)?.[0].replace(/^resets /i, '').trim() ?? null; } };
   let pending = '';
   const paths = [['ab-path', 'tests/evals/ab'], ['task-hidden', `${task}/hidden`], ['task-oracle', `${task}/oracle`], ['eval-env', '.somi/eval.env']];
   if (absAb) paths.push(['ab-path', absAb]);
@@ -70,10 +74,11 @@ export function createSink(file, { token, canary, task, absAb, ownTmp, maxBytes 
       for (const [name, needle] of paths) if (raw.includes(needle)) s.leaks.add(name);
       if ((ownTmp ? raw.split(ownTmp).join('') : raw).includes('/ab-draw-')) s.leaks.add('other-draw');
     }
-    if (ev?.type === 'result') s.result = ev;
+    if (ev?.type === 'rate_limit_event' && /"status":"rejected"/.test(raw)) s.limit = true;
+    if (ev?.type === 'result') { s.result = ev; limitText(ev.result); }
     if (ev?.type === 'assistant' && Array.isArray(ev.message?.content)) {
       const t = ev.message.content.filter((b) => b?.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
-      if (t !== '') s.text = t;
+      if (t !== '') { s.text = t; limitText(t); }
     }
     fs.writeSync(fd, `${redactToken(raw, token)}\n`);
   }

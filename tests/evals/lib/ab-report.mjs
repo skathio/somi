@@ -48,6 +48,8 @@ export function buildReport(rows) {
   const count = (arm, o) => real.filter((r) => r.arm === arm && r.outcome === o).length;
   L.push(`Outcomes (all tasks): ${['bare', 'somi'].map((a) => `${a}: scored ${count(a, 'scored')} paused ${count(a, 'paused')} over-budget ${count(a, 'over-budget')} invalid ${count(a, 'invalid')}`).join('; ')}; not run (budget stop) ${skipped}`);
   for (const r of real.filter((x) => x.outcome === 'invalid')) L.push(`  invalid: ${r.draw} ${r.reason}`);
+  const limited = rows.filter((r) => r.reason === 'account-limit');
+  if (limited.length > 0) L.push(`account-limit: re-run after ${[...new Set(limited.map((r) => r.resetText).filter(Boolean))].join(' / ') || 'the usage window resets (time unknown)'}; ${limited.length} draw(s) cut off or not run, reported as excluded, never as a loss`);
   const noise = rows.filter((r) => r.noise && r.outcome === 'scored');
   for (const t of [...new Set(noise.map((r) => r.task))]) {
     const b = get(t, 'bare');

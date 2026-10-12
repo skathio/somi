@@ -13,6 +13,8 @@
 //                 values). The bare arm always uses --budget-per-draw and --timeout-min. The plan, the worst case, the budget-total
 //                 check, the resume budget and the deadline all use the arm's own values. The spend in the log lines is the running
 //                 total over all finished draws of the run, not the cost of the draw named on the line.
+//   --concurrency draws run in parallel and share the account's usage window; so does any other Claude activity on the same account.
+//                 A call cut off by the window ends the run (reason account-limit): re-run after the reset time in the report.
 //   --model       required; the model name is never defaulted in code.
 //   --sandbox     auto (default): bubblewrap must work or the run is refused, unless --unsafe-no-sandbox. off: no sandbox; allowed
 //                 for a stub --claude, refused for the real one without --unsafe-no-sandbox.
@@ -148,7 +150,7 @@ async function main() {
   fs.mkdirSync(out, { recursive: true, mode: 0o700 });
   const resultsFile = path.join(out, 'results.jsonl');
   const claude = sandboxOn ? claudeReal : (args.claude ?? 'claude');
-  const st = { spent: 0, reserved: 0, halt: null, interrupted: false };
+  const st = { spent: 0, reserved: 0, halt: null, limit: false, interrupted: false };
 
   async function doDraw(d) {
     const t = tasks.get(d.task);
@@ -164,6 +166,7 @@ async function main() {
       const after = lstatManifest(ws);
       run.leaks = [...new Set([...run.leaks, ...inspectDraw({ ws, cfg: path.join(tmp, 'cfg'), after, drawDir, token, canary: t.task.canary, absAb: AB })])].sort();
       Object.assign(row, classify({ run, arm: d.arm, budget: capOf(d.arm) }), { costUsd: run.cost, durationMs: run.wallMs, resumes: run.resumes, turns: run.turns, models: run.models });
+      if (run.limit) { row.resetText = run.reset; st.limit = true; st.halt = `${d.id}: the account's usage limit was reached${run.reset ? `, resets ${run.reset}` : ''}`; }
       if (!run.result && !run.error) Object.assign(row, { costUsd: capOf(d.arm), costEstimated: true });
       if (st.interrupted) Object.assign(row, { outcome: 'invalid', reason: 'interrupted' });
       const sv = scopeVerdict({ before, after, declared: declaredScope(t.task) });
@@ -179,7 +182,7 @@ async function main() {
     for (let d = queue.shift(); d; d = queue.shift()) {
       let row;
       if (st.halt || st.interrupted || st.spent + st.reserved + capOf(d.arm) > args.budgetTotal) {
-        row = { draw: d.id, task: d.task, arm: d.arm, noise: d.noise, order: d.order, outcome: 'budget-stop', reason: st.halt ? 'halted' : st.interrupted ? 'interrupted' : 'budget', green: 0, total: 0 };
+        row = { draw: d.id, task: d.task, arm: d.arm, noise: d.noise, order: d.order, outcome: 'budget-stop', reason: st.limit ? 'account-limit' : st.halt ? 'halted' : st.interrupted ? 'interrupted' : 'budget', green: 0, total: 0 };
       } else {
         st.reserved += capOf(d.arm);
         row = await doDraw(d);

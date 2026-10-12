@@ -225,12 +225,12 @@ export async function runDraw({ model, arm, prompt, budget, timeoutMs, claude, e
       run.turns += Number.isInteger(res.num_turns) ? res.num_turns : 0;
       for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
       session = typeof res.session_id === 'string' ? res.session_id : null;
-      if (arm !== 'somi' || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= MAX_RESUMES) break;
+      if (sink.state.limit || arm !== 'somi' || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= MAX_RESUMES) break;
       if (budget - run.cost < MIN_REMAINING_USD) { run.exhausted = true; break; }
       run.resumes++; text = RESUME_PROMPT;
     }
   } finally { await sweepProcesses(`CLAUDE_CONFIG_DIR=${env.CLAUDE_CONFIG_DIR}`); sink.end(); }
-  return { ...run, models: [...run.models].sort(), text: sink.state.text, leaks: [...sink.state.leaks].sort(), capped: sink.state.capped, wallMs: Date.now() - started, stderr: redactToken(run.stderr, token) };
+  return { ...run, models: [...run.models].sort(), text: sink.state.text, leaks: [...sink.state.leaks].sort(), capped: sink.state.capped, limit: sink.state.limit, reset: sink.state.reset, wallMs: Date.now() - started, stderr: redactToken(run.stderr, token) };
 }
 
 /** Facts -> {outcome, reason} in the compareArms vocabulary; the first matching rule wins. */
@@ -241,6 +241,8 @@ export function classify({ run, arm, budget }) {
   if (run.leaks.length > 0) return inv(`leak:${run.leaks.join(',')}`);
   if (run.capped) return inv('output-cap');
   if (run.timedOut) return inv('timeout');
+  // An exhausted usage window ends a call as a success; it is an infrastructure failure and outranks every other reading.
+  if (run.limit) return inv('account-limit');
   if (!r) return inv(AUTH_STDERR.test(run.stderr) ? 'auth' : 'no-result');
   if (r.is_error && (AUTH_STDERR.test(run.stderr) || /please run \/login/i.test(String(r.result ?? '')))) return inv('auth');
   if (r.subtype === 'error_max_budget_usd' || run.cost > budget || run.exhausted) return { outcome: 'over-budget', reason: 'budget exhausted' };

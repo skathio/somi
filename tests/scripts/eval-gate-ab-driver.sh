@@ -60,6 +60,8 @@ else if (mode === 'fold') {
   fs.writeFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', 'x', 'sess.jsonl'), JSON.stringify({ content: 'token ' + t }) + '\n');
   fs.writeFileSync('notes.txt', 'CLAUDE_CODE_OAUTH_TOKEN=' + t + '\n'); solve(); result();
 }
+else if (mode === 'limit-event') { emit({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour' } }); say('Shall I proceed?'); result({ result: 'Shall I proceed?', session_id: 'sess-l' }); }
+else if (mode === 'limit-text') { say('working'); result({ result: "You've hit your session limit · resets 1:50am (Europe/Vilnius)", session_id: 'sess-l' }); }
 else if (mode === 'auth-fail') { process.stderr.write('401 Unauthorized\n'); result({ is_error: true, result: 'Invalid API key. Please run /login', total_cost_usd: 0 }); process.exitCode = 1; }
 else if (mode === 'auth-text') { say('done'); result({ is_error: true, subtype: 'error_during_execution', result: 'the server returned 401 for the test', total_cost_usd: 0.1 }); }
 else if (mode === 'task-changed') { fs.appendFileSync(path.join(cfg.taskDir, 'fixture', 'package.json'), ' '); solve(); result(); }
@@ -210,6 +212,10 @@ console.log(JSON.stringify({repo:ex(e.REPO+'/package.json'),dotclaude:ex(e.REAL_
     } else if (mode === 'fd') {
       const e = JSON.parse(fs.readFileSync(`${somi.tmp}/env.json`, 'utf8')); const f = JSON.parse(fs.readFileSync(`${somi.tmp}/fd.json`, 'utf8'));
       check('--token-fd: the token reaches the child only through descriptor 3, the environment holds the descriptor variable and no token', both((r) => r.outcome === 'scored') && Object.keys(e).sort().join() === 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR,CLAUDE_CONFIG_DIR,HOME,LANG,PATH' && e.CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR === '3' && !Object.values(e).includes('<TOKEN>') && f.match === true);
+    } else if (mode === 'limit-event' || mode === 'limit-text') {
+      const hit = rows.find((r) => r.reason === 'account-limit'); const stop = rows.find((r) => r.outcome === 'budget-stop');
+      check('an exhausted usage window (rejected event, or only the success text) is invalid account-limit, never resumed, halts the run, the other draw is not run', rc === 1 && hit && hit.outcome === 'invalid' && stop && stop.reason === 'account-limit' && calls(hit).length === 1 && hit.resumes === 0 && (mode === 'limit-event' || /1:50am/.test(hit.resetText ?? '')));
+      check('the report says when to re-run', /account-limit: re-run after/.test(log()) && (mode === 'limit-event' || log().includes('re-run after 1:50am')));
     } else if (mode === 'perarm') {
       const cs = calls(somi); const cb = calls(bare); const cap = (c) => c[c.indexOf('--max-budget-usd') + 1];
       check('per-arm cap: the bare arm keeps --budget-per-draw, the SoMi first call and its resume use --budget-somi (cap minus spend)', cap(cb[0]) === '8.00' && cap(cs[0]) === '5.00' && cap(cs[1]) === '4.50' && /2 draw|bare x \$8 \+ 1 SoMi x \$5 = \$13\.00/.test(log()) && bare.outcome === 'scored' && somi.outcome === 'scored');
@@ -256,6 +262,8 @@ for m in $MODES; do
   cli "$m" "$ROOT" "$(mkstub "$m" "$m" 41001)" "$TMP/eval.env" "${extra[@]}"
 done
 cli slowpause "$ROOT" "$(mkstub slowpause slowpause 0)" "$TMP/eval.env" --timeout-min 0.04
+cli limit-event "$ROOT" "$(mkstub limit-event limit-event 0)" "$TMP/eval.env" --concurrency 1
+cli limit-text "$ROOT" "$(mkstub limit-text limit-text 0)" "$TMP/eval.env" --concurrency 1
 cli perarm "$ROOT" "$(mkstub perarm pause 0)" "$TMP/eval.env" --budget-somi 5
 cli perarm-time "$ROOT" "$(mkstub perarm-time slowpause 0)" "$TMP/eval.env" --timeout-min 5 --timeout-somi-min 0.04
 cli fd "$ROOT" "$(mkstub fd fd 0)" "$TMP/eval.env" --token-fd
@@ -310,6 +318,11 @@ mutant task-changed tests/scripts/manual/ab-experiment.mjs "if (halt) st.halt = 
 mutant task-changed $DR "return \`\${row.draw}: \${sc.reason}\`; }" "return null; }" "a scorer fault halts"
 mutant fd $DR "fdToken: tokenFd ? token : null" "fdToken: null" "the token fd is written"
 mutant hang tests/scripts/manual/ab-experiment.mjs "if (!run.result && !run.error) Object.assign(row, { costUsd: capOf(d.arm), costEstimated: true });" "" "a draw without a result is charged its cap"
+mutant limit-event $DR "if (run.limit) return inv('account-limit');" "" "an exhausted usage window is invalid"
+mutant limit-event $DR "if (sink.state.limit || arm" "if (arm" "no resume on an exhausted window"
+mutant limit-event $ST "test(raw)) s.limit = true;" "test(raw)) s.limit = false;" "the rejected rate-limit event"
+mutant limit-text $ST "if (typeof t === 'string' && LIMIT_TEXT.test(t))" "if (false)" "the limit text"
+mutant limit-text tests/scripts/manual/ab-experiment.mjs "st.limit = true; st.halt =" "st.halt =" "an exhausted window halts the run"
 mutant perarm tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.budgetSomi : args.budgetPerDraw)" "args.budgetPerDraw" "the SoMi arm's own dollar cap"
 mutant perarm-time tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.timeoutSomiMin : args.timeoutMin)" "args.timeoutMin" "the SoMi arm's own time limit"
 mutant sigint tests/scripts/manual/ab-experiment.mjs "for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'])" "for (const sig of ['SIGTERM'])" "SIGINT is handled"
@@ -318,7 +331,7 @@ wait
 pass=0; fail=0
 tally() { while IFS=$'\t' read -r status name; do case "$status" in ok) pass=$((pass+1)); printf '  ok   %s\n' "$name" ;; FAIL) fail=$((fail+1)); printf '  FAIL %s\n' "$name" ;; *) [ -n "$status" ] && { fail=$((fail+1)); printf '  FAIL unexpected output: %s\n' "$status $name"; } ;; esac; done; }
 tally < <(verify "$ROOT" unit unit)
-for m in $MODES perarm perarm-time fd slowpause spawn-error envmode budget-stop task-changed; do tally < <(verify "$ROOT" "$m" "$m" 41001); done
+for m in $MODES limit-event limit-text perarm perarm-time fd slowpause spawn-error envmode budget-stop task-changed; do tally < <(verify "$ROOT" "$m" "$m" 41001); done
 tally < <(verify "$ROOT" sigint sigint 41002)
 real=(); for p in "$TMP"/o-* "$TMP"/t-*; do case "${p##*/}" in ?-mu[0-9]*|*.log|*.err|*.rc) ;; *) [ -d "$p" ] && real+=("$p") ;; esac; done
 tally < <(verify "$ROOT" disk disk 0 "$(IFS=:; echo "${real[*]}")")
