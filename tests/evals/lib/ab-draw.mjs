@@ -13,7 +13,9 @@
 //   sits there as an inert file. Recorded here because a plan that says "no .somi" would otherwise be silently contradicted.
 // Arms differ in ONE thing: the SoMi arm gets `--plugin-dir <packed plugin>` and a `/somi:ship-loop ` prefix on the same
 //   task text. The plugin is the npm package of the repository extracted read-only (buildPlugin), never the checkout.
-// Environment (childEnv): an allowlist of five variables; the token is a parameter, never read from process.env.
+// Environment (childEnv): an allowlist of six variables; the token is a parameter, never read from process.env. The sixth,
+//   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0, makes `claude --print` wait for background work without its own 600 s ceiling
+//   (a SoMi planner runs in the background); it is set for both arms, and the per-draw deadline stays the hard bound.
 // Sandbox (sandboxArgs): bubblewrap, read-only root, the real HOME and /tmp replaced by empty tmpfs, then only the claude
 //   and PATH directories (read-only), the plugin (read-only) and the draw directory (read-write) bound back; a new pid
 //   namespace dies with the leader. The repository, ~/.claude, ~/.ssh and other draws' directories are not visible. The
@@ -60,7 +62,7 @@ export function claudeArgv({ arm, prompt, budget, plugin, resume, model }) {
 
 /** The only variables the claude child sees. HOME and the config directory are fresh per draw. */
 export function childEnv({ token, tmp, tokenFd = false }) {
-  const base = { PATH: process.env.PATH ?? '', LANG: 'C.UTF-8', HOME: tmp, CLAUDE_CONFIG_DIR: path.join(tmp, 'cfg') };
+  const base = { PATH: process.env.PATH ?? '', LANG: 'C.UTF-8', HOME: tmp, CLAUDE_CONFIG_DIR: path.join(tmp, 'cfg'), CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' };
   return tokenFd ? { ...base, CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR: '3' } : { ...base, CLAUDE_CODE_OAUTH_TOKEN: token };
 }
 
@@ -243,6 +245,8 @@ export function classify({ run, arm, budget }) {
   if (run.timedOut) return inv('timeout');
   // An exhausted usage window ends a call as a success; it is an infrastructure failure and outranks every other reading.
   if (run.limit) return inv('account-limit');
+  // The CLI ended the session on its own background-wait ceiling: the work never finished, so the score says nothing.
+  if (/Background tasks still running after/.test(run.stderr)) return inv('bg-wait-ceiling');
   if (!r) return inv(AUTH_STDERR.test(run.stderr) ? 'auth' : 'no-result');
   if (r.is_error && (AUTH_STDERR.test(run.stderr) || /please run \/login/i.test(String(r.result ?? '')))) return inv('auth');
   if (r.subtype === 'error_max_budget_usd' || run.cost > budget || run.exhausted) return { outcome: 'over-budget', reason: 'budget exhausted' };

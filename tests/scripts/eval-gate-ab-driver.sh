@@ -62,6 +62,7 @@ else if (mode === 'fold') {
 }
 else if (mode === 'limit-event') { emit({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour' } }); say('Shall I proceed?'); result({ result: 'Shall I proceed?', session_id: 'sess-l' }); }
 else if (mode === 'limit-text') { say('working'); result({ result: "You've hit your session limit · resets 1:50am (Europe/Vilnius)", session_id: 'sess-l' }); }
+else if (mode === 'bg-ceiling') { process.stderr.write('Background tasks still running after 600s; terminating.\n'); say('planning'); result({ result: 'Planning started.' }); }
 else if (mode === 'auth-fail') { process.stderr.write('401 Unauthorized\n'); result({ is_error: true, result: 'Invalid API key. Please run /login', total_cost_usd: 0 }); process.exitCode = 1; }
 else if (mode === 'auth-text') { say('done'); result({ is_error: true, subtype: 'error_during_execution', result: 'the server returned 401 for the test', total_cost_usd: 0.1 }); }
 else if (mode === 'task-changed') { fs.appendFileSync(path.join(cfg.taskDir, 'fixture', 'package.json'), ' '); solve(); result(); }
@@ -123,7 +124,7 @@ if (mode === 'unit') {
   const base = ['--print', 'P', '--output-format', 'stream-json', '--verbose', '--model', 'test-model', '--max-budget-usd', '7.99', '--permission-mode', 'bypassPermissions', '--disallowed-tools', 'WebFetch,WebSearch'];
   check('bare argv has no plugin, disables the web tools, rounds the budget down', JSON.stringify(L.claudeArgv({ model: 'test-model', arm: 'bare', prompt: 'P', budget: 7.999, plugin: '/p' })) === JSON.stringify(base));
   check('SoMi argv adds only the plugin dir; a resume adds the session', JSON.stringify(L.claudeArgv({ model: 'test-model', arm: 'somi', prompt: 'P', budget: 7.999, plugin: '/p', resume: 's' })) === JSON.stringify([...base, '--plugin-dir', '/p', '--resume', 's']));
-  check('childEnv has exactly the five allowlisted keys; the fd variant swaps the token for the descriptor', JSON.stringify(Object.keys(L.childEnv({ token: 't', tmp: '/x' })).sort()) === JSON.stringify(['CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR', 'HOME', 'LANG', 'PATH']) && JSON.stringify(Object.keys(L.childEnv({ token: 't', tmp: '/x', tokenFd: true })).sort()) === JSON.stringify(['CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CONFIG_DIR', 'HOME', 'LANG', 'PATH']));
+  check('childEnv has exactly the six allowlisted keys; the fd variant swaps the token for the descriptor', JSON.stringify(Object.keys(L.childEnv({ token: 't', tmp: '/x' })).sort()) === JSON.stringify(['CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS', 'CLAUDE_CONFIG_DIR', 'HOME', 'LANG', 'PATH']) && JSON.stringify(Object.keys(L.childEnv({ token: 't', tmp: '/x', tokenFd: true })).sort()) === JSON.stringify(['CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS', 'CLAUDE_CONFIG_DIR', 'HOME', 'LANG', 'PATH']));
   check('pause heuristic: questions, the checkpoint menu and explicit requests pause', [['Shall I proceed?', 1], ['Checkpoint: approve / revise / abort', 1], ['Reply approve to continue.', 1], ['I am waiting for your approval', 1], ['Should I also add tests? Let me know.', 1], ['What a day?" ', 1]].every(([t, w]) => L.looksPaused(t) === Boolean(w)));
   check('pause heuristic: status reports that mention approve, confirmed or proceeded are NOT pauses', ['Done. /code-loop exited on approve; all 12 tests pass.', 'Iteration 1.1 closed. Reviewer verdict: approve (no Blocker/Major).', 'I confirmed the boundary is inclusive and committed the change.', 'Implemented and proceeded to the review stage; shipped.', 'All tests pass.', 'I fixed it. Is it ok? Yes, shipped.'].every((t) => L.looksPaused(t) === false));
   const d = fs.mkdtempSync(`${TMP}/unit-`);
@@ -202,7 +203,7 @@ console.log(JSON.stringify({repo:ex(e.REPO+'/package.json'),dotclaude:ex(e.REAL_
       check('SoMi argv: the same text behind /somi:ship-loop, the same flags, the packed plugin (not the checkout) only here', s0[1] === `/somi:ship-loop ${b0[1]}` && s0.slice(2, 13).join(' ') === b0.slice(2).join(' ') && s0.slice(13).join('|') === `--plugin-dir|${PLUGIN}` && PLUGIN !== ROOT);
       check('the prompt carries neither the canary nor a hidden or oracle path', ![b0[1], s0[1]].some((p) => p.includes(CANARY) || /hidden|oracle|tests\/evals/.test(p)));
       const env = JSON.parse(fs.readFileSync(`${bare.tmp}/env.json`, 'utf8')); const envS = JSON.parse(fs.readFileSync(`${somi.tmp}/env.json`, 'utf8'));
-      check('child env: exactly the allowlisted keys, no host variable, the token only as CLAUDE_CODE_OAUTH_TOKEN', both((r) => { const e = r === bare ? env : envS; return Object.keys(e).sort().join() === 'CLAUDE_CODE_OAUTH_TOKEN,CLAUDE_CONFIG_DIR,HOME,LANG,PATH' && e.HOME === r.tmp && e.CLAUDE_CONFIG_DIR === `${r.tmp}/cfg` && e.CLAUDE_CODE_OAUTH_TOKEN === '<TOKEN>' && !JSON.stringify(e).includes('leak-me') && Object.values(e).filter((v) => v === '<TOKEN>').length === 1; }));
+      check('child env: exactly the allowlisted keys, no host variable, the token only as CLAUDE_CODE_OAUTH_TOKEN', both((r) => { const e = r === bare ? env : envS; return Object.keys(e).sort().join() === 'CLAUDE_CODE_OAUTH_TOKEN,CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS,CLAUDE_CONFIG_DIR,HOME,LANG,PATH' && e.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS === '0' && e.HOME === r.tmp && e.CLAUDE_CONFIG_DIR === `${r.tmp}/cfg` && e.CLAUDE_CODE_OAUTH_TOKEN === '<TOKEN>' && !JSON.stringify(e).includes('leak-me') && Object.values(e).filter((v) => v === '<TOKEN>').length === 1; }));
       const cfgOf = (r) => fs.readFileSync(`${r.tmp}/ws/.somi/config.json`, 'utf8');
       check('both workspaces are identical git repos with the ceiling config and one commit', both((r) => cfgOf(r) === '{"cost":{"ceiling":"medium"}}\n' && spawnSync('git', ['-C', `${r.tmp}/ws`, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).stdout.trim() === '1' && !fs.existsSync(`${r.tmp}/ws/.git/hooks`) && fs.readdirSync(`${r.tmp}/ws`).sort().join() === '.git,.somi,package.json,prorate.mjs'));
       const st = (p) => (fs.statSync(p).mode & 0o777).toString(8);
@@ -211,11 +212,14 @@ console.log(JSON.stringify({repo:ex(e.REPO+'/package.json'),dotclaude:ex(e.REAL_
       check('the plan states the hard time bound and the sandbox status', /hard bound/.test(log()) && /sandbox/i.test(log()));
     } else if (mode === 'fd') {
       const e = JSON.parse(fs.readFileSync(`${somi.tmp}/env.json`, 'utf8')); const f = JSON.parse(fs.readFileSync(`${somi.tmp}/fd.json`, 'utf8'));
-      check('--token-fd: the token reaches the child only through descriptor 3, the environment holds the descriptor variable and no token', both((r) => r.outcome === 'scored') && Object.keys(e).sort().join() === 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR,CLAUDE_CONFIG_DIR,HOME,LANG,PATH' && e.CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR === '3' && !Object.values(e).includes('<TOKEN>') && f.match === true);
+      check('--token-fd: the token reaches the child only through descriptor 3, the environment holds the descriptor variable and no token', both((r) => r.outcome === 'scored') && Object.keys(e).sort().join() === 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR,CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS,CLAUDE_CONFIG_DIR,HOME,LANG,PATH' && e.CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR === '3' && !Object.values(e).includes('<TOKEN>') && f.match === true);
     } else if (mode === 'limit-event' || mode === 'limit-text') {
       const hit = rows.find((r) => r.reason === 'account-limit'); const stop = rows.find((r) => r.outcome === 'budget-stop');
       check('an exhausted usage window (rejected event, or only the success text) is invalid account-limit, never resumed, halts the run, the other draw is not run', rc === 1 && hit && hit.outcome === 'invalid' && stop && stop.reason === 'account-limit' && calls(hit).length === 1 && hit.resumes === 0 && (mode === 'limit-event' || /1:50am/.test(hit.resetText ?? '')));
       check('the report says when to re-run', /account-limit: re-run after/.test(log()) && (mode === 'limit-event' || log().includes('re-run after 1:50am')));
+    } else if (mode === 'bg-ceiling') {
+      const hit = rows.find((r) => r.reason === 'bg-wait-ceiling'); const stop = rows.find((r) => r.outcome === 'budget-stop');
+      check('a session ended by the CLI background-wait ceiling is invalid bg-wait-ceiling (not scored), halts the run, the other draw is not run, the report says so', rc === 1 && hit && hit.outcome === 'invalid' && stop && stop.reason === 'bg-wait-ceiling' && /bg-wait-ceiling: the CLI ended the session/.test(log()));
     } else if (mode === 'perarm') {
       const cs = calls(somi); const cb = calls(bare); const cap = (c) => c[c.indexOf('--max-budget-usd') + 1];
       check('per-arm cap: the bare arm keeps --budget-per-draw, the SoMi first call and its resume use --budget-somi (cap minus spend)', cap(cb[0]) === '8.00' && cap(cs[0]) === '5.00' && cap(cs[1]) === '4.50' && /2 draw|bare x \$8 \+ 1 SoMi x \$5 = \$13\.00/.test(log()) && bare.outcome === 'scored' && somi.outcome === 'scored');
@@ -264,6 +268,7 @@ done
 cli slowpause "$ROOT" "$(mkstub slowpause slowpause 0)" "$TMP/eval.env" --timeout-min 0.04
 cli limit-event "$ROOT" "$(mkstub limit-event limit-event 0)" "$TMP/eval.env" --concurrency 1
 cli limit-text "$ROOT" "$(mkstub limit-text limit-text 0)" "$TMP/eval.env" --concurrency 1
+cli bg-ceiling "$ROOT" "$(mkstub bg-ceiling bg-ceiling 0)" "$TMP/eval.env" --concurrency 1
 cli perarm "$ROOT" "$(mkstub perarm pause 0)" "$TMP/eval.env" --budget-somi 5
 cli perarm-time "$ROOT" "$(mkstub perarm-time slowpause 0)" "$TMP/eval.env" --timeout-min 5 --timeout-somi-min 0.04
 cli fd "$ROOT" "$(mkstub fd fd 0)" "$TMP/eval.env" --token-fd
@@ -322,7 +327,10 @@ mutant limit-event $DR "if (run.limit) return inv('account-limit');" "" "an exha
 mutant limit-event $DR "if (sink.state.limit || arm" "if (arm" "no resume on an exhausted window"
 mutant limit-event $ST "test(raw)) s.limit = true;" "test(raw)) s.limit = false;" "the rejected rate-limit event"
 mutant limit-text $ST "if (typeof t === 'string' && LIMIT_TEXT.test(t))" "if (false)" "the limit text"
-mutant limit-text tests/scripts/manual/ab-experiment.mjs "st.limit = true; st.halt =" "st.halt =" "an exhausted window halts the run"
+mutant limit-text tests/scripts/manual/ab-experiment.mjs "st.stopReason = row.reason; st.halt = " "st.halt = " "an exhausted window halts the run"
+mutant bg-ceiling $DR "if (/Background tasks still running after/.test(run.stderr)) return inv('bg-wait-ceiling');" "" "the background-wait ceiling is invalid"
+mutant bg-ceiling tests/scripts/manual/ab-experiment.mjs "row.reason === 'account-limit' || row.reason === 'bg-wait-ceiling')" "row.reason === 'account-limit')" "the background-wait ceiling halts the run"
+mutant solve $DR ", CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' };" " };" "the background-wait ceiling is lifted in the child environment"
 mutant perarm tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.budgetSomi : args.budgetPerDraw)" "args.budgetPerDraw" "the SoMi arm's own dollar cap"
 mutant perarm-time tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.timeoutSomiMin : args.timeoutMin)" "args.timeoutMin" "the SoMi arm's own time limit"
 mutant sigint tests/scripts/manual/ab-experiment.mjs "for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'])" "for (const sig of ['SIGTERM'])" "SIGINT is handled"
@@ -331,7 +339,7 @@ wait
 pass=0; fail=0
 tally() { while IFS=$'\t' read -r status name; do case "$status" in ok) pass=$((pass+1)); printf '  ok   %s\n' "$name" ;; FAIL) fail=$((fail+1)); printf '  FAIL %s\n' "$name" ;; *) [ -n "$status" ] && { fail=$((fail+1)); printf '  FAIL unexpected output: %s\n' "$status $name"; } ;; esac; done; }
 tally < <(verify "$ROOT" unit unit)
-for m in $MODES limit-event limit-text perarm perarm-time fd slowpause spawn-error envmode budget-stop task-changed; do tally < <(verify "$ROOT" "$m" "$m" 41001); done
+for m in $MODES bg-ceiling limit-event limit-text perarm perarm-time fd slowpause spawn-error envmode budget-stop task-changed; do tally < <(verify "$ROOT" "$m" "$m" 41001); done
 tally < <(verify "$ROOT" sigint sigint 41002)
 real=(); for p in "$TMP"/o-* "$TMP"/t-*; do case "${p##*/}" in ?-mu[0-9]*|*.log|*.err|*.rc) ;; *) [ -d "$p" ] && real+=("$p") ;; esac; done
 tally < <(verify "$ROOT" disk disk 0 "$(IFS=:; echo "${real[*]}")")
