@@ -75,6 +75,7 @@ bash tests/scripts/cost-ceiling.sh
 
 echo "==> Dispatch resolver tests..."
 bash tests/scripts/somi-dispatch.sh
+bash tests/scripts/size-tier.sh
 
 echo "==> Front-door agent <-> dispatch resolver contract tests..."
 # agents/somi.md is a prompt and can't be exercised without a model, but what its Step 4 tells the
