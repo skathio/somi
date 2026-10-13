@@ -409,5 +409,25 @@ mutate "C1 controls allowed in evidence" "s.replace('\\\\u007f-\\\\u009f','\\\\u
 mutate "bidi and separator characters allowed in evidence" "s.replace('\\\\u2028-\\\\u202e','')"
 mutate "zero-width and mark characters allowed in evidence" "s.replace('\\\\u200b-\\\\u200f','')"
 
+# ---- drift guard: the routing skill's Size tiers section vs the module ----
+echo "== size tier: skill drift guard =="
+DRIFT="$ROOT/tests/scripts/lib/size-tier-drift.mjs"; SKILL="$ROOT/skills/somi-routing/SKILL.md"
+if d="$(node "$DRIFT" "$SKILL" "$MOD" 2>&1)"; then ok "skill and module agree: $d"; else bad "skill and module drifted: $d"; fi
+drift_red() { # $1 = label, $2 = skill|module, $3 = node expression over `s` returning the mutated source
+  local src="$SKILL" out="$TMP/drift-skill.md" mod="$MOD"
+  [ "$2" = module ] && { src="$MOD"; out="$TMP/drift-mod.mjs"; }
+  node -e "const fs=require('fs');const s=fs.readFileSync(process.argv[1],'utf8');const t=($3);if(t===s){process.exit(3)}fs.writeFileSync(process.argv[2],t)" "$src" "$out" || { bad "drift mutation '$1' did not apply"; return; }
+  if [ "$2" = module ]; then mod="$out"; src="$SKILL"; else src="$out"; fi
+  if node "$DRIFT" "$src" "$mod" >/dev/null 2>&1; then bad "drift mutation '$1' left the guard green"; else ok "drift mutation '$1' turns the guard red"; fi
+}
+drift_red "signal id removed from the skill" skill "s.replace('| \`hard_surface\` |','| \`hard_surface_x\` |')"
+drift_red "signal id removed from the module" module "s.replace(\"'design_open', \",'')"
+drift_red "signal order swapped in the skill" skill "s.replace('| \`est_files\` |','| \`TMP\` |').replace('| \`est_diff_lines\` |','| \`est_files\` |').replace('| \`TMP\` |','| \`est_diff_lines\` |')"
+drift_red "threshold changed in the skill" skill "s.replace('| \`MAX_FILES\` | 6 |','| \`MAX_FILES\` | 7 |')"
+drift_red "threshold changed in the module" module "s.replace('MAX_MODULES = 2','MAX_MODULES = 3')"
+drift_red "threshold row removed from the skill" skill "s.replace('| \`TRIVIAL_MAX_DIFF_LINES\` | 50 |','| \`TRIVIAL_MAX_DIFF_LINES_X\` | 50 |')"
+drift_red "threshold sentence pasted into the section" skill "s.replace('### Thresholds','Not security-sensitive: touches no auth, crypto, secrets, PII, or untrusted-input boundary.\n\n### Thresholds')"
+drift_red "threshold label pasted into the section" skill "s.replace('### Thresholds','Cheap to reverse.\n\n### Thresholds')"
+
 echo "== size tier: $pass passed, $fail failed =="
 [ "$fail" = 0 ]

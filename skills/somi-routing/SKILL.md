@@ -48,6 +48,76 @@ an existing work item in `.somi/` is never "trivial" — continue that item inst
 
 Not trivial and cause unknown goes to `/debug`; not trivial and cause known goes to `/plan`.
 
+## Size tiers
+
+`/ship-loop` sizes the pipeline to the work. The model extracts the signals below, each with
+evidence; `scripts/somi-tier.mjs` (a pure function over them) returns the tier. Unsure goes up a tier.
+Every tier has exactly one human gate.
+
+| Tier | Meaning | Pipeline |
+|---|---|---|
+| `trivial` | [meets the trivial threshold](#the-trivial-threshold), and is within the `TRIVIAL_*` limits below | `/code` |
+| `small` | not trivial, but contained, testable and free of open design questions | a short brief-only work item, then `/code-loop` with review; no `/plan-loop` |
+| `full` | anything else, or any security doubt | as today: design if warranted, `/plan-loop`, `/code-loop` |
+
+### Signal checklist
+
+Ids are exact; the function and the drift guard read them. Each entry is `{value, evidence}`.
+
+| Id | Value | Meaning |
+|---|---|---|
+| `T1-T5` | boolean each | the five numbered signals of [the trivial threshold](#the-trivial-threshold), entries `T1` to `T5`, same order; defined there only |
+| `hard_surface` | boolean | changes or removes an existing contract, adds a schema or migration or a dependency, or adds a new network, IPC or persisted-format contract. A new in-process function alone does not count |
+| `design_open` | boolean | a design choice that is costly to reverse is still unsettled |
+| `open_questions` | count >= 0 | questions the requester must still answer |
+| `acceptance_testable` | boolean | acceptance can be written as checks that can fail |
+| `modules_touched` | count >= 1 | distinct modules or top-level directories with production changes |
+| `est_files` | count >= 1 | production files you expect to change |
+| `est_diff_lines` | count >= 1 | production lines you expect to add or change; tests are not counted |
+| `existing_work_item` | boolean | the request matches a work item in `.somi/plans/` |
+| `brief_exists` | boolean | a `brief.md` for this work already exists |
+
+### Thresholds
+
+Named constants exported by `scripts/lib/size-tier.mjs`; the drift guard keeps this table equal to them.
+
+| Constant | Value | Rule |
+|---|---|---|
+| `MAX_DIFF_LINES` | 100 | above it, `full`. Provisional: production lines only, set below the code loop's diff cap because that cap still counts test lines |
+| `MAX_FILES` | 6 | above it, `full` |
+| `MAX_MODULES` | 2 | above it, `full` |
+| `TRIVIAL_MAX_FILES` | 1 | above it, at least `small` |
+| `TRIVIAL_MAX_MODULES` | 1 | above it, at least `small` |
+| `TRIVIAL_MAX_DIFF_LINES` | 50 | above it, at least `small` |
+| `MAX_EVIDENCE_CHARS` | 300 | longest accepted evidence string |
+
+Also forcing `full`: `existing_work_item` or `brief_exists` (continue it), a false `T3` (a security
+floor no override can lower), `hard_surface`, `design_open`, `open_questions` above 0, a false
+`acceptance_testable` or `T4`.
+
+### Extracting the signals
+
+Read the request and the code it names before answering. For every signal give a value and an
+evidence string: at most 300 characters, plain text, no control or bidi characters, naming the files
+or lines that justify the value. Report counts of production files and lines you expect to change,
+never tests. A signal you cannot determine is reported as `null` with evidence saying why; never guess
+it true. `T3` must cite what was checked (auth, crypto, secrets, PII, untrusted-input boundaries).
+Missing, malformed or over-long entries are read as their worst case.
+
+### Calling the function
+
+`node scripts/somi-tier.mjs resolve --signals <file|-> [--override small|full] [--record <slug>]`
+
+- Exit `0` ok; `64` usage, input or I/O error; `65` a downward override refused by the floor.
+- stdout is one JSON line: `tier` (computed), `effective` (to run), `source` (`computed`, `override`
+  or `env`), `floor`, `failed`, `unknown`, `invalid`, `reasons`, `basis` (id to evidence), and
+  `recorded` with `--record`.
+- Override: raising the tier is always allowed; lowering is refused when `floor` is `full`.
+  `SOMI_SHIP_LOOP_TIER=small|full` is the non-interactive form; the flag wins. `trivial` is not a target.
+
+The function cannot see the repo. A wrong extraction is caught by a person, so the gate shows the
+human `basis` (the evidence behind each signal) along with the tier and reasons.
+
 ## Existing-work-item check (do this first)
 
 Check the existing-work-item row **first** — grep `.somi/plans/*/progress.md` and
