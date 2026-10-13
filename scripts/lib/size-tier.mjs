@@ -51,7 +51,8 @@ export const SIGNAL_IDS = Object.freeze([
 
 const MIN_COUNT = { open_questions: 0, modules_touched: 1, est_files: 1, est_diff_lines: 1 };
 const TRIVIAL_IDS = SIGNAL_IDS.slice(0, 5);
-const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+// C0/C1 controls plus the invisible and direction-changing characters that can disguise text in a terminal.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
 
 // What an unreadable signal is taken to be: the answer that sends the tier up.
 const WORST = Object.freeze({
