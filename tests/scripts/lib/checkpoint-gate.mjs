@@ -11,12 +11,34 @@
 // says the three things that make the checkpoint what it is:
 //   1. it is still declared non-overridable;
 //   2. it still names the brief-handoff anchor;
-//   3. it still names the cold-start (after /plan-loop) anchor.
+//   3. it still names the cold-start (after /plan-loop) anchor;
+//   4. the Stage -1 gate sentences (every tier has one gate, no code before it, a reply is required,
+//      no auto-approve, no retry below the floor, trivial is no target, both tiers stop there), each
+//      anchored through its terminal period.
 //
 // Usage: node checkpoint-gate.mjs <path-to-ship-loop.md>
-// Exit 0 with "ok" on stdout when all three hold; exit 1 with one named reason per miss otherwise.
+// Exit 0 with "ok" on stdout when all of them hold; exit 1 with one named reason per miss otherwise.
 
 import { readFileSync } from 'node:fs';
+
+// Each anchor is a whole sentence through its terminal period, so an appended exception ("..., unless
+// ...") no longer matches. Whitespace is free (and a quote marker), because the prose is hard-wrapped.
+export const SENTENCE_ANCHORS = [
+  [/Every[\s>]+tier[\s>]+has[\s>]+exactly[\s>]+one[\s>]+gate:[\s>]+`trivial`[\s>]+and[\s>]+`small`[\s>]+gate[\s>]+at[\s>]+Stage[\s>]+-1,[\s>]+before[\s>]+any[\s>]+code;[\s>]+`full`[\s>]+gates[\s>]+as[\s>]+above\./,
+    'no "every tier has exactly one gate" sentence -- no tier may run without its one human gate'],
+  [/No\s+code\s+runs\s+before\s+the\s+Stage\s+-1\s+gate\./,
+    'no "no code runs before the Stage -1 gate" sentence -- trivial and small must gate before any code'],
+  [/Do\s+not\s+proceed\s+without\s+one\s+of\s+these\s+replies\./,
+    'no "do not proceed without one of these replies" sentence -- the Stage -1 gate needs a reply'],
+  [/There\s+is\s+no\s+auto-approve;\s+the\s+A\/B\s+harness\s+answers\s+`Approved\.`\s+as\s+operator\./,
+    'no "there is no auto-approve" sentence -- a non-interactive run stops at the gate'],
+  [/Do\s+not\s+retry\s+lower\./,
+    'no "do not retry lower" sentence -- a refused override must not be retried below the floor'],
+  [/Anything\s+else\s+re-asks,\s+and\s+`trivial`\s+is\s+never\s+a\s+target\./,
+    'no "trivial is never a target" sentence -- trivial is not an override target'],
+  [/`trivial`\s+and\s+`small`\s+stop\s+at\s+the\s+gate\s+below\./,
+    'no "trivial and small stop at the gate below" sentence -- both tiers must stop at the Stage -1 gate'],
+];
 
 export function checkCheckpoint(text) {
   const problems = [];
@@ -28,6 +50,9 @@ export function checkCheckpoint(text) {
   }
   if (!/after\s+`?\/plan-loop`?/i.test(text)) {
     problems.push('no mention of the cold-start anchor (falls to after /plan-loop when no design action ran)');
+  }
+  for (const [re, message] of SENTENCE_ANCHORS) {
+    if (!re.test(text)) problems.push(message);
   }
   return problems;
 }
@@ -44,7 +69,7 @@ function main() {
     for (const p of problems) console.log(`CHECKPOINT GATE: ${p}`);
     process.exit(1);
   }
-  console.log('ok (checkpoint still non-overridable; both anchors named)');
+  console.log('ok (checkpoint still non-overridable; both anchors named; every tier gated)');
 }
 
 // Only run as a CLI when invoked directly -- tests/scripts/checkpoint-gate.sh imports

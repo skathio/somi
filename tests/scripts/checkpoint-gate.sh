@@ -3,9 +3,9 @@
 #
 # commands/ship-loop.md's single mandatory human checkpoint moved from a cost-tier
 # boundary (which stopped existing) to the brief handoff. Nothing else fails the build if a later
-# edit quietly drops "non-overridable" or either of the two anchors it fires at (the brief handoff,
-# and -- on a cold start -- after /plan-loop). Proves the gate both ways, the same discipline
-# retirement-gate.sh and dispatch-reference-gate.sh already apply to their own gates: green against
+# edit quietly drops "non-overridable", either of the two anchors it fires at (the brief handoff,
+# and -- on a cold start -- after /plan-loop), the every-tier wording, or the Stage -1 gate
+# sentence. Proves the gate both ways, the same discipline retirement-gate.sh and dispatch-reference-gate.sh already apply to their own gates: green against
 # the real file, red against a `cp -a` copy with the wording deliberately weakened.
 #
 # Fixture mutations run through node, not sed -- this repo hard-wraps prose at ~100 chars, so at
@@ -85,6 +85,41 @@ case "$out_red3" in
   *"cold-start anchor"*) ok "gate names the missing cold-start anchor" ;;
   *) bad "gate's output does not name the missing cold-start anchor (got: $out_red3)" ;;
 esac
+
+# --- RED: each Stage -1 gate sentence, reworded away and with an exception appended ---------------
+# $1 = label, $2 = whole-file regex of the sentence without its period, $3 = text the gate must name.
+sentence() {
+  strip "$SHIP_LOOP" "$TMP/ship-loop.md" "$2\\." 'something else entirely.'
+  local out rc
+  out="$(node "$GATE" "$TMP/ship-loop.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 1 ] && [[ "$out" == *"$3"* ]]; then
+    ok "gate goes red, naming it, once the '$1' sentence is reworded away"
+  else
+    bad "gate did not go red naming '$3' after rewording '$1' (rc=$rc, out=$out)"
+  fi
+  node -e '
+    const fs = require("fs");
+    const [, src, dest, pattern] = process.argv;
+    const text = fs.readFileSync(src, "utf8");
+    const re = new RegExp(pattern + "\\.", "i");
+    if (!re.test(text)) process.exit(3);
+    fs.writeFileSync(dest, text.replace(re, (m) => m.slice(0, -1) + ", unless told otherwise."));
+  ' "$SHIP_LOOP" "$TMP/ship-loop.md" "$2"
+  if [ $? -ne 0 ]; then bad "exception mutation for '$1' did not apply (stale pattern)"; return; fi
+  out="$(node "$GATE" "$TMP/ship-loop.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 1 ] && [[ "$out" == *"$3"* ]]; then
+    ok "gate goes red once an exception is appended to the '$1' sentence"
+  else
+    bad "gate stayed green with an exception appended to '$1' (rc=$rc, out=$out)"
+  fi
+}
+sentence "every tier has one gate" 'Every[\s>]+tier[\s>]+has[\s>]+exactly[\s>]+one[\s>]+gate:[\s>]+`trivial`[\s>]+and[\s>]+`small`[\s>]+gate[\s>]+at[\s>]+Stage[\s>]+-1,[\s>]+before[\s>]+any[\s>]+code;[\s>]+`full`[\s>]+gates[\s>]+as[\s>]+above' 'every tier has exactly one gate'
+sentence "no code before the gate" 'No\s+code\s+runs\s+before\s+the\s+Stage\s+-1\s+gate' 'Stage -1 gate'
+sentence "a reply is required" 'Do\s+not\s+proceed\s+without\s+one\s+of\s+these\s+replies' 'one of these replies'
+sentence "no auto-approve" 'There\s+is\s+no\s+auto-approve;\s+the\s+A/B\s+harness\s+answers\s+`Approved\.`\s+as\s+operator' 'no auto-approve'
+sentence "no retry lower" 'Do\s+not\s+retry\s+lower' 'retry lower'
+sentence "trivial is never a target" 'Anything\s+else\s+re-asks,\s+and\s+`trivial`\s+is\s+never\s+a\s+target' 'never a target'
+sentence "trivial and small stop at the gate" '`trivial`\s+and\s+`small`\s+stop\s+at\s+the\s+gate\s+below' 'stop at the gate below'
 
 echo "checkpoint gate tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

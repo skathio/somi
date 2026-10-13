@@ -61,6 +61,7 @@ for (const c of cases) {
   check('unknown or invalid never lowers: ' + c.name, lowered, []);
 }
 
+check('fullBasis shows every signal read cleanly even at full', [Object.keys(decideTier(build({ set: { hard_surface: true } })).basis), Object.keys(decideTier(build({ set: { hard_surface: true } }), { fullBasis: true }).basis).length], [['T3'], SIGNAL_IDS.length]);
 const shapeOk = (r) => j(r) === j({ tier: 'full', floor: 'full', failed: [...SIGNAL_IDS], unknown: [], invalid: [...SIGNAL_IDS], reasons: ['signals_unreadable'], basis: {} });
 const good = () => Object.fromEntries(Object.keys(base).map((id) => [id, entry(base[id])]));
 let reads = 0;
@@ -122,6 +123,7 @@ mutate() { # $1 = label, $2 = node expression over `s` (the source) returning th
   if [ "$made" != 0 ]; then bad "mutation '$1' did not change the module (stale pattern)"; return; fi
   if node "$TMP/run.mjs" "$TMP/mut.mjs" "$CASES" >/dev/null 2>&1; then bad "mutation '$1' left the suite green"; else ok "mutation '$1' turns the suite red"; fi
 }
+mutate "full basis flag ignored" "s.replace('(fullBasis || ','(')"
 mutate "diff threshold 100 -> 101" "s.replace('MAX_DIFF_LINES = 100','MAX_DIFF_LINES = 101')"
 mutate "file threshold 6 -> 7" "s.replace('MAX_FILES = 6','MAX_FILES = 7')"
 mutate "module threshold 2 -> 3" "s.replace('MAX_MODULES = 2','MAX_MODULES = 3')"
@@ -297,7 +299,7 @@ const doc = readRec('my-item');
 check('record: exit 0, stdout gains the relative path, other keys unchanged', [r.rc, json(r.out).recorded, Object.keys(json(r.out)).sort()], [0, '.somi/somi-state/tier/my-item.json', ['recorded', ...KEYS].sort()]);
 check('record: modes 0600 file, 0700 directories', [mode9(file), mode9(tierDir), mode9(path.dirname(tierDir)), mode9(path.join(proj, '.somi'))], ['600', '700', '700', '700']);
 check('record: content is the computed result', [doc.slug, doc.tier, doc.source, doc.computed_tier, doc.floor, doc.reasons, doc.failed, Object.keys(doc).sort()],
-  ['my-item', 'small', 'computed', 'small', null, ['T2', 'est_diff_lines'], [], ['basis', 'computed_tier', 'failed', 'floor', 'reasons', 'recorded_at', 'signals_sha256', 'slug', 'source', 'tier']]);
+  ['my-item', 'small', 'computed', 'small', null, ['T2', 'est_diff_lines'], [], ['attempt', 'basis', 'computed_tier', 'failed', 'floor', 'prior', 'reasons', 'recorded_at', 'signals_sha256', 'slug', 'source', 'tier']]);
 check('record: timestamp is ISO', new Date(doc.recorded_at).toISOString(), doc.recorded_at);
 check('record: sha256 covers the signal entries', doc.signals_sha256, hashOf(F.small));
 rec('reordered', write('reordered.json', Object.fromEntries(Object.entries(JSON.parse(fs.readFileSync(F.small, 'utf8'))).reverse())));
@@ -327,6 +329,36 @@ r = rec('s4', write('bad.json', '[]'));
 check('record with unusable signals: 64, nothing written', [r.rc, fs.existsSync(path.join(tierDir, 's4.json'))], [64, false]);
 check('record: project dir that does not exist is a usage error', run(['resolve', '--signals', F.small, '--record', 's5', '--project-dir', path.join(work, 'nope')]).rc, 64);
 
+// attempts log, re-extraction bounds, whole basis on a lowering override
+const logOf = (slug) => fs.readFileSync(path.join(tierDir, `${slug}.attempts.jsonl`), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+const logFile = path.join(tierDir, 'my-item.attempts.jsonl');
+check('attempts: two attempts logged in order, 0600, every line pure ASCII', [logOf('my-item').map((a) => [a.n, a.computed_tier, a.outcome]), mode9(logFile), isAscii(fs.readFileSync(logFile, 'utf8'))], [[[1, 'small', 'accepted'], [2, 'small', 'accepted']], '600', true]);
+check('attempts: the record carries attempt and prior', [readRec('my-item').attempt, readRec('my-item').prior], [2, [{ computed_tier: 'small', signals_sha256: hashOf(F.small) }]]);
+check('attempts: a first record has attempt 1 and no prior', [doc.attempt, doc.prior], [1, []]);
+rec('lower', F.floor);
+r = rec('lower', F.small);
+check('a re-record with a lower computed tier is refused: 65, record unchanged, refusal logged', [r.rc, r.out, /earlier computed tier/.test(r.err), readRec('lower').tier, logOf('lower').map((a) => a.outcome)], [65, '', true, 'full', ['accepted', 'refused_lower']]);
+r = rec('lower', F.small, ['--override', 'full']);
+check('a re-record with --override is allowed to compute lower', [r.rc, readRec('lower').attempt, readRec('lower').prior.map((p) => p.computed_tier)], [0, 3, ['full', 'small']]);
+r = rec('lower', F.floor);
+check('a re-record with an equal or higher computed tier is allowed', [r.rc, readRec('lower').attempt], [0, 4]);
+check('a refused floor override is logged before the failure exit', [logOf('s3').length, logOf('s3')[0].outcome, logOf('s3')[0].requested], [1, 'refused_floor', 'small']);
+r = ov(F.nofloor, 'small');
+check('a lowering override shows the whole basis', [Object.keys(json(r.out).basis).length, json(ov(F.nofloor, null).out).basis && Object.keys(json(ov(F.nofloor, null).out).basis)], [IDS.length, ['T3']]);
+check('a non-lowering override keeps the short basis', Object.keys(json(ov(F.nofloor, 'full').out).basis), ['T3']);
+const victim = path.join(work, 'victim-log.txt'); fs.writeFileSync(victim, 'keep');
+const evil = path.join(tierDir, 'evil.attempts.jsonl'); fs.symlinkSync(victim, evil);
+r = rec('evil', F.small);
+check('a symlinked attempts log is refused, the target is untouched', [r.rc, fs.readFileSync(victim, 'utf8'), fs.existsSync(path.join(tierDir, 'evil.json'))], [64, 'keep', false]);
+fs.writeFileSync(path.join(tierDir, 'junk.attempts.jsonl'), '{"computed_tier":"bogus","signals_sha256":null}\n');
+check('a malformed attempts line fails closed', [rec('junk', F.small).rc, fs.existsSync(path.join(tierDir, 'junk.json'))], [64, false]);
+fs.writeFileSync(path.join(tierDir, 'notjson.attempts.jsonl'), 'garbage\n');
+check('an unparsable attempts line fails closed', rec('notjson', F.small).rc, 64);
+fs.writeFileSync(path.join(tierDir, 'full-log.attempts.jsonl'), '{"computed_tier":"small","signals_sha256":null}\n'.repeat(50));
+check('a full attempts log (50) stops further attempts', [rec('full-log', F.small).rc, fs.existsSync(path.join(tierDir, 'full-log.json'))], [64, false]);
+fs.writeFileSync(path.join(tierDir, 'big.attempts.jsonl'), `{"computed_tier":"small","signals_sha256":null,"pad":"${'x'.repeat(300 * 1024)}"}\n`);
+check('an oversize attempts log is refused', rec('big', F.small).rc, 64);
+
 // links are never followed
 const outside = path.join(work, 'outside'); fs.mkdirSync(outside);
 const p2 = path.join(work, 'proj2'); fs.mkdirSync(path.join(p2, '.somi', 'somi-state'), { recursive: true });
@@ -336,10 +368,10 @@ check('symlinked tier directory is refused, nothing lands outside', [r.rc, r.out
 const p3 = path.join(work, 'proj3'); fs.mkdirSync(p3); fs.symlinkSync(outside, path.join(p3, '.somi'));
 r = run(['resolve', '--signals', F.small, '--record', 'x', '--project-dir', p3]);
 check('symlinked .somi is refused, nothing lands outside', [r.rc, fs.readdirSync(outside)], [64, []]);
-const victim = path.join(outside, 'victim.txt'); fs.writeFileSync(victim, 'keep');
-fs.symlinkSync(victim, path.join(tierDir, 'linked.json'));
+const victim2 = path.join(outside, 'victim.txt'); fs.writeFileSync(victim2, 'keep');
+fs.symlinkSync(victim2, path.join(tierDir, 'linked.json'));
 r = rec('linked', F.small);
-check('a symlink at the final path is replaced, never written through', [r.rc, fs.readFileSync(victim, 'utf8'), fs.lstatSync(path.join(tierDir, 'linked.json')).isFile()], [0, 'keep', true]);
+check('a symlink at the final path is replaced, never written through', [r.rc, fs.readFileSync(victim2, 'utf8'), fs.lstatSync(path.join(tierDir, 'linked.json')).isFile()], [0, 'keep', true]);
 
 fs.rmSync(work, { recursive: true, force: true });
 console.log('SUMMARY ' + n + ' ' + bad);
@@ -385,6 +417,18 @@ cmutate "directory link check alone removed" 's.replace("else if (!st.isDirector
 cmutate "signals symlink followed" 's.replace("fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK","fs.constants.O_RDONLY | fs.constants.O_NONBLOCK")'
 cmutate "FIFO opened blocking" 's.replace(" | fs.constants.O_NONBLOCK","")'
 cmutate "regular-file check on the descriptor removed" 's.replace("if (!fs.fstatSync(fd).isFile())","if (false)")' holds
+cmutate "lower re-record check removed" 's.replace("rank(r.tier) < highest","false")'
+cmutate "override no longer exempts a lower re-record" 's.replace("slug && !f[\x27--override\x27] &&","slug &&")'
+cmutate "lower re-record refusal not logged" 's.replace("log(\x27refused_lower\x27);","")'
+cmutate "floor refusal not logged" 's.replace("beforeFail?.(\x27refused_floor\x27);","")'
+cmutate "attempts log not append-only" 's.replace("fs.constants.O_APPEND | ","")'
+cmutate "attempts log follows links" 's.replace("fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW","fs.constants.O_APPEND | fs.constants.O_CREAT")' holds
+cmutate "attempts log mode 0600 -> 0666" 's.replace("O_APPEND | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW, 0o600","O_APPEND | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW, 0o666")'
+cmutate "prior and attempt not recorded" 's.replace("attempt: prior.length + 1, prior, ","attempt: 1, prior: [], ")'
+cmutate "lowering override keeps the short basis" 's.replace("requested && rank(effective) < rank(r.tier) ? decideTier(signals, { fullBasis: true }) : r","r")'
+cmutate "malformed attempts line accepted" 's.replace("if (!ok) fail(","if (false) fail(")'
+cmutate "attempts cap removed" 's.replace("rows.length >= MAX_ATTEMPTS","false")'
+cmutate "attempts size cap removed" 's.replace(" || st.size > MAX_LOG_BYTES","")'
 cmutate "output not ASCII-escaped" 's.replace("[\\u007f-\\uffff]","[\\uffff]")'
 cmutate "parse error echoes the engine message" 's.replace("signals are not valid UTF-8 JSON${","signals are not valid UTF-8 JSON ${String(e.message)}${")'
 cmutate "arguments echoed raw" 's.replace("const quote = (x) => ascii(String(x));","const quote = (x) => String(x);")'
@@ -428,6 +472,26 @@ drift_red "threshold changed in the module" module "s.replace('MAX_MODULES = 2',
 drift_red "threshold row removed from the skill" skill "s.replace('| \`TRIVIAL_MAX_DIFF_LINES\` | 50 |','| \`TRIVIAL_MAX_DIFF_LINES_X\` | 50 |')"
 drift_red "threshold sentence pasted into the section" skill "s.replace('### Thresholds','Not security-sensitive: touches no auth, crypto, secrets, PII, or untrusted-input boundary.\n\n### Thresholds')"
 drift_red "threshold label pasted into the section" skill "s.replace('### Thresholds','Cheap to reverse.\n\n### Thresholds')"
+
+# ---- text guard: commands/ship-loop.md points at the rubric and holds no copy of it ----
+echo "== size tier: ship-loop text guard =="
+SHIPGUARD="$ROOT/tests/scripts/lib/ship-loop-sizing-guard.mjs"; SHIP="$ROOT/commands/ship-loop.md"
+if d="$(node "$SHIPGUARD" "$SHIP" "$SKILL" 2>&1)"; then ok "ship-loop and skill agree: $d"; else bad "ship-loop text guard failed: $d"; fi
+ship_red() { # $1 = label, $2 = node expression over `s` (ship-loop.md) returning the mutated text
+  node -e "const fs=require('fs');const s=fs.readFileSync(process.argv[1],'utf8');const t=($2);if(t===s){process.exit(3)}fs.writeFileSync(process.argv[2],t)" "$SHIP" "$TMP/ship.md" || { bad "ship-loop mutation '$1' did not apply"; return; }
+  if node "$SHIPGUARD" "$TMP/ship.md" "$SKILL" >/dev/null 2>&1; then bad "ship-loop mutation '$1' left the guard green"; else ok "ship-loop mutation '$1' turns the guard red"; fi
+}
+ship_red "skill reference removed" "s.replace('somi-routing/SKILL.md#size-tiers','somi-routing/SKILL.md')"
+ship_red "skill reference duplicated" "s.replace('### Stage 0','See ../skills/somi-routing/SKILL.md#size-tiers again.\n\n### Stage 0')"
+ship_red "threshold constant pasted" "s.replace('### Stage 0','Above MAX_FILES it is full.\n\n### Stage 0')"
+ship_red "signal id pasted" "s.replace('### Stage 0','Check hard_surface first.\n\n### Stage 0')"
+ship_red "threshold number pasted" "s.replace('### Stage 0','More than 6 files is full.\n\n### Stage 0')"
+ship_red "spelled-out limit pasted" "s.replace('### Stage 0','More than six files is full.\\n\\n### Stage 0')"
+ship_red "line limit pasted" "s.replace('### Stage 0','Over 100 production lines is full.\\n\\n### Stage 0')"
+ship_red "small line limit pasted" "s.replace('### Stage 0','Trivial means 50 lines at most.\\n\\n### Stage 0')"
+ship_red "numeric comparison pasted" "s.replace('### Stage 0','Use full when est >= 7.\\n\\n### Stage 0')"
+ship_red "trivial-threshold sentence pasted" "s.replace('### Stage 0','Not security-sensitive: touches no auth, crypto, secrets, PII, or untrusted-input boundary.\n\n### Stage 0')"
+ship_red "trivial-threshold label pasted" "s.replace('### Stage 0','Cheap to reverse.\n\n### Stage 0')"
 
 echo "== size tier: $pass passed, $fail failed =="
 [ "$fail" = 0 ]

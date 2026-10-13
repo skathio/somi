@@ -148,7 +148,7 @@ const SMALL_BECAUSE = [
   ['est_diff_lines', (x) => x > TRIVIAL_MAX_DIFF_LINES],
 ];
 
-export function decideTier(signals) {
+export function decideTier(signals, { fullBasis = false } = {}) {
   let r;
   try {
     r = readSignals(signals);
@@ -169,7 +169,7 @@ export function decideTier(signals) {
   const reasons = decided.reasons.map((id) => ((id === 'existing_work_item' || id === 'brief_exists') && failed.includes(id) ? `${id}_unknown` : id));
   const basis = {};
   for (const id of SIGNAL_IDS) {
-    if (read[id].state === 'ok' && (id === 'T3' || decided.tier !== 'full')) basis[id] = read[id].evidence;
+    if (read[id].state === 'ok' && (fullBasis || (id === 'T3' || decided.tier !== 'full'))) basis[id] = read[id].evidence;
   }
   return { tier: decided.tier, floor: v.T3 === true ? null : 'full', failed, unknown, invalid, reasons, basis };
 }

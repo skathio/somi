@@ -17,8 +17,14 @@
 //       --record <slug> also writes <project>/.somi/somi-state/tier/<slug>.json from that same
 //       result, so the recorded tier, source, floor and signals hash are the computed ones by
 //       construction: { slug, tier (the effective one), source, computed_tier, floor, reasons,
-//       failed, basis, signals_sha256, recorded_at }, and the stdout line gains `recorded` (the
-//       path relative to the project). The project is --project-dir or the current directory.
+//       failed, basis, signals_sha256, attempt, prior, recorded_at }, and the stdout line gains
+//       `recorded` (the path relative to the project). Every attempt that computed a tier, refusals
+//       included, is first appended to tier/<slug>.attempts.jsonl (append-only, 0600, links never
+//       followed); `attempt` is its number and `prior` the { computed_tier, signals_sha256 } of
+//       the earlier ones. A re-record whose computed tier is lower than any earlier computed tier
+//       is refused (65) unless --override is given. The basis is the whole one whenever the
+//       effective tier is lower than the computed tier. The project is --project-dir or the
+//       current directory.
 //       signals_sha256 is the sha256 of the signal entries only (their value and evidence, in id
 //       order, scalars only), so key order and extra keys do not change it. Directories it creates
 //       are 0700, the file is 0600, written to a temp file and renamed; a link at .somi,
@@ -33,7 +39,8 @@
 //   0   ok
 //   64  usage, input or I/O error: bad flag or value, unreadable or oversize input, JSON parse
 //       error, signals that are not an object, bad slug, unusable state directory, failed write
-//   65  refused: a downward override below a security floor (names the floor on stderr)
+//   65  refused: a downward override below a security floor (names the floor on stderr), or a
+//       re-record whose computed tier is lower than an earlier one without --override
 // Nothing is printed to stdout on an error path. Zero-dependency: stdlib only.
 
 import crypto from 'node:crypto';
@@ -165,8 +172,9 @@ function signalsHash(signals) {
   return crypto.createHash('sha256').update(JSON.stringify(rows)).digest('hex');
 }
 
-function refuseBelowFloor(tier, floor, what) {
+function refuseBelowFloor(tier, floor, what, beforeFail) {
   if (floor && rank(tier) < rank(floor)) {
+    beforeFail?.('refused_floor');
     fail(EXIT_FLOOR, `${what} to ${tier} is refused: the security floor is ${floor} (the request is not proven free of security-sensitive work)`);
   }
 }
@@ -192,15 +200,68 @@ function stateDir(projectDir) {
   return { root, real };
 }
 
-// Writes the record atomically (temp file, then rename); returns its path relative to the project.
-function writeRecord(projectDir, slug, doc) {
-  let dirs;
+const MAX_ATTEMPTS = 50;
+const MAX_LOG_BYTES = 256 * 1024;
+const attemptsPath = (dirs, slug) => path.join(dirs.real, `${slug}.attempts.jsonl`);
+
+// -> [{ computed_tier, signals_sha256 }] of every earlier attempt for the slug, oldest first.
+// A log that cannot be read, is too large, or holds a malformed line fails closed.
+function readAttempts(dirs, slug) {
+  let fd;
   try {
-    dirs = stateDir(projectDir);
+    try {
+      fd = fs.openSync(attemptsPath(dirs, slug), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    } catch (e) {
+      if (e.code === 'ENOENT') return [];
+      throw e;
+    }
+    const st = fs.fstatSync(fd);
+    if (!st.isFile() || st.size > MAX_LOG_BYTES) fail(EXIT_USAGE, 'the attempts log is not a regular file or is too large');
+    const rows = fs.readFileSync(fd, 'utf8').split('\n').filter(Boolean).map((line) => {
+      let row;
+      try { row = JSON.parse(line); } catch { row = null; }
+      const ok = row !== null && typeof row === 'object' && TIERS.includes(row.computed_tier)
+        && (row.signals_sha256 === null || /^[0-9a-f]{64}$/.test(row.signals_sha256));
+      if (!ok) fail(EXIT_USAGE, 'the attempts log holds a malformed line');
+      return { computed_tier: row.computed_tier, signals_sha256: row.signals_sha256 };
+    });
+    if (rows.length >= MAX_ATTEMPTS) fail(EXIT_USAGE, `the attempts log is full (${MAX_ATTEMPTS} attempts); start a new slug`);
+    return rows;
+  } catch (e) {
+    if (e instanceof ExitSignal) throw e;
+    return fail(EXIT_USAGE, `cannot read the attempts log: ${e.code || 'error'}`);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+// Appends one line (append-only, 0600, links never followed).
+function appendAttempt(dirs, slug, row) {
+  let fd;
+  try {
+    fd = fs.openSync(attemptsPath(dirs, slug), fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW, 0o600);
+    if (!fs.fstatSync(fd).isFile()) fail(EXIT_USAGE, 'the attempts log is not a regular file');
+    const line = `${ascii(row)}\n`;
+    if (fs.writeSync(fd, line) !== line.length) throw Object.assign(new Error('short write'), { code: 'ESHORT' });
+  } catch (e) {
+    if (e instanceof ExitSignal) throw e;
+    fail(EXIT_USAGE, `cannot append to the attempts log: ${e.code || 'error'}`);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+function openState(projectDir) {
+  try {
+    return stateDir(projectDir);
   } catch (e) {
     if (e instanceof ExitSignal) throw e;
     return fail(EXIT_USAGE, `cannot prepare the state directory: ${e.code || 'error'}`);
   }
+}
+
+// Writes the record atomically (temp file, then rename); returns its path relative to the project.
+function writeRecord(dirs, slug, doc) {
   const body = `${ascii(doc, 2)}\n`;
   const final = path.join(dirs.real, `${slug}.json`);
   const tmp = path.join(dirs.real, `.${slug}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`);
@@ -235,22 +296,40 @@ function resolve(args) {
   }
   const signals = loadSignals(f['--signals']);
   const r = decideTier(signals);
+  const slug = f['--record'];
+  // The attempts log is the memory of this slug: every attempt that computed a tier is appended,
+  // refusals included, before the failure exit.
+  const dirs = slug ? openState(f['--project-dir'] || process.cwd()) : null;
+  const prior = slug ? readAttempts(dirs, slug) : [];
+  const hash = slug ? signalsHash(signals) : null;
+  const log = (outcome) => slug && appendAttempt(dirs, slug, {
+    n: prior.length + 1, at: new Date().toISOString(), computed_tier: r.tier, requested: requested || null, outcome, signals_sha256: hash,
+  });
   let effective = r.tier;
   if (requested) {
-    refuseBelowFloor(requested, r.floor, `overriding ${r.tier}`);
+    refuseBelowFloor(requested, r.floor, `overriding ${r.tier}`, log);
     effective = requested;
   } else {
     source = 'computed';
   }
+  // Re-extracting cannot talk the tier down: only a human reply (the flag) can.
+  const highest = Math.max(-1, ...prior.map((a) => rank(a.computed_tier)));
+  if (slug && !f['--override'] && rank(r.tier) < highest) {
+    log('refused_lower');
+    fail(EXIT_FLOOR, `computed tier ${r.tier} is lower than an earlier computed tier (${TIERS[highest]}) for this slug; re-extracting cannot lower the tier (a human reply with --override is required)`);
+  }
+  // An override that lowers the tier shows the whole basis, not only the security signal's.
+  const shown = requested && rank(effective) < rank(r.tier) ? decideTier(signals, { fullBasis: true }) : r;
   const out = {
     tier: r.tier, effective, source, floor: r.floor, failed: r.failed, unknown: r.unknown,
-    invalid: r.invalid, reasons: r.reasons, basis: r.basis,
+    invalid: r.invalid, reasons: r.reasons, basis: shown.basis,
   };
-  if (f['--record']) {
-    out.recorded = writeRecord(f['--project-dir'] || process.cwd(), f['--record'], {
-      slug: f['--record'], tier: effective, source, computed_tier: r.tier, floor: r.floor,
-      reasons: r.reasons, failed: r.failed, basis: r.basis, signals_sha256: signalsHash(signals),
-      recorded_at: new Date().toISOString(),
+  if (slug) {
+    log('accepted');
+    out.recorded = writeRecord(dirs, slug, {
+      slug, tier: effective, source, computed_tier: r.tier, floor: r.floor,
+      reasons: r.reasons, failed: r.failed, basis: shown.basis, signals_sha256: hash,
+      attempt: prior.length + 1, prior, recorded_at: new Date().toISOString(),
     });
   }
   console.log(ascii(out));
