@@ -359,6 +359,27 @@ check('a full attempts log (50) stops further attempts', [rec('full-log', F.smal
 fs.writeFileSync(path.join(tierDir, 'big.attempts.jsonl'), `{"computed_tier":"small","signals_sha256":null,"pad":"${'x'.repeat(300 * 1024)}"}\n`);
 check('an oversize attempts log is refused', rec('big', F.small).rc, 64);
 
+// approve: stamps the approval and the brief hash; only a small, hashed, unapproved record
+const brief = (slug, text = 'brief one') => { const d = path.join(proj, '.somi', 'plans', slug); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'brief.md'), text); };
+const appr = (slug) => run(['approve', '--slug', slug, '--project-dir', proj]);
+const shaOf = (t) => crypto.createHash('sha256').update(t).digest('hex');
+rec('ap', F.small); brief('ap');
+r = appr('ap');
+check('approve: exit 0, stamps approved_at and the brief hash, keeps the rest', [r.rc, json(r.out).approved, readRec('ap').brief_sha256, typeof readRec('ap').approved_at, readRec('ap').tier, mode9(path.join(tierDir, 'ap.json'))], [0, true, shaOf('brief one'), 'string', 'small', '600']);
+check('approve twice is refused: 65', appr('ap').rc, 65);
+rec('ap', F.small);
+check('a new resolve --record voids the approval', [readRec('ap').approved_at, readRec('ap').brief_sha256], [undefined, undefined]);
+check('approve without a record: 64', appr('no-such').rc, 64);
+rec('ap-full', F.floor); brief('ap-full');
+check('approve refuses a full record: 65', appr('ap-full').rc, 65);
+rec('ap-nobrief', F.small);
+check('approve without a brief: 64, record unapproved', [appr('ap-nobrief').rc, readRec('ap-nobrief').approved_at], [64, undefined]);
+rec('ap-null', F.small); brief('ap-null');
+const nullDoc = readRec('ap-null'); nullDoc.signals_sha256 = null; fs.writeFileSync(path.join(tierDir, 'ap-null.json'), JSON.stringify(nullDoc));
+check('approve refuses a record with no signals hash: 65', appr('ap-null').rc, 65);
+check('approve rejects a bad slug: 64', run(['approve', '--slug', '../x', '--project-dir', proj]).rc, 64);
+check('approve requires --slug: 64', run(['approve', '--project-dir', proj]).rc, 64);
+
 // links are never followed
 const outside = path.join(work, 'outside'); fs.mkdirSync(outside);
 const p2 = path.join(work, 'proj2'); fs.mkdirSync(path.join(p2, '.somi', 'somi-state'), { recursive: true });
@@ -391,7 +412,7 @@ mkdir -p "$TMP/cm"
 cm_n=0
 cmutate() { # $1 = label, $2 = node expression over `s` (the source); $3 = holds (optional)
   cm_n=$((cm_n + 1)); local d="$TMP/cm/$cm_n"
-  mkdir -p "$d/lib"; cp "$MOD" "$d/lib/size-tier.mjs"
+  mkdir -p "$d/lib"; cp "$MOD" "$d/lib/size-tier.mjs"; cp "$ROOT/scripts/lib/tier-record.mjs" "$d/lib/tier-record.mjs"
   printf '%s' "$1" > "$d/label"; printf '%s' "${3:-red}" > "$d/kind"
   (
     node -e "const fs=require('fs');const s=fs.readFileSync(process.argv[1],'utf8');const t=($2);if(t===s){process.exit(3)}fs.writeFileSync(process.argv[2],t)" "$CLI" "$d/somi-tier.mjs" || { echo stale > "$d/rc"; exit 0; }
@@ -429,6 +450,10 @@ cmutate "lowering override keeps the short basis" 's.replace("requested && rank(
 cmutate "malformed attempts line accepted" 's.replace("if (!ok) fail(","if (false) fail(")'
 cmutate "attempts cap removed" 's.replace("rows.length >= MAX_ATTEMPTS","false")'
 cmutate "attempts size cap removed" 's.replace(" || st.size > MAX_LOG_BYTES","")'
+cmutate "approve accepts a full record" 's.replace("rec.tier !== \x27small\x27) fail(EXIT_FLOOR","false) fail(EXIT_FLOOR")'
+cmutate "approve accepts a record with no hash" 's.replace("if (typeof rec.signals_sha256 !== \x27string\x27 || !/^[0-9a-f]{64}$/.test(rec.signals_sha256)) {\n    fail(EXIT_FLOOR","if (false) {\n    fail(EXIT_FLOOR")'
+cmutate "approve repeatable" 's.replace("if (rec.approved_at) fail(","if (false) fail(")'
+cmutate "approve does not bind the brief" 's.replace(", brief_sha256: brief }",", brief_sha256: null }")'
 cmutate "output not ASCII-escaped" 's.replace("[\\u007f-\\uffff]","[\\uffff]")'
 cmutate "parse error echoes the engine message" 's.replace("signals are not valid UTF-8 JSON${","signals are not valid UTF-8 JSON ${String(e.message)}${")'
 cmutate "arguments echoed raw" 's.replace("const quote = (x) => ascii(String(x));","const quote = (x) => String(x);")'
@@ -492,6 +517,23 @@ ship_red "small line limit pasted" "s.replace('### Stage 0','Trivial means 50 li
 ship_red "numeric comparison pasted" "s.replace('### Stage 0','Use full when est >= 7.\\n\\n### Stage 0')"
 ship_red "trivial-threshold sentence pasted" "s.replace('### Stage 0','Not security-sensitive: touches no auth, crypto, secrets, PII, or untrusted-input boundary.\n\n### Stage 0')"
 ship_red "trivial-threshold label pasted" "s.replace('### Stage 0','Cheap to reverse.\n\n### Stage 0')"
+
+# ---- text guard: /code and /code-loop accept a brief-only item only with the CLI's tier record ----
+echo "== size tier: brief-only text guard =="
+BRIEFGUARD="$ROOT/tests/scripts/lib/brief-only-guard.mjs"; CODE="$ROOT/commands/code.md"; LOOP="$ROOT/commands/code-loop.md"
+if d="$(node "$BRIEFGUARD" "$CODE" "$LOOP" 2>&1)"; then ok "brief-only rule: $d"; else bad "brief-only text guard failed: $d"; fi
+brief_red() { # $1 = label, $2 = which file (code|loop), $3 = node expression over `s`
+  local src="$CODE" a="$TMP/code.md" b="$LOOP"; [ "$2" = loop ] && { src="$LOOP"; a="$CODE"; b="$TMP/loop.md"; }
+  local out="$TMP/$2.md"
+  node -e "const fs=require('fs');const s=fs.readFileSync(process.argv[1],'utf8');const t=($3);if(t===s){process.exit(3)}fs.writeFileSync(process.argv[2],t)" "$src" "$out" || { bad "brief-only mutation '$1' did not apply"; return; }
+  if node "$BRIEFGUARD" "$a" "$b" >/dev/null 2>&1; then bad "brief-only mutation '$1' left the guard green"; else ok "brief-only mutation '$1' turns the guard red"; fi
+}
+brief_red "code.md drops the non-null hash requirement" code "s.replace('non-null \`signals_sha256\`','a \`signals_sha256\`')"
+brief_red "code.md drops the small-tier requirement" code "s.replace('\`tier\` equal to\n\`small\`','\`tier\` set').replace('\`tier\` equal to \`small\`','\`tier\` set')"
+brief_red "code.md allows hand-made records" code "s.replace('Never create the record or edit it by hand.','')"
+brief_red "code.md drops the /plan recommendation" code "s.replace(/recommend\s+\`\/plan <problem>\`/,'carry on')"
+brief_red "code-loop.md drops the hash requirement" loop "s.replace('non-null \`signals_sha256\`','a \`signals_sha256\`')"
+brief_red "code-loop.md drops the iteration" loop "s.replace('is iteration \`1.1\`','is an iteration')"
 
 echo "== size tier: $pass passed, $fail failed =="
 [ "$fail" = 0 ]

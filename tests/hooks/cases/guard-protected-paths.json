@@ -1,6 +1,10 @@
 {
   "script": "pre-tool/guard-protected-paths.mjs",
   "cases": [
+    { "name": "write-tier-record", "expect": "deny",
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/.somi/somi-state/tier/x.json" } } },
+    { "name": "write-signals-file-allowed", "expect": "allow",
+      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/.somi/somi-state/x-signals.json" } } },
     { "name": "write-node-modules-absolute", "expect": "deny",
       "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/node_modules/lodash/index.js" } } },
     { "name": "write-node-modules-relative", "expect": "deny",

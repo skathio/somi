@@ -68,6 +68,28 @@ check "init: CLI flag beats env and config" \
 expect_exit "init: refuses to clobber a running loop without --force" 64 \
   node "$LOOP" init --slug demo --loop code --iteration 1.1 --files "src/a.txt"
 
+# --- somi-loop: a brief-only work item (plan dir without phases/) needs the approved tier record ---
+mkdir -p .somi/plans/bo
+printf 'brief one\n' > .somi/plans/bo/brief.md
+TIER="$ROOT/scripts/somi-tier.mjs"
+node -e 'const s={};for(const k of ["T1","T2","T3","T4","T5"])s[k]={value:k!=="T2",evidence:"e"};Object.assign(s,{hard_surface:{value:false,evidence:"e"},design_open:{value:false,evidence:"e"},open_questions:{value:0,evidence:"e"},acceptance_testable:{value:true,evidence:"e"},modules_touched:{value:1,evidence:"e"},est_files:{value:2,evidence:"e"},est_diff_lines:{value:80,evidence:"e"},existing_work_item:{value:false,evidence:"e"},brief_exists:{value:false,evidence:"e"}});console.log(JSON.stringify(s))' > "$TMP/small-signals.json"
+expect_exit "brief-only: refused with no tier record" 64 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
+node "$TIER" resolve --signals "$TMP/small-signals.json" --record bo --project-dir "$REPO" >/dev/null
+check "brief-only: tier record is small" "$(jq -e '.tier == "small"' .somi/somi-state/tier/bo.json >/dev/null; echo $?)"
+expect_exit "brief-only: refused when sized but not approved" 64 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
+node "$TIER" approve --slug bo --project-dir "$REPO" >/dev/null
+expect_exit "brief-only: accepted once approved" 0 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
+printf 'brief two\n' > .somi/plans/bo/brief.md
+expect_exit "brief-only: refused once the brief changed after approval" 64 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
+mkdir -p .somi/plans/bo/phases
+expect_exit "a plan with phases/ is unaffected" 0 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files "src/a.txt"
+rm -rf .somi/plans/bo .somi/somi-state/tier
+
 # --- somi-loop: pass counting ---------------------------------------------------
 node "$LOOP" pass --slug demo --iteration 1.1 >/dev/null
 expect_exit "pass: exceeding max_passes exits 2" 2 \

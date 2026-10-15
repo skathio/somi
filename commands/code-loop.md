@@ -64,6 +64,11 @@ adjusting either mid-loop still means starting a fresh loop.
 Same logic as [`/code`](./code.md) §1–§2. If the iteration is missing or already `done`, stop and
 ask the user.
 
+A **brief-only work item** (`brief.md` and `progress.md`, no `phases/`) is iteration `1.1`. Refuse
+it, stopping before `init` and recommending `/plan <problem>`, unless the CLI's tier record for the
+slug exists with a non-null `signals_sha256` and `tier` equal to `small`, stamped approved for the current `brief.md` (`init` enforces this); never
+create or edit that record by hand. Use the brief's expected files as `--files`.
+
 ### 2. Initialize loop state (deterministic, resumable)
 
 The loop's arithmetic — pass counting, the diff baseline, cap checks, finding recurrence — is

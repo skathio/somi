@@ -47,9 +47,19 @@ Parse the fenced user request (above) for the resolution shape:
   - If it **fails** it (any signal, or unsure), stop. Recommend `/debug <symptoms>` when the cause is
     not yet isolated, otherwise `/plan <problem>`.
 
+**Brief-only work item.** A slug whose directory holds `brief.md` and `progress.md` but no
+`phases/` is a one-iteration item, iteration `1.1`; its acceptance is the brief's testable
+acceptance bullets and its files are the brief's expected files. It exists only for the `small`
+tier of [`/ship-loop`](./ship-loop.md), so **refuse it unless** the CLI's record
+`.somi/somi-state/tier/<slug>.json` exists, has a non-null `signals_sha256`, has `tier` equal to
+`small`, and carries the approval stamp (`approved_at`, and a `brief_sha256` matching `brief.md` now);
+`scripts/somi-loop.mjs init` enforces the same check. A missing, unreadable or mismatching record means the item was not sized: stop and
+recommend `/plan <problem>`. Never create the record or edit it by hand.
+
 ### 2. Locate the iteration
 
-Read `.somi/plans/<slug>/spec.md`, `progress.md`, and the relevant `phases/<NN>-*.md`. If a
+Read `.somi/plans/<slug>/spec.md`, `progress.md`, and the relevant `phases/<NN>-*.md` (a brief-only
+item has `brief.md` and `progress.md` only, read those). If a
 **`brief.md`** is present (the design→execution handoff), read it too — it carries the decisions in
 force, the complexity map, the file map, and the repo conventions. **Apply its `§10 Supersessions`
 overlay before trusting §2** — a supersession line there wins over the §2 decision it names.

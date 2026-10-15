@@ -40,6 +40,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { verifyBriefOnly } from './lib/tier-record.mjs';
 
 const PROG = 'somi-loop';
 
@@ -378,6 +379,14 @@ function main() {
         if (status === 'running') {
           die(`loop state already running at ${SF} — use 'resume' to continue it, or 'init --force' to discard`);
         }
+      }
+
+      // A brief-only work item (a plan directory with no phases/) exists only for the sized, human-
+      // approved small tier of /ship-loop: refuse it without the tier record's approval stamp.
+      const planDir = path.join(root, '.somi', 'plans', SLUG);
+      if (LOOP === 'code' && fs.existsSync(planDir) && !fs.existsSync(path.join(planDir, 'phases'))) {
+        const v = verifyBriefOnly(root, SLUG);
+        if (!v.ok) die(`brief-only work item refused: ${v.reason}; use /plan or /ship-loop`);
       }
 
       // Cap resolution: CLI > env > config > default (per loop type), through the

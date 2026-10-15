@@ -32,6 +32,12 @@
 //       Residual, accepted: a same-user process that swaps a checked directory for a link between
 //       the check and the write is not defended against.
 //
+//   approve --slug <slug> [--project-dir <dir>]
+//       Stamps approved_at and brief_sha256 (of .somi/plans/<slug>/brief.md) into the slug's record.
+//       Run once, after the human replies approve and brief.md is written. Refused (65) unless the
+//       record is tier small with a signals hash and not yet approved; 64 when the record or the
+//       brief cannot be read. `somi-loop.mjs init` accepts a brief-only item only with this stamp.
+//
 // Output (stdout and the state file) is pure ASCII: every non-ASCII character is \uXXXX-escaped.
 // Error messages never echo input text raw: values are JSON-quoted and non-ASCII is escaped.
 //
@@ -47,9 +53,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { decideTier, SIGNAL_IDS } from './lib/size-tier.mjs';
+import { briefSha256, readRecord } from './lib/tier-record.mjs';
 
 const PROG = 'somi-tier';
-const USAGE = `usage: ${PROG}.mjs resolve --signals <file|-> [--override small|full] [--record <slug> [--project-dir <dir>]]`;
+const USAGE = `usage: ${PROG}.mjs resolve --signals <file|-> [--override small|full] [--record <slug> [--project-dir <dir>]] | approve --slug <slug> [--project-dir <dir>]`;
 
 const EXIT_USAGE = 64;
 const EXIT_FLOOR = 65;
@@ -225,7 +232,7 @@ function readAttempts(dirs, slug) {
       if (!ok) fail(EXIT_USAGE, 'the attempts log holds a malformed line');
       return { computed_tier: row.computed_tier, signals_sha256: row.signals_sha256 };
     });
-    if (rows.length >= MAX_ATTEMPTS) fail(EXIT_USAGE, `the attempts log is full (${MAX_ATTEMPTS} attempts); start a new slug`);
+    if (rows.length >= MAX_ATTEMPTS) fail(EXIT_USAGE, `the attempts log is full (${MAX_ATTEMPTS} attempts); ask the human before sizing this work again`);
     return rows;
   } catch (e) {
     if (e instanceof ExitSignal) throw e;
@@ -335,9 +342,29 @@ function resolve(args) {
   console.log(ascii(out));
 }
 
+// Stamps the approval into the record: run after the human's reply and after brief.md is written.
+// Binds the approval to the brief as it is now; a later change to the brief voids it.
+function approve(args) {
+  const f = parseFlags(args, { '--slug': { pattern: SLUG }, '--project-dir': {} });
+  if (!f['--slug']) die('--slug is required');
+  const dirs = openState(f['--project-dir'] || process.cwd());
+  const rec = readRecord(dirs.root, f['--slug']);
+  if (!rec) fail(EXIT_USAGE, 'there is no readable tier record for this slug');
+  if (rec.tier !== 'small') fail(EXIT_FLOOR, 'only a small tier record can be approved for a brief-only run');
+  if (typeof rec.signals_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(rec.signals_sha256)) {
+    fail(EXIT_FLOOR, 'the record has no signals hash; resolve with --record first');
+  }
+  if (rec.approved_at) fail(EXIT_FLOOR, 'the record is already approved; a new approval needs a new resolve --record');
+  const brief = briefSha256(dirs.root, f['--slug']);
+  if (!brief) fail(EXIT_USAGE, 'brief.md is missing, a link, or too large');
+  const recorded = writeRecord(dirs, f['--slug'], { ...rec, approved_at: new Date().toISOString(), brief_sha256: brief });
+  console.log(ascii({ approved: true, recorded, brief_sha256: brief }));
+}
+
 function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   if (cmd === 'resolve') resolve(rest);
+  else if (cmd === 'approve') approve(rest);
   else die(cmd ? `unknown subcommand: ${quote(cmd)}` : 'a subcommand is required');
 }
 

@@ -78,6 +78,10 @@ const PROTECTED_GLOBS = [
   // SOMI plugin install — never let an agent rewrite the ruleset under itself.
   '*/.claude/plugins/somi/*',
 
+  // The sizing CLI's records (scripts/somi-tier.mjs): they gate the brief-only path, so only the
+  // CLI writes them, never an agent's Write/Edit.
+  '*/.somi/somi-state/tier/*',
+
   // Vendored deps & build outputs.
   '*/node_modules/*',
   '*/vendor/*',
