@@ -20,7 +20,7 @@ const where = 'cost in .somi/config.json';
 
 // Committed config reaches the model's context through these messages: quote every echoed value and
 // bound its length so a hostile key cannot inject lines or escape sequences.
-const quote = (v) => {
+export const quote = (v) => {
   const q = JSON.stringify(v) ?? String(v);
   return q.length > 80 ? `${q.slice(0, 80)}...` : q;
 };

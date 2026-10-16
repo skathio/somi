@@ -10,9 +10,9 @@
 //   resolveCeiling(projectRoot, ceiling) -> decideDispatch(declaredCost, ceiling, cost.agents[agent])
 //     -> modelForDispatch(decision, host, mergeHostMapping(HOST_MODELS, cost.mapping))
 //
-// `cost.mapping` is read from the project's .somi/config.json on EVERY call, unlike the ceiling
-// (re-read only at bootstrap — see cost-ceiling.mjs's header): the mapping is a lookup table, not
-// a gate, so a mid-session config fix taking effect on the very next dispatch is correct.
+// `cost.mapping`, `cost.agents` and `cost.ceiling` are all read from the project's
+// .somi/config.json on EVERY call, so a mid-session config fix takes effect on the very next
+// dispatch (see cost-ceiling.mjs's header for the ceiling's precedence).
 //
 // `agent` is validated against a strict allowlist before any path is built — it may come from a
 // prompt carrying untrusted text (and, via the MCP server, from a model-supplied tool argument).
@@ -98,9 +98,8 @@ export function validateDispatchArgs({ agent, host, ceiling } = {}) {
   if (host !== undefined && (typeof host !== 'string' || host === '')) {
     return err(EXIT_USAGE, `--host requires a non-empty string, got ${JSON.stringify(host)}`);
   }
-  // Validated here, before resolveCeiling() ever touches disk: a bad ceiling used to reach
-  // loadOrInitState() first, which bootstraps (and WRITES) the state file before the value is
-  // checked, so a rejected argument still left a state file behind.
+  // Validated here, before resolveCeiling() ever touches disk, so a rejected argument can never
+  // leave a persisted state file behind.
   if (ceiling !== undefined) {
     if (typeof ceiling !== 'string' || ceiling === '') {
       return err(EXIT_USAGE, `--ceiling requires a non-empty string, got ${JSON.stringify(ceiling)}`);
@@ -164,7 +163,7 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
     return err(EXIT_PROJECT_ENV, e.message);
   }
 
-  // Read fresh per call, not per-bootstrap (see this file's header): this is how a project on a
+  // Read fresh per call (see this file's header): this is how a project on a
   // host SoMi doesn't ship a mapping for (e.g. Copilot) tells SoMi which of ITS models counts as
   // low/medium/high. Captured once, before the merge, and kept around past it: modelForDispatch's
   // own catch below needs to know whether the PROJECT's mapping named this specific host at all,

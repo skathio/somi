@@ -83,19 +83,21 @@ else
   bad "67 was not reachable via an unparsable config.json (got $r67rc)"
 fi
 
-# 67 is also reachable AFTER a session already bootstrapped successfully (M1: a config error must
+# 67 is also reachable AFTER an earlier successful call persisted a ceiling (M1: a config error must
 # never surface as 66, blamed on the agent's own cost: declaration, just because it happened on a
-# LATER call than the one that wrote .somi/somi-state/ceiling.json).
+# LATER call than the one that wrote .somi/somi-state/ceiling.json). The first call passes
+# --ceiling so state really exists before the config is corrupted.
 R67_POST="$(fresh)"; mkdir -p "$R67_POST/.somi"
 printf '{"cost": {"ceiling": "high"}}\n' > "$R67_POST/.somi/config.json"
-CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent coder >/dev/null 2>&1 # bootstrap
+CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent coder --ceiling high >/dev/null 2>&1 # persists state
+[ -f "$R67_POST/.somi/somi-state/ceiling.json" ] || bad "the first call did not persist a ceiling state file"
 printf '{"cost": {"ceiling": "high"}\n' > "$R67_POST/.somi/config.json"  # now corrupt
 r67postrc=0
 CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent coder >/dev/null 2>&1 || r67postrc=$?
 if [ "$r67postrc" = "67" ]; then
-  ok "67 is reachable even AFTER a successful bootstrap, not just on a fresh project"
+  ok "67 is reachable even AFTER state was persisted, not just on a fresh project"
 else
-  bad "config corrupted after bootstrap did not reach 67 (got $r67postrc) -- may be misattributed to 66"
+  bad "config corrupted after state was persisted did not reach 67 (got $r67postrc) -- may be misattributed to 66"
 fi
 
 

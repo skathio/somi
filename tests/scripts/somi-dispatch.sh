@@ -84,11 +84,11 @@ check "coder under ceiling=low: model is haiku" "$(field "$out" model)" "haiku"
 out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
 check "coder under ceiling=medium: selects medium" "$(field "$out" tier)" "medium"
 out="$(run "$(fresh)" resolve --agent coder --ceiling high)"
-check "coder under ceiling=high: runs at the ceiling (high), not degraded (D9)" \
+check "coder under ceiling=high: runs at the ceiling (high), not degraded" \
   "$(field "$out" tier)/$(field "$out" degraded)/$(field "$out" tier_source)" "high/false/ceiling"
 check "coder under ceiling=high: model is opus" "$(field "$out" model)" "opus"
 
-# --- ceiling_source covers all five origins -- this is what lets a dispatcher announce a `low`
+# --- ceiling_source covers all of cli/env/config/state/default -- this is what lets a dispatcher announce a `low`
 # ceiling honestly, by its real source, not just its bare value. -----------------------------------
 out="$(run "$(fresh)" resolve --agent coder)"
 check "no config, no env, no --ceiling: ceiling_source is default" "$(field "$out" ceiling_source)" "default"
@@ -103,11 +103,21 @@ check "SOMI_COST_CEILING set, no --ceiling: ceiling_source is env" "$(field "$ou
 R_CFG="$(fresh)"; mkdir -p "$R_CFG/.somi"
 printf '{"cost": {"ceiling": "low"}}\n' > "$R_CFG/.somi/config.json"
 out="$(run "$R_CFG" resolve --agent coder)"
-check "bootstrap from .somi/config.json's cost.ceiling: ceiling_source is config" \
-  "$(field "$out" ceiling_source)" "config"
+check "cost.ceiling in .somi/config.json: ceiling_source is config" "$(field "$out" ceiling_source)" "config"
 out2="$(run "$R_CFG" resolve --agent coder)"
-check "a second call against the same project root: ceiling_source is state, not config again" \
-  "$(field "$out2" ceiling_source)" "state"
+check "a second call is config again (config is read live, not remembered as state)" \
+  "$(field "$out2" ceiling_source)/$(field "$out2" ceiling_origin)" "config/config"
+printf '{"cost": {"ceiling": "high"}}\n' > "$R_CFG/.somi/config.json"
+out="$(run "$R_CFG" resolve --agent coder)"
+check "editing the config between two calls moves the ceiling" "$(field "$out" ceiling)/$(field "$out" tier)" "high/high"
+out="$(run "$R_CFG" resolve --agent coder --ceiling low)"
+check "--ceiling beats the config and persists" "$(field "$out" ceiling_source)/$(field "$out" ceiling)" "cli/low"
+rm "$R_CFG/.somi/config.json"
+out="$(run "$R_CFG" resolve --agent coder)"
+check "with the config gone, the persisted CLI ceiling is state with origin cli" \
+  "$(field "$out" ceiling_source)/$(field "$out" ceiling_origin)/$(field "$out" ceiling)" "state/cli/low"
+out="$(run "$(fresh)" resolve --agent coder)"
+check "no config, no state: the default ceiling is medium" "$(field "$out" ceiling)/$(field "$out" tier)" "medium/medium"
 
 # --- unmapped host: model is null (let the host choose), never a guessed name -------------------
 out="$(run "$(fresh)" resolve --agent coder --host some-future-host --ceiling high)"
@@ -354,10 +364,11 @@ check "fresh project, no override: ceiling_origin matches ceiling_source ('defau
 
 R_ORIGIN="$(fresh)"; mkdir -p "$R_ORIGIN/.somi"
 printf '{"cost": {"ceiling": "low"}}\n' > "$R_ORIGIN/.somi/config.json"
-run "$R_ORIGIN" resolve --agent coder >/dev/null  # bootstrap from config
-out="$(run "$R_ORIGIN" resolve --agent coder)"    # a later bare call: state now on disk
-check "a later call: ceiling_source is 'state' but ceiling_origin still says 'config' -- actionable" \
-  "$(field "$out" ceiling_source),$(field "$out" ceiling_origin)" "state,config"
+run "$R_ORIGIN" resolve --agent coder --ceiling medium >/dev/null  # persisted from the CLI; config still outranks it
+rm "$R_ORIGIN/.somi/config.json"
+out="$(run "$R_ORIGIN" resolve --agent coder)"    # a later bare call, config gone: state on disk
+check "a later call: ceiling_source is 'state' but ceiling_origin still says 'cli' -- actionable" \
+  "$(field "$out" ceiling_source),$(field "$out" ceiling_origin)" "state,cli"
 
 # --- CRLF checkout (#28): a Windows clone with core.autocrlf rewrites agent files to CRLF; the
 # frontmatter delimiter is then `---\r`, which must still parse. Run a copy of the install whose

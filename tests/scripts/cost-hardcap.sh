@@ -136,7 +136,7 @@ eq "CLI: ... tier_source ceiling" "$(field "$out" tier_source)" "ceiling"
 
 P="$(proj '{"cost":{"ceiling":"high"}}')"
 out="$(cli "$P" --agent coder)"
-eq "CLI: ceiling above the declared set -> the ceiling (high), not degraded (D9)" "$(field "$out" tier)/$(field "$out" degraded)" "high/false"
+eq "CLI: ceiling above the declared set -> the ceiling (high), not degraded" "$(field "$out" tier)/$(field "$out" degraded)" "high/false"
 
 P="$(proj '{"cost":{"agents":{"designer":"turbo"}}}')"; rc=0
 cli "$P" --agent designer >/dev/null 2>&1 || rc=$?
@@ -223,6 +223,106 @@ P="$(proj)"; printf '\n\x01\x1b[31mSECRET-TOKEN {not json' > "$P/.somi/config.js
 msg="$(verdict_file "$LIB_SRC" "$P")"
 case "$msg" in *SECRET-TOKEN*|*$'\x1b'*|*$'\x01'*) bad "parse error leaked file text: $msg" ;; reject:*"not valid JSON"*) ok "a malformed config's parse error carries no file text or control characters" ;; *) bad "unexpected parse verdict: $msg" ;; esac
 eq "... and the message is a single line" "$(printf '%s' "$msg" | wc -l)" "0"
+
+# ---- ceiling precedence: explicit > live config > persisted CLI/env state > default (medium) -----
+echo "== ceiling precedence =="
+rc_() { # $1 = lib dir, $2 = project root -> ceiling,source,origin for a bare resolve
+  node --input-type=module -e "
+    const C = await import('$1/cost-ceiling.mjs');
+    const r = C.resolveCeiling('$2', undefined); process.stdout.write([r.ceiling, r.source, r.ceiling_origin].join(','))"
+}
+pj() { # $1 = config body or '', $2 = state body or ''
+  local r; r="$(mktemp -d -p "$TMP")"; mkdir -p "$r/.somi/somi-state"
+  [ -n "$1" ] && printf '%s' "$1" > "$r/.somi/config.json"
+  [ -n "$2" ] && printf '%s' "$2" > "$r/.somi/somi-state/ceiling.json"
+  echo "$r"
+}
+mut_prec() { # $1 = name, $2 = sed expression
+  mkdir -p "$TMP/$1"; cp "$LIB_SRC"/cost-*.mjs "$TMP/$1/"; sed -i "$2" "$TMP/$1/cost-ceiling.mjs"
+  cmp -s "$LIB_SRC/cost-ceiling.mjs" "$TMP/$1/cost-ceiling.mjs" && bad "mutant $1 did not change the file"
+}
+mut_prec config-ignored   's/^    if (isConfigured) {$/    if (false) {/'
+mut_prec state-outranks   's/if (state \&\& EXPLICIT_ORIGINS.includes(state.ceiling_origin)) {/if (state) {/'
+mut_prec default-high     "s/export const DEFAULT_CEILING = 'medium';/export const DEFAULT_CEILING = 'high';/"
+
+P="$(pj '{"cost":{"ceiling":"low"}}' '')"
+eq "config alone sets the ceiling, source config" "$(rc_ "$LIB_SRC" "$P")" "low,config,config"
+printf '{"cost":{"ceiling":"high"}}' > "$P/.somi/config.json"
+eq "an edit between two resolves moves the ceiling (config is read live)" "$(rc_ "$LIB_SRC" "$P")" "high,config,config"
+eq "red proof (config-live): with the config read removed the edit has no effect" "$(rc_ "$TMP/config-ignored" "$P")" "medium,default,default"
+
+P="$(pj '{"cost":{"ceiling":"low"}}' '{"ceiling":"high","ceiling_origin":"cli"}')"
+eq "config outranks a persisted cli ceiling (config > persisted state)" "$(rc_ "$LIB_SRC" "$P")" "low,config,config"
+P="$(pj '' '{"ceiling":"low","ceiling_origin":"env"}')"
+eq "a persisted env ceiling applies when config is silent" "$(rc_ "$LIB_SRC" "$P")" "low,state,env"
+
+LEGACY='{"ceiling":"high"}' # a state file written before origins were recorded
+P="$(pj '' "$LEGACY")"
+[ "$(cat "$P/.somi/somi-state/ceiling.json")" = "$LEGACY" ] || bad "legacy fixture was not written"
+eq "a legacy state file (no origin) yields to the medium default" "$(rc_ "$LIB_SRC" "$P")" "medium,default,default"
+eq "red proof (state-yields): if any state outranked the default, the legacy file would win" "$(rc_ "$TMP/state-outranks" "$P")" "high,state,"
+P="$(pj '' '{"ceiling":"high","ceiling_origin":"default"}')"
+eq "a default-origin state yields to the default" "$(rc_ "$LIB_SRC" "$P")" "medium,default,default"
+P="$(pj '' '')"
+eq "no config and no state: medium" "$(rc_ "$LIB_SRC" "$P")" "medium,default,default"
+eq "red proof (default medium): the mutant default is high" "$(rc_ "$TMP/default-high" "$P")" "high,default,default"
+
+# ---- untrusted text never echoed; state writes are atomic and symlink-safe; raises recorded ------
+echo "== ceiling hardening =="
+nasty() { printf 'bad\n\033[31m'; head -c 100 /dev/zero | tr '\0' 'y'; printf 'SECRET-TOKEN'; head -c 3000 /dev/zero | tr '\0' 'y'; }
+clean_msg() { # $1 = label, $2 = message
+  case "$2" in
+    reject:*SECRET-TOKEN*|*$'\033'*|*$'\n'*SECRET*) bad "$1 leaked untrusted text" ;;
+    reject:*) if [ "${#2}" -lt 600 ]; then ok "$1 carries no file text, control characters or 3000-char echo"; else bad "$1 message is unbounded (${#2})"; fi ;;
+    *) bad "$1 was not rejected ($2)" ;;
+  esac
+}
+resolve_msg() { # $1 = project root -> reject: <message> | ok
+  node --input-type=module -e "
+    const C = await import('$LIB_SRC/cost-ceiling.mjs');
+    try { C.resolveCeiling('$1', undefined); console.log('ok'); } catch (e) { console.log('reject: ' + e.message); }"
+}
+P="$(proj)"; node -e "require('fs').writeFileSync(process.argv[1], JSON.stringify({cost:{ceiling:process.argv[2]}}))" "$P/.somi/config.json" "$(nasty)"
+clean_msg "a bad cost.ceiling value" "$(resolve_msg "$P")"
+P="$(pj '' '')"; node -e "require('fs').writeFileSync(process.argv[1], JSON.stringify({ceiling:process.argv[2]}))" "$P/.somi/somi-state/ceiling.json" "$(nasty)"
+clean_msg "a bad state ceiling" "$(resolve_msg "$P")"
+P="$(pj '' '')"; node -e "require('fs').writeFileSync(process.argv[1], JSON.stringify({ceiling:'low',ceiling_origin:process.argv[2]}))" "$P/.somi/somi-state/ceiling.json" "$(nasty)"
+clean_msg "a bad state ceiling_origin" "$(resolve_msg "$P")"
+P="$(pj '' '')"; printf '\n\033[31mSECRET-TOKEN {not json' > "$P/.somi/somi-state/ceiling.json"
+clean_msg "an unparsable state file" "$(resolve_msg "$P")"
+
+# A symlink at ceiling.json is refused on read (67)...
+P="$(pj '' '')"; echo KEEP > "$TMP/victim.txt"; ln -s "$TMP/victim.txt" "$P/.somi/somi-state/ceiling.json"
+rc=0; CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$CLI" resolve --agent coder --ceiling low >/dev/null 2>&1 || rc=$?
+eq "resolve --ceiling over a symlinked state path exits 67" "$rc" "67"
+eq "... and the symlink target was never modified" "$(cat "$TMP/victim.txt")" "KEEP"
+# ...and one planted between the read and the write is replaced by the atomic rename, not followed.
+P="$(pj '' '')"
+node --input-type=module -e "
+  import fs from 'node:fs';
+  const C = await import('$LIB_SRC/cost-ceiling.mjs');
+  const f = C.ceilingStatePath('$P');
+  const mk = fs.mkdirSync;
+  fs.mkdirSync = (...a) => { const r = mk(...a); fs.symlinkSync('$TMP/victim.txt', f); return r; };
+  C.resolveCeiling('$P', 'low');"
+eq "a symlink planted before the write is replaced, never written through" "$(cat "$TMP/victim.txt")" "KEEP"
+eq "... ceiling.json is now a regular file holding the new state, with no temp file left" \
+  "$([ -f "$P/.somi/somi-state/ceiling.json" ] && [ ! -L "$P/.somi/somi-state/ceiling.json" ] && tr -d '\n' < "$P/.somi/somi-state/ceiling.json" | grep -c '"ceiling":"low"'; ls "$P/.somi/somi-state" | tr '\n' ' ')" "1
+ceiling.json "
+
+# A raise over a differing config is recorded even when persisted state already holds the value.
+P="$(pj '{"cost":{"ceiling":"low"}}' '{"ceiling":"high","ceiling_origin":"cli"}')"
+out="$(node --input-type=module -e "
+  const C = await import('$LIB_SRC/cost-ceiling.mjs');
+  const r = C.resolveCeiling('$P', 'high');
+  const r2 = C.resolveCeiling('$P', 'high');
+  const fs = await import('node:fs');
+  const s = JSON.parse(fs.readFileSync(C.ceilingStatePath('$P'), 'utf8'));
+  process.stdout.write([r.overridden, r.override?.from, r.override?.to, r2.overridden, s.ceiling_overrides.length].join(','))")"
+eq "persisted high over config low: the raise is recorded (from the config value), a repeat is reported but not duplicated" "$out" "true,low,high,true,1"
+P="$(pj '{"cost":{"ceiling":"high"}}' '{"ceiling":"high","ceiling_origin":"cli"}')"
+eq "persisted high, config high, --ceiling high: nothing changes, nothing recorded" \
+  "$(node --input-type=module -e "const C = await import('$LIB_SRC/cost-ceiling.mjs'); process.stdout.write(String(C.resolveCeiling('$P', 'high').overridden))")" "false"
 
 echo "cost hardcap tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1
