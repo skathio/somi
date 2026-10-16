@@ -114,6 +114,31 @@ async function run() {
     check('67 appears in the error text', /\(exit 67\)/.test(toolText(r)), true);
   });
 
+  // --- hard cap / overrides / size cap surface through somi_resolve unchanged -----------------
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const withConfig = (body) => {
+      const d = fresh();
+      mkdirSync(path.join(d, '.somi'), { recursive: true });
+      writeFileSync(path.join(d, '.somi', 'config.json'), body);
+      return d;
+    };
+    let r = await toolCall(client, 'somi_resolve', { agent: 'designer', project_dir: withConfig('{"cost":{"ceiling":"low"}}') });
+    let j = JSON.parse(toolText(r));
+    check('hard cap: high-only designer under ceiling low is clamped, degraded, tier_source ceiling',
+      [j.tier, j.degraded, j.declared, j.tier_source], ['low', true, ['high'], 'ceiling']);
+
+    r = await toolCall(client, 'somi_resolve', { agent: 'designer', project_dir: withConfig('{"cost":{"ceiling":"low","agents":{"designer":"high"}}}') });
+    j = JSON.parse(toolText(r));
+    check('a cost.agents override wins over the ceiling', [j.tier, j.degraded, j.tier_source], ['high', false, 'override']);
+
+    r = await toolCall(client, 'somi_resolve', { agent: 'designer', project_dir: withConfig('{"cost":{"agents":{"designer":"turbo"}}}') });
+    check('a bad override value is isError with exit 67', [r.isError, /\(exit 67\)/.test(toolText(r))], [true, true]);
+
+    r = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: withConfig(`{"pad":"${'x'.repeat(70000)}"}`) });
+    check('an oversize config.json is isError with exit 67', [r.isError, /\(exit 67\)/.test(toolText(r))], [true, true]);
+  });
+
   // --- path traversal rejected before any read ----------------------------------------------
   await withClient({}, async (client) => {
     await client.initialize();

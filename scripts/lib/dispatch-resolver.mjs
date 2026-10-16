@@ -7,7 +7,7 @@
 // Each caller turns the returned {ok, ...} shape into its own surface — the CLI: exit code +
 // stdout JSON, or a stderr message; the MCP server: a tool result. Composition (never inline the
 // pieces yourself; this is the one sanctioned call site for it):
-//   resolveCeiling(projectRoot, ceiling) -> decideDispatch(declaredCost, ceiling)
+//   resolveCeiling(projectRoot, ceiling) -> decideDispatch(declaredCost, ceiling, cost.agents[agent])
 //     -> modelForDispatch(decision, host, mergeHostMapping(HOST_MODELS, cost.mapping))
 //
 // `cost.mapping` is read from the project's .somi/config.json on EVERY call, unlike the ceiling
@@ -39,9 +39,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveCeiling, decideDispatch, modelForDispatch, readCostConfig, CEILING_ENV } from './cost-ceiling.mjs';
+import { AGENT_NAME_RE } from './cost-config.mjs';
 import { HOST_MODELS, mergeHostMapping, VALID_COSTS } from './cost-model.mjs';
 
-export const AGENT_NAME_RE = /^[a-z][a-z0-9-]*$/;
+export { AGENT_NAME_RE };
 
 export const EXIT_USAGE = 64;
 export const EXIT_UNKNOWN_AGENT = 65;
@@ -169,10 +170,20 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
   // own catch below needs to know whether the PROJECT's mapping named this specific host at all,
   // to attribute a later resolution failure correctly.
   let projectMapping;
+  let override;
   try {
-    projectMapping = readCostConfig(projectRoot).mapping;
+    const costConfig = readCostConfig(projectRoot);
+    projectMapping = costConfig.mapping;
+    // hasOwn, not a plain lookup: the map is null-prototype already, but this keeps "no entry"
+    // meaning "follows the ceiling" for any name, including ones like "constructor".
+    if (costConfig.agents && Object.hasOwn(costConfig.agents, agent)) override = costConfig.agents[agent];
   } catch (e) {
     return err(EXIT_PROJECT_ENV, e.message);
+  }
+  // readCostConfig already validated it; re-checked here so an invalid override can only ever be the
+  // project's file (67), never reach decideDispatch's agent-declaration error path (66).
+  if (override !== undefined && !VALID_COSTS.includes(override)) {
+    return err(EXIT_PROJECT_ENV, `cost.agents.${agent} expected one of ${VALID_COSTS.join('|')}, got ${JSON.stringify(override)}`);
   }
 
   // mergeHostMapping rejects a __proto__/constructor/prototype key, a non-object per-host value,
@@ -186,17 +197,17 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
     return err(EXIT_PROJECT_ENV, e.message);
   }
 
-  // decideDispatch failing is always this AGENT's own cost: declaration (66) — unrelated to the
-  // mapping, so it stays in its own try/catch rather than sharing modelForDispatch's below.
+  // The override and ceiling are validated by now, so decideDispatch failing is this AGENT's own
+  // cost: declaration (66) -- unrelated to the mapping, so it stays in its own try/catch.
   let decision;
   try {
-    decision = decideDispatch(declaredCost, ceilingResult.ceiling);
+    decision = decideDispatch(declaredCost, ceilingResult.ceiling, override);
   } catch (e) {
     return err(EXIT_MALFORMED, e.message);
   }
 
   // modelForDispatch failing here means the MERGED mapping is shape-valid but incomplete or wrong
-  // for the tier this call actually selected. Whose fault that is turns on whether the project's
+  // for the tier this call actually selected (the ceiling, or the agent's override). Whose fault that is turns on whether the project's
   // OWN cost.mapping named this host at all: if it did, the gap is the project's own file (67),
   // and the message says so explicitly. Only a host the project's mapping never mentioned failing
   // this way would point at a bug in the shipped HOST_MODELS table itself, which stays 66.
@@ -215,7 +226,10 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
     result: {
       agent,
       supported: decision.supported,
+      declared: decision.supported,
       tier: decision.selected,
+      degraded: decision.degraded,
+      tier_source: decision.tier_source,
       model,
       ceiling: ceilingResult.ceiling,
       ceiling_source: ceilingResult.source,

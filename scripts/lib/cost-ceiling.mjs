@@ -44,11 +44,43 @@ function nowIso() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+// A committed config is untrusted input; a file this large is not a config (spec section 8).
+export const MAX_CONFIG_BYTES = 64 * 1024;
+
+// Opened with O_NOFOLLOW (a committed symlink -- say to /dev/zero -- is refused, never followed) and
+// O_NONBLOCK (a FIFO cannot hang the open), then checked on the open descriptor, not the path, so
+// there is no stat-then-read race. At most MAX_CONFIG_BYTES+1 bytes are ever read.
+const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+
+function readConfigText(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, OPEN_FLAGS);
+  } catch (e) {
+    if (e.code === 'ELOOP') throw new Error(`cost-ceiling: ${file} is a symlink; refusing to follow it`);
+    throw e;
+  }
+  try {
+    if (!fs.fstatSync(fd).isFile()) throw new Error(`cost-ceiling: ${file} is not a regular file`);
+    const buf = Buffer.alloc(MAX_CONFIG_BYTES + 1);
+    let n = 0;
+    while (n < buf.length) {
+      const got = fs.readSync(fd, buf, n, buf.length - n, null);
+      if (got === 0) break;
+      n += got;
+    }
+    if (n > MAX_CONFIG_BYTES) throw new Error(`cost-ceiling: ${file} is over the ${MAX_CONFIG_BYTES}-byte limit`);
+    return buf.toString('utf8', 0, n);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 function readConfig(root) {
   const file = path.join(root, '.somi', 'config.json');
   let raw;
   try {
-    raw = fs.readFileSync(file, 'utf8');
+    raw = readConfigText(file);
   } catch (e) {
     if (e.code === 'ENOENT') return {}; // no config committed: nothing configured, defaults apply
     throw e;
@@ -58,8 +90,11 @@ function readConfig(root) {
   } catch (e) {
     // A committed config that fails to PARSE is not "unconfigured" -- silently returning {} here
     // would bootstrap DEFAULT_CEILING and PERSIST it, inverting a team's `low` policy until
-    // someone notices, and outliving the typo once fixed. Dies loudly instead, naming the file.
-    throw new Error(`cost-ceiling: ${file} is not valid JSON: ${e.message}`);
+    // someone notices, and outliving the typo once fixed. Dies loudly, naming the file. The parser's
+    // own message quotes file text (untrusted, and it reaches the model), so only its name and
+    // numeric position are reported.
+    const pos = /position (\d+)/.exec(String(e.message))?.[1];
+    throw new Error(`cost-ceiling: ${file} is not valid JSON (${JSON.stringify(e.name)}${pos ? ` at position ${pos}` : ''})`);
   }
 }
 
@@ -253,48 +288,45 @@ function normalizeCostSet(costs, label) {
 }
 
 /**
- * Selects the tier a dispatch declaring `costs` (its full capability set) runs at against
- * `ceiling`. `costs` is a single cost string or an ascending, duplicate-free array/list of them.
- * Always allows, and always runs at a tier the unit itself declared:
+ * Selects the tier a dispatch runs at. The ceiling is a HARD cap with one escape hatch:
  *
- *  - some declared member sits at or below the ceiling -> `selected` is the HIGHEST such member.
- *    The ceiling silently picks the richest permitted tier -- this is selection within declared
- *    capability, not a downgrade.
- *  - no declared member fits -> `selected` is the CHEAPEST declared member (`supported[0]`). A
- *    unit whose cheapest declared tier is already above the ceiling has no cheaper mode to fall
- *    back to -- it is intrinsically that expensive, so blocking it would not be a saving, only a
- *    stoppage. It runs at its own declared floor rather than not at all.
+ *  - `override` given (the agent's `cost.agents.<name>` from config) -> `selected` is the override,
+ *    even above the ceiling. `tier_source` is `"override"`.
+ *  - no override -> `selected` is the CEILING tier itself, whatever the unit declared (not the
+ *    highest declared member, not a min() of the two). `tier_source` is `"ceiling"`.
  *
- * `supported` always echoes exactly the normalized declared set -- there is no lookup table, no
- * "nearest allowed tier" pulled from outside what the unit itself declared. The result is frozen so
- * a caller can't rewrite it into something that would look like one.
+ * `costs` (the unit's frontmatter capability set, a string or an ascending duplicate-free array) is
+ * read only to report: `supported` echoes it, and `degraded` is true when `selected` ranks below
+ * its highest member. It never changes `selected`. This reverses the old never-degrade rule, which
+ * ran a unit at its cheapest declared tier when none fit under the ceiling.
+ *
+ * Pure and deterministic; the result is frozen so a caller can't rewrite the selection.
  */
-export function decideDispatch(costs, ceiling) {
+export function decideDispatch(costs, ceiling, override) {
   const supported = normalizeCostSet(costs, 'declared cost');
   if (!VALID_COSTS.includes(ceiling)) {
     throw new Error(`cost-ceiling: unrecognized ceiling "${ceiling}" (expected one of ${VALID_COSTS.join('|')})`);
   }
-  // `ORDER[c] > ORDER[selected]` is redundant given `supported`'s strictly-ascending invariant
-  // (normalizeCostSet enforces it) -- each later `c` in the loop is already the higher one. Left
-  // in as a documented guard, not a bug: it makes "take the highest permitted member" true by
-  // construction even if that invariant were ever relaxed, rather than by iteration order alone.
-  let selected = null;
-  for (const c of supported) {
-    if (ORDER[c] <= ORDER[ceiling] && (selected === null || ORDER[c] > ORDER[selected])) {
-      selected = c;
-    }
+  if (override !== undefined && !VALID_COSTS.includes(override)) {
+    throw new Error(`cost-ceiling: unrecognized override "${override}" (expected one of ${VALID_COSTS.join('|')})`);
   }
-  // Nothing in `supported` fit the ceiling: fall back to the cheapest declared member rather than
-  // blocking. It is still a tier the unit itself declared, so the never-degrade rule holds.
-  if (selected === null) selected = supported[0];
-  return Object.freeze({ action: 'allow', selected, supported, ceiling });
+  const selected = override === undefined ? ceiling : override;
+  const degraded = ORDER[selected] < ORDER[supported[supported.length - 1]];
+  return Object.freeze({
+    action: 'allow',
+    selected,
+    supported,
+    ceiling,
+    degraded,
+    tier_source: override === undefined ? 'ceiling' : 'override',
+  });
 }
 
 /**
  * The only sanctioned way to turn a decideDispatch() result into a model. `decideDispatch` always
  * returns "allow" now, so this guard is unreachable by construction -- kept anyway as the
- * structural closer for the never-degrade rule: nothing can hand this function a decision that
- * wasn't produced by `decideDispatch`'s own selection and expect a model back.
+ * structural closer: nothing can hand this function a decision that wasn't produced by
+ * `decideDispatch`'s own selection and expect a model back.
  */
 export function modelForDispatch(decision, host, mapping) {
   if (!decision || decision.action !== 'allow') {

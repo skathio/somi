@@ -51,18 +51,27 @@ expect_exit() { # $1 = name, $2 = expected exit code, $3 = project root, remaini
   if [ "$got" = "$want" ]; then ok "$name"; else bad "$name (expected exit $want, got $got)"; fi
 }
 
-# --- high-only (`designer`, cost: high): no cheaper mode exists, so every ceiling still runs high -
-for c in low medium high; do
+# --- high-only (`designer`, cost: high): the ceiling is a hard cap, so it runs AT the ceiling and
+# is reported degraded when that is below its declared high ----------------------------------------
+for spec in low:haiku:true medium:sonnet:true high:opus:false; do
+  IFS=: read -r c m d <<<"$spec"
   out="$(run "$(fresh)" resolve --agent designer --ceiling "$c")"
-  check "designer (high-only) under ceiling=$c: tier is high -- no cheaper mode to select" \
-    "$(field "$out" tier)" "high"
-  check "designer under ceiling=$c: model is opus" "$(field "$out" model)" "opus"
+  check "designer (high-only) under ceiling=$c: tier is the ceiling (hard cap)" "$(field "$out" tier)" "$c"
+  check "designer under ceiling=$c: model is $m" "$(field "$out" model)" "$m"
+  check "designer under ceiling=$c: degraded is $d, tier_source ceiling" \
+    "$(field "$out" degraded)/$(field "$out" tier_source)" "$d/ceiling"
 done
+# An agent override wins over the ceiling, through the CLI.
+R_OVR="$(fresh)"; mkdir -p "$R_OVR/.somi"
+printf '{"cost": {"ceiling": "low", "agents": {"designer": "high"}}}\n' > "$R_OVR/.somi/config.json"
+out="$(run "$R_OVR" resolve --agent designer)"
+check "cost.agents.designer=high beats ceiling=low: tier high, model opus, tier_source override" \
+  "$(field "$out" tier)/$(field "$out" model)/$(field "$out" tier_source)" "high/opus/override"
 
-# --- graded medium/high (`reviewer`): ceiling picks the highest permitted member -----------------
+# --- graded medium/high (`reviewer`): the tier is the ceiling itself; degraded when below the top member -
 out="$(run "$(fresh)" resolve --agent reviewer --ceiling low)"
-check "reviewer (medium,high) under ceiling=low: no member fits, selects cheapest (medium)" \
-  "$(field "$out" tier)" "medium"
+check "reviewer (medium,high) under ceiling=low: clamped to the ceiling (low), degraded" \
+  "$(field "$out" tier)/$(field "$out" degraded)" "low/true"
 out="$(run "$(fresh)" resolve --agent reviewer --ceiling medium)"
 check "reviewer under ceiling=medium: selects medium" "$(field "$out" tier)" "medium"
 out="$(run "$(fresh)" resolve --agent reviewer --ceiling high)"
@@ -75,9 +84,9 @@ check "coder under ceiling=low: model is haiku" "$(field "$out" model)" "haiku"
 out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
 check "coder under ceiling=medium: selects medium" "$(field "$out" tier)" "medium"
 out="$(run "$(fresh)" resolve --agent coder --ceiling high)"
-check "coder under ceiling=high: selects its own top member (medium), never invents high" \
-  "$(field "$out" tier)" "medium"
-check "coder under ceiling=high: model is sonnet, not opus" "$(field "$out" model)" "sonnet"
+check "coder under ceiling=high: runs at the ceiling (high), not degraded (D9)" \
+  "$(field "$out" tier)/$(field "$out" degraded)/$(field "$out" tier_source)" "high/false/ceiling"
+check "coder under ceiling=high: model is opus" "$(field "$out" model)" "opus"
 
 # --- ceiling_source covers all five origins -- this is what lets a dispatcher announce a `low`
 # ceiling honestly, by its real source, not just its bare value. -----------------------------------
@@ -101,9 +110,9 @@ check "a second call against the same project root: ceiling_source is state, not
   "$(field "$out2" ceiling_source)" "state"
 
 # --- unmapped host: model is null (let the host choose), never a guessed name -------------------
-out="$(run "$(fresh)" resolve --agent coder --host some-future-host)"
+out="$(run "$(fresh)" resolve --agent coder --host some-future-host --ceiling high)"
 check "unmapped host: model is null" "$(field "$out" model)" "null"
-check "unmapped host: tier still resolves normally" "$(field "$out" tier)" "medium"
+check "unmapped host: tier still resolves normally (the ceiling, high)" "$(field "$out" tier)" "high"
 
 # --- .somi/config.json's cost.mapping override: how a host SoMi doesn't map (e.g. Copilot) is told
 # which of ITS OWN models is low/medium/high -- reused via readCostConfig, merged via
@@ -126,22 +135,22 @@ expect_malformed() { # $1=name $2=want-exit-code $3=proj, remaining = CLI args
 }
 
 # Otherwise-unmapped host, mapped by the project: resolves to it for the tier actually selected
-# (coder is low,medium; default ceiling high -> its own top member, medium). Without the mapping,
+# (--ceiling high -> coder resolves to high, so the high entry is used). Without the mapping,
 # same as any unmapped host: null.
 R_MAP="$(fresh)"; mkdir -p "$R_MAP/.somi"
 printf '{"cost": {"mapping": {"copilot": {"low": "gpt-5-mini", "medium": "gpt-5", "high": "gpt-5-pro"}}}}\n' \
   > "$R_MAP/.somi/config.json"
-out="$(run "$R_MAP" resolve --agent coder --host copilot)"
-check "copilot mapped via project config: model is the mapped medium entry" "$(field "$out" model)" "gpt-5"
+out="$(run "$R_MAP" resolve --agent coder --host copilot --ceiling high)"
+check "copilot mapped via project config: model is the mapped high entry" "$(field "$out" model)" "gpt-5-pro"
 out="$(run "$(fresh)" resolve --agent coder --host copilot)"
 check "copilot with no project mapping: model is null" "$(field "$out" model)" "null"
 
-# A project mapping can override a single claude-code tier; designer (cost: high, no cheaper mode)
-# always selects high, isolating the override to exactly the tier it names.
+# A project mapping can override a single claude-code tier; designer at --ceiling high selects high,
+# isolating the override to exactly the tier it names.
 R_OVERRIDE="$(fresh)"; mkdir -p "$R_OVERRIDE/.somi"
 printf '{"cost": {"mapping": {"claude-code": {"low": "haiku", "medium": "sonnet", "high": "custom-opus"}}}}\n' \
   > "$R_OVERRIDE/.somi/config.json"
-out="$(run "$R_OVERRIDE" resolve --agent designer)"
+out="$(run "$R_OVERRIDE" resolve --agent designer --ceiling high)"
 check "project mapping overrides claude-code's high tier" "$(field "$out" model)" "custom-opus"
 
 # A __proto__ key is rejected outright (mergeHostMapping's denylist) -- this is the PROJECT's own
@@ -173,8 +182,8 @@ esac
 R_NONSTRING="$(fresh)"; mkdir -p "$R_NONSTRING/.somi"
 printf '{"cost": {"mapping": {"copilot": {"low": "gpt-5-mini", "medium": 5, "high": "gpt-5-pro"}}}}\n' \
   > "$R_NONSTRING/.somi/config.json"
-expect_malformed "a non-string mapped model" 67 "$R_NONSTRING" resolve --agent coder --host copilot
-nonstring_msg="$(run "$R_NONSTRING" resolve --agent coder --host copilot 2>&1 >/dev/null || true)"
+expect_malformed "a non-string mapped model" 67 "$R_NONSTRING" resolve --agent coder --host copilot --ceiling medium
+nonstring_msg="$(run "$R_NONSTRING" resolve --agent coder --host copilot --ceiling medium 2>&1 >/dev/null || true)"
 case "$nonstring_msg" in
   *".somi/config.json cost.mapping"*) ok "the non-string-model error names .somi/config.json cost.mapping" ;;
   *) bad "the non-string-model error does not name .somi/config.json cost.mapping (got: $nonstring_msg)" ;;
@@ -187,8 +196,8 @@ esac
 R_SHIPPED_PARTIAL="$(fresh)"; mkdir -p "$R_SHIPPED_PARTIAL/.somi"
 printf '{"cost": {"mapping": {"claude-code": {"high": "custom-opus"}}}}\n' > "$R_SHIPPED_PARTIAL/.somi/config.json"
 expect_malformed "a partial override of the shipped claude-code host drops its other tiers" 67 \
-  "$R_SHIPPED_PARTIAL" resolve --agent coder
-shipped_partial_msg="$(run "$R_SHIPPED_PARTIAL" resolve --agent coder 2>&1 >/dev/null || true)"
+  "$R_SHIPPED_PARTIAL" resolve --agent coder --ceiling medium
+shipped_partial_msg="$(run "$R_SHIPPED_PARTIAL" resolve --agent coder --ceiling medium 2>&1 >/dev/null || true)"
 case "$shipped_partial_msg" in
   *".somi/config.json cost.mapping"*) ok "the shipped-host partial-override error names .somi/config.json cost.mapping" ;;
   *) bad "the shipped-host partial-override error does not name .somi/config.json cost.mapping (got: $shipped_partial_msg)" ;;
@@ -330,9 +339,9 @@ esac
 
 # --- output shape: exactly the seven documented fields, and a real JSON array for `supported` -----
 out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
-check "JSON output carries exactly agent/ceiling/ceiling_origin/ceiling_source/model/supported/tier" \
+check "JSON output carries exactly agent/ceiling/ceiling_origin/ceiling_source/declared/degraded/model/supported/tier/tier_source" \
   "$(node -e 'process.stdout.write(Object.keys(JSON.parse(process.argv[1])).sort().join("|"))' "$out")" \
-  "agent|ceiling|ceiling_origin|ceiling_source|model|supported|tier"
+  "agent|ceiling|ceiling_origin|ceiling_source|declared|degraded|model|supported|tier|tier_source"
 check "coder's supported set is exactly [low, medium], echoing its declared frontmatter" \
   "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" \
   "low,medium"

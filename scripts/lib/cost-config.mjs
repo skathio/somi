@@ -8,8 +8,8 @@ import { VALID_COSTS } from './cost-model.mjs';
 
 export const COST_CONFIG_KEYS = Object.freeze(['ceiling', 'mapping', 'agents']);
 
-// Same shape as AGENT_NAME_RE in dispatch-resolver.mjs, which imports cost-ceiling.mjs (and so this
-// file) -- importing it back would be a cycle.
+// The one agent-name pattern; dispatch-resolver.mjs re-exports it (that module imports this one, so
+// the dependency runs one way).
 export const AGENT_NAME_RE = /^[a-z][a-z0-9-]*$/;
 
 // "constructor" and "prototype" satisfy AGENT_NAME_RE, so the name pattern alone does not keep them

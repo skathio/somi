@@ -3,8 +3,8 @@
 #
 # Exercises: re-resolution per dispatch across separate process invocations (state lives on disk,
 # not in memory), a bare .somi/config.json edit cannot move a ceiling already recorded,
-# capability-set selection (allow picks the highest permitted declared member; when none fits, allow
-# at the cheapest declared member instead of blocking, never a tier outside the declared set), and a
+# hard-cap selection (no override: the ceiling tier itself, whatever was declared; the declared set
+# only feeds `degraded`; the old never-degrade rule is reversed), and a
 # malformed ceiling or declared set — from config, an env var, or an explicit argument — dying loudly
 # instead of silently disabling the ceiling.
 set -uo pipefail
@@ -257,51 +257,36 @@ check "the thrown message names the state file, not a flag or env var" \
   "$(run "$CORRUPT" 'try { C.resolveCeiling(ROOT, undefined); } catch (e) { process.stdout.write(String(e.message.includes("ceiling.json"))); }')" \
   "true"
 
-# --- decideDispatch: a declared cost is a CAPABILITY SET; the ceiling selects the highest member
-# it permits, and always allows -- when no member fits, it selects the cheapest declared member
-# instead of blocking. A bare string is a one-member set (back-compat, not a special case). ------
+# --- decideDispatch: the ceiling is a HARD cap. With no override the selected tier IS the ceiling,
+# whatever the unit declared; the declared set (a capability set) is echoed in `supported` and used
+# only to compute `degraded`. A bare string is a one-member set. The old never-degrade rule (run at
+# the cheapest declared member when none fits) is reversed. Override / source cases: cost-hardcap.sh.
+# Each case prints action,selected,supported,degraded,tier_source.
+dd() { run "$B" "const d = C.decideDispatch($1); process.stdout.write([d.action, d.selected, d.supported.join('|'), d.degraded, d.tier_source].join(','))"; }
 
-# One-member set (bare string) -- behaves exactly like a single declared tier.
-check "one-member set within ceiling: allow, selected echoes the sole member" \
-  "$(run "$B" 'const d = C.decideDispatch("low", "high"); process.stdout.write(d.action + "," + d.selected + "," + d.supported.join("|"))')" \
-  "allow,low,low"
+check "one-member set under a higher ceiling: runs at the ceiling, not degraded" \
+  "$(dd '"low", "high"')" "allow,high,low,false,ceiling"
+check "single-high declaration under a medium ceiling: clamped to medium, degraded" \
+  "$(dd '"high", "medium"')" "allow,medium,high,true,ceiling"
+check "single-high declaration under a low ceiling: clamped to low, degraded" \
+  "$(dd '["high"], "low"')" "allow,low,high,true,ceiling"
+check "two-member set [medium,high], ceiling low: clamped to low, below every declared member" \
+  "$(dd '["medium","high"], "low"')" "allow,low,medium|high,true,ceiling"
+check "two-member set [medium,high], ceiling medium: medium, degraded (below its highest member)" \
+  "$(dd '["medium","high"], "medium"')" "allow,medium,medium|high,true,ceiling"
+check "two-member set [medium,high], ceiling high: high, not degraded" \
+  "$(dd '["medium","high"], "high"')" "allow,high,medium|high,false,ceiling"
+check "three-member set, ceiling low: low, degraded" \
+  "$(dd '["low","medium","high"], "low"')" "allow,low,low|medium|high,true,ceiling"
+check "three-member set, ceiling medium: medium, degraded" \
+  "$(dd '["low","medium","high"], "medium"')" "allow,medium,low|medium|high,true,ceiling"
+check "three-member set, ceiling high: high, not degraded" \
+  "$(dd '["low","medium","high"], "high"')" "allow,high,low|medium|high,false,ceiling"
 
-# The canonical case: a unit declaring only `high` has no cheaper mode. Under a ceiling that
-# permits none of its members, it still runs, at that one declared tier -- blocking it would not be
-# a saving, only a stoppage.
-check "single-high declaration under a medium ceiling: still allow, at high (its only declared tier)" \
-  "$(run "$B" 'const d = C.decideDispatch("high", "medium"); process.stdout.write(d.action + "," + d.selected + "," + d.supported.join("|"))')" \
-  "allow,high,high"
-
-# Two-member set -- selection across three ceilings: below both, between them, above both.
-# The "no member fits" case is the general form the single-high case generalizes: `selected` falls
-# to the cheapest declared member (supported[0]), not the unit's only member.
-check "two-member set [medium,high], ceiling low: no member fits -> allow at cheapest (medium)" \
-  "$(run "$B" 'const d = C.decideDispatch(["medium","high"], "low"); process.stdout.write(d.action + "," + d.selected + "," + d.supported.join("|"))')" \
-  "allow,medium,medium|high"
-check "two-member set [medium,high], ceiling medium: selects medium (highest permitted), silently" \
-  "$(run "$B" 'const d = C.decideDispatch(["medium","high"], "medium"); process.stdout.write(d.action + "," + d.selected)')" \
-  "allow,medium"
-check "two-member set [medium,high], ceiling high: selects high (highest permitted)" \
-  "$(run "$B" 'const d = C.decideDispatch(["medium","high"], "high"); process.stdout.write(d.action + "," + d.selected)')" \
-  "allow,high"
-
-# Three-member set -- selection at each of the three ceilings, proving the richest permitted
-# member is always the one chosen, never a lower one left on the table.
-check "three-member set [low,medium,high], ceiling low: selects low" \
-  "$(run "$B" 'const d = C.decideDispatch(["low","medium","high"], "low"); process.stdout.write(d.action + "," + d.selected)')" \
-  "allow,low"
-check "three-member set [low,medium,high], ceiling medium: selects medium, not low" \
-  "$(run "$B" 'const d = C.decideDispatch(["low","medium","high"], "medium"); process.stdout.write(d.action + "," + d.selected)')" \
-  "allow,medium"
-check "three-member set [low,medium,high], ceiling high: selects high, not a lower member" \
-  "$(run "$B" 'const d = C.decideDispatch(["low","medium","high"], "high"); process.stdout.write(d.action + "," + d.selected)')" \
-  "allow,high"
-
-# No code path ever yields a tier absent from the declared set, and every outcome is "allow": sweep
-# every set against every ceiling.
-check "action is always allow, and selected is always a member of the declared set, across every set x ceiling" \
-  "$(run "$B" 'const sets=[["low"],["medium"],["high"],["low","medium"],["medium","high"],["low","high"],["low","medium","high"]]; const ceilings=["low","medium","high"]; let bad=0; for (const s of sets) for (const c of ceilings) { const d=C.decideDispatch(s,c); if (d.action!=="allow") bad++; if (!s.includes(d.selected)) bad++; } process.stdout.write(String(bad))')" \
+# Sweep: without an override, selected is exactly the ceiling for every set x ceiling; the selected
+# tier may be outside the declared set, and degraded is exactly "selected below the top member".
+check "no override: selected === ceiling and degraded matches rank, across every set x ceiling" \
+  "$(run "$B" 'const sets=[["low"],["medium"],["high"],["low","medium"],["medium","high"],["low","high"],["low","medium","high"]]; const R={low:0,medium:1,high:2}; let bad=0; for (const s of sets) for (const c of ["low","medium","high"]) { const d=C.decideDispatch(s,c); if (d.action!=="allow"||d.selected!==c||d.tier_source!=="ceiling") bad++; if (d.degraded !== (R[c] < R[s[s.length-1]])) bad++; } process.stdout.write(String(bad))')" \
   "0"
 
 check "the decision object is frozen -- a caller cannot rewrite the selection after the fact" \
@@ -310,9 +295,9 @@ check "the decision object is frozen -- a caller cannot rewrite the selection af
 check "the supported array itself is frozen too, not just the decision object wrapping it" \
   "$(run "$B" 'const d = C.decideDispatch(["low","high"], "high"); const before = d.supported.length; try { d.supported.push("medium"); } catch {} process.stdout.write(String(d.supported.length === before))')" \
   "true"
-check "the allow shape carries exactly action, selected, supported, ceiling" \
+check "the allow shape carries exactly action, ceiling, degraded, selected, supported, tier_source" \
   "$(run "$B" 'process.stdout.write(Object.keys(C.decideDispatch(["low","high"], "high")).sort().join("|"))')" \
-  "action|ceiling|selected|supported"
+  "action|ceiling|degraded|selected|supported|tier_source"
 expect_exit "an unrecognized cost value throws rather than silently allowing" 1 \
   "$B" 'C.decideDispatch("critical", "high")'
 expect_exit "an unrecognized ceiling value throws rather than silently allowing" 1 \
@@ -324,16 +309,18 @@ expect_exit "a duplicate in the declared set throws" 1 \
 expect_exit "an empty declared set throws rather than resolving to no-capability-silently" 1 \
   "$B" 'C.decideDispatch([], "high")'
 
-# --- modelForDispatch: the sanctioned composition, structurally unable to degrade ---------------
+# --- modelForDispatch: the sanctioned composition from a decideDispatch decision ----------------
 check "modelForDispatch resolves the model for the SELECTED tier, not just any declared member" \
   "$(run "$B" 'process.stdout.write(C.modelForDispatch(C.decideDispatch(["low","medium"],"medium"), "claude-code"))')" \
   "sonnet"
-check "modelForDispatch on a one-member set resolves that member's model" \
+check "modelForDispatch on a one-member set resolves the CEILING tier's model (hard cap), not the member's" \
   "$(run "$B" 'process.stdout.write(C.modelForDispatch(C.decideDispatch("low","high"), "claude-code"))')" \
-  "haiku"
-# decideDispatch itself can no longer produce anything but "allow" -- the guard is unreachable by
-# construction now, but it is still exercised directly against a hand-built non-allow shape, so the
-# never-degrade backstop stays proven rather than merely unreachable-and-untested.
+  "opus"
+check "modelForDispatch follows an override above the ceiling" \
+  "$(run "$B" 'process.stdout.write(C.modelForDispatch(C.decideDispatch("low","low","high"), "claude-code"))')" \
+  "opus"
+# decideDispatch itself can only produce "allow" -- the guard is unreachable by construction, but it
+# is still exercised directly against a hand-built non-allow shape, so the backstop stays proven.
 expect_exit "modelForDispatch refuses a decision shaped as anything but allow" 1 \
   "$B" 'C.modelForDispatch({ action: "refuse", supported: ["high"], ceiling: "low" }, "claude-code")'
 expect_exit "modelForDispatch refuses a missing decision" 1 \
