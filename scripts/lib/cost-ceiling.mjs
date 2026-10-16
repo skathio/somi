@@ -28,6 +28,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveModel, VALID_COSTS } from './cost-model.mjs';
+import { validateCostConfig } from './cost-config.mjs';
 
 export const CEILING_ENV = 'SOMI_COST_CEILING';
 export const DEFAULT_CEILING = 'high';
@@ -62,8 +63,6 @@ function readConfig(root) {
   }
 }
 
-const COST_CONFIG_KEYS = new Set(['ceiling', 'mapping']);
-
 // A `cost` that isn't an object, has an unrecognized key (a typo), or a `ceiling` misplaced at
 // the top level all die loudly here instead of silently resolving to "not configured".
 //
@@ -75,17 +74,7 @@ export function readCostConfig(root) {
   if (cfg.ceiling !== undefined) {
     throw new Error('cost-ceiling: "ceiling" in .somi/config.json belongs under "cost.ceiling"');
   }
-  const cost = cfg.cost;
-  if (cost === undefined || cost === null) return {};
-  if (typeof cost !== 'object' || Array.isArray(cost)) {
-    throw new Error(`cost-ceiling: cost in .somi/config.json expected an object, got ${JSON.stringify(cost)}`);
-  }
-  for (const key of Object.keys(cost)) {
-    if (!COST_CONFIG_KEYS.has(key)) {
-      throw new Error(`cost-ceiling: cost in .somi/config.json has an unrecognized key "${key}"`);
-    }
-  }
-  return cost;
+  return validateCostConfig(cfg.cost);
 }
 
 function validateCeiling(raw, label) {

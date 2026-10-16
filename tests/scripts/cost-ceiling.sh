@@ -341,3 +341,4 @@ expect_exit "modelForDispatch refuses a missing decision" 1 \
 
 echo "cost ceiling tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1
+bash "$(dirname "${BASH_SOURCE[0]}")/cost-hardcap.sh" || exit 1
