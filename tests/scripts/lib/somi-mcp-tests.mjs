@@ -63,7 +63,7 @@ async function run() {
 
     const list = await client.request('tools/list', {});
     const names = (list.tools || []).map((t) => t.name).sort();
-    check('tools/list carries exactly somi_resolve, somi_command, somi_skill and somi_agent', names, ['somi_agent', 'somi_command', 'somi_resolve', 'somi_skill']);
+    check('tools/list carries exactly somi_resolve, somi_command, somi_skill, somi_agent and somi_tier', names, ['somi_agent', 'somi_command', 'somi_resolve', 'somi_skill', 'somi_tier']);
 
     const ping = await client.request('ping', {});
     check('ping returns an empty result', ping, {});
@@ -154,6 +154,29 @@ async function run() {
 
     const unknownSkill = await toolCall(client, 'somi_skill', { name: 'not-a-real-skill' });
     check('somi_skill rejects an unknown skill name', unknownSkill.isError, true);
+  });
+
+  // --- somi_tier: the sizing CLI's own output and exit codes, for every case --------------------
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const TIER_CLI = path.join(ROOT, 'scripts', 'somi-tier.mjs');
+    const base = { T1: true, T2: true, T3: true, T4: true, T5: true, hard_surface: false, design_open: false, open_questions: 0, acceptance_testable: true, modules_touched: 1, est_files: 1, est_diff_lines: 40, existing_work_item: false, brief_exists: false };
+    const sig = (over = {}) => Object.fromEntries(Object.entries({ ...base, ...over }).map(([k, v]) => [k, { value: v, evidence: 'e' }]));
+    const cases = [
+      ['trivial', sig(), undefined], ['small', sig({ T2: false, est_diff_lines: 80 }), undefined],
+      ['floor', sig({ T3: false, hard_surface: true }), undefined], ['unknown signal', { ...sig(), T3: { value: null, evidence: 'x' } }, undefined],
+      ['raise', sig(), 'full'], ['lower below the floor', sig({ T3: false }), 'small'],
+    ];
+    for (const [label, signals, override] of cases) {
+      const argv = [TIER_CLI, 'resolve', '--signals', '-', ...(override ? ['--override', override] : [])];
+      let want; let code = 0;
+      try { want = execFileSync(process.execPath, argv, { input: JSON.stringify(signals), encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trimEnd(); } catch (e) { code = e.status; want = null; }
+      const r = await toolCall(client, 'somi_tier', { signals, ...(override ? { override } : {}) });
+      if (code === 0) check(`somi_tier ${label}: same JSON as the CLI`, [r.isError, toolText(r)], [undefined, want]);
+      else check(`somi_tier ${label}: error carries the CLI exit code`, [r.isError, toolText(r).endsWith(`(exit ${code})`)], [true, true]);
+    }
+    const noObj = await toolCall(client, 'somi_tier', { signals: [1] });
+    check('somi_tier rejects non-object signals with 64 and writes nothing', [noObj.isError, /\(exit 64\)/.test(toolText(noObj)), existsSync(path.join(ROOT, '.somi', 'somi-state', 'tier', 'x.json'))], [true, true, false]);
   });
 
   // --- somi_agent: the agent's instructions without frontmatter, same allowlist ------------

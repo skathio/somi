@@ -6,7 +6,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
-_Nothing yet._
+**Minor (proposed, version files untouched) — `/ship-loop` sizes the work before it runs.** A new
+Stage -1 reads the request against the code and picks `trivial`, `small` or `full`; `trivial` and
+`small` stop at one human gate and skip planning, `full` is the previous flow unchanged. Escape:
+`SOMI_SHIP_LOOP_TIER=full` (set by the operator) or reply `full` at the gate.
+
+- **Rubric in one place.** The `somi-routing` skill's Size tiers section defines the signals and
+  limits; `scripts/lib/size-tier.mjs` decides, and a drift guard keeps the two equal.
+- **Security floor.** Work touching auth, crypto, secrets, PII or an untrusted-input boundary, and
+  work that cannot be shown free of them, is `full`; a downward override below that is refused (65).
+- **`scripts/somi-tier.mjs`** — `resolve` (tier, override, attempts log, tier record) and `approve`
+  (stamps the human approval and the brief hash). `scripts/somi-loop.mjs init` refuses a brief-only
+  work item without that stamp. `/code` and `/code-loop` accept such an item as iteration 1.1.
+- **`somi_tier` MCP tool** — runs the same CLI, so Copilot gets identical results and exit codes.
+- **Not measured.** No cost or time saving is claimed; the live comparison is still to run, and the
+  thresholds (100 production lines, 6 files, 2 modules) are provisional.
 
 ## [3.1.0] — 2026-10-02 — fix: SoMi agents unusable on GitHub Copilot
 

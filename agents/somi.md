@@ -67,6 +67,11 @@ problem shape against its canonical table. Apply the skill's existing-work-item-
 item) and its ambiguity-disambiguation guidance exactly as written there — do not re-derive or
 duplicate either here.
 
+When the match is a coding request with no work item, the pipeline size is the routing skill's
+[Size tiers](../skills/somi-routing/SKILL.md#size-tiers) section: extract its signals from the
+code, call `somi_tier` with `signals` (and `override` only after a human reply), and announce the
+tier it returns. Follow `/ship-loop` Stage -1 for the gate; this agent restates no threshold.
+
 ### Step 3 — Announce-as-entering. Reached from branch 1(b) or from Step 2's match, before Step 5.
 
 State, in one line, which command you are about to enter and why — the explicit instruction you

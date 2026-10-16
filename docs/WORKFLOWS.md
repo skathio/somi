@@ -392,6 +392,12 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 It's identical to running (an optional `cost: high` front-load, then) `/plan`, then `/code`, then
 `/review` manually, with the orchestration baked in.
 
+`/ship-loop` first **sizes the work** (Stage -1): `trivial` and `small` requests stop at one human
+gate and skip planning (`small` runs `/code-loop` on a brief-only work item); `full` is the flow
+below. The rubric is the routing skill's Size tiers section; work touching security-sensitive
+surface is always `full`. The operator can force `full` with `SOMI_SHIP_LOOP_TIER=full`, or lower
+the tier with `small` (the security floor refuses that).
+
 `/ship-loop <problem>` is the **continuous** path of the design→execution economy: it front-loads a
 `cost: high` action once (compiling `brief.md`), gates a **single** human checkpoint **once that
 design action has produced the `brief.md`, before planning consumes it** (you review the brief),

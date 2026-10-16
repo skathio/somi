@@ -85,6 +85,7 @@ fallback for a host with a shell but no MCP client.
 
 ### Manifests
 
+- **`somi_tier`** — sizes a request: runs `scripts/somi-tier.mjs resolve` on the `signals` you pass (optional `override`, only after a human reply) and returns its JSON line and exit codes (64 input, 65 refused below the security floor). It writes no record; the approval stamp needs the CLI. Rubric: the `somi-routing` skill, Size tiers.
 - [`.claude-plugin/plugin.json`](../.claude-plugin/plugin.json) — plugin manifest.
 - [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) — marketplace manifest
   (lists this plugin so `/plugin marketplace add` resolves it).

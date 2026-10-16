@@ -24,6 +24,7 @@
 // error with `id: null` — the server keeps running; one bad line must never kill in-flight calls.
 
 import { createInterface } from 'node:readline';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -189,6 +190,24 @@ const TOOLS = [
       required: ['name'],
     },
   },
+  {
+    name: 'somi_tier',
+    description:
+      "Size a request: run `node scripts/somi-tier.mjs resolve` (no --record) on the signals you " +
+      'extracted and return its one JSON line unchanged (tier, effective, source, floor, reasons, ' +
+      'basis). The rubric is the skill somi-routing, section Size tiers; this tool states no ' +
+      'thresholds. Failures report the CLI exit code: 64 usage/input, 65 refused (a downward ' +
+      'override below the security floor). It writes nothing: the tier record and the approval ' +
+      'stamp need the CLI itself with --record.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        signals: { type: 'object', description: 'signal id -> { value, evidence }, as the Size tiers section defines' },
+        override: { type: 'string', description: 'small or full; only after a human reply' },
+      },
+      required: ['signals'],
+    },
+  },
 ];
 
 // --- tool implementations --------------------------------------------------------------------
@@ -269,6 +288,18 @@ function callSomiAgent(args) {
   return r.error ?? textResult(r.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trimStart());
 }
 
+// Runs the sizing CLI itself, so the result and the exit codes are the CLI's, byte for byte.
+function callSomiTier(args) {
+  if (args.signals === null || typeof args.signals !== 'object' || Array.isArray(args.signals)) {
+    return textResult('somi-tier: signals must be an object (exit 64)', true);
+  }
+  const argv = [path.join(installRoot(), 'scripts', 'somi-tier.mjs'), 'resolve', '--signals', '-'];
+  if (args.override !== undefined) argv.push('--override', String(args.override));
+  const r = spawnSync(process.execPath, argv, { input: JSON.stringify(args.signals), encoding: 'utf8', timeout: 10000 });
+  if (r.status === 0) return textResult(r.stdout.trimEnd());
+  return textResult(`${(r.stderr || 'somi-tier: failed').trim()} (exit ${r.status ?? 'none'})`, true);
+}
+
 // Returns null for an unrecognized tool name — the caller turns that into a JSON-RPC error, since
 // an unknown TOOL is the protocol failing to find it at all, distinct from a known tool that ran
 // and failed (which reports isError:true in an otherwise-successful JSON-RPC response).
@@ -278,6 +309,7 @@ async function callTool(name, args) {
     case 'somi_command': return callSomiCommand(args || {});
     case 'somi_skill': return callSomiSkill(args || {});
     case 'somi_agent': return callSomiAgent(args || {});
+    case 'somi_tier': return callSomiTier(args || {});
     default: return null;
   }
 }
