@@ -22,6 +22,7 @@ tracked follow-up, not a claim of full guard parity on Windows.
 
 | Event              | Matcher       | Script                                           | What it does                                                                                                                |
 |--------------------|---------------|--------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `SessionStart`     | (any)         | `session-start/ensure-default-config.mjs`        | Creates `.somi/config.json` with default cost settings, only when nothing exists at that path. Never overwrites. |
 | `PreToolUse`       | `Bash`        | `pre-tool/block-dangerous-bash.mjs`              | Denies `rm -rf /`, `curl \| sh`, force-push to protected branches **or without a verifiable target branch**, destructive SQL (case-insensitive), and shell-level writes to secret paths (`> .env`, `tee`, `sed -i`, `cp`/`mv`). Also matches inside `bash -c "…"` quoting. |
 | `PreToolUse`       | `Bash`        | `pre-tool/gate-dep-install.mjs`                  | Denies `npm install <pkg>` / `pip install <pkg>` / `cargo add` / etc. without `SOMI_ALLOW_DEP_INSTALL=1` or a `.somi/config.json` `dep_install.allow` prefix match. Bare reinstall is allowed. |
 | `PreToolUse`       | `Write\|Edit` | `pre-tool/block-secret-writes.mjs`               | Denies writes to `.env`, `*.pem`, `id_rsa`, secret YAML/JSON.                                                              |
@@ -137,6 +138,44 @@ Two responsibilities, both surfaced via `hookSpecificOutput.additionalContext` o
    channel Stop events don't actually have.
 
 State file: `.somi/somi-state/last-context-signature` (project-local, gitignored).
+
+### `ensure-default-config.mjs`
+
+On `SessionStart`, if the project has **no** `.somi/config.json`, writes one holding the default
+cost settings: `cost.ceiling` set to the built-in default (`medium`) and every shipped agent pinned
+to the highest tier it declares (the table is `scripts/lib/cost-defaults.mjs`, kept equal to the
+agent frontmatter by `tests/scripts/cost-defaults.sh`). Without it, every agent would follow the
+ceiling and the ones built for the strongest tier would run lower. It then prints one short notice
+through `additionalContext`.
+
+What it will not do:
+
+- **Never overwrites or touches an existing file of any kind** at `.somi/config.json`: valid, invalid
+  JSON, a symlink (even a dangling one), or a directory. Only "nothing there" (`lstat` ENOENT)
+  triggers a write.
+- **Never follows a link.** If `.somi` is a symlink or a regular file, nothing is written. The file
+  is opened with `O_CREAT|O_EXCL|O_NOFOLLOW`, so a race or a link planted at the path is never
+  written through. `.somi` is created (mode `0700`) only when absent.
+- **Writes nothing but that one file**, and its content is a fixed constant, never derived from any
+  existing file.
+- **Never blocks a session.** Exit code is `0` on every path, including a read-only directory, and it
+  prints no file content or error text.
+
+When a regular `.somi/config.json` already exists, the hook only reads it (no symlink followed, at
+most 64 KiB). If it parses to an object with no valid `cost.agents["security-reviewer"]` tier, it
+prints one fixed notice that `security-reviewer` runs at the ceiling (below `high` by default) and
+that pinning it under `cost.agents` keeps the strong pass. Nothing from the file reaches the
+notice, an unparsable, oversize or symlinked file stays silent (the resolver already reports
+those), and the file is never written.
+
+To change the settings afterwards, edit the `cost` block of `.somi/config.json`.
+
+**GitHub Copilot: unverified.** The opening note of this document says hooks do not fire there. A
+user reported seeing SoMi audit state populated under Copilot, which contradicts that. Whether
+`SessionStart` hooks fire on Copilot has not been checked, so this page does not claim either way.
+On a host where this hook does not run, the project simply has no default file and every agent
+follows the ceiling (`medium`); create or edit `.somi/config.json` by hand (a `/somi-config init`
+command is planned and does not exist yet).
 
 ## `somi-check` — the portable working-tree guard
 

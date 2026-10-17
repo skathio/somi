@@ -72,7 +72,7 @@ what it *emits* varies per turn:
 
 > **The digest gate is not session-scoped.** It compares against
 > `.somi/somi-state/last-context-signature`, a project-local file that nothing resets — no
-> SessionStart hook clears it (SoMi ships one, but it only detects repo instruction files), and
+> SessionStart hook clears it (SoMi ships two; one detects repo instruction files and the other creates a default cost config), and
 > there is no TTL. The signature hashes `.somi/plans/`, `.somi/reviews/`, and
 > `.somi/rd/`. So in a project that **never runs a SoMi workflow**, the digest is emitted on the
 > first prompt after install and **not again**; every later turn, in every later session, gets the
