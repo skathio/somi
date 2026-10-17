@@ -7,12 +7,18 @@
 //   node tests/scripts/manual/ab-experiment.mjs --model ALIAS [--tasks a,b] [--out DIR] [--concurrency 3]
 //     [--budget-per-draw 8] [--budget-somi USD] [--budget-total 130] [--timeout-min 40] [--timeout-somi-min MIN] [--seed 1] [--noise T1-proration:2] [--only task:arm,..]
 //     [--claude claude] [--env-file .somi/eval.env] [--sandbox auto|off] [--unsafe-no-sandbox] [--plugin-dir DIR] [--token-fd]
-//     [--dry-run] [--force-budget] [--report-only results.jsonl]
+//     [--ceiling-somi low|medium|high] [--pin-all] [--dry-run] [--force-budget] [--report-only results.jsonl]
 //
 //   --budget-somi, --timeout-somi-min  the SoMi arm's own dollar cap and time limit (default: the --budget-per-draw and --timeout-min
 //                 values). The bare arm always uses --budget-per-draw and --timeout-min. The plan, the worst case, the budget-total
 //                 check, the resume budget and the deadline all use the arm's own values. The spend in the log lines is the running
 //                 total over all finished draws of the run, not the cost of the draw named on the line.
+//   --ceiling-somi  the tier written as cost.ceiling into every workspace's .somi/config.json (default medium). The bare arm has
+//                 no plugin, so the file is inert there; it is written identically so the two workspaces differ only where the
+//                 experiment differs. Checked by the plugin's own validator (scripts/lib/cost-config.mjs).
+//   --pin-all     also writes cost.agents, pinning EVERY agent to the --ceiling-somi tier. The names are the agents/*.md file
+//                 names of the plugin directory in use (--plugin-dir, else this repository, which is what is packed). The driver
+//                 knows no model names: the tier maps to a model through the plugin's cost.mapping, so choose --model to match.
 //   --concurrency draws run in parallel and share the account's usage window; so does any other Claude activity on the same account.
 //                 A call cut off by the window ends the run (reason account-limit): re-run after the reset time in the report.
 //   --model       required; the model name is never defaulted in code.
@@ -42,11 +48,13 @@ import { declaredScope, taskHash } from '../../evals/lib/task-store.mjs';
 import { armPrompt, buildPlugin, childEnv, classify, foldScore, prepareWorkspace, probeSandbox, readEnvFile, resolveBinary, runDraw, sandboxSpec, seededShuffle, taskText } from '../../evals/lib/ab-draw.mjs';
 import { inspectDraw } from '../../evals/lib/ab-stream.mjs';
 import { buildReport } from '../../evals/lib/ab-report.mjs';
+import { VALID_COSTS } from '../../../scripts/lib/cost-model.mjs';
+import { validateCostConfig } from '../../../scripts/lib/cost-config.mjs';
 
 const REPO = path.resolve(import.meta.dirname, '../../..');
 const AB = path.join(REPO, 'tests/evals/ab');
-const FLAGS = new Set(['tasks', 'out', 'concurrency', 'budget-per-draw', 'budget-total', 'timeout-min', 'seed', 'noise', 'only', 'claude', 'env-file', 'report-only', 'model', 'sandbox', 'plugin-dir', 'budget-somi', 'timeout-somi-min']);
-const SWITCHES = new Set(['dry-run', 'force-budget', 'unsafe-no-sandbox', 'token-fd']);
+const FLAGS = new Set(['tasks', 'out', 'concurrency', 'budget-per-draw', 'budget-total', 'timeout-min', 'seed', 'noise', 'only', 'claude', 'env-file', 'report-only', 'model', 'sandbox', 'plugin-dir', 'budget-somi', 'timeout-somi-min', 'ceiling-somi']);
+const SWITCHES = new Set(['dry-run', 'force-budget', 'unsafe-no-sandbox', 'token-fd', 'pin-all']);
 const NAME = /^[A-Za-z0-9._-]{1,64}$/;
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]{0,63}$/;
 const kills = new Set();
@@ -65,7 +73,22 @@ function parseArgs(argv) {
   }
   const num = (k, d, min) => { const v = a[k] === undefined ? d : Number(a[k]); if (!Number.isFinite(v) || v < min) die(`--${k} must be a number >= ${min}`); return v; };
   if (a.sandbox !== undefined && !['auto', 'off'].includes(a.sandbox)) die('--sandbox must be auto or off');
-  return { ...a, concurrency: Math.floor(num('concurrency', 3, 1)), budgetPerDraw: num('budget-per-draw', 8, 0.1), budgetTotal: num('budget-total', 130, 0.1), timeoutMin: num('timeout-min', 40, 0.001), budgetSomi: num('budget-somi', a['budget-per-draw'] === undefined ? 8 : Number(a['budget-per-draw']), 0.1), timeoutSomiMin: num('timeout-somi-min', a['timeout-min'] === undefined ? 40 : Number(a['timeout-min']), 0.001), seed: Math.floor(num('seed', 1, 0)) };
+  if (a['ceiling-somi'] !== undefined && !VALID_COSTS.includes(a['ceiling-somi'])) die(`--ceiling-somi must be one of ${VALID_COSTS.join('|')}`);
+  return { ...a, concurrency: Math.floor(num('concurrency', 3, 1)), budgetPerDraw: num('budget-per-draw', 8, 0.1), budgetTotal: num('budget-total', 130, 0.1), timeoutMin: num('timeout-min', 40, 0.001), budgetSomi: num('budget-somi', a['budget-per-draw'] === undefined ? 8 : Number(a['budget-per-draw']), 0.1), timeoutSomiMin: num('timeout-somi-min', a['timeout-min'] === undefined ? 40 : Number(a['timeout-min']), 0.001), seed: Math.floor(num('seed', 1, 0)), ceilingSomi: a['ceiling-somi'] ?? 'medium', pinAll: a['pin-all'] === true };
+}
+
+/** The `cost` block both arms' workspaces carry: `ceiling`, plus with `pinAll` every agent in `agentsDir` pinned to it. The
+ *  shared validator decides what is legal (tier, agent names); it throws a `cost-ceiling:` Error otherwise. */
+function costBlock({ ceiling, pinAll, agentsDir }) {
+  const cost = { ceiling };
+  if (pinAll) {
+    const names = fs.readdirSync(agentsDir).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).sort();
+    if (names.length === 0) throw new Error(`no agents found under ${agentsDir}`);
+    cost.agents = Object.fromEntries(names.map((n) => [n, ceiling]));
+  }
+  validateCostConfig(cost);
+  if (!VALID_COSTS.includes(ceiling)) throw new Error(`cost-ceiling: ceiling expected one of ${VALID_COSTS.join('|')}`);
+  return cost;
 }
 
 const readRows = (file) => fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
@@ -112,10 +135,17 @@ async function main() {
     tasks.set(name, { dir, task: th.task, hash: adm.hash, expect: { total: adm.total, names: adm.names } });
   }
 
+  // The pinned names come from the plugin directory actually used: --plugin-dir, else this repository (what npm pack packs).
+  const agentsDirOf = (pluginDir) => path.join(pluginDir ?? (args['plugin-dir'] ? path.resolve(args['plugin-dir']) : REPO), 'agents');
+  const costFor = (pluginDir) => { try { return costBlock({ ceiling: args.ceilingSomi, pinAll: args.pinAll, agentsDir: agentsDirOf(pluginDir) }); } catch (e) { return die(`the cost config is not valid: ${String(e?.message ?? e).slice(0, 160)}`); } };
+  const costLine = (cost) => `cost config (both arms, same content): ceiling ${cost.ceiling}, pin-all ${args.pinAll ? `on (${Object.keys(cost.agents).length} agents pinned to ${cost.ceiling})` : 'off (0 agents pinned)'}`;
+
   if (args['dry-run']) {
+    const cost = costFor(null);
+    console.log(costLine(cost));
     for (const d of draws) {
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-draw-'));
-      try { const { ws, before } = prepareWorkspace({ taskDir: tasks.get(d.task).dir, tmp }); console.log(`prepared ${d.id}: ${before.files.length} file(s) in ${ws}`); } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+      try { const { ws, before } = prepareWorkspace({ taskDir: tasks.get(d.task).dir, tmp, cost }); console.log(`prepared ${d.id}: ${before.files.length} file(s) in ${ws}`); } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     }
     console.log(`dry run: no claude call was made; sandbox ${args.sandbox ?? 'auto'}`);
     return 0;
@@ -139,6 +169,8 @@ async function main() {
       if (!fs.statSync(plugin, { throwIfNoEntry: false })?.isDirectory() || fs.existsSync(path.join(plugin, 'tests/evals')) || fs.existsSync(path.join(plugin, '.somi'))) die('--plugin-dir must be a directory without tests/evals and .somi');
     } else { try { plugin = buildPlugin({ repoRoot: REPO, runTmp }); } catch (e) { die(`the plugin could not be packed: ${e.message}`, 1); } }
   }
+  const cost = costFor(plugin);
+  console.log(costLine(cost));
   const specFor = (arm) => sandboxSpec({ home: process.env.HOME ?? os.homedir(), repoRoot: REPO, claudeReal, plugin: arm === 'somi' ? plugin : null });
   let sandboxOn = false;
   if (sandboxMode === 'auto') {
@@ -157,10 +189,10 @@ async function main() {
     const drawDir = path.join(out, d.id);
     fs.mkdirSync(drawDir, { recursive: true, mode: 0o700 });
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-draw-'));
-    const row = { draw: d.id, task: d.task, arm: d.arm, noise: d.noise, order: d.order, outcome: 'invalid', reason: '', green: 0, total: t.expect.total, failedNames: [], scope: { ok: false, reason: 'not checked' }, costUsd: 0, durationMs: 0, resumes: 0, turns: 0, models: [], flags: {}, tmp };
+    const row = { draw: d.id, task: d.task, arm: d.arm, noise: d.noise, order: d.order, ceilingSomi: args.ceilingSomi, pinAll: args.pinAll, outcome: 'invalid', reason: '', green: 0, total: t.expect.total, failedNames: [], scope: { ok: false, reason: 'not checked' }, costUsd: 0, durationMs: 0, resumes: 0, turns: 0, models: [], flags: {}, tmp };
     console.log(`start ${d.id}`);
     try {
-      const { ws, before } = prepareWorkspace({ taskDir: t.dir, tmp });
+      const { ws, before } = prepareWorkspace({ taskDir: t.dir, tmp, cost });
       const run = await runDraw({ model: args.model, arm: d.arm, prompt: armPrompt(d.arm, taskText(t.task)), budget: capOf(d.arm), timeoutMs: minutesOf(d.arm) * 60000, claude, env: childEnv({ token, tmp, tokenFd: args['token-fd'] }), cwd: ws, plugin, drawDir, token, tokenFd: args['token-fd'], canary: t.task.canary, task: d.task, absAb: AB, ownTmp: tmp, sandbox: sandboxOn ? specFor(d.arm) : null, kills });
       fs.writeFileSync(path.join(drawDir, 'stderr.txt'), run.stderr, { mode: 0o600 });
       const after = lstatManifest(ws);
@@ -183,7 +215,7 @@ async function main() {
     for (let d = queue.shift(); d; d = queue.shift()) {
       let row;
       if (st.halt || st.interrupted || st.spent + st.reserved + capOf(d.arm) > args.budgetTotal) {
-        row = { draw: d.id, task: d.task, arm: d.arm, noise: d.noise, order: d.order, outcome: 'budget-stop', reason: st.stopReason ?? (st.halt ? 'halted' : st.interrupted ? 'interrupted' : 'budget'), green: 0, total: 0 };
+        row = { draw: d.id, task: d.task, arm: d.arm, noise: d.noise, order: d.order, ceilingSomi: args.ceilingSomi, pinAll: args.pinAll, outcome: 'budget-stop', reason: st.stopReason ?? (st.halt ? 'halted' : st.interrupted ? 'interrupted' : 'budget'), green: 0, total: 0 };
       } else {
         st.reserved += capOf(d.arm);
         row = await doDraw(d);

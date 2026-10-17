@@ -218,6 +218,28 @@ definition sets live in one run, and reading them from the working tree would ma
 depend on which branch happened to be checked out. A path source records `sha: null` rather than
 implying a commit it cannot reproduce.
 
+## Running both arms on one tier (A/B driver)
+
+By default `tests/scripts/manual/ab-experiment.mjs` writes `cost.ceiling: "medium"` into each
+draw's `.somi/config.json`, so the SoMi arm's agents follow the ceiling. To compare the arms on one
+tier, pass `--ceiling-somi <low|medium|high>` and `--pin-all`:
+
+```sh
+node tests/scripts/manual/ab-experiment.mjs --model <alias> --ceiling-somi medium --pin-all
+```
+
+`--pin-all` adds a `cost.agents` entry for every agent (the `agents/*.md` file names of the plugin
+directory in use: `--plugin-dir` if given, else this repository), each set to the `--ceiling-somi`
+tier, so no agent runs above or below it. The driver knows no model names. A tier becomes a model
+through the plugin's `cost.mapping`, and `--model` is only the CLI alias for the session, so choose
+the tier that corresponds to the `--model` you pass; the driver does not check that they match.
+
+Both arms' workspaces get the same config. The bare arm has no plugin, so the file is inert there;
+writing it anyway keeps the two workspaces differing only where the experiment differs. A dry run
+prints `cost config (both arms, same content): ceiling <tier>, pin-all <on|off> (<n> agents pinned)`
+and each results row records `ceilingSomi` and `pinAll`. Rows written before these fields existed
+still report; the report does not read them.
+
 ## Why certification failed, and what fixed the approach
 
 Task 01's first certification attempt **could not pass** — 4 failures against a budget of 2, with

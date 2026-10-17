@@ -81,7 +81,7 @@ cli() { # name root stub env-file extra... (runs in the background, at most JOBS
   ( cd "$root" && env HOST_SENTINEL=leak-me TMPDIR="$TMP/t-$name" node tests/scripts/manual/ab-experiment.mjs --out "$TMP/o-$name" --model test-model --sandbox off --plugin-dir "$PLUGIN" --claude "$stub" --env-file "$envf" --tasks T1-proration --only T1-proration:bare,T1-proration:somi --concurrency 2 "$@" > "$TMP/o-$name.log" 2> "$TMP/o-$name.err"; echo $? > "$TMP/o-$name.rc" ) &
 }
 scratch() { # name -> a copy of the driver, its libraries and the T1 task under $TMP/<name>
-  local d="$TMP/$1"; mkdir -p "$d/tests/evals/lib" "$d/tests/scripts/manual" "$d/tests/evals/ab"
+  local d="$TMP/$1"; mkdir -p "$d/tests/evals/lib" "$d/tests/scripts/manual" "$d/tests/evals/ab" "$d/scripts/lib"; cp scripts/lib/{cost-config,cost-model}.mjs "$d/scripts/lib/"
   cp tests/evals/lib/{ab-draw,ab-stream,ab-report,admit,score-hidden,task-store,manifest,compare}.mjs "$d/tests/evals/lib/"; cp tests/scripts/manual/ab-experiment.mjs "$d/tests/scripts/manual/"; cp -r tests/evals/ab/T1-proration "$d/tests/evals/ab/"
 }
 
@@ -114,7 +114,20 @@ const rf = `${TMP}/o-${name}/results.jsonl`;
 const wins = (t) => Array.from({ length: TOKEN.length - 11 }, (_, i) => TOKEN.slice(i, i + 12));
 const hasWindow = (text) => wins().some((w) => text.includes(w));
 const walk = (d) => { const r = []; for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) r.push(...walk(p)); else if (e.isFile()) r.push(p); } return r; };
+const wsConfigs = (n) => { const d = `${TMP}/t-${n}`; return fs.readdirSync(d).filter((e) => e.startsWith('ab-draw-')).map((e) => path.join(d, e, 'ws/.somi/config.json')).filter((f) => fs.existsSync(f)).map((f) => fs.readFileSync(f, 'utf8')); };
+const rows = () => fs.readFileSync(rf, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 try {
+if (mode === 'ceil' || mode === 'ceildef') {
+  const cfgs = wsConfigs(name); const pinned = mode === 'ceil'; const tier = pinned ? 'low' : 'medium';
+  const agents = fs.readdirSync(`${PLUGIN}/agents`).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).sort();
+  check('both arms\' workspaces carry a config, identical in content', cfgs.length === 2 && cfgs[0] === cfgs[1]);
+  const cost = cfgs.length ? JSON.parse(cfgs[0]).cost : {};
+  check(`the workspace ceiling is ${tier}`, cost.ceiling === tier);
+  check(pinned ? 'every agent in the plugin directory is pinned to the ceiling tier, and nothing else' : 'no agents are pinned by default', pinned ? JSON.stringify(Object.keys(cost.agents ?? {}).sort()) === JSON.stringify(agents) && Object.values(cost.agents).every((v) => v === tier) : cost.agents === undefined);
+  const rs = rows();
+  check('every results row records ceilingSomi and pinAll', rs.length === 2 && rs.every((x) => x.ceilingSomi === tier && x.pinAll === pinned));
+  if (pinned) check('the driver printed the effective ceiling and the pin count', fs.readFileSync(`${TMP}/o-${name}.log`, 'utf8').includes(`cost config (both arms, same content): ceiling low, pin-all on (${agents.length} agents pinned to low)`));
+}
 if (mode === 'unit') {
   const L = await import(`${LIB}/ab-draw.mjs`); const S = await import(`${LIB}/ab-stream.mjs`); const R = await import(`${LIB}/ab-report.mjs`);
   const task = { statements: ['one', 'two'], source: ['a.mjs', 'src/'], test_dir: 'test', root_files: ['package.json'] };
@@ -265,6 +278,7 @@ for m in $MODES; do
   [ "$m" = hang ] && extra=(--timeout-min 0.03)
   cli "$m" "$ROOT" "$(mkstub "$m" "$m" 41001)" "$TMP/eval.env" "${extra[@]}"
 done
+cli ceil "$ROOT" "$(mkstub ceil solve 0)" "$TMP/eval.env" --ceiling-somi low --pin-all
 cli slowpause "$ROOT" "$(mkstub slowpause slowpause 0)" "$TMP/eval.env" --timeout-min 0.04
 cli limit-event "$ROOT" "$(mkstub limit-event limit-event 0)" "$TMP/eval.env" --concurrency 1
 cli limit-text "$ROOT" "$(mkstub limit-text limit-text 0)" "$TMP/eval.env" --concurrency 1
@@ -286,7 +300,7 @@ mutant() { # mode file from to label [from2 to2]
   if ! apply "$d/$2" "$3" "$4" || { [ -n "${6:-}" ] && ! apply "$d/$2" "$6" "$7"; }; then mnames+=("$n"); mmodes+=(BAD); mlabels+=("$5"); return; fi
   mnames+=("$n"); mmodes+=("$1"); mlabels+=("$5")
   local extra=() envf="$TMP/eval.env" sm="$1" sl="41$((100 + nm))"
-  case "$1" in hang) extra=(--timeout-min 0.03) ;; setsid) extra=(--timeout-min 0.1) ;; slowpause) extra=(--timeout-min 0.04) ;; envmode) envf="$TMP/eval644.env"; sm=solve ;; esac
+  case "$1" in ceil) sm=solve; extra=(--ceiling-somi low --pin-all) ;; hang) extra=(--timeout-min 0.03) ;; setsid) extra=(--timeout-min 0.1) ;; slowpause) extra=(--timeout-min 0.04) ;; envmode) envf="$TMP/eval644.env"; sm=solve ;; esac
   [ "$1" = fd ] && extra=(--token-fd)
   if [ "$1" = sigint ]; then cli_sigint "$n" "$(mkstub "$n" hang "$sl")" "$d"; else cli "$n" "$d" "$(mkstub "$n" "$sm" "$sl")" "$envf" "${extra[@]}"; fi
 }
@@ -333,12 +347,16 @@ mutant bg-ceiling tests/scripts/manual/ab-experiment.mjs "row.reason === 'accoun
 mutant solve $DR ", CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' };" " };" "the background-wait ceiling is lifted in the child environment"
 mutant perarm tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.budgetSomi : args.budgetPerDraw)" "args.budgetPerDraw" "the SoMi arm's own dollar cap"
 mutant perarm-time tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.timeoutSomiMin : args.timeoutMin)" "args.timeoutMin" "the SoMi arm's own time limit"
+mutant ceil tests/scripts/manual/ab-experiment.mjs "cost.agents = Object.fromEntries(names.map((n) => [n, ceiling]));" "" "--pin-all writes the agent pins"
+mutant ceil tests/scripts/manual/ab-experiment.mjs "prepareWorkspace({ taskDir: t.dir, tmp, cost })" "prepareWorkspace({ taskDir: t.dir, tmp })" "the workspace carries the chosen ceiling"
 mutant sigint tests/scripts/manual/ab-experiment.mjs "for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'])" "for (const sig of ['SIGTERM'])" "SIGINT is handled"
 
 wait
 pass=0; fail=0
 tally() { while IFS=$'\t' read -r status name; do case "$status" in ok) pass=$((pass+1)); printf '  ok   %s\n' "$name" ;; FAIL) fail=$((fail+1)); printf '  FAIL %s\n' "$name" ;; *) [ -n "$status" ] && { fail=$((fail+1)); printf '  FAIL unexpected output: %s\n' "$status $name"; } ;; esac; done; }
 tally < <(verify "$ROOT" unit unit)
+tally < <(verify "$ROOT" ceil ceil)
+tally < <(verify "$ROOT" ceildef solve)
 for m in $MODES bg-ceiling limit-event limit-text perarm perarm-time fd slowpause spawn-error envmode budget-stop task-changed; do tally < <(verify "$ROOT" "$m" "$m" 41001); done
 tally < <(verify "$ROOT" sigint sigint 41002)
 real=(); for p in "$TMP"/o-* "$TMP"/t-*; do case "${p##*/}" in ?-mu[0-9]*|*.log|*.err|*.rc) ;; *) [ -d "$p" ] && real+=("$p") ;; esac; done
@@ -347,6 +365,7 @@ if command -v bwrap > /dev/null && bwrap --ro-bind / / --unshare-pid --die-with-
 
 # ---- plan, dry run and CLI refusals (no draw is started) -----------------------------------------------------------------
 G="node tests/scripts/manual/ab-experiment.mjs"
+mkdir -p "$TMP/badagents/agents"; : > "$TMP/badagents/agents/Bad_Name.md"
 refuse() { # label expected-text args...  -> exit 2, the text on stderr, nothing started
   local label=$1 want=$2; shift 2
   "$@" > "$TMP/r.log" 2> "$TMP/r.err"; rc=$?
@@ -368,6 +387,28 @@ mkdir "$TMP/t-dry"; TMPDIR="$TMP/t-dry" $G --model test-model --dry-run --force-
 if [ "$rc" -eq 0 ] && grep -q "prepared H4-static-files-somi: " "$TMP/dry.log" && grep -q "dry run: no claude call" "$TMP/dry.log" && [ ! -e "$TMP/o-dry" ] && [ -z "$(ls -A "$TMP/t-dry")" ]; then pass=$((pass+1)); echo "  ok   dry run: workspaces (setup included) are prepared and removed, no claude call, no results"; else fail=$((fail+1)); echo "  FAIL dry run (rc $rc)"; fi
 $G --model test-model --dry-run --tasks H1-csv-export,H7-wikilinks --budget-per-draw 8 --budget-somi 24 --timeout-somi-min 60 > "$TMP/dry2.log" 2>&1; rc=$?
 if [ "$rc" -eq 0 ] && grep -q 'worst case: 2 bare x \$8 + 2 SoMi x \$24 = \$64.00' "$TMP/dry2.log" && grep -q 'SoMi draw 60 min' "$TMP/dry2.log" && ! grep -q noise "$TMP/dry2.log"; then pass=$((pass+1)); echo "  ok   per-arm limits are accepted and summed in the plan; no noise draws when --tasks is given"; else fail=$((fail+1)); echo "  FAIL per-arm plan (rc $rc)"; fi
+# ---- --ceiling-somi / --pin-all: validation, plan output, tolerance of old rows (no draw is started) ------------------------
+refuse "a ceiling tier outside low|medium|high is refused" "--ceiling-somi must be one of" $G --model test-model --dry-run --ceiling-somi turbo
+refuse "--ceiling-somi without a value is refused" "needs a value" $G --model test-model --dry-run --ceiling-somi
+refuse "an agent file name outside the shared agent-name pattern is refused under --pin-all" "cost config is not valid" $G --model test-model --dry-run --tasks T1-proration --pin-all --plugin-dir "$TMP/badagents"
+$G --model test-model --dry-run --tasks T1-proration > "$TMP/dc1.log" 2>&1; rc1=$?
+$G --model test-model --dry-run --tasks T1-proration --ceiling-somi low --pin-all > "$TMP/dc2.log" 2>&1; rc2=$?
+nag="$(ls agents/*.md | wc -l)"
+if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ] \
+  && grep -qxF 'cost config (both arms, same content): ceiling medium, pin-all off (0 agents pinned)' "$TMP/dc1.log" \
+  && grep -qxF "cost config (both arms, same content): ceiling low, pin-all on ($nag agents pinned to low)" "$TMP/dc2.log"; then pass=$((pass+1)); echo "  ok   dry run prints the effective ceiling and the number of pinned agents (default medium / off)"; else fail=$((fail+1)); echo "  FAIL dry-run cost line ($rc1/$rc2: $(grep 'cost config' "$TMP/dc1.log" "$TMP/dc2.log"))"; fi
+  # The names come from the shipped mapping, so this test holds no model name of its own.
+  MODEL_RE="$(node -e 'import("./scripts/lib/cost-model.mjs").then(m=>console.log(Object.values(m.HOST_MODELS).flatMap(Object.values).join("|")))')"
+  if [ -n "$MODEL_RE" ] && ! grep -qiE "$MODEL_RE" "$TMP/dc1.log" "$TMP/dc2.log" tests/scripts/manual/ab-experiment.mjs tests/evals/lib/ab-draw.mjs; then pass=$((pass+1)); echo "  ok   the driver and its output name no model"; else fail=$((fail+1)); echo "  FAIL a model name appears in the driver or its output"; fi
+mkdir -p "$TMP/pd/agents" && : > "$TMP/pd/agents/alpha.md" && : > "$TMP/pd/agents/beta-two.md" && : > "$TMP/pd/agents/notes.txt"
+$G --model test-model --dry-run --tasks T1-proration --ceiling-somi high --pin-all --plugin-dir "$TMP/pd" > "$TMP/dc3.log" 2>&1
+grep -qxF 'cost config (both arms, same content): ceiling high, pin-all on (2 agents pinned to high)' "$TMP/dc3.log" && { pass=$((pass+1)); echo "  ok   the pinned names come from the plugin directory in use"; } || { fail=$((fail+1)); echo "  FAIL pins from --plugin-dir: $(grep 'cost config' "$TMP/dc3.log")"; }
+# Rows written before the two fields existed still report, and so do rows that carry them.
+printf '%s\n' '{"draw":"T1-proration-bare","task":"T1-proration","arm":"bare","noise":false,"order":0,"outcome":"scored","reason":"","green":3,"total":3,"costUsd":1,"durationMs":1000,"scope":{"ok":true}}' > "$TMP/old.jsonl"
+sed 's/"order":0/"order":0,"ceilingSomi":"low","pinAll":true/' "$TMP/old.jsonl" > "$TMP/new.jsonl"
+$G --report-only "$TMP/old.jsonl" > "$TMP/ro1.log" 2>&1; r1=$?; $G --report-only "$TMP/new.jsonl" > "$TMP/ro2.log" 2>&1; r2=$?
+if [ "$r1" -eq 0 ] && [ "$r2" -eq 0 ] && cmp -s "$TMP/ro1.log" "$TMP/ro2.log"; then pass=$((pass+1)); echo "  ok   a results file without ceilingSomi/pinAll reports, and identically to one that has them"; else fail=$((fail+1)); echo "  FAIL report on old/new rows ($r1/$r2)"; fi
+
 if [ "$(cat "$TMP/o-envlink.rc" 2>/dev/null)" = 2 ] && [ ! -e "$TMP/o-envlink/results.jsonl" ]; then pass=$((pass+1)); echo "  ok   an env file that is a symlink is refused"; else fail=$((fail+1)); echo "  FAIL symlinked env file"; fi
 git check-ignore -q .somi/ab-results/x && { pass=$((pass+1)); echo "  ok   the default results directory is gitignored"; } || { fail=$((fail+1)); echo "  FAIL default output directory is not ignored"; }
 grep -q '^scripts/manual/' tests/.npmignore && { pass=$((pass+1)); echo "  ok   tests/scripts/manual/ is excluded from the package"; } || { fail=$((fail+1)); echo "  FAIL manual/ is not in tests/.npmignore"; }

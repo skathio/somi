@@ -135,7 +135,8 @@ export const probeSandbox = (spec) => spawnSync('bwrap', sandboxArgs({ ...spec, 
 
 const PATH_ONLY = (home) => ({ PATH: process.env.PATH ?? '', HOME: home });
 /** Fresh directories under `tmp` (made by the caller with mkdtemp) -> {ws, before}; throws an Error naming the step that failed. */
-export function prepareWorkspace({ taskDir, tmp }) {
+/** `cost` is the already-validated `cost` block of the workspace's .somi/config.json (plain data; the caller validates it). */
+export function prepareWorkspace({ taskDir, tmp, cost = { ceiling: 'medium' } }) {
   const ws = path.join(tmp, 'ws');
   fs.mkdirSync(ws, { mode: 0o700 });
   fs.mkdirSync(path.join(tmp, 'cfg'), { mode: 0o700 });
@@ -155,7 +156,7 @@ export function prepareWorkspace({ taskDir, tmp }) {
     if (r.error || r.status !== 0) throw new Error('the task setup failed');
   }
   fs.mkdirSync(path.join(ws, '.somi'), { recursive: true });
-  fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify({ cost: { ceiling: 'medium' } })}\n`);
+  fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify({ cost })}\n`);
   const git = (...a) => { const r = spawnSync('git', a, { cwd: ws, env: { ...PATH_ONLY(tmp), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore', timeout: SETUP_MS }); if (r.error || r.status !== 0) throw new Error(`git ${a[0]} failed`); };
   git('init', '-q', '-b', 'main', '--template=');
   git('config', 'user.name', 'somi-ab');
