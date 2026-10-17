@@ -8,7 +8,7 @@ allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebFetch, Bash
 
 You are running the **planning workflow** of somi. It has no `cost:` of its own — a command has no
 model to size — and runs entirely inline; the `planner` it Tasks declares `cost: low, medium`
-(`medium` unless the session ceiling resolves to `low`): planning is *sequencing an
+(it runs at the session ceiling): planning is *sequencing an
 already-compiled design*, not open-ended research. When an upstream
 high-cost design action ([`/design`](./design.md), [`/discover`](./discover.md), or
 [`/refactor-design`](./refactor-design.md) — each Tasking an agent that declares `cost: high`) ran
@@ -57,8 +57,8 @@ new slug.
 
 ### 2a. Check for an upstream brief (the design→execution handoff)
 
-`/plan` Tasks the `planner` agent at `cost: low, medium` (`medium` unless the session ceiling
-resolves to `low`) — it executes against an already-compiled
+`/plan` Tasks the `planner` agent at `cost: low, medium` (it runs at the session ceiling) — it
+executes against an already-compiled
 design, it doesn't do the front-loaded research itself. So look first for a **`brief.md`** left by
 a prior high-cost design action:
 

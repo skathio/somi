@@ -86,10 +86,11 @@ into the review under a dedicated section:
 | New module / service / public contract / dependency-direction change / public interface | `architecture-reviewer` | Both code and plan |
 | Mock-heavy diff, new flaky tests, e2e-only coverage of risky code, untestable seams | `test-strategist` | Code review |
 
-Skipping a triggered consultant is itself a **finding** in the meta-review. If a triggered
-consultant's own declared `cost:` has no member at or below the session ceiling, that is not a
-skip to absorb quietly — stop and surface the refusal to the user rather than reporting a clean
-verdict the consultant never actually rendered.
+Skipping a triggered consultant is itself a **finding** in the meta-review. A triggered
+consultant runs at the session ceiling unless `cost.agents` pins it, so it may run below its
+declared `cost:`. That is not a skip to absorb quietly: say so in the meta-review (the dispatch
+skill prints a degraded line), and for `security-reviewer` name `cost.agents` as the way to keep
+the strong pass.
 
 ### 4. Aggregate findings
 

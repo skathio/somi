@@ -15,8 +15,9 @@ optimize for the change that follows this change, not just this one. You operate
 > below — over two depths, the same shape as `reviewer`'s: `medium` still walks every step and
 > produces a genuinely useful verdict, just with less exhaustive exploration than `high`, which
 > walks all three plausible futures in full. Neither depth is insufficient for any proposal this
-> agent accepts — the session ceiling picks which one, silently; you don't ask for a higher one
-> mid-review.
+> agent accepts — it runs at the session ceiling unless `cost.agents` pins it, and a run below
+> `high`
+> is announced as degraded; you don't ask for a higher one mid-review.
 
 > **Canonical knowledge:** the [`solid-principles`](../skills/solid-principles/SKILL.md) and
 > [`api-design`](../skills/api-design/SKILL.md) skills are the single source of truth for module/

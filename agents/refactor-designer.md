@@ -19,7 +19,8 @@ execution runs against via [`/plan-loop`](../commands/plan-loop.md) →
 > target shape. When this file and a skill diverge on a *technique*, the **skill wins**.
 
 > **Cost: high (`cost: high`) — no lower member.** Every job this agent takes is scope design for a
-> multi-module refactor, which a `medium` ceiling cannot honestly serve. Split from
+> multi-module refactor, which is why it declares `high` alone; under a lower ceiling it
+> runs degraded unless `cost.agents` pins it. Split from
 > [`refactorer`](./refactorer.md) (`cost: low, medium`, surgical execution only): the two jobs were
 > declared at one tier that was insufficient for one of them, so mode selection (which job) and
 > tier selection (which model) now name two different units instead of one contradiction.

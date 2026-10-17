@@ -90,13 +90,13 @@ echo "==> Bundled MCP server tests (somi_resolve / somi_command)..."
 # rather than re-testing the resolver's arithmetic a third time.
 bash tests/scripts/somi-mcp.sh
 
-echo "==> Validating the never-degrade dispatch guard..."
+echo "==> Validating the dispatch guard (no caller ignoring per-agent overrides)..."
 # scripts/lib/cost-ceiling.mjs's modelForDispatch() is the ONLY sanctioned way to turn a dispatch
 # decision into a model: it resolves the SELECTED tier and refuses anything shaped as other than an
 # "allow" decision. Calling the underlying model resolver directly against a decision's ceiling
 # field instead of its selected field reads fine in English but is a different, unsanctioned
-# composition -- it would run a unit at whatever tier the session merely PERMITS rather than the
-# tier decideDispatch actually picked for it, silently running above what the unit declared. This
+# composition -- a caller that ignores per-agent overrides: it would run a unit at the session
+# ceiling rather than the tier decideDispatch actually picked for it (its cost.agents entry). This
 # gate closes that path structurally rather than by convention: nothing outside the library itself
 # may compose the two functions that way. scripts/somi-dispatch.mjs is the first real dispatch call
 # site this machinery ever had (before it, decideDispatch/modelForDispatch had zero live callers),
@@ -189,9 +189,9 @@ fi
 echo "==> Validating cost-tier declarations..."
 # Extract the first `cost:` (or `model:`) value(s) from a file's frontmatter (the block between
 # the first two `---` lines). A declared `cost:` is a CAPABILITY SET -- every tier that unit can
-# usefully run at, comma-separated in strictly ascending order -- and a dispatcher selects the
-# highest member its ceiling permits; that selection is capability, never a downgrade to a tier
-# the unit didn't declare. agents/reviewer.md's shipped `cost: medium, high` is a real example: a
+# usefully run at, comma-separated in strictly ascending order -- and a dispatcher reports a run
+# below the highest member as degraded; the tier itself is the agent's cost.agents entry or the
+# ceiling, and the declaration never changes it. agents/reviewer.md's shipped `cost: medium, high` is a real example: a
 # lighter pass is honestly useful at `medium`, adversarial fresh-eyes review needs `high`. What a
 # file Tasks never contributes a value here, and a spawned unit never inherits its caller's tier
 # either direction: a cost: medium orchestrator Tasking a cost: high agent stays declared medium --
@@ -327,9 +327,9 @@ assert_cost() {
 # low, medium: these three widen downward under the opt-in bar for `low` -- a builder-tier agent
 # may declare `low` once it can still do a reduced-depth version of its job and its own output says
 # so when it ran that way, even though the reduced depth would not hold up as the only tier it ever
-# ran at. `low` only ever runs when the session ceiling resolves to `low` -- an explicit CLI flag or
-# SOMI_COST_CEILING for this session, or inherited from a committed .somi/config.json or a saved
-# state file that persists across sessions -- and the front door announces that ceiling and its
+# ran at. `low` only ever runs for a low ceiling (flag, env var, cost.ceiling in a committed
+# .somi/config.json, or one set earlier by flag or env var) or a cost.agents entry of low -- and
+# the front door announces that ceiling and its
 # source before work starts, so the quality drop is a trade the user can see, not one sprung on
 # them. Each agent's own frontmatter and "Running at `low`" section name what that agent's
 # reduced-depth pass keeps and what it trims -- read those, not this comment, for the specifics.

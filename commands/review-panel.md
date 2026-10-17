@@ -15,15 +15,16 @@ target such as a PR / commit range / working tree).
 
 The orchestrator (this command) has no `cost:` of its own — nor a `model:` of its own; it runs on
 whatever model this session is already using — and runs entirely inline. Each lens it Tasks
-resolves its model from its **own** declared set:
-`reviewer`, `architecture-reviewer`,
-`test-strategist`, `plan-reviewer`, and `sdlc-reviewer` declare `cost: medium, high` (the ceiling picks the highest permitted member,
-typically `high` for the fresh-eyes depth a panel wants); `security-reviewer` declares `cost: high`
-alone — a missed vulnerability outweighs a lighter generalist pass, so it has no lower mode (see
-its own `> **Cost:**` callout). The lenses are read-only **by contract, not by platform
+resolves its model through the dispatch skill: its `cost.agents` entry if the config has
+one, otherwise the session ceiling itself. `reviewer`, `architecture-reviewer`, `test-strategist`,
+`plan-reviewer`, and `sdlc-reviewer` declare `cost: medium, high`; pin them to `high` under
+`cost.agents` for the fresh-eyes depth a panel wants. `security-reviewer` declares `cost: high`
+alone — a missed vulnerability outweighs a lighter generalist pass — so pin it to `high` too (see
+its own `> **Cost:**` callout); an unpinned lens runs at the ceiling and is reported as degraded.
+The lenses are read-only **by contract, not by platform
 restriction** — they return findings; this command owns every write (the merged review file,
-`progress.md`, `diary.md`). The session ceiling selects each lens's tier and never refuses one: a lens whose declared tiers
-all sit above the ceiling still runs, at its cheapest declared tier.
+`progress.md`, `diary.md`). The session ceiling is a hard cap that sets each lens's tier and never
+refuses one.
 
 > **Why this exists.** A single reviewer carries one set of priorities at a time; running the
 > specialist lenses *in parallel* on one diff catches what a sequential, escalation-only pass misses

@@ -51,7 +51,11 @@ fails to launch. Declaring the server inline in the manifest avoids that collisi
 nothing at the repo root for a bare checkout to misread. It exposes four tools:
 
 - **`somi_resolve`** — the MCP-native equivalent of `node scripts/somi-dispatch.mjs resolve`:
-  given an agent name (and optionally a host/ceiling), returns its dispatch tier and model. A
+  given an agent name (and optionally a host/ceiling), returns its dispatch tier and model, plus
+  `declared`, `degraded` and `tier_source`. The tier is the agent's `cost.agents` entry in
+  `.somi/config.json` if it has one, otherwise the session ceiling itself. A `ceiling` argument
+  applies to that call and is remembered, but is outranked whenever the config
+  sets `cost.ceiling`, which is read live. A
   failure maps one-to-one onto the CLI's exit-code family (64 usage / 65 unknown agent /
   66 malformed `cost:` / 67 project environment failure), reported in the tool result text.
 - **`somi_command`** — returns a SoMi command's own procedure text (`commands/<name>.md`) from

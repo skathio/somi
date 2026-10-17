@@ -114,7 +114,8 @@ const TOOLS = [
   {
     name: 'somi_resolve',
     description:
-      "Resolve one agent's dispatch tier and model against the current session ceiling — the " +
+      "Resolve one agent's dispatch tier and model: its cost.agents override from .somi/config.json, " +
+      'else the current session ceiling itself (a hard cap) — the ' +
       'MCP-native equivalent of `node scripts/somi-dispatch.mjs resolve`. Same validation, same ' +
       'four-code failure family (64 usage / 65 unknown agent / 66 malformed cost: declaration / ' +
       '67 project environment failure — including "no project root could be established": no ' +
@@ -128,9 +129,10 @@ const TOOLS = [
         ceiling: {
           type: 'string',
           description:
-            'one of low|medium|high. Sets and SAVES the session ceiling for every later dispatch ' +
-            'in this project, not just this call — omit it unless the user actually asked to ' +
-            'change the ceiling.',
+            'one of low|medium|high. Used for this call and remembered as an explicitly set ' +
+            'value, but cost.ceiling in .somi/config.json is read live and outranks it, so it ' +
+            'does not last where the config sets one — omit it unless the user actually asked ' +
+            'to change the ceiling.',
         },
         project_dir: {
           type: 'string',

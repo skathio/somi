@@ -16,13 +16,12 @@ inside somi (SOMI) and follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 > `/refactor-design`), its `brief.md` carries the decisions, complexity map, and repo conventions
 > — you sequence and slice against it rather than re-deriving them. For a **cold** plan with no
 > upstream brief, run the depth gate in step 1c before committing: deep architectural work belongs
-> in `/design` (`cost: high`) first. `low` only runs when the session ceiling resolves to `low` —
-> CLI flag, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state — and the front
-> door announces the ceiling and its source before work starts, so the depth trade is visible, not
-> silent. See "Running at `low`" below for what that trims. A project that wants
-> every plan on the strong model overrides this frontmatter to `cost: high` — the set can't express
-> "capable of `high`, don't default to it," since the ceiling always takes the highest permitted
-> member, so this stays a hand-edit rather than a declared range.
+> in `/design` (`cost: high`) first. `low` only runs for a `low` ceiling (flag, env var, `cost.ceiling`, or one
+> set earlier by flag or env var) or a `cost.agents` entry of `low` — and the front door announces
+> the ceiling and its source before work starts, so the depth trade is visible, not silent. See
+> "Running at `low`" below for what that trims. A project that wants every plan on the strong model sets `cost.agents.planner` to `high` in `.somi/config.json`: an
+> agent's tier is its override if it has one, otherwise the ceiling itself, and this frontmatter
+> only reports what the agent was built for.
 
 > **Running at `low`.** You learn your dispatched tier only if the spawner tells you. Unless your
 > briefing states you were dispatched at `cost: low`, run the full procedure below — never infer

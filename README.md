@@ -117,7 +117,7 @@ Once installed, use `@somi` in GitHub Copilot chat:
 >   confirmed on Claude Code and on VS Code's Copilot; undocumented on Copilot CLI, where the
 >   agent's own frontmatter `model:` may be what actually governs instead. Where a model can't be
 >   bound per call, the dispatcher still names the tier it selected and says plainly that its model
->   pick could not be applied — the tier decision itself never degrades.
+>   pick could not be applied — the tier decision itself is the same everywhere.
 >
 > The commands, agents, skills, rules, and templates are shared; **enforcement and concurrency are
 > Claude Code features**; cost tiering is shared, with per-call model binding confirmed on Claude

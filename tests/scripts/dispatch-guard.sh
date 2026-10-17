@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Regression test for scripts/validate.sh's never-degrade dispatch guard: resolveModel() called
-# against a decision's `ceiling` field instead of its `selected` field would silently run a unit at
-# whatever the session merely PERMITS, not the tier decideDispatch picked. That guard was
-# hand-verified RED once, by eye, and its automated test then dropped to fit a diff cap -- exactly
+# Regression test for scripts/validate.sh's dispatch guard: resolveModel() called
+# against a decision's `ceiling` field instead of its `selected` field is a caller that ignores
+# per-agent overrides: it would run a unit at the session ceiling, not the tier decideDispatch
+# picked. That guard was hand-verified RED once, by eye, and its automated test then dropped to fit a diff cap -- exactly
 # the failure this repo has already hit repeatedly (see
 # tests/scripts/retirement-gate.sh's own header): a guard proven only by memory of once failing.
 #
@@ -24,7 +24,7 @@ bad() { fail=$((fail+1)); printf '  FAIL %s\n' "$1"; }
 assert_rc() { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (expected exit $3, got $2)"; fi; }
 assert_has() { if grep -qF "$2" "$3"; then ok "$1"; else bad "$1 (got: $(cat "$3"))"; fi; }
 
-echo "== never-degrade dispatch guard (scripts/validate.sh) =="
+echo "== dispatch guard (scripts/validate.sh) =="
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -39,7 +39,7 @@ BLOCK="$(awk '
 
 if [ -z "$BLOCK" ]; then
   bad "could not extract the guard block from scripts/validate.sh -- its markers may have moved"
-  echo "never-degrade dispatch guard tests: $pass ok, $fail failed"
+  echo "dispatch guard tests: $pass ok, $fail failed"
   exit 1
 fi
 
@@ -104,5 +104,5 @@ exempt_out="$TMP/exempt.out"; exempt_err="$TMP/exempt.err"
 run_guard "$EXEMPT" "$exempt_out" "$exempt_err"; rc=$?
 assert_rc "the identical call inside scripts/lib/ is exempt and does not fail the guard" "$rc" 0
 
-echo "never-degrade dispatch guard tests: $pass ok, $fail failed"
+echo "dispatch guard tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

@@ -19,11 +19,12 @@ This command automates the manual `/plan` → `/review plan <slug>` → `/plan` 
 gates** that ensure it terminates. It has no `cost:` of its own — nor a `model:` of its own; it runs
 on whatever model this session is already using — and runs entirely inline; the `planner` it Tasks
 declares `cost: low,
-medium` (`medium` unless the session ceiling resolves to `low`; executing against an upstream
+medium` (it runs at the session ceiling; executing against an upstream
 `brief.md` when one exists), while the `reviewer` it Tasks declares
-`cost: medium, high` — the session ceiling picks the highest permitted member, typically `high`
-for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by the
-planner's reasoning.
+`cost: medium, high` — it runs at the session ceiling unless `cost.agents` pins it (pin `reviewer`
+to `high` for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by
+the
+planner's reasoning).
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > and `spec.md §1` — in the **same order at the front** of each pass's planner brief, and append the

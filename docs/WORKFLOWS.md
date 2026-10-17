@@ -9,8 +9,8 @@ work.
 
 - **High-cost front-loads:** `/discover` (a whole new product), `/design` (a brownfield
   feature/story), and `/refactor-design` (a large refactor) — each compiles a `brief.md`.
-  `/review`'s `reviewer` declares `cost: medium, high` — the session ceiling picks the highest
-  permitted member, typically `high` for the fresh-eyes judgment this stage wants.
+  `/review`'s `reviewer` declares `cost: medium, high` — it runs at the session ceiling unless
+  `cost.agents` pins it (pin it to `high` for the fresh-eyes judgment this stage wants).
 - **Medium-cost execution:** `/plan` (+ `/plan-loop`) sequences the brief into phases; `/code`
   (+ `/code-loop`, `/code-parallel`) implements against it.
 
@@ -35,9 +35,9 @@ procedure live instead of Tasking a single agent to carry it out. Either way, ev
 procedure starts — one `Task` call per agent — resolves its cost tier and model first, through
 `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill, served over the
 bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP isn't reachable), and
-the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling **selects**
-the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
-declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
+the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling is a **hard
+cap**: the unit runs at the ceiling tier, or at its `cost.agents` override when the config has one —
+never refused, and reported as degraded when that is below what it declared.
 
 ## The workflows
 

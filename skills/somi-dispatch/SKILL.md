@@ -46,10 +46,11 @@ this session is actually working in — read your own working directory to get i
 you have one this turn, or the workspace root the host already told you at session start) — never a
 relative path, and never SoMi's own install directory.
 
-**Pass `ceiling` only when the user actually asked, in this turn, to change the session ceiling.**
-It is not a per-call filter — passing it **persists** the value: it is saved to
-`.somi/somi-state/ceiling.json` and stays in force for every later resolve, this session and every
-later one, until something moves it again. Omit it on every ordinary resolve.
+**Pass `ceiling` only when the user actually asked, in this turn, to change the session ceiling —
+or asked earlier in this conversation while `cost.ceiling` is set and no config write happened.**
+It applies to that resolve and is remembered as an explicitly set value, but a `cost.ceiling` in
+`.somi/config.json` is read live on every resolve and outranks a remembered value — so where the
+config sets one, a ceiling passed here does **not** last. Omit it on every ordinary resolve.
 
 Name `<host>` precisely, never guess it: `claude-code` if this turn is running in Claude Code,
 `copilot` if it's running in GitHub Copilot.
@@ -78,14 +79,24 @@ The tool's JSON comes back in its text content; the CLI fallback prints the iden
 stdout:
 
 ```json
-{"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "ceiling": "high", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "coder", "supported": ["low", "medium"], "declared": ["low", "medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
-- `tier` — the cost tier the resolver selected for this agent, right now.
+- `tier` — the cost tier the resolver selected for this agent, right now: the agent's own
+  `cost.agents` entry in `.somi/config.json` if it has one (`tier_source: "override"`), otherwise
+  the ceiling itself (`tier_source: "ceiling"`). The ceiling is a hard cap for every agent without
+  an override; the agent's frontmatter `cost:` does not change the tier.
+- `declared` (same as `supported`) — the tiers the agent's frontmatter says it is built for.
+  `degraded` is `true` when the selected `tier` is below the highest declared one.
 - `model` — pass this to `Task` when it is non-null. When it is `null` (no mapping for this
   host/tier), see "No mapped model" below — never omit a model silently *and* never invent one
   without saying so.
 - `ceiling` / `ceiling_source` / `ceiling_origin` — see the announcement rule immediately below.
+
+**When `degraded` is `true`, say so in one line before the agent's `Task` call:**
+`running <agent> at <tier> (declared <declared set>)` — for example
+`running security-reviewer at medium (declared high)`. This is the hard cap working as designed, and
+the user should see which agents are running below what they were built for.
 
 **Announce a `low` ceiling once per session, before the first agent it applies to starts** — not
 once per command, and not again for every later agent this session that also resolves `low`.
@@ -94,29 +105,26 @@ violation, after a context compaction (the earlier announcement is no longer vis
 against) or inside a Tasked command's own fresh context (a subagent has no visibility into what the
 orchestrator already announced). The first time a resolve call in the *currently visible* context
 comes back with `ceiling: "low"`, say so in one line before that agent's `Task` call, naming its
-source: `ceiling_source`, unless that is `state` (a value already saved from an earlier call), in
-which case name `ceiling_origin` instead — the actual reason a saved `low` is in force:
+source: `ceiling_source`, unless that is `state` (a value an earlier call set explicitly), in
+which case name `ceiling_origin` instead — the actual reason a remembered `low` is in force:
 
-- `config` — a committed project policy in `.somi/config.json`.
-- `cli` / `env` — an explicit override, possibly from a previous session.
-- `default` — nobody set it.
-- `config-stale` — `.somi/config.json`'s `cost.ceiling` was what set this, but that file has since
-  changed to a different value (or dropped the setting) — editing config does not itself move a
-  ceiling already saved to `.somi/somi-state/ceiling.json`. Say so plainly, and that clearing that
-  file (or passing `--ceiling <tier>` / setting `SOMI_COST_CEILING`) is how to pick up the new
-  value.
-- `unknown` — a saved state file that predates this field entirely; there is no way to recover
-  which of the above actually produced it, so say that honestly rather than guessing one.
+- `config` — a committed project policy: `cost.ceiling` in `.somi/config.json`, read live, so
+  editing the file moves the ceiling on the next resolve.
+- `cli` / `env` — an explicit override (a `--ceiling` flag, `SOMI_COST_CEILING`, or `somi_resolve`'s
+  `ceiling` argument), possibly remembered from an earlier session.
 
-This is what lets the user raise the ceiling — via `somi_resolve`'s own `ceiling` argument (the CLI
-fallback's `--ceiling`) or `SOMI_COST_CEILING` — before work starts, rather than discovering the
+
+This is what lets the user raise the ceiling before work starts, rather than discovering the
 reduced depth after the fact.
 
-**In-chat ceiling raise.** If the user asks, mid-session, to raise the ceiling, call `somi_resolve`
-again passing `ceiling: <tier>` (or the CLI fallback's `--ceiling <tier>`) the next time you resolve
-an agent, and say plainly that the raise **persists**: it is saved to
-`.somi/somi-state/ceiling.json` and stays in force for every later resolve this session — and every
-later session — until something moves it again.
+**In-chat ceiling raise.** The ceiling the user wants must live in `.somi/config.json`'s
+`cost.ceiling`, because that file is read live and outranks anything remembered. A ceiling passed
+to `somi_resolve` (or `--ceiling`) is used for that call and remembered, but outranked whenever the
+config sets one. Until the `/somi-config` command exists to write the config for you, when the user
+asks
+mid-session to raise or lower the ceiling: tell them to set `cost.ceiling` in `.somi/config.json`
+(or pass `ceiling: <tier>` on each resolve you make for them), and **never say the change is
+saved** unless a config write actually happened.
 
 **No mapped model.** When `model` comes back `null`, pick only from model identifiers **actually
 visible to you this turn** — e.g. the subagent tool's own `model` parameter, when it lists
@@ -145,8 +153,9 @@ than once.
 - `66` (malformed declaration) — this agent's own `cost:` frontmatter is missing or invalid; quote
   the resolver's own message and stop.
 - `67` (project environment/config failure) — either `.somi/config.json` (including a structurally
-  invalid `cost.mapping`) or `.somi/somi-state/ceiling.json` is corrupt, unparsable, or
-  malformed-shape; or the merged mapping is missing the tier just selected, or holds a non-string
+  invalid `cost.mapping`, `cost.agents`, or an oversize, symlinked or non-regular file) or
+  `.somi/somi-state/ceiling.json` is corrupt, unparsable, or malformed-shape; or the merged mapping
+  is missing the tier just selected, or holds a non-string
   model value, for a host the project's own `cost.mapping` named (a partial override of a shipped
   host replaces that host's whole tier map, so overriding just one tier drops the others); **or no
   project root could be established at all** — no `project_dir` reached the server as usable, and
@@ -162,11 +171,14 @@ Reached only when this turn cannot call `somi_resolve` at all **and** there is n
 to run the CLI (or SoMi's install path genuinely isn't known) — never when either one is reachable
 and simply returned a failure (map that per §3 instead). Say plainly that you're doing this and
 name which of the two you couldn't reach, then resolve the same decision manually: read the
-ceiling yourself, in the same order the resolver itself would check —
-`.somi/somi-state/ceiling.json` if it exists, else `.somi/config.json`'s `cost.ceiling` if set, else
-`high` (the shipped default) — then read this agent's `cost:` frontmatter yourself and pick the
-highest declared tier at or below that ceiling — the same selection the resolver would have made —
-mirroring `/code-loop`'s own no-shell fallback honesty.
+ceiling and the tier yourself, in the same order the resolver itself would: a ceiling the user
+asked for in this conversation (you cannot see `SOMI_COST_CEILING` without a shell), then this
+agent's
+`cost.agents.<agent>` entry in `.somi/config.json` if it has one, else the ceiling — `cost.ceiling`
+in `.somi/config.json` if set, else a ceiling the user explicitly set earlier in
+`.somi/somi-state/ceiling.json` (only if it records `cli` or `env` as its origin), else `medium`
+(the shipped default). That tier is the answer; the agent's `cost:` frontmatter does not change it,
+though if the tier is below the highest tier it declares, say so as in §2.
 
 ## 5. Start the agent
 

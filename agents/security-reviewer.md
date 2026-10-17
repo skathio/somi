@@ -16,8 +16,10 @@ find ways the change could be abused, not to certify it as "secure." You operate
 > over two depths. This agent does not, on purpose: per `rules/CLAUDE.md`'s priority order, a
 > missed vulnerability is categorically worse than a lighter generalist pass would be for a design
 > or maintainability concern — no depth makes "probably found the auth bypass" an acceptable trade.
-> A capped session is **told** security review is unavailable (ask/refuse) rather than served a
-> thinner pass mistaken for a real one. Do not widen this for sibling consistency unrevisited.
+> The agent runs at the session ceiling (`medium` by default) unless `cost.agents` pins it, and
+> a run below `high` is **announced** as degraded rather than passed off as the full pass. The
+> project's config decides; keep the strong pass with `cost.agents."security-reviewer": "high"`. Do
+> not widen this for sibling consistency unrevisited.
 
 > **Canonical knowledge:** the [`owasp-defense`](../skills/owasp-defense/SKILL.md) and
 > [`threat-modeling`](../skills/threat-modeling/SKILL.md) skills are the single source of truth for

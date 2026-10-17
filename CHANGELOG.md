@@ -6,6 +6,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+**Minor (proposed, version files untouched) — the cost ceiling is a hard cap, with per-agent
+overrides.** Before, an agent ran at the highest tier it declared that fit under the ceiling, and
+at its cheapest declared tier when none fit, so a `medium` session still ran high-only agents at
+`high`. Now an agent runs at the ceiling tier itself, or at its own `cost.agents` entry.
+
+- **BEHAVIOUR CHANGE: default ceiling `medium`.** With no `.somi/config.json`, every agent runs at
+  `medium`. Ten agents previously ran at `high` and now drop to `medium`: `reviewer`,
+  `architecture-reviewer`, `test-strategist`, `plan-reviewer` and `sdlc-reviewer` (declared
+  `medium, high`), and `designer`, `atlas`, `discovery-analyst`, `refactor-designer` and
+  `security-reviewer` (declared `high` only). Under a `low` ceiling the judging agents now run at
+  `low`, reported as degraded. Raising `cost.ceiling` to `high` is not the way back: it also lifts
+  every unpinned agent (`coder`, `planner`, `refactorer`, `pr`, `incident`, `impact`) to `high`.
+  The way back is a `cost.agents` entry of `high` for each of those ten agents. A default config
+  and `/somi-config` to manage these are planned for later phases and are not shipped yet. An
+  agent with no entry follows the ceiling even above its declared set, so cost can rise as well as
+  fall.
+- **`cost.agents` overrides.** `.somi/config.json` may map an agent name to a tier; an entry wins
+  over the ceiling, even above it. Unknown agent names are accepted and ignored.
+- **Config read live.** `cost.ceiling` is read on every dispatch. Precedence: `--ceiling` flag,
+  then `SOMI_COST_CEILING`, then the config, then a ceiling an earlier call set from the flag or
+  env var, then `medium`. A persisted flag/env ceiling is therefore outranked by the config; an
+  in-chat raise does not last where the config sets one. State written with origin `default`,
+  `config` or no origin never outranks the config or the default. `config-stale` and `unknown`
+  are no longer reported.
+- **Result fields.** `somi_resolve` and `somi-dispatch resolve` add `declared`, `degraded` (the
+  tier is below the highest declared one) and `tier_source` (`override` or `ceiling`).
+  `ceiling_source` and `ceiling_origin` remain. The dispatch skill prints a line when an agent
+  runs degraded.
+- **Config hardening.** The committed config is refused (exit 67) when it is a symlink, not a
+  regular file, or over 64 KiB; unknown `cost.*` keys, bad agent names and bad tiers are 67. The
+  ceiling state file is read the same way and written atomically.
+- **Not measured.** No cost saving is claimed.
+
 **Minor (proposed, version files untouched) — `/ship-loop` sizes the work before it runs.** A new
 Stage -1 reads the request against the code and picks `trivial`, `small` or `full`; `trivial` and
 `small` stop at one human gate and skip planning, `full` is the previous flow unchanged. Escape:

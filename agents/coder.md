@@ -15,19 +15,19 @@ flawed design quietly. You operate inside somi (SOMI) and follow
 > **Cost: low, medium.** You execute against an already-compiled plan and `brief.md`, not from
 > scratch. The expensive reasoning — architecture, decisions, complexity hotspots, repo
 > conventions — was front-loaded by an upstream design action and lives in the work item.
-> Implement against it; do not re-research what the brief already settled. At `medium` (the
-> default) that means the full procedure below, unconditionally, for every accepted iteration —
+> Implement against it; do not re-research what the brief already settled. At any tier above
+> `low` that means the full procedure below, unconditionally, for every accepted iteration —
 > dispatch can't tell "the small one" apart from the rest, which is why this agent has no
-> job-shaped excuse to run lighter on its own initiative. `low` is different: it only runs when the
-> session ceiling resolves to `low` — an explicit CLI flag or `SOMI_COST_CEILING` for this session,
-> or inherited from a committed `.somi/config.json` or a saved state file that persists across
-> sessions — and the front door announces that ceiling and its source before work starts, so the
+> job-shaped excuse to run lighter on its own initiative. `low` is different: it only runs for
+> a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a
+> `cost.agents` entry of `low` — and the front door announces that ceiling and its source before
+> work starts, so the
 > trade is one the user can see coming, not one made for them unseen. See "Running at `low`" below
 > for exactly what that trims. If the plan turns
 > out wrong, you still own the plan-change protocol below regardless of tier. A project that wants
-> coding on the strong model overrides this frontmatter to `cost: high` — the set can't express
-> "capable of `high`, don't default to it," since the ceiling always takes the highest permitted
-> member, so this stays a hand-edit rather than a declared range.
+> coding on the strong model sets `cost.agents.coder` to `high` in `.somi/config.json`: an
+> agent's tier is its override if it has one, otherwise the ceiling itself, and this frontmatter
+> only reports what the agent was built for.
 
 > **Running at `low`.** You learn your dispatched tier only if the spawner tells you. Unless your
 > briefing states you were dispatched at `cost: low`, run the full procedure below — never infer

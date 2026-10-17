@@ -19,10 +19,10 @@ $ARGUMENTS
 This is the **careful, gated-at-every-stage** entrypoint. It has no `cost:` of its own — nor a
 `model:` of its own; it runs on whatever model this session is already using — and runs entirely
 inline, composing [`/plan`](./plan.md) and [`/code-loop`](./code-loop.md) as a router. The `planner` and `coder` those commands Task declare
-`cost: low, medium` (`medium` unless the session ceiling resolves to `low`), and the `reviewer`
-`/code-loop` Tasks declares `cost: medium, high` — the session
-ceiling picks the highest permitted member, typically `high` for the fresh-eyes judgment that
-stage wants.
+`cost: low, medium` (it runs at the session ceiling), and the `reviewer`
+`/code-loop` Tasks declares `cost: medium, high` — it runs at the session ceiling unless
+`cost.agents` pins it (pin `reviewer` to `high` for the fresh-eyes judgment that
+stage wants).
 
 > **Design-heavy work? Front-load a design action first.** `/ship` starts by composing
 > [`/plan`](./plan.md). If the work is design-heavy and has no `brief.md` yet (it crosses modules,

@@ -563,7 +563,7 @@ optional; omit anything you don't want to change:
   "debug":         { "max_hypotheses": 5 },
   "dep_install":   { "allow": ["@types/", "eslint-"] },
   "lockfiles":     { "allow_edit": false },
-  "cost":          { "ceiling": "high", "mapping": {} }
+  "cost":          { "ceiling": "medium", "mapping": {}, "agents": { "security-reviewer": "high" } }
 }
 ```
 
@@ -575,8 +575,12 @@ optional; omit anything you don't want to change:
   and every package in the command must match a prefix.
 - `lockfiles.allow_edit: true` permits hand-editing lockfiles as project policy
   (`SOMI_ALLOW_LOCKFILES` still wins for a session, including `=0` to re-deny).
-- `cost.ceiling` sets the session's maximum `cost` tier (`low`/`medium`/`high`, default `high` — no
-  restriction). `cost.mapping` overrides [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s
+- `cost.ceiling` sets the tier every agent runs at unless it has its own entry
+  (`low`/`medium`/`high`,
+  default `medium`); it is a hard cap, and it is read from this file on every dispatch.
+  `cost.agents` maps an agent name to the tier that agent runs at instead — an entry wins over the
+  ceiling, even above it. `cost.mapping` overrides
+  [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s
   shipped per-host model mapping; a host named there replaces that host's whole tier map. See "Cost
   tiers and model resolution" below for how the ceiling and the mapping override actually apply.
 
@@ -590,8 +594,9 @@ fails the build if a `commands/*.md` file declares `cost:` or `model:`. Every `a
 host binds that agent's model when the user selects it, not SoMi), and `scripts/validate.sh`
 asserts presence and validity across all of them. **`cost:` is a CAPABILITY SET, and the test is
 universal, not "usually": a unit declares a tier only if that tier is acceptable for *everything
-the unit accepts*.** The session ceiling that later picks among a unit's declared members is blind
-to which job is running, so a declared tier has to hold for every job, not just the common case. A
+the unit accepts*.** The unit's declaration is what the session ceiling is later compared against
+(to report a degraded run), and it is blind to which job is running, so a declared tier has to hold
+for every job, not just the common case. A
 single value (`cost: medium`) means the unit has exactly one accepted-everywhere tier; a
 comma-separated, strictly-ascending list (`cost: medium, high`) means *each* listed tier produces
 acceptable output for every job the unit accepts — not "this tier for the easy jobs, that tier for
@@ -606,18 +611,19 @@ still require the tier to hold for *every* accepted job. `low` uses an opt-in ba
 builder-tier agent (one that produces the work, not one that judges it) may declare `low` once it
 can still do a reduced-depth version of its job and its own output discloses that it ran at that
 depth and names what it skipped. This is safe specifically because `low` is never *silently*
-selected — it only runs when the session ceiling resolves to `low`, whether from an explicit CLI
-argument or `SOMI_COST_CEILING` for this session, or inherited from a committed `.somi/config.json`
-or a saved state file that persists across sessions, and the front door announces that ceiling and
-its source before any work runs. So the reduced depth is a trade the user can see coming, not one
-made for them unseen. The judging agents (`reviewer`, `security-reviewer`, `architecture-reviewer`,
-`test-strategist`) stay off `low` regardless: a weaker judge doesn't produce weaker output, it
-produces a false pass, with nothing downstream to catch what it missed.
+selected — it only runs for a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by
+flag or env var) or a `cost.agents` entry of `low`, and the front door announces that ceiling and
+its source before
+any work runs. So the reduced depth is a trade the user can see coming, not one made for them
+unseen. The judging agents (`reviewer`, `security-reviewer`, `architecture-reviewer`,
+`test-strategist`) never *declare* `low`: a weaker judge doesn't produce weaker output, it
+produces a false pass, with nothing downstream to catch what it missed. A `low` ceiling still runs
+them at `low`, reported as degraded, unless `cost.agents` pins them higher.
 
 **Three declared shapes, and they resolve differently:**
 
 1. **Graded over one job** — no modes; output degrades smoothly with less reasoning depth. Declares
-   its full set; the ceiling picking blindly is correct because neither member is *insufficient*,
+   its full set; running it at either member is acceptable because neither is *insufficient*,
    only shallower. This is the common case (`agents/reviewer.md`'s `medium, high` below).
 2. **Alternative modes** — the unit actually does two different jobs with different requirements
    (A *xor* B, not "A but sometimes shallower"). **Split into separate units** rather than declaring
@@ -686,43 +692,47 @@ starts a real agent references the skill somewhere in its own text (`MISSING DIS
 fails the build otherwise) — not only when a request happens to be routed through the `somi`
 persona (see `docs/AGENTS.md`'s escalation matrix for which agent a given command Tasks).
 
-A session ceiling **selects among the tiers a unit offers; it does not decide whether the unit
-runs.** [`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s `resolveCeiling(root,
-arg)` and `decideDispatch(costs, ceiling)`. State lives at `.somi/somi-state/ceiling.json` — one
-file for the whole session, not per slug, since spend applies across whatever you're working on.
-Precedence for what can **move** a ceiling already in force: an explicit argument this call >
-`SOMI_COST_CEILING` this call > the ceiling already on disk; `.somi/config.json`'s `cost.ceiling` is
-read only once, when no state file exists yet — a bare config edit after that never silently
-reopens the ceiling, mirroring `/code-loop`'s cap precedent. Every move is recorded in
-`ceiling_overrides` as `{field, from, to, source, at}`.
+The session ceiling is a **hard cap**: an agent runs at the ceiling tier itself unless
+`.somi/config.json` gives that agent its own entry under `cost.agents`, in which case it runs at
+that tier, even above the ceiling.
+[`scripts/lib/cost-ceiling.mjs`](../scripts/lib/cost-ceiling.mjs)'s
+`resolveCeiling(root, arg)` and `decideDispatch(costs, ceiling, override)`.
+
+Precedence for the ceiling, highest first, re-resolved on every call: an explicit argument this
+call (`--ceiling`, or `somi_resolve`'s `ceiling`) > `SOMI_COST_CEILING` > `cost.ceiling` in
+`.somi/config.json`, read live — a config edit moves the ceiling on the very next dispatch > a
+ceiling an earlier call set explicitly and persisted (only a CLI/env value is ever written, to
+`.somi/somi-state/ceiling.json`, one file for the whole session, not per slug) > the built-in
+default, `medium`. A persisted value whose origin was the config, the default, or nothing recorded
+never outranks the config or the default. Every explicit raise or lowering is recorded in
+`ceiling_overrides` as `{field, from, to, source, at}`. Because the config outranks a persisted
+value, a ceiling passed in chat does not last where the config sets one; to change it durably, edit
+`cost.ceiling` in `.somi/config.json`.
 
 `decideDispatch` takes `costs` — a unit's declared set, as a single string or an ascending array —
-and always allows the dispatch. It picks `selected` from `costs`:
+an optional per-agent `override`, and always allows the dispatch:
 
-- some declared member sits at or below the ceiling → `selected` is the **highest** such member,
-  chosen silently, with no prompt. Running `agents/reviewer.md`'s `medium, high` under a `medium`
-  ceiling *selects `medium`* — this is choosing within declared capability, not a downgrade,
-  because the unit itself said `medium` was acceptable.
-- no declared member fits the ceiling → `selected` is the **cheapest** declared member. A unit
-  declaring only `high` has no lower mode to fall back to — it is intrinsically that expensive, so
-  blocking it would not be a saving, only a stoppage. It runs at `high` regardless of the ceiling.
+- with an override, `selected` is the override (`tier_source: "override"`), whatever the ceiling.
+- without one, `selected` is the **ceiling itself** (`tier_source: "ceiling"`) — not the highest
+  declared member and not the lower of the two. An agent declared `medium, high` under a `low`
+  ceiling runs at `low`; an agent declared `low, medium` under a `high` ceiling runs at `high`.
+- the declared set is read only to report: `degraded` is `true` when `selected` is below the highest
+  declared member, and `supported` echoes the declared set. It never changes `selected`.
 
-**The ceiling is therefore not a hard spend cap.** A `medium` session can still spawn `high` for a
-unit that declares only `high` (`security-reviewer`, `designer`, `refactor-designer`,
-`discovery-analyst`, and the `/atlas` work). There is currently no way to express "never `high`,
-full stop" — the mechanism that would enforce that does not exist yet, so don't rely on the ceiling
-alone for a hard budget guarantee. The tier a unit honestly declares (narrower sets are cheaper by
-construction) is the real spend lever.
+There is no never-below-declared floor in code. A project that wants an agent to keep its depth
+under a low ceiling pins it with `cost.agents` (for example `"security-reviewer": "high"`). Lowering
+a reviewer
+below `high` is the project's call, and the dispatch skill prints a line whenever an agent runs
+degraded. A malformed ceiling, override, or declared set — from config, the env var, an explicit
+argument, or the `costs` argument itself — throws rather than disabling the cap or coercing into
+something valid. `modelForDispatch(decision, host, mapping)` is the sanctioned way to turn a
+decision into a model: it resolves `decision.selected` and refuses outright unless
+`decision.action` is `allow` — unreachable through `decideDispatch` today, but kept as the
+structural closer so nothing but a real decision is ever turned into a model.
 
-No outcome invents a tier from outside `supported` (the normalized declared set, present on the
-result) — there is no lookup table, no "nearest allowed tier" pulled in from elsewhere. A malformed
-ceiling or an unrecognized/unordered/duplicated declared set — from config, the env var, an
-explicit argument, or the `costs` argument itself — throws rather than disabling the ceiling or
-coercing into something valid. `modelForDispatch(decision, host, mapping)` is the sanctioned way to
-turn a decision into a model: it resolves `decision.selected` and refuses outright unless
-`decision.action` is `allow` — unreachable through `decideDispatch` today, since every dispatch now
-allows, but kept as the structural closer for the never-degrade rule: nothing ever runs below a
-tier it declared.
+The committed `.somi/config.json` is untrusted input: only the documented `cost.*` keys are
+accepted, agent names must match `^[a-z][a-z0-9-]*$` and tiers must be `low`/`medium`/`high`, and
+the file is refused (exit `67`) if it is a symlink, not a regular file, or over 64 KiB.
 
 ### Dispatch resolver
 
@@ -756,16 +766,16 @@ node scripts/somi-dispatch.mjs resolve --agent <name> [--host <host>] [--ceiling
   precisely, naming whichever host is actually running it.
 - `--ceiling` is an explicit override for this one call. Its value is checked against
   `low`/`medium`/`high` **before** anything is read from or written to disk — a rejected value
-  therefore never bootstraps a ceiling state file, exit `64` — and only then passed to
+  therefore never leaves a ceiling state file behind, exit `64` — and only then passed to
   `resolveCeiling`.
 
 Before resolving a model, it builds the effective mapping the same way this doc's "Cost tiers"
 section above describes: `mergeHostMapping(HOST_MODELS, cost.mapping)`, where `cost.mapping` is
 read from the **caller's project** `.somi/config.json` (via `readCostConfig` — the same reader
 `resolveCeiling` uses for `cost.ceiling`, so a project's cost config is never parsed by two readers
-that could disagree). Unlike the ceiling, this is read fresh on every call rather than only at
-bootstrap: the mapping is a lookup table, not a gate a mid-session edit could reopen, so a config
-fix takes effect on the very next dispatch. This is how a host SoMi doesn't ship a mapping for
+that could disagree). Like `cost.ceiling` and `cost.agents`, it is read fresh on every call, so a
+config fix takes effect on the very next dispatch. This is how a host SoMi doesn't ship a mapping
+for
 (e.g. Copilot) gets one at all — the user's own project tells SoMi which of its models is
 `low`/`medium`/`high`. A malformed mapping fails loudly, never a guessed model, split by **whose**
 fault it is: a **structurally** invalid mapping (a `__proto__`/`constructor`/`prototype` host key,
@@ -783,13 +793,16 @@ declaration. Only a host the project's mapping never named failing this way woul
 the shipped `HOST_MODELS` table itself — guarded against by `tests/scripts/cost-model.sh` asserting
 every shipped entry resolves for every tier — and that stays exit `66`.
 
-On success it prints one JSON object and exits 0 — `agent`, `supported` (the normalized declared
-set), `tier` (what `decideDispatch` selected), `model` (what the effective mapping resolves that
+On success it prints one JSON object and exits 0 — `agent`, `supported` and `declared` (the
+normalized declared
+set), `tier` (what `decideDispatch` selected), `tier_source` (`override` or `ceiling`), `degraded`
+(`true` when `tier` is below the highest declared tier), `model` (what the effective mapping
+resolves that
 tier and host to today — this doc names the tier, not the model, for the same reason the rest of
 this section does), `ceiling`, `ceiling_source`, and `ceiling_origin`:
 
 ```json
-{"agent": "coder", "supported": ["low", "medium"], "tier": "medium", "model": "<mapped model>", "ceiling": "high", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "coder", "supported": ["low", "medium"], "declared": ["low", "medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
 `model` is `null` for a host absent from the mapping — this call makes no guess. The **caller** is
@@ -798,19 +811,10 @@ available on that host itself, matching the resolved tier (lightest for `low`, s
 `high`), and disclose plainly that the pick is its own judgment, not the mapping's answer — never
 silently omit a model while a tier was still selected, and never invent one without saying so.
 `ceiling_source` is one of `cli`, `env`, `config`, `state`, `default`: `resolveCeiling` reports this
-on every call, not only when a ceiling actually moves. `ceiling_origin` is a companion field naming
-what actually produced the value now in force, and it survives every later bare call the way
-`ceiling_source` does not: once a ceiling is loaded from disk, `ceiling_source` just says `"state"`
-on every subsequent call, which alone cannot explain *why* the user is at `low` (a
-saved-but-unexplained state is not actionable). `ceiling_origin` keeps saying `config` (a committed
-team policy) or `cli`/`env` (an explicit override, possibly from a previous session) for as long as
-that value stays in force, which is what lets a caller announce a `low` ceiling honestly rather
-than only "it's in force, somehow." Two further values it can report, neither ever written to the
-state file: `config-stale` — the value was bootstrapped from `.somi/config.json`, but that file's
-`cost.ceiling` has since changed to something else or been removed, and a bare edit cannot itself
-move a ceiling already saved — and `unknown` — a state file written before `ceiling_origin` existed
-(there is no way to recover which of the other values actually produced it, so this is the honest
-answer rather than a guess).
+on every call. `state` means a ceiling an earlier call set explicitly and persisted, and
+`ceiling_origin` then names which of `cli`/`env` that was, so a caller can announce a `low` ceiling
+honestly rather than only "it's in force, somehow." For every other source `ceiling_origin` equals
+`ceiling_source`.
 
 Failure is loud and specific rather than a bare stack trace, with a distinct exit code per cause:
 `64` for a bad or missing argument — including an unrecognized `--ceiling` value **or** an
@@ -823,7 +827,9 @@ the project's own `cost.mapping` never named**, which would mean a bug in the sh
 table itself — and `67` for the **project's own files** being broken before resolution can even get
 that far — an unparsable or malformed-shape `.somi/config.json` (including a structurally invalid
 `cost.mapping`: a `__proto__`/`constructor`/`prototype` host key, a non-object per-host value, or a
-tier key outside `low`/`medium`/`high`), a corrupt `.somi/somi-state/ceiling.json` — **or** that same
+tier key outside `low`/`medium`/`high`), a corrupt `.somi/somi-state/ceiling.json`, an invalid
+`cost.agents` entry, an oversize, symlinked
+or non-regular config file — **or** that same
 missing-tier / non-string-model failure for a host the project's own `cost.mapping` **did** name (a
 partial override of a shipped host drops its other tiers) — distinct from `64` because nothing the
 caller typed this call caused it, and distinct from `66` because the gap traces back to the

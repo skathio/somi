@@ -99,8 +99,9 @@ constrained by a **`## Write discipline` contract in their own prompt**, not by 
 the build if a command declares either field; a command runs on whatever model the session is
 already using. The agent a command Tasks runs on its own **cost tier** — `cost: high` for high-cost agents
 (design, discovery, review), `cost: low, medium` for the builder agents (planner, coder,
-refactorer) — `low` selected whenever the session ceiling resolves there (an explicit CLI flag or
-`SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and its
+refactorer) — `low` selected for
+a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a
+`cost.agents` entry of `low`, with the ceiling and its
 source announced before the first agent it applies to starts. Every command that Tasks an agent
 directly is instructed to resolve it per
 [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md) — the same resolve-then-start procedure

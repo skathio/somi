@@ -71,9 +71,10 @@ frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
 - **`cost: medium`** sequences and implements **against** the brief, so the high-volume work runs
   cheap. This is the **plan-and-execute / model-cascade** pattern (strong planner, cheap executor).
 - A unit's declared `cost:` is a **capability set**, not a single value — every tier it can
-  honestly run at. The session ceiling selects the highest permitted member; it never blocks a
-  unit down to a tier it didn't declare, and a unit declaring only `high` (no cheaper mode exists)
-  still runs even under a lower ceiling, at its cheapest declared member.
+  honestly run at. The session ceiling is a hard cap: an agent runs at the ceiling tier itself, or
+  at its
+  own `cost.agents` entry in `.somi/config.json` when it has one (an entry wins, even above the
+  ceiling). The declaration is read only to report when a run is below it (`degraded`).
 
 **Interaction with the layers.** Commands (the orchestration layer) carry no `cost:` of their own
 and simply `Task` the tier-appropriate agent, which resolves its own model from its own declared
@@ -96,9 +97,10 @@ that procedure starts — one `Task` call per agent, never the whole command in 
 its cost tier and model through `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)
 skill, served over the bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP
 isn't reachable — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) before the `Task`, and
-the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling **selects**
-the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
-declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
+the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling is a
+**hard cap**: the unit runs at the ceiling tier, or at its `cost.agents` override when the config
+has
+one — never refused, and reported as degraded when that is below what it declared.
 
 **Repo-awareness.** A SessionStart hook surfaces repo-local instruction files (`CLAUDE.md`,
 `AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; the high-cost design agents read

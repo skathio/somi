@@ -20,7 +20,7 @@ for (const [name, text] of [['code.md', code], ['code-loop.md', loop]]) {
   for (const [what, re] of anchors) if (!re.test(text)) problems.push(`${name} does not state: ${what}`);
 }
 if (!/(?:Never create the record or edit it by hand)/.test(code) || !/never create or edit that record by hand/.test(loop)) problems.push('code.md does not forbid creating or editing the record');
-for (const [n, t] of [['code.md', code], ['code-loop.md', loop]]) if (/\b(?:skip this|any tier|or create|write (?:one|it) by hand|without a record)\b/i.test(t)) problems.push(`${n} permits bypassing the tier record`);
+for (const [n, t] of [['code.md', code], ['code-loop.md', loop]]) if (/\b(?:skip this|or any tier|or create|write (?:one|it) by hand|without a record)\b/i.test(t)) problems.push(`${n} permits bypassing the tier record`);
 if (/TRIVIAL_MAX_|MAX_FILES|MAX_MODULES|MAX_DIFF_LINES|hard_surface|est_files/.test(code + loop)) problems.push('the commands repeat a rubric constant or signal id');
 
 if (problems.length) { console.log(problems.join('\n')); process.exit(1); }

@@ -281,8 +281,7 @@ function normalizeCostSet(costs, label) {
  *
  * `costs` (the unit's frontmatter capability set, a string or an ascending duplicate-free array) is
  * read only to report: `supported` echoes it, and `degraded` is true when `selected` ranks below
- * its highest member. It never changes `selected`. This reverses the old never-degrade rule, which
- * ran a unit at its cheapest declared tier when none fit under the ceiling.
+ * its highest member. It never changes `selected`: declaring a tier never lowers or raises the run.
  *
  * Pure and deterministic; the result is frozen so a caller can't rewrite the selection.
  */

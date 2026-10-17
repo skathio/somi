@@ -9,7 +9,7 @@ allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
 You are invoking the **refactorer** workflow of somi. This command has no `cost:` of its own — nor
 a `model:` of its own; it runs on whatever model this session is already using — and Tasks the
 [`refactorer`](../agents/refactorer.md) agent, which declares `cost: low, medium` for this mode
-(`medium` unless the session ceiling resolves to `low`).
+(it runs at the session ceiling).
 
 The user's refactor target: **$ARGUMENTS**
 

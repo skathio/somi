@@ -23,11 +23,11 @@ $ARGUMENTS
 
 This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
 session is already using — and runs entirely inline; the `coder` it Tasks declares `cost: low,
-medium` (`medium` unless the session ceiling resolves to `low`). It also carries a **high-cost
+medium` (it runs at the session ceiling). It also carries a **high-cost
 escalation
 hatch**: if isolation stalls, a fresh-context `reviewer` (declares
-`cost: medium, high`; the ceiling picks the highest permitted member — the escalation wants
-whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
+`cost: medium, high`; it runs at the session ceiling unless `cost.agents` pins it; the escalation
+wants whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
 economics are the inverse of `/design` — spend cheap tokens on mechanical narrowing first, escalate
 to the strong model only when narrowing stalls.
 

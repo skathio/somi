@@ -148,8 +148,8 @@ Return to the user with:
 - The **architectural decisions made** (one-liner each) and the **complexity hotspots** identified.
 - A pointer to `.somi/plans/<slug>/` and the files to read first (`brief.md`, then `design.md`).
 - A specific next step: "Review / edit `.somi/plans/<slug>/brief.md`, then run `/plan <slug>` — the
-  planner consumes the brief and sequences it into phases (at `cost: low, medium` — `medium`
-  unless the session ceiling resolves to `low`)."
+  planner consumes the brief and sequences it into phases (at `cost: low, medium` — it runs at the
+  session ceiling)."
 
 ## Guardrails
 

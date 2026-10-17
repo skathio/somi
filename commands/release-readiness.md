@@ -42,8 +42,8 @@ Any hard failure here (open Blocker, red tests, unexecutable rollback) → the v
 ## Stage 2 — High-cost integration review (the one expensive step)
 
 Per-iteration reviews saw each diff in isolation. Task the [`reviewer`](../agents/reviewer.md)
-(declares `cost: medium, high`; the session ceiling picks the highest permitted member — typically
-`high`, the fresh-context depth this stage wants). Before this `Task`, call `somi_resolve` for
+(declares `cost: medium, high`; it runs at the session ceiling unless `cost.agents` pins it; pin it
+to `high` for the fresh-context depth this stage wants). Before this `Task`, call `somi_resolve` for
 `reviewer` (with `project_dir`), pass its model, and put `dispatched at cost: <tier>` in the
 briefing; full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude
 Code). Task it on the **cumulative release diff** (merge-base of

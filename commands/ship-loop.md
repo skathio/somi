@@ -27,9 +27,9 @@ checkpoint at Stage -1.
 This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
 session is already using — and runs entirely inline as a router; the `planner` and `coder` the
 composed commands Task declare
-`cost: low, medium` (`medium` unless the session ceiling resolves to `low`),
-and the `reviewer` declares `cost: medium, high` (the session ceiling picks the highest permitted
-member — typically `high` for the fresh-eyes judgment this pipeline wants).
+`cost: low, medium` (it runs at the session ceiling),
+and the `reviewer` declares `cost: medium, high` (it runs at the session ceiling unless
+`cost.agents` pins it; pin it to `high` for the fresh-eyes judgment this pipeline wants).
 
 > **"Stop only at the tier's one gate."** For `full` the gate fires once a design action has
 > produced a `brief.md`, and the bounded caps (per-layer + global budget + cross-layer breaker) are the

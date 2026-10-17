@@ -131,11 +131,11 @@ questions) as escape hatches.
   gate** and recommends `/design` (Tasks `designer` at `cost: high`) first. `low` still produces
   the full artifact set (and still keeps the false-premise/contradiction checks, the depth gate,
   and `Pros`/`Cons`/`Reverses` on the recommended option) but trims the alternatives comparison and
-  Discovery mode's guided flow — selected whenever the session ceiling resolves to `low` (CLI,
-  `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and
+  Discovery mode's guided flow — selected for a `low` ceiling (flag, env var, `cost.ceiling`, or one
+  set earlier by flag or env var) or a `cost.agents` entry of `low`, with the ceiling and
   its source announced before the first agent it applies to starts, on every entry path (see
-  [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md)). Overridable to `cost: high` in the
-  agent frontmatter.
+  [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md)). Set `cost.agents.<agent>` in
+  `.somi/config.json` to run it at another tier.
 - **Won't**: write code, silently pick architectural defaults, take the request's framing as truth.
 - **Will**: stop and recommend re-scoping if the work is much larger than presented; **challenge the
   request's premise** (false premise, XY problem, contradiction, already-solved need) before planning
@@ -152,10 +152,11 @@ appends a diary entry, surfaces to the user before continuing.
   architecture/decisions/complexity/repo-conventions were already settled by a `cost: high` action.
   The plan-change protocol (judgment, not research) still applies at either tier. `low` still runs
   every numbered step (including the plan-change trigger and always reporting a silent failure or
-  hidden side effect) but trims the proactive design-smell sweep — selected whenever the session
-  ceiling resolves to `low` (CLI, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted
-  state), with the ceiling and its source announced before the first agent it applies to starts, on every entry path. Overridable
-  to `cost: high` in frontmatter.
+  hidden side effect) but trims the proactive design-smell sweep — selected for a `low` ceiling
+  (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a `cost.agents` entry of
+  `low`, with the ceiling and its source announced before the first agent it applies to starts, on
+  every
+  entry path. Set `cost.agents.<agent>` in `.somi/config.json` to run it at another tier.
 - **Won't**: silently widen scope; ship without running tests; bypass hooks; let the plan show
   stale state.
 - **Will**: stop and trigger the plan-change protocol if the planned approach is producing bad
@@ -251,8 +252,8 @@ mixed in. Returns the codebase to a state where the next planned change is easy.
   ceiling-picked tier can't safely name the same choice on one unit. `low` keeps the
   behavior-preservation contract (tests green after every individual transform, no behavior change)
   intact and trims commit granularity (batching mechanical steps only) plus the search for further
-  smells beyond the one named — selected whenever the session ceiling resolves to `low` (CLI,
-  `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and
+  smells beyond the one named — selected for a `low` ceiling (flag, env var, `cost.ceiling`, or one
+  set earlier by flag or env var) or a `cost.agents` entry of `low`, with the ceiling and
   its source announced before the first agent it applies to starts, on every entry path.
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`clean-code`](../skills/clean-code/SKILL.md) skills — skill wins on divergence.
@@ -268,7 +269,8 @@ two jobs — surgical execution and scope design — have different requirements
 declared tier.
 
 - **Cost**: `high` — no lower member. Every job this agent takes is scope design for a
-  multi-module refactor, which a `medium` ceiling cannot honestly serve.
+  multi-module refactor, which is why it declares `high` alone; under a lower ceiling it runs
+  degraded unless `cost.agents` pins it.
 - **Won't**: edit code; ship an empty brief; pick the destination shape or migration approach
   silently.
 - **Will**: reuse `.somi/atlas.md` when a fresh one exists rather than re-reading the repo; hand
@@ -393,7 +395,7 @@ one-file change.
 | **`high`** (no lower member) | `discovery-analyst`, `designer`, `security-reviewer`, `refactor-designer`, `atlas` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it (`atlas` front-loads a repo map instead of a work-item brief) |
 | **`medium, high`** (graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist`, `plan-reviewer`, `sdlc-reviewer` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept — the opt-in bar for `low` below does not extend to these: a weaker judge produces a false pass, not merely a lighter one |
 | **`medium`** (no lower or higher member) | `incident`, `impact` | `incident` executes against an already-framed incident without re-researching; every job is a live outage, so there is no lighter version of the mitigation/debt-capture call to make honestly. `impact` is a judge, reverted here from `low, medium`: its verdict and (in diff mode) its review-lens selection would produce a false pass at reduced depth, and its full-depth pass is already mechanical call-graph tracing rather than open-ended design, so `high` buys nothing either |
-| **`low, medium`** (graded over one job) | `coder`, `planner`, `refactorer`, `pr` | `pr` grades one job over two depths — a fuller pass adds house-style matching, never required for correctness. The other three widened downward: `low` is a reduced-depth pass (each agent's own "Running at `low`" section names its trims), selected whenever the session ceiling resolves to `low` (CLI, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and its source announced before the first agent it applies to starts on every entry path — so the quality drop is a trade the user can see, not one made for them unseen |
+| **`low, medium`** (graded over one job) | `coder`, `planner`, `refactorer`, `pr` | `pr` grades one job over two depths — a fuller pass adds house-style matching, never required for correctness. The other three widened downward: `low` is a reduced-depth pass (each agent's own "Running at `low`" section names its trims), selected for a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a `cost.agents` entry of `low`, with the ceiling and its source announced before the first agent it applies to starts on every entry path — so the quality drop is a trade the user can see, not one made for them unseen |
 
 `somi` declares no `cost:` at all — exempt, not a fifth `medium` member: the host binds the model
 when the user selects the agent, so a declaration here would control nothing.

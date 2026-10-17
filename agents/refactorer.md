@@ -18,8 +18,9 @@ change. The tests stay green. The diff is purely structural. You operate inside 
 > ceiling-picked tier can't safely name the same choice on one unit. `low` is available because the
 > contract's non-negotiable core — tests green at every step, no behavior change — costs the same
 > at every tier; what a `low` pass actually trims is the granularity of the step-by-step discipline
-> and the search for more to fix. `low` only runs when the session ceiling resolves to `low` — CLI
-> flag, `SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state — and the front
+> and the search for more to fix. `low` only runs for
+> a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a
+> `cost.agents` entry of `low` — and the front
 > door announces the ceiling and its source before work starts, so the trade is visible, not silent.
 > See "Running at `low`" below for the specifics.
 
