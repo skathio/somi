@@ -39,7 +39,7 @@ export const RESUME_PROMPT = 'Approved. Continue to completion without further q
 const AUTH_STDERR = /\b401\b|not logged in|invalid (api key|authentication)|authentication[_ ]error|oauth token.{0,40}(expired|revoked)/i;
 const TERMINAL_QUESTION = /\?[\s"'*_)\]`]*$/;
 const CHECKPOINT_MENU = /\bapprove\b[^\n]{0,120}\brevise\b[^\n]{0,120}\babort\b/i;
-const EXPLICIT_REQUEST = /\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\b(shall|should|may) I\b[^.]*\?/i;
+const EXPLICIT_REQUEST = /\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\bneeds? your (verdict|decision|approval|input)\b|\b(shall|should|may) I\b[^.]*\?/i;
 
 // ---- command line and environment ----------------------------------------------------------------------------
 
