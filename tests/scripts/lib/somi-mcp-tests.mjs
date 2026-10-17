@@ -8,7 +8,7 @@
 // Invoked from tests/scripts/somi-mcp.sh, which is wired into scripts/validate.sh.
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +31,13 @@ const tmpRoot = mkdtempSync(path.join(tmpdir(), 'somi-mcp-test-'));
 function fresh() {
   const d = path.join(tmpRoot, `p${Math.random().toString(36).slice(2)}`);
   mkdirSync(d, { recursive: true });
+  return d;
+}
+
+function projWith(body) {
+  const d = fresh();
+  mkdirSync(path.join(d, '.somi'), { recursive: true });
+  writeFileSync(path.join(d, '.somi', 'config.json'), body);
   return d;
 }
 
@@ -63,7 +70,7 @@ async function run() {
 
     const list = await client.request('tools/list', {});
     const names = (list.tools || []).map((t) => t.name).sort();
-    check('tools/list carries exactly somi_resolve, somi_command, somi_skill, somi_agent and somi_tier', names, ['somi_agent', 'somi_command', 'somi_resolve', 'somi_skill', 'somi_tier']);
+    check('tools/list carries exactly somi_resolve, somi_command, somi_skill, somi_agent, somi_tier and somi_config', names, ['somi_agent', 'somi_command', 'somi_config', 'somi_resolve', 'somi_skill', 'somi_tier']);
 
     const ping = await client.request('ping', {});
     check('ping returns an empty result', ping, {});
@@ -92,20 +99,13 @@ async function run() {
   // --- CLI vs MCP parity with NO ceiling argument: config decides, and a bare resolve writes no state
   await withClient({}, async (client) => {
     await client.initialize();
-    const mk = () => {
-      const d = fresh();
-      mkdirSync(path.join(d, '.somi'), { recursive: true });
-      writeFileSync(path.join(d, '.somi', 'config.json'), '{"cost":{"ceiling":"low"}}');
-      return d;
-    };
+    const mk = () => projWith('{"cost":{"ceiling":"low"}}');
     const proj = mk();
     const mcpJson = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: proj })));
     const cliJson = JSON.parse(execFileSync(process.execPath, [CLI, 'resolve', '--agent', 'coder'], {
       env: { ...process.env, CLAUDE_PROJECT_DIR: mk(), SOMI_COST_CEILING: '' },
     }).toString());
-    check('no ceiling argument: MCP and CLI both resolve ceiling low from the config',
-      [mcpJson.ceiling, mcpJson.ceiling_source, cliJson.ceiling, cliJson.ceiling_source],
-      ['low', 'config', 'low', 'config']);
+    check('no ceiling argument: MCP and CLI both resolve ceiling low from the config', [mcpJson.ceiling, mcpJson.ceiling_source, cliJson.ceiling, cliJson.ceiling_source], ['low', 'config', 'low', 'config']);
     check('a bare MCP resolve writes no .somi/somi-state', existsSync(path.join(proj, '.somi', 'somi-state')), false);
   });
 
@@ -137,17 +137,10 @@ async function run() {
   // --- hard cap / overrides / size cap surface through somi_resolve unchanged -----------------
   await withClient({}, async (client) => {
     await client.initialize();
-    const withConfig = (body) => {
-      const d = fresh();
-      mkdirSync(path.join(d, '.somi'), { recursive: true });
-      writeFileSync(path.join(d, '.somi', 'config.json'), body);
-      return d;
-    };
+    const withConfig = projWith;
     let r = await toolCall(client, 'somi_resolve', { agent: 'designer', project_dir: withConfig('{"cost":{"ceiling":"low"}}') });
     let j = JSON.parse(toolText(r));
-    check('hard cap: high-only designer under ceiling low is clamped, degraded, tier_source ceiling',
-      [j.tier, j.degraded, j.declared, j.tier_source], ['low', true, ['high'], 'ceiling']);
-
+    check('hard cap: high-only designer under ceiling low is clamped, degraded, tier_source ceiling', [j.tier, j.degraded, j.declared, j.tier_source], ['low', true, ['high'], 'ceiling']);
     r = await toolCall(client, 'somi_resolve', { agent: 'designer', project_dir: withConfig('{"cost":{"ceiling":"low","agents":{"designer":"high"}}}') });
     j = JSON.parse(toolText(r));
     check('a cost.agents override wins over the ceiling', [j.tier, j.degraded, j.tier_source], ['high', false, 'override']);

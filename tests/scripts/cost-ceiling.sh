@@ -251,3 +251,5 @@ echo "cost ceiling tests: $pass ok, $fail failed"
 bash "$(dirname "${BASH_SOURCE[0]}")/cost-hardcap.sh" || exit 1
 bash "$(dirname "${BASH_SOURCE[0]}")/cost-defaults.sh" || exit 1
 bash "$(dirname "${BASH_SOURCE[0]}")/ensure-default-config.sh" || exit 1
+bash "$(dirname "${BASH_SOURCE[0]}")/somi-config.sh" || exit 1
+bash "$(dirname "${BASH_SOURCE[0]}")/cost-lowering.sh" || exit 1

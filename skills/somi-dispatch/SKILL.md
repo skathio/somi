@@ -50,7 +50,8 @@ relative path, and never SoMi's own install directory.
 or asked earlier in this conversation while `cost.ceiling` is set and no config write happened.**
 It applies to that resolve and is remembered as an explicitly set value, but a `cost.ceiling` in
 `.somi/config.json` is read live on every resolve and outranks a remembered value — so where the
-config sets one, a ceiling passed here does **not** last. Omit it on every ordinary resolve.
+config sets one, a ceiling passed here does **not** last. Omit it on every ordinary resolve. A `ceiling` below the one
+now in force needs the user's confirmation (the host will ask them); never pass one they did not ask for.
 
 Name `<host>` precisely, never guess it: `claude-code` if this turn is running in Claude Code,
 `copilot` if it's running in GitHub Copilot.
@@ -120,11 +121,15 @@ reduced depth after the fact.
 **In-chat ceiling raise.** The ceiling the user wants must live in `.somi/config.json`'s
 `cost.ceiling`, because that file is read live and outranks anything remembered. A ceiling passed
 to `somi_resolve` (or `--ceiling`) is used for that call and remembered, but outranked whenever the
-config sets one. Until the `/somi-config` command exists to write the config for you, when the user
-asks
-mid-session to raise or lower the ceiling: tell them to set `cost.ceiling` in `.somi/config.json`
+config sets one. So when the user asks mid-session to raise or lower the ceiling, call the
+`somi_config` tool (`somi_config({ action: "set", key: "cost.ceiling", value: "<tier>", project_dir: "<project>" })`),
+which validates and writes it, and say it is saved only after that call returns success. If the
+tool cannot be reached, tell the user to set `cost.ceiling` in `.somi/config.json` themselves
 (or pass `ceiling: <tier>` on each resolve you make for them), and **never say the change is
-saved** unless a config write actually happened.
+saved** unless a config write actually happened. Lowering a tier (the ceiling, or any agent, above all
+`security-reviewer`) needs the user: confirm it with them first, expect the host to ask them too, and if
+the tool refuses it (exit `64`) do not work around it. Repeat every entry of the result's `warnings`
+verbatim; never drop or soften one.
 
 **No mapped model.** When `model` comes back `null`, pick only from model identifiers **actually
 visible to you this turn** — e.g. the subagent tool's own `model` parameter, when it lists

@@ -23,6 +23,7 @@ tracked follow-up, not a claim of full guard parity on Windows.
 | Event              | Matcher       | Script                                           | What it does                                                                                                                |
 |--------------------|---------------|--------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
 | `SessionStart`     | (any)         | `session-start/ensure-default-config.mjs`        | Creates `.somi/config.json` with default cost settings, only when nothing exists at that path. Never overwrites. |
+| `PreToolUse`       | `Write\|Edit\|MultiEdit\|mcp__.*somi_config` | `pre-tool/guard-cost-lowering.mjs` | Asks the user before a change to `.somi/config.json` (through the `somi_config` MCP tool or a file edit) that would lower an agent's effective cost tier. Silent for raises, no-ops and every other call. |
 | `PreToolUse`       | `Bash`        | `pre-tool/block-dangerous-bash.mjs`              | Denies `rm -rf /`, `curl \| sh`, force-push to protected branches **or without a verifiable target branch**, destructive SQL (case-insensitive), and shell-level writes to secret paths (`> .env`, `tee`, `sed -i`, `cp`/`mv`). Also matches inside `bash -c "…"` quoting. |
 | `PreToolUse`       | `Bash`        | `pre-tool/gate-dep-install.mjs`                  | Denies `npm install <pkg>` / `pip install <pkg>` / `cargo add` / etc. without `SOMI_ALLOW_DEP_INSTALL=1` or a `.somi/config.json` `dep_install.allow` prefix match. Bare reinstall is allowed. |
 | `PreToolUse`       | `Write\|Edit` | `pre-tool/block-secret-writes.mjs`               | Denies writes to `.env`, `*.pem`, `id_rsa`, secret YAML/JSON.                                                              |
@@ -164,7 +165,8 @@ What it will not do:
 When a regular `.somi/config.json` already exists, the hook only reads it (no symlink followed, at
 most 64 KiB). If it parses to an object with no valid `cost.agents["security-reviewer"]` tier, it
 prints one fixed notice that `security-reviewer` runs at the ceiling (below `high` by default) and
-that pinning it under `cost.agents` keeps the strong pass. Nothing from the file reaches the
+that pinning it under `cost.agents` keeps the strong pass. If the entry exists but pins it to `low` or `medium`, it prints a different fixed notice
+saying its security reviews run at that lower tier. Nothing from the file reaches the
 notice, an unparsable, oversize or symlinked file stays silent (the resolver already reports
 those), and the file is never written.
 
@@ -176,6 +178,60 @@ user reported seeing SoMi audit state populated under Copilot, which contradicts
 On a host where this hook does not run, the project simply has no default file and every agent
 follows the ceiling (`medium`); create or edit `.somi/config.json` by hand (a `/somi-config init`
 command is planned and does not exist yet).
+
+### `guard-cost-lowering.mjs`
+
+A model steered by injected text could lower `security-reviewer` or the ceiling through the
+`somi_config` MCP tool or by editing `.somi/config.json`, and any warning would reach only that model.
+This hook makes lowering a tier the user's decision. It computes what the change would do, using the
+same edit code the tool uses (`scripts/lib/cost-config-edit.mjs`), and if it **lowers** anything it answers
+`permissionDecision: "ask"` with a plain-text reason, so the host shows the user a prompt the model cannot
+answer. It covers:
+
+- the `somi_config` tool (`set` and `unset`; any plugin-namespaced name ending in `somi_config`), and
+- the `somi_resolve` tool when it is given a `ceiling` ranking below the ceiling now in force (the config's, else
+  a persisted one, else the default): a model-supplied lower ceiling needs the user, because it persists as
+  an explicitly set value, and
+- any `Write`, `Edit` or `MultiEdit` of the persisted ceiling file `.somi/somi-state/ceiling.json` (every write
+  there asks; it is the other way to lower the ceiling), and
+- `Write`, `Edit` and `MultiEdit` of the project's `.somi/config.json` (the path is resolved against the
+  project root, so `.somi/../.somi/config.json` and a symlinked `.somi` resolve to the same file).
+
+A change lowers when `security-reviewer` would run below `high` (even if that was already so: an explicit
+`low` pin is always flagged, though an identical before and after is a no-op), when the ceiling drops, when
+any agent's effective tier drops (including removing a pin that sat above the ceiling), or when the new
+content is unparsable or invalid. The rules live in `scripts/lib/cost-lowering.mjs`. Raises and no-ops are
+silent, and so is every unrelated tool call. The reason is built from fixed strings and never echoes file
+content. For a config-file path the hook fails closed to the user: an edit that cannot apply, content that
+does not parse, or any internal error asks.
+
+A config that has no `cost.ceiling` after the change is judged against the worst case, whatever persisted
+ceiling exists now or appears later: deleting `cost.ceiling` is a lowering unless the removed value was
+already `low`, and unpinning an agent in a config without a ceiling is too (otherwise the ceiling could be
+deleted first and a low one planted afterwards). Otherwise the ceiling is compared the way the resolver
+sees it, with a persisted flag/env ceiling as the fallback for an absent `cost.ceiling`. When the tool is given a
+`project_dir` it is evaluated instead of the host root if it resolves inside it, and anything else asks.
+Whether a path is the config is decided by file identity (same inode, same directory, any letter case), not
+by how it is spelled. A change that leaves `security-reviewer` below `high` without lowering anything else
+gets its own wording rather than "lowers".
+
+Where the SoMi hooks do not run (for example GitHub Copilot, where whether hooks run is unverified), the
+`somi_config` tool refuses a lowering itself: it passes `--refuse-lowering` to the CLI whenever
+`CLAUDE_PLUGIN_ROOT` is not set in the MCP server's environment, exit `64`, and asks the model to have the
+user run the CLI. The CLI run directly by the user is never restricted.
+
+Limits, accepted and worth knowing:
+
+- Other MCP servers' write tools, `Bash` (`sed -i`, `echo >`) and any other way of changing the file are not
+  covered; `Bash` has its own permission gate.
+- The `CLAUDE_PLUGIN_ROOT` test is a **heuristic** for "a hook can ask". It **fails open when hooks are
+  disabled** while that variable is still set: the tool then neither refuses nor is asked about.
+- How `ask` behaves under a host's bypass or auto-accept permission modes, and in headless runs with no one
+  to answer, is **unverified**. This gate is not claimed to cover those modes.
+- The hook reads the config and the persisted ceiling at the project root (or the evaluated `project_dir`);
+  the session's own `SOMI_COST_CEILING` is not visible to it.
+- A vendored install lists the hook in `.claude/settings.json`. This repo's own copy is kept in step by hand;
+  no gate compares it with `hooks/hooks.json`.
 
 ## `somi-check` — the portable working-tree guard
 

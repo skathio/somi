@@ -193,6 +193,26 @@ const TOOLS = [
     },
   },
   {
+    name: 'somi_config',
+    description:
+      'Show or change the cost settings in the project\'s .somi/config.json by running ' +
+      '`node scripts/somi-config.mjs`, and return its one JSON line unchanged. Actions: show ' +
+      '(every agent\'s effective tier and warnings), get, set, unset, init (create the default file ' +
+      'when absent). Only cost.ceiling and cost.agents.<name> can be changed, to low|medium|high; ' +
+      'the change is live, since the config is read on every dispatch. Failures report the CLI exit ' +
+      'code: 64 usage (bad key, tier or name), 67 the project\'s config or .somi is unusable.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'show, get, set, unset or init' },
+        key: { type: 'string', description: 'cost.ceiling or cost.agents.<name> (get, set, unset)' },
+        value: { type: 'string', description: 'low, medium or high (set)' },
+        project_dir: { type: 'string', description: 'absolute path of the project, as for somi_resolve' },
+      },
+      required: ['action'],
+    },
+  },
+  {
     name: 'somi_tier',
     description:
       "Size a request: run `node scripts/somi-tier.mjs resolve` (no --record) on the signals you " +
@@ -302,6 +322,39 @@ function callSomiTier(args) {
   return textResult(`${(r.stderr || 'somi-tier: failed').trim()} (exit ${r.status ?? 'none'})`, true);
 }
 
+// Runs the config CLI itself (never a shell), so output and exit codes are the CLI's, byte for byte.
+async function callSomiConfig(args) {
+  const text = (v) => v === undefined || typeof v === 'string';
+  if (typeof args.action !== 'string' || !['show', 'get', 'set', 'unset', 'init'].includes(args.action)) {
+    return textResult('somi-config: action must be one of show, get, set, unset, init (exit 64)', true);
+  }
+  if (!text(args.key) || !text(args.value) || [args.key, args.value].some((v) => v !== undefined && (v === '' || v.startsWith('-') || /[\u0000-\u001f\u007f]/.test(v)))) {
+    return textResult('somi-config: key and value must be non-empty strings without control characters that do not start with a dash (exit 64)', true);
+  }
+  // Writes need a root the HOST supplied: a model-supplied project_dir alone could point a write anywhere.
+  // The probe (no project_dir) succeeds, or fails as ambiguous, only when the host offered a root.
+  if (args.action !== 'show' && args.action !== 'get') {
+    const probe = await resolveProjectRoot({ projectDirArg: undefined, listRoots: () => listClientRoots() });
+    if (!probe.ok && !probe.message.startsWith('ambiguous')) {
+      return textResult('somi-config: no host project root; run the CLI yourself (node scripts/somi-config.mjs) to change the config (exit 67)', true);
+    }
+  }
+  const rootOutcome = await resolveProjectRoot({ projectDirArg: args.project_dir, listRoots: () => listClientRoots() });
+  if (!rootOutcome.ok) return textResult(`somi-config: ${rootOutcome.message} (exit ${rootOutcome.code})`, true);
+  const argv = [path.join(installRoot(), 'scripts', 'somi-config.mjs'), args.action];
+  if (args.key !== undefined) argv.push(args.key);
+  if (args.value !== undefined) argv.push(args.value);
+  // Lowering a tier needs the user. Where the SoMi plugin's hooks run (CLAUDE_PLUGIN_ROOT is set in this
+  // server's environment) the cost-lowering PreToolUse hook asks the user; where it is not, nothing can
+  // ask, so the CLI refuses a lowering. This is a heuristic for "a hook can ask", not a guarantee.
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
+  if ((args.action === 'set' || args.action === 'unset') && !(pluginRoot && !pluginRoot.includes('${'))) argv.push('--refuse-lowering');
+  argv.push('--project-dir', fs.realpathSync(rootOutcome.root));
+  const r = spawnSync(process.execPath, argv, { encoding: 'utf8', timeout: 10000 });
+  if (r.status === 0) return textResult(r.stdout.trimEnd());
+  return textResult(`${(r.stderr || 'somi-config: failed').trim()} (exit ${r.status ?? 'none'})`, true);
+}
+
 // Returns null for an unrecognized tool name — the caller turns that into a JSON-RPC error, since
 // an unknown TOOL is the protocol failing to find it at all, distinct from a known tool that ran
 // and failed (which reports isError:true in an otherwise-successful JSON-RPC response).
@@ -312,6 +365,7 @@ async function callTool(name, args) {
     case 'somi_skill': return callSomiSkill(args || {});
     case 'somi_agent': return callSomiAgent(args || {});
     case 'somi_tier': return callSomiTier(args || {});
+    case 'somi_config': return await callSomiConfig(args || {});
     default: return null;
   }
 }

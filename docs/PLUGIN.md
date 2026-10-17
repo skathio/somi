@@ -48,7 +48,7 @@ is needed, and this repo deliberately doesn't ship one: a root `.mcp.json` is AL
 repo's own* project MCP config when a developer opens the SoMi repo itself (as opposed to having
 installed it as a plugin elsewhere), where `${CLAUDE_PLUGIN_ROOT}` is undefined and the server
 fails to launch. Declaring the server inline in the manifest avoids that collision — there is
-nothing at the repo root for a bare checkout to misread. It exposes four tools:
+nothing at the repo root for a bare checkout to misread. It exposes these tools:
 
 - **`somi_resolve`** — the MCP-native equivalent of `node scripts/somi-dispatch.mjs resolve`:
   given an agent name (and optionally a host/ceiling), returns its dispatch tier and model, plus
@@ -58,6 +58,23 @@ nothing at the repo root for a bare checkout to misread. It exposes four tools:
   sets `cost.ceiling`, which is read live. A
   failure maps one-to-one onto the CLI's exit-code family (64 usage / 65 unknown agent /
   66 malformed `cost:` / 67 project environment failure), reported in the tool result text.
+- **`somi_config`** — shows or changes the cost settings in the project's `.somi/config.json` by
+  running `scripts/somi-config.mjs` (never a shell) and returning its JSON line and exit codes
+  unchanged: `show` (every agent's effective tier, plus fixed warnings such as `security-reviewer`
+  below `high`), `get`, `set`, `unset`, and `init` (creates the default file only when absent). Only
+  `cost.ceiling` and `cost.agents.<name>` can be changed, to `low`/`medium`/`high`; anything else is
+  exit 64. A broken existing config (unreadable, oversize, a symlink, invalid JSON, invalid cost
+  block) is exit 67 and nothing is written. Changes are **live**: the config is read on every
+  dispatch, so the next resolve sees them. It resolves the project root exactly as `somi_resolve`
+  does (`project_dir` narrows a host-supplied root), but `set`, `unset` and `init` need a host-supplied
+  root and are refused (exit 67) when only a model-supplied `project_dir` exists; run the CLI yourself
+  then. A set or unset refuses (67) a file a rewrite could not reproduce faithfully (duplicate keys, an
+  integer beyond the safe range, a number outside the double range) or that would grow past 64 KiB.
+  Lowering a tier needs the user: with the SoMi hooks running, a PreToolUse hook asks before a lowering
+  `set`/`unset`; when `CLAUDE_PLUGIN_ROOT` is not set in the server's environment (a heuristic for "no
+  hook can ask", for example Copilot) the tool refuses a lowering with exit 64 and points to the CLI.
+  The CLI is also usable directly:
+  `node scripts/somi-config.mjs <show|get|set|unset|init> [key] [value] [--project-dir DIR]`.
 - **`somi_command`** — returns a SoMi command's own procedure text (`commands/<name>.md`) from
   the install root, so the front door can run a command live without knowing an install path.
 - **`somi_skill`** — returns a SoMi skill's own text (`skills/<name>/SKILL.md`) from the install

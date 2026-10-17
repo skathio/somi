@@ -18,7 +18,8 @@
 //   - Exit code is 0 on every path; no file content or error text is printed. On success it prints
 //     one short, fixed notice through the same SessionStart channel the sibling hook uses.
 //   - When a regular config file already exists, it is only READ (O_NOFOLLOW, at most 64 KiB): if it
-//     parses to an object with no own cost.agents["security-reviewer"] tier, one fixed notice says so.
+//     parses to an object with no own cost.agents["security-reviewer"] tier, or one pinned below high,
+//     one fixed notice says so (a distinct text for each).
 //     Nothing from the file reaches the notice, and the file is never written.
 
 import fs from 'node:fs';
@@ -31,6 +32,7 @@ const CREATE = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXC
 
 const MAX_READ = 64 * 1024;
 const READ = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+const LOW_PIN_NOTICE = 'SoMi: .somi/config.json pins security-reviewer below high; its security reviews run at that lower tier.';
 const PIN_NOTICE = 'SoMi: .somi/config.json has no cost.agents pin for security-reviewer, so it runs at the ceiling (below high by default). Pin it under cost.agents to keep the strong pass.';
 
 function writeAll(fd, text) {
@@ -38,13 +40,14 @@ function writeAll(fd, text) {
   for (let off = 0; off < buf.length;) off += fs.writeSync(fd, buf, off, buf.length - off);
 }
 
-// True when the file parses to an object that lacks an own, valid-tier cost.agents["security-reviewer"].
-// Any doubt (symlink, not a regular file, oversize, unparsable) is false: the resolver reports those.
-function lacksSecurityPin(file) {
+// For a config that parses to an object: 'missing' when it has no own, valid-tier
+// cost.agents["security-reviewer"], 'low' when that entry is below high, else null. Any doubt
+// (symlink, not a regular file, oversize, unparsable) is null: the resolver reports those.
+function securityPinState(file) {
   let fd;
   try {
     fd = fs.openSync(file, READ);
-    if (!fs.fstatSync(fd).isFile()) return false;
+    if (!fs.fstatSync(fd).isFile()) return null;
     const buf = Buffer.alloc(MAX_READ + 1);
     let n = 0;
     while (n < buf.length) {
@@ -52,14 +55,15 @@ function lacksSecurityPin(file) {
       if (got === 0) break;
       n += got;
     }
-    if (n > MAX_READ) return false;
+    if (n > MAX_READ) return null;
     const cfg = JSON.parse(buf.toString('utf8', 0, n));
-    if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) return false;
+    if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) return null;
     const agents = cfg.cost && typeof cfg.cost === 'object' ? cfg.cost.agents : undefined;
     const tier = agents && typeof agents === 'object' && Object.hasOwn(agents, 'security-reviewer') ? agents['security-reviewer'] : undefined;
-    return !['low', 'medium', 'high'].includes(tier);
+    if (tier === 'low' || tier === 'medium') return 'low';
+    return tier === 'high' ? null : 'missing';
   } catch {
-    return false;
+    return null;
   } finally {
     if (fd !== undefined) try { fs.closeSync(fd); } catch { /* already closed */ }
   }
@@ -79,7 +83,8 @@ async function main() {
     if (dir && !dir.isDirectory()) return; // a symlink or a file: write nothing
     const existing = dir ? lstatOrNull(file) : null;
     if (existing) { // anything already there is left alone; a regular file is only read
-      if (existing.isFile() && lacksSecurityPin(file)) contextOutput('SessionStart', PIN_NOTICE);
+      const pin = existing.isFile() ? securityPinState(file) : null;
+      if (pin) contextOutput('SessionStart', pin === 'low' ? LOW_PIN_NOTICE : PIN_NOTICE);
       return;
     }
     const { serializeDefaultConfig, buildDefaultConfig } = await import(pathToFileURL(DEFAULTS_LIB).href);

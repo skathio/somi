@@ -54,7 +54,7 @@ export const MAX_CONFIG_BYTES = 64 * 1024;
 // there is no stat-then-read race. At most MAX_CONFIG_BYTES+1 bytes are ever read.
 const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
 
-function readTextFile(file) {
+export function readTextFile(file) {
   let fd;
   try {
     fd = fs.openSync(file, OPEN_FLAGS);
@@ -85,7 +85,7 @@ function parseFailure(file, e) {
   return new Error(`cost-ceiling: ${file} is not valid JSON (${JSON.stringify(e.name)}${pos ? ` at position ${pos}` : ''})`);
 }
 
-function readConfig(root) {
+export function readConfig(root) {
   const file = path.join(root, '.somi', 'config.json');
   let raw;
   try {
@@ -159,7 +159,7 @@ function saveState(root, state) {
 // Returns the persisted state, or undefined when there is none. A PRESENT but corrupt file is not
 // silently treated as missing -- it throws, same "malformed dies loudly" discipline as a bad
 // CLI/env value. Read with the same no-follow, regular-file, size-bounded helper as the config.
-function loadState(root) {
+export function loadState(root) {
   const file = ceilingStatePath(root);
   let raw;
   try {

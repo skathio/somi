@@ -80,6 +80,12 @@ check "config with the pin: exit 0, silent" "$(runhook "$HOOK_SRC" "$P")|$(wc -c
 P="$(proj)"; mkdir "$P/.somi"; printf '{"cost":{"agents":{"security-reviewer":"turbo"}}}' > "$P/.somi/config.json"
 runhook "$HOOK_SRC" "$P" > /dev/null
 check "an invalid tier does not count as a pin: notice printed" "$(notice_of)" "$NOTICE"
+LOWNOTICE='SoMi: .somi/config.json pins security-reviewer below high; its security reviews run at that lower tier.'
+for t in low medium; do
+  P="$(proj)"; mkdir "$P/.somi"; printf '{"cost":{"agents":{"security-reviewer":"%s"}}}' "$t" > "$P/.somi/config.json"
+  runhook "$HOOK_SRC" "$P" > /dev/null
+  check "security-reviewer pinned to $t: the distinct fixed notice, file untouched" "$(notice_of)|$(cat "$P/.somi/config.json")" "$LOWNOTICE|{\"cost\":{\"agents\":{\"security-reviewer\":\"$t\"}}}"
+done
 P="$(proj)"; mkdir "$P/.somi"; printf '{ not json' > "$P/.somi/config.json"
 check "invalid JSON: silent" "$(runhook "$HOOK_SRC" "$P")|$(wc -c < "$TMP/out" | tr -d ' ')" "0|0"
 P="$(proj)"; mkdir "$P/.somi"; ln -s "$VICTIM" "$P/.somi/config.json"
@@ -145,7 +151,7 @@ sed -i 's/if (existing) {/if (false) {/; s/ | fs.constants.O_EXCL//' "$M"
 P="$(proj)"; mkdir "$P/.somi"; echo KEEP2 > "$TMP/victim2.txt"; ln -s "$TMP/victim2.txt" "$P/.somi/config.json"; runhook "$M" "$P" > /dev/null
 check "red proof: without O_NOFOLLOW (and O_EXCL, early check) a symlink at config.json is written through" "$([ "$(cat "$TMP/victim2.txt")" = KEEP2 ] && echo kept || echo written)" "written"
 
-mutant no-pin-check "s/return !\['low', 'medium', 'high'\].includes(tier);/return false;/"
+mutant no-pin-check "s/return tier === 'high' ? null : 'missing';/return null;/"
 P="$(proj)"; mkdir "$P/.somi"; printf '{}' > "$P/.somi/config.json"
 runhook "$TMP/no-pin-check/hooks/session-start/ensure-default-config.mjs" "$P" > /dev/null
 check "red proof: without the pin check the notice is not printed" "$(wc -c < "$TMP/out" | tr -d ' ')" "0"

@@ -273,6 +273,21 @@ export function denyPretool(payload, reason) {
   throw new HookExit(0);
 }
 
+// Ask the user about a PreToolUse tool call instead of deciding it: the harness shows `reason` and
+// lets the user allow or deny. Same shape and flow as denyPretool, with permissionDecision 'ask' and an
+// ASK audit line (a failed audit write never changes the answer). Throws HookExit(0).
+export function askPretool(payload, reason) {
+  console.log(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'ask',
+      permissionDecisionReason: reason,
+    },
+  }));
+  try { audit(payload, 'ASK', reason); } catch { /* the question has been asked; auditing is best effort */ }
+  throw new HookExit(0);
+}
+
 // Emit additionalContext for events that support it (PreToolUse, PostToolUse,
 // UserPromptSubmit, SessionStart — see the header comment). The harness shows
 // this to the model on its next turn. Does NOT exit — callers still fall
