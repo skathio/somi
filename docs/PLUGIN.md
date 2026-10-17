@@ -58,7 +58,7 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   sets `cost.ceiling`, which is read live. A
   failure maps one-to-one onto the CLI's exit-code family (64 usage / 65 unknown agent /
   66 malformed `cost:` / 67 project environment failure), reported in the tool result text.
-- **`somi_config`** — shows or changes the cost settings in the project's `.somi/config.json` by
+- **`somi_config`** — the tool behind the [`/somi-config`](../commands/somi-config.md) command: shows or changes the cost settings in the project's `.somi/config.json` by
   running `scripts/somi-config.mjs` (never a shell) and returning its JSON line and exit codes
   unchanged: `show` (every agent's effective tier, plus fixed warnings such as `security-reviewer`
   below `high`), `get`, `set`, `unset`, and `init` (creates the default file only when absent). Only

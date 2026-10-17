@@ -112,7 +112,7 @@ async function main() {
       return;
     }
     fs.closeSync(fd);
-    contextOutput('SessionStart', `SoMi created .somi/config.json with default cost settings: ceiling ${ceiling}, each agent pinned to its default tier. Edit "cost" in .somi/config.json to change them.`);
+    contextOutput('SessionStart', `SoMi created .somi/config.json with default cost settings: ceiling ${ceiling}, each agent pinned to its default tier. Run /somi-config, or edit "cost" in .somi/config.json, to change them.`);
   } catch {
     // Any failure (read-only directory, EEXIST race, missing plugin file) is a silent no-op.
   }

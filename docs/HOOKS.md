@@ -170,14 +170,14 @@ saying its security reviews run at that lower tier. Nothing from the file reache
 notice, an unparsable, oversize or symlinked file stays silent (the resolver already reports
 those), and the file is never written.
 
-To change the settings afterwards, edit the `cost` block of `.somi/config.json`.
+To change the settings afterwards, run `/somi-config` or edit the `cost` block of `.somi/config.json`.
 
 **GitHub Copilot: unverified.** The opening note of this document says hooks do not fire there. A
 user reported seeing SoMi audit state populated under Copilot, which contradicts that. Whether
 `SessionStart` hooks fire on Copilot has not been checked, so this page does not claim either way.
 On a host where this hook does not run, the project simply has no default file and every agent
-follows the ceiling (`medium`); create or edit `.somi/config.json` by hand (a `/somi-config init`
-command is planned and does not exist yet).
+follows the ceiling (`medium`); run `/somi-config` and choose the default config (the `somi_config` tool's `init` action), or create
+and edit `.somi/config.json` by hand.
 
 ### `guard-cost-lowering.mjs`
 

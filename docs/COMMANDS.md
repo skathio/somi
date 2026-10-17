@@ -32,6 +32,7 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 | [`/ship`](../commands/ship.md)                           | Full pipeline       | `planner` (`cost: low, medium`) + (per iteration) `/code-loop` (see its row)               | full `.somi/plans/<slug>/` set + iteration diffs + reviews                   |
 | [`/ship-loop`](../commands/ship-loop.md)                 | Bounded pipeline    | none of its own — router; `/plan-loop` (see its row) → `/code-loop` (see its row) per iteration | sizes first (`trivial`/`small`/`full`, one gate); `full` as `/ship`, both layers under caps, a hard human gate between them |
 | [`/pr`](../commands/pr.md)                               | PR handoff          | `pr` (`cost: low, medium`; composes from artifacts, returns text; `gh` after confirmation, run by the command) | PR title + description distilled from the work item; optionally the opened PR |
+| [`/somi-config`](../commands/somi-config.md)             | Cost settings       | none — inline; reads and writes `cost.ceiling` / `cost.agents` through the `somi_config` tool | the project's `.somi/config.json`; shows every agent's effective tier, asks before each change, and needs explicit confirmation to lower a tier |
 
 > **Note:** `/plan-review` no longer exists as a separate command — plan-level review is part of
 > `/review` (use `/review plan <slug>` or pass an `.somi/plans/<slug>/` path).

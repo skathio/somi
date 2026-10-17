@@ -121,7 +121,8 @@ reduced depth after the fact.
 **In-chat ceiling raise.** The ceiling the user wants must live in `.somi/config.json`'s
 `cost.ceiling`, because that file is read live and outranks anything remembered. A ceiling passed
 to `somi_resolve` (or `--ceiling`) is used for that call and remembered, but outranked whenever the
-config sets one. So when the user asks mid-session to raise or lower the ceiling, call the
+config sets one. So when the user asks mid-session to raise or lower the ceiling, point them at
+`/somi-config` (or run its procedure), or call the
 `somi_config` tool (`somi_config({ action: "set", key: "cost.ceiling", value: "<tier>", project_dir: "<project>" })`),
 which validates and writes it, and say it is saved only after that call returns success. If the
 tool cannot be reached, tell the user to set `cost.ceiling` in `.somi/config.json` themselves

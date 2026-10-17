@@ -215,7 +215,8 @@ For the all-in-one pipeline: `/ship <problem statement>`.
 **Lost?** On GitHub Copilot, select the `somi` agent — bare `@somi` renders a status dashboard of
 everything in flight (with a next action per item), and `@somi <what you want to do>` routes to
 the right command. When a work item is ready to merge, `/pr <slug>` turns its artifacts into the
-pull-request description.
+pull-request description. To see or change which cost tier each agent runs at, `/somi-config` shows the
+settings and asks before each change; lowering a tier needs your explicit confirmation.
 
 ---
 

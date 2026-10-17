@@ -32,6 +32,8 @@ check "the file holds exactly the default config text" "$(cmp -s "$P/.somi/confi
 check "the file mode is 644" "$(mode_of "$P/.somi/config.json")" "644"
 check "the .somi directory was created with mode 700" "$(mode_of "$P/.somi")" "700"
 check "one short JSON notice is printed (bounded)" "$(node -e "const o=JSON.parse(require('fs').readFileSync('$TMP/out','utf8')); process.stdout.write(String(o.hookSpecificOutput.hookEventName==='SessionStart' && o.hookSpecificOutput.additionalContext.length<300))")" "true"
+notice_of() { node -e "const t=require('fs').readFileSync('$TMP/out','utf8'); if(!t.trim()){process.stdout.write('');process.exit(0)} const o=JSON.parse(t); process.stdout.write(o.hookSpecificOutput.additionalContext)"; }
+check "the created-file notice is the fixed text (names /somi-config)" "$(notice_of)" 'SoMi created .somi/config.json with default cost settings: ceiling medium, each agent pinned to its default tier. Run /somi-config, or edit "cost" in .somi/config.json, to change them.'
 check "nothing is written to stderr" "$(wc -c < "$TMP/err" | tr -d ' ')" "0"
 
 # --- the created file is a valid config the resolver reads ----------------------------------------

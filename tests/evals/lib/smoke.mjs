@@ -53,7 +53,7 @@ import { DEFINITION_DIRS, installSomi } from './install.mjs';
  */
 export const CLAUDE_CODE_TOOLS = new Set([
   'Task', 'Bash', 'Glob', 'Grep', 'Read', 'Edit', 'Write', 'NotebookEdit',
-  'WebFetch', 'WebSearch', 'TodoWrite', 'BashOutput', 'KillShell', 'ExitPlanMode', 'SlashCommand',
+  'WebFetch', 'WebSearch', 'TodoWrite', 'BashOutput', 'KillShell', 'ExitPlanMode', 'SlashCommand', 'AskUserQuestion',
 ]);
 
 /** Parses the flat `key: value` frontmatter block between the first two `---` lines. Hand-rolled,
