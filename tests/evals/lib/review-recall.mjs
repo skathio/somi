@@ -16,6 +16,8 @@ export const SEVERITIES = Object.freeze(['blocker', 'major', 'minor', 'nit']);
 export const DETECTING = Object.freeze(['blocker', 'major']);
 export const SAMPLE = Object.freeze({ MUTANTS: 40, PER_TASK_MAX: 8, CLEAN: 10 });
 export const DEFAULT_SEED = 20261018;
+export const CLEAN_VARIANTS = Object.freeze(['oracle', 'oracle2']);
+const CLEAN_PER_TASK_MAX = 2;
 
 const MAX_LINE_NO = 10_000_000;
 const SEVERITY_WINDOW = 40; // a severity word opens a finding block only near the start of a line
@@ -242,28 +244,26 @@ function allocate(total, caps, order) {
 
 /**
  * Seeded stratified draw from <corpusDir>/<task>.mutants.json: 40 mutants (at most 8 per task, shares
- * as even as the corpus allows) and 10 clean cases (unmutated oracle source files, one per task before
- * any task repeats). Same corpus and seed give the same list.
- * Returns { seed, mutants: [{task, name, file, start, end}], clean: [{task, file}] }.
+ * as even as the corpus allows) and 10 clean cases (a task's whole unmutated solution, `oracle` or `oracle2`, one per
+ * task before any task repeats, at most 2 per task). Same corpus and seed give the same list; the mutant draw does not
+ * depend on the clean draw. Returns { seed, mutants: [{task, name, file, start, end}], clean: [{task, variant}] }.
  */
 export function selectCases(corpusDir, seed = DEFAULT_SEED) {
   const rnd = mulberry32(seed);
   const tasks = readdirSync(corpusDir).filter((n) => n.endsWith('.mutants.json')).map((n) => n.slice(0, -'.mutants.json'.length)).sort();
   const pools = new Map();
-  const sources = new Map();
+  const variants = new Map();
   for (const task of tasks) {
     const list = JSON.parse(readFileSync(join(corpusDir, `${task}.mutants.json`), 'utf8'));
     const pool = [];
-    const files = new Set();
     for (const mu of Array.isArray(list) ? list : []) {
       const path = join(corpusDir, task, 'oracle', String(mu.file));
       if (!existsSync(path)) continue;
-      files.add(mu.file);
       const range = mutatedRange(readFileSync(path, 'utf8'), mu.find, mu.replace);
       if (range) pool.push({ task, name: mu.name, file: mu.file, ...range });
     }
     if (pool.length > 0) pools.set(task, pool);
-    sources.set(task, [...files].sort());
+    variants.set(task, CLEAN_VARIANTS.filter((v) => existsSync(join(corpusDir, task, v)) && readdirSync(join(corpusDir, task, v)).length > 0));
   }
   const order = shuffled([...pools.keys()], rnd);
   const caps = new Map(order.map((t) => [t, Math.min(SAMPLE.PER_TASK_MAX, pools.get(t).length)]));
@@ -271,13 +271,15 @@ export function selectCases(corpusDir, seed = DEFAULT_SEED) {
   const mutants = [];
   for (const t of [...pools.keys()].sort()) mutants.push(...shuffled(pools.get(t), rnd).slice(0, alloc.get(t)));
 
-  const cleanOrder = shuffled([...sources.keys()].filter((t) => sources.get(t).length > 0), rnd);
-  const queues = new Map(cleanOrder.map((t) => [t, shuffled(sources.get(t), rnd)]));
+  // Clean cases are whole-task diffs: the fixture against a complete correct solution. Each task offers up to two distinct ones
+  // (the reference solution and the independent second solution); no task is used more than twice and none is repeated.
+  const cleanOrder = shuffled([...variants.keys()].filter((t) => variants.get(t).length > 0), rnd);
+  const queues = new Map(cleanOrder.map((t) => [t, shuffled(variants.get(t), rnd)]));
   const clean = [];
-  for (let round = 0; clean.length < SAMPLE.CLEAN && round < 64; round++) {
+  for (let round = 0; round < CLEAN_PER_TASK_MAX && clean.length < SAMPLE.CLEAN; round++) {
     for (const t of cleanOrder) {
       const q = queues.get(t);
-      if (round < q.length && clean.length < SAMPLE.CLEAN) clean.push({ task: t, file: q[round] });
+      if (round < q.length && clean.length < SAMPLE.CLEAN) clean.push({ task: t, variant: q[round] });
     }
   }
   return { seed, mutants, clean };
