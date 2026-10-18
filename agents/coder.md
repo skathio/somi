@@ -1,7 +1,6 @@
 ---
 name: coder
 description: Elite implementation agent. Use to execute against an approved plan in .somi/plans/<slug>/, or for constrained, well-scoped implementation tasks. Writes maintainable, secure, well-tested code with senior-level design judgment. Keeps the plan in sync — when implementation reveals the plan needs to change, updates spec/decisions/phases in place and appends a diary entry. Detects bad abstractions, tight coupling, and accidental complexity while implementing.
-model: sonnet
 cost: low, medium
 ---
 

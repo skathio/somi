@@ -132,14 +132,13 @@ saved** unless a config write actually happened. Lowering a tier (the ceiling, o
 the tool refuses it (exit `64`) do not work around it. Repeat every entry of the result's `warnings`
 verbatim; never drop or soften one.
 
-**No mapped model.** When `model` comes back `null`, pick only from model identifiers **actually
+An unresolved launch (no `model` passed) inherits the session's model, so always pass the resolved model. **No mapped model.** When `model` comes back `null`, pick only from model identifiers **actually
 visible to you this turn** — e.g. the subagent tool's own `model` parameter, when it lists
 candidates — to match the resolved `tier`: the lightest visible model for `low`, the strongest for
 `high`. Say plainly that this is your own choice, not a value the mapping supplied, and pass it to
 `Task`. A project's own `.somi/config.json` `cost.mapping` always wins over this when it names one
 — this pick applies only when the resolver reported none. **If no model identifiers are visible to
-you this turn, pass no model at all and say so**: the agent then runs on its own frontmatter
-`model:` or the session's own model, and `cost.mapping` is how a project binds tiers to specific
+you this turn, pass no model at all and say so**: the agent then runs on the session's own model, and `cost.mapping` is how a project binds tiers to specific
 models on this host — never invent an identifier you cannot actually see. **The host's own
 instructions win over this pick:** if they say not to set a model unless the user names one, pass
 none, and say the agent runs on the host's model rather than at the resolved tier, and that

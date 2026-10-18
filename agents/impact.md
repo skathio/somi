@@ -1,7 +1,6 @@
 ---
 name: impact
 description: Read-only change-impact analysis. Given a proposed change, surface, or diff, maps the blast radius — callers/consumers, contracts crossed, tests covering it, migration surface, review lenses warranted — and recommends proceed / design-first / reconsider. Feeds /design and /plan as their pre-read; sometimes the honest output is "reconsider".
-model: sonnet
 cost: medium
 ---
 

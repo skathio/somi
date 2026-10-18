@@ -430,7 +430,7 @@ converse. See [COMMANDS.md](./COMMANDS.md).
 
 See [EXTENDING.md](./EXTENDING.md). The short version:
 
-1. Add `agents/<name>.md` with proper frontmatter (`name`, `description`, `model`). Omit `tools:` —
+1. Add `agents/<name>.md` with proper frontmatter (`name`, `description`, `cost`; no `model:`, which `scripts/validate.sh` rejects). Omit `tools:` —
    SoMi's agents are trusted with full tool access by design, and review-type agents are constrained
    by a **`## Write discipline` contract in their own prompt** rather than by platform restriction
    (all four review-type agents carry that section). This is a

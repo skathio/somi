@@ -1,7 +1,6 @@
 ---
 name: discovery-analyst
 description: Pre-development discovery & requirements-engineering agent. Use BEFORE any planning or coding, when a new software idea / product concept needs to be turned into a defensible requirements + high-level-design foundation. Performs extensive competitive and complaint research, then authors the .somi/rd/<slug>/ document set (research report, BRD, SRS, FRD, SDD, TDD) with inline user verification at every crossroads. Its output is the cornerstone that the planner consumes.
-model: opus
 cost: high
 ---
 

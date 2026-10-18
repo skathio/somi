@@ -35,8 +35,8 @@ It is designed to be:
 | `/review`     | medium, high | `reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
 | `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `cost: high` front-load), gated at every stage |
 
-**Cost tiers in practice.** `cost:` (and `model:`) are declared by **agents**, not commands —
-`cost:` sizes an agent instance being spawned, and a command declares neither field, running on
+**Cost tiers in practice.** `cost:` is declared by **agents**, not commands —
+`cost:` sizes an agent instance being spawned, and a command declares none, running on
 whatever model the session is already using — so the tier above is the tier of the agent that
 command Tasks. The **`cost: high`** tier front-loads expensive reasoning — research, design,
 decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The
@@ -115,7 +115,7 @@ Once installed, use `@somi` in GitHub Copilot chat:
 >   start procedure), including on Copilot. What varies is only whether a *concrete model* can be
 >   bound per `Task` call:
 >   confirmed on Claude Code and on VS Code's Copilot; undocumented on Copilot CLI, where the
->   agent's own frontmatter `model:` may be what actually governs instead. Where a model can't be
+>   host's default model applies, because agents no longer declare a frontmatter `model:`. Where a model can't be
 >   bound per call, the dispatcher still names the tier it selected and says plainly that its model
 >   pick could not be applied — the tier decision itself is the same everywhere.
 >

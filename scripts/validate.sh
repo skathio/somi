@@ -205,16 +205,16 @@ model_of() {
 }
 cost_failed=0
 
-# Both the valid-cost enum and each tier's expected model are DERIVED from
+# The valid-cost enum is DERIVED from
 # scripts/lib/cost-model.mjs in one node call, not hardcoded a second time here -- a repricing or
 # a new tier is then a one-file edit instead of two files drifting apart.
 #
 # CAPTURE, CHECK, THEN EVAL -- deliberately not a bare `eval "$(node -e …)"`. A PARTIAL failure
-# (resolveModel throws for one tier mid-forEach, after valid_costs and earlier ranks already
+# (the import fails mid-forEach, after valid_costs and earlier ranks already
 # printed) exits node non-zero, but that status is invisible to `eval`: the failing command
 # substitution is only an argument being built for eval, not the exit status of a simple command,
 # so `set -e` cannot see it and the script would report the cost block PASSED with that tier's
-# model_for_* silently missing. Assigning to a plain variable first makes the substitution's exit
+# rank_* silently missing. Assigning to a plain variable first makes the substitution's exit
 # status the ASSIGNMENT's status, which the explicit `||` below then catches -- and it must be
 # explicit, not a bare `cost_env=$(node …)`: under `set -e` a bare assignment dies silently at the
 # assignment, with no diagnostic reaching the user about which check was skipped.
@@ -223,7 +223,6 @@ import("./scripts/lib/cost-model.mjs").then((m) => {
   console.log("valid_costs=" + JSON.stringify(m.VALID_COSTS.join("|")));
   m.VALID_COSTS.forEach((c, idx) => {
     console.log("rank_" + c + "=" + idx);
-    console.log("model_for_" + c + "=" + JSON.stringify(m.resolveModel(c, "claude-code")));
   });
 });
 ')" || { echo "cost-model derivation failed; cannot validate cost tiers" >&2; exit 1; }
@@ -244,10 +243,8 @@ eval "$cost_env"
 #
 # Commands must not declare `model:` either, for the same reason: Claude Code honoured a
 # command's own `model:` for that command's own turn, which taught the repo that a command has a
-# cost while every dispatch target's actual cost lives on the agent it Tasks. Agents keep
-# `model:` -- it is still the mechanism Claude Code reads to pick a Tasked subagent's model, and
-# the retirement gate's frontmatter exemption (tests/scripts/lib/retirement-gate.mjs) still applies
-# to it.
+# cost while every dispatch target's actual cost lives on the agent it Tasks. Agents declare no
+# `model:` either (check (c) below): the resolver's result is the only tier-to-model step.
 for f in agents/*.md commands/*.md; do
   [ -f "$f" ] || continue
   got="$(cost_of "$f")"
@@ -370,28 +367,13 @@ assert_cost agents/incident.md medium
 # correct, usable PR description at low; a fuller pass adds house-style matching, never required.
 assert_cost agents/pr.md low,medium
 
-# (c) `model:` and `cost:` state one fact twice -- assert `model:` resolves from the declared
-# `cost:` set's TOP (highest, rightmost) member, deriving the expected model from resolveModel()
-# rather than a second hardcoded table. Top-ness, not mere membership: a `model:` naming a lower
-# declared member would silently run the agent at that lower tier regardless of ceiling -- the
-# muted-reviewer failure `cost:` exists to prevent, re-opened by hand. `agents/` only -- commands
-# declare neither `cost:` nor `model:` any more (asserted above), so there is nothing here to check
-# them against.
+# (c) Agents declare no `model:`. The tier-to-model step is the resolver's result alone, passed as the Task
+# model argument; a launch that skips the resolver must inherit the session's model, so the session tier
+# stays a ceiling. A declared `model:` would silently win over it (the cost-cap leak this check closes).
 for f in agents/*.md; do
-  [ -f "$f" ] || continue
-  got="$(cost_of "$f" | tr -d '[:space:]')"
-  [ -z "$got" ] && continue  # already reported as COST TIER MISSING above
-  declared_model="$(model_of "$f" | tr -d '[:space:]')"
-  IFS=',' read -ra mv_values <<< "$got"
-  top="${mv_values[${#mv_values[@]}-1]}"
-  mv="model_for_$top"
-  expected="${!mv:-}"
-  # An unrecognized top value was already reported as COST TIER INVALID above -- nothing further
-  # to check here (no expected model to compare against).
-  if [ -n "$expected" ] && [ "$expected" != "$declared_model" ]; then
-    echo "MODEL/COST MISMATCH: $f declares cost: $got (top tier: $top) with model: $declared_model, expected '$expected' per scripts/lib/cost-model.mjs" >&2
-    cost_failed=1
-  fi
+  [ -z "$(model_of "$f" | tr -d '[:space:]')" ] && continue
+  echo "MODEL ON AGENT: $f declares model: -- remove it; an unresolved launch must inherit the session tier, and the resolver passes the model" >&2
+  cost_failed=1
 done
 
 if [ "$cost_failed" -ne 0 ]; then

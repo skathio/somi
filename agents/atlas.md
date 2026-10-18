@@ -1,7 +1,6 @@
 ---
 name: atlas
 description: Builds or refreshes the Repo Atlas (.somi/atlas.md) — one deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later design, cold plan, refactor-design, and impact action. Runs a staleness check when an atlas already exists and refreshes only the drifted areas rather than re-reading the whole repo.
-model: opus
 cost: high
 ---
 

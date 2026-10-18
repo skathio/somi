@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+**Fix — agents no longer declare `model:`, so the session tier is a real cap.** BEHAVIOUR CHANGE:
+a launch that skips the resolver (no `model` passed to `Task`) used to run at the agent's declared
+top-tier `model:`; it now inherits the session's model. This closes a leak where pinned-`low`
+reviewer calls ran on the top tier. The way back to the old depth is a `cost.agents` entry for
+the agent, or passing the model on the launch. `scripts/validate.sh` now fails the build on any
+`agents/*.md` that declares `model:`. On Copilot CLI, where the agent's own `model:` may have
+governed, the host's default model now applies.
+
 **Minor (proposed, version files untouched) — the cost ceiling is a hard cap, with per-agent
 overrides.** Before, an agent ran at the highest tier it declared that fit under the ceiling, and
 at its cheapest declared tier when none fit, so a `medium` session still ran high-only agents at

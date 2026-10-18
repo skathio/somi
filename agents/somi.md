@@ -1,7 +1,6 @@
 ---
 name: somi
 description: SoMi's front door for GitHub Copilot users who aren't sure which of SoMi's other agents to pick for a session. Bare invocation renders a status dashboard; an explicit /<command> is proxied; free-form requests are classified into the matching SoMi flow (design, plan, code, review, refactor, and the rest). Either way it runs that flow's own procedure live for the rest of the turn — resolving and dispatching every agent it starts through the same cost resolver a direct command uses. Not needed on Claude Code, where the direct commands already select the right agent.
-model: sonnet
 ---
 
 # somi (agent) — SoMi's front door for Copilot

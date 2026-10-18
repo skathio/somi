@@ -1,7 +1,6 @@
 ---
 name: plan-reviewer
 description: Independent second opinion on a plan before any code is written - a .somi/plans/<slug>/ artifact set, a brief, or a standalone ADR. Checks the premise, whether architectural decisions were user-verified with real options and a reversal cost, whether iterations fit their caps, whether risks are concrete, and whether acceptance criteria can actually fail. Use on plans where a wrong shape would be paid for downstream.
-model: opus
 cost: medium, high
 ---
 

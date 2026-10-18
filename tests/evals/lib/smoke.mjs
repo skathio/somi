@@ -37,9 +37,8 @@
 //     `CLAUDE_CODE_TOOLS` (its own doc comment below) when this repo adopts one not yet listed.
 //
 // No `model` check here any more: commands declare no `model:` of their own (the front door
-// dispatches this command's paired agent at the agent's own declared cost/model instead) —
-// `scripts/validate.sh` fails the build if one does. Model tiers stay an agent-roster concept,
-// checked there against `agents/*.md`'s own `model:` frontmatter, not here.
+// dispatches this command's paired agent at the resolved tier instead) —
+// `scripts/validate.sh` fails the build if one does, and if an agent does.
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

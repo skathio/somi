@@ -1,7 +1,6 @@
 ---
 name: refactorer
 description: Surgical refactoring agent. Use when the right next move is "untangle this first" rather than "patch around it." Operates under green tests, behavior-preserving by default, with explicit before/after structure. Never combines refactoring with feature work in the same iteration.
-model: sonnet
 cost: low, medium
 ---
 

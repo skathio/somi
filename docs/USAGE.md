@@ -586,10 +586,10 @@ optional; omit anything you don't want to change:
 
 ## Cost tiers and model resolution
 
-Cost is declared with a `cost:` field in frontmatter, beside `model:` — **agents only**: `cost:`
+Cost is declared with a `cost:` field in frontmatter — **agents only** (no agent declares `model:` either; an unresolved launch inherits the session's model): `cost:`
 sizes an agent instance being spawned, and a command is instructions, not an instance — it declares
 neither field and runs inline under whatever model the session is already using. `scripts/validate.sh`
-fails the build if a `commands/*.md` file declares `cost:` or `model:`. Every `agents/*.md` file declares `cost:`
+fails the build if a `commands/*.md` file declares `cost:` or `model:`, or an `agents/*.md` file declares `model:`. Every `agents/*.md` file declares `cost:`
 (one narrow, named exemption: `agents/somi.md` — its declaration was always decorative, since the
 host binds that agent's model when the user selects it, not SoMi), and `scripts/validate.sh`
 asserts presence and validity across all of them. **`cost:` is a CAPABILITY SET, and the test is

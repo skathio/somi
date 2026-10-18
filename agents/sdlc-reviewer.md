@@ -1,7 +1,6 @@
 ---
 name: sdlc-reviewer
 description: Independent check that a work item's process artifacts match reality - progress.md accuracy, diary entries for plan and decision changes, diary compaction, decisions recorded before acted on, review findings resolved by id, and nothing shipped that points into the planning folder. Use after iterations land or before a PR, when the question is whether the paper trail is true rather than whether the code is good.
-model: opus
 cost: medium, high
 ---
 
