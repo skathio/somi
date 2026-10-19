@@ -1,0 +1,11 @@
+[
+ {"name": "standard-layout-no-mirror", "file": "bracket.mjs", "find": "[...first, ...first.map(mirror).reverse()]", "replace": "Array.from({ length: size / 2 }, (_, j) => Math.min(std[2 * j], std[2 * j + 1]))"},
+ {"name": "alternating-generator", "file": "bracket.mjs", "find": "std = std.flatMap((x) => [x, s + 1 - x]);", "replace": "std = std.flatMap((x, i) => (i % 2 === 0 ? [x, s + 1 - x] : [s + 1 - x, x]));"},
+ {"name": "size-by-rounded-log", "file": "bracket.mjs", "find": "  let size = 2;\n  while (size < n) size *= 2;", "replace": "  const size = 2 ** Math.max(1, Math.round(Math.log2(n)));"},
+ {"name": "power-of-two-doubled", "file": "bracket.mjs", "find": "while (size < n) size *= 2;", "replace": "while (size <= n) size *= 2;"},
+ {"name": "last-seed-gets-bye", "file": "bracket.mjs", "find": "lo > n ? null", "replace": "lo >= n ? null"},
+ {"name": "count-checked-before-types", "file": "bracket.mjs", "find": "  for (const e of entrants) if (!isEntry(e)) throw bad(TypeError, 'E_TYPE');\n  const n = entrants.length;\n  if (n < 2) throw bad(RangeError, 'E_COUNT');", "replace": "  const n = entrants.length;\n  if (n < 2) throw bad(RangeError, 'E_COUNT');\n  for (const e of entrants) if (!isEntry(e)) throw bad(TypeError, 'E_TYPE');"},
+ {"name": "duplicates-by-text", "file": "bracket.mjs", "find": "new Set(entrants).size", "replace": "new Set(entrants.map(String)).size"},
+ {"name": "array-like-accepted", "file": "bracket.mjs", "find": "if (!Array.isArray(entrants))", "replace": "if (entrants === null || entrants === undefined || typeof entrants.length !== 'number')"},
+ {"name": "single-entry-allowed", "file": "bracket.mjs", "find": "if (n < 2)", "replace": "if (n < 1)"}
+]

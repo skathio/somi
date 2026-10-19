@@ -72,7 +72,10 @@ export function createSink(file, { token, canary, task, absAb, ownTmp, maxBytes 
     // The system events list the plugin's own files; only what the agent did and saw is scanned for paths.
     if (!ev || ev.type === 'assistant' || ev.type === 'user') {
       for (const [name, needle] of paths) if (raw.includes(needle)) s.leaks.add(name);
-      if ((ownTmp ? raw.split(ownTmp).join('') : raw).includes('/ab-draw-')) s.leaks.add('other-draw');
+      // The own directory also shows up in its relative form (Node's "Did you mean to import ./ab-draw-X/..." hint), so
+      // both spellings are removed before looking for another draw's directory.
+      const own = ownTmp ? ownTmp.slice(ownTmp.lastIndexOf('/')) : null;
+      if ((ownTmp ? raw.split(ownTmp).join('').split(own).join('') : raw).includes('/ab-draw-')) s.leaks.add('other-draw');
     }
     if (ev?.type === 'rate_limit_event' && /"status":"rejected"/.test(raw)) s.limit = true;
     if (ev?.type === 'result') { s.result = ev; limitText(ev.result); }

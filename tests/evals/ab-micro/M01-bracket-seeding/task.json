@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create bracket.mjs at the workspace root: an ES module with one named function export, seedBracket(entrants). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "entrants lists the entries of a single-elimination tournament in seed order: index 0 is seed 1, index 1 is seed 2, and so on. Checks run in this order, the first failure decides: entrants is not an array, TypeError code 'E_TYPE'; an entry is neither a string nor a finite number, the same error; fewer than 2 entries, RangeError code 'E_COUNT'; a repeated entry, RangeError code 'E_DUPLICATE'.",
+    "Entries are compared only by strict equality, never sorted, converted or normalised: the number 1 and the string '1' are different entries, and 0 and -0 are the same entry. Entries are returned exactly as given.",
+    "With n entries the bracket size is the smallest power of two that is at least n. Seeds above n do not exist. The result is an array of size divided by 2 first-round slots; each slot is an array of two items: the entry of the better (lower numbered) seed, then the entry of the worse seed, or null when that worse seed does not exist (a bye).",
+    "Treat the bracket as having all size seeds: the two seeds of every slot add up to size plus 1.",
+    "If the better seed won every match, then in every round the two seeds that meet add up to the number of players still in that round plus 1.",
+    "Seed 1 is in the first slot. When there are at least 2 slots, the better seeds of the j-th slot from the start and of the j-th slot from the end are consecutive seed numbers 2k-1 and 2k for some k. In the first half of the slots, whenever two groups of slots feed the same later match, the group holding the better seed comes first.",
+    "The function is pure: no I/O, no shared state, the input is not mutated, and a new array is returned."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M01-3f9a1c7e5d2b8046",
+  "source": [
+    "bracket.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement bracket.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

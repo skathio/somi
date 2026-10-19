@@ -1,0 +1,15 @@
+[
+ {"name": "counts-floor-in-divisor", "file": "apportion.mjs", "find": "step * (out[i] - floor) + 1", "replace": "step * out[i] + 1"},
+ {"name": "tie-smaller-population", "file": "apportion.mjs", "find": "mine === theirs && populations[i] > populations[best]", "replace": "mine === theirs && populations[i] < populations[best]"},
+ {"name": "tie-last-index-wins", "file": "apportion.mjs", "find": "if (mine > theirs || (mine === theirs && populations[i] > populations[best]))", "replace": "if (mine >= theirs)"},
+ {"name": "cap-off-by-one", "file": "apportion.mjs", "find": "if (out[i] >= cap) continue;", "replace": "if (out[i] > cap) continue;"},
+ {"name": "divisors-swapped", "file": "apportion.mjs", "find": "o.divisor === 'next' ? 1 : 2", "replace": "o.divisor === 'next' ? 2 : 1"},
+ {"name": "floor-default-zero", "file": "apportion.mjs", "find": "o.floor === undefined ? 1 : o.floor", "replace": "o.floor === undefined ? 0 : o.floor"},
+ {"name": "capacity-unchecked", "file": "apportion.mjs", "find": " || seats > capacity", "replace": ""},
+ {"name": "zero-population-gets-floor", "file": "apportion.mjs", "find": "if (p > 0) live.push(i);", "replace": "live.push(i);"},
+ {"name": "textbook-sainte-lague", "file": "apportion.mjs", "find": "const div = step * (out[i] - floor) + 1;", "replace": "const div = 2 * out[i] + 1;"},
+ {"name": "textbook-dhondt", "file": "apportion.mjs", "find": "const div = step * (out[i] - floor) + 1;", "replace": "const div = out[i] + 1;"},
+ {"name": "cap-ignored-while-handing-out", "file": "apportion.mjs", "find": "      if (out[i] >= cap) continue;\n", "replace": ""},
+ {"name": "largest-remainder-recalled", "file": "apportion.mjs", "find": "  for (let left = seats - k * floor; left > 0; left--) {\n    let best = -1;\n    let bestDiv = 0;\n    for (const i of live) {\n      if (out[i] >= cap) continue;\n      const div = step * (out[i] - floor) + 1;\n      if (best < 0) { best = i; bestDiv = div; continue; }\n      const mine = populations[i] * bestDiv;\n      const theirs = populations[best] * div;\n      if (mine > theirs || (mine === theirs && populations[i] > populations[best])) { best = i; bestDiv = div; }\n    }\n    out[best]++;\n  }\n", "replace": "  const rest = seats - k * floor;\n  const total = live.reduce((sum, i) => sum + populations[i], 0);\n  for (const i of live) out[i] += Math.floor((populations[i] * rest) / total);\n  const order = [...live].sort((x, y) => ((populations[y] * rest) % total) - ((populations[x] * rest) % total) || x - y);\n  for (let left = seats - out.reduce((sum, v) => sum + v, 0), j = 0; left > 0; left--, j++) out[order[j % order.length]]++;\n"},
+ {"name": "floor-seats-not-deducted", "file": "apportion.mjs", "find": "let left = seats - k * floor; left > 0", "replace": "let left = seats; left > 0"}
+]

@@ -1,0 +1,13 @@
+[
+ {"name": "sunday-first-weekdays", "file": "recurrence.mjs", "find": "(new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7", "replace": "new Date(Date.UTC(y, m - 1, d)).getUTCDay()"},
+ {"name": "interval-counted-from-afterdate", "file": "recurrence.mjs", "find": "const idx = base + k * step,", "replace": "const idx = Math.max(base, +afterDate.slice(0, 4) * 12 + +afterDate.slice(5, 7) - 1) + k * step,"},
+ {"name": "after-is-inclusive", "file": "recurrence.mjs", "find": "iso <= afterDate", "replace": "iso < afterDate"},
+ {"name": "dates-before-start-kept", "file": "recurrence.mjs", "find": "iso < rule.start || ", "replace": ""},
+ {"name": "clamp-negative-month-day-goes-last", "file": "recurrence.mjs", "find": "return clamp ? (k > 0 ? n : 1) : 0;", "replace": "return clamp ? n : 0;"},
+ {"name": "clamp-negative-weekday-goes-last", "file": "recurrence.mjs", "find": "return nth > 0 ? first + 7 * (total - 1) : first;", "replace": "return first + 7 * (total - 1);"},
+ {"name": "century-years-are-leap-years", "file": "recurrence.mjs", "find": "y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)", "replace": "y % 4 === 0"},
+ {"name": "exceptions-count-toward-count", "file": "recurrence.mjs", "find": "iso <= afterDate || skip.has(iso)) continue;\n    out.push(iso);\n  }\n  return out;", "replace": "iso <= afterDate) continue;\n    out.push(iso);\n  }\n  return out.filter((d) => !skip.has(d));"},
+ {"name": "default-policy-is-clamp", "file": "recurrence.mjs", "find": "clamp = rule.onMissing === 'clamp';", "replace": "clamp = rule.onMissing !== 'skip';"},
+ {"name": "negative-nth-off-by-one", "file": "recurrence.mjs", "find": "const idx = nth > 0 ? nth : total + 1 + nth;", "replace": "const idx = nth > 0 ? nth : total + nth;"},
+ {"name": "no-calendar-cutoff", "file": "recurrence.mjs", "find": "if (y > 2200) break;", "replace": "if (y > 2400) break;"}
+]

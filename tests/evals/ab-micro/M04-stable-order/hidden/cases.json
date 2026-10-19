@@ -1,0 +1,3585 @@
+{
+ "canary": "SOMI-CANARY-M04-3c9e71a05d2b84f6",
+ "module": "order.mjs",
+ "export": "orderTasks",
+ "timeoutMs": 10000,
+ "families": [
+  {
+   "name": "functional",
+   "cases": [
+    {
+     "id": "no-edges",
+     "ac": 5,
+     "args": [
+      [
+       "c",
+       "a",
+       "b"
+      ],
+      []
+     ],
+     "want": {
+      "value": [
+       "c",
+       "a",
+       "b"
+      ]
+     }
+    },
+    {
+     "id": "empty",
+     "ac": 5,
+     "args": [
+      [],
+      []
+     ],
+     "want": {
+      "value": []
+     }
+    },
+    {
+     "id": "chain-reversed",
+     "ac": 5,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "c",
+        "b"
+       ],
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "b",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "release-passes-queue",
+     "ac": 5,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d"
+      ],
+      [
+       [
+        "c",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "b",
+       "c",
+       "a",
+       "d"
+      ]
+     }
+    },
+    {
+     "id": "release-passes-queue-2",
+     "ac": 5,
+     "args": [
+      [
+       "b",
+       "a",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "b",
+       "c"
+      ]
+     }
+    },
+    {
+     "id": "not-alphabetical",
+     "ac": 5,
+     "args": [
+      [
+       "z",
+       "y",
+       "x"
+      ],
+      [
+       [
+        "x",
+        "z"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "y",
+       "x",
+       "z"
+      ]
+     }
+    },
+    {
+     "id": "not-alphabetical-2",
+     "ac": 5,
+     "args": [
+      [
+       "m",
+       "n",
+       "b"
+      ],
+      [
+       [
+        "b",
+        "m"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "n",
+       "b",
+       "m"
+      ]
+     }
+    },
+    {
+     "id": "diamond",
+     "ac": 5,
+     "args": [
+      [
+       "d",
+       "c",
+       "b",
+       "a"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "a",
+        "c"
+       ],
+       [
+        "b",
+        "d"
+       ],
+       [
+        "c",
+        "d"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "c",
+       "b",
+       "d"
+      ]
+     }
+    },
+    {
+     "id": "two-released-at-once",
+     "ac": 5,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e"
+      ],
+      [
+       [
+        "d",
+        "a"
+       ],
+       [
+        "d",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "d",
+       "a",
+       "b",
+       "e"
+      ]
+     }
+    },
+    {
+     "id": "late-prerequisite",
+     "ac": 5,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e"
+      ],
+      [
+       [
+        "e",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "b",
+       "c",
+       "d",
+       "e",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "two-chains-interleave",
+     "ac": 5,
+     "args": [
+      [
+       "a",
+       "c",
+       "b",
+       "d"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "c",
+        "d"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "c",
+       "b",
+       "d"
+      ]
+     }
+    },
+    {
+     "id": "dfs-trap",
+     "ac": 5,
+     "args": [
+      [
+       "x",
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "b",
+        "a"
+       ],
+       [
+        "c",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "x",
+       "b",
+       "c",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "dfs-trap-2",
+     "ac": 5,
+     "args": [
+      [
+       "c",
+       "b",
+       "a",
+       "d"
+      ],
+      [
+       [
+        "a",
+        "d"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "b",
+       "a",
+       "d"
+      ]
+     }
+    },
+    {
+     "id": "star-out",
+     "ac": 5,
+     "args": [
+      [
+       "h",
+       "i",
+       "j",
+       "k",
+       "l"
+      ],
+      [
+       [
+        "l",
+        "h"
+       ],
+       [
+        "l",
+        "j"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "i",
+       "k",
+       "l",
+       "h",
+       "j"
+      ]
+     }
+    },
+    {
+     "id": "star-in",
+     "ac": 5,
+     "args": [
+      [
+       "e",
+       "d",
+       "c",
+       "b",
+       "a"
+      ],
+      [
+       [
+        "a",
+        "e"
+       ],
+       [
+        "b",
+        "e"
+       ],
+       [
+        "c",
+        "e"
+       ],
+       [
+        "d",
+        "e"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "d",
+       "c",
+       "b",
+       "a",
+       "e"
+      ]
+     }
+    },
+    {
+     "id": "numeric-names-edge",
+     "ac": 5,
+     "args": [
+      [
+       "10",
+       "9",
+       "2"
+      ],
+      [
+       [
+        "2",
+        "10"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "9",
+       "2",
+       "10"
+      ]
+     }
+    },
+    {
+     "id": "words",
+     "ac": 5,
+     "args": [
+      [
+       "deploy",
+       "build",
+       "test",
+       "lint"
+      ],
+      [
+       [
+        "build",
+        "deploy"
+       ],
+       [
+        "test",
+        "deploy"
+       ],
+       [
+        "lint",
+        "build"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "test",
+       "lint",
+       "build",
+       "deploy"
+      ]
+     }
+    },
+    {
+     "id": "long-back-edge",
+     "ac": 5,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e",
+       "f",
+       "g"
+      ],
+      [
+       [
+        "g",
+        "a"
+       ],
+       [
+        "g",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "d",
+       "e",
+       "f",
+       "g",
+       "a",
+       "b"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "boundary",
+   "cases": [
+    {
+     "id": "single",
+     "ac": 5,
+     "args": [
+      [
+       "a"
+      ],
+      []
+     ],
+     "want": {
+      "value": [
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "all-same",
+     "ac": 3,
+     "args": [
+      [
+       "a",
+       "a",
+       "a"
+      ],
+      []
+     ],
+     "want": {
+      "value": [
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "dups-first-wins",
+     "ac": 3,
+     "args": [
+      [
+       "b",
+       "a",
+       "c",
+       "b",
+       "a"
+      ],
+      []
+     ],
+     "want": {
+      "value": [
+       "b",
+       "a",
+       "c"
+      ]
+     }
+    },
+    {
+     "id": "dups-with-edge",
+     "ac": 3,
+     "args": [
+      [
+       "c",
+       "a",
+       "b",
+       "a",
+       "c"
+      ],
+      [
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "b",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "dups-with-edge-2",
+     "ac": 3,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "a",
+       "b"
+      ],
+      [
+       [
+        "c",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "b",
+       "c",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "dups-edge-on-dup",
+     "ac": 3,
+     "args": [
+      [
+       "a",
+       "b",
+       "a",
+       "b"
+      ],
+      [
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "b",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "dups-satisfied-edge",
+     "ac": 3,
+     "args": [
+      [
+       "a",
+       "b",
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "b"
+      ]
+     }
+    },
+    {
+     "id": "dups-only-last-pos",
+     "ac": 3,
+     "args": [
+      [
+       "x",
+       "y",
+       "x",
+       "z",
+       "y"
+      ],
+      [
+       [
+        "z",
+        "x"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "y",
+       "z",
+       "x"
+      ]
+     }
+    },
+    {
+     "id": "empty-id",
+     "ac": 3,
+     "args": [
+      [
+       "",
+       "a"
+      ],
+      [
+       [
+        "a",
+        ""
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       ""
+      ]
+     }
+    },
+    {
+     "id": "empty-id-dup",
+     "ac": 3,
+     "args": [
+      [
+       "a",
+       "",
+       "a",
+       ""
+      ],
+      []
+     ],
+     "want": {
+      "value": [
+       "a",
+       ""
+      ]
+     }
+    },
+    {
+     "id": "spaces",
+     "ac": 3,
+     "args": [
+      [
+       "a b",
+       "a",
+       " "
+      ],
+      [
+       [
+        " ",
+        "a b"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       " ",
+       "a b"
+      ]
+     }
+    },
+    {
+     "id": "edge-dup-2",
+     "ac": 4,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "a",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "b"
+      ]
+     }
+    },
+    {
+     "id": "edge-dup-reordering",
+     "ac": 4,
+     "args": [
+      [
+       "c",
+       "a",
+       "b"
+      ],
+      [
+       [
+        "c",
+        "a"
+       ],
+       [
+        "c",
+        "a"
+       ],
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "b",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "edge-dup-diamond",
+     "ac": 4,
+     "args": [
+      [
+       "d",
+       "c",
+       "b",
+       "a"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "a",
+        "b"
+       ],
+       [
+        "a",
+        "c"
+       ],
+       [
+        "b",
+        "d"
+       ],
+       [
+        "b",
+        "d"
+       ],
+       [
+        "c",
+        "d"
+       ],
+       [
+        "c",
+        "d"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "c",
+       "b",
+       "d"
+      ]
+     }
+    },
+    {
+     "id": "edge-already-satisfied",
+     "ac": 4,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "a",
+        "c"
+       ],
+       [
+        "b",
+        "c"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "b",
+       "c"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "safety",
+   "cases": [
+    {
+     "id": "constructor-order",
+     "ac": 5,
+     "args": [
+      [
+       "constructor",
+       "a"
+      ],
+      [
+       [
+        "a",
+        "constructor"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "constructor"
+      ]
+     }
+    },
+    {
+     "id": "proto-order",
+     "ac": 3,
+     "args": [
+      [
+       "__proto__",
+       "a",
+       "b"
+      ],
+      [
+       [
+        "b",
+        "__proto__"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "b",
+       "__proto__"
+      ]
+     }
+    },
+    {
+     "id": "tostring-valueof",
+     "ac": 5,
+     "args": [
+      [
+       "toString",
+       "valueOf",
+       "hasOwnProperty"
+      ],
+      [
+       [
+        "hasOwnProperty",
+        "toString"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "valueOf",
+       "hasOwnProperty",
+       "toString"
+      ]
+     }
+    },
+    {
+     "id": "proto-dups",
+     "ac": 3,
+     "args": [
+      [
+       "__proto__",
+       "a",
+       "__proto__"
+      ],
+      []
+     ],
+     "want": {
+      "value": [
+       "__proto__",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "constructor-unknown",
+     "ac": 4,
+     "args": [
+      [
+       "a"
+      ],
+      [
+       [
+        "constructor",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "proto-unknown",
+     "ac": 4,
+     "args": [
+      [
+       "a"
+      ],
+      [
+       [
+        "a",
+        "__proto__"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "proto-cycle",
+     "ac": 6,
+     "args": [
+      [
+       "__proto__",
+       "constructor"
+      ],
+      [
+       [
+        "__proto__",
+        "constructor"
+       ],
+       [
+        "constructor",
+        "__proto__"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "proto-self-edge",
+     "ac": 6,
+     "args": [
+      [
+       "__proto__"
+      ],
+      [
+       [
+        "__proto__",
+        "__proto__"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "prototype-chain",
+     "ac": 5,
+     "args": [
+      [
+       "prototype",
+       "constructor",
+       "__proto__",
+       "toString"
+      ],
+      [
+       [
+        "toString",
+        "prototype"
+       ],
+       [
+        "constructor",
+        "toString"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "constructor",
+       "__proto__",
+       "toString",
+       "prototype"
+      ]
+     }
+    },
+    {
+     "id": "inputs-not-modified",
+     "ac": 7,
+     "args": [
+      [
+       "c",
+       "b",
+       "a"
+      ],
+      [
+       [
+        "c",
+        "a"
+       ],
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "b",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "inputs-not-modified-dups",
+     "ac": 7,
+     "args": [
+      [
+       "b",
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "b"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "errors",
+   "cases": [
+    {
+     "id": "cycle-two",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "cycle-three",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "c"
+       ],
+       [
+        "c",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "cycle-with-tail",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "a"
+       ],
+       [
+        "b",
+        "c"
+       ],
+       [
+        "c",
+        "d"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "cycle-with-feeder",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d"
+      ],
+      [
+       [
+        "d",
+        "a"
+       ],
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "cycle-and-free",
+     "ac": 6,
+     "args": [
+      [
+       "x",
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "cycle-in-dup-items",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b",
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "self-edge",
+     "ac": 6,
+     "args": [
+      [
+       "a"
+      ],
+      [
+       [
+        "a",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "self-edge-among-many",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "a",
+        "a"
+       ],
+       [
+        "b",
+        "c"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "self-edge-twice",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "b",
+        "b"
+       ],
+       [
+        "b",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "self-edge-last-only",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "c"
+       ],
+       [
+        "c",
+        "c"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "self-edge-no-others",
+     "ac": 6,
+     "args": [
+      [
+       "b",
+       "a"
+      ],
+      [
+       [
+        "a",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "self-edge-and-cycle",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "a"
+       ],
+       [
+        "b",
+        "c"
+       ],
+       [
+        "c",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "unknown-after",
+     "ac": 4,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "x"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "unknown-before",
+     "ac": 4,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "x",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "unknown-empty-items",
+     "ac": 4,
+     "args": [
+      [],
+      [
+       [
+        "a",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "unknown-self-edge",
+     "ac": 4,
+     "args": [
+      [
+       "a"
+      ],
+      [
+       [
+        "x",
+        "x"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "unknown-beats-cycle",
+     "ac": 4,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "a"
+       ],
+       [
+        "a",
+        "x"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "unknown-beats-cycle-2",
+     "ac": 4,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "a"
+       ],
+       [
+        "b",
+        "x"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "unknown-case-differs",
+     "ac": 4,
+     "args": [
+      [
+       "a"
+      ],
+      [
+       [
+        "A",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_UNKNOWN"
+      }
+     }
+    },
+    {
+     "id": "items-not-array",
+     "ac": 2,
+     "args": [
+      "abc",
+      []
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "items-null",
+     "ac": 2,
+     "args": [
+      null,
+      []
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "items-undefined",
+     "ac": 2,
+     "args": [
+      {
+       "$undef": 1
+      },
+      []
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "items-number-element",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       1
+      ],
+      []
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "items-null-element",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       null
+      ],
+      []
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "edges-undefined",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      {
+       "$undef": 1
+      }
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "edges-null",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      null
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "edge-three-elements",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "b",
+        "c"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "edge-one-element",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      [
+       [
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "edge-number",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        2
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "edge-object",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       {
+        "0": "a",
+        "1": "b",
+        "length": 2
+       }
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "type-beats-unknown",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      [
+       [
+        "a",
+        "x"
+       ],
+       [
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "type-beats-unknown-2",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      [
+       [
+        "x",
+        "a"
+       ],
+       [
+        "a",
+        5
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "type-beats-cycle",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b"
+      ],
+      [
+       [
+        "a",
+        "b"
+       ],
+       [
+        "b",
+        "a"
+       ],
+       [
+        1,
+        2
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "items-type-beats-edges-type",
+     "ac": 2,
+     "args": [
+      [
+       1
+      ],
+      "x"
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "items-type-beats-unknown",
+     "ac": 2,
+     "args": [
+      [
+       1
+      ],
+      [
+       [
+        "a",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "self-edge-first",
+     "ac": 6,
+     "args": [
+      [
+       "c",
+       "a",
+       "b"
+      ],
+      [
+       [
+        "c",
+        "c"
+       ],
+       [
+        "a",
+        "b"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "random",
+   "cases": [
+    {
+     "id": "r01",
+     "ac": 5,
+     "args": [
+      [
+       "n",
+       "c",
+       "s",
+       "u",
+       "a"
+      ],
+      [
+       [
+        "c",
+        "n"
+       ],
+       [
+        "s",
+        "u"
+       ],
+       [
+        "s",
+        "n"
+       ],
+       [
+        "u",
+        "n"
+       ],
+       [
+        "u",
+        "n"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "s",
+       "u",
+       "n",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "r02",
+     "ac": 3,
+     "args": [
+      [
+       "a",
+       "c",
+       "h",
+       "c",
+       "h",
+       "c"
+      ],
+      [
+       [
+        "a",
+        "c"
+       ],
+       [
+        "h",
+        "c"
+       ],
+       [
+        "a",
+        "c"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "a",
+       "h",
+       "c"
+      ]
+     }
+    },
+    {
+     "id": "r03",
+     "ac": 5,
+     "args": [
+      [
+       "b",
+       "n",
+       "f"
+      ],
+      [
+       [
+        "b",
+        "f"
+       ],
+       [
+        "b",
+        "f"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "b",
+       "n",
+       "f"
+      ]
+     }
+    },
+    {
+     "id": "r04",
+     "ac": 5,
+     "args": [
+      [
+       "u",
+       "f",
+       "k",
+       "e",
+       "g"
+      ],
+      [
+       [
+        "g",
+        "u"
+       ],
+       [
+        "k",
+        "e"
+       ],
+       [
+        "g",
+        "e"
+       ],
+       [
+        "g",
+        "e"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "f",
+       "k",
+       "g",
+       "u",
+       "e"
+      ]
+     }
+    },
+    {
+     "id": "r05",
+     "ac": 5,
+     "args": [
+      [
+       "q",
+       "g",
+       "f",
+       "m",
+       "y",
+       "u"
+      ],
+      [
+       [
+        "q",
+        "u"
+       ],
+       [
+        "y",
+        "u"
+       ],
+       [
+        "g",
+        "y"
+       ],
+       [
+        "q",
+        "g"
+       ],
+       [
+        "f",
+        "y"
+       ],
+       [
+        "g",
+        "y"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "q",
+       "g",
+       "f",
+       "m",
+       "y",
+       "u"
+      ]
+     }
+    },
+    {
+     "id": "r06",
+     "ac": 5,
+     "args": [
+      [
+       "u",
+       "q",
+       "h",
+       "c",
+       "w",
+       "g"
+      ],
+      [
+       [
+        "g",
+        "u"
+       ],
+       [
+        "u",
+        "q"
+       ],
+       [
+        "g",
+        "u"
+       ],
+       [
+        "w",
+        "u"
+       ],
+       [
+        "w",
+        "q"
+       ],
+       [
+        "q",
+        "h"
+       ],
+       [
+        "g",
+        "h"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "w",
+       "g",
+       "u",
+       "q",
+       "h"
+      ]
+     }
+    },
+    {
+     "id": "r07",
+     "ac": 5,
+     "args": [
+      [
+       "y",
+       "w",
+       "s",
+       "b"
+      ],
+      [
+       [
+        "b",
+        "y"
+       ],
+       [
+        "w",
+        "y"
+       ],
+       [
+        "w",
+        "y"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "w",
+       "s",
+       "b",
+       "y"
+      ]
+     }
+    },
+    {
+     "id": "r08",
+     "ac": 5,
+     "args": [
+      [
+       "u",
+       "g",
+       "f",
+       "s",
+       "r"
+      ],
+      [
+       [
+        "f",
+        "s"
+       ],
+       [
+        "f",
+        "g"
+       ],
+       [
+        "r",
+        "u"
+       ],
+       [
+        "f",
+        "g"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "f",
+       "g",
+       "s",
+       "r",
+       "u"
+      ]
+     }
+    },
+    {
+     "id": "r09",
+     "ac": 5,
+     "args": [
+      [
+       "c",
+       "h",
+       "d"
+      ],
+      [
+       [
+        "c",
+        "d"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "h",
+       "d"
+      ]
+     }
+    },
+    {
+     "id": "r10",
+     "ac": 3,
+     "args": [
+      [
+       "p",
+       "y",
+       "p",
+       "k"
+      ],
+      [
+       [
+        "y",
+        "p"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "y",
+       "p",
+       "k"
+      ]
+     }
+    },
+    {
+     "id": "r11",
+     "ac": 3,
+     "args": [
+      [
+       "u",
+       "g",
+       "t",
+       "h",
+       "t",
+       "r"
+      ],
+      [
+       [
+        "u",
+        "g"
+       ],
+       [
+        "u",
+        "g"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "u",
+       "g",
+       "t",
+       "h",
+       "r"
+      ]
+     }
+    },
+    {
+     "id": "r12",
+     "ac": 5,
+     "args": [
+      [
+       "t",
+       "u",
+       "v",
+       "e",
+       "n",
+       "x",
+       "c"
+      ],
+      [
+       [
+        "e",
+        "n"
+       ],
+       [
+        "u",
+        "v"
+       ],
+       [
+        "n",
+        "t"
+       ],
+       [
+        "c",
+        "x"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "u",
+       "v",
+       "e",
+       "n",
+       "t",
+       "c",
+       "x"
+      ]
+     }
+    },
+    {
+     "id": "r13",
+     "ac": 5,
+     "args": [
+      [
+       "p",
+       "b",
+       "f",
+       "m",
+       "k",
+       "j"
+      ],
+      [
+       [
+        "f",
+        "p"
+       ],
+       [
+        "p",
+        "j"
+       ],
+       [
+        "f",
+        "k"
+       ],
+       [
+        "k",
+        "b"
+       ],
+       [
+        "f",
+        "p"
+       ],
+       [
+        "f",
+        "m"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "f",
+       "p",
+       "m",
+       "k",
+       "b",
+       "j"
+      ]
+     }
+    },
+    {
+     "id": "r14",
+     "ac": 5,
+     "args": [
+      [
+       "x",
+       "g",
+       "w",
+       "m",
+       "t",
+       "h",
+       "v"
+      ],
+      [
+       [
+        "x",
+        "v"
+       ],
+       [
+        "g",
+        "m"
+       ],
+       [
+        "w",
+        "m"
+       ],
+       [
+        "g",
+        "w"
+       ],
+       [
+        "g",
+        "m"
+       ],
+       [
+        "x",
+        "h"
+       ],
+       [
+        "w",
+        "m"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "x",
+       "g",
+       "w",
+       "m",
+       "t",
+       "h",
+       "v"
+      ]
+     }
+    },
+    {
+     "id": "r15",
+     "ac": 5,
+     "args": [
+      [
+       "x",
+       "d",
+       "c",
+       "v"
+      ],
+      [
+       [
+        "c",
+        "d"
+       ],
+       [
+        "d",
+        "x"
+       ],
+       [
+        "d",
+        "x"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "d",
+       "x",
+       "v"
+      ]
+     }
+    },
+    {
+     "id": "r16",
+     "ac": 5,
+     "args": [
+      [
+       "y",
+       "e",
+       "a",
+       "h",
+       "k"
+      ],
+      [
+       [
+        "h",
+        "e"
+       ],
+       [
+        "e",
+        "k"
+       ],
+       [
+        "y",
+        "a"
+       ],
+       [
+        "y",
+        "e"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "y",
+       "a",
+       "h",
+       "e",
+       "k"
+      ]
+     }
+    },
+    {
+     "id": "r17",
+     "ac": 6,
+     "args": [
+      [
+       "p",
+       "j",
+       "c",
+       "f",
+       "e",
+       "x",
+       "v"
+      ],
+      [
+       [
+        "x",
+        "p"
+       ],
+       [
+        "v",
+        "j"
+       ],
+       [
+        "e",
+        "v"
+       ],
+       [
+        "e",
+        "c"
+       ],
+       [
+        "x",
+        "j"
+       ],
+       [
+        "v",
+        "j"
+       ],
+       [
+        "p",
+        "f"
+       ],
+       [
+        "c",
+        "v"
+       ],
+       [
+        "c",
+        "e"
+       ]
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_CYCLE"
+      }
+     }
+    },
+    {
+     "id": "r18",
+     "ac": 5,
+     "args": [
+      [
+       "v",
+       "m",
+       "t",
+       "x",
+       "g",
+       "y"
+      ],
+      [
+       [
+        "y",
+        "v"
+       ],
+       [
+        "x",
+        "m"
+       ],
+       [
+        "t",
+        "m"
+       ],
+       [
+        "m",
+        "g"
+       ],
+       [
+        "y",
+        "t"
+       ],
+       [
+        "v",
+        "m"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "x",
+       "y",
+       "v",
+       "t",
+       "m",
+       "g"
+      ]
+     }
+    },
+    {
+     "id": "r19",
+     "ac": 5,
+     "args": [
+      [
+       "g",
+       "v",
+       "t"
+      ],
+      [
+       [
+        "t",
+        "v"
+       ],
+       [
+        "g",
+        "v"
+       ],
+       [
+        "g",
+        "t"
+       ],
+       [
+        "g",
+        "t"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "g",
+       "t",
+       "v"
+      ]
+     }
+    },
+    {
+     "id": "r20",
+     "ac": 5,
+     "args": [
+      [
+       "m",
+       "r",
+       "q"
+      ],
+      [
+       [
+        "m",
+        "q"
+       ],
+       [
+        "m",
+        "r"
+       ],
+       [
+        "m",
+        "q"
+       ],
+       [
+        "r",
+        "q"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "m",
+       "r",
+       "q"
+      ]
+     }
+    },
+    {
+     "id": "r21",
+     "ac": 5,
+     "args": [
+      [
+       "h",
+       "y",
+       "w",
+       "q",
+       "g"
+      ],
+      [
+       [
+        "y",
+        "w"
+       ],
+       [
+        "h",
+        "g"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "h",
+       "y",
+       "w",
+       "q",
+       "g"
+      ]
+     }
+    },
+    {
+     "id": "r22",
+     "ac": 5,
+     "args": [
+      [
+       "h",
+       "f",
+       "m",
+       "k",
+       "c",
+       "g"
+      ],
+      [
+       [
+        "c",
+        "g"
+       ],
+       [
+        "f",
+        "c"
+       ],
+       [
+        "m",
+        "g"
+       ],
+       [
+        "h",
+        "c"
+       ],
+       [
+        "h",
+        "k"
+       ],
+       [
+        "m",
+        "g"
+       ],
+       [
+        "m",
+        "g"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "h",
+       "f",
+       "m",
+       "k",
+       "c",
+       "g"
+      ]
+     }
+    },
+    {
+     "id": "r23",
+     "ac": 5,
+     "args": [
+      [
+       "f",
+       "v",
+       "c",
+       "y",
+       "u"
+      ],
+      [
+       [
+        "f",
+        "v"
+       ],
+       [
+        "u",
+        "f"
+       ],
+       [
+        "c",
+        "f"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "y",
+       "u",
+       "f",
+       "v"
+      ]
+     }
+    },
+    {
+     "id": "r24",
+     "ac": 3,
+     "args": [
+      [
+       "h",
+       "h",
+       "e",
+       "c",
+       "a",
+       "v",
+       "h",
+       "b",
+       "c"
+      ],
+      [
+       [
+        "e",
+        "h"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "e",
+       "h",
+       "c",
+       "a",
+       "v",
+       "b"
+      ]
+     }
+    },
+    {
+     "id": "r25",
+     "ac": 5,
+     "args": [
+      [
+       "f",
+       "a",
+       "u",
+       "p",
+       "t"
+      ],
+      [
+       [
+        "f",
+        "t"
+       ],
+       [
+        "p",
+        "a"
+       ],
+       [
+        "f",
+        "p"
+       ],
+       [
+        "u",
+        "a"
+       ],
+       [
+        "p",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "f",
+       "u",
+       "p",
+       "a",
+       "t"
+      ]
+     }
+    },
+    {
+     "id": "r26",
+     "ac": 5,
+     "args": [
+      [
+       "z",
+       "a",
+       "t"
+      ],
+      [
+       [
+        "t",
+        "a"
+       ],
+       [
+        "t",
+        "a"
+       ],
+       [
+        "z",
+        "t"
+       ],
+       [
+        "t",
+        "a"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "z",
+       "t",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "r27",
+     "ac": 3,
+     "args": [
+      [
+       "q",
+       "q",
+       "z",
+       "g",
+       "y",
+       "s",
+       "j",
+       "n",
+       "j",
+       "q"
+      ],
+      [
+       [
+        "y",
+        "j"
+       ],
+       [
+        "q",
+        "g"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "q",
+       "z",
+       "g",
+       "y",
+       "s",
+       "j",
+       "n"
+      ]
+     }
+    },
+    {
+     "id": "r28",
+     "ac": 5,
+     "args": [
+      [
+       "h",
+       "u",
+       "c"
+      ],
+      []
+     ],
+     "want": {
+      "value": [
+       "h",
+       "u",
+       "c"
+      ]
+     }
+    },
+    {
+     "id": "r29",
+     "ac": 5,
+     "args": [
+      [
+       "k",
+       "z",
+       "n"
+      ],
+      [
+       [
+        "k",
+        "n"
+       ],
+       [
+        "z",
+        "n"
+       ],
+       [
+        "z",
+        "n"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "k",
+       "z",
+       "n"
+      ]
+     }
+    },
+    {
+     "id": "r30",
+     "ac": 3,
+     "args": [
+      [
+       "g",
+       "f",
+       "c",
+       "a",
+       "u",
+       "f",
+       "j",
+       "a"
+      ],
+      [
+       [
+        "j",
+        "u"
+       ],
+       [
+        "j",
+        "u"
+       ],
+       [
+        "g",
+        "f"
+       ],
+       [
+        "a",
+        "c"
+       ],
+       [
+        "g",
+        "a"
+       ],
+       [
+        "u",
+        "f"
+       ],
+       [
+        "a",
+        "f"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "g",
+       "a",
+       "c",
+       "j",
+       "u",
+       "f"
+      ]
+     }
+    },
+    {
+     "id": "r31",
+     "ac": 3,
+     "args": [
+      [
+       "p",
+       "c",
+       "g",
+       "w",
+       "g",
+       "c",
+       "c",
+       "m",
+       "v"
+      ],
+      [
+       [
+        "v",
+        "m"
+       ],
+       [
+        "g",
+        "m"
+       ],
+       [
+        "g",
+        "v"
+       ],
+       [
+        "v",
+        "m"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "p",
+       "c",
+       "g",
+       "w",
+       "v",
+       "m"
+      ]
+     }
+    },
+    {
+     "id": "r32",
+     "ac": 5,
+     "args": [
+      [
+       "c",
+       "m",
+       "d",
+       "g"
+      ],
+      [
+       [
+        "m",
+        "g"
+       ],
+       [
+        "m",
+        "g"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "c",
+       "m",
+       "d",
+       "g"
+      ]
+     }
+    },
+    {
+     "id": "r33",
+     "ac": 5,
+     "args": [
+      [
+       "e",
+       "p",
+       "r",
+       "y"
+      ],
+      [
+       [
+        "e",
+        "r"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "e",
+       "p",
+       "r",
+       "y"
+      ]
+     }
+    },
+    {
+     "id": "r34",
+     "ac": 5,
+     "args": [
+      [
+       "x",
+       "w",
+       "e",
+       "b",
+       "k",
+       "r",
+       "n"
+      ],
+      [
+       [
+        "r",
+        "w"
+       ],
+       [
+        "x",
+        "n"
+       ],
+       [
+        "w",
+        "n"
+       ],
+       [
+        "x",
+        "r"
+       ],
+       [
+        "x",
+        "r"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "x",
+       "e",
+       "b",
+       "k",
+       "r",
+       "w",
+       "n"
+      ]
+     }
+    },
+    {
+     "id": "r35",
+     "ac": 5,
+     "args": [
+      [
+       "n",
+       "v",
+       "b",
+       "p",
+       "h"
+      ],
+      [
+       [
+        "n",
+        "b"
+       ],
+       [
+        "p",
+        "n"
+       ],
+       [
+        "b",
+        "h"
+       ],
+       [
+        "n",
+        "v"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "p",
+       "n",
+       "v",
+       "b",
+       "h"
+      ]
+     }
+    },
+    {
+     "id": "r36",
+     "ac": 5,
+     "args": [
+      [
+       "d",
+       "f",
+       "g",
+       "q",
+       "t"
+      ],
+      [
+       [
+        "d",
+        "q"
+       ],
+       [
+        "f",
+        "q"
+       ],
+       [
+        "f",
+        "q"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "d",
+       "f",
+       "g",
+       "q",
+       "t"
+      ]
+     }
+    },
+    {
+     "id": "r37",
+     "ac": 5,
+     "args": [
+      [
+       "f",
+       "j",
+       "v",
+       "c"
+      ],
+      [
+       [
+        "v",
+        "f"
+       ],
+       [
+        "j",
+        "f"
+       ],
+       [
+        "c",
+        "f"
+       ],
+       [
+        "c",
+        "j"
+       ],
+       [
+        "c",
+        "j"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "v",
+       "c",
+       "j",
+       "f"
+      ]
+     }
+    },
+    {
+     "id": "r38",
+     "ac": 5,
+     "args": [
+      [
+       "r",
+       "c",
+       "d",
+       "w",
+       "b"
+      ],
+      [
+       [
+        "r",
+        "d"
+       ],
+       [
+        "r",
+        "c"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "r",
+       "c",
+       "d",
+       "w",
+       "b"
+      ]
+     }
+    },
+    {
+     "id": "r39",
+     "ac": 5,
+     "args": [
+      [
+       "x",
+       "p",
+       "c"
+      ],
+      [
+       [
+        "p",
+        "x"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "p",
+       "x",
+       "c"
+      ]
+     }
+    },
+    {
+     "id": "r40",
+     "ac": 5,
+     "args": [
+      [
+       "f",
+       "q",
+       "w"
+      ],
+      [
+       [
+        "w",
+        "f"
+       ],
+       [
+        "w",
+        "f"
+       ],
+       [
+        "w",
+        "f"
+       ],
+       [
+        "w",
+        "f"
+       ],
+       [
+        "w",
+        "f"
+       ]
+      ]
+     ],
+     "want": {
+      "value": [
+       "q",
+       "w",
+       "f"
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

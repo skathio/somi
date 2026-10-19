@@ -1,0 +1,9 @@
+[
+ {"name": "home-streak-limit-three", "file": "schedule.mjs", "find": "run[h] >= 2)", "replace": "run[h] >= 3)"},
+ {"name": "no-home-balance", "file": "schedule.mjs", "find": "cap = odd ? (n - 1) / 2 : n / 2", "replace": "cap = n"},
+ {"name": "away-first-comparison", "file": "schedule.mjs", "find": "for (let h = 0; h < n; h++) for (let a = 0; a < n; a++) {", "replace": "for (let a = 0; a < n; a++) for (let h = 0; h < n; h++) {"},
+ {"name": "matches-ordered-by-home", "file": "schedule.mjs", "find": "const m = Math.min(h, a);", "replace": "const m = h;"},
+ {"name": "even-balance-off-by-one", "file": "schedule.mjs", "find": "odd ? (n - 1) / 2 : n / 2", "replace": "odd ? (n - 1) / 2 : n / 2 + 1"},
+ {"name": "rest-breaks-the-streak", "file": "schedule.mjs", "find": "run[h] >= 2)", "replace": "run[h] >= 2 && last[h] === r - 1)"},
+ {"name": "away-balance-unchecked", "file": "schedule.mjs", "find": "|| away[a] >= cap", "replace": ""}
+]

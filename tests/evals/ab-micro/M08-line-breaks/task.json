@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create breaks.mjs at the workspace root: an ES module with one named function export, breakLines(words, width). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "Checks run in this order, the first failure decides: words is not an array, or an entry (taken in index order) is not a string, TypeError code 'E_TYPE'; width is not a number with an integer value (so NaN, Infinity and 2.5 fail), TypeError code 'E_TYPE'; width is less than 1, RangeError code 'E_WIDTH'; an entry is empty or contains a space character (U+0020), RangeError code 'E_WORD'.",
+    "The result is an array of lines, in order. A line is its words joined by single space characters; every word appears once, in the given order. No words gives an empty array. The length of a line is its string length (UTF-16 code units), so a character outside the basic plane counts 2.",
+    "A line of two or more words has length at most width. A line of exactly one word may be longer than width, whatever the word.",
+    "A line costs: when it is not the last line and fits, the square of (width minus its length); when it is a single word longer than width, 0, last line or not; when it is the last line and fits, 0, except 6 if it is not the only line and holds exactly one word.",
+    "The result is a break placement with the smallest total cost of its lines.",
+    "Among placements of equal total cost, the result is the one whose first line is the longest; if the first lines have equal length, the one whose second line is the longest, and so on to the first line where two placements differ in length.",
+    "The function is pure: no I/O, no shared state, and the input array is not mutated."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M08-6d2e9b40a7c1f385",
+  "source": [
+    "breaks.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement breaks.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

@@ -157,9 +157,9 @@ if (mode === 'unit') {
   check('sink: a token split across chunks is flagged and redacted on disk; a prefix secret is redacted; a system event is not path-scanned', JSON.stringify([...sink.state.leaks].sort()) === JSON.stringify(['sk-ant-', 'token']) && !saved.includes('SECRETSECRET') && !saved.includes('ZZZZZZZZ') && saved.includes('[REDACTED]'));
   const s2 = S.createSink(`${d}/s2.jsonl`, { token: T, canary: 'CANARY1234567890ab', task: 'T1-proration', absAb: '/r/tests/evals/ab', ownTmp: '/tmp/ab-draw-own' });
   const ev = (t) => `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: t }] } })}\n`;
-  s2.feed(Buffer.from(ev('ls /tmp/ab-draw-own/ws /usr/share/hidden/ and ./hidden/x ok'))); const fine = [...s2.state.leaks].length === 0;
-  s2.feed(Buffer.from(ev('cat T1-proration/hidden/a.mjs'))); s2.feed(Buffer.from(ev('ls /tmp/ab-draw-other/ws'))); s2.feed(Buffer.from(ev('cat /r/tests/evals/ab/x')));
-  check('path patterns: a bare hidden directory and the own temp directory are fine; the task hidden path, another draw and the repository path are leaks', fine && JSON.stringify([...s2.state.leaks].sort()) === JSON.stringify(['ab-path', 'other-draw', 'task-hidden']));
+  s2.feed(Buffer.from(ev('ls /tmp/ab-draw-own/ws /usr/share/hidden/ and ./hidden/x ok'))); s2.feed(Buffer.from(ev('Did you mean to import "./ab-draw-own/ws/a.mjs"?'))); const fine = [...s2.state.leaks].length === 0;
+  s2.feed(Buffer.from(ev('cat T1-proration/hidden/a.mjs'))); s2.feed(Buffer.from(ev('ls /tmp/ab-draw-other/ws'))); s2.feed(Buffer.from(ev('Did you mean "./ab-draw-other/ws/a.mjs"?'))); s2.feed(Buffer.from(ev('cat /r/tests/evals/ab/x')));
+  check('path patterns: a bare hidden directory, the own temp directory and its relative spelling are fine; the task hidden path, another draw and the repository path are leaks', fine && JSON.stringify([...s2.state.leaks].sort()) === JSON.stringify(['ab-path', 'other-draw', 'task-hidden']));
   const s3 = S.createSink(`${d}/s3.jsonl`, { token: T, canary: 'CANARY1234567890ab', task: 'T1-proration' });
   s3.feed(Buffer.from(`{"type":"user","message":"${T}`)); s3.turn(); s3.feed(Buffer.from('\n'));
   check('an unterminated last line is processed before the next invocation starts', s3.state.leaks.has('token') && !fs.readFileSync(`${d}/s3.jsonl`, 'utf8').includes('SECRETSECRET'));

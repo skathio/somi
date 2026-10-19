@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create pairing.mjs at the workspace root: an ES module with one named function export, pairRound(players, history). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "players and history must each be an array, otherwise throw a TypeError whose code property is 'E_TYPE'. Each player must be a non-null, non-array object with a non-empty string id and safe-integer points and rating, and ids must be distinct, otherwise throw a RangeError with code 'E_PLAYER'. Extra fields are ignored.",
+    "Each history entry must be an array [idA, idB] where idA is the id of a player in this call and idB is either null (idA had a bye) or the id of a different player in this call (the two have met; their order in the entry does not matter and an entry may repeat). Otherwise throw a RangeError with code 'E_HISTORY'. The checks run in the order E_TYPE, E_PLAYER, E_HISTORY, before any pairing.",
+    "Players are ranked best first: more points first, then higher rating first, then id ascending compared as plain strings by UTF-16 code unit order (so \"10\" ranks before \"9\" and \"B\" before \"a\"). Ranks are always distinct because ids are.",
+    "Two players who have met must not be paired. With an odd number of players exactly one gets a bye and all the others are paired; with an even number nobody gets a bye. A player who has had a bye in history must not get another. The bye goes to the lowest ranked player among those who may take it with all the others then still pairable.",
+    "The others are paired as the lexicographically first valid set, walking the ranked list: the highest ranked unpaired player takes the highest ranked still unpaired player they have not met for whom all remaining unpaired players can still be paired validly; then repeat. The bye player is chosen first and left out of this walk.",
+    "The result is an array of [idA, idB] pairs with the higher ranked player first, ordered by the rank of idA, best first. A bye, if any, is the last element, written [id, null]. With no players the result is []. The result is a new array and the arguments are not mutated.",
+    "If no valid complete pairing exists, including an odd number of players where nobody may take the bye, throw a RangeError with code 'E_NO_PAIRING'."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M02-6c1f4a9d2e7b8035",
+  "source": [
+    "pairing.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement pairing.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

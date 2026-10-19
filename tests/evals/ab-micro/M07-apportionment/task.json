@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create apportion.mjs at the workspace root: an ES module with one named function export, apportion(populations, seats, options). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "populations is an array of integers from 0 to 1000000000; seats is an integer from 0 to 1000. options is undefined or an object (not null, not an array) with optional fields, undefined meaning absent: floor, an integer 0 to 1000, default 1; cap, an integer 1 to 1000, default no maximum; divisor, the string 'odd' or 'next', default 'odd'. Any violation throws a TypeError with code 'E_TYPE'.",
+    "The result is an array of integer seat counts, same length and order as populations, summing to seats. A region with population 0 gets 0 seats; every other region gets at least floor and at most cap seats. If no array satisfies this, throw a RangeError with code 'E_INFEASIBLE'; that check runs only after every E_TYPE check has passed.",
+    "Construction: each region with a population above 0 first receives floor seats. The remaining seats are then handed out one at a time, each to the region with the highest priority among the regions that hold fewer than cap seats.",
+    "A region's priority is its population divided by a divisor that depends only on extra, the number of seats it has received beyond its floor (the floor seats do not count). Divisor 'odd' uses 2 times extra plus 1; divisor 'next' uses extra plus 1. Priorities are compared exactly as fractions, never rounded.",
+    "If two regions have equal priority, the one with the larger population is preferred; if the populations are equal too, the one with the smaller index is preferred. This applies at every single seat that is handed out.",
+    "The function is pure: no I/O, no shared state, the inputs are not mutated, and a new array is returned."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M07-6c1e90d4a37b25f8",
+  "source": [
+    "apportion.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement apportion.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

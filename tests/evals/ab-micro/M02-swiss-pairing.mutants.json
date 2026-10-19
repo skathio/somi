@@ -1,0 +1,13 @@
+[
+ {"name": "greedy-no-backtrack", "file": "pairing.mjs", "find": "    if (tail) return [[first, others[i]], ...tail];", "replace": "    return tail ? [[first, others[i]], ...tail] : null;"},
+ {"name": "bye-only-lowest-tried", "file": "pairing.mjs", "find": "      if (pairs) return [...pairs, [ranked[i], null]];", "replace": "      if (pairs) return [...pairs, [ranked[i], null]];\n      break;"},
+ {"name": "bye-ignores-earlier-bye", "file": "pairing.mjs", "find": "      if (byes.has(ranked[i])) continue;", "replace": "      if (false) continue;"},
+ {"name": "bye-to-highest-ranked", "file": "pairing.mjs", "find": "for (let i = ranked.length - 1; i >= 0; i--) {", "replace": "for (let i = 0; i < ranked.length; i++) {"},
+ {"name": "ids-compared-as-numbers", "file": "pairing.mjs", "find": "a.id < b.id ? -1 : a.id > b.id ? 1 : 0;", "replace": "(Number(a.id) - Number(b.id) || 0);"},
+ {"name": "ids-compared-by-locale", "file": "pairing.mjs", "find": "a.id < b.id ? -1 : a.id > b.id ? 1 : 0;", "replace": "a.id.localeCompare(b.id);"},
+ {"name": "rating-ascending", "file": "pairing.mjs", "find": "a.rating !== b.rating ? b.rating - a.rating", "replace": "a.rating !== b.rating ? a.rating - b.rating"},
+ {"name": "points-ascending-ties-by-rating", "file": "pairing.mjs", "find": "a.points !== b.points ? b.points - a.points", "replace": "a.points !== b.points ? a.points - b.points"},
+ {"name": "rematch-recorded-one-way", "file": "pairing.mjs", "find": "      met.get(h[1]).add(h[0]);\n", "replace": ""},
+ {"name": "duplicate-ids-accepted", "file": "pairing.mjs", "find": " && !met.has(p.id);", "replace": ";"},
+ {"name": "history-unknown-id-ignored", "file": "pairing.mjs", "find": "!met.has(h[0]) || h[0] === h[1]", "replace": "h[0] === h[1]"}
+]

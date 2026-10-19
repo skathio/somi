@@ -1,0 +1,9 @@
+[
+ {"name": "greedy-fill", "file": "breaks.mjs", "find": "  const lines = [];\n  for (let i = 0; i < n; i = next[i])", "replace": "  for (let i = 0; i < n; i++) { let j = i + 1; let u = len[i]; while (j < n && u + 1 + len[j] <= width) { u += 1 + len[j]; j++; } next[i] = j; }\n  const lines = [];\n  for (let i = 0; i < n; i = next[i])"},
+ {"name": "no-lone-word-penalty", "file": "breaks.mjs", "find": "else c = i > 0 && j - i === 1 ? 6 : 0;", "replace": "else c = 0;"},
+ {"name": "ties-to-shorter-first-line", "file": "breaks.mjs", "find": "if (c + best[j] <= best[i])", "replace": "if (c + best[j] < best[i])"},
+ {"name": "code-point-length", "file": "breaks.mjs", "find": "const len = words.map((w) => w.length);", "replace": "const len = words.map((w) => [...w].length);"},
+ {"name": "last-line-costs-too", "file": "breaks.mjs", "find": "else c = i > 0 && j - i === 1 ? 6 : 0;", "replace": "else c = (width - used) ** 2;"},
+ {"name": "lone-penalty-any-short-last", "file": "breaks.mjs", "find": "else c = i > 0 && j - i === 1 ? 6 : 0;", "replace": "else c = i > 0 && j - i <= 2 ? 6 : 0;"},
+ {"name": "width-must-be-positive-type-last", "file": "breaks.mjs", "find": "  if (!Number.isInteger(width)) throw bad(TypeError, 'E_TYPE');\n  if (width < 1) throw bad(RangeError, 'E_WIDTH');\n  for (const w of words) if (w === '' || w.includes(' ')) throw bad(RangeError, 'E_WORD');", "replace": "  for (const w of words) if (w === '' || w.includes(' ')) throw bad(RangeError, 'E_WORD');\n  if (!Number.isInteger(width)) throw bad(TypeError, 'E_TYPE');\n  if (width < 1) throw bad(RangeError, 'E_WIDTH');"}
+]
