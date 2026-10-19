@@ -1,0 +1,9 @@
+[
+ {"name": "no-low-clamp", "file": "clamp.mjs", "find": "value < low ? low :", "replace": "false ? low :"},
+ {"name": "no-high-clamp", "file": "clamp.mjs", "find": "value > high ? high :", "replace": "false ? high :"},
+ {"name": "bounds-unchecked", "file": "clamp.mjs", "find": "if (low > high) throw", "replace": "if (false) throw"},
+ {"name": "equal-bounds-rejected", "file": "clamp.mjs", "find": "low > high", "replace": "low >= high"},
+ {"name": "negative-zero-leaks", "file": "clamp.mjs", "find": "return result === 0 ? 0 : result;", "replace": "return result;"},
+ {"name": "infinity-accepted", "file": "clamp.mjs", "find": "Number.isFinite(x)", "replace": "!Number.isNaN(x)"},
+ {"name": "wrong-bounds-code", "file": "clamp.mjs", "find": "'E_BOUNDS'", "replace": "'E_TYPE'"}
+]

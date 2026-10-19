@@ -1,0 +1,249 @@
+{
+ "canary": "SOMI-CANARY-EX-5b7e2d91c4a80f36",
+ "module": "clamp.mjs",
+ "export": "clamp",
+ "timeoutMs": 10000,
+ "families": [
+  {
+   "name": "functional",
+   "cases": [
+    {
+     "id": "case-01",
+     "ac": 4,
+     "args": [
+      5,
+      0,
+      10
+     ],
+     "want": {
+      "value": 5
+     }
+    },
+    {
+     "id": "case-02",
+     "ac": 4,
+     "args": [
+      -5,
+      0,
+      10
+     ],
+     "want": {
+      "value": 0
+     }
+    },
+    {
+     "id": "case-03",
+     "ac": 4,
+     "args": [
+      15,
+      0,
+      10
+     ],
+     "want": {
+      "value": 10
+     }
+    },
+    {
+     "id": "case-04",
+     "ac": 4,
+     "args": [
+      2.5,
+      1.5,
+      3.5
+     ],
+     "want": {
+      "value": 2.5
+     }
+    }
+   ]
+  },
+  {
+   "name": "boundary",
+   "cases": [
+    {
+     "id": "case-05",
+     "ac": 4,
+     "args": [
+      0,
+      0,
+      10
+     ],
+     "want": {
+      "value": 0
+     }
+    },
+    {
+     "id": "case-06",
+     "ac": 4,
+     "args": [
+      10,
+      0,
+      10
+     ],
+     "want": {
+      "value": 10
+     }
+    },
+    {
+     "id": "case-07",
+     "ac": 4,
+     "args": [
+      3,
+      3,
+      3
+     ],
+     "want": {
+      "value": 3
+     }
+    },
+    {
+     "id": "case-08",
+     "ac": 5,
+     "args": [
+      {
+       "$num": "-0"
+      },
+      0,
+      10
+     ],
+     "want": {
+      "value": 0
+     }
+    },
+    {
+     "id": "case-09",
+     "ac": 5,
+     "args": [
+      -5,
+      {
+       "$num": "-0"
+      },
+      10
+     ],
+     "want": {
+      "value": 0
+     }
+    },
+    {
+     "id": "case-10",
+     "ac": 5,
+     "args": [
+      {
+       "$num": "-0"
+      },
+      {
+       "$num": "-0"
+      },
+      {
+       "$num": "-0"
+      }
+     ],
+     "want": {
+      "value": 0
+     }
+    }
+   ]
+  },
+  {
+   "name": "safety",
+   "cases": [
+    {
+     "id": "case-11",
+     "ac": 2,
+     "args": [
+      "5",
+      0,
+      10
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "case-12",
+     "ac": 2,
+     "args": [
+      {
+       "$num": "NaN"
+      },
+      0,
+      10
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "case-13",
+     "ac": 2,
+     "args": [
+      5,
+      0,
+      {
+       "$num": "Infinity"
+      }
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "case-14",
+     "ac": 3,
+     "args": [
+      5,
+      10,
+      0
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_BOUNDS"
+      }
+     }
+    },
+    {
+     "id": "case-15",
+     "ac": 3,
+     "args": [
+      "x",
+      10,
+      0
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "case-16",
+     "ac": 2,
+     "args": [
+      {
+       "$undef": 1
+      },
+      0,
+      10
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}
