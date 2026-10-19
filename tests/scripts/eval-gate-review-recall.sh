@@ -20,7 +20,7 @@ CODE=$(cat <<'EOS'
 import { mkdirSync, writeFileSync } from 'node:fs'; import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 const L = await import(`${process.env.LIB}/review-recall.mjs`);
-const { parseFindings: P, overlaps, scoreMutant, scoreClean, wilson95, recallStats, branchFor, mutatedRange, selectCases, sameFile } = L;
+const { parseFindings: P, sensitivityStats, outsideTests, scoreCleanOutsideTests, TEST_PATH, overlaps, scoreMutant, scoreClean, wilson95, recallStats, branchFor, mutatedRange, selectCases, sameFile } = L;
 const res = [];
 const check = (name, got, want) => res.push([JSON.stringify(got) === JSON.stringify(want), name, got, want]);
 const near = (a, b, tol = 0.0005) => Math.abs(a - b) <= tol;
@@ -134,6 +134,21 @@ const st = recallStats(rows(18, 40, 2, 10));
 check('recallStats returns R, FPR, interval and branch', [st.R, st.FPR, st.n, st.m, st.k, st.f, st.branch, near(st.interval.lower, 0.3071), near(st.interval.upper, 0.6017), st.unparsed], [0.45, 0.2, 40, 10, 18, 2, 'GO', true, true, 0]);
 check('recallStats counts unparsed rows', recallStats([{ kind: 'mutant', detected: false, unparsed: true }, { kind: 'clean', falsePositive: false, unparsed: true }, { kind: 'mutant', detected: true }]).unparsed, 2);
 for (const [name, v] of [['not an array', 5], ['empty', []], ['mutants only', [{ kind: 'mutant', detected: true }]], ['clean only', [{ kind: 'clean', falsePositive: false }]], ['an unknown kind', [{ kind: 'x' }]], ['a non-boolean flag', [{ kind: 'mutant', detected: 1 }, { kind: 'clean', falsePositive: false }]], ['a null row', [null]]]) check(`recallStats rejects ${name}`, recallStats(v), null);
+
+// --- sensitivity reading: clean cases counted only for Major/Blocker findings outside test files ----------------
+check('test paths: a test or tests directory anywhere in the path, not a name that merely contains test', ['test/a.mjs', 'src/test/a.mjs', 'tests/x.mjs', 'a/tests/b/c.mjs', 'latest/a.mjs', 'src/contest.mjs', 'testing/a.mjs', 'src/test.mjs'].map((f) => TEST_PATH.test(f)), [true, true, true, true, false, false, false, false]);
+check('outsideTests: a Major in test/ alone does not count; a Major or Blocker elsewhere does; Minor never does', [
+  outsideTests([{ file: 'test/a.mjs', severity: 'major' }]), outsideTests([{ file: 'src/a.mjs', severity: 'major' }]), outsideTests([{ file: './test/a.mjs', severity: 'blocker' }, { file: 'b/src/x.mjs', severity: 'blocker' }]), outsideTests([{ file: 'src/a.mjs', severity: 'minor' }]), outsideTests([])], [false, true, true, false, false]);
+check('scoreCleanOutsideTests reads a reviewer text: a Blocker in test/ only is not outside, with a Major in src it is', [scoreCleanOutsideTests('Blocker test/a.test.mjs:1'), scoreCleanOutsideTests('Blocker test/a.test.mjs:1\nMajor src/b.mjs:4')], [false, true]);
+// Hand-computed: 3 of 10 outside test files, z = 1.96. (2*3 + 3.8416 -+ 1.96*sqrt(3.8416 + 4*3*0.7)) / (2*(10 + 3.8416)):
+// sqrt(12.2416) = 3.49880, times 1.96 = 6.85765; lower = (9.8416 - 6.85765)/27.6832 = 0.10779, upper = (9.8416 + 6.85765)/27.6832 = 0.60324.
+// Registered rows: 18 of 40 mutants detected (R = 0.45), 5 of 10 clean flagged anywhere, 3 of those outside test files.
+const srows = [...Array(40)].map((_, i) => ({ kind: 'mutant', detected: i < 18 })).concat([...Array(10)].map((_, i) => ({ kind: 'clean', falsePositive: i < 5, fpOutsideTests: i < 3 })));
+const sens = sensitivityStats(srows); const reg = recallStats(srows);
+check('sensitivity: FPR 3/10 = 0.3, Wilson [0.1078, 0.6032], R - FPR = 0.45 - 0.3 = 0.15', [sens.f, sens.m, sens.FPR, near(sens.interval.lower, 0.1078), near(sens.interval.upper, 0.6032), near(sens.diff, 0.15)], [3, 10, 0.3, true, true, true]);
+check('the registered numbers do not move with the sensitivity: FPR 5/10 = 0.5, R - FPR = -0.05, NO-GO (the sensitivity alone would be 0.15, UNDEFINED territory)', [reg.f, reg.m, reg.FPR, near(reg.diff, -0.05), reg.branch, Object.keys(reg).includes('fpOutsideTests')], [5, 10, 0.5, true, 'NO-GO', false]);
+check('the same rows without the sensitivity field give the same registered result', JSON.stringify(recallStats(srows.map(({ fpOutsideTests, ...r }) => r))), JSON.stringify(reg));
+check('sensitivity needs a boolean on every clean row and both kinds of row', [sensitivityStats(srows.map(({ fpOutsideTests, ...r }) => r)), sensitivityStats(srows.filter((r) => r.kind === 'mutant')), sensitivityStats(null)], [null, null, null]);
 
 // --- mutated range --------------------------------------------------------------------------------------
 const src = 'a\nb\nc\nd\ne\n';
@@ -252,8 +267,9 @@ const names = git('diff', '--name-only').trim().split('\n').filter(Boolean);
 const status = git('status', '--porcelain').trim().split('\n').filter(Boolean);
 let conf = null; try { conf = JSON.parse(fs.readFileSync('.somi/config.json', 'utf8')); } catch { /* none */ }
 const tok = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+const strayAdds = git('diff').split('\n').filter((l) => l === '+//' || l === '+<!-- -->').length;
 const canaryFiles = (() => { let n = 0; const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.name === '.git') continue; const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (fs.readFileSync(p, 'utf8').includes('SOMI-CANARY')) n++; } }; walk('.'); return n; })();
-fs.appendFileSync(cfg.log, JSON.stringify({ canaryFiles, diffHasCanary: git('diff').includes('SOMI-CANARY'), argv: process.argv.slice(2), envKeys: Object.keys(process.env).sort(), tokenKeys: Object.keys(process.env).filter((k) => process.env[k] === cfg.token), names, status, conf }) + '\n');
+fs.appendFileSync(cfg.log, JSON.stringify({ strayAdds, numstat: git('diff', '--numstat'), canaryFiles, diffHasCanary: git('diff').includes('SOMI-CANARY'), argv: process.argv.slice(2), envKeys: Object.keys(process.env).sort(), tokenKeys: Object.keys(process.env).filter((k) => process.env[k] === cfg.token), names, status, conf }) + '\n');
 const emit = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 const say = (text) => emit({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
 const result = (o = {}) => emit({ type: 'result', subtype: 'success', is_error: false, result: 'Done.', total_cost_usd: 0.3, num_turns: 2, session_id: 's1', modelUsage: { 'stub-usage-key': {} }, ...o });
@@ -285,6 +301,7 @@ else if (mode === 'minor') say(finding('Minor', sp.sp > 0 ? sp.start : 1));
 else if (mode === 'fp') say(finding('Major', sp.sp > 0 ? sp.start : 1));
 else if (mode === 'hostile') { say(finding('Major', sp.start).repeat(30000) + 'a:'.repeat(300000)); }
 else if (mode === 'echo') { say(`token is ${tok}`); process.stderr.write(`stderr token ${tok}\n`); fs.writeFileSync('leak.txt', tok); fs.writeFileSync(path.join(process.env.HOME, 'leak.txt'), tok); }
+else if (mode === 'fptest') say('**[Major] no tests**\n- test/missing.test.mjs:1\n');
 else if (mode === 'diffecho') { useTool('tb', 'Bash'); toolResult('tb', git('diff')); say(hitText()); }
 else if (mode === 'canary') say(`header ${cfg.canary}`);
 else if (mode === 'taskresult') { useTool('tu1', 'Agent'); toolResult('tu1', [{ type: 'text', text: hitText() }]); say('Done.'); }
@@ -337,6 +354,10 @@ harness_scenarios() { # tag root: starts every scenario in the background and wa
   ( hone "$t" overbudget 1 "$r" overbudget --only m01,c04 ) &
   ( hone "$t" otherrun 1 "$r" hit --only m01; hone "$t" otherrun 2 "$r" hit --only m01 --model othermodel ) &
   ( hone "$t" foreign 1 "$r" hit --only m01,m28; hone "$t" foreign 2 "$r" hit --only m01 ) &
+  ( hone "$t" comment 1 "$r" hit --only m01,c01; hone "$t" blank 1 "$r" hit --only m01,c01 --placeholder blank ) &
+  ( hone "$t" mixed 1 "$r" hit --only m01 --placeholder blank; hone "$t" mixed 2 "$r" hit --only m01 ) &
+  ( hone "$t" legacy 1 "$r" hit --only m01; node -e "const f=process.argv[1],fs=require('fs');if(!fs.existsSync(f))process.exit(0);fs.writeFileSync(f,fs.readFileSync(f,'utf8').split('\n').filter(Boolean).map((l)=>{const r=JSON.parse(l);delete r.run.placeholder;return JSON.stringify(r)}).join('\n')+'\n')" "$TMP/h-$t/legacy/out/results.jsonl"; hone "$t" legacy 2 "$r" hit --only m01,m28; hone "$t" legacy 3 "$r" hit --only m01 --placeholder blank ) &
+  ( hone "$t" sens 1 "$r" fptest --only c04,c05,m01 ) &
   ( hone "$t" pilot 1 "$r" hit --dry-run --pilot 2 ) &
   ( local d="$TMP/h-$t/realbin"; mkdir -p "$d/tmp"; cd "$r" && env PATH="$TMP/fakebin:$PATH" TMPDIR="$d/tmp" node tests/scripts/manual/review-recall.mjs --model stubmodel --sandbox off --claude claude --plugin-dir "$HPLUGIN" --env-file "$TMP/eval.env" --out "$d/out" --only m01 > "$d/log1" 2> "$d/err1"; echo $? > "$d/rc1" ) &
   ( hone "$t" miss 1 "$r" miss --only m01,m28 ) &
@@ -361,7 +382,7 @@ const calls = (s, n = 1) => (rd(s, `stub${n}/calls.jsonl`) ?? '').split('\n').fi
 const rc = (s, n = 1) => Number((rd(s, `rc${n}`) ?? 'x').trim());
 const walk = (d) => { const o = []; for (const e of fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }) : []) { const p = path.join(d, e.name); if (e.isDirectory()) o.push(...walk(p)); else o.push(p); } return o; };
 const anyToken = (s) => walk(path.join(D, s)).filter((p) => !p.includes('/stub') && fs.readFileSync(p, 'utf8').includes(TOKEN));
-const KEYS = ['case', 'kind', 'task', 'mutant', 'file', 'variant', 'mutated', 'order', 'run', 'detected', 'falsePositive', 'source', 'wide', 'unparsed', 'findingsTotal', 'findings', 'outcome', 'reason', 'costUsd', 'durationMs', 'models'];
+const KEYS = ['case', 'kind', 'task', 'mutant', 'file', 'variant', 'mutated', 'order', 'run', 'detected', 'falsePositive', 'fpOutsideTests', 'source', 'wide', 'unparsed', 'findingsTotal', 'findings', 'outcome', 'reason', 'costUsd', 'durationMs', 'models'];
 
 // dry run
 const dl = (rd('dry', 'log1') ?? '').split('\n');
@@ -450,6 +471,16 @@ check('--sandbox off with the real claude binary found on PATH needs --unsafe-no
 const pl = rd('pilot', 'log1') ?? '';
 check('--pilot 2 is the first mutant and the first clean case, dry', [rc('pilot'), pl.split('\n').filter((l) => /^ {2}\d\d [mc]\d\d /.test(l)).map((l) => l.trim().split(' ')[1]).sort(), /dry run: 2 case\(s\) \(1 mutant, 1 clean\)/.test(pl)], [0, ['c01', 'm01'], true]);
 
+// placeholder style, sensitivity line
+const cmt = calls('comment'); const blk = calls('blank');
+check('the comment placeholder leaves a stray comment line in the diff; the blank one leaves none, with the same added-line counts', [cmt.map((c) => c.strayAdds > 0), blk.map((c) => c.strayAdds), JSON.stringify(cmt.map((c) => c.numstat)) === JSON.stringify(blk.map((c) => c.numstat))], [[true, true], [0, 0], true]);
+check('the blank run is clean of the canary and records its style in every row; the default records comment', [blk.every((c) => c.canaryFiles === 0 && c.diffHasCanary === false), rows('blank').every((r) => r.run.placeholder === 'blank'), rows('comment').every((r) => r.run.placeholder === 'comment')], [true, true, true]);
+check('resuming a blank run in the comment style (or the reverse) is refused (exit 2) and makes no call', [rc('mixed', 1), rc('mixed', 2), /placeholder style differs/.test(rd('mixed', 'err2')), calls('mixed', 2).length], [0, 2, true, 0]);
+check('rows written before the option existed count as the comment style: resumable in comment, refused in blank', [rc('legacy', 2), calls('legacy', 2).length, rc('legacy', 3)], [0, 1, 2]);
+const sl = rd('sens', 'log1') ?? ''; const sr = rows('sens');
+check('a Major only in a test file is a registered false positive but not a sensitivity one', [sr.filter((r) => r.kind === 'clean').map((r) => [r.falsePositive, r.fpOutsideTests]), sr.filter((r) => r.kind === 'mutant').map((r) => r.fpOutsideTests)], [[[true, false], [true, false]], [null]]);
+check('the summary keeps the registered FPR 2/2 and adds a labelled SENSITIVITY line 0/2 with its own interval and R - FPR', [/FPR = 2\/2 = 1\.000/.test(sl), /branch: NO-GO/.test(sl), /SENSITIVITY \(not the registered reading[^)]*\): FPR excluding findings located in test\/ files = 0\/2 = 0\.000 \(95% interval 0\.000-0\.658\); R - FPR = 0\.000/.test(sl)], [true, true, true]);
+
 // selection note, arguments
 check('a note that differs from the rebuilt selection is refused (exit 2)', [rc('notebad'), /differs from the committed list/.test(rd('notebad', 'err1'))], [2, true]);
 check('a missing note is only mentioned', [rc('nonote'), /does not exist, so the rebuilt selection/.test(rd('nonote', 'log1'))], [0, true]);
@@ -500,7 +531,7 @@ hmutant "if (!sameRows(got.mutants, rec.mutants) || !sameRows(got.clean, rec.cle
 hmutant "if (r && (r.task !== c.task || r.mutant !== c.name || r.kind !== c.kind)) die(" "if (false) die(" "resume refuses another selection"
 hmutant "fs.writeFileSync(path.join(caseDir, 'stderr.txt'), stderr.slice(0, 64 * 1024)" "fs.writeFileSync(path.join(caseDir, 'stderr.txt'), r.stderr" "kept stderr is redacted"
 hmutant "if (!res && !r.error) Object.assign(row, { costUsd: args.perCall, costEstimated: true });" "" "a call without a result is charged its cap"
-hmutant "(l.includes(canary) ? neutralLine(l) : l)" "l" "canary lines are neutralised in the workspace"
+hmutant "(l.includes(canary) ? neutralLine(l, style) : l)" "l" "canary lines are neutralised in the workspace"
 hmutant "if (row.reason.startsWith('leak:')) st.halt" "if (false) st.halt" "a leak halts the run"
 hmutant "if (st.lastInvalid === row.reason) st.halt" "if (false) st.halt" "two consecutive invalid rows with one reason halt"
 hmutant "if (row.costUsd > COST_HALT_FACTOR * args.perCall) st.halt" "if (false) st.halt" "a call far over its cap halts"
@@ -508,17 +539,21 @@ hmutant "&& taskIds.has(b.tool_use_id)) out.taskResult.push" "&& true) out.taskR
 hmutant "      keepReviews(ws, caseDir, token);" "" "review files are copied before the workspace is removed"
 hmutant "o.push(text.slice(i, i + MAX_INPUT_CHARS))" "{ if (i === 0) o.push(text.slice(0, MAX_INPUT_CHARS)); }" "long replies are scored past the first chunk"
 hmutant "taskIds.has(ev.tool_use_id) && typeof ev.summary" "false && typeof ev.summary" "the task notification is a source"
-hmutant "if (JSON.stringify(r.run) !== JSON.stringify(runInfo)) die(" "if (false) die(" "resume refuses another run identity"
+hmutant "if (identity(r.run) !== identity(runInfo)) die(" "if (false) die(" "resume refuses another run identity"
 hmutant "(realClaude !== null && resolveBinary(args.claude) === realClaude)" "false" "the real claude is recognised behind a path"
 hmutant "limit: lim !== null," "limit: sink.state.limit," "account limit comes from result events, not prose"
 hmutant "const mine = rows.filter((r) => caseIds.has(r.case));" "const mine = rows;" "summary uses the current selection only"
 hmutant "> WIDE_LINES : false" "> 1000 : false" "wide cited ranges are flagged"
 hmutant "const unscored = last.filter((r) => r.outcome !== 'scored');" "const unscored = [];" "unscored rows are reported next to R"
 hmutant "redactTree(tmp, token);" "" "a kept workspace is redacted"
+hmutant "style === 'blank' ? '' : t.startsWith" "false ? '' : t.startsWith" "blank placeholder makes an empty line"
+hmutant "o?.placeholder ?? 'comment']" "'comment']" "the placeholder style is part of the run identity"
+hmutant "else { row.falsePositive = j.hit; row.fpOutsideTests = j.fpOut; }" "else { row.falsePositive = j.hit; row.fpOutsideTests = j.hit; }" "the sensitivity looks at where the finding is"
+hmutant "if (sens) lines.push(" "if (false) lines.push(" "the summary prints the sensitivity line"
 hmutant "args.only = order.slice(0, Number(args.pilot)).join(',');" "args.only = order.slice(0, 1).join(',');" "pilot N takes N cases"
 
 ran=$((pass + fail))
-[ "$ran" -ge 200 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 200 written"; }
+[ "$ran" -ge 230 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 230 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

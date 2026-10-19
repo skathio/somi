@@ -6,7 +6,7 @@
 //
 //   node tests/scripts/manual/review-recall.mjs --model ALIAS [--env-file .somi/eval.env] [--seed 20261018]
 //     [--budget-total 20] [--per-call 0.75] [--out DIR] [--dry-run] [--claude claude] [--sandbox auto|off]
-//     [--unsafe-no-sandbox] [--plugin-dir DIR] [--ceiling medium] [--timeout-min 6] [--keep] [--note FILE] [--only m01,c02 | --pilot N]
+//     [--unsafe-no-sandbox] [--plugin-dir DIR] [--ceiling medium] [--timeout-min 6] [--keep] [--note FILE] [--only m01,c02 | --pilot N] [--placeholder comment|blank]
 //
 // Cases: selectCases(tests/evals/ab, seed) -> 40 mutants + 10 clean, in a seeded shuffle. When the committed selection note
 // (.somi/plans/micro-task-suite/phase0-log-read.md, or --note) exists, the rebuilt list must equal it or the run is refused.
@@ -27,7 +27,12 @@
 // sources. The row records which source produced the detecting finding and whether its cited range was wider than 10 lines.
 // Canary: every oracle file carries the task's canary line; in the workspace each such line is replaced by a neutral line of
 // the same line count (baseline copies and the working file alike, so the frozen line numbers hold) and the workspace is
-// asserted canary-free before launch. A `leak:*` outcome halts the run, and so do two consecutive invalid rows with one reason.
+// asserted canary-free before launch. --placeholder blank makes that line an EMPTY line instead of a comment marker, which a
+// reviewer would otherwise flag as stray (default comment, so earlier results stay reproducible); the style is part of the run
+// identity, so runs with different styles never merge.
+// The summary also prints a SENSITIVITY line (clean cases counted as false positives only for findings outside test files);
+// the registered R, FPR and branch are computed exactly as before.
+// A `leak:*` outcome halts the run, and so do two consecutive invalid rows with one reason.
 // Tier: the workspace's .somi/config.json carries cost.ceiling (--ceiling) and EVERY agent of the plugin pinned to it, the
 // "--pin-all" configuration of the A/B driver (a copy of its costBlock: that file runs main() on import, so it cannot be
 // imported). The harness knows no model names.
@@ -47,14 +52,14 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildPlugin, childEnv, classify, claudeArgv, prepareWorkspace, probeSandbox, readEnvFile, resolveBinary, runClaude, sandboxArgs, sandboxSpec, seededShuffle, taskText } from '../../evals/lib/ab-draw.mjs';
 import { createSink, redactToken, sweepProcesses } from '../../evals/lib/ab-stream.mjs';
-import { DEFAULT_SEED, DETECTING, MAX_FINDINGS, MAX_INPUT_CHARS, mutatedRange, overlaps, parseFindings, recallStats, sameFile, scoreClean, scoreMutant, selectCases } from '../../evals/lib/review-recall.mjs';
+import { DEFAULT_SEED, DETECTING, MAX_FINDINGS, MAX_INPUT_CHARS, mutatedRange, outsideTests, overlaps, parseFindings, recallStats, sameFile, scoreClean, scoreMutant, selectCases, sensitivityStats } from '../../evals/lib/review-recall.mjs';
 import { VALID_COSTS } from '../../../scripts/lib/cost-model.mjs';
 import { validateCostConfig } from '../../../scripts/lib/cost-config.mjs';
 
 const REPO = path.resolve(import.meta.dirname, '../../..');
 const AB = path.join(REPO, 'tests/evals/ab');
 const DEFAULT_NOTE = path.join(REPO, '.somi/plans/micro-task-suite/phase0-log-read.md');
-const FLAGS = new Set(['model', 'env-file', 'seed', 'budget-total', 'per-call', 'out', 'claude', 'sandbox', 'plugin-dir', 'ceiling', 'timeout-min', 'note', 'only', 'pilot']);
+const FLAGS = new Set(['model', 'env-file', 'seed', 'budget-total', 'per-call', 'out', 'claude', 'sandbox', 'plugin-dir', 'ceiling', 'timeout-min', 'note', 'only', 'pilot', 'placeholder']);
 const SWITCHES = new Set(['dry-run', 'unsafe-no-sandbox', 'keep']);
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]{0,63}$/;
 const MAX_STREAM = 16 * 1024 * 1024;
@@ -86,9 +91,10 @@ function parseArgs(argv) {
   }
   const num = (k, d, min) => { const v = a[k] === undefined ? d : Number(a[k]); if (!Number.isFinite(v) || v < min) die(`--${k} must be a number >= ${min}`); return v; };
   if (a.sandbox !== undefined && !['auto', 'off'].includes(a.sandbox)) die('--sandbox must be auto or off');
+  if (a.placeholder !== undefined && !['comment', 'blank'].includes(a.placeholder)) die('--placeholder must be comment or blank');
   if (a.ceiling !== undefined && !VALID_COSTS.includes(a.ceiling)) die(`--ceiling must be one of ${VALID_COSTS.join('|')}`);
   if (a.pilot !== undefined && (a.only !== undefined || !/^[1-9]\d{0,2}$/.test(a.pilot))) die('--pilot takes a positive number and excludes --only');
-  return { ...a, seed: Math.floor(num('seed', DEFAULT_SEED, 0)), budgetTotal: num('budget-total', 20, 0.01), perCall: num('per-call', 0.75, 0.01), timeoutMin: num('timeout-min', 6, 0.001), ceiling: a.ceiling ?? 'medium' };
+  return { ...a, seed: Math.floor(num('seed', DEFAULT_SEED, 0)), budgetTotal: num('budget-total', 20, 0.01), perCall: num('per-call', 0.75, 0.01), timeoutMin: num('timeout-min', 6, 0.001), ceiling: a.ceiling ?? 'medium', placeholder: a.placeholder ?? 'comment' };
 }
 
 /** The `cost` block of every workspace: the ceiling and every agent of `agentsDir` pinned to it, checked by the shared validator. */
@@ -133,9 +139,9 @@ function oracleFiles(dir) {
   return out;
 }
 
-const neutralLine = (line) => { const t = line.trim(); return t.startsWith('<!--') ? '<!-- -->' : t.startsWith('//') ? '//' : t.startsWith('#') ? '#' : ''; };
+const neutralLine = (line, style) => { const t = line.trim(); return style === 'blank' ? '' : t.startsWith('<!--') ? '<!-- -->' : t.startsWith('//') ? '//' : t.startsWith('#') ? '#' : ''; };
 /** Every line holding the canary becomes a neutral line, so the line count (and every frozen line number) is unchanged. */
-const stripCanary = (text, canary) => text.split('\n').map((l) => (l.includes(canary) ? neutralLine(l) : l)).join('\n');
+const stripCanary = (text, canary, style) => text.split('\n').map((l) => (l.includes(canary) ? neutralLine(l, style) : l)).join('\n');
 /** `rel` resolved under `base`, refusing anything that leaves it. */
 function inside(base, rel) {
   const full = path.resolve(base, String(rel));
@@ -150,7 +156,7 @@ function filesUnder(dir, skipGit = true) {
 }
 
 /** The throwaway repository of one case -> {ws, diff: {added, removed, files, bytes}}. Throws an Error that names the step that failed. */
-function buildCase(c, tmp, cost, task) {
+function buildCase(c, tmp, cost, task, placeholder) {
   const taskDir = inside(AB, c.task);
   const { ws } = prepareWorkspace({ taskDir, tmp, cost });
   const git = (...a) => { const r = spawnSync('git', a, { cwd: ws, env: { ...PATH_ONLY(tmp), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, encoding: 'utf8', timeout: GIT_MS }); if (r.error || r.status !== 0) throw new Error(`git ${a[0]} failed`); return r.stdout; };
@@ -171,7 +177,7 @@ function buildCase(c, tmp, cost, task) {
     }
     const to = inside(ws, rel);
     fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.writeFileSync(to, stripCanary(content, task.canary));
+    fs.writeFileSync(to, stripCanary(content, task.canary, placeholder));
   }
   if (c.kind === 'mutant' && !applied) throw new Error('the mutated file is not part of the solution');
   git('add', '-N', '.');
@@ -211,12 +217,13 @@ const chunksOf = (text) => { const o = []; for (let i = 0; i < text.length; i +=
 
 /** Score the sources -> {hit, source, wide, unparsed, findings, total}. The rule itself is the library's (scoreMutant / scoreClean). */
 function judge(c, sources) {
-  let parsedAny = false; let hit = false; let source = null; let wide = false; let total = 0; const findings = [];
+  let parsedAny = false; let hit = false; let source = null; let wide = false; let total = 0; let fpOut = false; const findings = [];
   for (const name of SOURCES) {
     for (const chunk of chunksOf(sources[name] ?? '')) {
       const p = parseFindings(chunk);
       if (!p.unparsed) parsedAny = true;
       total += p.findings.length; if (findings.length < KEPT_FINDINGS) findings.push(...p.findings.slice(0, KEPT_FINDINGS - findings.length));
+      if (c.kind === 'clean' && outsideTests(p.findings)) fpOut = true;
       if (hit) continue;
       const m = { file: c.file, start: c.start, end: c.end };
       if (c.kind === 'mutant' ? scoreMutant(chunk, m).detected : scoreClean(chunk).falsePositive) {
@@ -226,7 +233,7 @@ function judge(c, sources) {
       }
     }
   }
-  return { hit, source, wide, unparsed: !parsedAny, findings, total: Math.min(total, MAX_FINDINGS) };
+  return { hit, source, wide, fpOut, unparsed: !parsedAny, findings, total: Math.min(total, MAX_FINDINGS) };
 }
 
 /** Copy the review files the command wrote into the case directory (redacted, bounded); the originals die with the workspace. */
@@ -275,7 +282,9 @@ function summary(rows, caseIds) {
   const scored = last.filter((r) => r.outcome === 'scored');
   const unscored = last.filter((r) => r.outcome !== 'scored');
   const cost = rows.reduce((s, r) => s + (Number.isFinite(r.costUsd) ? r.costUsd : 0), 0);
-  const st = recallStats(scored.map((r) => ({ kind: r.kind, detected: r.detected === true, falsePositive: r.falsePositive === true, unparsed: r.unparsed === true })));
+  const asRow = (r) => ({ kind: r.kind, detected: r.detected === true, falsePositive: r.falsePositive === true, unparsed: r.unparsed === true, fpOutsideTests: typeof r.fpOutsideTests === 'boolean' ? r.fpOutsideTests : outsideTests(r.findings ?? []) });
+  const st = recallStats(scored.map(asRow));
+  const sens = sensitivityStats(scored.map(asRow));
   const pct = (x) => x.toFixed(3);
   const iv = (i) => (i ? `${pct(i.lower)}-${pct(i.upper)}` : 'n/a');
   const why = {}; for (const r of unscored) { const k = r.outcome === 'invalid' ? `invalid:${String(r.reason).split(':')[0]}` : r.outcome; why[k] = (why[k] ?? 0) + 1; }
@@ -286,6 +295,7 @@ function summary(rows, caseIds) {
     lines.push(`recall R = ${st.k}/${st.n} = ${pct(st.R)} (95% interval ${iv(st.interval)})`);
     lines.push(`false-positive rate FPR = ${st.f}/${st.m} = ${pct(st.FPR)} (95% interval ${iv(st.fprInterval)})`);
     lines.push(`R - FPR = ${pct(st.diff)}`);
+    if (sens) lines.push(`SENSITIVITY (not the registered reading; the branch above is the registered one): FPR excluding findings located in test/ files = ${sens.f}/${sens.m} = ${pct(sens.FPR)} (95% interval ${iv(sens.interval)}); R - FPR = ${pct(sens.diff)}`);
     const det = scored.filter((r) => r.kind === 'mutant' && r.detected === true);
     const bySource = {}; for (const r of det) bySource[r.source] = (bySource[r.source] ?? 0) + 1;
     lines.push(`detections by source: ${det.length === 0 ? 'none' : Object.entries(bySource).map(([k, n]) => `${n} ${k}`).join(', ')}; ${det.filter((r) => r.wide).length} of ${det.length} from a cited range wider than ${WIDE_LINES} lines`);
@@ -339,7 +349,7 @@ async function main() {
     for (const c of cases) {
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
       try {
-        const { diff } = buildCase(c, tmp, cost, JSON.parse(fs.readFileSync(path.join(inside(AB, c.task), 'task.json'), 'utf8')));
+        const { diff } = buildCase(c, tmp, cost, JSON.parse(fs.readFileSync(path.join(inside(AB, c.task), 'task.json'), 'utf8')), args.placeholder);
         console.log(`  ${pad(c.order)} ${c.id} ${c.kind} ${c.task} ${c.kind === 'clean' ? c.variant : `${c.file} [${c.name}] lines ${rangeText(c)}`} diff +${diff.added} -${diff.removed} over ${diff.files} file(s), ${diff.bytes} bytes`);
         if (!biggest || diff.bytes > biggest.diff.bytes) biggest = { id: c.id, diff };
       } catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); die(`case ${c.id} cannot be built: ${String(e?.message ?? e).slice(0, 120)}`, 1); } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
@@ -369,8 +379,10 @@ async function main() {
     if (!fs.statSync(plugin, { throwIfNoEntry: false })?.isDirectory() || fs.existsSync(path.join(plugin, 'tests/evals')) || fs.existsSync(path.join(plugin, '.somi'))) die('--plugin-dir must be a directory without tests/evals and .somi');
   } else { try { plugin = buildPlugin({ repoRoot: REPO, runTmp }); } catch (e) { die(`the plugin could not be packed: ${e.message}`, 1); } }
   const pluginHash = sha(...['agents/reviewer.md', 'commands/review.md'].map((f) => { try { return fs.readFileSync(path.join(plugin, f), 'utf8'); } catch { return ''; } }));
-  const runInfo = { model: args.model, ceiling: args.ceiling, seed: args.seed, plugin: pluginHash, selection: selectionHash };
-  for (const r of readRows(resultsFile)) if (JSON.stringify(r.run) !== JSON.stringify(runInfo)) die(`${resultsFile} was written by a different run (model, ceiling, seed, plugin or selection differs); use a fresh --out`);
+  const identity = (o) => JSON.stringify([o?.model, o?.ceiling, o?.seed, o?.plugin, o?.selection, o?.placeholder ?? 'comment']);
+  const runInfo = { model: args.model, ceiling: args.ceiling, seed: args.seed, plugin: pluginHash, selection: selectionHash, placeholder: args.placeholder };
+  // Rows written before the placeholder option existed used the comment style.
+  for (const r of readRows(resultsFile)) if (identity(r.run) !== identity(runInfo)) die(`${resultsFile} was written by a different run (model, ceiling, seed, plugin, selection or placeholder style differs); use a fresh --out`);
   const spec = sandboxSpec({ home: process.env.HOME ?? os.homedir(), repoRoot: REPO, claudeReal, plugin });
   let sandboxOn = false;
   if (sandboxMode === 'auto') {
@@ -394,9 +406,9 @@ async function main() {
     fs.mkdirSync(caseDir, { recursive: true, mode: 0o700 });
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
     liveTmp.add(tmp);
-    const row = { case: c.id, kind: c.kind, task: c.task, mutant: c.name, file: c.file, variant: c.variant ?? null, mutated: c.kind === 'mutant' ? { start: c.start, end: c.end } : null, order: c.order, run: runInfo, detected: null, falsePositive: null, source: null, wide: false, unparsed: false, findingsTotal: 0, findings: [], outcome: 'invalid', reason: '', costUsd: 0, durationMs: 0, models: [] };
+    const row = { case: c.id, kind: c.kind, task: c.task, mutant: c.name, file: c.file, variant: c.variant ?? null, mutated: c.kind === 'mutant' ? { start: c.start, end: c.end } : null, order: c.order, run: runInfo, detected: null, falsePositive: null, fpOutsideTests: null, source: null, wide: false, unparsed: false, findingsTotal: 0, findings: [], outcome: 'invalid', reason: '', costUsd: 0, durationMs: 0, models: [] };
     try {
-      const { ws } = buildCase(c, tmp, cost, task);
+      const { ws } = buildCase(c, tmp, cost, task, args.placeholder);
       const sink = createSink(path.join(caseDir, 'stream.jsonl'), { token, canary: task.canary, task: c.task, absAb: AB, ownTmp: tmp, maxBytes: MAX_STREAM });
       sink.turn();
       const argv = claudeArgv({ arm: 'somi', prompt: promptFor(task), budget: args.perCall, plugin, resume: null, model: args.model });
@@ -424,7 +436,7 @@ async function main() {
       fs.writeFileSync(path.join(caseDir, 'reviewer.txt'), redactToken(SOURCES.map((k) => `=== ${k} ===\n${sources[k]}`).join('\n'), token).slice(0, MAX_KEPT_TEXT), { mode: 0o600 });
       const j = judge(c, sources);
       Object.assign(row, { unparsed: j.unparsed, findingsTotal: j.total, findings: j.findings, source: j.source, wide: j.wide });
-      if (row.outcome === 'scored') { if (c.kind === 'mutant') row.detected = j.hit; else row.falsePositive = j.hit; }
+      if (row.outcome === 'scored') { if (c.kind === 'mutant') row.detected = j.hit; else { row.falsePositive = j.hit; row.fpOutsideTests = j.fpOut; } }
     } catch (e) { row.reason = `case-fault: ${String(e?.message ?? e).slice(0, 120)}`; } finally {
       if (args.keep) { try { fs.rmSync(path.join(tmp, 'cfg'), { recursive: true, force: true }); redactTree(tmp, token); } catch { /* best effort */ } } else fs.rmSync(tmp, { recursive: true, force: true });
       liveTmp.delete(tmp);

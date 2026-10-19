@@ -158,6 +158,15 @@ export function scoreClean(output) {
   return { kind: 'clean', falsePositive: p.findings.some((f) => DETECTING.includes(f.severity)), unparsed: p.unparsed };
 }
 
+/** Paths of test files: a directory named test or tests anywhere in the path. */
+export const TEST_PATH = /(^|\/)(test|tests)\//;
+/** True when a Blocker or Major finding points outside test files. */
+export const outsideTests = (findings) => findings.some((f) => DETECTING.includes(f.severity) && !TEST_PATH.test(norm(f.file)));
+/** Sensitivity of a clean case: a false positive only if a Blocker or Major finding is outside test files. */
+export function scoreCleanOutsideTests(output) {
+  return outsideTests(parseFindings(output).findings);
+}
+
 /** Wilson 95% interval for k of n, or null outside the domain. */
 export function wilson95(k, n) {
   return wilson(k, n, 1.96);
@@ -178,6 +187,20 @@ export function branchFor(k, n, f, m) {
   if (!ge(k, n, T.R_LIMITED) || !ge(diffNum, diffDen, T.DIFF_MIN)) return 'NO-GO';
   if (!ge(k, n, T.R_GO)) return 'LIMITED-GO';
   return ge(diffNum, diffDen, T.DIFF_GO) ? 'GO' : 'UNDEFINED';
+}
+
+/**
+ * SENSITIVITY reading, never the registered one: the false-positive rate when a clean case counts only if a
+ * Blocker/Major finding lies outside test files. Rows are {kind, ..., fpOutsideTests} like recallStats' rows; recall is the
+ * registered R. Returns null unless recallStats would, or a clean row lacks a boolean fpOutsideTests.
+ */
+export function sensitivityStats(rows) {
+  const st = recallStats(rows);
+  if (st === null) return null;
+  const clean = rows.filter((r) => r.kind === 'clean');
+  if (clean.some((r) => typeof r.fpOutsideTests !== 'boolean')) return null;
+  const f = clean.filter((r) => r.fpOutsideTests).length;
+  return { m: clean.length, f, FPR: f / clean.length, interval: wilson95(f, clean.length), diff: st.R - f / clean.length };
 }
 
 /**
