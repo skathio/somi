@@ -19,9 +19,24 @@ const CAVEAT = 'Caveats: the host is not contained unless the run used the sandb
   + 'a cost marked ~ is an estimate (the call ended without a result, the whole per-draw cap is charged). A call that overshoots the cap but otherwise '
   + 'succeeds is classed over-budget. A paused SoMi draw scores 0 in the verdict; its scorer green is shown next to it.';
 
-/** Result rows -> the report text (tables, the compareArms verdicts, counts, noise spread, caveats). */
+/**
+ * The old-corpus report reads experiment rows only. Rows of another phase, or rows of mixed phases, are refused with the reason;
+ * rows written before the field existed are legacy and allowed (named in the report). -> {ok: true, legacy} | {ok: false, message}.
+ */
+export function checkPhases(rows) {
+  const phases = new Set(rows.map((r) => r.phase).filter((p) => p !== undefined));
+  const legacy = rows.filter((r) => r.phase === undefined).length;
+  if (phases.size > 1) return { ok: false, message: `the rows mix phases (${[...phases].sort().join(', ')}); a calibration or sizing draw is never an experiment draw, report each phase from its own results file` };
+  if (phases.size === 1 && !phases.has('experiment')) return { ok: false, message: `the rows carry phase ${[...phases][0]}, not experiment; a calibration or sizing draw is never an experiment draw and this report would turn it into a verdict` };
+  return { ok: true, legacy };
+}
+
+/** Result rows -> the report text (tables, the compareArms verdicts, counts, noise spread, caveats). Throws on rows of another phase. */
 export function buildReport(rows) {
+  const ph = checkPhases(rows);
+  if (!ph.ok) throw new Error(ph.message);
   const L = [];
+  if (ph.legacy > 0) L.push(`note: ${ph.legacy} legacy row(s) without a phase field are treated as experiment rows`);
   const real = rows.filter((r) => !r.noise && r.outcome !== 'budget-stop');
   const tasks = [...new Set(real.map((r) => r.task))].sort();
   const get = (t, arm) => real.find((r) => r.task === t && r.arm === arm);

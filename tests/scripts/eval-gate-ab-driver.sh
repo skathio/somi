@@ -51,7 +51,7 @@ else if (mode === 'setsid') { cp.spawn('setsid', ['sleep', String(cfg.sleep)], {
 else if (mode === 'pause') { if (argv.includes('--resume')) { say('All done.'); solve(); result({ result: 'All done.' }); } else { say('Shall I proceed with this plan?'); result({ result: 'Shall I proceed with this plan?', session_id: 'sess-p' }); } }
 else if (mode === 'pause-forever') { say('Please review the design. Shall I proceed?'); result({ result: 'Please review the design. Shall I proceed?', session_id: 'sess-p' }); }
 else if (mode === 'pause-costly') { say('Shall I continue?'); result({ result: 'Shall I continue?', session_id: 'sess-p', total_cost_usd: 7.95 }); }
-else if (mode === 'slowpause') setTimeout(() => { say('Shall I continue?'); result({ result: 'Shall I continue?', session_id: 'sess-p', total_cost_usd: 0.2 }); }, 1500);
+else if (mode === 'slowpause') setTimeout(() => { say('Shall I continue?'); result({ result: 'Shall I continue?', session_id: 'sess-p', total_cost_usd: 0.2 }); }, 4000);
 else if (mode === 'token-echo') { emit({ type: 'user', message: { content: [{ type: 'tool_result', content: 'env says ' + process.env.CLAUDE_CODE_OAUTH_TOKEN }] } }); solve(); result(); }
 else if (mode === 'fold') {
   const t = process.env.CLAUDE_CODE_OAUTH_TOKEN;
@@ -279,12 +279,12 @@ for m in $MODES; do
   cli "$m" "$ROOT" "$(mkstub "$m" "$m" 41001)" "$TMP/eval.env" "${extra[@]}"
 done
 cli ceil "$ROOT" "$(mkstub ceil solve 0)" "$TMP/eval.env" --ceiling-somi low --pin-all
-cli slowpause "$ROOT" "$(mkstub slowpause slowpause 0)" "$TMP/eval.env" --timeout-min 0.04
+cli slowpause "$ROOT" "$(mkstub slowpause slowpause 0)" "$TMP/eval.env" --timeout-min 0.1
 cli limit-event "$ROOT" "$(mkstub limit-event limit-event 0)" "$TMP/eval.env" --concurrency 1
 cli limit-text "$ROOT" "$(mkstub limit-text limit-text 0)" "$TMP/eval.env" --concurrency 1
 cli bg-ceiling "$ROOT" "$(mkstub bg-ceiling bg-ceiling 0)" "$TMP/eval.env" --concurrency 1
 cli perarm "$ROOT" "$(mkstub perarm pause 0)" "$TMP/eval.env" --budget-somi 5
-cli perarm-time "$ROOT" "$(mkstub perarm-time slowpause 0)" "$TMP/eval.env" --timeout-min 5 --timeout-somi-min 0.04
+cli perarm-time "$ROOT" "$(mkstub perarm-time slowpause 0)" "$TMP/eval.env" --timeout-min 5 --timeout-somi-min 0.1
 cli fd "$ROOT" "$(mkstub fd fd 0)" "$TMP/eval.env" --token-fd
 cli spawn-error "$ROOT" "$TMP/no-such-claude" "$TMP/eval.env"
 cli envmode "$ROOT" "$(mkstub envmode solve 0)" "$TMP/eval644.env"
@@ -300,7 +300,7 @@ mutant() { # mode file from to label [from2 to2]
   if ! apply "$d/$2" "$3" "$4" || { [ -n "${6:-}" ] && ! apply "$d/$2" "$6" "$7"; }; then mnames+=("$n"); mmodes+=(BAD); mlabels+=("$5"); return; fi
   mnames+=("$n"); mmodes+=("$1"); mlabels+=("$5")
   local extra=() envf="$TMP/eval.env" sm="$1" sl="41$((100 + nm))"
-  case "$1" in ceil) sm=solve; extra=(--ceiling-somi low --pin-all) ;; hang) extra=(--timeout-min 0.03) ;; setsid) extra=(--timeout-min 0.1) ;; slowpause) extra=(--timeout-min 0.04) ;; envmode) envf="$TMP/eval644.env"; sm=solve ;; esac
+  case "$1" in ceil) sm=solve; extra=(--ceiling-somi low --pin-all) ;; hang) extra=(--timeout-min 0.03) ;; setsid) extra=(--timeout-min 0.1) ;; slowpause) extra=(--timeout-min 0.1) ;; envmode) envf="$TMP/eval644.env"; sm=solve ;; esac
   [ "$1" = fd ] && extra=(--token-fd)
   if [ "$1" = sigint ]; then cli_sigint "$n" "$(mkstub "$n" hang "$sl")" "$d"; else cli "$n" "$d" "$(mkstub "$n" "$sm" "$sl")" "$envf" "${extra[@]}"; fi
 }
@@ -326,7 +326,7 @@ mutant solve $DR "...(arm === 'somi' ? ['--plugin-dir', plugin] : [])" "'--plugi
 mutant solve $DR "'--disallowed-tools', 'WebFetch,WebSearch', " "" "the web tools are disabled"
 mutant solve $DR "(arm === 'somi' ? \`/somi:ship-loop \${text}\` : text)" "text" "the ship-loop prefix"
 mutant over-budget $DR "r.subtype === 'error_max_budget_usd' || " "" "over-budget from the result subtype"
-mutant pause-forever $DR "run.resumes >= MAX_RESUMES" "false" "the resume cap"
+mutant pause-forever $DR "run.resumes >= maxResumes" "false" "the resume cap"
 mutant pause $DR "|| !looksPaused(sink.state.text) ||" "|| true ||" "a pause is resumed"
 mutant pause $DR "budget: budget - run.cost" "budget: budget" "the resume gets the remaining budget"
 mutant pause-costly $DR "if (budget - run.cost < MIN_REMAINING_USD)" "if (false)" "no resume without budget left"
@@ -345,8 +345,8 @@ mutant limit-text tests/scripts/manual/ab-experiment.mjs "st.stopReason = row.re
 mutant bg-ceiling $DR "if (/Background tasks still running after/.test(run.stderr)) return inv('bg-wait-ceiling');" "" "the background-wait ceiling is invalid"
 mutant bg-ceiling tests/scripts/manual/ab-experiment.mjs "row.reason === 'account-limit' || row.reason === 'bg-wait-ceiling')" "row.reason === 'account-limit')" "the background-wait ceiling halts the run"
 mutant solve $DR ", CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' };" " };" "the background-wait ceiling is lifted in the child environment"
-mutant perarm tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.budgetSomi : args.budgetPerDraw)" "args.budgetPerDraw" "the SoMi arm's own dollar cap"
-mutant perarm-time tests/scripts/manual/ab-experiment.mjs "(arm === 'somi' ? args.timeoutSomiMin : args.timeoutMin)" "args.timeoutMin" "the SoMi arm's own time limit"
+mutant perarm tests/scripts/manual/ab-experiment.mjs "arm === 'somi' ? args.budgetSomi : args.budgetPerDraw" "args.budgetPerDraw" "the SoMi arm's own dollar cap"
+mutant perarm-time tests/scripts/manual/ab-experiment.mjs "arm === 'somi' ? args.timeoutSomiMin : args.timeoutMin" "args.timeoutMin" "the SoMi arm's own time limit"
 mutant ceil tests/scripts/manual/ab-experiment.mjs "cost.agents = Object.fromEntries(names.map((n) => [n, ceiling]));" "" "--pin-all writes the agent pins"
 mutant ceil tests/scripts/manual/ab-experiment.mjs "prepareWorkspace({ taskDir: t.dir, tmp, cost })" "prepareWorkspace({ taskDir: t.dir, tmp })" "the workspace carries the chosen ceiling"
 mutant sigint tests/scripts/manual/ab-experiment.mjs "for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'])" "for (const sig of ['SIGTERM'])" "SIGINT is handled"
@@ -410,6 +410,7 @@ $G --report-only "$TMP/old.jsonl" > "$TMP/ro1.log" 2>&1; r1=$?; $G --report-only
 if [ "$r1" -eq 0 ] && [ "$r2" -eq 0 ] && cmp -s "$TMP/ro1.log" "$TMP/ro2.log"; then pass=$((pass+1)); echo "  ok   a results file without ceilingSomi/pinAll reports, and identically to one that has them"; else fail=$((fail+1)); echo "  FAIL report on old/new rows ($r1/$r2)"; fi
 
 if [ "$(cat "$TMP/o-envlink.rc" 2>/dev/null)" = 2 ] && [ ! -e "$TMP/o-envlink/results.jsonl" ]; then pass=$((pass+1)); echo "  ok   an env file that is a symlink is refused"; else fail=$((fail+1)); echo "  FAIL symlinked env file"; fi
+if node -e "const r=require('fs').readFileSync(process.argv[1],'utf8').split('\n').filter(Boolean).map(JSON.parse);process.exit(r.length===2&&r.every((x)=>x.phase==='experiment')&&r.find((x)=>x.arm==='somi').computedTier===null?0:1)" "$TMP/o-solve/results.jsonl"; then pass=$((pass+1)); echo "  ok   an old-corpus run defaults to the experiment phase on every row"; else fail=$((fail+1)); echo "  FAIL old-corpus default phase"; fi
 git check-ignore -q .somi/ab-results/x && { pass=$((pass+1)); echo "  ok   the default results directory is gitignored"; } || { fail=$((fail+1)); echo "  FAIL default output directory is not ignored"; }
 grep -q '^scripts/manual/' tests/.npmignore && { pass=$((pass+1)); echo "  ok   tests/scripts/manual/ is excluded from the package"; } || { fail=$((fail+1)); echo "  FAIL manual/ is not in tests/.npmignore"; }
 
@@ -418,8 +419,178 @@ for i in "${!mnames[@]}"; do
   n="${mnames[$i]}"; r=$(verify "$ROOT" "${mmodes[$i]}" "$n" "41$((100 + ${n#mu}))" | grep -c '^FAIL')
   if [ "$r" -gt 0 ]; then pass=$((pass+1)); printf '  ok   mutation caught: %s\n' "${mlabels[$i]}"; else fail=$((fail+1)); printf '  FAIL mutation survived: %s\n' "${mlabels[$i]}"; fi
 done
+# ---- --corpus, --sizing-probe, tier recording, --phase (a stub claude on a scratch micro corpus) ---------------------------------
+MSTUB=$(cat <<'EOS'
+#!/usr/bin/env node
+const fs = require('fs'), path = require('path');
+const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'stub.json'), 'utf8'));
+const mode = path.basename(__filename).slice(5);
+fs.appendFileSync(path.join(process.env.HOME, 'argv.jsonl'), JSON.stringify(process.argv.slice(2)) + '\n');
+const emit = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+const say = (text) => emit({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
+const result = (o = {}) => emit({ type: 'result', subtype: 'success', is_error: false, result: 'Done.', total_cost_usd: 0.1, num_turns: 2, session_id: 'sess-1', modelUsage: { 'stub-usage-key': {} }, ...o });
+const DIR = '.somi/somi-state/tier';
+const put = (name, text) => { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(path.join(DIR, name), text); };
+const tool = (text) => emit({ type: 'user', message: { content: [{ type: 'tool_result', content: text }] } });
+emit({ type: 'system', subtype: 'init', session_id: 'sess-1' });
+const gate = () => { say('Shall I proceed with this plan?'); result({ result: 'Shall I proceed with this plan?', session_id: 'sess-p' }); };
+if (mode === 'small') { put('x-task.json', '{"tier":"small","computed_tier":"small"}'); say('Done.'); result(); }
+else if (mode === 'gate') { put('x-task.json', '{"tier":"small"}'); gate(); }
+else if (mode === 'gate-full') { put('x-task.json', '{"tier":"full","computed_tier":"small","source":"override"}'); gate(); }
+else if (mode === 'many') { for (let i = 0; i < 17; i++) put(`a${String(i).padStart(2, '0')}-task.json`, '{"tier":"small"}'); say('Done.'); result(); }
+else if (mode === 'decoys') { for (let i = 0; i < 16; i++) put(`a${String(i).padStart(2, '0')}-task.json`, '{not json'); put('z-real.json', '{"tier":"small"}'); say('Done.'); result(); }
+else if (mode === 'corrupt') { put('x-task.json', '{not json'); tool('{"tier":"small","effective":"small"}'); say('Done.'); result(); }
+else if (mode === 'mixed') { put('a-task.json', '{"tier":"small"}'); put('b-task.json', '{not json'); say('Done.'); result(); }
+else if (mode === 'stream-fake') { emit({ type: 'assistant', message: { content: [{ type: 'tool_result', content: '{"effective":"small"}' }] } }); say('Done.'); result(); }
+else if (mode === 'symlink') { fs.mkdirSync(DIR, { recursive: true }); fs.symlinkSync(cfg.lure, path.join(DIR, 'x-task.json')); say('Done.'); result(); }
+else if (mode === 'big') { put('x-task.json', '{"tier":"small"}' + ' '.repeat(10 * 1024 * 1024)); say('Done.'); result(); }
+else if (mode === 'garbled') { put('x-task.json', '{not json SECRET-MARK'); say('Done.'); result(); }
+else if (mode === 'inject') { put('x-task.json', '{"tier":"full; rm -rf SECRET-MARK"}'); say('Done.'); result(); }
+else if (mode === 'upper') { put('x-task.json', '{"tier":"FULL"}'); say('Done.'); result(); }
+else if (mode === 'object') { put('x-task.json', '{"tier":{"a":"SECRET-MARK"}}'); say('Done.'); result(); }
+else if (mode === 'conflict') { put('a-task.json', '{"tier":"small"}'); put('b-task.json', '{"tier":"full"}'); say('Done.'); result(); }
+else if (mode === 'dirlink') { fs.mkdirSync('.somi/somi-state', { recursive: true }); fs.mkdirSync(cfg.outside, { recursive: true }); fs.writeFileSync(path.join(cfg.outside, 'x-task.json'), '{"tier":"small"}'); fs.symlinkSync(cfg.outside, DIR); say('Done.'); result(); }
+else if (mode === 'stream') { tool('{"tier":"small","effective":"small","source":"computed","floor":"small"}'); say('Done.'); result(); }
+else if (mode === 'stream-text') { say('{"tier":"small","effective":"small"}'); say('Done.'); result(); }
+else if (mode === 'stream-bad') { tool('{"effective":"full; SECRET-MARK"} and {"effective":"FULL"}'); say('Done.'); result(); }
+else { say('Done.'); result(); }
+EOS
+)
+mscratch() { # tag -> a scratch repository root with the driver, its libraries and the micro example under tests/evals/ab-micro
+  local d="$TMP/ms-$1"; rm -rf "$d"; mkdir -p "$d/tests/evals/lib" "$d/tests/scripts/manual" "$d/tests/evals/ab-micro" "$d/scripts/lib"; cp scripts/lib/{cost-config,cost-model}.mjs "$d/scripts/lib/"
+  cp tests/evals/lib/{ab-draw,ab-stream,ab-report,admit,score-hidden,task-store,manifest,compare}.mjs "$d/tests/evals/lib/"; cp tests/scripts/manual/ab-experiment.mjs "$d/tests/scripts/manual/"; cp -r tests/evals/ab-micro-template/EXAMPLE "$d/tests/evals/ab-micro/"
+  mkdir -p "$d/tests/evals/ab"; ln -s ab-micro "$d/tests/evals/linkc"; ln -s . "$d/tests/evals/linkd"; : > "$d/tests/evals/ab-micro/task.json"; : > "$d/tests/evals/task.json"
+}
+mrun() { # tag scen mode extra...: the driver on the scratch corpus of <tag>, in the foreground; logs under $TMP/m2-<tag>-<scen>
+  local tag=$1 scen=$2 mode=$3; shift 3
+  local d="$TMP/m2-$tag-$scen" root="$TMP/ms-$tag" ph=(--phase sizing); [ -n "${NOPHASE:-}" ] && ph=(); mkdir -p "$d/tmp" "$d/stub"
+  printf '%s\n' "$MSTUB" > "$d/stub/stub-$mode"; chmod 755 "$d/stub/stub-$mode"
+  printf '{"tier":"small","note":"SECRET-MARK"}' > "$d/lure.json"
+  node -e "require('fs').writeFileSync(process.argv[1], JSON.stringify({lure: process.argv[2], outside: process.argv[3]}))" "$d/stub/stub.json" "$d/lure.json" "$d/outside"
+  ( cd "$root" && env TMPDIR="$d/tmp" node tests/scripts/manual/ab-experiment.mjs --model test-model --sandbox off --plugin-dir "$PLUGIN" --claude "$d/stub/stub-$mode" --env-file "$TMP/eval.env" --out "$d/out" "${ph[@]}" "$@" > "$d/log" 2> "$d/err"; echo $? > "$d/rc" )
+}
+micro_scenarios() { # tag: every scenario in the background (on the scratch root of <tag>), then wait
+  local t=$1 row='{"draw":"T1-proration-bare","task":"T1-proration","arm":"bare","noise":false,"order":0,"outcome":"scored","reason":"","green":3,"total":3,"costUsd":1,"durationMs":1000,"scope":{"ok":true}'
+  printf '%s,"phase":"calibration"}\n' "$row" > "$TMP/rp-cal.jsonl"
+  { printf '%s,"phase":"experiment"}\n' "$row"; printf '%s,"phase":"sizing"}\n' "$row"; } > "$TMP/rp-mix.jsonl"
+  printf '%s}\n' "$row" > "$TMP/rp-leg.jsonl"; printf '%s,"phase":"experiment"}\n' "$row" > "$TMP/rp-exp.jsonl"
+  ( mrun "$t" run small --corpus tests/evals/ab-micro --phase calibration ) &
+  ( NOPHASE=1 mrun "$t" nophasec small --corpus tests/evals/ab-micro --dry-run ) &
+  ( NOPHASE=1 mrun "$t" nophasep small --corpus tests/evals/ab-micro --sizing-probe --dry-run ) &
+  ( mrun "$t" dotname small --corpus tests/evals/ab-micro --tasks . --dry-run ) &
+  ( mrun "$t" dotname2 small --corpus tests/evals/ab-micro --tasks .. --dry-run ) &
+  for r in cal mix leg exp; do ( mrun "$t" "rep-$r" small --report-only "$TMP/rp-$r.jsonl" ) & done
+  ( mrun "$t" probe gate --corpus tests/evals/ab-micro --sizing-probe ) &
+  ( mrun "$t" probefull gate-full --corpus tests/evals/ab-micro --sizing-probe --phase calibration --budget-probe 0.3 --timeout-probe-min 2 ) &
+  ( mrun "$t" refuse small --corpus tests/evals/ab-micro --sizing-probe --phase experiment --dry-run ) &
+  for m in symlink big garbled inject upper object conflict dirlink stream stream-bad stream-text many decoys corrupt mixed stream-fake; do ( mrun "$t" "h-$m" "$m" --corpus tests/evals/ab-micro --sizing-probe ) & done
+  ( mrun "$t" outside small --corpus /tmp --dry-run ) &
+  ( mrun "$t" linkc small --corpus tests/evals/linkc --dry-run ) &
+  ( mrun "$t" linkmid small --corpus tests/evals/linkd/ab-micro --dry-run ) &
+  ( mrun "$t" missing small --corpus tests/evals/nope --dry-run ) &
+  ( mrun "$t" dotdot small --corpus tests/evals/ab-micro/../ab-micro --dry-run ) &
+  ( mrun "$t" afile small --corpus tests/evals/ab-micro/EXAMPLE/task.json --dry-run ) &
+  ( mrun "$t" root small --corpus tests/evals --dry-run ) &
+  ( mrun "$t" dry small --corpus tests/evals/ab-micro --dry-run ) &
+  wait
+}
+M2CHECK=$(cat <<'EOS'
+const fs = require('fs');
+const { TMP, TAG } = process.env;
+const res = [];
+const check = (name, got, want) => res.push([JSON.stringify(got) === JSON.stringify(want), name, got, want]);
+const D = (s) => `${TMP}/m2-${TAG}-${s}`;
+const rd = (s, f) => { try { return fs.readFileSync(`${D(s)}/${f}`, 'utf8'); } catch { return null; } };
+const rows = (s) => (rd(s, 'out/results.jsonl') ?? '').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+const rc = (s) => Number((rd(s, 'rc') ?? 'x').trim());
+const argvs = (row) => (row.tmp && fs.existsSync(`${row.tmp}/argv.jsonl`) ? fs.readFileSync(`${row.tmp}/argv.jsonl`, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+const cap = (a) => a?.[a.indexOf('--max-budget-usd') + 1];
+
+const run = rows('run');
+check('--corpus: the micro corpus is used, no noise draws, one bare and one SoMi row, exit 0', [rc('run'), run.map((r) => [r.task, r.arm, r.noise]).sort()], [0, [['EXAMPLE', 'bare', false], ['EXAMPLE', 'somi', false]]]);
+check('--phase is recorded on every row', run.map((r) => r.phase), ['calibration', 'calibration']);
+const somi = run.find((r) => r.arm === 'somi') ?? {}; const bare = run.find((r) => r.arm === 'bare') ?? {};
+check('the SoMi row records the tier, the computed tier and where it came from; the bare row records none', [somi.tier, somi.computedTier, somi.tierSource, bare.tier, bare.tierSource, bare.computedTier], ['small', 'small', 'file', null, 'none', null]);
+check('a normal draw on the micro corpus is scored by the hidden suite (0 of 16 here: the stub writes no code)', run.map((r) => [r.outcome, r.green, r.total]), [['scored', 0, 16], ['scored', 0, 16]]);
+check('the old-corpus report text does not apply: a count summary, no caveats, side tasks or controls', [/results: 2 row\(s\)/.test(rd('run', 'log') ?? ''), /Caveats|side result|controls|H4-static-files|T1-proration/.test(rd('run', 'log') ?? '')], [true, false]);
+check('--corpus without --phase, and --sizing-probe without --phase, are refused (exit 2) naming the flag', [rc('nophasec'), /--phase .* is required with --corpus/.test(rd('nophasec', 'err') ?? ''), rc('nophasep'), /--phase .* is required with --corpus and --sizing-probe/.test(rd('nophasep', 'err') ?? '')], [2, true, 2, true]);
+const rep = (s) => [rc('rep-' + s), (rd('rep-' + s, 'err') ?? '').replace(/\s+/g, ' ').slice(0, 200), (rd('rep-' + s, 'log') ?? '').split('\n')[0]];
+check('the old-corpus report refuses rows of the calibration phase and rows that mix phases, with the reason', [rep('cal')[0], /cannot report: .*phase calibration, not experiment/.test(rep('cal')[1]), rep('mix')[0], /cannot report: .*mix phases \(experiment, sizing\)/.test(rep('mix')[1])], [2, true, 2, true]);
+check('legacy rows without a phase are reported and the report names them; experiment rows are reported with no such note', [rep('leg')[0], /note: 1 legacy row\(s\) without a phase field/.test(rep('leg')[2]), rep('exp')[0], /legacy/.test(rd('rep-exp', 'log') ?? '')], [0, true, 0, false]);
+check('a task name of . or .. is refused even when a task.json sits there, and the error names the active corpus directory', [rc('dotname'), rc('dotname2'), /--tasks names a directory under tests\/evals\/ab-micro that has no task.json/.test(rd('dotname', 'err') ?? '')], [2, 2, true]);
+
+const probe = rows('probe');
+check('--sizing-probe: exactly one row, SoMi arm, outcome probe, tier recorded, phase sizing, never scored', [rc('probe'), probe.length, probe[0]?.arm, probe[0]?.outcome, probe[0]?.tier, probe[0]?.tierSource, probe[0]?.phase, probe[0]?.green, probe[0]?.failedNames, probe[0]?.scope], [0, 1, 'somi', 'probe', 'small', 'file', 'sizing', 0, [], { ok: false, reason: 'not checked (sizing probe)' }]);
+const pa = argvs(probe[0] ?? {});
+check('the probe made exactly one claude call (the stub ends at the gate with a question) and never resumed; per-probe cap 0.50', [pa.length, pa.flat().includes('--resume'), cap(pa[0]), probe[0]?.resumes], [1, false, '0.50', 0]);
+const pf = rows('probefull');
+check('a probe that chose the full tier records full and the computed small (an override); its own cap and phase flags apply', [pf[0]?.tier, pf[0]?.computedTier, pf[0]?.outcome, pf[0]?.phase, cap(argvs(pf[0] ?? {})[0])], ['full', 'small', 'probe', 'calibration', '0.30']);
+check('the worst-case line of a probe run prints the probe cap and timeout', [/worst case: 1 sizing probe\(s\) x \$0\.5 \(cap per probe, one call, no resume\) = \$0\.50 .* cut off after 5 min/.test(rd('probe', 'log') ?? ''), /x \$0\.3 .* cut off after 2 min/.test(rd('probefull', 'log') ?? '')], [true, true]);
+check('--sizing-probe with --phase experiment is refused (exit 2) before anything starts', [rc('refuse'), /cannot run in the experiment phase/.test(rd('refuse', 'err') ?? ''), rd('refuse', 'out/results.jsonl')], [2, true, null]);
+
+const hostile = ['symlink', 'big', 'garbled', 'inject', 'upper', 'object', 'conflict', 'dirlink', 'stream-bad', 'stream-text', 'many', 'decoys', 'corrupt', 'mixed', 'stream-fake'];
+for (const m of hostile) {
+  const r = rows('h-' + m);
+  // Any entry named like a record, or a link where the directory belongs, makes the answer unknown from the file: the stream is not consulted.
+  const want = ['stream-bad', 'stream-text', 'stream-fake'].includes(m) ? ['unknown', 'none'] : ['unknown', 'file'];
+  // A link anywhere in the workspace makes the draw invalid (the leak scan does not follow links); the tier is still unknown.
+  const outcome = m === 'symlink' || m === 'dirlink' ? 'invalid' : 'probe';
+  check(`hostile tier data (${m}): exit 0, one ${outcome} row, tier unknown, ${want[1]} source`, [rc('h-' + m), r.length, r[0]?.outcome, r[0]?.tier, r[0]?.tierSource], [0, 1, outcome, ...want]);
+}
+check('no content of a hostile tier file or tool result is echoed into a row, the log or stderr', hostile.every((m) => ['out/results.jsonl', 'log', 'err'].every((f) => !/SECRET-MARK|rm -rf/.test(rd('h-' + m, f) ?? ''))), true);
+const st = rows('h-stream');
+check('with no usable record the CLI result line in the stream is the fallback, and the source says so', [st[0]?.tier, st[0]?.tierSource], ['small', 'stream']);
+
+for (const [s, what] of [['outside', 'a directory outside tests/evals'], ['linkc', 'a symbolic link'], ['linkmid', 'a path through a symbolic link directory'], ['missing', 'a missing directory'], ['dotdot', 'a path with ..'], ['afile', 'a file'], ['root', 'tests/evals itself']]) {
+  check(`a bad --corpus (${what}) is refused with exit 2 and starts nothing`, [rc(s), /--corpus must/.test(rd(s, 'err') ?? ''), rd(s, 'out/results.jsonl')], [2, true, null]);
+}
+const dry = rd('dry', 'log') ?? '';
+check('a dry run on the corpus plans its tasks, no noise, and names no old-corpus task', [rc('dry'), /prepared EXAMPLE-bare/.test(dry), /noise|T1-proration|H4-static-files/.test(dry)], [0, true, false]);
+for (const [ok, name, got, w] of res) console.log((ok ? 'ok' : 'FAIL') + '\t' + name + (ok ? '' : ' (want ' + JSON.stringify(w) + ', got ' + JSON.stringify(got).slice(0, 300) + ')'));
+EOS
+)
+m2suite() { local t=$1; rm -rf "$TMP"/m2-"$t"-*; micro_scenarios "$t"; TMP="$TMP" TAG="$t" node -e "$M2CHECK" 2>&1; }
+mscratch base
+tally < <(m2suite base)
+m2nm=0
+m2mutant() { # file from to label
+  local t="x$((++m2nm))"; mscratch "$t"
+  if ! apply "$TMP/ms-$t/$1" "$2" "$3"; then fail=$((fail+1)); printf '  FAIL mutation target not found: %s\n' "$4"; return; fi
+  local res; res=$(m2suite "$t")
+  if [ -z "$res" ] || printf '%s\n' "$res" | grep -qv '^ok'; then pass=$((pass+1)); printf '  ok   mutation caught: %s\n' "$4"; else fail=$((fail+1)); printf '  FAIL mutation survived: %s\n' "$4"; fi
+}
+AD=tests/evals/lib/ab-draw.mjs; EX=tests/scripts/manual/ab-experiment.mjs
+m2mutant $AD "if (!st.isFile() || st.size > TIER_MAX_BYTES) return null;" "if (!st.isFile()) return null;" "the tier file size cap"
+m2mutant $AD "fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    const st" "fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
+    const st" "the tier file is opened without following a link"
+m2mutant $AD "|| typeof v.tier !== 'string' || !TIERS.includes(v.tier)) return null;" "|| typeof v.tier !== 'string') return null;" "only the three tiers are accepted"
+m2mutant $AD "st = fs.lstatSync(dir);" "st = fs.statSync(dir);" "no directory on the way to the tier file may be a link"
+m2mutant $AD "|| new Set(recs.map((r) => r.tier)).size !== 1" "" "disagreeing tier records are unknown"
+m2mutant $AD "tierSource: 'stream', computedTier" "tierSource: 'file', computedTier" "the tier source says stream"
+m2mutant $AD '/"effective":\s*"(small|trivial|full)"/' '/"effective":\s*"([^"]*)"/' "the stream fallback accepts the three tiers only"
+m2mutant $AD "if (ev?.type !== 'user' || " "if (" "the stream fallback reads user events only"
+m2mutant $AD "if (names.length > TIER_MAX_FILES) return unknown;" "" "more than 16 record-like entries are decoys"
+m2mutant $AD "names.map((n) => recordTier(path.join(dir, n)));" "names.map((n) => recordTier(path.join(dir, n))).filter((r) => r !== null);" "every record-like entry must be valid"
+m2mutant $AD "if (rec !== null) return { tier: rec.tier," "if (rec !== null && rec.tier !== 'unknown') return { tier: rec.tier," "the stream is consulted only when there are no records"
+m2mutant $AD "computedTier: computed.size === 1 ? [...computed][0] : null" "computedTier: null" "the computed tier is recorded"
+m2mutant $EX "(a.corpus !== undefined || a['sizing-probe']) && a.phase === undefined" "false" "--phase is required with --corpus or --sizing-probe"
+m2mutant tests/evals/lib/ab-report.mjs "if (phases.size === 1 && !phases.has('experiment'))" "if (false)" "the old-corpus report refuses other phases"
+m2mutant tests/evals/lib/ab-report.mjs "if (phases.size > 1)" "if (false)" "the old-corpus report refuses mixed phases"
+m2mutant $EX "const NAME = /^(?!\\.{1,2}\$)[A-Za-z0-9._-]{1,64}\$/;" "const NAME = /^[A-Za-z0-9._-]{1,64}\$/;" "task names . and .. are refused"
+m2mutant $EX "x \$\${args.budgetProbe} (cap per probe" "x \$\${args.budgetPerDraw} (cap per probe" "the probe worst-case line prints the probe cap"
+m2mutant $EX "maxResumes: args.sizingProbe ? 0 : undefined" "maxResumes: undefined" "a probe never resumes"
+m2mutant $EX "if (args.sizingProbe) row.scope = " "if (false) row.scope = " "a probe is never scored"
+m2mutant $EX "args.only || args.tasks || args.corpus || args.sizingProbe" "args.only || args.tasks || args.sizingProbe" "no noise draws on another corpus"
+m2mutant $EX "rel.startsWith('..')" "false" "a corpus outside tests/evals is refused"
+m2mutant $EX "fs.realpathSync(abs) !== path.join(fs.realpathSync(root), rel)" "false" "a corpus behind a link is refused"
+m2mutant $EX "if (a['sizing-probe'] && a.phase === 'experiment') die(" "if (false) die(" "a probe is never an experiment draw"
+m2mutant $EX "if (d.arm === 'somi') Object.assign(row, resolveTier(" "if (false) Object.assign(row, resolveTier(" "every SoMi row records its tier"
+m2mutant $EX "if (args.sizingProbe && (row.outcome === 'scored'" "if (false && (row.outcome === 'scored'" "a finished probe is outcome probe"
+m2mutant $EX "args.sizingProbe ? args.budgetProbe :" "false ? args.budgetProbe :" "the per-probe cap"
+m2mutant $EX "pinAll: args.pinAll, phase: args.phase, tier: null," "pinAll: args.pinAll, tier: null," "the phase is on every row"
 ran=$((pass + fail))
-[ "$ran" -ge 100 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 100 written"; }
+[ "$ran" -ge 150 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 150 written"; }
 echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
