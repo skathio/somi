@@ -44,9 +44,11 @@ review loop adds for a model of that size on small code, and says nothing about 
   candidate-visible does.
 - `oracle/` is the fast reference. `oracle2/` is an independent implementation by a different method (a brute force where one
   exists): both must score every case. Admission also needs the nop (the fixture alone) to fail every test.
-- `<ID>.mutants.json` holds at least 6 plausible wrong solutions, `{name, file, find, replace}` against `oracle/`, whose failed
-  fractions spread over 5% to 60% of the cases with at least one in each of 5-20%, 20-40% and 40-60%, so that a partial
-  solution can land between 40% and 90%. A mutant that fails nearly everything or one case only is not a plausible mistake.
+- `<ID>.mutants.json` holds at least 6 plausible wrong solutions, `{name, file, find, replace}` against `oracle/`. The share of
+  cases each one fails (the failed fraction) must be at least 5% and at most 90%, with at least one mutant in each of the bands
+  5-20%, 20-40% and 40-60% (a mutant between 60% and 90% is allowed), so that a partial solution can land between 40% and 90%.
+  A mutant that fails no case is equivalent and is reported by name. `tests/evals/lib/mutant-spread.mjs` checks this and
+  `tests/scripts/eval-gate-micro-tasks.sh` runs it, with admission at 3 repeats, over every task here.
 
 ## Before a task counts
 
