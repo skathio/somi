@@ -1,0 +1,168 @@
+{
+  "schema": 1,
+  "scenarios": [
+    {
+      "id": "session-start",
+      "description": "A session opens in a project with no SoMi config: both SessionStart hooks run.",
+      "components": [
+        {
+          "kind": "hook",
+          "name": "session-start/detect-repo-instructions.mjs",
+          "event": "SessionStart",
+          "payload": {
+            "session_id": "l0-fixed",
+            "source": "startup"
+          }
+        },
+        {
+          "kind": "hook",
+          "name": "session-start/ensure-default-config.mjs",
+          "event": "SessionStart",
+          "payload": {
+            "session_id": "l0-fixed",
+            "source": "startup"
+          }
+        }
+      ]
+    },
+    {
+      "id": "first-prompt",
+      "description": "The first user prompt of a session: the UserPromptSubmit hook with the rules digest.",
+      "components": [
+        {
+          "kind": "hook",
+          "name": "user-prompt-submit/inject-workflow-context.mjs",
+          "event": "UserPromptSubmit",
+          "payload": {
+            "session_id": "l0-fixed",
+            "prompt": "Add a retry to the fetch helper."
+          }
+        }
+      ]
+    },
+    {
+      "id": "rules-digest",
+      "description": "The always-on rules digest alone, as it sits in rules/CLAUDE.md.",
+      "components": [
+        {
+          "kind": "digest",
+          "name": "rules/CLAUDE.md"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "description": "/plan as typed: the prompt hook, the command and the planner agent it dispatches.",
+      "components": [
+        {
+          "kind": "hook",
+          "name": "user-prompt-submit/inject-workflow-context.mjs",
+          "event": "UserPromptSubmit",
+          "payload": {
+            "session_id": "l0-fixed",
+            "prompt": "/plan add rate limiting"
+          }
+        },
+        {
+          "kind": "command",
+          "name": "plan"
+        },
+        {
+          "kind": "agent",
+          "name": "planner"
+        }
+      ]
+    },
+    {
+      "id": "code-loop",
+      "description": "/code-loop as typed: the prompt hook, the command, and the coder and reviewer agents it dispatches.",
+      "components": [
+        {
+          "kind": "hook",
+          "name": "user-prompt-submit/inject-workflow-context.mjs",
+          "event": "UserPromptSubmit",
+          "payload": {
+            "session_id": "l0-fixed",
+            "prompt": "/code-loop my-slug phase 1, iteration 1"
+          }
+        },
+        {
+          "kind": "command",
+          "name": "code-loop"
+        },
+        {
+          "kind": "agent",
+          "name": "coder"
+        },
+        {
+          "kind": "agent",
+          "name": "reviewer"
+        }
+      ]
+    },
+    {
+      "id": "ship-loop-stage-m1",
+      "description": "/ship-loop up to the Stage -1 sizing call: prompt hook, command, routing skill and the sizing tool definition.",
+      "components": [
+        {
+          "kind": "hook",
+          "name": "user-prompt-submit/inject-workflow-context.mjs",
+          "event": "UserPromptSubmit",
+          "payload": {
+            "session_id": "l0-fixed",
+            "prompt": "/ship-loop fix the off-by-one in pagination"
+          }
+        },
+        {
+          "kind": "command",
+          "name": "ship-loop"
+        },
+        {
+          "kind": "skill",
+          "name": "somi-routing"
+        },
+        {
+          "kind": "tool",
+          "name": "somi_tier"
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "description": "/review as typed: the prompt hook, the command and the reviewer agent.",
+      "components": [
+        {
+          "kind": "hook",
+          "name": "user-prompt-submit/inject-workflow-context.mjs",
+          "event": "UserPromptSubmit",
+          "payload": {
+            "session_id": "l0-fixed",
+            "prompt": "/review"
+          }
+        },
+        {
+          "kind": "command",
+          "name": "review"
+        },
+        {
+          "kind": "agent",
+          "name": "reviewer"
+        }
+      ]
+    },
+    {
+      "id": "dispatch",
+      "description": "One agent start mid-session: the dispatch skill and the agent.",
+      "components": [
+        {
+          "kind": "skill",
+          "name": "somi-dispatch"
+        },
+        {
+          "kind": "agent",
+          "name": "coder"
+        }
+      ]
+    }
+  ]
+}
