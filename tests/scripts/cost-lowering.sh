@@ -240,5 +240,11 @@ tree nooutside; mutate nooutside hooks/pre-tool/guard-cost-lowering.mjs "askPret
 P="$(proj)"; OTHER="$(proj)"
 check "red proof: without the project_dir check an outside directory is not asked about" "$(verdict "$TMP/nooutside/hooks/pre-tool/guard-cost-lowering.mjs" "$P" "$(pd "$OTHER")")" "silent"
 
+# An audit log path under /proc used to make fs.mkdirSync({recursive}) spin forever, which hung every hook that
+# writes an audit line. The hook must now finish (with an error or not) well inside the timeout.
+P="$(proj)"
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' | CLAUDE_PROJECT_DIR="$P" SOMI_AUDIT_LOG=/proc/nope/x.log timeout 20 node "$ROOT_REPO/hooks/pre-tool/block-dangerous-bash.mjs" >/dev/null 2>&1; rc=$?
+if [ "$rc" -ne 124 ]; then ok "an audit log path that cannot be created fails fast instead of hanging the hook (exit $rc)"; else bad "a hook hung on an audit log path under /proc"; fi
+
 echo "cost lowering tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

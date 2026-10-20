@@ -246,10 +246,37 @@ export function config(fieldPath) {
 // Append a structured line to the audit log. Frozen contract:
 // "timestamp\tkind\ttool\tdetail\n", byte-exact — any deviation here is a
 // regression, not a style choice.
+// Creates `dir` (and missing parents) without fs.mkdirSync's recursive mode, which spins forever on some
+// paths (for example under /proc): find the nearest existing ancestor within a bounded walk, then make each
+// missing level one step at a time, so an impossible path fails fast with the OS error instead of hanging.
+function ensureDir(dir) {
+  const missing = [];
+  let d = dir;
+  for (let i = 0; i < 64; i++) {
+    try {
+      if (fs.statSync(d).isDirectory()) break;
+      throw Object.assign(new Error(`${d} is not a directory`), { code: 'ENOTDIR' });
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+    }
+    missing.unshift(d);
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+  for (const m of missing) {
+    try {
+      fs.mkdirSync(m);
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+    }
+  }
+}
+
 export function audit(payload, kind, detail) {
   const tool = field(payload, '.tool_name');
   const log = auditLogPath();
-  fs.mkdirSync(path.dirname(log), { recursive: true });
+  ensureDir(path.dirname(log));
   const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'); // date -u +%Y-%m-%dT%H:%M:%SZ
   fs.appendFileSync(log, `${timestamp}\t${kind}\t${tool || 'unknown'}\t${detail}\n`);
 }
