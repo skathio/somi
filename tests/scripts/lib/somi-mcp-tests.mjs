@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { McpClient } from './somi-mcp-client.mjs';
+import { SIGNAL_IDS } from '../../../scripts/lib/size-tier.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const SERVER = path.join(ROOT, 'scripts', 'somi-mcp.mjs');
@@ -213,6 +214,16 @@ async function run() {
       if (code === 0) check(`somi_tier ${label}: same JSON as the CLI`, [r.isError, toolText(r)], [undefined, want]);
       else check(`somi_tier ${label}: error carries the CLI exit code`, [r.isError, toolText(r).endsWith(`(exit ${code})`)], [true, true]);
     }
+    // The advertised schema lists the rubric's own ids (imported, not copied), each with value and evidence.
+    const tierTool = ((await client.request('tools/list', {})).tools || []).find((t) => t.name === 'somi_tier');
+    const sp = tierTool?.inputSchema?.properties?.signals;
+    check('somi_tier schema: signals lists exactly the rubric signal ids, all required', [Object.keys(sp?.properties ?? {}), sp?.required], [[...SIGNAL_IDS], [...SIGNAL_IDS]]);
+    check('somi_tier schema: every signal is an object that requires value and evidence', Object.values(sp?.properties ?? {}).every((v) => v.type === 'object' && JSON.stringify(v.required) === '["value","evidence"]'), true);
+    check('somi_tier description says the ids are exact and points at the routing skill without stating a threshold', [/ids in `signals` are exact/.test(tierTool?.description ?? ''), /somi-routing/.test(sp?.description ?? ''), /\b(40|50)\b/.test(JSON.stringify(sp))], [true, true, false]);
+    const invented = await toolCall(client, 'somi_tier', { signals: { business_logic_complexity: { value: true, evidence: 'SECRET-VALUE' }, 'x\u202ey': 1 } });
+    const iv = JSON.parse(toolText(invented));
+    check('somi_tier: invented names come back as unrecognized next to the expected ids; the decision is the closed one (full) and no value is echoed', [iv.tier, iv.unrecognized, iv.expected, toolText(invented).includes('SECRET-VALUE'), toolText(invented).includes('\u202e')], ['full', ['business_logic_complexity', 'x\u202ey'], [...SIGNAL_IDS], false, false]);
+    check('somi_tier: a correct call carries neither unrecognized nor expected', ['unrecognized' in JSON.parse(toolText(await toolCall(client, 'somi_tier', { signals: sig() }))), 'expected' in JSON.parse(toolText(await toolCall(client, 'somi_tier', { signals: sig() })))], [false, false]);
     const noObj = await toolCall(client, 'somi_tier', { signals: [1] });
     check('somi_tier rejects non-object signals with 64 and writes nothing', [noObj.isError, /\(exit 64\)/.test(toolText(noObj)), existsSync(path.join(ROOT, '.somi', 'somi-state', 'tier', 'x.json'))], [true, true, false]);
   });

@@ -36,6 +36,7 @@ import {
   EXIT_UNKNOWN_AGENT,
 } from './lib/dispatch-resolver.mjs';
 import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
+import { SIGNAL_IDS } from './lib/size-tier.mjs';
 
 const PROG = 'somi-dispatch'; // shared identity with the CLI: this is the SAME resolver speaking.
 
@@ -218,13 +219,25 @@ const TOOLS = [
       "Size a request: run `node scripts/somi-tier.mjs resolve` (no --record) on the signals you " +
       'extracted and return its one JSON line unchanged (tier, effective, source, floor, reasons, ' +
       'basis). The rubric is the skill somi-routing, section Size tiers; this tool states no ' +
-      'thresholds. Failures report the CLI exit code: 64 usage/input, 65 refused (a downward ' +
+      'thresholds. The signal ids in `signals` are exact: use these names and no others. A name that ' +
+      'is not one is ignored and listed back as `unrecognized` next to `expected`, and a missing ' +
+      'signal is read as its worst case. Failures report the CLI exit code: 64 usage/input, 65 refused (a downward ' +
       'override below the security floor). It writes nothing: the tier record and the approval ' +
-      'stamp need the CLI itself with --record.',
+      'stamp need the CLI itself with --record and approve. SoMi is installed at ' + installRoot() +
+      ': run `node <that path>/scripts/somi-tier.mjs ...` from the project directory.',
     inputSchema: {
       type: 'object',
       properties: {
-        signals: { type: 'object', description: 'signal id -> { value, evidence }, as the Size tiers section defines' },
+        signals: {
+          type: 'object',
+          description: 'One entry per rubric signal id, with exactly these names: { value, evidence }. What each means and how to extract it is in the skill somi-routing, section Size tiers.',
+          properties: Object.fromEntries(SIGNAL_IDS.map((id) => [id, {
+            type: 'object',
+            properties: { value: { description: 'true or false, or a whole number for a count signal; null when it cannot be determined' }, evidence: { type: 'string', description: 'files and lines you opened' } },
+            required: ['value', 'evidence'],
+          }])),
+          required: [...SIGNAL_IDS],
+        },
         override: { type: 'string', description: 'small or full; only after a human reply' },
       },
       required: ['signals'],

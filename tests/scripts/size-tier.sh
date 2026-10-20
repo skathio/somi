@@ -197,6 +197,23 @@ for (const [name, tier, floor] of [['trivial', 'trivial', null], ['small', 'smal
   const s = run(['resolve', '--signals', '-'], { input: fs.readFileSync(F[name]) });
   check(`resolve ${name}: stdin equals file`, s.out, r.out);
 }
+// Unrecognized keys: reported by name (bounded, escaped, no values) with the expected ids, only when present.
+{
+  const { SIGNAL_IDS: IDS_LIST } = await import('file://' + path.join(path.dirname(CLI), 'lib', 'size-tier.mjs'));
+  const hostile = { ...JSON.parse(fs.readFileSync(F.trivial, 'utf8')), business_logic_complexity: { value: true, evidence: 'LEAK-ME' }, ['k\u202e\u0000' + 'x'.repeat(100)]: 1 };
+  for (let i = 0; i < 12; i++) hostile['extra' + i] = i;
+  const r = run(['resolve', '--signals', '-'], { input: JSON.stringify(hostile) });
+  const o = json(r.out);
+  check('unrecognized keys: exit 0, the two fields appear, the decision is unchanged', [r.rc, Object.keys(o).sort(), o.tier], [0, [...KEYS, 'expected', 'unrecognized'].sort(), 'trivial']);
+  check('unrecognized: at most 8 names, each at most 40 characters, pure ASCII on the wire, no value echoed', [o.unrecognized.length, o.unrecognized.every((n) => n.length <= 40), /^[\x20-\x7e]*$/.test(r.out.trim()), r.out.includes('LEAK-ME')], [8, true, true, false]);
+  check('unrecognized: expected is the exact id list', o.expected, IDS_LIST);
+  const none = json(run(['resolve', '--signals', F.trivial]).out);
+  check('no unrecognized keys: neither field is present', ['unrecognized' in none, 'expected' in none], [false, false]);
+  const invented = json(run(['resolve', '--signals', '-'], { input: JSON.stringify({ input_handling_detail: 'x', T1: 'yes' }) }).out);
+  check('invented names only: fail-closed as before, names listed back', [invented.tier, invented.unrecognized], ['full', ['input_handling_detail']]);
+  const arr = run(['resolve', '--signals', '-'], { input: '[]' });
+  check('a non-object input is still a usage error', arr.rc, 64);
+}
 check('resolve: reasons and failed are echoed', (({ reasons, failed }) => [reasons, failed])(json(run(['resolve', '--signals', F.floor]).out)), [['T3'], []]);
 
 // input errors

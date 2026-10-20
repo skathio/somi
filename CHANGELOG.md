@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+**Fix — Stage -1 sizing is easier for weaker models.** The `somi_tier` tool now advertises the
+rubric's exact signal ids in its input schema, and `scripts/somi-tier.mjs resolve` lists keys it
+does not recognise (`unrecognized`, with `expected`) when there are any, so a model that invented
+names can correct them; the decision itself is unchanged (a missing signal is still read as its
+worst case). `/ship-loop` Stage -1 now tells the model to load the routing skill first and to use
+the `somi_tier` tool for the computation, and says how to spell the CLI path for `--record`.
+
 **Fix — agents no longer declare `model:`, so the session tier is a real cap.** BEHAVIOUR CHANGE:
 a launch that skips the resolver (no `model` passed to `Task`) used to run at the agent's declared
 top-tier `model:`; it now inherits the session's model. This closes a leak where pinned-`low`

@@ -6,6 +6,11 @@
 //       Reads signals JSON (a file path, or - for stdin; at most 64 KiB; a path must be a regular
 //       file, never a symlink or FIFO), calls decideTier, applies the optional override, prints one
 //       JSON line: { tier, effective, source, floor, failed, unknown, invalid, reasons, basis }.
+//       When the input holds keys that are not signal ids, the line also carries `unrecognized` (at
+//       most 8 of those names, each cut to 40 characters and ASCII-escaped; values are never
+//       echoed) and `expected` (the exact signal ids), so a caller can correct its input. Those two
+//       fields appear only then; the decision itself is unchanged (a missing signal is read as its
+//       worst case).
 //         tier       what the function computed
 //         effective  the tier to run: the computed one, or the override
 //         source     'computed' | 'override' (flag) | 'env' (SOMI_SHIP_LOOP_TIER)
@@ -62,6 +67,8 @@ const EXIT_USAGE = 64;
 const EXIT_FLOOR = 65;
 
 const MAX_INPUT_BYTES = 64 * 1024;
+const MAX_UNRECOGNIZED = 8;
+const MAX_NAME_CHARS = 40;
 const OVERRIDE_TARGETS = ['small', 'full'];
 const TIERS = ['trivial', 'small', 'full'];
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -331,6 +338,11 @@ function resolve(args) {
     tier: r.tier, effective, source, floor: r.floor, failed: r.failed, unknown: r.unknown,
     invalid: r.invalid, reasons: r.reasons, basis: shown.basis,
   };
+  const strange = signals !== null && typeof signals === 'object' && !Array.isArray(signals) ? Object.keys(signals).filter((k) => !SIGNAL_IDS.includes(k)) : [];
+  if (strange.length > 0) {
+    out.unrecognized = strange.slice(0, MAX_UNRECOGNIZED).map((k) => k.slice(0, MAX_NAME_CHARS));
+    out.expected = [...SIGNAL_IDS];
+  }
   if (slug) {
     log('accepted');
     out.recorded = writeRecord(dirs, slug, {
