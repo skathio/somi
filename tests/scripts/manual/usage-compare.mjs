@@ -12,7 +12,10 @@ export const LIMITS = `LIMITS (what this comparison can and cannot conclude)
   - Tier: every verdict is for the recorded model tier only (low). Direction transfers for context-size changes;
     Stage -1 sizing and other model-behaviour effects do not transfer to a higher tier.
   - L0 is exact bytes injected, not tokens billed. L1 is local latency on one host fingerprint. L2 resolves only
-    30% in time and 20% in cost, tokens or turns at 8 repeats per arm; smaller changes read inconclusive by design.
+    30% in time and 20% in cost, tokens or turns at 8 repeats per arm, which in practice means only large changes
+    (about 50% or more) are called; smaller changes read inconclusive by design. Distribution-only scenarios (the
+    rule's scope) stay in the baseline and the quality guard but do not enter any ratio; their draw counts and green
+    medians are printed instead.
   - Quality: only a coarse non-inferiority flag (0.20 median drop, 0.25 more invalid or zero draws). No quality win
     or loss is declared, and a drop under about 0.20 is not detected.
   - L1 and wall time are refused across hosts or after a model alias change; re-record instead.
@@ -54,6 +57,7 @@ function main(argv) {
   }
   if (r.guard) console.log(`quality guard: ${r.guard.tripped ? 'TRIPPED' : 'clear'}  ${JSON.stringify(r.guard.scenarios)}`);
   if (r.draws) console.log(`draws: ${JSON.stringify(r.draws)}`);
+  if (r.scope.distributionOnly.length) console.log(`distribution-only (not in any ratio): ${JSON.stringify(r.scope.distributionOnly)}`);
   console.log(`VERDICT: ${r.verdict}${r.draft ? ' (DRAFT)' : ''}`);
   console.log(LIMITS);
   return 0;

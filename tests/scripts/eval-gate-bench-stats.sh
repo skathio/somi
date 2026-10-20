@@ -118,7 +118,7 @@ check('no output field is ever NaN on a valid call', Object.values(bb(noisy)).ev
 const text = fs.readFileSync(RULE_FILE, 'utf8');
 const raw = JSON.parse(text);
 const loaded = R.loadRule(RULE_FILE);
-check('the shipped rule.json loads, is a draft (sealed false) and version 1', [loaded !== null, loaded?.sealed, loaded?.rule.version], [true, false, 1]);
+check('the shipped rule.json loads, is sealed and version 1', [loaded !== null, loaded?.sealed, loaded?.rule.version], [true, true, 1]);
 check('the shipped rule holds exactly the user-verified numbers', loaded && [loaded.rule.bootstrap.level, loaded.rule.bootstrap.resamples, loaded.rule.minEffect.L0, loaded.rule.minEffect.L1, loaded.rule.minEffect.L2, loaded.rule.qualityGuard], [0.9, 10000, 0.01, { effect: 0.1, minRepeats: 30 }, { time: 0.3, cost: 0.2, tokens: 0.2, turns: 0.2 }, { medianDrop: 0.2, invalidShareIncrease: 0.25 }]);
 check('the shipped rule\'s seed and resamples are accepted by the statistics', S.percentileBootstrap([1, 2, 3], [1, 2, 3], { seed: loaded.rule.bootstrap.seed, resamples: loaded.rule.bootstrap.resamples, level: loaded.rule.bootstrap.level }) !== null, true);
 check('the metric table has the four layers of the registered table with their bases', loaded.rule.metrics.map((m) => [m.layer, m.primaryBasis, m.secondaryBasis]), [['L0', 'absolute', null], ['L1', 'absolute', null], ['L2 time and cost', 'overhead', 'absolute'], ['L2 tokens and turns', 'absolute', 'overhead']]);
@@ -137,7 +137,7 @@ check('hash changes when version changes', R.ruleHash(mk((c) => { c.version = 2;
 const changes = [['level', (c) => { c.bootstrap.level = 0.95; }], ['resamples', (c) => { c.bootstrap.resamples = 5000; }], ['seed', (c) => { c.bootstrap.seed = 1; }], ['L0', (c) => { c.minEffect.L0 = 0.02; }], ['L1 effect', (c) => { c.minEffect.L1.effect = 0.11; }], ['L1 repeats', (c) => { c.minEffect.L1.minRepeats = 31; }], ['L2 time', (c) => { c.minEffect.L2.time = 0.31; }], ['L2 cost', (c) => { c.minEffect.L2.cost = 0.21; }], ['L2 tokens', (c) => { c.minEffect.L2.tokens = 0.21; }], ['L2 turns', (c) => { c.minEffect.L2.turns = 0.21; }], ['median drop', (c) => { c.qualityGuard.medianDrop = 0.21; }], ['invalid share', (c) => { c.qualityGuard.invalidShareIncrease = 0.26; }], ['metric text', (c) => { c.metrics[0].primary += '!'; }], ['metric basis', (c) => { c.metrics[0].primaryBasis = 'overhead'; }], ['metric list', (c) => { c.metrics[2].metrics.push('x'); }]];
 for (const [name, patch] of changes) { const p = R.parseRule(mk(patch)); check(`hash changes when ${name} changes`, p !== null && p.hash !== loaded.hash, true); }
 check('hash is 64 lowercase hex characters', /^[0-9a-f]{64}$/.test(loaded.hash), true);
-check('sealed:true is reported as sealed, sealed:false as not', [R.parseRule(mk((c) => { c.sealed = true; })).sealed, loaded.sealed], [true, false]);
+check('sealed:true is reported as sealed, sealed:false as not', [R.parseRule(mk((c) => { c.sealed = true; })).sealed, R.parseRule(mk((c) => { c.sealed = false; })).sealed], [true, false]);
 
 // refusals
 const refuse = (name, patch) => check(`rule refused: ${name}`, safe(() => R.parseRule(mk(patch))), null);
@@ -147,6 +147,14 @@ refuse('unknown key in L2', (c) => { c.minEffect.L2.energy = 0.2; });
 refuse('unknown key in a metric row', (c) => { c.metrics[0].extra = 1; });
 refuse('missing key', (c) => { delete c.qualityGuard; });
 refuse('missing nested key', (c) => { delete c.minEffect.L1.minRepeats; });
+refuse('scope missing', (c) => { delete c.scope; });
+refuse('scope with an unknown key', (c) => { c.scope.extra = []; });
+refuse('scope ids not an array', (c) => { c.scope.distributionOnly = 'S2'; });
+refuse('scope id not matching the pattern', (c) => { c.scope.distributionOnly = ['S 2']; });
+refuse('scope id not a string', (c) => { c.scope.distributionOnly = [2]; });
+refuse('scope duplicate id', (c) => { c.scope.distributionOnly = ['S2', 'S2']; });
+refuse('scope more than 16 ids', (c) => { c.scope.distributionOnly = Array.from({ length: 17 }, (_, i) => `S${i}`); });
+check('an empty scope list and the shipped S2 entry are valid', [R.ruleProblems(mk((c) => { c.scope.distributionOnly = []; })).length, R.loadRule(process.env.RULE_FILE).rule.scope.distributionOnly], [0, ['S2']]);
 refuse('version 2', (c) => { c.version = 2; });
 refuse('sealed not a boolean', (c) => { c.sealed = 'no'; });
 refuse('resamples below 100', (c) => { c.bootstrap.resamples = 99; });

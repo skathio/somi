@@ -8,6 +8,9 @@
 //   bootstrap {level in (0,1), resamples integer in [MIN_RESAMPLES, MAX_RESAMPLES], seed integer in [0, 2^32)},
 //   minEffect {L0, L1 {effect, minRepeats integer >= 1}, L2 {time, cost, tokens, turns}} (fractions in (0, 1]),
 //   qualityGuard {medianDrop, invalidShareIncrease} (fractions in (0, 1]),
+//   scope {distributionOnly [scenario ids]} (0..16 ids matching the scenario id pattern, no duplicates): those
+//   scenarios stay in the baseline and the quality guard but do not enter the pooled L2 ratio strata; the verdict
+//   reports their draw counts and green medians instead (the id list is part of the hashed content),
 //   metrics [{layer, metrics [strings], primary, secondary, primaryBasis, secondaryBasis}] (primary and secondary
 //   are the layer table's text; the bases are "absolute" or "overhead", the secondary basis may be null).
 //
@@ -27,6 +30,7 @@ export const DEFAULT_RULE_PATH = fileURLToPath(
 );
 
 const BASES = ['absolute', 'overhead'];
+const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v) &&
   (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
 const isFraction = (x) => typeof x === 'number' && Number.isFinite(x) && x > 0 && x <= 1;
@@ -44,7 +48,7 @@ function exactKeys(v, keys, where, out) {
 /** Every reason the value is not a valid rule; an empty array means valid. */
 export function ruleProblems(rule) {
   const out = [];
-  const top = ['version', 'sealed', 'bootstrap', 'minEffect', 'qualityGuard', 'metrics'];
+  const top = ['version', 'sealed', 'bootstrap', 'minEffect', 'qualityGuard', 'scope', 'metrics'];
   if (!exactKeys(rule, top, 'rule', out)) return out;
   if (rule.version !== 1) out.push('version must be 1');
   if (typeof rule.sealed !== 'boolean') out.push('sealed must be a boolean');
@@ -71,6 +75,12 @@ export function ruleProblems(rule) {
     for (const k of ['medianDrop', 'invalidShareIncrease']) {
       if (!isFraction(rule.qualityGuard[k])) out.push(`qualityGuard.${k} must be a fraction in (0, 1]`);
     }
+  }
+  if (exactKeys(rule.scope, ['distributionOnly'], 'scope', out)) {
+    const d = rule.scope.distributionOnly;
+    if (!Array.isArray(d) || d.length > 16 || !d.every((x) => typeof x === 'string' && ID.test(x))) {
+      out.push('scope.distributionOnly must be an array of at most 16 scenario ids');
+    } else if (new Set(d).size !== d.length) out.push('scope.distributionOnly has a duplicate id');
   }
   if (!Array.isArray(rule.metrics) || rule.metrics.length < 1 || rule.metrics.length > 16) {
     out.push('metrics must be an array of 1..16 rows');

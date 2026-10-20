@@ -25,6 +25,10 @@
 // invalid-or-zero draws exceeds the baseline's by more than invalidShareIncrease. An over-budget draw counts
 // as fraction 0 and as a zero draw; an invalid draw has no fraction and counts as invalid; a paused draw is in
 // neither, only in the reported paused count. It can only turn better into guarded.
+// Scope: the rule's scope.distributionOnly scenarios keep their draws in the baseline and in the guard but are left
+// out of every L2 ratio stratum. If that leaves no stratum the L2 metric is "not-comparable" with the reason in its
+// note (a refusal when primary). The result's `scope.distributionOnly` lists each such scenario with, per side and
+// arm, the usable draw count and the median green fraction. A rule id absent from the baselines is invalid input.
 // Draws: only "scored", unpaused draws in the scenario's required tier (when it has one) enter ratio samples;
 // paused, over-budget, invalid and off-tier draws are counted per side and arm under `draws`.
 // Host: the fingerprint minus pluginVersion must match for ms and time; otherwise those metrics are
@@ -79,6 +83,17 @@ function drawCounts(b) {
   return out;
 }
 
+function distribution(cand, base, ids) {
+  return ids.map((id) => {
+    const side = (b) => Object.fromEntries(['somi', 'bare'].map((arm) => {
+      const sc = b.scenarios.find((s) => s.id === id);
+      const fr = b.L2.rows.filter((r) => r.arm === arm && r.scenario === id && usable(r, sc)).map((r) => r.green / r.total);
+      return [arm, { draws: fr.length, greenMedian: fr.length ? median(fr) : null }];
+    }));
+    return { scenario: id, candidate: side(cand), baseline: side(base) };
+  });
+}
+
 function guard(cand, base, rule) {
   const q = rule.qualityGuard;
   const per = cand.scenarios.map((sc) => {
@@ -116,6 +131,9 @@ export function verdict(candidate, baseline, ruleInfo, opts = {}) {
   if (list(c) !== list(b) || canon(Object.keys(c.L0.bytes).sort()) !== canon(Object.keys(b.L0.bytes).sort()) ||
     canon(Object.keys(c.L1.events).sort()) !== canon(Object.keys(b.L1.events).sort())) return refusal('scenario lists differ (scenarios, L0 entries or L1 events)');
   for (const x of [c, b]) if (x.L2.rows.some((r) => r.phase !== 'experiment')) return refusal('rows from a phase other than experiment (phases must not be mixed)');
+  const only = rule.scope.distributionOnly;
+  const absent = only.filter((id) => !c.scenarios.some((s) => s.id === id));
+  if (absent.length) return refusal(`rule scope names scenarios not in the baselines: ${absent.join(', ')}`, 'invalid-input');
   const o = rule.bootstrap;
   const sameHost = (() => { const f = (h) => canon({ ...h, pluginVersion: 0 }); return f(c.host) === f(b.host); })();
   const layerOf = (t) => t.row.layer.slice(0, 2);
@@ -139,7 +157,9 @@ export function verdict(candidate, baseline, ruleInfo, opts = {}) {
     } else {
       const S = (x, id, arm) => x.L2.rows.filter((q) => q.scenario === id && q.arm === arm && usable(q, x.scenarios.find((s) => s.id === id))).map((q) => value(q, t.metric));
       const arms = (id) => (basis === 'absolute' ? [S(c, id, 'somi'), S(b, id, 'somi')] : [S(c, id, 'somi'), S(c, id, 'bare'), S(b, id, 'somi'), S(b, id, 'bare')]);
-      const strata = c.scenarios.map((s) => arms(s.id));
+      const ratioScenarios = c.scenarios.filter((s) => !only.includes(s.id));
+      if (!ratioScenarios.length) return na('every scenario is distribution-only; no ratio stratum remains');
+      const strata = ratioScenarios.map((s) => arms(s.id));
       if (strata.some((a) => a.some((xs) => xs.length === 0))) return na('a scenario has no usable draws in an arm');
       r = bootstrap(strata, basis === 'absolute' ? (x) => x[0] / x[1] : (x) => (x[0] / x[1]) / (x[2] / x[3]), o);
     }
@@ -165,7 +185,7 @@ export function verdict(candidate, baseline, ruleInfo, opts = {}) {
   if (out === 'better' && q && q.tripped) out = 'inconclusive-guarded';
   return {
     verdict: out, draft: !ruleInfo.sealed, primaryMetric: pm, ruleHash: hash, ruleVersion: rule.version, tier: c.model.tier,
-    alias: c.model.alias, candidateSha: c.sha, baselineSha: b.sha, metrics: rows, secondary, guard: q,
+    alias: c.model.alias, candidateSha: c.sha, baselineSha: b.sha, metrics: rows, secondary, guard: q, scope: { distributionOnly: distribution(c, b, only) },
     draws: l2 ? { candidate: drawCounts(c), baseline: drawCounts(b) } : null,
   };
 }

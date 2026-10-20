@@ -6,8 +6,8 @@
 // baselines built from the rows.
 //
 //   node tests/scripts/manual/usage-bench.mjs --model ALIAS --phase calibration|sizing|experiment --out DIR
-//     [--scenarios S1,S2,S3] [--repeats 8] [--budget-total USD] [--budget-somi 6] [--budget-bare 2] [--budget-probe 0.5]
-//     [--timeout-min 40] [--timeout-probe-min 5] [--ceiling-somi low] [--seed 1] [--pinned-ids ID,ID] [--sizing-probe]
+//     [--scenarios S1,S2,S3] [--repeats 8] [--budget-total USD] [--budget-somi 6] [--budget-bare 2] [--budget-probe 1]
+//     [--timeout-min 40] [--timeout-probe-min 8] [--ceiling-somi low] [--seed 1] [--pinned-ids ID,ID] [--sizing-probe]
 //     [--plan-only|--dry-run] [--force-budget] [--claude claude] [--sandbox auto|off] [--unsafe-no-sandbox]
 //     [--env-file .somi/eval.env] [--plugin-dir DIR] [--token-fd]
 //
@@ -139,7 +139,7 @@ function parseArgs(argv) {
   if (new Set(scenarios).size !== scenarios.length || scenarios.some((s) => !Object.hasOwn(SCENARIOS, s) || Boolean(SCENARIOS[s].probe) !== probe)) die(`--scenarios must name each of ${Object.keys(SCENARIOS).filter((s) => Boolean(SCENARIOS[s].probe) === probe).join(', ')} at most once${probe ? '' : ' (probes need --sizing-probe)'}`);
   const pinnedExtra = a['pinned-ids'] === undefined ? [] : [...new Set(a['pinned-ids'].split(','))].sort();
   if (pinnedExtra.some((m) => !MODEL.test(m))) die('--pinned-ids must list model ids (letters, digits and . _ : [ ] -)');
-  return { ...a, dry, probe, scenarios, pinnedExtra, repeats: num('repeats', probe ? 2 : 8, 1, true), seed: num('seed', 1, 0, true), budgetTotal: dry && a['budget-total'] === undefined ? null : num('budget-total', 0, 0.1), budgetSomi: num('budget-somi', 6, 0.1), budgetBare: num('budget-bare', 2, 0.1), budgetProbe: num('budget-probe', 0.5, 0.1), timeoutMin: num('timeout-min', 40, 0.001), timeoutProbeMin: num('timeout-probe-min', 5, 0.001), ceilingSomi: a['ceiling-somi'] ?? 'low' };
+  return { ...a, dry, probe, scenarios, pinnedExtra, repeats: num('repeats', probe ? 2 : 8, 1, true), seed: num('seed', 1, 0, true), budgetTotal: dry && a['budget-total'] === undefined ? null : num('budget-total', 0, 0.1), budgetSomi: num('budget-somi', 6, 0.1), budgetBare: num('budget-bare', 2, 0.1), budgetProbe: num('budget-probe', 1, 0.1), timeoutMin: num('timeout-min', 40, 0.001), timeoutProbeMin: num('timeout-probe-min', 8, 0.001), ceilingSomi: a['ceiling-somi'] ?? 'low' };
 }
 
 /** The `cost` block both arms' workspaces carry: the ceiling and every agent of `agentsDir` pinned to it (pin-all is not optional here). */

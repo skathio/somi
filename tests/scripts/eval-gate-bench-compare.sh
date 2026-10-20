@@ -25,7 +25,7 @@ const res = [];
 const check = (name, got, want) => res.push([JSON.stringify(got) === JSON.stringify(want), name, got, want]);
 const draft = R.loadRule(`${ROOT}/benchmarks/usage-speed/rule.json`);
 const RES = 1000;
-const mkRule = (sealed) => R.parseRule({ ...draft.rule, sealed, bootstrap: { ...draft.rule.bootstrap, resamples: RES } });
+const mkRule = (sealed, only = []) => R.parseRule({ ...draft.rule, sealed, scope: { distributionOnly: only }, bootstrap: { ...draft.rule.bootstrap, resamples: RES } });
 const RS = mkRule(true); const RD = mkRule(false);
 const SEED = draft.rule.bootstrap.seed;
 
@@ -179,9 +179,32 @@ check('a home path in a baseline is refused', inv({ ...better, host: { ...better
 check('a rule that is not parsed is invalid-input', [V.verdict(better, base, null, { primaryMetric: 'cost' }).code, V.verdict(better, base, { rule: {}, hash: 1 }, { primaryMetric: 'cost' }).code], ['invalid-input', 'invalid-input']);
 check('no input throws', (() => { try { return [V.verdict(null, null, RS, { primaryMetric: 'cost' }).code, V.verdict(better, base, RS, null).code]; } catch { return 'THREW'; } })(), ['invalid-input', 'invalid-input']);
 
+// ---- scope: distribution-only scenarios ----
+const RO = mkRule(true, ['s2']); const ROD = mkRule(false, ['s2']);
+const mo = (o = {}) => mk({ hash: RO.hash, ...o });
+const baseO = mo({ sha: 'b' });
+const hvo = (cand, metric, o = {}) => { const x = V.verdict(cand, o.b ?? baseO, o.r ?? RO, { repoRoot: ROOT, primaryMetric: metric }); return x.refused ? { refused: x.refused, code: x.code } : x; };
+const s2Cost = (k) => ({ patch: (row, arm, si) => (si === 1 && arm === 'somi' ? { ...row, costUsd: row.costUsd * k } : row) });
+const costEst = (r) => r.metrics.find((m) => m.metric === 'cost').estimate;
+check('naming a distribution-only scenario changes the rule hash; sealed state still does not', [RS.hash !== RO.hash, RO.hash === ROD.hash], [true, true]);
+check('a distribution-only scenario does not enter the ratio: a 5x cost change there moves the pooled estimate when it is a stratum, not when excluded', [costEst(head(mk({ sha: 'a', ...s2Cost(5) }), 'cost')) > 1.2, Math.abs(costEst(hvo(mo({ sha: 'a', ...s2Cost(5) }), 'cost')) - 1) < 0.05], [true, true]);
+check('the excluded scenario is reported with both sides and arms: usable draws and green medians', hvo(mo({ sha: 'a' }), 'cost').scope.distributionOnly.map((d) => [d.scenario, d.candidate.somi.draws, d.baseline.bare.draws, d.candidate.somi.greenMedian, d.baseline.bare.greenMedian]), [['s2', 8, 8, 1, 1]]);
+check('with no distribution-only scenario the scope list is empty', head(base, 'cost').scope.distributionOnly, []);
+const s2Zero = (extra = {}) => mo({ sha: 'a', ...extra, patch: (row, arm, si) => (si === 1 && arm === 'somi' ? { ...row, green: 0 } : row) });
+check('the quality guard still sees a distribution-only scenario: a green collapse there blocks a better', [hvo(s2Zero({ scale: { somi: { cost: 0.5 } } }), 'cost').verdict, hvo(mo({ sha: 'a', scale: { somi: { cost: 0.5 } } }), 'cost').verdict], ['inconclusive-guarded', 'better']);
+check('the green median of the excluded scenario shows the collapse', hvo(s2Zero(), 'cost').scope.distributionOnly[0].candidate.somi.greenMedian, 0);
+const RA = mkRule(true, ['s1', 's2', 's3']); const mA = (o = {}) => mk({ hash: RA.hash, ...o });
+const allOut = hvo(mA({ sha: 'a' }), 'cost', { b: mA({ sha: 'b' }), r: RA });
+check('every scenario distribution-only: an L2 primary is refused with the reason', [typeof allOut.refused, /every scenario is distribution-only/.test(allOut.refused ?? '')], ['string', true]);
+const allOutL0 = hvo(mA({ sha: 'a' }), 'bytes', { b: mA({ sha: 'b' }), r: RA });
+check('every scenario distribution-only: an L0 primary still gets a verdict and the L2 row reads not-comparable', [allOutL0.verdict, allOutL0.metrics.find((m) => m.metric === 'cost').status], ['inconclusive', 'not-comparable']);
+const RZ = mkRule(true, ['zz']);
+check('a rule scope naming a scenario the baselines lack is invalid input', hvo(mk({ sha: 'a', hash: RZ.hash }), 'cost', { b: mk({ sha: 'b', hash: RZ.hash }), r: RZ }).code, 'invalid-input');
+
 // CLI fixtures (the shell runs the tool on these; the draft rule's hash is the shipped one)
 if (process.env.FIXDIR) {
-  const w = (n, o) => fs.writeFileSync(`${process.env.FIXDIR}/${n}.json`, JSON.stringify(o));
+  // the shipped rule names scenarios by their registered ids, so the CLI fixtures use them too
+  const w = (n, o) => fs.writeFileSync(`${process.env.FIXDIR}/${n}.json`, JSON.stringify(o).replace(/"s([123])"/g, '"S$1"'));
   w('cand', mk({ hash: draft.hash, scale: sc50 })); w('base', mk({ sha: 'b', hash: draft.hash })); w('invalid', { ...mk({ hash: draft.hash }), extra: 1 });
   w('leak', mk({ hash: draft.hash, plugin: 'sk-ant-abcdefgh12345' })); fs.writeFileSync(`${process.env.FIXDIR}/bad.json`, '{no');
 }
@@ -207,9 +230,9 @@ cli() { node "$CLI" "$@" >"$TMP/o.txt" 2>"$TMP/e.txt"; echo $?; }
 chk() { if [ "$2" = "$3" ]; then pass=$((pass+1)); printf '  ok   %s\n' "$1"; else fail=$((fail+1)); printf '  FAIL %s (want %s, got %s)\n' "$1" "$3" "$2"; fi; }
 F="$TMP/fix"
 chk "cli: a draft verdict exits 0" "$(cli "$F/cand.json" "$F/base.json" --primary cost --draft)" 0
-grep -q 'VERDICT: better (DRAFT)' "$TMP/o.txt" && grep -q '^LIMITS' "$TMP/o.txt" && grep -q 'rule hash: [0-9a-f]\{64\}' "$TMP/o.txt" && grep -q 'tier (low)\|recorded model tier only (low)' "$TMP/o.txt"; chk "cli: prints the verdict, the rule hash and the limits block" "$?" 0
-chk "cli: an unsealed rule without --draft is a refusal (64)" "$(cli "$F/cand.json" "$F/base.json" --primary cost)" 64
-grep -q '^REFUSED: the rule is not sealed' "$TMP/o.txt"; chk "cli: the refusal reason is printed" "$?" 0
+grep -q '^VERDICT: better$' "$TMP/o.txt" && grep -q '^LIMITS' "$TMP/o.txt" && grep -q 'rule hash: [0-9a-f]\{64\}' "$TMP/o.txt" && grep -q 'tier (low)\|recorded model tier only (low)' "$TMP/o.txt"; chk "cli: prints the verdict, the rule hash and the limits block" "$?" 0
+chk "cli: the sealed shipped rule gives a registered verdict without the draft flag" "$(cli "$F/cand.json" "$F/base.json" --primary cost)" 0
+! grep -q 'DRAFT' "$TMP/o.txt"; chk "cli: a sealed rule output carries no DRAFT note" "$?" 0
 chk "cli: a missing --primary is a usage error (64)" "$(cli "$F/cand.json" "$F/base.json")" 64
 chk "cli: one file only is a usage error (64)" "$(cli "$F/cand.json" --primary cost)" 64
 chk "cli: an unknown flag is a usage error (64)" "$(cli "$F/cand.json" "$F/base.json" --primary cost --force)" 64
@@ -219,6 +242,8 @@ chk "cli: unparseable JSON exits 65" "$(cli "$F/bad.json" "$F/base.json" --prima
 chk "cli: a missing file exits 65" "$(cli "$F/none.json" "$F/base.json" --primary cost --draft)" 65
 chk "cli: a refusal still prints the limits block" "$(cli "$F/cand.json" "$F/base.json" --primary latency --draft)" 64
 grep -q '^LIMITS' "$TMP/o.txt"; chk "cli: limits block present on a refusal" "$?" 0
+chk "cli: a draft verdict under the shipped scope exits 0" "$(cli "$F/cand.json" "$F/base.json" --primary cost --draft)" 0
+grep -q 'distribution-only (not in any ratio)' "$TMP/o.txt" && grep -q 'Distribution-only scenarios' "$TMP/o.txt" && grep -q 'only large changes' "$TMP/o.txt"; chk "cli: prints the excluded scenarios and the limits state the large-change resolution" "$?" 0
 if grep -q 'sk-ant' "$TMP/o.txt" "$TMP/e.txt"; then chk "cli: output never echoes the secret" bad ok; else chk "cli: output never echoes the secret" ok ok; fi
 
 # Mutation: each rule is broken on a scratch copy of the libraries; the suite must then fail.
@@ -260,6 +285,10 @@ mutant $VB "if (WALL.includes(t.metric) && !sameHost)" "if (false)" "refusal rem
 mutant $VB "{ ...h, pluginVersion: 0 }" "h" "host comparison keeps the plugin version"
 mutant $VB "c.L1.events[k].length < rule.minEffect.L1.minRepeats ||" "false ||" "refusal removed: L1 repeats"
 mutant $VB "|| !table.some((t) => t.metric === pm)) return refusal" ") return refusal" "refusal removed: unknown primary metric"
+mutant $VB "const ratioScenarios = c.scenarios.filter((s) => !only.includes(s.id));" "const ratioScenarios = c.scenarios;" "distribution-only scenarios enter the ratio"
+mutant $VB "if (!ratioScenarios.length) return na(" "if (false) return na(" "no ratio stratum left is not flagged"
+mutant $VB "if (absent.length) return refusal(" "if (false) return refusal(" "refusal removed: unknown scope scenario"
+mutant $VB "const [c, b] = [pick(cand), pick(base)];" "const [c, b] = [pick(cand), pick(base)].map((x) => x.filter((r) => !rule.scope.distributionOnly.includes(r.scenario)));" "guard skips distribution-only scenarios"
 mutant $VB "if (p.length) return refusal(" "if (false) return refusal(" "refusal removed: invalid schema"
 mutant $SB "for (const l of findLeaks(b," "for (const l of [] || findLeaks(b," "the secret and path check removed"
 mutant $SB "[/sk-[A-Za-z0-9_-]{8,}/, 'token-like string']," "" "token pattern removed"

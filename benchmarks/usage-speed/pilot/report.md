@@ -52,7 +52,7 @@ Conclusions for the rule (the user decides, step 2.3):
 2. S2 SoMi should be reported as a distribution (full run versus early stop) and judged by the quality guard, not by a ratio of medians.
 3. Small effects must be shown by L0 (exact bytes) and L1 (local latency, 6% run to run), which are free; an optimisation whose claim is smaller
    than the L2 detectable effect is measured at L0/L1 only, and the report says L2 could not see it.
-4. A probe cap of $0.50 and 5 minutes is too tight for M08 (two of two ended at the cap with no tier read); raise it to $1.00 and 8 minutes, or drop M08.
+4. A probe cap of $0.50 and 5 minutes is too tight for M08 (two of two ended at the cap with no tier read); the driver defaults are now $1.00 and 8 minutes.
 5. Whether `--pinned-ids` is needed is answered: no unpinned-model row appeared in 20 rows.
 
 Limits: two draws per cell give rough sigma estimates (plus or minus a factor of two); the pilot is one account, one host, one day.

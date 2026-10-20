@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sealed": false,
+  "sealed": true,
   "bootstrap": { "level": 0.9, "resamples": 10000, "seed": 20261020 },
   "minEffect": {
     "L0": 0.01,
@@ -8,6 +8,7 @@
     "L2": { "time": 0.3, "cost": 0.2, "tokens": 0.2, "turns": 0.2 }
   },
   "qualityGuard": { "medianDrop": 0.2, "invalidShareIncrease": 0.25 },
+  "scope": { "distributionOnly": ["S2"] },
   "metrics": [
     { "layer": "L0", "metrics": ["bytes"], "primary": "absolute bytes, SoMi side, exact", "secondary": "none", "primaryBasis": "absolute", "secondaryBasis": null },
     { "layer": "L1", "metrics": ["ms"], "primary": "absolute median ms, same host fingerprint", "secondary": "none", "primaryBasis": "absolute", "secondaryBasis": null },
