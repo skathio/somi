@@ -97,7 +97,7 @@ that procedure starts — one `Task` call per agent, never the whole command in 
 its cost tier and model through `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)
 skill, served over the bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP
 isn't reachable — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) before the `Task`, and
-the spawned agent's briefing states `dispatched at cost: <tier>`. The session ceiling is a
+the spawned agent's briefing states `dispatched at cost: <tier>` when a model was enforced, or `requested cost: <tier> (not enforced: no mapped model)` when none was. The session ceiling is a
 **hard cap**: the unit runs at the ceiling tier, or at its `cost.agents` override when the config
 has
 one — never refused, and reported as degraded when that is below what it declared.

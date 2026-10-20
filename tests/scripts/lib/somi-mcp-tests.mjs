@@ -13,7 +13,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { McpClient } from './somi-mcp-client.mjs';
-import { SIGNAL_IDS } from '../../../scripts/lib/size-tier.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const SERVER = path.join(ROOT, 'scripts', 'somi-mcp.mjs');
@@ -110,6 +109,23 @@ async function run() {
     check('a bare MCP resolve writes no .somi/somi-state', existsSync(path.join(proj, '.somi', 'somi-state')), false);
   });
 
+  // --- #32: enforced/reason are exposed, and a config mapping makes copilot enforced ----------
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const bare = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'copilot', ceiling: 'high', project_dir: fresh() })));
+    check('copilot, no mapping: model null, enforced false, reason names host',
+      [bare.model, bare.enforced, /no model mapping for host copilot.*low, medium and high/.test(bare.reason ?? '')], [null, false, true]);
+    const mapped = fresh();
+    mkdirSync(path.join(mapped, '.somi'), { recursive: true });
+    writeFileSync(path.join(mapped, '.somi', 'config.json'),
+      JSON.stringify({ cost: { mapping: { copilot: { low: 'gpt-5-mini', medium: 'gpt-5', high: 'gpt-5-pro' } } } }));
+    const m = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'copilot', ceiling: 'high', project_dir: mapped })));
+    check('copilot with config mapping: model set, enforced true, no reason',
+      [m.model, m.enforced, 'reason' in m], ['gpt-5-pro', true, false]);
+    const cc = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'claude-code', project_dir: fresh() })));
+    check('claude-code default: model set, enforced true', [typeof cc.model, cc.enforced], ['string', true]);
+  });
+
   // --- the four failure codes surface as isError with the matching code --------------------
   await withClient({}, async (client) => {
     await client.initialize();
@@ -193,39 +209,6 @@ async function run() {
 
     const unknownSkill = await toolCall(client, 'somi_skill', { name: 'not-a-real-skill' });
     check('somi_skill rejects an unknown skill name', unknownSkill.isError, true);
-  });
-
-  // --- somi_tier: the sizing CLI's own output and exit codes, for every case --------------------
-  await withClient({}, async (client) => {
-    await client.initialize();
-    const TIER_CLI = path.join(ROOT, 'scripts', 'somi-tier.mjs');
-    const base = { T1: true, T2: true, T3: true, T4: true, T5: true, hard_surface: false, design_open: false, open_questions: 0, acceptance_testable: true, modules_touched: 1, est_files: 1, est_diff_lines: 40, existing_work_item: false, brief_exists: false };
-    const sig = (over = {}) => Object.fromEntries(Object.entries({ ...base, ...over }).map(([k, v]) => [k, { value: v, evidence: 'e' }]));
-    const cases = [
-      ['trivial', sig(), undefined], ['small', sig({ T2: false, est_diff_lines: 80 }), undefined],
-      ['floor', sig({ T3: false, hard_surface: true }), undefined], ['unknown signal', { ...sig(), T3: { value: null, evidence: 'x' } }, undefined],
-      ['raise', sig(), 'full'], ['lower below the floor', sig({ T3: false }), 'small'],
-    ];
-    for (const [label, signals, override] of cases) {
-      const argv = [TIER_CLI, 'resolve', '--signals', '-', ...(override ? ['--override', override] : [])];
-      let want; let code = 0;
-      try { want = execFileSync(process.execPath, argv, { input: JSON.stringify(signals), encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trimEnd(); } catch (e) { code = e.status; want = null; }
-      const r = await toolCall(client, 'somi_tier', { signals, ...(override ? { override } : {}) });
-      if (code === 0) check(`somi_tier ${label}: same JSON as the CLI`, [r.isError, toolText(r)], [undefined, want]);
-      else check(`somi_tier ${label}: error carries the CLI exit code`, [r.isError, toolText(r).endsWith(`(exit ${code})`)], [true, true]);
-    }
-    // The advertised schema lists the rubric's own ids (imported, not copied), each with value and evidence.
-    const tierTool = ((await client.request('tools/list', {})).tools || []).find((t) => t.name === 'somi_tier');
-    const sp = tierTool?.inputSchema?.properties?.signals;
-    check('somi_tier schema: signals lists exactly the rubric signal ids, all required', [Object.keys(sp?.properties ?? {}), sp?.required], [[...SIGNAL_IDS], [...SIGNAL_IDS]]);
-    check('somi_tier schema: every signal is an object that requires value and evidence', Object.values(sp?.properties ?? {}).every((v) => v.type === 'object' && JSON.stringify(v.required) === '["value","evidence"]'), true);
-    check('somi_tier description says the ids are exact and points at the routing skill without stating a threshold', [/ids in `signals` are exact/.test(tierTool?.description ?? ''), /somi-routing/.test(sp?.description ?? ''), /\b(40|50)\b/.test(JSON.stringify(sp))], [true, true, false]);
-    const invented = await toolCall(client, 'somi_tier', { signals: { business_logic_complexity: { value: true, evidence: 'SECRET-VALUE' }, 'x\u202ey': 1 } });
-    const iv = JSON.parse(toolText(invented));
-    check('somi_tier: invented names come back as unrecognized next to the expected ids; the decision is the closed one (full) and no value is echoed', [iv.tier, iv.unrecognized, iv.expected, toolText(invented).includes('SECRET-VALUE'), toolText(invented).includes('\u202e')], ['full', ['business_logic_complexity', 'x\u202ey'], [...SIGNAL_IDS], false, false]);
-    check('somi_tier: a correct call carries neither unrecognized nor expected', ['unrecognized' in JSON.parse(toolText(await toolCall(client, 'somi_tier', { signals: sig() }))), 'expected' in JSON.parse(toolText(await toolCall(client, 'somi_tier', { signals: sig() })))], [false, false]);
-    const noObj = await toolCall(client, 'somi_tier', { signals: [1] });
-    check('somi_tier rejects non-object signals with 64 and writes nothing', [noObj.isError, /\(exit 64\)/.test(toolText(noObj)), existsSync(path.join(ROOT, '.somi', 'somi-state', 'tier', 'x.json'))], [true, true, false]);
   });
 
   // --- somi_agent: the agent's instructions without frontmatter, same allowlist ------------

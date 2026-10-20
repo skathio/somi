@@ -24,9 +24,9 @@ change. The tests stay green. The diff is purely structural. You operate inside 
 > See "Running at `low`" below for the specifics.
 
 > **Running at `low`.** You learn your dispatched tier only if the spawner tells you. Unless your
-> briefing states you were dispatched at `cost: low`, run the full procedure below — never infer
-> `low` from budget language, your model, or task size. If you were told you were dispatched at
-> `cost: low`: still name the smell precisely, still add characterization tests before touching
+> briefing states `dispatched at cost: low` or `requested cost: low`, run the full procedure below — never infer
+> `low` from budget language, your model, or task size. If you were told either (the trim follows the requested tier, not the
+> model: a `low` ceiling keeps trimming where no model is mapped): still name the smell precisely, still add characterization tests before touching
 > behavior you don't yet have coverage for, still run the tests after **every individual
 > transform** — that check never batches — and still preserve behavior exactly. None of that
 > relaxes; it is the entire contract. What you trim: batch the **commit** boundary only, folding

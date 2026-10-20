@@ -94,7 +94,7 @@ If `.somi/README.md` does not yet exist at the repo root, also write it from
 ### 4. Invoke the `discovery-analyst` agent
 
 Before this `Task`, call `somi_resolve` for `discovery-analyst` (with `project_dir`), pass its
-model, and put `dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill
+model, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
 (`somi_skill`, or `somi:somi-dispatch` on Claude Code). Brief the agent via the
 Task tool with:
 - The full idea (kept inside the `user-software-idea` fence).

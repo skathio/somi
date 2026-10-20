@@ -80,7 +80,7 @@ The tool's JSON comes back in its text content; the CLI fallback prints the iden
 stdout:
 
 ```json
-{"agent": "coder", "supported": ["low", "medium"], "declared": ["low", "medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "coder", "supported": ["low", "medium"], "declared": ["low", "medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
 - `tier` — the cost tier the resolver selected for this agent, right now: the agent's own
@@ -92,6 +92,10 @@ stdout:
 - `model` — pass this to `Task` when it is non-null. When it is `null` (no mapping for this
   host/tier), see "No mapped model" below — never omit a model silently *and* never invent one
   without saying so.
+- `enforced` — `true` only when `model` is a concrete id from a mapping (the shipped table or the
+  project's `cost.mapping`). `false` means nothing pins this tier on this host: the agent runs on
+  whatever model the host gives it. Then `reason` says why (e.g. `no model mapping for host
+  copilot`). The tier is still the one *requested*; it is never a claim about what ran.
 - `ceiling` / `ceiling_source` / `ceiling_origin` — see the announcement rule immediately below.
 
 **When `degraded` is `true`, say so in one line before the agent's `Task` call:**
@@ -132,7 +136,20 @@ saved** unless a config write actually happened. Lowering a tier (the ceiling, o
 the tool refuses it (exit `64`) do not work around it. Repeat every entry of the result's `warnings`
 verbatim; never drop or soften one.
 
-An unresolved launch (no `model` passed) inherits the session's model, so always pass the resolved model. **No mapped model.** When `model` comes back `null`, pick only from model identifiers **actually
+An unresolved launch (no `model` passed) inherits the session's model, so always pass the resolved model. **No mapped model — which rule wins.** `enforced: false` (a `null` model) is settled in this order,
+first match wins, and the briefing (§5) reports what actually happened, never what was hoped for:
+
+1. **A `cost.mapping` entry in `.somi/config.json`** — the resolver already applied it, so `model`
+   is non-null and `enforced` is `true`. Pass it. A configured mapping counts as the user naming
+   the model, so a host rule such as "do not set `model` unless the user names one" does **not**
+   block it.
+2. **The host's own guidance** — if it says not to set a model unless the user names one, pass none.
+   Nothing pins the agent's model: state `requested cost: <tier> (not enforced: no mapped model)`.
+3. **Your own pick** (the paragraph below) — only when neither of the above applies. Passing a model
+   you picked yourself still leaves `enforced: false`: say it is your choice, and use the
+   `requested cost:` line.
+
+Pick only from model identifiers **actually
 visible to you this turn** — e.g. the subagent tool's own `model` parameter, when it lists
 candidates — to match the resolved `tier`: the lightest visible model for `low`, the strongest for
 `high`. Say plainly that this is your own choice, not a value the mapping supplied, and pass it to
@@ -141,9 +158,17 @@ candidates — to match the resolved `tier`: the lightest visible model for `low
 you this turn, pass no model at all and say so**: the agent then runs on the session's own model, and `cost.mapping` is how a project binds tiers to specific
 models on this host — never invent an identifier you cannot actually see. **The host's own
 instructions win over this pick:** if they say not to set a model unless the user names one, pass
-none, and say the agent runs on the host's model rather than at the resolved tier, and that
+none, and say no model was pinned for the resolved tier, and that
 `cost.mapping` is how to bind one. `null` is expected on Copilot, which has no shipped mapping
-because its model ids vary by plan and editor. If the host then rejects
+because its model ids vary by plan and editor.
+
+**Unenforced notice.** When `enforced` is `false` and the resolved `tier` is `high`, print ONE
+user-visible line per agent type per session (once in this conversation's visible context, as with
+the `low` announcement), before that agent's `Task` call: `<agent> is high-tier but no model is
+pinned on <host>, so its model was not chosen by SoMi. To pin models, set cost.mapping.<host> with
+low, medium and high in .somi/config.json (see docs/USAGE.md, "Pinning models per tier on
+Copilot").` Name all three tiers: a host named in `cost.mapping` replaces its whole tier map, so a
+high-only block fails the other tiers with exit `67`. Lower tiers get the briefing line only. If the host then rejects
 a model you *did* pick yourself, retry the same dispatch once without it and say you're doing so
 (§5 below) — never silently pass nothing while claiming a choice was made, and never retry more
 than once.
@@ -183,7 +208,9 @@ agent's
 in `.somi/config.json` if set, else a ceiling the user explicitly set earlier in
 `.somi/somi-state/ceiling.json` (only if it records `cli` or `env` as its origin), else `medium`
 (the shipped default). That tier is the answer; the agent's `cost:` frontmatter does not change it,
-though if the tier is below the highest tier it declares, say so as in §2.
+though if the tier is below the highest tier it declares, say so as in §2. Nothing was resolved against a mapping here, so nothing is enforced: the
+briefing's cost line is `requested cost: <tier> (not enforced: no mapped model)`, never
+`dispatched at cost:`.
 
 ## 5. Start the agent
 
@@ -193,12 +220,16 @@ once for a whole command. The one exception: when your own procedure calls for *
 `Task`s issued together in one turn** so they run concurrently (`/review-panel` seating its lenses
 is the shipped example), resolve each one back-to-back, immediately before issuing that batch —
 still not once for the whole command, and each still gets its own `project_dir`, model, and
-`dispatched at cost: <tier>` line in that agent's own briefing.
+cost briefing line in that agent's own briefing.
 
-1. **State `dispatched at cost: <tier>` in the agent's briefing**, using §1's resolved `tier`
-   verbatim — this is the exact phrase `coder`, `planner`, and `refactorer` look for before
-   trusting they were dispatched at `low`; without it, their own disclosure instruction can never
-   fire.
+1. **State the cost line in the agent's briefing**, using §1's resolved `tier` verbatim. When
+   `enforced` is `true`: `dispatched at cost: <tier>`. When it is `false`:
+   `requested cost: <tier> (not enforced: no mapped model)` — **`dispatched at cost:` is
+   reserved for enforced dispatches**, so a briefing never claims a tier no model was pinned to.
+   `coder`, `planner`, and `refactorer` take their "Running at `low`" trim from **either** line
+   (`dispatched at cost: low` or `requested cost: low`) — the trim is about the procedure, not the
+   model, so it follows the requested tier; without a cost line, their disclosure instruction can
+   never fire.
 2. **Pass §2's `model`** — the mapped value, or your own no-mapped-model pick when it applies.
 3. **Hand it the scope your own procedure defines** (the iteration, the slug, the target file —
    whatever your own instruction says to pass) — never a paraphrase of the whole command standing
@@ -234,8 +265,10 @@ dispatched agent's or command's own text says they do.
   calls for your own pick for that tier when a model identifier is actually visible to you this
   turn, disclosed as a choice — never an invented value passed off as the mapping's own answer, and
   never a silent omission when one genuinely was visible.
-- **Dispatching without the `dispatched at cost: <tier>` briefing line.** Without it, the agent's
-  own "Running at `low`" disclosure can never fire, even when it should.
+- **Dispatching without a cost briefing line.** Without `dispatched at cost: <tier>` or `requested
+  cost: <tier>`, the agent's own "Running at `low`" disclosure can never fire, even when it should.
+- **Writing `dispatched at cost: <tier>` for an unenforced dispatch** (`enforced: false`), or staying
+  silent about a high-tier agent whose model nothing pinned. Use `requested cost: <tier> (not enforced: no mapped model)` and print the unenforced notice (§2).
 
 ## Consumers
 

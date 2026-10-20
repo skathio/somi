@@ -104,6 +104,76 @@ argument.
 
 No migration action required.
 
+## [3.1.1] — 2026-10-05 — fix: unenforced cost tier reported as dispatched on Copilot
+
+**Patch — bug fix** ([#32](https://github.com/skathio/somi/issues/32)). On Copilot `somi_resolve`
+returns `model: null` for every tier (no shipped mapping), so a `cost: high` agent such as
+`designer` ran on the host's medium-cost model while its briefing said `dispatched at cost: high`.
+The user was told nothing.
+
+### Fixed
+
+- **`somi_resolve` reports whether the tier is enforced.** The result gains `enforced: boolean`,
+  true only when a concrete model id was resolved from a mapping (the shipped table or the
+  project's `cost.mapping`), and a `reason` string when it is false (for example `no model mapping
+  for host copilot (set cost.mapping.copilot with low, medium and high ...)`). Existing fields are unchanged. Same output from the MCP tool and the CLI.
+- **A briefing never claims an unenforced tier.** The dispatch skill, every command and agent that
+  names the cost line, and the front door now state `dispatched at cost: <tier>` only for enforced
+  dispatches, and `requested cost: <tier> (not enforced: no mapped model)` otherwise. For a
+  high-tier agent dispatched unenforced the orchestrator is also instructed to print one
+  user-visible notice per agent type per session, naming the fix (map all three tiers under
+  `cost.mapping.<host>`, since a host named there replaces its whole tier map). That notice is a
+  prompt instruction, not something the code guarantees.
+- **Low-tier trimming is unchanged without a mapping.** `coder`, `planner` and `refactorer` take
+  their "Running at `low`" trim from either `dispatched at cost: low` or `requested cost: low`: the
+  trim is about the procedure, not the model, so a `low` ceiling keeps trimming on Copilot.
+- **Which rule wins on a null mapping is now stated:** a `cost.mapping` entry in
+  `.somi/config.json` (it counts as the user naming the model), then the host's "do not set
+  `model`" guidance, then the soft pick-strongest-visible.
+- **Docs:** `docs/USAGE.md` gains "Pinning models per tier on Copilot" with an example
+  `cost.mapping.copilot` block, and says `cost.ceiling` is an upper bound, not a model request.
+
+Not changed: with no mapping nothing pins a model, and the agent still runs on whatever the host
+gives it. This release makes that visible; it does not pick a model or prompt for one. Unenforced
+medium- and low-tier agents get only the briefing line, not the notice. A guided model picker,
+ordered preference lists and a `validate.sh` warning remain follow-ups.
+
+No migration action required. To pin models on Copilot, set `cost.mapping.copilot`.
+
+## [3.1.0] — 2026-10-02 — fix: SoMi agents unusable on GitHub Copilot
+
+**Minor — one new MCP tool, plus fixes** ([#30](https://github.com/skathio/somi/issues/30)).
+On GitHub Copilot the front door could not start SoMi's agents, for three reasons.
+
+- **Invalid YAML frontmatter.** Copilot rejects frontmatter that Claude Code tolerates, and
+  skipped `designer`, `refactor-designer` and `reviewer` with "mapping values are not allowed".
+  Their `description:` values contained an unquoted `: `, as did `commands/atlas.md`,
+  `commands/design.md` and `commands/ship-loop.md`. `commands/atlas.md`'s `argument-hint:` started
+  with `[`. The `argument-hint:` of `/review`, `/security-review` and `/architecture-review`
+  contained ` #`, which YAML reads as a comment, so everything after `<PR` was silently dropped.
+  All are now quoted.
+- **A real frontmatter gate.** `scripts/check-frontmatter.mjs` replaces `validate.sh`'s "a line
+  starts with `---`" check. It requires flat `key: value` frontmatter and fails the plain-scalar
+  forms YAML rejects or truncates. It is a targeted check, not a YAML parser, which keeps the suite
+  zero-dependency; every file it passes also parses with PyYAML.
+- **New `somi_agent` MCP tool.** Copilot's subagent tool accepts only its built-in agent types
+  (`Unknown agent_type: coder`), so plugin agents cannot be started by name there. `somi_agent`
+  returns an agent's instructions without frontmatter. When the host rejects an agent type, the
+  `somi-dispatch` skill (§5, step 5) now starts the built-in general-purpose subagent with that text
+  and the resolved model. This keeps a reviewer's fresh context, which running the role inline
+  would lose. `somi_command` and `somi_skill` now share one reader with it, with the same name
+  allowlist and unchanged messages.
+- **`model: null` on Copilot is expected**, because SoMi ships no Copilot model mapping. The
+  dispatch skill now says that the host's own "don't set a model" instruction wins over its
+  visible-model pick, and that `cost.mapping` is how to bind tiers to models.
+- **Docs:** `docs/PLUGIN.md` lists `somi_agent` and notes that a second install under
+  `~/.vscode/agent-plugins/` is skipped by Copilot.
+
+Not verified on a real Copilot host: whether general-purpose subagents there accept the `model`
+argument.
+
+No migration action required.
+
 ## [3.0.1] — 2026-10-01 — fix: agent dispatch failing on Windows checkouts with CRLF line endings
 
 **Patch — bug fix** ([#28](https://github.com/skathio/somi/issues/28)). On a Windows clone with

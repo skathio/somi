@@ -29,7 +29,7 @@ diary entry = the fenced report + the timeline as known. No spec, no phases, no 
 ### 2. Brief the `incident` agent
 
 Before this `Task`, call `somi_resolve` for `incident` (with `project_dir`), pass its model, and put
-`dispatched at cost: <tier>` in the briefing; full rules: the `somi-dispatch` skill (`somi_skill`,
+the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
 or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass
 the slug and the frame from step 1. The agent
 ([`agents/incident.md`](../agents/incident.md)) mitigates, verifies against the live symptom, and
