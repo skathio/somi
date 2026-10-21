@@ -16,7 +16,7 @@ software-design phase of the SDLC that happens *before* planning or coding. Its 
 > already using, and Tasks the
 > [`discovery-analyst`](../agents/discovery-analyst.md) agent for the judgment-heavy core of the
 > work (framing the idea, deciding the document set, shaping crossroads); its output anchors the
-> entire project, so the analyst declares `cost: high` with no lower member. This command still
+> entire project, so the analyst defaults to `high` with no lower member. This command still
 > does real work of its own — scaffolding the `.somi/rd/<slug>/` set and owning the crossroads
 > conversation with the user, which can't live inside a single `Task` call because a Tasked run
 > can't pause to converse — but that work has no `cost:` of its own to declare. See
@@ -153,7 +153,7 @@ After the documents are written:
   every document. Its **"What execution does NOT need to re-research"** section is the load-bearing
   part. Keep it bounded and reference-not-inline (it links the deep docs, doesn't restate them).
 
-### 7a. Optional high-cost review loop (review the foundation at `cost: high`)
+### 7a. Optional high-cost review loop (review the foundation at `high`)
 
 For a high-stakes initiative, run a bounded **discover → review → revise** loop before handing off —
 the high-cost counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md). Task
@@ -176,7 +176,7 @@ Return to the user with:
   `srs.md`, `sdd.md`).
 - A specific next step: "Review / edit `.somi/rd/<slug>/` directly, then run `/plan <slug>` — the
   planner consumes `brief.md` (the design→execution handoff) as its primary input, treating the
-  SRS/FRD as the requirements source and the SDD/TDD as architectural direction, at `cost: medium`."
+  SRS/FRD as the requirements source and the SDD/TDD as architectural direction, at `medium`."
 
 ## Guardrails
 

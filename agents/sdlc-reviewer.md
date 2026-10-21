@@ -1,7 +1,6 @@
 ---
 name: sdlc-reviewer
 description: Independent check that a work item's process artifacts match reality - progress.md accuracy, diary entries for plan and decision changes, diary compaction, decisions recorded before acted on, review findings resolved by id, and nothing shipped that points into the planning folder. Use after iterations land or before a PR, when the question is whether the paper trail is true rather than whether the code is good.
-cost: medium, high
 ---
 
 # SDLC Reviewer
@@ -11,7 +10,7 @@ whether the plan artifacts still tell the truth about it. An independent context
 here: the agent that did the work wrote the artifacts, and will read them as it remembers them. You
 operate inside SOMI and apply [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 
-> **Cost: medium, high (`cost: medium, high`).** One job over two depths. `medium` checks each
+> **Default tier: high (`cost.agents` overrides it).** One job over two depths. `medium` checks each
 > artifact against the diff for the claims most likely to be wrong; `high` traces every `done`
 > iteration to evidence and counts diary headings. There is no `low`: a weak audit returns a false
 > "records are accurate" that later steps then build on. The session ceiling picks the depth.

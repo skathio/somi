@@ -145,16 +145,17 @@ P="$(proj '{"cost":{"agents":{"nonexistent-agent":"high"}}}')"; rc=0
 cli "$P" --agent coder >/dev/null 2>&1 || rc=$?
 eq "CLI: an unknown agent name in cost.agents is not an error" "$rc" "0"
 
-# Own-property lookup: an agent literally named "constructor" with no override follows the ceiling.
-# Defence in depth: the validated map is already null-prototype, and Object.hasOwn is the second guard.
+# An agent file literally named "constructor" has no default-tier table entry, so it is 66: the null-prototype
+# table must not hand back an inherited value. (The cost.agents hasOwn guard is now unreachable from
+# resolveDispatch by construction: the table lookup fails first.)
 INST="$TMP/inst"; mkdir -p "$INST/agents"
-printf -- '---\nname: constructor\ncost: high\n---\n' > "$INST/agents/constructor.md"
+printf -- '---\nname: constructor\n---\n' > "$INST/agents/constructor.md"
 P="$(proj '{"cost":{"ceiling":"low","agents":{"coder":"high"}}}')"
-eq "resolver: --agent constructor with no override resolves to the ceiling, not an inherited value" \
+eq "resolver: --agent constructor (no table entry) is 66 and names the default tier table, not an inherited value" \
   "$(node --input-type=module -e "
     const R = await import('$LIB_SRC/dispatch-resolver.mjs');
     const o = R.resolveDispatch({ agent: 'constructor', projectRoot: '$P', installRoot: '$INST' });
-    process.stdout.write(o.ok ? o.result.tier + ',' + o.result.tier_source : 'code ' + o.code)")" "low,ceiling"
+    process.stdout.write(o.ok ? o.result.tier + ',' + o.result.tier_source : 'code ' + o.code + ' ' + o.message)")" "code 66 agent \"constructor\" has no entry in the default tier table (scripts/lib/cost-defaults.mjs)"
 
 eq "resolver re-exports the one AGENT_NAME_RE from cost-config" \
   "$(node --input-type=module -e "

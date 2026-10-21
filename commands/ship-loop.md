@@ -18,7 +18,7 @@ $ARGUMENTS
 This command is the **continuous, gated** pipeline of SoMi's design→execution economy. It first
 sizes the work (Stage -1); the `full` tier optionally front-loads a high-cost design action ([`/design`](./design.md) /
 [`/discover`](./discover.md) / [`/refactor-design`](./refactor-design.md), each Tasking an agent
-that declares `cost: high`) to compile a `brief.md`, then composes the medium-cost layer
+that defaults to `high`) to compile a `brief.md`, then composes the medium-cost layer
 ([`/plan-loop`](./plan-loop.md) → [`/code-loop`](./code-loop.md)) **continuously under bounded
 caps**. For `full`, the single mandatory human checkpoint fires **once a design action has produced
 a `brief.md`, before planning consumes it** — you review the compiled brief, then the medium-cost
@@ -26,9 +26,9 @@ loops run to completion without a per-iteration stop. `trivial` and `small` have
 checkpoint at Stage -1.
 This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
 session is already using — and runs entirely inline as a router; the `planner` and `coder` the
-composed commands Task declare
-`cost: low, medium` (it runs at the session ceiling),
-and the `reviewer` declares `cost: medium, high` (it runs at the session ceiling unless
+composed commands Task default to
+`medium` (it runs at the session ceiling),
+and the `reviewer` defaults to `high` (it runs at the session ceiling unless
 `cost.agents` pins it; pin it to `high` for the fresh-eyes judgment this pipeline wants).
 
 > **"Stop only at the tier's one gate."** For `full` the gate fires once a design action has
@@ -141,7 +141,7 @@ high-cost design action first to compile one:
 - A **feature / user story** on an existing repo → [`/design`](./design.md).
 - A **large refactor** → [`/refactor-design`](./refactor-design.md).
 
-Each Tasks an agent that declares `cost: high` and writes `brief.md` (plus its own deep docs). If
+Each Tasks an agent that defaults to `high` and writes `brief.md` (plus its own deep docs). If
 the work is small / the design is already clear / a `brief.md` already exists, **skip Stage 0** —
 go straight to Stage 1's gate as a cold plan.
 
@@ -258,10 +258,10 @@ At completion (clean or stopped):
 ## Why this command exists
 
 `/ship-loop` is the **continuous** entrypoint to SoMi's design→execution economy: it front-loads
-the expensive reasoning once (`cost: high` → `brief.md`) when the work warrants it, gates a single
+the expensive reasoning once (default `high` → `brief.md`) when the work warrants it, gates a single
 human review per tier (Stage -1 for `trivial` and `small`, the brief handoff for `full`), then runs the medium-cost loops (`/plan-loop` → `/code-loop`) to completion under bounded
 caps — without stopping to ask after every diff. The economics: the high-cost tier is spent once on
-the brief; the high-volume iterative work runs at `cost: medium` against it. Use
+the brief; the high-volume iterative work runs at `medium` against it. Use
 [`/ship`](./ship.md) when you want a human gate at **every** stage (the careful path); use
 `/ship-loop` when you want the expensive layer reviewed once and the cheap layer run continuously
 under caps.

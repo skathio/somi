@@ -3,8 +3,8 @@
 # to for "which tier and model should this agent run at, right now" -- the first real call site for
 # decideDispatch/modelForDispatch (nothing before this composed them together outside a test).
 #
-# Exercises: resolution against real shipped agents at every representative declared shape
-# (high-only, medium+high, low+medium) across all three ceilings; ceiling_source surfacing each of
+# Exercises: resolution against real shipped agents at every representative default tier
+# (high, medium) across all three ceilings; ceiling_source surfacing each of
 # cli/env/config/state/default; an unmapped host resolving to model: null rather than a guess; the
 # project's `.somi/config.json` `cost.mapping` override (an unmapped host gaining a mapped model, a
 # single claude-code tier overridden, a __proto__ key rejected, a malformed mapping -- missing tier
@@ -12,13 +12,12 @@
 # --agent rejected before any file is read, in either direction (`../` and a bare `/`); the somi
 # exemption and an unknown agent each failing with their own distinct, clear, non-zero exit code;
 # an empty or missing value for --host/--ceiling/--agent rejected outright rather than falling
-# through to a silent default; and the three exit codes (usage / unknown agent / malformed
-# declaration) staying distinct from each other and from success.
+# through to a silent default; and the three exit codes (usage / unknown agent / no tier source) staying distinct from each other and from success.
 #
 # Every invocation is scoped to its OWN throwaway CLAUDE_PROJECT_DIR, so the real repo's
-# .somi/somi-state/ceiling.json is never read or written by this suite -- agent frontmatter itself
-# is still read from the REAL agents/ directory (the resolver's install root, not the project
-# root), which is the behavior under test, not something to fake.
+# .somi/somi-state/ceiling.json is never read or written by this suite -- agent FILES are still looked up in
+# the REAL agents/ directory (the resolver's install root, not the project root), while each agent's
+# tier comes from scripts/lib/cost-defaults.mjs -- the behavior under test, not something to fake.
 set -uo pipefail
 
 ROOT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -52,7 +51,7 @@ expect_exit() { # $1 = name, $2 = expected exit code, $3 = project root, remaini
 }
 
 # --- high-only (`designer`, cost: high): the ceiling is a hard cap, so it runs AT the ceiling and
-# is reported degraded when that is below its declared high ----------------------------------------
+# is reported degraded when that is below its default tier high ----------------------------------------
 for spec in low:haiku:true medium:sonnet:true high:opus:false; do
   IFS=: read -r c m d <<<"$spec"
   out="$(run "$(fresh)" resolve --agent designer --ceiling "$c")"
@@ -68,18 +67,18 @@ out="$(run "$R_OVR" resolve --agent designer)"
 check "cost.agents.designer=high beats ceiling=low: tier high, model opus, tier_source override" \
   "$(field "$out" tier)/$(field "$out" model)/$(field "$out" tier_source)" "high/opus/override"
 
-# --- graded medium/high (`reviewer`): the tier is the ceiling itself; degraded when below the top member -
+# --- default high, also acceptable at medium (`reviewer`): the tier is the ceiling itself; degraded when below the default -
 out="$(run "$(fresh)" resolve --agent reviewer --ceiling low)"
-check "reviewer (medium,high) under ceiling=low: clamped to the ceiling (low), degraded" \
+check "reviewer (default high) under ceiling=low: clamped to the ceiling (low), degraded" \
   "$(field "$out" tier)/$(field "$out" degraded)" "low/true"
 out="$(run "$(fresh)" resolve --agent reviewer --ceiling medium)"
 check "reviewer under ceiling=medium: selects medium" "$(field "$out" tier)" "medium"
 out="$(run "$(fresh)" resolve --agent reviewer --ceiling high)"
 check "reviewer under ceiling=high: selects high" "$(field "$out" tier)" "high"
 
-# --- graded low/medium (`coder`): the opt-in `low` bar's shipped example ------------------------
+# --- default medium, opt-in low (`coder`): the opt-in `low` bar's shipped example ------------------------
 out="$(run "$(fresh)" resolve --agent coder --ceiling low)"
-check "coder (low,medium) under ceiling=low: selects low" "$(field "$out" tier)" "low"
+check "coder (default medium) under ceiling=low: selects low" "$(field "$out" tier)" "low"
 check "coder under ceiling=low: model is haiku" "$(field "$out" model)" "haiku"
 out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
 check "coder under ceiling=medium: selects medium" "$(field "$out" tier)" "medium"
@@ -399,9 +398,9 @@ out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
 check "JSON output carries exactly agent/ceiling/ceiling_origin/ceiling_source/declared/degraded/enforced/model/supported/tier/tier_source" \
   "$(node -e 'process.stdout.write(Object.keys(JSON.parse(process.argv[1])).sort().join("|"))' "$out")" \
   "agent|ceiling|ceiling_origin|ceiling_source|declared|degraded|enforced|model|supported|tier|tier_source"
-check "coder's supported set is exactly [low, medium], echoing its declared frontmatter" \
+check "coder's supported set is exactly [medium], echoing its default tier from the table" \
   "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" \
-  "low,medium"
+  "medium"
 
 # --- ceiling_origin surfaces through the CLI, not just the library: the source/origin distinction
 # that makes "ceiling_source: state" actionable round-trips through the JSON. ---------------------
@@ -417,17 +416,37 @@ out="$(run "$R_ORIGIN" resolve --agent coder)"    # a later bare call, config go
 check "a later call: ceiling_source is 'state' but ceiling_origin still says 'cli' -- actionable" \
   "$(field "$out" ceiling_source),$(field "$out" ceiling_origin)" "state,cli"
 
-# --- CRLF checkout (#28): a Windows clone with core.autocrlf rewrites agent files to CRLF; the
-# frontmatter delimiter is then `---\r`, which must still parse. Run a copy of the install whose
-# agent files are CRLF. -----------------------------------------------------------------------------
-CRLF_INSTALL="$(fresh)"
-cp -R "$ROOT_REPO/scripts" "$ROOT_REPO/agents" "$CRLF_INSTALL/"
-for f in "$CRLF_INSTALL"/agents/*.md; do sed -i 's/$/\r/' "$f"; done
-crlf_rc=0
-out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CRLF_INSTALL/scripts/somi-dispatch.mjs" resolve --agent planner --host copilot 2>&1)" || crlf_rc=$?
-check "CRLF agent files: resolve exits 0 (was 66, 'declares no cost:')" "$crlf_rc" "0"
-[ "$crlf_rc" = 0 ] && check "CRLF agent files: planner's supported set parses without a trailing CR" \
-  "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" "low,medium"
+# --- the tier comes from the default table, never from the agent file --------------------------------
+# A leftover `cost:` line in an agent file (step one of retiring it) is ignored, and so is the file's
+# line-ending style (#28: a Windows clone rewrites agent files to CRLF). Run a copy of the install whose
+# planner declares `cost: low` and whose agent files are all CRLF.
+LEFTOVER_INSTALL="$(fresh)"
+cp -R "$ROOT_REPO/scripts" "$ROOT_REPO/agents" "$LEFTOVER_INSTALL/"
+sed -i '0,/^description:/s/^description:/cost: low\ndescription:/' "$LEFTOVER_INSTALL/agents/planner.md"
+for f in "$LEFTOVER_INSTALL"/agents/*.md; do sed -i 's/$/\r/' "$f"; done
+leftover_rc=0
+out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$LEFTOVER_INSTALL/scripts/somi-dispatch.mjs" resolve --agent planner --host copilot 2>&1)" || leftover_rc=$?
+check "a leftover cost: line in a CRLF agent file: resolve exits 0" "$leftover_rc" "0"
+[ "$leftover_rc" = 0 ] && check "... and planner's supported set is the table's [medium], not the file's low" \
+  "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" "medium"
+grep -q '^cost: low' "$LEFTOVER_INSTALL/agents/planner.md" || bad "fixture did not plant the leftover cost: line"
+# Red proof: if the resolver took the tier from anywhere but the table, the same assertion would see it.
+sed -i "s/const defaultTier = AGENT_DEFAULT_TIERS\[agent\];/const defaultTier = 'low';/" "$LEFTOVER_INSTALL/scripts/lib/dispatch-resolver.mjs"
+out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$LEFTOVER_INSTALL/scripts/somi-dispatch.mjs" resolve --agent planner --host copilot 2>&1)" || true
+check "red proof: a resolver that ignores the table reports a different supported set" \
+  "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" "low"
+
+# An agent file with no table entry (and not the exempt somi) is a gap in the plugin itself: 66, naming the table.
+GHOST_INSTALL="$(fresh)"
+cp -R "$ROOT_REPO/scripts" "$ROOT_REPO/agents" "$GHOST_INSTALL/"
+printf -- '---\nname: ghost\ndescription: d\n---\nbody\n' > "$GHOST_INSTALL/agents/ghost.md"
+ghost_rc=0
+msg="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$GHOST_INSTALL/scripts/somi-dispatch.mjs" resolve --agent ghost 2>&1 >/dev/null)" || ghost_rc=$?
+check "an agent file with no default-tier table entry exits 66" "$ghost_rc" "66"
+case "$msg" in
+  *"default tier table"*) ok "... and the message names the table" ;;
+  *) bad "... the message does not name the table (got: $msg)" ;;
+esac
 
 echo "somi-dispatch tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

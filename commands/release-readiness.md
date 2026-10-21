@@ -14,7 +14,7 @@ per-iteration reviews structurally miss.
 > **No `cost:` of its own, and no `model:` either — it runs on whatever model this session is
 > already using.** Stages 1 and 3 read and write
 > directly, inline, at whatever tier is already running this command. Stage 2, the one expensive
-> step, Tasks the [`reviewer`](../agents/reviewer.md) agent, which declares `cost: medium, high`
+> step, Tasks the [`reviewer`](../agents/reviewer.md) agent, which defaults to `high`
 > on its own account and resolves against the session ceiling independently of this command.
 
 Scope: **$ARGUMENTS** (one or more work-item slugs, or a milestone description; empty = every
@@ -42,7 +42,7 @@ Any hard failure here (open Blocker, red tests, unexecutable rollback) → the v
 ## Stage 2 — High-cost integration review (the one expensive step)
 
 Per-iteration reviews saw each diff in isolation. Task the [`reviewer`](../agents/reviewer.md)
-(declares `cost: medium, high`; it runs at the session ceiling unless `cost.agents` pins it; pin it
+(defaults to `high`; it runs at the session ceiling unless `cost.agents` pins it; pin it
 to `high` for the fresh-context depth this stage wants). Before this `Task`, call `somi_resolve` for
 `reviewer` (with `project_dir`), pass its model, and put the cost line in the
 briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude

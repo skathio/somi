@@ -48,10 +48,10 @@ Each layer has a clear job:
 
 The four layers above describe *structure*. A second, orthogonal axis describes *economics*: which
 model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth — and the
-declaration lives on **agents only**: `cost:` sizes an agent instance being spawned, and a
+default tier lives on **agents only**, in a table (`scripts/lib/cost-defaults.mjs`) that `cost.agents` in `.somi/config.json` can override: a
 command is instructions, not an instance, so it declares neither `cost:` nor `model:` of its own —
-it runs on whatever model the session is already using — and simply `Task`s the agent whose own
-frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
+it runs on whatever model the session is already using — and simply `Task`s the agent whose default
+tier the table holds (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
 
 ```
         cost: high                                       cost: medium
@@ -70,15 +70,15 @@ frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
   inlining them, and carries an explicit *"What execution does NOT need to re-research"* list.
 - **`cost: medium`** sequences and implements **against** the brief, so the high-volume work runs
   cheap. This is the **plan-and-execute / model-cascade** pattern (strong planner, cheap executor).
-- A unit's declared `cost:` is a **capability set**, not a single value — every tier it can
-  honestly run at. The session ceiling is a hard cap: an agent runs at the ceiling tier itself, or
+- An agent's default tier is the tier it was built for; a lower one must be acceptable for every job
+  it accepts. The session ceiling is a hard cap: an agent runs at the ceiling tier itself, or
   at its
   own `cost.agents` entry in `.somi/config.json` when it has one (an entry wins, even above the
-  ceiling). The declaration is read only to report when a run is below it (`degraded`).
+  ceiling). The default tier is read only to report when a run is below it (`degraded`).
 
 **Interaction with the layers.** Commands (the orchestration layer) carry no `cost:` of their own
-and simply `Task` the tier-appropriate agent, which resolves its own model from its own declared
-set. Tasking a differently-costed subagent from an uncosted command is the **cache-correct** way to
+and simply `Task` the tier-appropriate agent, which resolves its own model from its default
+tier. Tasking a differently-costed subagent from an uncosted command is the **cache-correct** way to
 mix models — and because prompt caches are model-scoped, a `cost: high` design action's `brief.md`
 and the `cost: medium` execution that consumes it sit on either side of a natural cache boundary,
 which is why `/ship-loop` places its single human gate right there: once the design action has
@@ -87,7 +87,7 @@ with no design action). `/discover`, `/design`, `/refactor-design`, and `/atlas`
 that Task a `cost: high` agent for their **entire** job — `discovery-analyst`, `designer`, and
 `refactor-designer`'s framing is judgment-heavy and their brief anchors the work item; `atlas` is
 one high-quality deep repo read, paid once. `/adopt` Tasks the `atlas` agent as its own Stage 1, at
-the agent's own declared tier — it does not inline that read.
+the agent's own default tier — it does not inline that read.
 
 **How dispatch actually happens.** Neither a command nor the front door hands a whole command's
 procedure to one Tasked agent that runs it end-to-end. On Claude Code, invoking a command runs its
@@ -113,7 +113,7 @@ Repo-local instructions win over SoMi defaults; SoMi never auto-invokes foreign 
 
 ```
 user: "/discover <idea>"
-  → command /discover (no `cost:` of its own; Tasks discovery-analyst at `cost: high` end-to-end)
+  → command /discover (no `cost:` of its own; Tasks discovery-analyst at its default tier `high` end-to-end)
     reads $ARGUMENTS, validates it's a researchable idea
   → command derives slug, scaffolds .somi/rd/<slug>/ from templates/ (RD-README, RESEARCH, BRD,
     SRS, FRD, SDD, TDD + reused DECISIONS/DIARY)

@@ -118,7 +118,7 @@ const TOOLS = [
       "Resolve one agent's dispatch tier and model: its cost.agents override from .somi/config.json, " +
       'else the current session ceiling itself (a hard cap) — the ' +
       'MCP-native equivalent of `node scripts/somi-dispatch.mjs resolve`. Same validation, same ' +
-      'four-code failure family (64 usage / 65 unknown agent / 66 malformed cost: declaration / ' +
+      'four-code failure family (64 usage / 65 unknown agent / 66 no default tier / ' +
       '67 project environment failure — including "no project root could be established": no ' +
       'CLAUDE_PROJECT_DIR, no usable MCP roots, and no project_dir given), reported in the tool ' +
       'result text on failure.',

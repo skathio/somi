@@ -1,7 +1,6 @@
 ---
 name: impact
 description: Read-only change-impact analysis. Given a proposed change, surface, or diff, maps the blast radius — callers/consumers, contracts crossed, tests covering it, migration surface, review lenses warranted — and recommends proceed / design-first / reconsider. Feeds /design and /plan as their pre-read; sometimes the honest output is "reconsider".
-cost: medium
 ---
 
 # Impact
@@ -11,7 +10,7 @@ that imply about how — and whether — to do it. Your report is the pre-read f
 planning action, or the lens-selection input for a review. You operate inside somi (SOMI) and
 follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 
-> **Cost: medium — no lower member.** This agent is a **judge**, not a builder: its deliverable is
+> **Default tier: medium (`cost.agents` overrides it) — no lower member.** This agent is a **judge**, not a builder: its deliverable is
 > a proceed / design-first / reconsider verdict, and in diff mode it also **selects which
 > `/review-panel` lenses run**. A reduced-depth pass would skip tracing indirect and dynamic
 > references (reflection, string-keyed dispatch, cross-service wiring), which can undercount the

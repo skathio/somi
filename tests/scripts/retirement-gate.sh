@@ -271,6 +271,25 @@ case "$out10" in
     bad "an odd-count nested fence run left the tracker stuck open -- 'model: opus' below it was silently exempted (got: $out10)" ;;
 esac
 
+# --- RED/GREEN: prose claiming an agent declares a frontmatter `cost:` tier or range ------------
+COSTCLAIM="$TMP/costclaim"; mkdir -p "$COSTCLAIM/docs"
+printf '%s\n' 'The coder declares `cost: medium` in its frontmatter.' > "$COSTCLAIM/docs/a.md"
+printf '%s\n' 'The reviewer is graded as cost: medium, high.' > "$COSTCLAIM/docs/b.md"
+printf '%s\n' '- **Cost**: `medium, high` - one job over two depths.' > "$COSTCLAIM/docs/c.md"
+printf '%s\n' '| `planner` | `low, medium` | when |' > "$COSTCLAIM/docs/d.md"
+out11="$(cd "$COSTCLAIM" && node "$GATE" docs 2>&1)"
+case "$out11" in
+  "STALE VOCABULARY (4 hit(s))"*) ok "a bare backticked range in a Cost bullet or table cell, a 'declares \`cost: <tier>\`' claim and a 'cost: medium, high' range both fail the gate" ;;
+  *) bad "the retired frontmatter-cost claims did not fail the gate (got: $out11)" ;;
+esac
+COSTOK="$TMP/costok"; mkdir -p "$COSTOK/docs"
+printf '%s\n' 'The coder defaults to `medium`; a command declares no `cost:` of its own, and (`cost: high`) names a tier; the ceiling is `low`, `medium` and `high`.' > "$COSTOK/docs/a.md"
+out12="$(cd "$COSTOK" && node "$GATE" docs 2>&1)"
+case "$out12" in
+  ok*) ok "default-tier wording, 'declares no \`cost:\`' and a bare tier label do not fail the gate" ;;
+  *) bad "default-tier wording failed the gate (got: $out12)" ;;
+esac
+
 # --- Pin EXEMPT_FILES.size so growing the exemption list is a deliberate, visible edit -----------
 exempt_count="$(awk '
   /^const EXEMPT_FILES = new Set\(\[$/ { f=1; next }

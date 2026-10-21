@@ -25,7 +25,7 @@
 //   0   ok
 //   64  usage error
 //   65  unknown agent
-//   66  malformed declaration
+//   66  no tier source (the exempt `somi` agent, or an agent file with no default-tier-table entry)
 //   67  project environment/config failure
 // A guessed model is never printed on any error path — only the success path emits JSON.
 

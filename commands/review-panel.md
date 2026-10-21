@@ -17,8 +17,8 @@ The orchestrator (this command) has no `cost:` of its own — nor a `model:` of 
 whatever model this session is already using — and runs entirely inline. Each lens it Tasks
 resolves its model through the dispatch skill: its `cost.agents` entry if the config has
 one, otherwise the session ceiling itself. `reviewer`, `architecture-reviewer`, `test-strategist`,
-`plan-reviewer`, and `sdlc-reviewer` declare `cost: medium, high`; pin them to `high` under
-`cost.agents` for the fresh-eyes depth a panel wants. `security-reviewer` declares `cost: high`
+`plan-reviewer`, and `sdlc-reviewer` default to `high`; pin them to `high` under
+`cost.agents` for the fresh-eyes depth a panel wants. `security-reviewer` defaults to `high`
 alone — a missed vulnerability outweighs a lighter generalist pass — so pin it to `high` too (see
 its own `> **Cost:**` callout); an unpinned lens runs at the ceiling and is reported as degraded.
 The lenses are read-only **by contract, not by platform

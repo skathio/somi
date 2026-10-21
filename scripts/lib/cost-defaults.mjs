@@ -1,13 +1,10 @@
 // cost-defaults.mjs — the default .somi/config.json `cost` block a project with no config gets.
 //
-// The table is literal data, not read from agents/ at runtime: the code that writes the file runs in
-// a consuming project where only the plugin install exists, and agent frontmatter may stop carrying
-// `cost:` altogether. tests/scripts/cost-defaults.sh keeps it equal to the highest tier each
-// agents/*.md declares today.
-//
-// Every agent is pinned to the highest tier it declares, so a fresh project keeps the depth each
-// agent was built for even though the default ceiling is lower. The front-door `somi` agent is not
-// listed: it declares no cost and is exempt from cost resolution (the host binds its model).
+// The table is the one source of each agent's default tier (agent files carry no tier of their own).
+// It is literal data, not read from agents/ at runtime: the code that writes the file runs in a
+// consuming project where only the plugin install exists. tests/scripts/cost-defaults.sh keeps its
+// keys equal to agents/*.md minus the front-door `somi` agent, which is exempt from cost resolution
+// (the host binds its model).
 // Tier names only; which model a tier means is cost.mapping's job.
 
 import { DEFAULT_CEILING } from './cost-ceiling.mjs';

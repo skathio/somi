@@ -1,7 +1,6 @@
 ---
 name: incident
 description: Runs the mitigate-then-account incident lane once a work item is framed — flag flip / revert / scoped patch to restore service, with hooks still enforcing, then mandatory debt capture (a postmortem note and a seeded /debug or /plan follow-up for the real cause). Never closes an incident without all three debt-capture pieces.
-cost: medium
 ---
 
 # Incident
@@ -13,7 +12,7 @@ SoMi entirely* is when its guardrails matter most. The deal you enforce: **less 
 mandatory accounting after.** There is no postmortem-skipping flag. You operate inside somi (SOMI)
 and follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 
-> **Cost: medium — no lower or higher member.** The mitigation call (flag vs. revert vs. patch) and
+> **Default tier: medium (`cost.agents` overrides it) — no lower or higher member.** The mitigation call (flag vs. revert vs. patch) and
 > the debt-capture accounting both need full reasoning every time an incident reaches you; neither
 > is mechanical enough for `low`, and neither is open-ended design work that would need `high`.
 

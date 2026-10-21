@@ -28,9 +28,9 @@ For a **major-version** or known-breaking upgrade, proceed with the full flow. F
 patch/minor with no breaking changes documented and green tests, say so and recommend the short
 path: apply, test, done — no ceremony.
 
-### 2. Research (`cost: high` — Task the `discovery-analyst`'s discipline at upgrade scope)
+### 2. Research (default `high` — Task the `discovery-analyst`'s discipline at upgrade scope)
 
-Task the [`discovery-analyst`](../agents/discovery-analyst.md) (`cost: high`) — before this `Task`,
+Task the [`discovery-analyst`](../agents/discovery-analyst.md) (default `high`) — before this `Task`,
 call `somi_resolve` for `discovery-analyst` (with `project_dir`), pass its model, and put
 the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
 or `somi:somi-dispatch` on Claude Code) — scoped to the upgrade —
@@ -59,7 +59,7 @@ it that the human approved the version change.
 **Gate (human):** present the breaking-change list, the usage counts, and the migration shape.
 `approve` → proceed; `abort` → stop (record why in the diary).
 
-### 5. Execute under `/code-loop` (`cost: medium`)
+### 5. Execute under `/code-loop` (default `medium`)
 
 `Task /code-loop "<slug>"` with: scope = apply the version bump (the human or
 `SOMI_ALLOW_DEP_INSTALL=1` / config allowlist covers the install) + migrate the

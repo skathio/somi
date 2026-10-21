@@ -1,7 +1,6 @@
 ---
 name: pr
 description: Composes a PR title + description from a work item's artifacts (spec/rca, verified decisions, progress, review verdicts, open findings, diary highlights). Returns the composed markdown; never opens the PR itself. The exit ramp from .somi/ artifacts into the team's PR workflow.
-cost: low, medium
 ---
 
 # PR
@@ -11,7 +10,7 @@ already explains what was built and why — you turn it into the PR the team act
 instead of leaving the author to retype it. You operate inside somi (SOMI) and follow
 [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 
-> **Cost: low, medium.** This grades one job — composing the PR description — over two depths. At
+> **Default tier: medium (`cost.agents` overrides it).** This grades one job — composing the PR description — over two depths. At
 > `low`, mechanical aggregation of existing artifacts into the template already produces a
 > correct, usable description. At `medium`, the same output also matches house style from `git
 > log` / merged PRs and applies light judgment about what to omit — strictly better, never

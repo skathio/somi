@@ -9,7 +9,7 @@ work.
 
 - **High-cost front-loads:** `/discover` (a whole new product), `/design` (a brownfield
   feature/story), and `/refactor-design` (a large refactor) — each compiles a `brief.md`.
-  `/review`'s `reviewer` declares `cost: medium, high` — it runs at the session ceiling unless
+  `/review`'s `reviewer` defaults to `high` — it runs at the session ceiling unless
   `cost.agents` pins it (pin it to `high` for the fresh-eyes judgment this stage wants).
 - **Medium-cost execution:** `/plan` (+ `/plan-loop`) sequences the brief into phases; `/code`
   (+ `/code-loop`, `/code-parallel`) implements against it.
@@ -22,7 +22,7 @@ discovery produces the requirements & design foundation inside `.somi/rd/<slug>/
 
 > **Why tier this way.** Previously every agent ran at the top tier, spreading the expensive model
 > across the whole lifecycle — including the highest-volume work. Concentrating the expensive model
-> on the front-loaded brief and on review, then running plan/code at `cost: medium` against the
+> on the front-loaded brief and on review, then running plan/code at its default tier `medium` against the
 > brief, is the **plan-and-execute / model-cascade** pattern: a strong model compiles the context
 > once, a cheaper model executes it many times. The `brief.md` is the contract that makes the cheap
 > tier safe — it carries the decisions, the complexity map, and an explicit *"what execution does
@@ -122,7 +122,7 @@ Status lives in `progress.md`, not in the directory location. Only humans delete
 foundation — *before* planning or coding. This is the requirements-engineering and high-level
 software-design phase of the SDLC. Its output is the cornerstone the planner consumes.
 
-**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md), Tasked at `cost: high` — the most
+**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md), Tasked at its default tier `high` — the most
 capable tier this repo maps — for the judgment-heavy core of the work, because the output anchors
 the entire project. `/discover` itself declares no `cost:` and no `model:` of its own; it runs on
 whatever model the session is already using, and still scaffolds `.somi/rd/<slug>/` and owns the
@@ -169,7 +169,7 @@ codebase — *before* planning — and compile it into the `brief.md` execution 
 fills the gap between discovery (a whole new product) and planning (sequencing): the requirement is
 clear, but how it should be shaped against *this* repo is not.
 
-**Agent**: [`designer`](../agents/designer.md), Tasked at `cost: high` — the most capable tier this
+**Agent**: [`designer`](../agents/designer.md), Tasked at its default tier `high` — the most capable tier this
 repo maps — for the judgment-heavy core of the work, because its `brief.md` anchors the whole work
 item. `/design` itself declares no `cost:` and no `model:` of its own, like `/discover`; it runs on
 whatever model the session is already using, and still scaffolds the artifact set and owns the
@@ -188,8 +188,8 @@ planner owns *sequencing* into phases and PR-sized slices, and the concrete file
 seam as discovery↔planning, one level down.
 
 **Stops the workflow**: never plans or codes. **Handoff to planning**: explicit — `/plan <slug>`
-consumes `brief.md` as its primary input and sequences it at `cost: medium`. For a high-stakes
-design, review it at `cost: high` first via `/review design <slug>` (fresh context, bounded loop).
+consumes `brief.md` as its primary input and sequences it at its default tier `medium`. For a high-stakes
+design, review it at its default tier `high` first via `/review design <slug>` (fresh context, bounded loop).
 
 > **When to use which front-load.** New product, open requirements → `/discover`. Feature/story on an
 > existing repo, design unsettled → `/design`. Large structural untangle → `/refactor-design`.
@@ -344,8 +344,8 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 - **Discover → Plan → Code → Review** for a greenfield product or major new initiative — discovery
   produces the requirements & design foundation (+ `brief.md`), which planning turns into phased work.
 - **Design → Plan → Code → Review** for a design-heavy brownfield feature — `/design` (Tasks
-  `designer` at `cost: high`) compiles the `brief.md`; `/plan` (Tasks `planner`, `cost: low, medium`)
-  sequences it; `/code-loop` (Tasks `coder`, `cost: low, medium`) implements against it. This is the
+  `designer` at its default tier `high`) compiles the `brief.md`; `/plan` (Tasks `planner`, default `medium`)
+  sequences it; `/code-loop` (Tasks `coder`, default `medium`) implements against it. This is the
   daily design→execution chain for non-trivial features.
 - **Plan → Code → Review** is the normal sequence when the design is already settled.
 - **Plan → Plan-review → Code → Review** when the plan is high-stakes or high-ambiguity.
@@ -359,9 +359,9 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   report becomes `/design`'s pre-read, tells `/review-panel` which lenses the surface warrants,
   or honestly says "reconsider" with the numbers.
 - **Upgrade** for a dependency bump — [`/upgrade`](../commands/upgrade.md): cited
-  breaking-change/CVE research (Tasks `discovery-analyst` at `cost: high`) → usage scan →
+  breaking-change/CVE research (Tasks `discovery-analyst` at its default tier `high`) → usage scan →
   mini-brief (doubles as the dep-gate sign-off) → migration under `/code-loop` (Tasks `coder`,
-  `cost: low, medium`).
+  default `medium`).
 - **Release-readiness** before shipping a set of work items —
   [`/release-readiness`](../commands/release-readiness.md): a deterministic checklist over the
   artifacts plus one high-cost review of the cumulative integration diff; verdict + draft release
@@ -410,7 +410,7 @@ safety net.
 ## The Repo Atlas (amortized high-cost)
 
 The `brief.md` compresses a *work item*; **`.somi/atlas.md`** (built by
-[`/atlas`](../commands/atlas.md), which Tasks the `atlas` agent at `cost: high`) compresses the
+[`/atlas`](../commands/atlas.md), which Tasks the `atlas` agent at its default tier `high`) compresses the
 *repository*: module map, dependency
 rules, conventions digest, complexity hotspots, test topology — SHA-stamped. Every later
 `cost: high` action (`/design`, a cold `/plan`, `/refactor-design`, `/impact`) starts from the

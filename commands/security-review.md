@@ -35,10 +35,10 @@ model, and put the cost line in the briefing (`dispatched at cost: <tier>` only 
   Write/Edit and its `## Write discipline` section forbids using them, so this command owns every
   write (the review file, `progress.md`, `diary.md`).
 
-`security-reviewer` declares `cost: high` alone. It runs at the session ceiling (`medium` by
+`security-reviewer` defaults to `high` alone. It runs at the session ceiling (`medium` by
 default) unless `cost.agents` in `.somi/config.json` pins it, and the dispatch skill prints a
 degraded line when that is below `high`. The config is respected: there is no floor in code. Say
-plainly in the review that it ran below its declared tier, and that setting
+plainly in the review that it ran below its default tier, and that setting
 `"security-reviewer": "high"` under `cost.agents` is how to keep the strong pass.
 
 ### 3. Findings must include

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Guard for the default config table (scripts/lib/cost-defaults.mjs). Until frontmatter `cost:` is
-# retired, the table must equal the HIGHEST tier each agents/*.md declares, with exactly the same
-# set of agents (the front-door `somi` agent, which declares no cost, is the one exclusion). Each
-# parity check is also proven red: a copy of the table with one tier changed, or one row removed,
-# must fail the same comparison.
+# Guard for the default tier table (scripts/lib/cost-defaults.mjs), the one source of each agent's tier:
+#  - the table lists exactly the agents/*.md files, minus the exempt front-door `somi` (existence, both
+#    directions);
+#  - no agents/*.md or commands/*.md declares `cost:` (the real check from scripts/validate.sh, extracted
+#    from a copy of it and run over fixtures, so this proves that block's own logic).
+# Each check is also proven red: a copy of the table with one row removed or added, and fixtures that
+# declare `cost:`, must fail the same comparison.
 set -uo pipefail
 
 ROOT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -19,25 +21,43 @@ echo "== cost defaults =="
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# Prints "name:tier" per agents/*.md that declares cost: (highest member), sorted.
-frontmatter_tiers() {
-  for f in "$ROOT_REPO"/agents/*.md; do
-    line="$(awk '/^---$/{n++; next} n==1 && /^cost:/{sub(/^cost:[ \t]*/,""); print; exit}' "$f")"
-    [ -n "$line" ] || continue
-    printf '%s:%s\n' "$(basename "$f" .md)" "$(printf '%s' "$line" | awk -F',' '{gsub(/[ \t\r]/,"",$NF); print $NF}')"
-  done | sort
+# Prints the agent names (agents/*.md minus the exempt `somi`), sorted.
+agent_files() { for f in "$1"/*.md; do n="$(basename "$f" .md)"; [ "$n" = somi ] || printf '%s\n' "$n"; done | sort; }
+# Prints the table's agent names for the lib dir given, sorted.
+table_names() {
+  node --input-type=module -e "
+    const D = await import('$1/cost-defaults.mjs');
+    for (const k of Object.keys(D.AGENT_DEFAULT_TIERS)) console.log(k);" | sort
 }
-# Prints "name:tier" for the table in the lib dir given, sorted.
+
+EXPECT="$(agent_files "$ROOT_REPO/agents")"
+[ -n "$EXPECT" ] || bad "no agent file was found"
+check "the table lists exactly the agent files (minus the exempt somi)" "$(table_names "$LIB_SRC")" "$EXPECT"
+
+# The tier values themselves: a literal expected list (changing a tier is a deliberate edit here).
+EXPECT_TIERS="architecture-reviewer:high
+atlas:high
+coder:medium
+designer:high
+discovery-analyst:high
+impact:medium
+incident:medium
+plan-reviewer:high
+planner:medium
+pr:medium
+refactor-designer:high
+refactorer:medium
+reviewer:high
+sdlc-reviewer:high
+security-reviewer:high
+test-strategist:high"
 table_tiers() {
   node --input-type=module -e "
     const D = await import('$1/cost-defaults.mjs');
     for (const [k, v] of Object.entries(D.AGENT_DEFAULT_TIERS)) console.log(k + ':' + v);" | sort
 }
-
-EXPECT="$(frontmatter_tiers)"
-[ -n "$EXPECT" ] || bad "no agent frontmatter was parsed"
-check "the table equals the highest declared tier of every agent that declares one (exact agent set)" \
-  "$(table_tiers "$LIB_SRC")" "$EXPECT"
+EXPECT_TIERS="$(printf '%s\n' "$EXPECT_TIERS" | sort)"
+check "the table's name:tier list equals the literal expected list" "$(table_tiers "$LIB_SRC")" "$EXPECT_TIERS"
 
 # Red proofs on copies of the lib.
 mutant() { # $1 = name, $2 = sed expression
@@ -47,9 +67,34 @@ mutant() { # $1 = name, $2 = sed expression
 mutant tier-changed "s/^  coder: 'medium',/  coder: 'high',/"
 mutant row-removed  "/^  atlas: 'high',/d"
 mutant row-added    "s/^  atlas: 'high',/  atlas: 'high',\n  ghost: 'low',/"
-for m in tier-changed row-removed row-added; do
-  if [ "$(table_tiers "$TMP/$m")" != "$EXPECT" ]; then ok "red proof: parity fails for $m"; else bad "red proof: parity still holds for $m"; fi
+if [ "$(table_tiers "$TMP/tier-changed")" != "$EXPECT_TIERS" ]; then ok "red proof: the tier list check fails for tier-changed"; else bad "red proof: a changed tier went unnoticed"; fi
+for m in row-removed row-added; do
+  if [ "$(table_names "$TMP/$m")" != "$EXPECT" ]; then ok "red proof: existence check fails for $m"; else bad "red proof: existence check still holds for $m"; fi
 done
+mkdir -p "$TMP/agents-extra"; cp "$ROOT_REPO"/agents/*.md "$TMP/agents-extra/"; printf -- '---\nname: extra\n---\n' > "$TMP/agents-extra/extra.md"
+if [ "$(agent_files "$TMP/agents-extra")" != "$(table_names "$LIB_SRC")" ]; then ok "red proof: an agent file with no table row fails the check"; else bad "red proof: an unlisted agent file went unnoticed"; fi
+
+# No agent or command declares `cost:` -- the real block from scripts/validate.sh, over fixtures.
+HELPER="$(awk '/^fm_has\(\) \{/{c=1} c{print} c&&/^\}$/{exit}' "$ROOT_REPO/scripts/validate.sh")"
+BLOCK="$(awk '/^cost_failed=0$/{c=1} c{print} c&&/^done$/{exit}' "$ROOT_REPO/scripts/validate.sh")"
+if [ -z "$HELPER" ] || [ -z "$BLOCK" ]; then bad "could not extract the cost check from scripts/validate.sh -- its markers may have moved"; else
+  SNIPPET="$HELPER"$'\n'"$BLOCK"$'\nexit $cost_failed'
+  fx() { (cd "$1" && bash -c "$SNIPPET" 2>"$1/err"); echo $?; }
+  mkdir -p "$TMP/fx-ok/agents" "$TMP/fx-ok/commands" "$TMP/fx-agent/agents" "$TMP/fx-agent/commands" "$TMP/fx-cmd/agents" "$TMP/fx-cmd/commands" "$TMP/fx-crlf/agents" "$TMP/fx-crlf/commands"
+  printf -- '---\nname: x\ndescription: d\n---\nbody line: cost: high\n' > "$TMP/fx-ok/agents/x.md"
+  printf -- '---\ndescription: d\n---\nbody\n' > "$TMP/fx-ok/commands/c.md"
+  for d in fx-agent fx-cmd fx-crlf; do cp "$TMP/fx-ok/agents/x.md" "$TMP/$d/agents/x.md"; cp "$TMP/fx-ok/commands/c.md" "$TMP/$d/commands/c.md"; done
+  printf -- '---\nname: x\ncost: medium, high\n---\n' > "$TMP/fx-agent/agents/x.md"
+  printf -- '---\ndescription: d\ncost: high\n---\n' > "$TMP/fx-cmd/commands/c.md"
+  printf -- '---\r\nname: x\r\ncost: high\r\n---\r\n' > "$TMP/fx-crlf/agents/x.md"
+  check "an agent and a command without a frontmatter cost: pass (a body line is not frontmatter)" "$(fx "$TMP/fx-ok")" "0"
+  check "red proof: an agent declaring cost: fails" "$(fx "$TMP/fx-agent")" "1"
+  check "red proof: a command declaring cost: fails" "$(fx "$TMP/fx-cmd")" "1"
+  check "red proof: a CRLF agent declaring cost: fails" "$(fx "$TMP/fx-crlf")" "1"
+  grep -q "agents/x.md declares cost:" "$TMP/fx-agent/err" && ok "the message names the offending file" || bad "message wrong: $(cat "$TMP/fx-agent/err")"
+  n="$(awk 'FNR==1{c=0} /^---$/{c++} c==1 && /^cost:/{print FILENAME; nextfile}' "$ROOT_REPO"/agents/*.md "$ROOT_REPO"/commands/*.md | wc -l)"
+  check "no shipped agent or command declares cost:" "$n" "0"
+fi
 
 # The shape of the default config.
 node --input-type=module -e "

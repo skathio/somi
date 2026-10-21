@@ -17,13 +17,13 @@ into a [`brief.md`](../templates/BRIEF.md.tmpl) that the cheaper tier executes v
 > whatever model this session is already using, and Tasks the
 > [`refactor-designer`](../agents/refactor-designer.md) agent for the judgment-heavy core of the
 > work (naming the destination shape, mapping seams and risks, confirming test-coverage gaps); its
-> `brief.md` anchors the whole refactor, so the agent declares `cost: high` with no lower member.
+> `brief.md` anchors the whole refactor, so the agent defaults to `high` with no lower member.
 > This command still does real work of its own — scaffolding the artifact set and owning the
 > crossroads conversation with the user, which can't live inside a single `Task` call because a
 > Tasked run can't pause to converse — but that work has no `cost:` of its own to declare. Split
 > out from [`/refactor`](./refactor.md) because mode
 > selection (surgical vs. scope design) and tier selection (`medium` vs. `high`) are two different
-> decisions — one unit naming both let a declared tier become a claim its own procedure could
+> decisions — one unit naming both let one tier become a claim its own procedure could
 > contradict (a large refactor under a `medium` ceiling would have entered scope-design work at a
 > tier its own text called insufficient). [`/refactor`](./refactor.md) stays the default for a
 > small, named smell that fits one safe diff; use this command when the destination needs more
@@ -76,14 +76,14 @@ same as the first Task (full rules: the `somi-dispatch` skill).
 Same bar as `/design`'s: dense, bounded per [`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl),
 reference-not-inline, with a concrete "What execution does NOT need to re-research" section. For a
 high-stakes refactor, review
-it at `cost: high` via [`/review`](./review.md) `design <slug>` (fresh context, bounded) first.
+it at `high` via [`/review`](./review.md) `design <slug>` (fresh context, bounded) first.
 
 ### 7. Summarise back
 
 - One-paragraph framing of the destination shape.
 - The seam/risk map (`file:line`) and any test-coverage gaps confirmed or raised.
 - A pointer to `.somi/plans/<slug>/brief.md`.
-- Next step: "Review `brief.md`, then run `/plan <slug>` (`cost: medium`)."
+- Next step: "Review `brief.md`, then run `/plan <slug>` (default `medium`)."
 
 ## Guardrails
 

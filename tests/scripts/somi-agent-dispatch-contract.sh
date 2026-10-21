@@ -71,7 +71,7 @@ fi
 # --- each code Step 4 maps is genuinely reachable against the real CLI, not merely documented -----
 reach "64 (usage) is reachable: missing --agent" 64
 reach "65 (unknown agent) is reachable" 65 --agent totally-not-a-real-agent
-reach "66 (malformed declaration) is reachable: somi is exempt from cost:" 66 --agent somi
+reach "66 (no tier source) is reachable: somi is exempt from cost resolution" 66 --agent somi
 
 R67="$(fresh)"; mkdir -p "$R67/.somi"
 printf '{"cost": {"ceiling": "low"}\n' > "$R67/.somi/config.json"  # missing closing brace

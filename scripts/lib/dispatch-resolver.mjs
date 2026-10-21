@@ -7,7 +7,7 @@
 // Each caller turns the returned {ok, ...} shape into its own surface — the CLI: exit code +
 // stdout JSON, or a stderr message; the MCP server: a tool result. Composition (never inline the
 // pieces yourself; this is the one sanctioned call site for it):
-//   resolveCeiling(projectRoot, ceiling) -> decideDispatch(declaredCost, ceiling, cost.agents[agent])
+//   resolveCeiling(projectRoot, ceiling) -> decideDispatch([default tier], ceiling, cost.agents[agent])
 //     -> modelForDispatch(decision, host, mergeHostMapping(HOST_MODELS, cost.mapping))
 //
 // `cost.mapping`, `cost.agents` and `cost.ceiling` are all read from the project's
@@ -23,7 +23,7 @@
 //       the same bad input produces the same code through either surface, checked before either
 //       surface's own project-root lookup (the MCP server's own can be a 2s `roots/list` round trip)
 //   65  unknown agent (no agents/<name>.md at the install root)
-//   66  malformed declaration (no cost:, or an invalid/unordered/duplicated cost set) — OR the
+//   66  no tier source (the exempt `somi` agent, or an agent file with no default-tier-table entry) — OR the
 //       merged mapping's own resolution for the selected tier failing WHEN the project's own
 //       cost.mapping never named that host at all (a bug in the shipped HOST_MODELS table, not a
 //       broken project file)
@@ -41,6 +41,7 @@ import path from 'node:path';
 import { resolveCeiling, decideDispatch, modelForDispatch, readCostConfig, CEILING_ENV } from './cost-ceiling.mjs';
 import { AGENT_NAME_RE } from './cost-config.mjs';
 import { HOST_MODELS, mergeHostMapping, VALID_COSTS } from './cost-model.mjs';
+import { AGENT_DEFAULT_TIERS } from './cost-defaults.mjs';
 
 export { AGENT_NAME_RE };
 
@@ -51,26 +52,6 @@ export const EXIT_PROJECT_ENV = 67;
 
 function err(code, message) {
   return { ok: false, code, message };
-}
-
-// Extracts one field's raw value from the frontmatter block (the lines between the first two
-// literal `---` delimiters) — same block scripts/validate.sh's cost_of()/model_of() awk parses.
-// Splits on CRLF too: a Windows checkout with core.autocrlf turns `---` into `---\r` (#28).
-function frontmatterField(content, field) {
-  const re = new RegExp(`^${field}:\\s*(.*)$`);
-  let dashes = 0;
-  for (const line of content.split(/\r?\n/)) {
-    if (line === '---') {
-      dashes++;
-      if (dashes >= 2) break;
-      continue;
-    }
-    if (dashes === 1) {
-      const m = re.exec(line);
-      if (m) return m[1].trim();
-    }
-  }
-  return undefined;
 }
 
 // The ONE validation order both surfaces run, over the SAME three fields, producing the SAME code
@@ -140,18 +121,21 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
     throw e;
   }
 
-  const rawCost = frontmatterField(content, 'cost');
-  if (!rawCost) {
-    if (agent === 'somi') {
-      return err(
-        EXIT_MALFORMED,
-        `agent "somi" is exempt from cost: — the host binds its model when the user selects it ` +
-        `in the host's own UI, so there is nothing for this resolver to compute`,
-      );
-    }
-    return err(EXIT_MALFORMED, `agent "${agent}" declares no cost: in its frontmatter`);
+  // The agent's own tier comes from the shipped default table, never from the agent file: a
+  // leftover `cost:` line in the file is ignored. `somi` is the one agent with no table entry on
+  // purpose; any other agent file the table doesn't know is a gap in the plugin itself (66).
+  if (agent === 'somi') {
+    return err(
+      EXIT_MALFORMED,
+      `agent "somi" is exempt from cost: — the host binds its model when the user selects it ` +
+      `in the host's own UI, so there is nothing for this resolver to compute`,
+    );
   }
-  const declaredCost = rawCost.split(',').map((s) => s.trim());
+  const defaultTier = AGENT_DEFAULT_TIERS[agent];
+  if (defaultTier === undefined) {
+    return err(EXIT_MALFORMED, `agent "${agent}" has no entry in the default tier table (scripts/lib/cost-defaults.mjs)`);
+  }
+  const declaredCost = [defaultTier];
 
   // Both --ceiling and SOMI_COST_CEILING were already syntax-checked above, before any disk write —
   // so anything resolveCeiling() throws now is the PROJECT's own persisted state, not this call's
@@ -188,7 +172,7 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
   // mergeHostMapping rejects a __proto__/constructor/prototype key, a non-object per-host value,
   // and a tier key outside low|medium|high outright — kept in its own try/catch, distinct from
   // decideDispatch/modelForDispatch below: this fails only on the PROJECT's own persisted
-  // .somi/config.json being structurally broken, never on this agent's own `cost:` frontmatter.
+  // .somi/config.json being structurally broken, never on this agent's own default tier.
   let mapping;
   try {
     mapping = mergeHostMapping(HOST_MODELS, projectMapping);
@@ -197,7 +181,7 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
   }
 
   // The override and ceiling are validated by now, so decideDispatch failing is this AGENT's own
-  // cost: declaration (66) -- unrelated to the mapping, so it stays in its own try/catch.
+  // default tier (66) -- unrelated to the mapping, so it stays in its own try/catch.
   let decision;
   try {
     decision = decideDispatch(declaredCost, ceilingResult.ceiling, override);

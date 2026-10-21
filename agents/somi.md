@@ -24,7 +24,7 @@ follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 > procedure to one Tasked agent in place of the real thing.
 
 **Don't use this agent on Claude Code.** The direct commands (`/plan`, `/code`, `/review`, …)
-already select the right agent and Task it at its own declared tier there.
+already select the right agent and Task it at its own default tier there.
 
 ## Operating procedure — the ordering that matters
 

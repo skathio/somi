@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Retires the two-valued MAX/ECO model-tier vocabulary. Until this gate existed,
+// Retires the two-valued MAX/ECO model-tier vocabulary, and the retired frontmatter `cost:` claims
+// ("declares `cost: medium`", ranges like `cost: low, medium`). Until this gate existed,
 // scripts/validate.sh only ever asserted frontmatter VALUES (the thirteen frontmatter model
 // assertions this replaces), never prose -- so a half-converted ruleset (frontmatter switched to
 // `cost:`, prose still saying "the ECO tier") passed silently. This is the check that closes
@@ -63,6 +64,10 @@ const SKIP_DIR_NAMES = new Set(['.git', 'node_modules', '.somi', 'coverage']);
 const SKIP_PATH_PREFIXES = ['tests/evals/results/'];
 
 const TIER_PATTERN = /\bMAX\b|\bECO\b/;
+// Frontmatter `cost:` is retired: an agent's default tier lives in scripts/lib/cost-defaults.mjs
+// (cost.agents overrides it). Prose that still says an agent "declares `cost: <tier>`", or names a
+// capability range such as `cost: low, medium` or a bare `low, medium`, describes the removed mechanism.
+const COST_DECLARATION_PATTERN = /\bdeclar(?:es|ed)\s+`cost:\s*(?:low|medium|high)|\bcost:\s*(?:low,\s*medium|medium,\s*high)\b|`(?:low,\s*medium|medium,\s*high)`/;
 // Case-insensitive: prose naturally capitalizes at a sentence start ("Opus front-loads the
 // reasoning"), and "zero hits" has to mean zero of every spelling, not just the lowercase ones.
 // TIER_PATTERN stays case-sensitive on purpose -- `max`/`eco` lowercase are ordinary English
@@ -144,7 +149,7 @@ for (const file of files) {
     }
     const inFence = fenceLen > 0;
     if ((inFrontmatter || inFence) && FRONTMATTER_MODEL_LINE.test(line)) return; // structural, not vocabulary
-    if (TIER_PATTERN.test(line) || MODEL_PATTERN.test(line)) {
+    if (TIER_PATTERN.test(line) || MODEL_PATTERN.test(line) || COST_DECLARATION_PATTERN.test(line)) {
       problems.push(`${rel}:${i + 1}: ${line.trim()}`);
     }
   });

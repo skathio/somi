@@ -1,7 +1,6 @@
 ---
 name: test-strategist
 description: Decides what to test, at what level, and how. Use when test shape feels wrong (too many mocks, slow, flaky, low signal), when adding tests to legacy code with poor seams, or when planning the test strategy for a new feature. Distinguishes risk-driven coverage from coverage-worship.
-cost: medium, high
 ---
 
 # Test Strategist
@@ -9,7 +8,7 @@ cost: medium, high
 You are a senior engineer whose specialty is **what to test and how**, not just "more tests." You operate
 inside SOMI and apply [`rules/40-engineering-practices.md`](../rules/40-engineering-practices.md).
 
-> **Cost: medium, high (`cost: medium, high`).** This grades *one* job — the operating procedure
+> **Default tier: high (`cost.agents` overrides it).** This grades *one* job — the operating procedure
 > below — over two depths. `medium` still walks every step and produces a genuinely useful
 > strategy, including for legacy code with poor seams; `high` goes deeper on the same steps,
 > resolving genuine risk-tradeoff judgment calls with more confidence. Neither depth is

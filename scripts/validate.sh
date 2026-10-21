@@ -187,185 +187,30 @@ if ! node scripts/check-frontmatter.mjs; then
 fi
 
 echo "==> Validating cost-tier declarations..."
-# Extract the first `cost:` (or `model:`) value(s) from a file's frontmatter (the block between
-# the first two `---` lines). A declared `cost:` is a CAPABILITY SET -- every tier that unit can
-# usefully run at, comma-separated in strictly ascending order -- and a dispatcher reports a run
-# below the highest member as degraded; the tier itself is the agent's cost.agents entry or the
-# ceiling, and the declaration never changes it. agents/reviewer.md's shipped `cost: medium, high` is a real example: a
-# lighter pass is honestly useful at `medium`, adversarial fresh-eyes review needs `high`. What a
-# file Tasks never contributes a value here, and a spawned unit never inherits its caller's tier
-# either direction: a cost: medium orchestrator Tasking a cost: high agent stays declared medium --
-# the agent's own frontmatter is where high is truthfully declared, once -- and a cost: high agent
-# Tasking a cost: low, medium helper does not pull that helper up to high either.
-cost_of() {
-  awk '{sub(/\r$/,"")} /^---$/{c++} c==1 && /^cost:[[:space:]]*/{sub(/^cost:[[:space:]]*/,""); print; exit}' "$1"
+# An agent's default tier lives in scripts/lib/cost-defaults.mjs (cost.agents in .somi/config.json
+# overrides it), never in frontmatter: no agents/*.md or commands/*.md declares `cost:`, and no
+# command declares `model:`. Agents declare no `model:` either (check (c) below). The table must list
+# exactly agents/*.md minus the exempt front door `somi`; tests/scripts/cost-defaults.sh proves that.
+fm_has() {
+  awk -v k="$2" '{sub(/\r$/,"")} /^---$/{c++} c==1 && index($0,k":")==1{f=1; exit} END{exit !f}' "$1"
 }
 model_of() {
   awk '{sub(/\r$/,"")} /^---$/{c++} c==1 && /^model:[[:space:]]*/{sub(/^model:[[:space:]]*/,""); print; exit}' "$1"
 }
 cost_failed=0
-
-# The valid-cost enum is DERIVED from
-# scripts/lib/cost-model.mjs in one node call, not hardcoded a second time here -- a repricing or
-# a new tier is then a one-file edit instead of two files drifting apart.
-#
-# CAPTURE, CHECK, THEN EVAL -- deliberately not a bare `eval "$(node -e …)"`. A PARTIAL failure
-# (the import fails mid-forEach, after valid_costs and earlier ranks already
-# printed) exits node non-zero, but that status is invisible to `eval`: the failing command
-# substitution is only an argument being built for eval, not the exit status of a simple command,
-# so `set -e` cannot see it and the script would report the cost block PASSED with that tier's
-# rank_* silently missing. Assigning to a plain variable first makes the substitution's exit
-# status the ASSIGNMENT's status, which the explicit `||` below then catches -- and it must be
-# explicit, not a bare `cost_env=$(node …)`: under `set -e` a bare assignment dies silently at the
-# assignment, with no diagnostic reaching the user about which check was skipped.
-cost_env="$(node -e '
-import("./scripts/lib/cost-model.mjs").then((m) => {
-  console.log("valid_costs=" + JSON.stringify(m.VALID_COSTS.join("|")));
-  m.VALID_COSTS.forEach((c, idx) => {
-    console.log("rank_" + c + "=" + idx);
-  });
-});
-')" || { echo "cost-model derivation failed; cannot validate cost tiers" >&2; exit 1; }
-eval "$cost_env"
-
-# (a) `cost:` lives on agents only -- `cost:` sizes an agent instance being spawned, and a
-# command isn't one, so `cost:` on a command binds to nothing. Every agents/*.md file must declare
-# a `cost:` field (EXEMPTION:
-# agents/somi.md, see below) and every value in it (split on comma, for graded units) must be one
-# of scripts/lib/cost-model.mjs's VALID_COSTS. Every commands/*.md file must NOT declare one -- the
-# front door spawns that command's paired agent at the agent's own declared tier instead.
-#
-# EXEMPTION: agents/somi.md. `cost:` on this one file was always decorative -- the host binds the
-# model when the user picks this agent in its own UI, so nothing in this repo could ever act on
-# the declaration. A field nothing can read is worse than no field: a future dispatcher would have
-# to treat a decorative declaration as a trap. Named here, not silently skipped, so a later reader
-# does not "fix" it back in.
-#
-# Commands must not declare `model:` either, for the same reason: Claude Code honoured a
-# command's own `model:` for that command's own turn, which taught the repo that a command has a
-# cost while every dispatch target's actual cost lives on the agent it Tasks. Agents declare no
-# `model:` either (check (c) below): the resolver's result is the only tier-to-model step.
 for f in agents/*.md commands/*.md; do
   [ -f "$f" ] || continue
-  got="$(cost_of "$f")"
-  case "$f" in
-    commands/*.md)
-      if [ -n "$got" ]; then
-        echo "COST TIER ON COMMAND: $f declares cost: '$got' -- commands declare no cost: of their own; declare cost: on the agent this command Tasks instead" >&2
-        cost_failed=1
-      fi
-      declared_model="$(model_of "$f" | tr -d '[:space:]')"
-      if [ -n "$declared_model" ]; then
-        echo "MODEL ON COMMAND: $f declares model: '$declared_model' -- commands no longer declare a model of their own; the front door dispatches this command's paired agent at the agent's own declared cost/model instead" >&2
-        cost_failed=1
-      fi
-      continue
-      ;;
-    agents/somi.md)
-      if [ -n "$got" ]; then
-        echo "COST TIER ON EXEMPT AGENT: $f declares cost: '$got' -- this file is exempt from cost: entirely (see the EXEMPTION comment above); remove the declaration" >&2
-        cost_failed=1
-      fi
-      continue
-      ;;
-  esac
-  if [ -z "$got" ]; then
-    echo "COST TIER MISSING: $f has no 'cost:' field in frontmatter" >&2
-    cost_failed=1
-    continue
-  fi
-  # Reject an empty element (leading/trailing/double comma, e.g. "medium," or ",high") before
-  # splitting -- `IFS=',' read -ra` silently drops a trailing empty field, so a malformed list
-  # would otherwise split clean and pass.
-  stripped="$(echo "$got" | tr -d '[:space:]')"
-  case "$stripped" in
-    ,*|*,|*,,*)
-      echo "COST TIER MALFORMED: $f has an empty cost value (leading/trailing/double comma) in '$got'" >&2
-      cost_failed=1
-      continue
-      ;;
-  esac
-  IFS=',' read -ra cost_values <<< "$got"
-  prev_rank=-1
-  for v in "${cost_values[@]}"; do
-    v="$(echo "$v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-    case "|$valid_costs|" in
-      *"|$v|"*)
-        rank_var="rank_$v"
-        rank="${!rank_var}"
-        ;;
-      *)
-        echo "COST TIER INVALID: $f declares cost value '$v' (expected one of $valid_costs)" >&2
-        cost_failed=1
-        rank=-1
-        ;;
-    esac
-    # Multi-value cost must be strictly ascending with no duplicates (low < medium < high) -- a
-    # second value that repeats or precedes the first is a hand-edit slip a reader will not
-    # notice, and the field is about to become a dispatch input.
-    if [ "$rank" -ge 0 ] && [ "$rank" -le "$prev_rank" ]; then
-      echo "COST TIER UNORDERED: $f declares '$got' -- multi-value cost must be strictly ascending ($valid_costs), no duplicates" >&2
-      cost_failed=1
-    fi
-    [ "$rank" -ge 0 ] && prev_rank="$rank"
-  done
-done
-
-# (b) Pin the exact declared cost for the files where the value is load-bearing beyond "some
-# valid tier" -- mirrors the thirteen model-value assertions this block replaces.
-assert_cost() {
-  local f="$1" want="$2" got
-  got="$(cost_of "$f" | tr -d '[:space:]')"
-  if [ "$got" != "$want" ]; then
-    echo "COST TIER MISMATCH: $f cost is '$got', expected '$want'" >&2
+  if fm_has "$f" cost; then
+    echo "COST DECLARED: $f declares cost: -- default tiers live in scripts/lib/cost-defaults.mjs and cost.agents, not in frontmatter" >&2
     cost_failed=1
   fi
-}
-# low, medium: these three widen downward under the opt-in bar for `low` -- a builder-tier agent
-# may declare `low` once it can still do a reduced-depth version of its job and its own output says
-# so when it ran that way, even though the reduced depth would not hold up as the only tier it ever
-# ran at. `low` only ever runs for a low ceiling (flag, env var, cost.ceiling in a committed
-# .somi/config.json, or one set earlier by flag or env var) or a cost.agents entry of low -- and
-# the front door announces that ceiling and its
-# source before work starts, so the quality drop is a trade the user can see, not one sprung on
-# them. Each agent's own frontmatter and "Running at `low`" section name what that agent's
-# reduced-depth pass keeps and what it trims -- read those, not this comment, for the specifics.
-# refactorer still has no `high` member: a refactor too big for one diff is a different job, split
-# out to the refactor-designer sibling below, not a third tier declared here. agents/somi.md is
-# EXEMPT from this whole block (see the comment above the loop) -- it declares no cost: at all.
-for a in planner coder refactorer; do
-  assert_cost "agents/$a.md" low,medium
+  case "$f" in commands/*.md)
+    if fm_has "$f" model; then
+      echo "MODEL ON COMMAND: $f declares model: -- a command runs on the session's model; its agent's tier comes from the default table and the resolver" >&2
+      cost_failed=1
+    fi ;;
+  esac
 done
-# high-only: a wrong call here is paid for through everything downstream that builds on it, so a
-# cheaper pass would be cheaper-and-wrong, not genuinely useful -- these never gain a lower member.
-# atlas joins this set: its whole value is one high-quality read of the repository, paid once.
-for a in discovery-analyst designer security-reviewer refactor-designer atlas; do
-  assert_cost "agents/$a.md" high
-done
-# medium, high: a lighter pass is genuinely useful under a capped ceiling, but the deepest work
-# needs the strong model -- these grade ONE job over two depths, not two different jobs, so a
-# blind ceiling pick is safe at either member. These are judges, not builders: a weaker judge
-# doesn't produce weaker output, it produces a false pass with nothing downstream to catch what it
-# missed, so the opt-in bar for `low` above does not extend to this set.
-for a in reviewer architecture-reviewer test-strategist plan-reviewer sdlc-reviewer; do
-  assert_cost "agents/$a.md" medium,high
-done
-# medium-only, judge not builder: impact's deliverable is a proceed / design-first / reconsider
-# verdict and, in diff mode, the review-lens selection -- a reduced-depth pass would undercount the
-# blast radius and can return a false "proceed, small" with nothing downstream to re-check it, or
-# drop a lens (security-reviewer, worst case) that then never runs elsewhere. Same false-pass
-# failure that keeps the medium,high judges above off `low`, so impact stays off it too despite
-# tracing an already-written call graph -- still no `high` member, since even its full-depth pass is
-# mechanical tracing, not open-ended research.
-assert_cost agents/impact.md medium
-# medium-only: incident's mitigation-stage judgment (flag flip vs. revert vs. scoped patch, verified
-# against the live symptom) and its debt-capture accounting both need full reasoning on every run --
-# every job this agent accepts is, by construction, a live outage handed off after framing, so there
-# is no lighter version of the call to make honestly.
-assert_cost agents/incident.md medium
-# graded over one job at two depths: mechanical aggregation of existing artifacts is already a
-# correct, usable PR description at low; a fuller pass adds house-style matching, never required.
-assert_cost agents/pr.md low,medium
 
 # (c) Agents declare no `model:`. The tier-to-model step is the resolver's result alone, passed as the Task
 # model argument; a launch that skips the resolver must inherit the session's model, so the session tier
@@ -379,23 +224,7 @@ done
 if [ "$cost_failed" -ne 0 ]; then
   exit 1
 fi
-
-echo "==> Validating cost-tier prose against coder/planner/refactorer's declared set..."
-# coder, planner, and refactorer all declare the widened `low, medium` set above; a stale "declares
-# cost: medium" claim about any of the three -- in a command's own explanatory prose, or in another
-# agent's cross-reference -- understates what they can run at and drifts back to exactly the
-# muted-capability bug this rework exists to close, silently and outside the frontmatter checks
-# above (which only ever see the agent's OWN file, never a claim made about it elsewhere). Matched
-# on the literal three-agent list, never a fourth: impact and incident are legitimately medium-only
-# today, so a plain `cost: medium` claim about either is correct, not stale, and must not fire here.
-stale_cost_claim_failed=0
-if grep -rnE '(coder|planner|refactorer)[^\n]{0,80}cost: medium`' commands/ agents/ docs/ 2>/dev/null; then
-  echo "STALE COST CLAIM: coder/planner/refactorer all declare the widened 'cost: low, medium' -- the line(s) above still claim a plain 'cost: medium'" >&2
-  stale_cost_claim_failed=1
-fi
-if [ "$stale_cost_claim_failed" -ne 0 ]; then
-  exit 1
-fi
+bash tests/scripts/cost-defaults.sh
 
 echo "==> Validating command <-> somi-dispatch skill reference..."
 # Every command that Tasks an agent directly resolves it through the same dispatch procedure the

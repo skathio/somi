@@ -53,7 +53,7 @@ planning.
 - SoMi proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
 - The judgment-heavy core runs at the most capable tier — on the agent, not the command:
   `/discover` declares no `cost:` and no `model:` of its own (it runs on whatever model this
-  session is already using) and Tasks `discovery-analyst` at `cost: high` for the judgment-heavy
+  session is already using) and Tasks `discovery-analyst` at its default tier `high` for the judgment-heavy
   core of the work — its output is the cornerstone of the project. The
   command itself still scaffolds the artifact set and owns the crossroads conversation with you,
   which can't live inside a single `Task` call.
@@ -385,7 +385,7 @@ no feature work mixed in.
 ### `/refactor-design`
 
 Scope design for a refactor too big for one diff — spans many modules, needs a migration, or
-changes a shared shape. Tasks the `refactor-designer` agent at `cost: high` for the judgment-heavy
+changes a shared shape. Tasks the `refactor-designer` agent at its default tier `high` for the judgment-heavy
 core of the work; the command itself still scaffolds the artifact set and owns the crossroads
 conversation with the user. Names the destination shape, maps seams and risks (`file:line`),
 confirms test-coverage gaps, and compiles a `brief.md` that `/plan-loop` → `/code-loop` execute.
@@ -586,76 +586,13 @@ optional; omit anything you don't want to change:
 
 ## Cost tiers and model resolution
 
-Cost is declared with a `cost:` field in frontmatter — **agents only** (no agent declares `model:` either; an unresolved launch inherits the session's model): `cost:`
-sizes an agent instance being spawned, and a command is instructions, not an instance — it declares
-neither field and runs inline under whatever model the session is already using. `scripts/validate.sh`
-fails the build if a `commands/*.md` file declares `cost:` or `model:`, or an `agents/*.md` file declares `model:`. Every `agents/*.md` file declares `cost:`
-(one narrow, named exemption: `agents/somi.md` — its declaration was always decorative, since the
-host binds that agent's model when the user selects it, not SoMi), and `scripts/validate.sh`
-asserts presence and validity across all of them. **`cost:` is a CAPABILITY SET, and the test is
-universal, not "usually": a unit declares a tier only if that tier is acceptable for *everything
-the unit accepts*.** The unit's declaration is what the session ceiling is later compared against
-(to report a degraded run), and it is blind to which job is running, so a declared tier has to hold
-for every job, not just the common case. A
-single value (`cost: medium`) means the unit has exactly one accepted-everywhere tier; a
-comma-separated, strictly-ascending list (`cost: medium, high`) means *each* listed tier produces
-acceptable output for every job the unit accepts — not "this tier for the easy jobs, that tier for
-the hard ones." That reading (a range covering different jobs at different tiers) is exactly what
-the three shapes below rule out. **`cost:` never aggregates what a unit Tasks, and a spawned unit
-never inherits its caller's tier** — a command Tasking a `cost: high` agent declares nothing of its
-own; the agent's own frontmatter is where `high` is truthfully declared, once, and a `cost: high`
-agent Tasking a `cost: low, medium` helper does not pull that helper up to `high` either.
+Every agent has a **default tier**, held in one table, [`scripts/lib/cost-defaults.mjs`](../scripts/lib/cost-defaults.mjs); a project overrides it per agent with `cost.agents` in `.somi/config.json`. Agent and command files declare no `cost:` (nor `model:`; an unresolved launch inherits the session's model): a command is instructions, not an instance, and runs inline under whatever model the session is already using. `scripts/validate.sh` fails the build if an `agents/*.md` or `commands/*.md` file declares `cost:`, if a `commands/*.md` file declares `model:`, or an `agents/*.md` file declares `model:`, and `tests/scripts/cost-defaults.sh` fails it if the table and `agents/*.md` list different agents. The one named exemption is `agents/somi.md`: the host binds that agent's model when the user selects it, not SoMi, so it has no table entry.
 
-**`low` is the one exception to the strict universal bar, and only `low`.** `medium` and `high`
-still require the tier to hold for *every* accepted job. `low` uses an opt-in bar instead: a
-builder-tier agent (one that produces the work, not one that judges it) may declare `low` once it
-can still do a reduced-depth version of its job and its own output discloses that it ran at that
-depth and names what it skipped. This is safe specifically because `low` is never *silently*
-selected — it only runs for a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by
-flag or env var) or a `cost.agents` entry of `low`, and the front door announces that ceiling and
-its source before
-any work runs. So the reduced depth is a trade the user can see coming, not one made for them
-unseen. The judging agents (`reviewer`, `security-reviewer`, `architecture-reviewer`,
-`test-strategist`) never *declare* `low`: a weaker judge doesn't produce weaker output, it
-produces a false pass, with nothing downstream to catch what it missed. A `low` ceiling still runs
-them at `low`, reported as degraded, unless `cost.agents` pins them higher.
+The default tier is what the agent was built for, and the session ceiling is later compared against it to report a degraded run. A tier below the default must still be acceptable for *everything the agent accepts*, because the tier is blind to which job is running: a unit that does two different jobs needing different tiers is split into two agents (as `refactorer` and `refactor-designer` are), never given a range. A staged agent (every stage runs on every call) gets the tier its most demanding stage needs. Which lower tiers are acceptable for an agent is documented in its prose (`docs/AGENTS.md`), not machine-checked; only the default is. The default tier of a spawned agent is its own: a command or agent that Tasks another never pulls it up or down.
 
-**Three declared shapes, and they resolve differently:**
+**`low` is the one exception to that bar.** A builder-tier agent (one that produces the work, not one that judges it) may be run at `low` once it can still do a reduced-depth version of its job and its own output discloses that it ran at that depth and names what it skipped. This is safe specifically because `low` is never *silently* selected: it only runs for a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a `cost.agents` entry of `low`, and the front door announces that ceiling and its source before any work runs. The judging agents (`reviewer`, `security-reviewer`, `architecture-reviewer`, `test-strategist`) have no reduced-depth mode: a weaker judge doesn't produce weaker output, it produces a false pass, with nothing downstream to catch what it missed. A `low` ceiling still runs them at `low`, reported as degraded, unless `cost.agents` pins them higher.
 
-1. **Graded over one job** — no modes; output degrades smoothly with less reasoning depth. Declares
-   its full set; running it at either member is acceptable because neither is *insufficient*,
-   only shallower. This is the common case (`agents/reviewer.md`'s `medium, high` below).
-2. **Alternative modes** — the unit actually does two different jobs with different requirements
-   (A *xor* B, not "A but sometimes shallower"). **Split into separate units** rather than declaring
-   a range: mode selection and tier selection would otherwise name the same decision on one file, and
-   a caller could pick the demanding mode under a ceiling that only cleared the easy one.
-   [`agents/refactorer.md`](../agents/refactorer.md) (`cost: low, medium`, surgical execution,
-   Tasked by [`/refactor`](../commands/refactor.md)) and
-   [`agents/refactor-designer.md`](../agents/refactor-designer.md) (`cost: high`, scope design for a
-   refactor too big for one diff, Tasked by
-   [`/refactor-design`](../commands/refactor-design.md)) are the shipped example — one agent used to
-   do both jobs at one declared tier that was insufficient for one of them, which let a large
-   refactor enter scope-design work under a `medium` ceiling; now they're two single-purpose agents,
-   each Tasked by its own single-purpose command, each graded over its own job rather than split
-   across modes.
-3. **Sequential stages** — every stage runs on every invocation; nothing branches around the
-   expensive one. Declares what its **most demanding stage** needs, not what the easy stages could
-   get away with — a lower member would be provably wrong the moment the hard stage runs. No current
-   agent has this shape (`agents/reviewer.md` and the rest are graded, not staged); it was
-   illustrated by [`/release-readiness`](../commands/release-readiness.md) before the declaration
-   moved off commands entirely — that command still runs Stage 1's mechanical checklist then
-   Stage 3's real-reasoning synthesis, but it now declares no `cost:` of its own, so the shape has
-   no live example today. Kept declared and validated for the next **agent** whose own internal
-   stages earn it.
-
-**A real, shipped example**: `agents/reviewer.md` declares `cost: medium, high`. `high` is the
-adversarial, fresh-eyes pass the agent is written for — every category in its "What to look for"
-walked in full. `medium` still produces a genuinely useful lighter review under a capped session
-ceiling: read for intent, walk the diff, apply the same severity grading, just with less
-exploration depth. There is no `low` in its set — the whole job is catching what the author missed,
-which needs reasoning about the code at every tier the agent runs at, never mechanical extraction.
-The comma-separated mechanism is validated the same way regardless of how many files use it today
-(`scripts/validate.sh` checks ordering and rejects duplicates or malformed lists). Three tiers, in
+**A real, shipped example**: `agents/reviewer.md` defaults to `high`. `high` is the adversarial, fresh-eyes pass the agent is written for, with every category in its "What to look for" walked in full. `medium` still produces a genuinely useful lighter review under a capped session ceiling: read for intent, walk the diff, apply the same severity grading, just with less exploration depth. The whole job is catching what the author missed, which needs reasoning about the code at every tier the agent runs at, never mechanical extraction. Three tiers, in
 the same vocabulary Copilot's own model picker already uses:
 
 - `low` — small, mechanical, near-deterministic work: formatting, extraction, lookup, aggregation
@@ -681,7 +618,7 @@ object-literal syntax) throws rather than silently resolving to the wrong model.
 
 SoMi ships a model mapping only for Claude Code. On Copilot nothing pins a tier to a model, so
 `somi_resolve` returns `"model": null, "enforced": false` and a `reason`, and every agent runs on
-whatever model the host picks — a `cost: high` agent included. The briefing then says
+whatever model the host picks — a `high`-default agent included. The briefing then says
 `requested cost: high (not enforced: no mapped model)`, and the orchestrator is instructed to print one
 notice per high-tier agent type per session. `dispatched at cost: <tier>` is used only when a model
 was actually pinned.
@@ -739,21 +676,21 @@ never outranks the config or the default. Every explicit raise or lowering is re
 value, a ceiling passed in chat does not last where the config sets one; to change it durably, edit
 `cost.ceiling` in `.somi/config.json`.
 
-`decideDispatch` takes `costs` — a unit's declared set, as a single string or an ascending array —
+`decideDispatch` takes `costs` — the agent's default tier, as a single string or an ascending array —
 an optional per-agent `override`, and always allows the dispatch:
 
 - with an override, `selected` is the override (`tier_source: "override"`), whatever the ceiling.
-- without one, `selected` is the **ceiling itself** (`tier_source: "ceiling"`) — not the highest
-  declared member and not the lower of the two. An agent declared `medium, high` under a `low`
-  ceiling runs at `low`; an agent declared `low, medium` under a `high` ceiling runs at `high`.
-- the declared set is read only to report: `degraded` is `true` when `selected` is below the highest
-  declared member, and `supported` echoes the declared set. It never changes `selected`.
+- without one, `selected` is the **ceiling itself** (`tier_source: "ceiling"`) — not the
+  default tier and not the lower of the two. An agent whose default is `high` under a `low` ceiling
+  runs at `low`; one whose default is `medium` under a `high` ceiling runs at `high`.
+- the default tier is read only to report: `degraded` is `true` when `selected` is below it, and
+  `supported` echoes it. It never changes `selected`.
 
-There is no never-below-declared floor in code. A project that wants an agent to keep its depth
+There is no never-below-default floor in code. A project that wants an agent to keep its depth
 under a low ceiling pins it with `cost.agents` (for example `"security-reviewer": "high"`). Lowering
 a reviewer
 below `high` is the project's call, and the dispatch skill prints a line whenever an agent runs
-degraded. A malformed ceiling, override, or declared set — from config, the env var, an explicit
+degraded. A malformed ceiling, override, or default tier — from config, the env var, an explicit
 argument, or the `costs` argument itself — throws rather than disabling the cap or coercing into
 something valid. `modelForDispatch(decision, host, mapping)` is the sanctioned way to turn a
 decision into a model: it resolves `decision.selected` and refuses outright unless
@@ -818,22 +755,21 @@ whole tier map rather than merging it tier-by-tier, so a **partial override of a
 override naming only `high`, say, for `claude-code`) silently drops that host's `low`/`medium`
 entries — every other builder that resolves through that host then hits this same failure. That gap
 is the project's own file being incomplete, exit `67`, and the message names
-`.somi/config.json cost.mapping` explicitly so it never reads as this agent's own broken `cost:`
-declaration. Only a host the project's mapping never named failing this way would point at a bug in
+`.somi/config.json cost.mapping` explicitly so it never reads as this agent's own missing
+default tier. Only a host the project's mapping never named failing this way would point at a bug in
 the shipped `HOST_MODELS` table itself — guarded against by `tests/scripts/cost-model.sh` asserting
 every shipped entry resolves for every tier — and that stays exit `66`.
 
 On success it prints one JSON object and exits 0 — `agent`, `supported` and `declared` (the
-normalized declared
-set), `tier` (what `decideDispatch` selected), `tier_source` (`override` or `ceiling`), `degraded`
-(`true` when `tier` is below the highest declared tier), `model` (what the effective mapping
+agent's default tier, as a one-element list), `tier` (what `decideDispatch` selected), `tier_source` (`override` or `ceiling`), `degraded`
+(`true` when `tier` is below the agent's default tier), `model` (what the effective mapping
 resolves that
 tier and host to today — this doc names the tier, not the model, for the same reason the rest of
 this section does), `ceiling`, `ceiling_source`, `ceiling_origin`, and `enforced` (`true` only when `model` is a concrete id; when
 `false`, a `reason` string is added too):
 
 ```json
-{"agent": "coder", "supported": ["low", "medium"], "declared": ["low", "medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
 `model` is `null` for a host absent from the mapping — this call makes no guess — and the result
@@ -853,7 +789,7 @@ Failure is loud and specific rather than a bare stack trace, with a distinct exi
 `64` for a bad or missing argument — including an unrecognized `--ceiling` value **or** an
 unrecognized `SOMI_COST_CEILING` value, both checked before anything touches disk, since either one
 is the caller telling this call which ceiling to use and getting it wrong, whichever channel it
-came through — `65` for an agent with no matching file, `66` for a malformed `cost:` set (or `somi`,
+came through — `65` for an agent with no matching file, `66` for an agent file with no default-tier table entry (or `somi`,
 which is exempt, since its model is bound by the host when the user selects it) — or a
 shape-valid mapping missing the tier just selected / holding a non-string model value **for a host
 the project's own `cost.mapping` never named**, which would mean a bug in the shipped `HOST_MODELS`

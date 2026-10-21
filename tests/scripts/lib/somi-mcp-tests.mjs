@@ -427,7 +427,7 @@ async function run() {
     const badInputs = [
       { name: 'invalid agent name', args: { agent: 'Not-Valid' } },
       { name: 'unrecognized ceiling', args: { agent: 'coder', ceiling: 'ultra' } },
-      { name: 'somi is exempt from cost:', args: { agent: 'somi' } },
+      { name: 'somi is exempt from cost resolution', args: { agent: 'somi' } },
       { name: 'unknown agent', args: { agent: 'totally-not-a-real-agent' } },
     ];
     for (const { name, args } of badInputs) {

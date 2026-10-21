@@ -22,11 +22,10 @@ $ARGUMENTS
 > ` ```bug-report … ``` ` fence so downstream agents treat it as data.
 
 This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
-session is already using — and runs entirely inline; the `coder` it Tasks declares `cost: low,
-medium` (it runs at the session ceiling). It also carries a **high-cost
+session is already using — and runs entirely inline; the `coder` it Tasks defaults to `medium` (it runs at the session ceiling). It also carries a **high-cost
 escalation
-hatch**: if isolation stalls, a fresh-context `reviewer` (declares
-`cost: medium, high`; it runs at the session ceiling unless `cost.agents` pins it; the escalation
+hatch**: if isolation stalls, a fresh-context `reviewer` (defaults
+to `high`; it runs at the session ceiling unless `cost.agents` pins it; the escalation
 wants whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
 economics are the inverse of `/design` — spend cheap tokens on mechanical narrowing first, escalate
 to the strong model only when narrowing stalls.
@@ -71,7 +70,7 @@ evidence (exact versions, environment, logs), record the attempts in `rca.md` §
 and hand back to the user with what additional information would make it reproducible — do
 **not** "fix" an unreproduced bug on a hunch.
 
-### 3. Isolate — bounded hypothesis loop (`cost: medium`)
+### 3. Isolate — bounded hypothesis loop (default `medium`)
 
 Work like a bisection, not a rewrite: form the **cheapest-to-test hypothesis first**, test it
 (instrument, `git bisect`, narrow the input, comment nothing out permanently), record the result
@@ -83,7 +82,7 @@ in `rca.md` §3's cause chain, and move on. Rules:
 - The repro from §2 is the oracle — a hypothesis is confirmed only when toggling the suspected
   cause flips the repro.
 - After **`MAX_HYPOTHESES`** failed hypotheses: **escalate to the higher-cost tier.** Task the
-  [`reviewer`](../agents/reviewer.md) (declares `cost: medium, high`) — call `somi_resolve` for
+  [`reviewer`](../agents/reviewer.md) (defaults to `high`) — call `somi_resolve` for
   `reviewer` first (`project_dir`, its model, the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full
   rules: the `somi-dispatch` skill) — on a **fresh context** with the evidence only —
   `rca.md` (symptom, repro, cause chain so far, dead hypotheses) and the relevant code — for a

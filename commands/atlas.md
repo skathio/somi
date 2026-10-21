@@ -10,7 +10,7 @@ You are running the **repo cartography** workflow of somi: one deep read of this
 every later design action starts from a map plus the drift since its SHA instead of re-reading
 the whole repo per work item. This command has no `cost:` of its own — and no `model:` of its own
 either, so it runs on whatever model this session is already using — and Tasks the
-[`atlas`](../agents/atlas.md) agent for its entire job, which declares `cost: high` with no lower
+[`atlas`](../agents/atlas.md) agent for its entire job, which defaults to `high` with no lower
 member.
 
 ## What to do

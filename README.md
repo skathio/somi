@@ -32,19 +32,19 @@ It is designed to be:
 | `/plan`       | medium | `planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
 | `/code`       | medium | `coder`             | Execute against an approved plan + brief with senior-level design judgment               |
 | `/debug`      | medium | `coder` | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop` (a `cost: high` hatch is available if isolation escalates), keep the repro test as the regression guard; writes a one-page `rca.md` |
-| `/review`     | medium, high | `reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
-| `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `cost: high` front-load), gated at every stage |
+| `/review`     | high | `reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
+| `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `high`-tier front-load), gated at every stage |
 
-**Cost tiers in practice.** `cost:` is declared by **agents**, not commands —
-`cost:` sizes an agent instance being spawned, and a command declares none, running on
+**Cost tiers in practice.** Default tiers belong to **agents**, not commands —
+a tier sizes an agent instance being spawned, and a command has none, running on
 whatever model the session is already using — so the tier above is the tier of the agent that
-command Tasks. The **`cost: high`** tier front-loads expensive reasoning — research, design,
+command Tasks (the table is `scripts/lib/cost-defaults.mjs`; `cost.agents` overrides it). The **`cost: high`** tier front-loads expensive reasoning — research, design,
 decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The
 **`cost: medium`** tier executes against that brief *without re-researching*, so the high-volume
 work (plan detail, iterative coding) runs cheaply. `/discover` (new product) and `/design`
 (brownfield feature) are the high-cost front-loads that feed `/plan`; `/ship-loop` runs the whole
 pipeline continuously, gating once at the brief handoff (before planning consumes the brief). Supporting agents invoked by
-handoff, at whichever cost their own frontmatter declares: `security-reviewer`,
+handoff, at whichever default tier the table gives them: `security-reviewer`,
 `architecture-reviewer`, `test-strategist`, `refactor-designer` — see
 [`docs/AGENTS.md`](docs/AGENTS.md#cost-tiering) for the exact shape per agent.
 
@@ -172,7 +172,7 @@ For a **brand-new product**, start one step earlier with discovery:
 # /plan clinic-scheduler — the planner consumes that foundation.
 ```
 
-For a **design-heavy feature on an existing repo**, front-load the design (`cost: high`) so
+For a **design-heavy feature on an existing repo**, front-load the design (default `high`) so
 planning and coding run cheaply against it:
 
 ```text

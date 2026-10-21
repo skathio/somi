@@ -14,14 +14,14 @@ This is a composite of existing pieces, run in order, with the user confirming a
 
 > **No `cost:` of its own, and no `model:` either — it runs on whatever model this session is
 > already using.** Stage 1 Tasks
-> the `atlas` agent ([`agents/atlas.md`](../agents/atlas.md)), which declares `cost: high` on its
+> the `atlas` agent ([`agents/atlas.md`](../agents/atlas.md)), which defaults to `high` on its
 > own account and resolves against the session ceiling independently of this command. Stages 2 and
 > 4 read and write directly, inline, at whatever tier is already running this command. Stage 3 may
 > also Task [`test-strategist`](../agents/test-strategist.md) for the gap report's test-thin-ice
 > depth — it resolves on its own account exactly as Stage 1's `atlas` does, not at this command's
 > tier.
 
-## Stage 1 — Build the Repo Atlas (`cost: high`, the expensive step)
+## Stage 1 — Build the Repo Atlas (default `high`, the expensive step)
 
 Before this `Task`, call `somi_resolve` for `atlas` (with `project_dir`), pass its model, and put
 the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,

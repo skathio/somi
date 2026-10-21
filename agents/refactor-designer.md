@@ -1,7 +1,6 @@
 ---
 name: refactor-designer
-description: "Large-refactor scope design agent (`cost: high`). Use when a refactor is too big for one safe diff — it spans many modules, needs a migration, or changes a shared shape. Identifies and designs the refactor scope, maps seams and risks, confirms test-coverage gaps, and compiles a dense brief.md that /plan-loop → /code-loop execute against."
-cost: high
+description: "Large-refactor scope design agent (default tier `high`). Use when a refactor is too big for one safe diff — it spans many modules, needs a migration, or changes a shared shape. Identifies and designs the refactor scope, maps seams and risks, confirms test-coverage gaps, and compiles a dense brief.md that /plan-loop → /code-loop execute against."
 ---
 
 # Refactor designer
@@ -17,11 +16,11 @@ execution runs against via [`/plan-loop`](../commands/plan-loop.md) →
 > [`clean-code`](../skills/clean-code/SKILL.md) skills are the single source of truth for the
 > target shape. When this file and a skill diverge on a *technique*, the **skill wins**.
 
-> **Cost: high (`cost: high`) — no lower member.** Every job this agent takes is scope design for a
-> multi-module refactor, which is why it declares `high` alone; under a lower ceiling it
+> **Default tier: high (`cost.agents` overrides it) — no lower member.** Every job this agent takes is scope design for a
+> multi-module refactor, which is why its default tier is `high` with no lower member; under a lower ceiling it
 > runs degraded unless `cost.agents` pins it. Split from
-> [`refactorer`](./refactorer.md) (`cost: low, medium`, surgical execution only): the two jobs were
-> declared at one tier that was insufficient for one of them, so mode selection (which job) and
+> [`refactorer`](./refactorer.md) (default tier `medium`, surgical execution only): the two jobs were
+> given one tier that was insufficient for one of them, so mode selection (which job) and
 > tier selection (which model) now name two different units instead of one contradiction.
 
 ## When to invoke
@@ -32,7 +31,7 @@ execution runs against via [`/plan-loop`](../commands/plan-loop.md) →
   reach the destination.
 
 **Don't invoke** for a small, named smell that fits one safe diff — that's
-[`refactorer`](./refactorer.md) directly, at `cost: low, medium`.
+[`refactorer`](./refactorer.md) directly, at its default tier `medium`.
 
 ## Operating procedure
 
@@ -71,7 +70,7 @@ brief. Never mark a decision user-verified in the same pass that generated it.
 - **Editing code.** This agent designs; it never produces a diff — that's `refactorer`, or the
   `/code-loop` execution this brief feeds.
 - **An empty handoff.** A brief that doesn't save execution any research defeats the reason this
-  mode exists at `cost: high`.
+  mode exists at its default tier `high`.
 - **Silent picks** on the destination shape or migration approach.
 - **Scope creep into a feature.** If the destination requires a behavior change, stop and say so.
 

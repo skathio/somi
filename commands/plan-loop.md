@@ -18,10 +18,10 @@ $ARGUMENTS
 This command automates the manual `/plan` → `/review plan <slug>` → `/plan` cycle, with **hard
 gates** that ensure it terminates. It has no `cost:` of its own — nor a `model:` of its own; it runs
 on whatever model this session is already using — and runs entirely inline; the `planner` it Tasks
-declares `cost: low,
-medium` (it runs at the session ceiling; executing against an upstream
-`brief.md` when one exists), while the `reviewer` it Tasks declares
-`cost: medium, high` — it runs at the session ceiling unless `cost.agents` pins it (pin `reviewer`
+defaults to
+`medium` (it runs at the session ceiling; executing against an upstream
+`brief.md` when one exists), while the `reviewer` it Tasks defaults
+to `high` — it runs at the session ceiling unless `cost.agents` pins it (pin `reviewer`
 to `high` for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by
 the
 planner's reasoning).

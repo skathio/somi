@@ -88,7 +88,7 @@ into the review under a dedicated section:
 
 Skipping a triggered consultant is itself a **finding** in the meta-review. A triggered
 consultant runs at the session ceiling unless `cost.agents` pins it, so it may run below its
-declared `cost:`. That is not a skip to absorb quietly: say so in the meta-review (the dispatch
+default tier. That is not a skip to absorb quietly: say so in the meta-review (the dispatch
 skill prints a degraded line), and for `security-reviewer` name `cost.agents` as the way to keep
 the strong pass.
 

@@ -8,7 +8,7 @@ allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebSearch, WebFetch, Bash
 
 You are running the **design workflow** of somi — the front-loaded, expensive-reasoning step that
 turns a feature or user story into a settled architecture against the **existing codebase**, then
-compiles it into a dense [`brief.md`](../templates/BRIEF.md.tmpl) the cheaper (`cost: medium`) tier
+compiles it into a dense [`brief.md`](../templates/BRIEF.md.tmpl) the cheaper (default `medium`) tier
 executes against **without re-researching**. All artifacts live under `.somi/plans/<slug>/`.
 
 > **The judgment-heavy core runs at the most capable tier — on the agent, not the command.** This
@@ -20,7 +20,7 @@ executes against **without re-researching**. All artifacts live under `.somi/pla
 > artifact set and owning the crossroads conversation with the user, which can't live inside a
 > single `Task` call because a Tasked run can't pause to converse — but that work has no `cost:` of
 > its own to declare. This is the high-cost layer of SoMi's design→execution economy; the cost is
-> justified because it lets plan and code run at `cost: medium`. See
+> justified because it lets plan and code run at `medium`. See
 > [`docs/COMMANDS.md`](../docs/COMMANDS.md).
 
 > **/design vs /discover vs /plan.** [`/discover`](./discover.md) is for a **whole new product** —
@@ -124,9 +124,9 @@ user-verified without an actual user verdict from step 2.
 Hold the designer to the brief quality bar: it must be **dense, bounded (≤ ~400 lines / ~6k tokens),
 reference-not-inline**, and its **"What execution does NOT need to re-research"** section must be
 concrete and honest — that section is what earns the higher spend and lets `/plan`/`/code` run at
-`cost: medium`.
+`medium`.
 
-### 8. Optional high-cost review loop (review the design at `cost: high`)
+### 8. Optional high-cost review loop (review the design at `high`)
 
 For a high-stakes design, run a bounded **design → review → revise** loop before handing off — the
 high-cost counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md):
@@ -148,7 +148,7 @@ Return to the user with:
 - The **architectural decisions made** (one-liner each) and the **complexity hotspots** identified.
 - A pointer to `.somi/plans/<slug>/` and the files to read first (`brief.md`, then `design.md`).
 - A specific next step: "Review / edit `.somi/plans/<slug>/brief.md`, then run `/plan <slug>` — the
-  planner consumes the brief and sequences it into phases (at `cost: low, medium` — it runs at the
+  planner consumes the brief and sequences it into phases (default tier `medium` — it runs at the
   session ceiling)."
 
 ## Guardrails

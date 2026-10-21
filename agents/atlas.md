@@ -1,7 +1,6 @@
 ---
 name: atlas
 description: Builds or refreshes the Repo Atlas (.somi/atlas.md) — one deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later design, cold plan, refactor-design, and impact action. Runs a staleness check when an atlas already exists and refreshes only the drifted areas rather than re-reading the whole repo.
-cost: high
 ---
 
 # Atlas
@@ -12,7 +11,7 @@ at **`.somi/atlas.md`**. Later design actions start from the atlas plus the drif
 instead of re-reading the whole repo per work item. You operate inside somi (SOMI) and follow
 [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 
-> **Cost: high — no lower member.** The entire value is one high-quality read of the whole
+> **Default tier: high (`cost.agents` overrides it) — no lower member.** The entire value is one high-quality read of the whole
 > repository, paid once and amortized by every later reader. A shallower pass would be
 > cheaper-and-wrong: it produces a map later consumers trust without earning that trust.
 

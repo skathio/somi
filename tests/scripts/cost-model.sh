@@ -112,32 +112,22 @@ check "a mapping with only valid tier keys is unaffected by the new check" \
 
 
 # --- scripts/validate.sh's own derivation idiom stays capture-then-check, not a bare eval --------
-# validate.sh builds its cost/model environment from this resolver via a shell idiom: assign the
+# validate.sh once built its cost/model environment from this resolver via a shell idiom: assign the
 # node call's stdout to a plain variable with an explicit `|| { ...; exit 1; }`, THEN eval the
 # variable -- never `eval "$(node -e ...)"` directly. A PARTIAL failure (one tier's resolveModel
 # call throws after earlier tiers already printed) exits node non-zero, but a bare eval hides that
 # status from `set -e`: the failing substitution is only an argument being built for eval, not the
 # exit status of a simple command, so the earlier assignments land silently and the surrounding
 # checks report PASSED with the missing tier never having been derived. Two independent instruments
-# below, covering two different things -- neither substitutes for the other: the shape checks read
-# the REAL `scripts/validate.sh` and are the only coverage that file's own form actually has
-# (literal revert, or the script-form bypass below); the behavioral reproduction that follows runs
+# below, covering two different things -- neither substitutes for the other: the shape check reads
+# the REAL `scripts/validate.sh` and is the only coverage that file's own form actually has
+# (it must never gain a bare eval/source of a node derivation, nor the script-form bypass below); the behavioral reproduction that follows runs
 # a hardcoded COPY of the idiom -- it never opens `validate.sh` -- and only pins that the
 # capture-then-check shell idiom itself, in the abstract, still exits 1 and reports its diagnostic
 # under a genuinely partial derivation failure. A rewrite of `validate.sh` that changes its form
 # without losing this property would pass the shape checks (correctly) but is not exercised by the
 # behavioral block at all.
 VALIDATE="$ROOT/scripts/validate.sh"
-if grep -qF 'cost_env="$(node -e' "$VALIDATE"; then
-  ok "validate.sh still captures the cost-model derivation into a plain variable before checking it"
-else
-  bad "validate.sh no longer captures the cost-model derivation into cost_env -- the guard may have been reverted"
-fi
-if grep -qF 'cost-model derivation failed; cannot validate cost tiers' "$VALIDATE"; then
-  ok "validate.sh still has an explicit failure diagnostic for the derivation"
-else
-  bad "validate.sh's derivation-failure diagnostic is gone"
-fi
 if grep -vE '^[[:space:]]*#' "$VALIDATE" | grep -qE 'eval[[:space:]]+"\$\(node|source[[:space:]]+<\(node'; then
   bad "validate.sh evaluates or sources a node derivation directly (bare eval \"\$(node ...)\" or source <(node ...)) -- set -e cannot see a partial failure through either form"
 else

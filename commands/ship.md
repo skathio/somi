@@ -18,9 +18,9 @@ $ARGUMENTS
 
 This is the **careful, gated-at-every-stage** entrypoint. It has no `cost:` of its own — nor a
 `model:` of its own; it runs on whatever model this session is already using — and runs entirely
-inline, composing [`/plan`](./plan.md) and [`/code-loop`](./code-loop.md) as a router. The `planner` and `coder` those commands Task declare
-`cost: low, medium` (it runs at the session ceiling), and the `reviewer`
-`/code-loop` Tasks declares `cost: medium, high` — it runs at the session ceiling unless
+inline, composing [`/plan`](./plan.md) and [`/code-loop`](./code-loop.md) as a router. The `planner` and `coder` those commands Task default to
+`medium` (it runs at the session ceiling), and the `reviewer`
+`/code-loop` Tasks defaults to `high` — it runs at the session ceiling unless
 `cost.agents` pins it (pin `reviewer` to `high` for the fresh-eyes judgment that
 stage wants).
 
@@ -29,7 +29,7 @@ stage wants).
 > touches auth/crypto/PII, needs a migration or a new contract, or the architecture is open), run
 > a high-cost design action first — [`/design`](./design.md) (feature), [`/discover`](./discover.md)
 > (new product), or [`/refactor-design`](./refactor-design.md) (large refactor), each Tasking an
-> agent that declares `cost: high` — review its `brief.md`, then `/ship` (or `/plan`) consumes it
+> agent that defaults to `high` — review its `brief.md`, then `/ship` (or `/plan`) consumes it
 > and runs the cheaper pipeline. For the **continuous** version that gates once at the
 > brief handoff and then runs the execution loops under caps, use
 > [`/ship-loop`](./ship-loop.md).

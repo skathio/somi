@@ -245,11 +245,10 @@ export function resolveCeiling(root, explicitArg) {
   return { ceiling: validated, overridden: true, source, ceiling_origin: source, override };
 }
 
-// A declared `cost` is a CAPABILITY SET, not a single value -- every tier the unit can usefully
-// run at (a frontmatter `cost: medium, high` split on comma). Accepts a bare string too, as a
-// one-member set, so a single-tier unit's declaration needs no special-casing at the call site.
-// Always returns a frozen array in ascending order -- the same shape validate.sh already enforces
-// on a frontmatter declaration, re-checked here rather than trusted: this is a library over
+// The `costs` argument is a tier set in ascending order; the resolver passes the agent's single
+// default tier. Accepts a bare string too, as a one-member set, so a single-tier caller needs no
+// special-casing. Always returns a frozen array in ascending order, re-checked here rather than
+// trusted: this is a library over
 // explicit inputs, and a malformed set must die loudly rather than be silently coerced into
 // something valid -- the same discipline validateCeiling() above applies to the ceiling value.
 function normalizeCostSet(costs, label) {
@@ -276,17 +275,17 @@ function normalizeCostSet(costs, label) {
  *
  *  - `override` given (the agent's `cost.agents.<name>` from config) -> `selected` is the override,
  *    even above the ceiling. `tier_source` is `"override"`.
- *  - no override -> `selected` is the CEILING tier itself, whatever the unit declared (not the
- *    highest declared member, not a min() of the two). `tier_source` is `"ceiling"`.
+ *  - no override -> `selected` is the CEILING tier itself, whatever the unit's default tier is (not that
+ *    default, not a min() of the two). `tier_source` is `"ceiling"`.
  *
- * `costs` (the unit's frontmatter capability set, a string or an ascending duplicate-free array) is
+ * `costs` (the unit's default tier set, a string or an ascending duplicate-free array) is
  * read only to report: `supported` echoes it, and `degraded` is true when `selected` ranks below
  * its highest member. It never changes `selected`: declaring a tier never lowers or raises the run.
  *
  * Pure and deterministic; the result is frozen so a caller can't rewrite the selection.
  */
 export function decideDispatch(costs, ceiling, override) {
-  const supported = normalizeCostSet(costs, 'declared cost');
+  const supported = normalizeCostSet(costs, 'default tier');
   if (!VALID_COSTS.includes(ceiling)) {
     throw new Error(`cost-ceiling: unrecognized ceiling "${ceiling}" (expected one of ${VALID_COSTS.join('|')})`);
   }

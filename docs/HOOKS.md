@@ -144,8 +144,8 @@ State file: `.somi/somi-state/last-context-signature` (project-local, gitignored
 
 On `SessionStart`, if the project has **no** `.somi/config.json`, writes one holding the default
 cost settings: `cost.ceiling` set to the built-in default (`medium`) and every shipped agent pinned
-to the highest tier it declares (the table is `scripts/lib/cost-defaults.mjs`, kept equal to the
-agent frontmatter by `tests/scripts/cost-defaults.sh`). Without it, every agent would follow the
+to its default tier (the table is `scripts/lib/cost-defaults.mjs`, kept equal to the
+set of `agents/*.md` by `tests/scripts/cost-defaults.sh`). Without it, every agent would follow the
 ceiling and the ones built for the strongest tier would run lower. It then prints one short notice
 through `additionalContext`.
 

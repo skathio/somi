@@ -80,15 +80,15 @@ The tool's JSON comes back in its text content; the CLI fallback prints the iden
 stdout:
 
 ```json
-{"agent": "coder", "supported": ["low", "medium"], "declared": ["low", "medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
 - `tier` — the cost tier the resolver selected for this agent, right now: the agent's own
   `cost.agents` entry in `.somi/config.json` if it has one (`tier_source: "override"`), otherwise
   the ceiling itself (`tier_source: "ceiling"`). The ceiling is a hard cap for every agent without
-  an override; the agent's frontmatter `cost:` does not change the tier.
-- `declared` (same as `supported`) — the tiers the agent's frontmatter says it is built for.
-  `degraded` is `true` when the selected `tier` is below the highest declared one.
+  an override; the agent's default tier only feeds `declared` and `degraded`.
+- `declared` (same as `supported`) — the agent's default tier, as a one-element list (the table in
+  `scripts/lib/cost-defaults.mjs`). `degraded` is `true` when the selected `tier` is below it.
 - `model` — pass this to `Task` when it is non-null. When it is `null` (no mapping for this
   host/tier), see "No mapped model" below — never omit a model silently *and* never invent one
   without saying so.
@@ -99,8 +99,8 @@ stdout:
 - `ceiling` / `ceiling_source` / `ceiling_origin` — see the announcement rule immediately below.
 
 **When `degraded` is `true`, say so in one line before the agent's `Task` call:**
-`running <agent> at <tier> (declared <declared set>)` — for example
-`running security-reviewer at medium (declared high)`. This is the hard cap working as designed, and
+`running <agent> at <tier> (default <default tier>)` — for example
+`running security-reviewer at medium (default high)`. This is the hard cap working as designed, and
 the user should see which agents are running below what they were built for.
 
 **Announce a `low` ceiling once per session, before the first agent it applies to starts** — not
@@ -180,8 +180,8 @@ than once.
   a root the host already supplied) — the call itself was malformed; say so and stop.
 - `65` (unknown agent) — no file at the install root matches the agent name you named; say so and
   stop, don't dispatch.
-- `66` (malformed declaration) — this agent's own `cost:` frontmatter is missing or invalid; quote
-  the resolver's own message and stop.
+- `66` (no tier source) — the agent is the exempt `somi`, or its file has no entry in the default
+  tier table; quote the resolver's own message and stop.
 - `67` (project environment/config failure) — either `.somi/config.json` (including a structurally
   invalid `cost.mapping`, `cost.agents`, or an oversize, symlinked or non-regular file) or
   `.somi/somi-state/ceiling.json` is corrupt, unparsable, or malformed-shape; or the merged mapping
@@ -207,8 +207,8 @@ agent's
 `cost.agents.<agent>` entry in `.somi/config.json` if it has one, else the ceiling — `cost.ceiling`
 in `.somi/config.json` if set, else a ceiling the user explicitly set earlier in
 `.somi/somi-state/ceiling.json` (only if it records `cli` or `env` as its origin), else `medium`
-(the shipped default). That tier is the answer; the agent's `cost:` frontmatter does not change it,
-though if the tier is below the highest tier it declares, say so as in §2. Nothing was resolved against a mapping here, so nothing is enforced: the
+(the shipped default). That tier is the answer; the agent's default tier does not change it,
+though if the tier is below the agent's default tier, say so as in §2. Nothing was resolved against a mapping here, so nothing is enforced: the
 briefing's cost line is `requested cost: <tier> (not enforced: no mapped model)`, never
 `dispatched at cost:`.
 

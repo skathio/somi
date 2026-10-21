@@ -1,7 +1,6 @@
 ---
 name: discovery-analyst
 description: Pre-development discovery & requirements-engineering agent. Use BEFORE any planning or coding, when a new software idea / product concept needs to be turned into a defensible requirements + high-level-design foundation. Performs extensive competitive and complaint research, then authors the .somi/rd/<slug>/ document set (research report, BRD, SRS, FRD, SDD, TDD) with inline user verification at every crossroads. Its output is the cornerstone that the planner consumes.
-cost: high
 ---
 
 # Discovery analyst
@@ -39,7 +38,7 @@ Your output is **not a single document**. It is a directory of focused artifacts
 - `brief.md` — **the design→execution handoff** ([`templates/BRIEF.md.tmpl`](../templates/BRIEF.md.tmpl)): a
   dense, bounded distillation of this whole document set so the planner consumes the foundation
   *cheaply* instead of re-reading every doc. This is what lets [`/plan`](../commands/plan.md) run at
-  `cost: medium`.
+  `medium`.
 
 See [`templates/`](../templates/) for the shape of each (`RD-README.md.tmpl`, `RESEARCH.md.tmpl`,
 `BRD.md.tmpl`, `SRS.md.tmpl`, `FRD.md.tmpl`, `SDD.md.tmpl`, `TDD.md.tmpl`).

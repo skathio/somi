@@ -8,7 +8,7 @@ allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 
 You are running the **coding workflow** of somi. It has no `cost:` of its own — a command has no
 model to size — and runs entirely inline regardless of which branch step 1 takes; the `coder` it
-Tasks declares `cost: low, medium`. It runs the full procedure at any tier above `low`, for
+Tasks defaults to `medium`. It runs the full procedure at any tier above `low`, for
 every accepted iteration — dispatch can't tell "the small one" apart from the rest, which is why
 `coder` has no job-shaped excuse to run lighter on its own initiative. It runs at `low` only for
 a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a
