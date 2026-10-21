@@ -23,6 +23,7 @@ Start here if you're new. Skim the headings, then read what matches your situati
 | Understand the SemVer policy                        | [VERSIONING.md](./VERSIONING.md)         |
 | Adopt SoMi in a team safely                         | [GOVERNANCE.md](./GOVERNANCE.md)         |
 | Measure whether a change to the instructions helps  | [EVALS.md](./EVALS.md)                   |
+| Measure a release's usage and speed against a recorded baseline | [USAGE-BENCHMARK.md](./USAGE-BENCHMARK.md) |
 | Distribute via Claude Code's plugin marketplace     | [PLUGIN.md](./PLUGIN.md)                 |
 | See how everything fits together                    | [architecture.md](./architecture.md)     |
 
