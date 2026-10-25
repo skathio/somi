@@ -11,3 +11,4 @@ set -euo pipefail
 ROOT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node "$ROOT_REPO/tests/scripts/lib/somi-mcp-tests.mjs"
 node "$ROOT_REPO/tests/scripts/lib/somi-mcp-tier-tests.mjs"
+node "$ROOT_REPO/tests/scripts/lib/agent-registry-tests.mjs"

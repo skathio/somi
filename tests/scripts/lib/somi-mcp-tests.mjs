@@ -70,7 +70,7 @@ async function run() {
 
     const list = await client.request('tools/list', {});
     const names = (list.tools || []).map((t) => t.name).sort();
-    check('tools/list carries exactly somi_resolve, somi_command, somi_skill, somi_agent, somi_tier and somi_config', names, ['somi_agent', 'somi_command', 'somi_config', 'somi_resolve', 'somi_skill', 'somi_tier']);
+    check('tools/list carries exactly somi_resolve, somi_agent_info, somi_command, somi_skill, somi_agent, somi_tier and somi_config', names, ['somi_agent', 'somi_agent_info', 'somi_command', 'somi_config', 'somi_resolve', 'somi_skill', 'somi_tier']);
 
     const ping = await client.request('ping', {});
     check('ping returns an empty result', ping, {});

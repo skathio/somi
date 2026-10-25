@@ -763,7 +763,9 @@ default tier. Only a host the project's mapping never named failing this way wou
 the shipped `HOST_MODELS` table itself — guarded against by `tests/scripts/cost-model.sh` asserting
 every shipped entry resolves for every tier — and that stays exit `66`.
 
-On success it prints one JSON object and exits 0 — `agent`, `supported` and `declared` (the
+On success it prints one JSON object and exits 0 — `agent`, `agent_type` (the id to pass as the
+host's subagent type: `somi:<agent>` on Claude Code and Copilot CLI, `null` for a host with no
+registration), `supported` and `declared` (the
 agent's default tier, as a one-element list), `tier` (what `decideDispatch` selected), `tier_source` (`override` or `ceiling`), `degraded`
 (`true` when `tier` is below the agent's default tier), `model` (what the effective mapping
 resolves that
@@ -772,7 +774,7 @@ this section does), `ceiling`, `ceiling_source`, `ceiling_origin`, and `enforced
 `false`, a `reason` string is added too):
 
 ```json
-{"agent": "somi-coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "somi-coder", "agent_type": "somi:somi-coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
 `model` is `null` for a host absent from the mapping — this call makes no guess — and the result

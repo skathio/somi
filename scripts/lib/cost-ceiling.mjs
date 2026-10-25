@@ -193,10 +193,11 @@ export function loadState(root) {
  * ceiling persisted by an earlier CLI/env call) or `default`. `ceiling_origin` is what produced the
  * value: the same, except a `state` ceiling reports the `cli`/`env` that originally set it.
  * A CLI/env value that differs from what is persisted is saved (with an override record); that is the
- * only write this function makes.
+ * only write this function makes, and `{persist: false}` skips it (a read-only lookup such as
+ * somi_agent_info reports the same answer without remembering anything).
  * @returns {{ceiling: string, overridden: boolean, source: string, ceiling_origin: string, override?: object}}
  */
-export function resolveCeiling(root, explicitArg) {
+export function resolveCeiling(root, explicitArg, { persist = true } = {}) {
   const state = loadState(root);
   const configured = readCostConfig(root).ceiling;
   const isConfigured = !(configured === undefined || configured === null || configured === '');
@@ -233,7 +234,7 @@ export function resolveCeiling(root, explicitArg) {
   next.ceiling = validated;
   next.ceiling_origin = source;
   if (from === validated) {
-    saveState(root, next);
+    if (persist) saveState(root, next);
     return { ceiling: validated, overridden: false, source, ceiling_origin: source };
   }
   const override = { field: 'ceiling', from, to: validated, source, at: nowIso() };
@@ -241,7 +242,7 @@ export function resolveCeiling(root, explicitArg) {
   // A repeat of the identical raise (same flag every call, config unchanged) is not a new event.
   const last = next.ceiling_overrides[next.ceiling_overrides.length - 1];
   if (!(last && last.from === from && last.to === validated && last.source === source)) next.ceiling_overrides.push(override);
-  saveState(root, next);
+  if (persist) saveState(root, next);
   return { ceiling: validated, overridden: true, source, ceiling_origin: source, override };
 }
 

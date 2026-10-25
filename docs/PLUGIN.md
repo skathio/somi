@@ -75,6 +75,16 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   hook can ask", for example Copilot) the tool refuses a lowering with exit 64 and points to the CLI.
   The CLI is also usable directly:
   `node scripts/somi-config.mjs <show|get|set|unset|init> [key] [value] [--project-dir DIR]`.
+- **`somi_agent_info`** — read-only agent registry and dispatch lookup. With no `agent`, the
+  catalog: every canonical agent (`somi-coder`, …, and the `somi` front door), the aliases hosts
+  actually register for it (today `somi:<name>` on Claude Code and Copilot CLI, the one alias each),
+  and its default tier. With `agent` (a canonical name or a registered alias) and `host`: the canonical
+  name, the alias that matched, `agent_type` (the id to pass as the host's subagent type), the
+  session ceiling and the tier and model the agent would run at now — from the same resolver as
+  `somi_resolve`, with nothing written (no ceiling is set or remembered). An unknown identifier is a
+  65 and is never routed to another agent; a pre-4.0.0 bare name such as `coder` gets a "renamed"
+  hint. Aliases live in one table, `scripts/lib/agent-registry.mjs`, which fails at start on a
+  collision.
 - **`somi_command`** — returns a SoMi command's own procedure text (`commands/<name>.md`) from
   the install root, so the front door can run a command live without knowing an install path.
 - **`somi_skill`** — returns a SoMi skill's own text (`skills/<name>/SKILL.md`) from the install

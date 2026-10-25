@@ -395,9 +395,9 @@ esac
 
 # --- output shape: exactly the documented fields (`enforced` added by #32; `reason` only when unenforced), and a real JSON array for `supported` -----
 out="$(run "$(fresh)" resolve --agent somi-coder --ceiling medium)"
-check "JSON output carries exactly agent/ceiling/ceiling_origin/ceiling_source/declared/degraded/enforced/model/supported/tier/tier_source" \
+check "JSON output carries exactly agent/agent_type/ceiling/ceiling_origin/ceiling_source/declared/degraded/enforced/model/supported/tier/tier_source" \
   "$(node -e 'process.stdout.write(Object.keys(JSON.parse(process.argv[1])).sort().join("|"))' "$out")" \
-  "agent|ceiling|ceiling_origin|ceiling_source|declared|degraded|enforced|model|supported|tier|tier_source"
+  "agent|agent_type|ceiling|ceiling_origin|ceiling_source|declared|degraded|enforced|model|supported|tier|tier_source"
 check "coder's supported set is exactly [medium], echoing its default tier from the table" \
   "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" \
   "medium"

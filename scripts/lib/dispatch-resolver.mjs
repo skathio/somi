@@ -42,6 +42,10 @@ import { resolveCeiling, decideDispatch, modelForDispatch, readCostConfig, CEILI
 import { AGENT_NAME_RE } from './cost-config.mjs';
 import { HOST_MODELS, mergeHostMapping, VALID_COSTS } from './cost-model.mjs';
 import { AGENT_DEFAULT_TIERS } from './cost-defaults.mjs';
+import { buildRegistry, agentTypeFor } from './agent-registry.mjs';
+
+// Built once: an alias collision fails the import, so no surface can start on an ambiguous registry.
+const REGISTRY = buildRegistry();
 
 export { AGENT_NAME_RE };
 
@@ -104,10 +108,13 @@ export function validateDispatchArgs({ agent, host, ceiling } = {}) {
  * `ceiling`, when given, is this call's explicit override. Both, and `agent`, are validated by
  * `validateDispatchArgs` above. `projectRoot`/`installRoot` are plain strings the caller resolves
  * itself (the CLI's own convention differs from the MCP server's — see mcp-project-root.mjs).
+ * `persist: false` makes the call read-only: an explicit or env ceiling is used but never remembered.
+ * The result's `agent_type` is the id the host's subagent tool takes for this agent (`somi:<agent>`
+ * on both shipped hosts), or null for a host with no registration (see agent-registry.mjs).
  *
  * @returns {{ok: true, result: object} | {ok: false, code: number, message: string}}
  */
-export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot }) {
+export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot, persist = true }) {
   const validated = validateDispatchArgs({ agent, host, ceiling });
   if (!validated.ok) return validated;
   const HOST = host || 'claude-code';
@@ -142,7 +149,7 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
   // arguments: an unparsable .somi/config.json, or a corrupt .somi/somi-state/ceiling.json.
   let ceilingResult;
   try {
-    ceilingResult = resolveCeiling(projectRoot, ceiling || undefined);
+    ceilingResult = resolveCeiling(projectRoot, ceiling || undefined, { persist });
   } catch (e) {
     return err(EXIT_PROJECT_ENV, e.message);
   }
@@ -216,6 +223,7 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
     ok: true,
     result: {
       agent,
+      agent_type: agentTypeFor(REGISTRY, agent, HOST),
       supported: decision.supported,
       declared: decision.supported,
       tier: decision.selected,

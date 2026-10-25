@@ -36,6 +36,7 @@ import {
   EXIT_UNKNOWN_AGENT,
 } from './lib/dispatch-resolver.mjs';
 import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
+import { AGENT_INFO_TOOL, agentInfo } from './lib/agent-info.mjs';
 import { SIGNAL_IDS } from './lib/size-tier.mjs';
 
 const PROG = 'somi-dispatch'; // shared identity with the CLI: this is the SAME resolver speaking.
@@ -147,6 +148,7 @@ const TOOLS = [
       required: ['agent'],
     },
   },
+  AGENT_INFO_TOOL,
   {
     name: 'somi_command',
     description:
@@ -287,6 +289,15 @@ async function callSomiResolve(args) {
   return textResult(JSON.stringify(outcome.result));
 }
 
+// Read-only agent lookup; the logic lives in lib/agent-info.mjs, this only supplies the project root.
+async function callSomiAgentInfo(args) {
+  const outcome = await agentInfo(args, {
+    resolveRoot: () => resolveProjectRoot({ projectDirArg: args?.project_dir, listRoots: () => listClientRoots() }),
+    installRoot: installRoot(),
+  });
+  return outcome.ok ? textResult(JSON.stringify(outcome.result)) : textResult(`somi-agent-info: ${outcome.message} (exit ${outcome.code})`, true);
+}
+
 // One reader for every install-root text tool. The name is checked against AGENT_NAME_RE BEFORE
 // any path is built, so a traversal payload (`../x`, `a/b`) is a 64 and never reaches path.join.
 // JSON.stringify, not a template interpolation, for the invalid name: an object-shaped `name`
@@ -379,6 +390,7 @@ async function callSomiConfig(args) {
 async function callTool(name, args) {
   switch (name) {
     case 'somi_resolve': return await callSomiResolve(args || {});
+    case 'somi_agent_info': return await callSomiAgentInfo(args || {});
     case 'somi_command': return callSomiCommand(args || {});
     case 'somi_skill': return callSomiSkill(args || {});
     case 'somi_agent': return callSomiAgent(args || {});

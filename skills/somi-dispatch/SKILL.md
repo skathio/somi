@@ -53,6 +53,12 @@ It applies to that resolve and is remembered as an explicitly set value, but a `
 config sets one, a ceiling passed here does **not** last. Omit it on every ordinary resolve. A `ceiling` below the one
 now in force needs the user's confirmation (the host will ask them); never pass one they did not ask for.
 
+**Name the agent canonically** (`somi-coder`, `somi-reviewer`, …). When the identifier came from
+somewhere else (a user typed `somi:somi-coder`, or an old name like `coder`), first call the read-only
+`somi_agent_info` tool: `somi_agent_info({ agent: "<identifier>", host: "<host>", project_dir: "<project>" })`. It returns the
+`canonical_name` to resolve, or a 65 for an unknown identifier. Stop on a 65 and relay its message
+(it names the 4.0.0 rename when that is the cause); never substitute a different agent.
+
 Name `<host>` precisely, never guess it: `claude-code` if this turn is running in Claude Code,
 `copilot` if it's running in GitHub Copilot.
 
@@ -80,7 +86,7 @@ The tool's JSON comes back in its text content; the CLI fallback prints the iden
 stdout:
 
 ```json
-{"agent": "somi-coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "somi-coder", "agent_type": "somi:somi-coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
 - `tier` — the cost tier the resolver selected for this agent, right now: the agent's own
