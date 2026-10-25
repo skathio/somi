@@ -177,9 +177,12 @@ At minimum:
 3. **Findings** — each one:
    - **[Severity / Confidence]** Title
    - **Where**: `path/to/file.ext:line-range`
-   - **What's wrong**: the actual problem, in one or two sentences.
+   - **What's wrong**: the concrete input or path, and what the code does with it (traced in the code
+     the change touches, callers included, not inferred from the diff alone), in one or two sentences.
    - **Why it matters**: the consequence (correctness, security, maintainability, …).
    - **Suggested fix**: concrete, not a homily.
+   - **If skipped**: what ships if this is not fixed: who hits it, when, how badly. If the honest
+     answer is "nothing much", it is a Nit or not a finding.
 4. **Plan-vs-code observations** (when scoped to a work item) — divergences from `spec.md` /
    `phases/`, missing or correct diary entries, accuracy of `progress.md`.
 5. **What looks good** — call out non-obvious good choices. Build trust; signal you actually read
