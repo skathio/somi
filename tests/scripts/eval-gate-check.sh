@@ -243,7 +243,10 @@ const gone = (graph) => {
   let walks = true; try { gx(R, 'rev-list', 'HEAD'); } catch { walks = false; }
   return [walks, baselineTagDigest(R, d), cli(['--records', store('gn' + graph, mk([pass({ digest: d, candidate: arm(1, { digest: d }) })])), '--repo', R, '--digest', d]).code];
 };
-check('an annotated tag with its commit deleted (with and without a commit-graph): git cannot walk HEAD, the helper refuses with ok:false and the CLI exits 1', [gone(false), gone(true)].map(([w, r, c]) => [w, r.ok, r.reason?.startsWith('the object store is incomplete'), c]), Array(2).fill([false, false, true, 1]));
+// What must hold on every git: the helper refuses (never v1.9.0, never none) and the CLI exits 1. Which check
+// refuses is git's business: git 2.43 cannot walk HEAD at all, while git 2.55 walks it through a commit-graph
+// and the refusal comes from the tag itself. Where git cannot walk, the reason must say the store is incomplete.
+check('an annotated tag with its commit deleted (with and without a commit-graph): the helper refuses with ok:false and the CLI exits 1; where git cannot walk HEAD, the reason says the object store is incomplete', [gone(false), gone(true)].map(([w, r, c]) => [r.ok, c, w || r.reason?.startsWith('the object store is incomplete')]), Array(2).fill([false, 1, true]));
 const V = repo(); commit(V, 'v1', 'v2'); const dV2 = commit(V, 'v2', 'v2.0.0'); const dVc = commit(V, 'v3');
 check('equal versions are ordered by name: v2.0.0 wins over v2', baselineTagDigest(V, dVc), { ok: true, digest: dV2 });
 
