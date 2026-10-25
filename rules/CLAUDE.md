@@ -52,8 +52,8 @@ the full treatment; read that file when you **enter its domain** (see "How to lo
   the hooks would gate. ([`40`](./40-engineering-practices.md))
 - **Collaboration:** challenge the premise, not just the architecture; match the answer to the
   question; recommend with concrete options, the user decides direction; surface tradeoffs and
-  blockers in the first line; close with what you skipped or did not verify, and the risk that
-  remains. ([`50`](./50-collaboration.md))
+  blockers in the first line; end with one or two lines: what you skipped or did not check, and any
+  risk the user must know. ([`50`](./50-collaboration.md))
 - **Reasoning craft:** before writing, parse trajectory (what will the reader do with this in 10
   minutes; answer the predictable next question now) → shape (choose the deliverable's form before
   the words; put the answer first) → verify (mark inference as inference; never trade "I confirmed"

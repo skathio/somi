@@ -30,9 +30,21 @@ judged against a recorded baseline, and it records none.
 - **A change to `cost.mapping` needs the user**, like a lowering: which model a tier means cannot be
   ranked, so repointing `high` at a weak model used to pass silently. The PreToolUse hook asks;
   `somi_config` refuses it where no hook can ask.
-- **Replies close with what was skipped or not verified, and the risk that remains** (always-on
-  digest and `rules/50`), and code-review findings add **If skipped** (what ships unfixed) and must
-  name the concrete input or path. Adapted from ponytail 5.0. Costs 76 bytes on every prompt.
+- **Adopted from ponytail v5.3.2's own skills** (`ponytail` and `ponytail-review`, MIT), not only its
+  release notes:
+  - every reply that did work ends with one or two lines: what was skipped or not checked, and any
+    risk the user must know (digest and `rules/50`);
+  - `somi-reviewer`: a "Check before you report" gate (no concrete case, no finding; re-read and
+    confirm the premise; smallest fix, deletion preferred; no "consider"), the expected load stated and
+    judged against, a Lean category (delete, reuse, stdlib, yagni, merge, split) and a scale lens;
+    findings numbered across severities with What this is / Problem / Fix / If skipped; closing
+    `Lean:` and `Not checked:` lines. A hunch is now a question for the author, not a Low-confidence
+    finding. Same shape in `templates/REVIEW.md.tmpl` and the example review;
+  - `somi-coder` maps every place a change must reach (callers, fixtures, config, exports) and what it
+    could break, fixes a bug once in the shared code, and marks a kept shortcut as
+    `shortcut: <the limit>, <when to upgrade>`, which reviewers treat as a decision.
+  L0 cost: +97 bytes on every prompt; the review scenario +2.7 KB, code-loop +3.4 KB. Its effect on
+  review precision and recall is not measured yet.
 - **The cost ceiling is a hard cap, with per-agent overrides.** Before, an agent ran at the highest
   tier it declared that fit under the ceiling, and at its cheapest declared tier when none fit, so a
   `medium` session still ran high-only agents at `high`. Now an agent runs at its own

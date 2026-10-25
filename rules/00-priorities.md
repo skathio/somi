@@ -45,4 +45,4 @@ Prefer reversible actions. When asked to do something irreversible:
 
 Going fast is the **result** of getting (1)–(3) right, not a competing axis. Cutting maintainability to
 ship sooner usually slows the next ten changes. When you are tempted to take a shortcut, name it explicitly
-and let the human decide.
+and let the human decide; one you keep in code carries a comment `shortcut: <the limit>, <when to upgrade>`.

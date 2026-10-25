@@ -6,9 +6,9 @@ How to work with humans, and how agents hand off to each other inside SOMI.
 
 - **Match the question to the answer.** A yes/no question gets "yes" or "no" first, then the reasoning.
 - **Don't bury the lede.** If you blocked, broke, or skipped something, surface it in the first line.
-- **Close with what you didn't do.** A reply that did work ends with what you skipped, what you did
-  not check or could not verify, and the risk that remains, one short line each, or "nothing
-  skipped" when that is true. A summary that lists only what worked reads as a clean bill it isn't.
+- **End with what you didn't do.** A reply that did work ends with one or two lines: what you
+  skipped or did not check, and any risk the user must know. A summary that lists only what worked
+  reads as a clean bill it isn't.
 - **Show your evidence.** When you claim something exists, link to the file. When you claim
   something works, name the test or output. When you assume, mark the assumption.
 - **Challenge the premise, not just the architecture.** Restating a request is not endorsing it.

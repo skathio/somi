@@ -5,7 +5,8 @@
 
 ## Summary
 
-<One paragraph: what this change does, what the overall posture of the review is.>
+<One paragraph: what this change does, what the overall posture of the review is, and the expected
+load you judged scale against.>
 
 ## Verdict
 
@@ -15,48 +16,55 @@
 
 ## Findings
 
-Format per finding:
+Numbered 1, 2, 3 across all severities, so the author can say "fix 2 and 5". Every finding has a
+concrete case; a worry without one goes under "Questions for the author". Format per finding:
 
-- **[Severity / Confidence]** — title
+- **N. [Severity / Confidence]** — title
 - **Where**: `path/to/file.ext:line-range`
-- **What's wrong**: <the concrete input or path, and what the code does with it>
-- **Why it matters**: <consequence>
-- **Suggested fix**: <concrete, not a homily>
-- **If skipped**: <what ships if this is not fixed: who hits it, when, how badly>
+- **What this is**: <what this code is for>
+- **Problem**: <the concrete case: this input or situation leads to this wrong result>
+- **Fix**: <the smallest fix that works>
+- **If skipped**: <what happens if it ships unfixed: who hits it, when, how badly>
 
 ---
 
 ### Blockers
 
-#### [Blocker / High] <title>
+#### 1. [Blocker / High] <title>
 - **Where**: `path/to/file.ext:42-58`
-- **What's wrong**: …
-- **Why it matters**: …
-- **Suggested fix**: …
+- **What this is**: …
+- **Problem**: …
+- **Fix**: …
+- **If skipped**: …
 
 ### Majors
 
-#### [Major / High] <title>
+#### 2. [Major / High] <title>
 - **Where**: …
-- **What's wrong**: …
-- **Why it matters**: …
-- **Suggested fix**: …
+- **What this is**: …
+- **Problem**: …
+- **Fix**: …
+- **If skipped**: …
 
 ### Minors
 
-#### [Minor / Medium] <title>
+#### 3. [Minor / Medium] <title>
 - **Where**: …
-- **What's wrong**: …
-- **Why it matters**: …
-- **Suggested fix**: …
+- **What this is**: …
+- **Problem**: …
+- **Fix**: …
+- **If skipped**: …
 
 ### Nits
 
-#### [Nit / Low] <title>
+#### 4. [Nit / Low] <title>
 - **Where**: …
 - **Suggestion**: …
 
 ---
+
+Lean: -<N> lines possible. <only when Lean findings exist>
+Not checked: <one line, when something mattered and could not be checked>
 
 ## What looks good
 

@@ -80,9 +80,12 @@ procedure.
    not read in this session.
 3. **Mark the iteration in-progress** in `progress.md` (single source of truth for status —
    do not duplicate into the phase file). Update "Last activity". (Older work items may still carry a "Currently in flight" section; keep it accurate if present.)
-4. **Map the change**. Identify every file you'll touch, every interface you'll cross, every test
-   you'll add. This should match the iteration's "Files (approx)" — if it doesn't, that's a
-   signal (see Plan-change protocol).
+4. **Map the change**. Identify every place it must reach: files, interfaces, callers, tests,
+   fixtures, config, exports — and what it could break for users (data it would destroy or expose,
+   callers that stop working). That is scope; extra features are not. For a bug fix, grep every caller
+   of the function you touch and fix the root cause once, in the shared code. Code you move or merge
+   keeps its error handling and validation. This should match the iteration's "Files (approx)" — if
+   it doesn't, that's a signal (see Plan-change protocol).
 5. **Climb the Decision Ladder before writing new code** — take the first rung that works: don't
    build it (YAGNI); reuse what the repo already has; the standard library; what the
    platform/runtime provides natively; an existing dependency (a new one is a decision — the repo's
@@ -236,7 +239,9 @@ Your final message must include:
 - **Defensive overengineering.** Don't add validation, retries, or fallbacks that the requirements
   don't call for.
 - **Silent compromises.** If you took a shortcut, the human doesn't find out by accident — you
-  tell them in the summary and in a diary entry if it affects the plan.
+  tell them in the summary and in a diary entry if it affects the plan. A shortcut with a known limit
+  left in code also gets a one-line comment in this form: `shortcut: <the limit>, <when to upgrade>`;
+  reviewers treat a marked shortcut as a decision, not a finding.
 - **Editing without reading.** Hooks may catch this; you should catch it first.
 - **Working through a blocked hook.** If a hook denied an action, do not retry with a workaround.
   Surface it to the human.
