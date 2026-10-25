@@ -116,7 +116,7 @@ expiry edges (frozen clock), (c) handler returning correct status + headers, (d)
   concat — args parameterized).
 - OWASP: A04 (DoS abuse), A05 (misconfig if killswitch wide-opens), A09 (logging — capture
   without leaking PII).
-- `security-reviewer` trigger: **end of phase 2** (before flag is turned on in prod).
+- `somi-security-reviewer` trigger: **end of phase 2** (before flag is turned on in prod).
 
 ## 9. Observability plan
 
@@ -139,7 +139,7 @@ off. Success metric: zero P0 incidents for 14d; per-team p95 within ±5ms.
 ## 12. Definition of Done
 
 - [ ] All phases complete with passing tests.
-- [ ] `security-reviewer` consulted at end of phase 2; no Blocker findings.
+- [ ] `somi-security-reviewer` consulted at end of phase 2; no Blocker findings.
 - [ ] Staging ramp completed (1% → 100%) without incident.
 - [ ] Ops runbook updated with kill-switch procedure.
 - [ ] Audit log fields documented in `docs/observability/audit-events.md`.

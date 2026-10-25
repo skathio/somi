@@ -115,7 +115,7 @@ check('the real run is repeatable', JSON.stringify(await L.measureL0({ repo: ROO
 const size = (rel) => fs.statSync(path.join(ROOT, rel)).size;
 const comp = (id, kind, name) => real[id].components.find((c) => c.kind === kind && c.name === name).bytes;
 check('a real command counts its file size', comp('plan', 'command', 'plan'), size('commands/plan.md'));
-check('a real agent counts its file size', comp('plan', 'agent', 'planner'), size('agents/planner.md'));
+check('a real agent counts its file size', comp('plan', 'agent', 'somi-planner'), size('agents/somi-planner.md'));
 check('a real skill counts its file size', comp('dispatch', 'skill', 'somi-dispatch'), size('skills/somi-dispatch/SKILL.md'));
 check('the prompt hook emits the digest, so it outweighs the digest alone', comp('first-prompt', 'hook', 'user-prompt-submit/inject-workflow-context.mjs') > comp('rules-digest', 'digest', 'rules/CLAUDE.md'), true);
 check('every scenario total is the sum of its components', Object.values(real).every((s) => s.bytes === s.components.reduce((t, c) => t + c.bytes, 0)), true);

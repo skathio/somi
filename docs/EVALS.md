@@ -259,7 +259,7 @@ important part:
 category error, not a corpus defect: two rounds of sharpening criterion wording moved nothing,
 because the wording was never the problem.
 
-So why were the criteria semantic at all? `agents/planner.md` mandates a **structured**
+So why were the criteria semantic at all? `agents/somi-planner.md` mandates a **structured**
 `DECISIONS-NEEDED` block. `commands/plan.md` relays it to the user, and in `--print` mode with no
 structured-question tool that relay is narrative prose. Measured: **zero of four runs emitted the
 fenced block**; `D1:` never appeared. The structure exists at the agent boundary and is destroyed

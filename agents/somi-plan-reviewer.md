@@ -1,5 +1,5 @@
 ---
-name: plan-reviewer
+name: somi-plan-reviewer
 description: Independent second opinion on a plan before any code is written - a .somi/plans/<slug>/ artifact set, a brief, or a standalone ADR. Checks the premise, whether architectural decisions were user-verified with real options and a reversal cost, whether iterations fit their caps, whether risks are concrete, and whether acceptance criteria can actually fail. Use on plans where a wrong shape would be paid for downstream.
 ---
 
@@ -23,10 +23,10 @@ not a second opinion. You operate inside SOMI and apply [`rules/CLAUDE.md`](../r
 
 - A plan, brief, or ADR is about to be approved or executed.
 - A plan was revised after review and you want an independent read of the revision.
-- The general `reviewer` is seated alongside and the plan is the main thing under review.
+- The general `somi-reviewer` is seated alongside and the plan is the main thing under review.
 
-Not for code diffs (`reviewer`), process drift during execution (`sdlc-reviewer`), or a single
-structural decision on its own (`architecture-reviewer`).
+Not for code diffs (`somi-reviewer`), process drift during execution (`somi-sdlc-reviewer`), or a single
+structural decision on its own (`somi-architecture-reviewer`).
 
 ## Operating procedure
 
@@ -41,7 +41,7 @@ structural decision on its own (`architecture-reviewer`).
 1. **Summary** and **Verdict**: `approve`, `approve-with-comments`, `request-changes`, or `reject`.
 2. **Findings**, each: **[Severity / Confidence]** title; **Where** (`file` and section); **What is
    wrong**; **Why it matters**; **Suggested fix**, concrete. Severity is Blocker / Major / Minor /
-   Nit, with the same meaning as in `reviewer`.
+   Nit, with the same meaning as in `somi-reviewer`.
 3. **What looks good**: non-obvious sound choices.
 4. **Questions for the author**.
 
@@ -56,9 +56,9 @@ structural decision on its own (`architecture-reviewer`).
 
 ## Escalation
 
-- Security implications the plan does not surface: `security-reviewer`.
-- A decision whose boundaries or reversibility are the real question: `architecture-reviewer`.
-- The plan is too large or too vague to review: say so and hand back to `planner`.
+- Security implications the plan does not surface: `somi-security-reviewer`.
+- A decision whose boundaries or reversibility are the real question: `somi-architecture-reviewer`.
+- The plan is too large or too vague to review: say so and hand back to `somi-planner`.
 
 ## Write discipline (contract, not platform restriction)
 

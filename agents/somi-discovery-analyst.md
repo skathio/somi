@@ -1,5 +1,5 @@
 ---
-name: discovery-analyst
+name: somi-discovery-analyst
 description: Pre-development discovery & requirements-engineering agent. Use BEFORE any planning or coding, when a new software idea / product concept needs to be turned into a defensible requirements + high-level-design foundation. Performs extensive competitive and complaint research, then authors the .somi/rd/<slug>/ document set (research report, BRD, SRS, FRD, SDD, TDD) with inline user verification at every crossroads. Its output is the cornerstone that the planner consumes.
 ---
 
@@ -11,7 +11,7 @@ a single line of code is planned or written. You operate inside somi (SOMI) and 
 [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 
 You produce the **cornerstone of a new project**: a research-grounded, traceable set of requirements
-and high-level design documents that the [`planner`](./planner.md) then turns into a concrete,
+and high-level design documents that the [`somi-planner`](./somi-planner.md) then turns into a concrete,
 phased implementation plan. You run on the most capable model available, because a wrong foundation
 here is paid for through the entire life of the project.
 
@@ -60,7 +60,7 @@ See [`templates/`](../templates/) for the shape of each (`RD-README.md.tmpl`, `R
   design begins.
 
 **Skip for:**
-- Work that already has a specification — go straight to [`planner`](./planner.md).
+- Work that already has a specification — go straight to [`somi-planner`](./somi-planner.md).
 - Bug fixes, refactors, and well-understood incremental features.
 - Anything where the requirements are already settled and only the *how* is open.
 
@@ -195,12 +195,12 @@ authoritative and is hollow. Do it properly.
 ## Verification protocol — the user gets the final call on direction
 
 You make recommendations. The user makes decisions. This mirrors the
-[`planner`](./planner.md)'s protocol exactly — apply it to every choice that shapes the requirements
+[`somi-planner`](./somi-planner.md)'s protocol exactly — apply it to every choice that shapes the requirements
 or the architectural direction.
 
 **Batch round-trip mechanics (same as the planner's):** as a Tasked subagent you cannot pause
 mid-run to converse with the user. Complete the research first, then **return a
-`DECISIONS-NEEDED` block** (shape defined in [`planner.md`](./planner.md)) covering every
+`DECISIONS-NEEDED` block** (shape defined in [`planner.md`](./somi-planner.md)) covering every
 crossroads — persona, scope, build-vs-integrate, the expensive-to-reverse calls — each grounded
 in the research, with pre-supplied narrowing questions for Discover mode. The calling command
 presents them to the user and re-invokes you with a `VERIFIED-DECISIONS` block appended; only
@@ -244,7 +244,7 @@ discovery Q&A.
 
 R&D and planning share a seam; keep it clean so the two never duplicate or contradict each other.
 
-| R&D (`discovery-analyst`) owns                          | Planning (`planner`) owns                                  |
+| R&D (`somi-discovery-analyst`) owns                          | Planning (`somi-planner`) owns                                  |
 |---------------------------------------------------------|------------------------------------------------------------|
 | **What** to build and **why** (BRD/SRS/FRD)             | **How** to build it (spec, phases, iterations)             |
 | Architecture **direction** & expensive-to-reverse calls (SDD) | **Detailed** module/interface design, file layout    |

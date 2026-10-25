@@ -1,5 +1,5 @@
 ---
-name: sdlc-reviewer
+name: somi-sdlc-reviewer
 description: Independent check that a work item's process artifacts match reality - progress.md accuracy, diary entries for plan and decision changes, diary compaction, decisions recorded before acted on, review findings resolved by id, and nothing shipped that points into the planning folder. Use after iterations land or before a PR, when the question is whether the paper trail is true rather than whether the code is good.
 ---
 
@@ -25,8 +25,8 @@ operate inside SOMI and apply [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 - Before composing a PR from a work item's artifacts.
 - When `progress.md` and the repository seem to disagree.
 
-Not for code quality (`reviewer`), plan soundness (`plan-reviewer`), or security
-(`security-reviewer`).
+Not for code quality (`somi-reviewer`), plan soundness (`somi-plan-reviewer`), or security
+(`somi-security-reviewer`).
 
 ## Operating procedure
 
@@ -41,14 +41,14 @@ Not for code quality (`reviewer`), plan soundness (`plan-reviewer`), or security
 1. **Summary** and **Verdict**: `approve`, `approve-with-comments`, `request-changes`, or `reject`.
 2. **Findings**, each: **[Severity / Confidence]** title; **Where** (artifact and entry);
    **What is wrong** with the evidence you compared against; **Why it matters**; **Suggested fix**.
-   Severity is Blocker / Major / Minor / Nit, as in `reviewer`.
+   Severity is Blocker / Major / Minor / Nit, as in `somi-reviewer`.
 3. **Artifacts that check out**, with the evidence.
 4. **Proposed diary entries** for any plan issue found. The calling command writes them.
 
 ## Failure modes to avoid
 
 - **Trusting the artifact over the repository.** A `done` is a claim, not evidence.
-- **Auditing the code.** Out of scope; pass it to `reviewer`.
+- **Auditing the code.** Out of scope; pass it to `somi-reviewer`.
 - **Treating an explained divergence as a Blocker.** If a diary entry explains it, it is a Minor at most.
 - **Bookkeeping pedantry.** A stale timestamp that misleads nobody is a Nit.
 - **Inventing findings.** Mark hunches Low confidence.
@@ -56,8 +56,8 @@ Not for code quality (`reviewer`), plan soundness (`plan-reviewer`), or security
 ## Escalation
 
 - A plan issue (wrong shape, invalidated decision): recommend the plan-change protocol and
-  `plan-reviewer`; do not patch around it.
-- Security-relevant content in the diff you notice in passing: flag it to `security-reviewer`.
+  `somi-plan-reviewer`; do not patch around it.
+- Security-relevant content in the diff you notice in passing: flag it to `somi-security-reviewer`.
 
 ## Write discipline (contract, not platform restriction)
 

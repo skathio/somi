@@ -53,7 +53,7 @@ planning.
 - SoMi proposes a slug (e.g., `clinic-scheduler`) and confirms with you.
 - The judgment-heavy core runs at the most capable tier — on the agent, not the command:
   `/discover` declares no `cost:` and no `model:` of its own (it runs on whatever model this
-  session is already using) and Tasks `discovery-analyst` at its default tier `high` for the judgment-heavy
+  session is already using) and Tasks `somi-discovery-analyst` at its default tier `high` for the judgment-heavy
   core of the work — its output is the cornerstone of the project. The
   command itself still scaffolds the artifact set and owns the crossroads conversation with you,
   which can't live inside a single `Task` call.
@@ -207,13 +207,13 @@ machine", a stack trace pointing somewhere implausible. (Cause already known + t
   with what's missing; no hunch-fixes.
 - **Bounded isolation**: one falsifiable hypothesis at a time (default budget 5 — config
   `debug.max_hypotheses`, env `SOMI_DEBUG_MAX_HYPOTHESES`); when narrowing stalls, a
-  fresh-context high-cost diagnosis pass (the `reviewer` on the evidence only) discriminates the
+  fresh-context high-cost diagnosis pass (the `somi-reviewer` on the evidence only) discriminates the
   remaining candidates.
 - The **fix runs under `/code-loop`** with the repro test as acceptance — the usual caps apply,
   and a fix that blows the diff cap is treated as a signal the change is feature-sized (hand-off
   to `/plan`, RCA as input).
 - The repro test **stays in the suite** as the regression guard; `rca.md` §6 answers *why no
-  test caught this* (consulting `test-strategist` if the answer is a test-shape problem).
+  test caught this* (consulting `somi-test-strategist` if the answer is a test-shape problem).
 
 **Then**: read `rca.md` — symptom, repro, cause chain with `file:line`, fix rationale, blast
 radius, follow-ups. It's the durable record for the next person who hits this class of bug.
@@ -240,9 +240,9 @@ radius, follow-ups. It's the durable record for the next person who hits this cl
 - Plan-vs-code checks: did the diff stay within the iteration scope? Are decision changes
   captured?
 - **Auto-invokes consultants** based on the trigger table in [`commands/review.md`](../commands/review.md):
-  - Auth/crypto/input/upload/deserialization → `security-reviewer`.
-  - New module/contract/service → `architecture-reviewer`.
-  - Mock-heavy/flaky/wrong-shaped tests → `test-strategist`.
+  - Auth/crypto/input/upload/deserialization → `somi-security-reviewer`.
+  - New module/contract/service → `somi-architecture-reviewer`.
+  - Mock-heavy/flaky/wrong-shaped tests → `somi-test-strategist`.
   Consultant findings are merged into the review under attributed sections.
 - Written to `.somi/reviews/<slug>/<YYYY-MM-DD>-<phase>.<iter>-<verdict>.md` (or
   `…-plan-review-<verdict>.md` for plan reviews).
@@ -349,7 +349,7 @@ findings.
 
 Use this in addition to `/review` when you specifically want the OWASP-Top-10 lens applied
 without the rest of the code-review noise. (`/review` already auto-invokes
-`security-reviewer` when its consultant-trigger table fires.)
+`somi-security-reviewer` when its consultant-trigger table fires.)
 
 ### `/architecture-review`
 
@@ -385,7 +385,7 @@ no feature work mixed in.
 ### `/refactor-design`
 
 Scope design for a refactor too big for one diff — spans many modules, needs a migration, or
-changes a shared shape. Tasks the `refactor-designer` agent at its default tier `high` for the judgment-heavy
+changes a shared shape. Tasks the `somi-refactor-designer` agent at its default tier `high` for the judgment-heavy
 core of the work; the command itself still scaffolds the artifact set and owns the crossroads
 conversation with the user. Names the destination shape, maps seams and risks (`file:line`),
 confirms test-coverage gaps, and compiles a `brief.md` that `/plan-loop` → `/code-loop` execute.
@@ -397,7 +397,7 @@ confirms test-coverage gaps, and compiles a `brief.md` that `/plan-loop` → `/c
 
 ### `/review-panel`
 
-Parallel multi-lens review. Seats the `reviewer` plus the security / architecture / test lenses **as
+Parallel multi-lens review. Seats the `somi-reviewer` plus the security / architecture / test lenses **as
 the diff warrants**, runs them concurrently on the same diff, and merges their findings into one
 de-duplicated, severity-graded verdict (highest severity wins; lens disagreement is surfaced).
 
@@ -563,7 +563,7 @@ optional; omit anything you don't want to change:
   "debug":         { "max_hypotheses": 5 },
   "dep_install":   { "allow": ["@types/", "eslint-"] },
   "lockfiles":     { "allow_edit": false },
-  "cost":          { "ceiling": "medium", "mapping": {}, "agents": { "security-reviewer": "high" } }
+  "cost":          { "ceiling": "medium", "mapping": {}, "agents": { "somi-security-reviewer": "high" } }
 }
 ```
 
@@ -588,11 +588,11 @@ optional; omit anything you don't want to change:
 
 Every agent has a **default tier**, held in one table, [`scripts/lib/cost-defaults.mjs`](../scripts/lib/cost-defaults.mjs); a project overrides it per agent with `cost.agents` in `.somi/config.json`. Agent and command files declare no `cost:` (nor `model:`; an unresolved launch inherits the session's model): a command is instructions, not an instance, and runs inline under whatever model the session is already using. `scripts/validate.sh` fails the build if an `agents/*.md` or `commands/*.md` file declares `cost:`, if a `commands/*.md` file declares `model:`, or an `agents/*.md` file declares `model:`, and `tests/scripts/cost-defaults.sh` fails it if the table and `agents/*.md` list different agents. The one named exemption is `agents/somi.md`: the host binds that agent's model when the user selects it, not SoMi, so it has no table entry.
 
-The default tier is what the agent was built for, and the session ceiling is later compared against it to report a degraded run. A tier below the default must still be acceptable for *everything the agent accepts*, because the tier is blind to which job is running: a unit that does two different jobs needing different tiers is split into two agents (as `refactorer` and `refactor-designer` are), never given a range. A staged agent (every stage runs on every call) gets the tier its most demanding stage needs. Which lower tiers are acceptable for an agent is documented in its prose (`docs/AGENTS.md`), not machine-checked; only the default is. The default tier of a spawned agent is its own: a command or agent that Tasks another never pulls it up or down.
+The default tier is what the agent was built for, and the session ceiling is later compared against it to report a degraded run. A tier below the default must still be acceptable for *everything the agent accepts*, because the tier is blind to which job is running: a unit that does two different jobs needing different tiers is split into two agents (as `somi-refactorer` and `somi-refactor-designer` are), never given a range. A staged agent (every stage runs on every call) gets the tier its most demanding stage needs. Which lower tiers are acceptable for an agent is documented in its prose (`docs/AGENTS.md`), not machine-checked; only the default is. The default tier of a spawned agent is its own: a command or agent that Tasks another never pulls it up or down.
 
-**`low` is the one exception to that bar.** A builder-tier agent (one that produces the work, not one that judges it) may be run at `low` once it can still do a reduced-depth version of its job and its own output discloses that it ran at that depth and names what it skipped. This is safe specifically because `low` is never *silently* selected: it only runs for a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a `cost.agents` entry of `low`, and the front door announces that ceiling and its source before any work runs. The judging agents (`reviewer`, `security-reviewer`, `architecture-reviewer`, `test-strategist`) have no reduced-depth mode: a weaker judge doesn't produce weaker output, it produces a false pass, with nothing downstream to catch what it missed. A `low` ceiling still runs them at `low`, reported as degraded, unless `cost.agents` pins them higher.
+**`low` is the one exception to that bar.** A builder-tier agent (one that produces the work, not one that judges it) may be run at `low` once it can still do a reduced-depth version of its job and its own output discloses that it ran at that depth and names what it skipped. This is safe specifically because `low` is never *silently* selected: it only runs for a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a `cost.agents` entry of `low`, and the front door announces that ceiling and its source before any work runs. The judging agents (`somi-reviewer`, `somi-security-reviewer`, `somi-architecture-reviewer`, `somi-test-strategist`) have no reduced-depth mode: a weaker judge doesn't produce weaker output, it produces a false pass, with nothing downstream to catch what it missed. A `low` ceiling still runs them at `low`, reported as degraded, unless `cost.agents` pins them higher.
 
-**A real, shipped example**: `agents/reviewer.md` defaults to `high`. `high` is the adversarial, fresh-eyes pass the agent is written for, with every category in its "What to look for" walked in full. `medium` still produces a genuinely useful lighter review under a capped session ceiling: read for intent, walk the diff, apply the same severity grading, just with less exploration depth. The whole job is catching what the author missed, which needs reasoning about the code at every tier the agent runs at, never mechanical extraction. Three tiers, in
+**A real, shipped example**: `agents/somi-reviewer.md` defaults to `high`. `high` is the adversarial, fresh-eyes pass the agent is written for, with every category in its "What to look for" walked in full. `medium` still produces a genuinely useful lighter review under a capped session ceiling: read for intent, walk the diff, apply the same severity grading, just with less exploration depth. The whole job is catching what the author missed, which needs reasoning about the code at every tier the agent runs at, never mechanical extraction. Three tiers, in
 the same vocabulary Copilot's own model picker already uses:
 
 - `low` — small, mechanical, near-deterministic work: formatting, extraction, lookup, aggregation
@@ -690,7 +690,7 @@ an optional per-agent `override`, and always allows the dispatch:
   `supported` echoes it. It never changes `selected`.
 
 There is no never-below-default floor in code. A project that wants an agent to keep its depth
-under a low ceiling pins it with `cost.agents` (for example `"security-reviewer": "high"`). Lowering
+under a low ceiling pins it with `cost.agents` (for example `"somi-security-reviewer": "high"`). Lowering
 a reviewer
 below `high` is the project's call, and the dispatch skill prints a line whenever an agent runs
 degraded. A malformed ceiling, override, or default tier — from config, the env var, an explicit
@@ -772,7 +772,7 @@ this section does), `ceiling`, `ceiling_source`, `ceiling_origin`, and `enforced
 `false`, a `reason` string is added too):
 
 ```json
-{"agent": "coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "somi-coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
 `model` is `null` for a host absent from the mapping — this call makes no guess — and the result

@@ -1,5 +1,5 @@
 ---
-name: planner
+name: somi-planner
 description: Staff-engineer-grade planning agent. Use BEFORE writing code that fails the somi-routing trivial threshold, when scoping a feature, decomposing an ambiguous request, or when the user asks "how should we approach X". Produces the .somi/plans/<slug>/ artifact set (context, spec, decisions, phases, progress, diary) with inline user verification on architectural choices. Always invoke for changes that cross modules, touch security/auth, or require migrations.
 ---
 
@@ -17,7 +17,7 @@ inside somi (SOMI) and follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 > in `/design` (default tier `high`) first. `low` only runs for a `low` ceiling (flag, env var, `cost.ceiling`, or one
 > set earlier by flag or env var) or a `cost.agents` entry of `low` — and the front door announces
 > the ceiling and its source before work starts, so the depth trade is visible, not silent. See
-> "Running at `low`" below for what that trims. A project that wants every plan on the strong model sets `cost.agents.planner` to `high` in `.somi/config.json`: an
+> "Running at `low`" below for what that trims. A project that wants every plan on the strong model sets `cost.agents.somi-planner` to `high` in `.somi/config.json`: an
 > agent's tier is its override if it has one, otherwise the ceiling itself, and the default tier
 > only reports what the agent was built for.
 
@@ -97,7 +97,7 @@ recommendation instead of producing ceremonial paperwork.
    `research-report.md`) only when the brief points you at them for a specific decision. Your job
    shrinks to sequencing, slicing, and surfacing anything the brief left open.
 1b. **Consume the R&D foundation if one exists.** If the briefing points you at `.somi/rd/<slug>/`
-   (produced by the [`discovery-analyst`](./discovery-analyst.md) via [`/discover`](../commands/discover.md)),
+   (produced by the [`somi-discovery-analyst`](./somi-discovery-analyst.md) via [`/discover`](../commands/discover.md)),
    it is the authoritative input. Read `README.md`, `srs.md`, `frd.md`, `sdd.md`, `tdd.md`, and
    `research-report.md`. Then:
    - Use the **SRS/FRD as the requirements source** — `spec.md §3` cites their IDs (`FR-*`, `NFR-*`)
@@ -326,7 +326,7 @@ A plan is **not done** when:
 ## Escalation
 
 - If the work intersects auth/crypto/PII, **explicitly note** in `spec.md` §8 which phase triggers
-  the `security-reviewer` agent.
+  the `somi-security-reviewer` agent.
 - If the change is contract-breaking, identify the version bump and the deprecation plan in
   `spec.md` §10.
 - If you discover the request is much larger than presented, **stop and produce a scoping note

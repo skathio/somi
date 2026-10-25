@@ -17,11 +17,11 @@ $ARGUMENTS
 
 This command automates the manual `/plan` → `/review plan <slug>` → `/plan` cycle, with **hard
 gates** that ensure it terminates. It has no `cost:` of its own — nor a `model:` of its own; it runs
-on whatever model this session is already using — and runs entirely inline; the `planner` it Tasks
+on whatever model this session is already using — and runs entirely inline; the `somi-planner` it Tasks
 defaults to
 `medium` (it runs at the session ceiling; executing against an upstream
-`brief.md` when one exists), while the `reviewer` it Tasks defaults
-to `high` — it runs at the session ceiling unless `cost.agents` pins it (pin `reviewer`
+`brief.md` when one exists), while the `somi-reviewer` it Tasks defaults
+to `high` — it runs at the session ceiling unless `cost.agents` pins it (pin `somi-reviewer`
 to `high` for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by
 the
 planner's reasoning).
@@ -103,12 +103,12 @@ while true:
   # 3b. Plan (the batch verification round-trip pauses here for the user when the
   #     planner returns DECISIONS-NEEDED — that pause never counts as a pass, and the
   #     re-invocation after it resolves fresh too, same as any other start). Call somi_resolve
-  #     for planner first; full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch
+  #     for somi-planner first; full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch
   #     on Claude Code).
-  Task planner (= /plan <problem>  or  /plan revision <slug> with prior findings as brief)
+  Task somi-planner (= /plan <problem>  or  /plan revision <slug> with prior findings as brief)
 
-  # 3c. Plan review — call somi_resolve for reviewer first; full rules: the somi-dispatch skill
-  Task reviewer (= /review plan <slug>)
+  # 3c. Plan review — call somi_resolve for somi-reviewer first; full rules: the somi-dispatch skill
+  Task somi-reviewer (= /review plan <slug>)
 
   # 3d. Record the pass + findings (locus file for a plan finding is the artifact —
   #     e.g. spec.md / decisions.md / phases/02-…md — symbol is the section)

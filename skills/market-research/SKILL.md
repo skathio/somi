@@ -6,7 +6,7 @@ description: Use when researching a software idea before specifying it — scann
 # Market & competitive research
 
 This skill powers the research half of the discovery phase. The owning agent is
-[`discovery-analyst`](../../agents/discovery-analyst.md); the output of this research feeds directly
+[`somi-discovery-analyst`](../../agents/somi-discovery-analyst.md); the output of this research feeds directly
 into [`requirements-engineering`](../requirements-engineering/SKILL.md) — every finding should become
 a requirement, a non-goal, or a risk, or it was wasted effort.
 
@@ -92,7 +92,7 @@ Known failure mode    → Risk + mitigation (verify our approach doesn't inherit
 Pricing/UX friction   → scope/non-goal in the BRD
 ```
 
-See the worked trace in [`discovery-analyst`](../../agents/discovery-analyst.md) ("Example of a good
+See the worked trace in [`somi-discovery-analyst`](../../agents/somi-discovery-analyst.md) ("Example of a good
 research-to-requirement trace").
 
 ## Anti-patterns to call out

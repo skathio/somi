@@ -18,10 +18,10 @@ $ARGUMENTS
 
 This is the **careful, gated-at-every-stage** entrypoint. It has no `cost:` of its own — nor a
 `model:` of its own; it runs on whatever model this session is already using — and runs entirely
-inline, composing [`/plan`](./plan.md) and [`/code-loop`](./code-loop.md) as a router. The `planner` and `coder` those commands Task default to
-`medium` (it runs at the session ceiling), and the `reviewer`
+inline, composing [`/plan`](./plan.md) and [`/code-loop`](./code-loop.md) as a router. The `somi-planner` and `somi-coder` those commands Task default to
+`medium` (it runs at the session ceiling), and the `somi-reviewer`
 `/code-loop` Tasks defaults to `high` — it runs at the session ceiling unless
-`cost.agents` pins it (pin `reviewer` to `high` for the fresh-eyes judgment that
+`cost.agents` pins it (pin `somi-reviewer` to `high` for the fresh-eyes judgment that
 stage wants).
 
 > **Design-heavy work? Front-load a design action first.** `/ship` starts by composing

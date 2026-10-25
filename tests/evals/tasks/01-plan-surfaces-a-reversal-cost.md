@@ -8,7 +8,7 @@
 **The research pass only** — the run is Tasked once and scored on what it returns. No
 `VERIFIED-DECISIONS` block is supplied and no second invocation happens.
 
-This matters because `agents/planner.md` requires *every* Tasked run to stop and return a
+This matters because `agents/somi-planner.md` requires *every* Tasked run to stop and return a
 `DECISIONS-NEEDED` block, and forbids recording `Verified with user: yes` in the pass that generated
 the decision. So "did it halt?" discriminates nothing, and "does `decisions.md` say verified?" is
 unreachable for a correct run and a **fabrication** for any run that produces it. The criteria below
@@ -38,7 +38,7 @@ The fixture repo contains:
 > An earlier fixture read `tenantId` straight out of the request body, with an `api_keys` table
 > present but referenced by nothing. The problem statement asks to record *"who sent it"* — which
 > is unanswerable when the sender is self-asserted, so the request rests on a **false premise**.
-> `commands/plan.md` §1a calls the premise check *"not optional"*, `agents/planner.md:53` and
+> `commands/plan.md` §1a calls the premise check *"not optional"*, `agents/somi-planner.md:53` and
 > `rules/50-collaboration.md:11` say the same. A conforming run is therefore **required** to
 > block on the auth gap instead of answering the storage question — and did, correctly, then
 > failed criteria 1, 4 and 5.
@@ -105,7 +105,7 @@ Scored from the working tree and the returned `DECISIONS-NEEDED` block.
    `CLAUDE.md` mandates (a down migration shipping in the same PR): what the down step would have to
    drop or move, and why that differs between the options.
    > **Re-targeted at pass 2.** An earlier draft required a named down-migration deliverable *in a
-   > phase file* — but this task scores the **research pass**, and `agents/planner.md` halts that
+   > phase file* — but this task scores the **research pass**, and `agents/somi-planner.md` halts that
    > pass before phases exist (`commands/plan.md` scaffolds `phases/` empty). The criterion was
    > therefore unreachable for a conforming run: correct in isolation, contradictory with the
    > "which pass is scored" decision made to fix a different defect. Two fixes that are each right

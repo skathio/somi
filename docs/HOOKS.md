@@ -163,8 +163,8 @@ What it will not do:
   prints no file content or error text.
 
 When a regular `.somi/config.json` already exists, the hook only reads it (no symlink followed, at
-most 64 KiB). If it parses to an object with no valid `cost.agents["security-reviewer"]` tier, it
-prints one fixed notice that `security-reviewer` runs at the ceiling (below `high` by default) and
+most 64 KiB). If it parses to an object with no valid `cost.agents["somi-security-reviewer"]` tier, it
+prints one fixed notice that `somi-security-reviewer` runs at the ceiling (below `high` by default) and
 that pinning it under `cost.agents` keeps the strong pass. If the entry exists but pins it to `low` or `medium`, it prints a different fixed notice
 saying its security reviews run at that lower tier. Nothing from the file reaches the
 notice, an unparsable, oversize or symlinked file stays silent (the resolver already reports
@@ -181,7 +181,7 @@ and edit `.somi/config.json` by hand.
 
 ### `guard-cost-lowering.mjs`
 
-A model steered by injected text could lower `security-reviewer` or the ceiling through the
+A model steered by injected text could lower `somi-security-reviewer` or the ceiling through the
 `somi_config` MCP tool or by editing `.somi/config.json`, and any warning would reach only that model.
 This hook makes lowering a tier the user's decision. It computes what the change would do, using the
 same edit code the tool uses (`scripts/lib/cost-config-edit.mjs`), and if it **lowers** anything it answers
@@ -197,7 +197,7 @@ answer. It covers:
 - `Write`, `Edit` and `MultiEdit` of the project's `.somi/config.json` (the path is resolved against the
   project root, so `.somi/../.somi/config.json` and a symlinked `.somi` resolve to the same file).
 
-A change lowers when `security-reviewer` would run below `high` (even if that was already so: an explicit
+A change lowers when `somi-security-reviewer` would run below `high` (even if that was already so: an explicit
 `low` pin is always flagged, though an identical before and after is a no-op), when the ceiling drops, when
 any agent's effective tier drops (including removing a pin that sat above the ceiling), or when the new
 content is unparsable or invalid. The rules live in `scripts/lib/cost-lowering.mjs`. Raises and no-ops are
@@ -212,7 +212,7 @@ deleted first and a low one planted afterwards). Otherwise the ceiling is compar
 sees it, with a persisted flag/env ceiling as the fallback for an absent `cost.ceiling`. When the tool is given a
 `project_dir` it is evaluated instead of the host root if it resolves inside it, and anything else asks.
 Whether a path is the config is decided by file identity (same inode, same directory, any letter case), not
-by how it is spelled. A change that leaves `security-reviewer` below `high` without lowering anything else
+by how it is spelled. A change that leaves `somi-security-reviewer` below `high` without lowering anything else
 gets its own wording rather than "lowers".
 
 Where the SoMi hooks do not run (for example GitHub Copilot, where whether hooks run is unverified), the

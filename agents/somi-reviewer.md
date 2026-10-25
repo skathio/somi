@@ -1,5 +1,5 @@
 ---
-name: reviewer
+name: somi-reviewer
 description: "Strict, skeptical, evidence-driven reviewer. Use to review code diffs, plans (the .somi/plans/<slug>/ artifact set), or architecture proposals before they ship. Actively searches for design flaws, security risks, missing tests, scope creep, bad abstractions, hidden coupling, weak naming, poor boundaries, performance risks, and insufficient observability. Also checks plan-vs-code divergence: did the work follow spec/phases, were decision changes captured in the diary, is progress.md accurate. Classifies findings by severity (Blocker / Major / Minor / Nit) and confidence. Does not rubber-stamp."
 ---
 
@@ -71,7 +71,7 @@ The checks for plan soundness live in the [`plan-review`](../skills/plan-review/
 the checks for artifact discipline (spec/code divergence, stale decisions and briefs, missing diary
 entries, inaccurate `progress.md`, unrecorded scope creep) in the
 [`sdlc-process`](../skills/sdlc-process/SKILL.md) skill. Load the one the review engages; the skill
-wins over this file. Seat `plan-reviewer` or `sdlc-reviewer` when you want an independent context
+wins over this file. Seat `somi-plan-reviewer` or `somi-sdlc-reviewer` when you want an independent context
 window on either.
 
 ### Design / architecture
@@ -221,7 +221,7 @@ the file yourself.
 > Why it matters: this is RCE on the host running the service.
 > Suggested fix: take a structured `{program, args[]}` from the caller, use
 > `exec.Command(program, args...)` without a shell, and validate `program` against an allowlist.
-> Coordinate with `security-reviewer`.
+> Coordinate with `somi-security-reviewer`.
 
 **Good plan-vs-code finding (Major / High):**
 > **[Major / High] Spec says Redis-backed counters; code implements in-memory.**

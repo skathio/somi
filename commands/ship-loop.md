@@ -25,10 +25,10 @@ a `brief.md`, before planning consumes it** — you review the compiled brief, t
 loops run to completion without a per-iteration stop. `trivial` and `small` have their one
 checkpoint at Stage -1.
 This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
-session is already using — and runs entirely inline as a router; the `planner` and `coder` the
+session is already using — and runs entirely inline as a router; the `somi-planner` and `somi-coder` the
 composed commands Task default to
 `medium` (it runs at the session ceiling),
-and the `reviewer` defaults to `high` (it runs at the session ceiling unless
+and the `somi-reviewer` defaults to `high` (it runs at the session ceiling unless
 `cost.agents` pins it; pin it to `high` for the fresh-eyes judgment this pipeline wants).
 
 > **"Stop only at the tier's one gate."** For `full` the gate fires once a design action has

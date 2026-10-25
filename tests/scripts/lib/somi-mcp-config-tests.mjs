@@ -33,7 +33,7 @@ console.log('== somi_config over MCP ==');
 
 const viaMcp = fresh(); const viaCli = fresh();
 await withClient(viaMcp, async (client) => {
-  const steps = [['init'], ['show'], ['get', 'cost.ceiling'], ['set', 'cost.ceiling', 'low'], ['set', 'cost.agents.designer', 'medium'], ['get', 'cost.agents.designer'], ['unset', 'cost.agents.designer'], ['show'], ['set', 'cost.bogus', 'low'], ['set', 'cost.ceiling', 'turbo']];
+  const steps = [['init'], ['show'], ['get', 'cost.ceiling'], ['set', 'cost.ceiling', 'low'], ['set', 'cost.agents.somi-designer', 'medium'], ['get', 'cost.agents.somi-designer'], ['unset', 'cost.agents.somi-designer'], ['show'], ['set', 'cost.bogus', 'low'], ['set', 'cost.ceiling', 'turbo']];
   for (const [action, ...kv] of steps) {
     let want; let code = 0;
     try { want = execFileSync(process.execPath, [CFG_CLI, action, ...kv, '--project-dir', viaCli], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, SOMI_COST_CEILING: '' } }).trimEnd(); } catch (e) { code = e.status; }
@@ -53,7 +53,7 @@ await withClient(bad, async (client) => {
 // No host root: reads work from project_dir, writes are refused and nothing is created.
 const lone = fresh();
 await withClient('', async (client) => {
-  for (const args of [{ action: 'set', key: 'cost.ceiling', value: 'low' }, { action: 'unset', key: 'cost.agents.coder' }, { action: 'init' }]) {
+  for (const args of [{ action: 'set', key: 'cost.ceiling', value: 'low' }, { action: 'unset', key: 'cost.agents.somi-coder' }, { action: 'init' }]) {
     const r = await call(client, { ...args, project_dir: lone });
     check(`without a host root ${args.action} is refused (67)`, [...exits(r, 67), /no host project root/.test(text(r)), existsSync(path.join(lone, '.somi'))], [true, true, true, false]);
   }
@@ -78,11 +78,11 @@ for (const [label, env, lowersOk] of [['without CLAUDE_PLUGIN_ROOT', { CLAUDE_PL
   const p = fresh();
   await withClient(p, async (client) => {
     await call(client, { action: 'init', project_dir: p });
-    const lower = await call(client, { action: 'set', key: 'cost.agents.coder', value: 'low', project_dir: p });
+    const lower = await call(client, { action: 'set', key: 'cost.agents.somi-coder', value: 'low', project_dir: p });
     const onDisk = JSON.parse(readFileSync(path.join(p, '.somi', 'config.json'), 'utf8')).cost.agents;
-    const raise = await call(client, { action: 'set', key: 'cost.agents.coder', value: 'high', project_dir: p });
-    const unsetPin = await call(client, { action: 'unset', key: 'cost.agents.designer', project_dir: p });
-    check(`${label}: a lowering set ${lowersOk ? 'goes through (the hook asks)' : 'is refused with 64 and the fixed message'}`, lowersOk ? [lower.isError, onDisk.coder] : [...exits(lower, 64), /this change lowers a tier and needs the user/.test(text(lower))], lowersOk ? [undefined, 'low'] : [true, true, true]);
+    const raise = await call(client, { action: 'set', key: 'cost.agents.somi-coder', value: 'high', project_dir: p });
+    const unsetPin = await call(client, { action: 'unset', key: 'cost.agents.somi-designer', project_dir: p });
+    check(`${label}: a lowering set ${lowersOk ? 'goes through (the hook asks)' : 'is refused with 64 and the fixed message'}`, lowersOk ? [lower.isError, onDisk['somi-coder']] : [...exits(lower, 64), /this change lowers a tier and needs the user/.test(text(lower))], lowersOk ? [undefined, 'low'] : [true, true, true]);
     check(`${label}: a raise is not refused`, raise.isError, undefined);
     check(`${label}: an unset of a pin at the ceiling or above ${lowersOk ? 'goes through' : 'is judged by the same rule'}`, lowersOk ? unsetPin.isError : [unsetPin.isError, /lowers a tier/.test(text(unsetPin))], lowersOk ? undefined : [true, true]);
   }, env);

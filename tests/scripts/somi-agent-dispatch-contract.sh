@@ -39,7 +39,7 @@ else
   bad "neither agents/somi.md nor skills/somi-dispatch/SKILL.md names the resolve --agent/--host CLI fallback shape -- if the wording changed intentionally, update this test to match it"
 fi
 
-out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent coder --host claude-code)"; rc=$?
+out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent somi-coder --host claude-code)"; rc=$?
 if [ "$rc" -eq 0 ] && node -e 'JSON.parse(process.argv[1])' "$out" >/dev/null 2>&1; then
   ok "the literal CLI-fallback invocation Step 4 names succeeds against the real CLI and prints valid JSON"
 else
@@ -55,7 +55,7 @@ else
 fi
 for h in claude-code copilot; do
   hrc=0
-  CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent coder --host "$h" >/dev/null 2>&1 || hrc=$?
+  CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent somi-coder --host "$h" >/dev/null 2>&1 || hrc=$?
   if [ "$hrc" = "0" ]; then ok "--host $h is accepted by the real CLI"; else bad "--host $h was rejected (rc=$hrc)"; fi
 done
 
@@ -76,7 +76,7 @@ reach "66 (no tier source) is reachable: somi is exempt from cost resolution" 66
 R67="$(fresh)"; mkdir -p "$R67/.somi"
 printf '{"cost": {"ceiling": "low"}\n' > "$R67/.somi/config.json"  # missing closing brace
 r67rc=0
-CLAUDE_PROJECT_DIR="$R67" node "$CLI" resolve --agent coder >/dev/null 2>&1 || r67rc=$?
+CLAUDE_PROJECT_DIR="$R67" node "$CLI" resolve --agent somi-coder >/dev/null 2>&1 || r67rc=$?
 if [ "$r67rc" = "67" ]; then
   ok "67 (project environment/config failure) is reachable: unparsable .somi/config.json"
 else
@@ -89,11 +89,11 @@ fi
 # --ceiling so state really exists before the config is corrupted.
 R67_POST="$(fresh)"; mkdir -p "$R67_POST/.somi"
 printf '{"cost": {"ceiling": "high"}}\n' > "$R67_POST/.somi/config.json"
-CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent coder --ceiling high >/dev/null 2>&1 # persists state
+CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent somi-coder --ceiling high >/dev/null 2>&1 # persists state
 [ -f "$R67_POST/.somi/somi-state/ceiling.json" ] || bad "the first call did not persist a ceiling state file"
 printf '{"cost": {"ceiling": "high"}\n' > "$R67_POST/.somi/config.json"  # now corrupt
 r67postrc=0
-CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent coder >/dev/null 2>&1 || r67postrc=$?
+CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent somi-coder >/dev/null 2>&1 || r67postrc=$?
 if [ "$r67postrc" = "67" ]; then
   ok "67 is reachable even AFTER state was persisted, not just on a fresh project"
 else

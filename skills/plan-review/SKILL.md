@@ -48,7 +48,7 @@ Nit with a confidence; a plan can be rejected.
 - Each risk names a specific failure mode and a mitigation that could be carried out. Generic
   platitudes ("scope may grow", "performance may suffer") are findings.
 - Security implications are in the spec's security section with the phase that triggers
-  `security-reviewer`; contract-breaking changes name the version bump and deprecation path.
+  `somi-security-reviewer`; contract-breaking changes name the version bump and deprecation path.
 
 ### 5. Acceptance criteria can fail
 - Every criterion states evidence of a **kind** (a named test, a command and its expected output,

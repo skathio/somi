@@ -1,5 +1,5 @@
 ---
-name: pr
+name: somi-pr
 description: Composes a PR title + description from a work item's artifacts (spec/rca, verified decisions, progress, review verdicts, open findings, diary highlights). Returns the composed markdown; never opens the PR itself. The exit ramp from .somi/ artifacts into the team's PR workflow.
 ---
 

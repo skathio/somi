@@ -35,22 +35,22 @@ EXPECT="$(agent_files "$ROOT_REPO/agents")"
 check "the table lists exactly the agent files (minus the exempt somi)" "$(table_names "$LIB_SRC")" "$EXPECT"
 
 # The tier values themselves: a literal expected list (changing a tier is a deliberate edit here).
-EXPECT_TIERS="architecture-reviewer:high
-atlas:high
-coder:medium
-designer:high
-discovery-analyst:high
-impact:medium
-incident:medium
-plan-reviewer:high
-planner:medium
-pr:medium
-refactor-designer:high
-refactorer:medium
-reviewer:high
-sdlc-reviewer:high
-security-reviewer:high
-test-strategist:high"
+EXPECT_TIERS="somi-architecture-reviewer:high
+somi-atlas:high
+somi-coder:medium
+somi-designer:high
+somi-discovery-analyst:high
+somi-impact:medium
+somi-incident:medium
+somi-plan-reviewer:high
+somi-planner:medium
+somi-pr:medium
+somi-refactor-designer:high
+somi-refactorer:medium
+somi-reviewer:high
+somi-sdlc-reviewer:high
+somi-security-reviewer:high
+somi-test-strategist:high"
 table_tiers() {
   node --input-type=module -e "
     const D = await import('$1/cost-defaults.mjs');
@@ -64,9 +64,9 @@ mutant() { # $1 = name, $2 = sed expression
   mkdir -p "$TMP/$1"; cp "$LIB_SRC"/cost-*.mjs "$TMP/$1/"; sed -i "$2" "$TMP/$1/cost-defaults.mjs"
   cmp -s "$LIB_SRC/cost-defaults.mjs" "$TMP/$1/cost-defaults.mjs" && bad "mutant $1 did not change the file"
 }
-mutant tier-changed "s/^  coder: 'medium',/  coder: 'high',/"
-mutant row-removed  "/^  atlas: 'high',/d"
-mutant row-added    "s/^  atlas: 'high',/  atlas: 'high',\n  ghost: 'low',/"
+mutant tier-changed "s/^  'somi-coder': 'medium',/  'somi-coder': 'high',/"
+mutant row-removed  "/^  'somi-atlas': 'high',/d"
+mutant row-added    "s/^  'somi-atlas': 'high',/  'somi-atlas': 'high',\n  'somi-ghost': 'low',/"
 if [ "$(table_tiers "$TMP/tier-changed")" != "$EXPECT_TIERS" ]; then ok "red proof: the tier list check fails for tier-changed"; else bad "red proof: a changed tier went unnoticed"; fi
 for m in row-removed row-added; do
   if [ "$(table_names "$TMP/$m")" != "$EXPECT" ]; then ok "red proof: existence check fails for $m"; else bad "red proof: existence check still holds for $m"; fi
@@ -110,7 +110,7 @@ node --input-type=module -e "
   out.push(['serialization is stable and is JSON, 2-space indent, trailing newline', D.serializeDefaultConfig() === D.serializeDefaultConfig() && D.serializeDefaultConfig() === JSON.stringify(cfg, null, 2) + '\n' && D.serializeDefaultConfig().endsWith('}\n')]);
   out.push(['serialization round-trips to the same object', JSON.stringify(JSON.parse(D.serializeDefaultConfig())) === JSON.stringify(cfg)]);
   out.push(['the somi front-door agent is not listed', !('somi' in D.AGENT_DEFAULT_TIERS)]);
-  out.push(['a bad table row is rejected', (() => { try { D.buildDefaultConfig({ coder: 'turbo' }); return false; } catch { return true; } })()]);
+  out.push(['a bad table row is rejected', (() => { try { D.buildDefaultConfig({ 'somi-coder': 'turbo' }); return false; } catch { return true; } })()]);
   out.push(['a bad agent name is rejected', (() => { try { D.buildDefaultConfig({ 'Bad_Name': 'low' }); return false; } catch { return true; } })()]);
   for (const [n, v] of out) console.log((v ? 'ok' : 'FAIL') + '\t' + n);" > "$TMP/shape.out" 2>&1
 while IFS=$'\t' read -r s n; do case "$s" in ok) ok "$n" ;; FAIL) bad "$n" ;; *) bad "unexpected output: $s $n" ;; esac; done < "$TMP/shape.out"

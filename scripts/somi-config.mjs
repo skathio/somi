@@ -61,7 +61,7 @@ const HOST_RE = /^[a-z][a-z0-9-]{0,31}$/;
 const EXIT_USAGE = 64;
 const EXIT_PROJECT = 67;
 
-const SEC_WARNING = 'security-reviewer runs below high; pin it with: set cost.agents.security-reviewer high';
+const SEC_WARNING = 'somi-security-reviewer runs below high; pin it with: set cost.agents.somi-security-reviewer high';
 const ENV_WARNING = 'SOMI_COST_CEILING is set in this environment and outranks cost.ceiling in the config';
 const STATE_WARNING = 'a ceiling set earlier by a flag or SOMI_COST_CEILING is in force because cost.ceiling is not set in the config';
 const UNKNOWN_WARNING = 'that agent name is not a shipped agent; the entry is accepted but may never be used';
@@ -216,7 +216,7 @@ function warningsFor(cost, force, extra = []) {
   const w = [...extra];
   if (force.source === 'env' && cost?.ceiling !== undefined && cost.ceiling !== force.value) w.push(ENV_WARNING);
   if (force.source === 'state') w.push(STATE_WARNING);
-  if (effective('security-reviewer', cost, force.value).tier !== 'high') w.push(SEC_WARNING);
+  if (effective('somi-security-reviewer', cost, force.value).tier !== 'high') w.push(SEC_WARNING);
   return w;
 }
 

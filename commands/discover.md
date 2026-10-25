@@ -14,7 +14,7 @@ software-design phase of the SDLC that happens *before* planning or coding. Its 
 > **The judgment-heavy core runs at the most capable tier — on the agent, not the command.** This
 > command declares no `cost:` and no `model:` of its own; it runs on whatever model this session is
 > already using, and Tasks the
-> [`discovery-analyst`](../agents/discovery-analyst.md) agent for the judgment-heavy core of the
+> [`somi-discovery-analyst`](../agents/somi-discovery-analyst.md) agent for the judgment-heavy core of the
 > work (framing the idea, deciding the document set, shaping crossroads); its output anchors the
 > entire project, so the analyst defaults to `high` with no lower member. This command still
 > does real work of its own — scaffolding the `.somi/rd/<slug>/` set and owning the crossroads
@@ -46,7 +46,7 @@ a product.
 ### 1a. Pressure-test the idea (and allow a no-go)
 
 Before scaffolding, instruct the analyst to hold the idea against four questions (see
-[`agents/discovery-analyst.md`](../agents/discovery-analyst.md) step 1a): is the problem real and
+[`agents/somi-discovery-analyst.md`](../agents/somi-discovery-analyst.md) step 1a): is the problem real and
 unmet, is the space already won, is there a structural fatal pitfall, and does the framing hide a
 false premise / XY problem? Keep these live through the research. The honest outcome may be **go**,
 **pivot** (a stronger adjacent cut — put it to the user first), or **no-go** (produce a short cited
@@ -91,9 +91,9 @@ Create `.somi/rd/<slug>/` with the document set and supporting files from the te
 If `.somi/README.md` does not yet exist at the repo root, also write it from
 [`templates/SOMI-README.md.tmpl`](../templates/SOMI-README.md.tmpl).
 
-### 4. Invoke the `discovery-analyst` agent
+### 4. Invoke the `somi-discovery-analyst` agent
 
-Before this `Task`, call `somi_resolve` for `discovery-analyst` (with `project_dir`), pass its
+Before this `Task`, call `somi_resolve` for `somi-discovery-analyst` (with `project_dir`), pass its
 model, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
 (`somi_skill`, or `somi:somi-dispatch` on Claude Code). Brief the agent via the
 Task tool with:
@@ -102,7 +102,7 @@ Task tool with:
 - A reminder to follow the **research methodology** and the **verification protocol** (§5).
 - Any context from the current conversation or repo.
 
-The analyst ([`agents/discovery-analyst.md`](../agents/discovery-analyst.md)) does the heavy lifting:
+The analyst ([`agents/somi-discovery-analyst.md`](../agents/somi-discovery-analyst.md)) does the heavy lifting:
 researches the competition and common complaints, synthesizes findings, decides the document set,
 then authors the requirements (BRD → SRS → FRD) and high-level design (SDD → TDD) with full
 traceability — pausing on each crossroads for verification.
@@ -121,7 +121,7 @@ subagent cannot pause to converse with the user, so run the **shared batch round
    pivot** verdict (which rides the block as the first decision). Nothing is recorded yet.
 2. **You present each decision to the user faithfully** — options, pros/cons, recommendation, the
    escape hatches; the analyst's pre-supplied narrowing questions power Discover mode.
-3. This re-invocation resolves fresh too — call `somi_resolve` for `discovery-analyst` again before
+3. This re-invocation resolves fresh too — call `somi_resolve` for `somi-discovery-analyst` again before
    it, same as the first Task (full rules: the `somi-dispatch` skill). Re-invoke the analyst with a
    **`VERIFIED-DECISIONS` block appended** to the same briefing; it
    then authors the document set and records `decisions.md` entries with
@@ -157,7 +157,7 @@ After the documents are written:
 
 For a high-stakes initiative, run a bounded **discover → review → revise** loop before handing off —
 the high-cost counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md). Task
-[`/review`](./review.md) as `design <slug>` (and the [`architecture-reviewer`](../agents/architecture-reviewer.md)
+[`/review`](./review.md) as `design <slug>` (and the [`somi-architecture-reviewer`](../agents/somi-architecture-reviewer.md)
 — resolve it via `somi_resolve` first, full rules: the `somi-dispatch` skill — where the SDD
 warrants) on a **fresh context** — give it the artifacts only (`brief.md`, `srs.md`,
 `sdd.md`, …), **not** the discovery conversation, so the review is unbiased. Revise on Blocker/Major
@@ -202,4 +202,4 @@ The discovery is acceptable when:
 - Every direction-shaping decision in `decisions.md` is user-verified.
 - `README.md`'s traceability map connects requirements to their origins and design elements.
 
-See [`agents/discovery-analyst.md`](../agents/discovery-analyst.md) for the full quality bar.
+See [`agents/somi-discovery-analyst.md`](../agents/somi-discovery-analyst.md) for the full quality bar.

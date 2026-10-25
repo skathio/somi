@@ -673,7 +673,7 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     // never captured. null (absent or malformed) is a harness fault for THIS observation only,
     // handled per-criterion below -- it does not, by itself, fail the whole draw.
     const auditLog = readAuditLog(work);
-    // Capture the ARTIFACT, not just the transcript. agents/planner.md mandates a structured
+    // Capture the ARTIFACT, not just the transcript. agents/somi-planner.md mandates a structured
     // DECISIONS-NEEDED block; commands/plan.md relays it to the user, and in --print mode that
     // relay is narrative prose -- measured, zero of four runs emitted the fenced block. The
     // structure survives on disk in decisions.md, which is what makes these criteria executable
@@ -683,7 +683,7 @@ export async function runOnce({ taskId, taskSpec, fixtureDir, sourceDir, index, 
     // The plan slug THIS draw created: the SOLE directory under `.somi/plans/` in the post-run
     // tree, independent of whether `decisions.md` exists there (corrected 2026-08-12, review pass
     // 1 Blocker F-43 -- keying on `decisions.md`'s presence left `slug` null on the conforming
-    // DECISIONS-NEEDED pause `agents/planner.md` mandates, and on 1 of the 4 task-01 draws already
+    // DECISIONS-NEEDED pause `agents/somi-planner.md` mandates, and on 1 of the 4 task-01 draws already
     // measured; `task01-plan/` ships no `.somi/` at all, so any directory found here is this draw's
     // own). `null` on zero OR more than one directory (absent, or ambiguous); callers fall back to
     // their own broad-match behaviour on `null` rather than being handed a directory that isn't

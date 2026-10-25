@@ -1,5 +1,5 @@
 ---
-name: incident
+name: somi-incident
 description: Runs the mitigate-then-account incident lane once a work item is framed — flag flip / revert / scoped patch to restore service, with hooks still enforcing, then mandatory debt capture (a postmortem note and a seeded /debug or /plan follow-up for the real cause). Never closes an incident without all three debt-capture pieces.
 ---
 

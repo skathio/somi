@@ -60,7 +60,7 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   66 malformed `cost:` / 67 project environment failure), reported in the tool result text.
 - **`somi_config`** — the tool behind the [`/somi-config`](../commands/somi-config.md) command: shows or changes the cost settings in the project's `.somi/config.json` by
   running `scripts/somi-config.mjs` (never a shell) and returning its JSON line and exit codes
-  unchanged: `show` (every agent's effective tier, plus fixed warnings such as `security-reviewer`
+  unchanged: `show` (every agent's effective tier, plus fixed warnings such as `somi-security-reviewer`
   below `high`), `get`, `set`, `unset`, and `init` (creates the default file only when absent). Only
   `cost.ceiling` and `cost.agents.<name>` can be changed, to `low`/`medium`/`high`; anything else is
   exit 64. A broken existing config (unreadable, oversize, a symlink, invalid JSON, invalid cost
@@ -85,7 +85,7 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   loading.
 - **`somi_agent`** — returns a SoMi agent's instructions (`agents/<name>.md`, frontmatter removed).
   GitHub Copilot's subagent tool accepts only its built-in agent types, so a plugin agent such as
-  `coder` or `reviewer` cannot be started by name there (`Unknown agent_type`). The front door then
+  `somi-coder` or `somi-reviewer` cannot be started by name there (`Unknown agent_type`). The front door then
   starts the built-in general-purpose subagent with this text and the model `somi_resolve` returned,
   which keeps a reviewer's fresh context. The procedure is in the `somi-dispatch` skill, §5.
 
@@ -264,31 +264,31 @@ Code the direct commands already select the right agent and run their own proced
 
 | Command                          | Agent(s) used                                                                            |
 |----------------------------------|------------------------------------------------------------------------------------------|
-| `@somi /discover`             | `discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
-| `@somi /design`               | `designer` (brownfield feature design → `brief.md`)                                      |
-| `@somi /atlas`                | `atlas` (repo map → `.somi/atlas.md`)                                                     |
-| `@somi /plan`                 | `planner`                                                                                |
-| `@somi /plan-loop`            | `planner` + `reviewer` (bounded)                                                         |
-| `@somi /code`                 | `coder`                                                                                  |
-| `@somi /code-loop`            | `coder` + `reviewer` (bounded)                                                           |
+| `@somi /discover`             | `somi-discovery-analyst` (greenfield: research + requirements & design → `.somi/rd/<slug>/`)  |
+| `@somi /design`               | `somi-designer` (brownfield feature design → `brief.md`)                                      |
+| `@somi /atlas`                | `somi-atlas` (repo map → `.somi/atlas.md`)                                                     |
+| `@somi /plan`                 | `somi-planner`                                                                                |
+| `@somi /plan-loop`            | `somi-planner` + `somi-reviewer` (bounded)                                                         |
+| `@somi /code`                 | `somi-coder`                                                                                  |
+| `@somi /code-loop`            | `somi-coder` + `somi-reviewer` (bounded)                                                           |
 | `@somi /code-parallel`        | per eligible iteration: `/code-loop` (sequential on Copilot — no worktrees/concurrency)   |
-| `@somi /debug`                | `coder` (+ `reviewer` as high-cost diagnosis hatch)                                            |
-| `@somi /review`               | `reviewer` (+ `security-reviewer` / `architecture-reviewer` / `test-strategist` auto-invoked) |
+| `@somi /debug`                | `somi-coder` (+ `somi-reviewer` as high-cost diagnosis hatch)                                            |
+| `@somi /review`               | `somi-reviewer` (+ `somi-security-reviewer` / `somi-architecture-reviewer` / `somi-test-strategist` auto-invoked) |
 | `@somi /review-panel`         | reviewer + specialist lenses (sequential on Copilot)                                     |
-| `@somi /ship`                 | `planner` + (per iteration) `/code-loop`                                                 |
+| `@somi /ship`                 | `somi-planner` + (per iteration) `/code-loop`                                                 |
 | `@somi /ship-loop`            | `/plan-loop` + (per iteration) `/code-loop`                                              |
-| `@somi /security-review`      | `security-reviewer`                                                                      |
-| `@somi /architecture-review`  | `architecture-reviewer` (+ `security-reviewer` when relevant)                            |
-| `@somi /test-strategy`        | `test-strategist`                                                                        |
-| `@somi /refactor`             | `refactorer`                                                                             |
-| `@somi /refactor-design`      | `refactor-designer`                                                                      |
-| `@somi /impact`               | `impact` (read-only blast-radius analysis)                                               |
-| `@somi /adopt`                | `atlas` agent (+ `test-strategist` for depth)                                            |
-| `@somi /upgrade`              | `discovery-analyst` (research) + `/code-loop` (migration)                                |
-| `@somi /release-readiness`    | `reviewer` (one integration pass; the checklist is deterministic)                        |
-| `@somi /incident`             | `incident` (mitigation inline; seeds `/debug` / `/plan` after)                            |
+| `@somi /security-review`      | `somi-security-reviewer`                                                                      |
+| `@somi /architecture-review`  | `somi-architecture-reviewer` (+ `somi-security-reviewer` when relevant)                            |
+| `@somi /test-strategy`        | `somi-test-strategist`                                                                        |
+| `@somi /refactor`             | `somi-refactorer`                                                                             |
+| `@somi /refactor-design`      | `somi-refactor-designer`                                                                      |
+| `@somi /impact`               | `somi-impact` (read-only blast-radius analysis)                                               |
+| `@somi /adopt`                | `somi-atlas` agent (+ `somi-test-strategist` for depth)                                            |
+| `@somi /upgrade`              | `somi-discovery-analyst` (research) + `/code-loop` (migration)                                |
+| `@somi /release-readiness`    | `somi-reviewer` (one integration pass; the checklist is deterministic)                        |
+| `@somi /incident`             | `somi-incident` (mitigation inline; seeds `/debug` / `/plan` after)                            |
 | `@somi` (bare)                | (none — status dashboard, read-only)                                                     |
-| `@somi /pr`                   | `pr` (composes the PR from artifacts; `gh` after confirmation)                            |
+| `@somi /pr`                   | `somi-pr` (composes the PR from artifacts; `gh` after confirmation)                            |
 
 > On Copilot the loop caps fall back to judgment-enforced tracking when the host can't run the
 > `scripts/somi-loop.mjs` / `somi-findings.mjs` helpers — and `scripts/somi-check.mjs` (below) is

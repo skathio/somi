@@ -1,5 +1,5 @@
 ---
-name: refactor-designer
+name: somi-refactor-designer
 description: "Large-refactor scope design agent (default tier `high`). Use when a refactor is too big for one safe diff — it spans many modules, needs a migration, or changes a shared shape. Identifies and designs the refactor scope, maps seams and risks, confirms test-coverage gaps, and compiles a dense brief.md that /plan-loop → /code-loop execute against."
 ---
 
@@ -19,7 +19,7 @@ execution runs against via [`/plan-loop`](../commands/plan-loop.md) →
 > **Default tier: high (`cost.agents` overrides it) — no lower member.** Every job this agent takes is scope design for a
 > multi-module refactor, which is why its default tier is `high` with no lower member; under a lower ceiling it
 > runs degraded unless `cost.agents` pins it. Split from
-> [`refactorer`](./refactorer.md) (default tier `medium`, surgical execution only): the two jobs were
+> [`somi-refactorer`](./somi-refactorer.md) (default tier `medium`, surgical execution only): the two jobs were
 > given one tier that was insufficient for one of them, so mode selection (which job) and
 > tier selection (which model) now name two different units instead of one contradiction.
 
@@ -27,11 +27,11 @@ execution runs against via [`/plan-loop`](../commands/plan-loop.md) →
 
 - The refactor spans many modules, needs a migration, or changes a shared shape — too big for one
   safe diff (a 600-line refactor is a *plan*, not a diff).
-- [`refactorer`](./refactorer.md) (the surgical agent) would need more than one reviewable diff to
+- [`somi-refactorer`](./somi-refactorer.md) (the surgical agent) would need more than one reviewable diff to
   reach the destination.
 
 **Don't invoke** for a small, named smell that fits one safe diff — that's
-[`refactorer`](./refactorer.md) directly, at its default tier `medium`.
+[`somi-refactorer`](./somi-refactorer.md) directly, at its default tier `medium`.
 
 ## Operating procedure
 
@@ -53,7 +53,7 @@ execution runs against via [`/plan-loop`](../commands/plan-loop.md) →
 
 ## Verification protocol
 
-Identical to [`designer`](./designer.md)'s, including the batch round-trip mechanics: return a
+Identical to [`somi-designer`](./somi-designer.md)'s, including the batch round-trip mechanics: return a
 `DECISIONS-NEEDED` block from your research pass; the calling command presents it to the user and
 re-invokes you with `VERIFIED-DECISIONS` appended before you record `decisions.md` and compile the
 brief. Never mark a decision user-verified in the same pass that generated it.
@@ -67,7 +67,7 @@ brief. Never mark a decision user-verified in the same pass that generated it.
 
 ## Failure modes to avoid
 
-- **Editing code.** This agent designs; it never produces a diff — that's `refactorer`, or the
+- **Editing code.** This agent designs; it never produces a diff — that's `somi-refactorer`, or the
   `/code-loop` execution this brief feeds.
 - **An empty handoff.** A brief that doesn't save execution any research defeats the reason this
   mode exists at its default tier `high`.
@@ -77,5 +77,5 @@ brief. Never mark a decision user-verified in the same pass that generated it.
 ## Escalation
 
 - If the destination is architectural enough to need sign-off beyond this work item, hand off to
-  `architecture-reviewer`.
-- If test coverage is too thin to safely scope a migration, escalate to `test-strategist`.
+  `somi-architecture-reviewer`.
+- If test coverage is too thin to safely scope a migration, escalate to `somi-test-strategist`.

@@ -154,15 +154,15 @@ See [docs/HOOKS.md](../docs/HOOKS.md) for the full list and how to extend it.
 
 SOMI provides specialized agents in `agents/`. Use them when the work matches their description:
 
-- **`discovery-analyst`** — a new product / greenfield idea needing requirements engineering, competitive research, and high-level design *before* planning (writes `.somi/rd/<slug>/`). Optional and upstream; skip for incremental work with settled requirements. **`cost: high`.**
-- **`designer`** — a feature / user story on an existing codebase that is design-heavy (crosses modules, touches auth/crypto/PII, needs a migration or new contract, or the architecture is open). Compiles the design + the `brief.md` execution runs against. Use *before* `/plan` when the architecture isn't settled. **`cost: high`.**
-- **`planner`** — before writing non-trivial code, or whenever the user asks "how should we approach X". **`cost: medium`** — consumes the `brief.md` a `cost: high` action left.
-- **`coder`** — to execute against an approved plan or do a constrained implementation task.
-- **`reviewer`** — before declaring work done; before merging; whenever you want a skeptical second opinion.
-- **`security-reviewer`** — auth, crypto, input handling, third-party data, file uploads, anything touching secrets.
-- **`architecture-reviewer`** — new modules, new services, contract changes, dependency direction changes.
-- **`test-strategist`** — flaky tests, missing coverage, deciding integration vs. unit, mocking decisions.
-- **`refactorer`** — when the right move is "untangle this first" rather than "patch around it".
+- **`somi-discovery-analyst`** — a new product / greenfield idea needing requirements engineering, competitive research, and high-level design *before* planning (writes `.somi/rd/<slug>/`). Optional and upstream; skip for incremental work with settled requirements. **`cost: high`.**
+- **`somi-designer`** — a feature / user story on an existing codebase that is design-heavy (crosses modules, touches auth/crypto/PII, needs a migration or new contract, or the architecture is open). Compiles the design + the `brief.md` execution runs against. Use *before* `/plan` when the architecture isn't settled. **`cost: high`.**
+- **`somi-planner`** — before writing non-trivial code, or whenever the user asks "how should we approach X". **`cost: medium`** — consumes the `brief.md` a `cost: high` action left.
+- **`somi-coder`** — to execute against an approved plan or do a constrained implementation task.
+- **`somi-reviewer`** — before declaring work done; before merging; whenever you want a skeptical second opinion.
+- **`somi-security-reviewer`** — auth, crypto, input handling, third-party data, file uploads, anything touching secrets.
+- **`somi-architecture-reviewer`** — new modules, new services, contract changes, dependency direction changes.
+- **`somi-test-strategist`** — flaky tests, missing coverage, deciding integration vs. unit, mocking decisions.
+- **`somi-refactorer`** — when the right move is "untangle this first" rather than "patch around it".
 
 Full catalogue and escalation rules: [docs/AGENTS.md](../docs/AGENTS.md).
 

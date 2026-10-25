@@ -20,7 +20,7 @@ How to work with humans, and how agents hand off to each other inside SOMI.
   user proposes a custom option) and **Discover** (you ask narrowing questions to guide the
   choice). Record verified decisions in `decisions.md`. When you are running as a Tasked
   subagent that cannot reach the user, **return the decisions for the orchestrator to present**
-  (the batch round-trip in `agents/planner.md`) — never answer them yourself and mark them
+  (the batch round-trip in `agents/somi-planner.md`) — never answer them yourself and mark them
   verified.
 - **Stop asking, start showing** when ambiguity is small. Don't ping the human for every
   micro-decision; pick the most reasonable default for non-architectural calls and call it out.
@@ -33,7 +33,7 @@ The workflows compose. Each one has a clean handoff shape — the build trio is 
 
 ### Discovery → Planning
 
-Discovery (the [`discovery-analyst`](../agents/discovery-analyst.md), greenfield only) produces the
+Discovery (the [`somi-discovery-analyst`](../agents/somi-discovery-analyst.md), greenfield only) produces the
 `.somi/rd/<slug>/` foundation: `research-report.md`, `brd.md`, `srs.md`, `frd.md`, `sdd.md`,
 `tdd.md`, plus `decisions.md`, `diary.md`, and a `README.md` index with a traceability map. The
 planner consumes it: the **SRS/FRD are the requirements source** (`spec.md` cites `FR-*`/`NFR-*`
@@ -78,10 +78,10 @@ plan-change protocol fires — don't patch symptoms in code when the plan needs 
 ## When to escalate up the agent chain
 
 Coders escalate to:
-- **`security-reviewer`** before touching auth/crypto/input validation in a non-trivial way.
-- **`architecture-reviewer`** before introducing a new module, service, or contract boundary.
-- **`test-strategist`** when tests feel wrong-shaped (too many mocks, too slow, too flaky).
-- **`refactorer`** when the task is "patch around an antipattern" and the antipattern keeps
+- **`somi-security-reviewer`** before touching auth/crypto/input validation in a non-trivial way.
+- **`somi-architecture-reviewer`** before introducing a new module, service, or contract boundary.
+- **`somi-test-strategist`** when tests feel wrong-shaped (too many mocks, too slow, too flaky).
+- **`somi-refactorer`** when the task is "patch around an antipattern" and the antipattern keeps
   biting.
 
 Planners escalate when the request is **bigger than it looked**: stop, produce a scoping note,

@@ -125,7 +125,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        agent: { type: 'string', description: 'agent name, e.g. "coder" (matches ^[a-z][a-z0-9-]*$)' },
+        agent: { type: 'string', description: 'agent name, e.g. "somi-coder" (matches ^[a-z][a-z0-9-]*$)' },
         host: { type: 'string', description: 'e.g. "claude-code" or "copilot"; defaults to "claude-code"' },
         ceiling: {
           type: 'string',
@@ -188,7 +188,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'agent name, e.g. "reviewer" (matches ^[a-z][a-z0-9-]*$)' },
+        name: { type: 'string', description: 'agent name, e.g. "somi-reviewer" (matches ^[a-z][a-z0-9-]*$)' },
       },
       required: ['name'],
     },

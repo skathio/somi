@@ -14,9 +14,9 @@ The user's target: **$ARGUMENTS** (a work-item slug, optionally a specific `phas
 
 This command has no `cost:` of its own and Tasks no agent directly — it composes
 [`/code-loop`](./code-loop.md) instead, which makes it a router by inspection, not by
-declaration. Each `/code-loop` instance it runs Tasks its `coder` at its default tier `medium` (it runs at
+declaration. Each `/code-loop` instance it runs Tasks its `somi-coder` at its default tier `medium` (it runs at
 the session ceiling; executing against the work item's `brief.md`
-+ plan) and its `reviewer` at the session ceiling unless `cost.agents` pins it (pin it to `high` for
++ plan) and its `somi-reviewer` at the session ceiling unless `cost.agents` pins it (pin it to `high` for
 fresh-eyes judgment).
 
 > **Why this exists, and why it's conservative.** Smaller diffs from focused agents are higher

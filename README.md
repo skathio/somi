@@ -27,12 +27,12 @@ It is designed to be:
 
 | Command       | Agent cost | Agent           | Purpose                                                                                  |
 |---------------|--------|---------------------|------------------------------------------------------------------------------------------|
-| `/discover`   | high   | `discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
-| `/design`     | high   | `designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
-| `/plan`       | medium | `planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
-| `/code`       | medium | `coder`             | Execute against an approved plan + brief with senior-level design judgment               |
-| `/debug`      | medium | `coder` | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop` (a `cost: high` hatch is available if isolation escalates), keep the repro test as the regression guard; writes a one-page `rca.md` |
-| `/review`     | high | `reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
+| `/discover`   | high   | `somi-discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
+| `/design`     | high   | `somi-designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
+| `/plan`       | medium | `somi-planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
+| `/code`       | medium | `somi-coder`             | Execute against an approved plan + brief with senior-level design judgment               |
+| `/debug`      | medium | `somi-coder` | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop` (a `cost: high` hatch is available if isolation escalates), keep the repro test as the regression guard; writes a one-page `rca.md` |
+| `/review`     | high | `somi-reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
 | `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `high`-tier front-load), gated at every stage |
 
 **Cost tiers in practice.** Default tiers belong to **agents**, not commands —
@@ -44,8 +44,8 @@ decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brie
 work (plan detail, iterative coding) runs cheaply. `/discover` (new product) and `/design`
 (brownfield feature) are the high-cost front-loads that feed `/plan`; `/ship-loop` runs the whole
 pipeline continuously, gating once at the brief handoff (before planning consumes the brief). Supporting agents invoked by
-handoff, at whichever default tier the table gives them: `security-reviewer`,
-`architecture-reviewer`, `test-strategist`, `refactor-designer` — see
+handoff, at whichever default tier the table gives them: `somi-security-reviewer`,
+`somi-architecture-reviewer`, `somi-test-strategist`, `somi-refactor-designer` — see
 [`docs/AGENTS.md`](docs/AGENTS.md#cost-tiering) for the exact shape per agent.
 
 ---

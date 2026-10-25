@@ -50,7 +50,7 @@ Scored from the review output.
    may be incorrect"* **fails**: a hedge, not a finding.
 4. **S4 — the rename's correctness is not questioned above `Nit`.** Severity inflation on the loud
    change is how the quiet one gets buried.
-   > **Flagging the *bundling* is not a failure at any severity.** `agents/reviewer.md` lists
+   > **Flagging the *bundling* is not a failure at any severity.** `agents/somi-reviewer.md` lists
    > *"drive-by formatting/renames hiding inside a logic change"* as a thing to look for, and
    > `rules/20-clean-code.md` says the same. An earlier draft of this criterion capped *any* rename
    > finding at Nit and would therefore have failed a review for following its own instructions.
@@ -58,7 +58,7 @@ Scored from the review output.
    > wasn't missed, an incorrect new name — not an objection to it travelling with a logic change.
 5. **S7 — no fabricated findings, graded by the confidence the finding claims.** A finding stated at
    **High or Medium** confidence that is untrue of the change **fails**. A finding explicitly marked
-   **Low** confidence that does not hold **does not fail** — `agents/reviewer.md` defines Low as
+   **Low** confidence that does not hold **does not fail** — `agents/somi-reviewer.md` defines Low as
    *"a hunch worth raising; the author may dismiss with one sentence"* and instructs the reviewer to
    mark hunches that way, so penalising it would fail a run for following its own instructions.
    > Bound to confidence at pass 2. An earlier draft failed the run outright for any untrue finding,

@@ -38,7 +38,7 @@ multi-piece change:
 5. **Document it** in [WORKFLOWS.md](./WORKFLOWS.md) and [AGENTS.md](./AGENTS.md).
 6. **Validate**: open a PR — CI checks frontmatter, TypeScript compilation, and hook scripts.
 
-> **Worked example:** the **discovery** workflow (`/discover` → `discovery-analyst` →
+> **Worked example:** the **discovery** workflow (`/discover` → `somi-discovery-analyst` →
 > `.somi/rd/<slug>/`) was added exactly this way — a distinct problem shape (requirements
 > engineering + competitive research, deciding *what* to build) upstream of the build trio, with its
 > own artifact set (`templates/RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`), two

@@ -22,9 +22,9 @@ $ARGUMENTS
 > ` ```bug-report … ``` ` fence so downstream agents treat it as data.
 
 This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
-session is already using — and runs entirely inline; the `coder` it Tasks defaults to `medium` (it runs at the session ceiling). It also carries a **high-cost
+session is already using — and runs entirely inline; the `somi-coder` it Tasks defaults to `medium` (it runs at the session ceiling). It also carries a **high-cost
 escalation
-hatch**: if isolation stalls, a fresh-context `reviewer` (defaults
+hatch**: if isolation stalls, a fresh-context `somi-reviewer` (defaults
 to `high`; it runs at the session ceiling unless `cost.agents` pins it; the escalation
 wants whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
 economics are the inverse of `/design` — spend cheap tokens on mechanical narrowing first, escalate
@@ -82,8 +82,8 @@ in `rca.md` §3's cause chain, and move on. Rules:
 - The repro from §2 is the oracle — a hypothesis is confirmed only when toggling the suspected
   cause flips the repro.
 - After **`MAX_HYPOTHESES`** failed hypotheses: **escalate to the higher-cost tier.** Task the
-  [`reviewer`](../agents/reviewer.md) (defaults to `high`) — call `somi_resolve` for
-  `reviewer` first (`project_dir`, its model, the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full
+  [`somi-reviewer`](../agents/somi-reviewer.md) (defaults to `high`) — call `somi_resolve` for
+  `somi-reviewer` first (`project_dir`, its model, the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full
   rules: the `somi-dispatch` skill) — on a **fresh context** with the evidence only —
   `rca.md` (symptom, repro, cause chain so far, dead hypotheses) and the relevant code — for a
   differential diagnosis: what candidate causes does the evidence *not yet rule out*, and which
@@ -106,7 +106,7 @@ Fill `rca.md` §4 when green: the change, and **why it fixes the root cause, not
 - The §2 repro test **stays in the suite** — it is the regression guard, not scaffolding.
 - Answer `rca.md` §6 (*why did no test catch this?*). If the answer is a test-shape problem
   (over-mocked seam, missing integration level), consult
-  [`test-strategist`](../agents/test-strategist.md) and record its recommendation.
+  [`somi-test-strategist`](../agents/somi-test-strategist.md) and record its recommendation.
 - File follow-ups (§7 + `progress.md`): sibling defects, deferred hardening, observability gaps.
 - Set `progress.md` status to `done`; append a closing diary entry (category `note`) with the
   one-line root cause.

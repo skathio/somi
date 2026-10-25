@@ -18,7 +18,7 @@
 //   - Exit code is 0 on every path; no file content or error text is printed. On success it prints
 //     one short, fixed notice through the same SessionStart channel the sibling hook uses.
 //   - When a regular config file already exists, it is only READ (O_NOFOLLOW, at most 64 KiB): if it
-//     parses to an object with no own cost.agents["security-reviewer"] tier, or one pinned below high,
+//     parses to an object with no own cost.agents["somi-security-reviewer"] tier, or one pinned below high,
 //     one fixed notice says so (a distinct text for each).
 //     Nothing from the file reaches the notice, and the file is never written.
 
@@ -32,8 +32,8 @@ const CREATE = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXC
 
 const MAX_READ = 64 * 1024;
 const READ = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
-const LOW_PIN_NOTICE = 'SoMi: .somi/config.json pins security-reviewer below high; its security reviews run at that lower tier.';
-const PIN_NOTICE = 'SoMi: .somi/config.json has no cost.agents pin for security-reviewer, so it runs at the ceiling (below high by default). Pin it under cost.agents to keep the strong pass.';
+const LOW_PIN_NOTICE = 'SoMi: .somi/config.json pins somi-security-reviewer below high; its security reviews run at that lower tier.';
+const PIN_NOTICE = 'SoMi: .somi/config.json has no cost.agents pin for somi-security-reviewer, so it runs at the ceiling (below high by default). Pin it under cost.agents to keep the strong pass.';
 
 function writeAll(fd, text) {
   const buf = Buffer.from(text);
@@ -41,7 +41,7 @@ function writeAll(fd, text) {
 }
 
 // For a config that parses to an object: 'missing' when it has no own, valid-tier
-// cost.agents["security-reviewer"], 'low' when that entry is below high, else null. Any doubt
+// cost.agents["somi-security-reviewer"], 'low' when that entry is below high, else null. Any doubt
 // (symlink, not a regular file, oversize, unparsable) is null: the resolver reports those.
 function securityPinState(file) {
   let fd;
@@ -59,7 +59,7 @@ function securityPinState(file) {
     const cfg = JSON.parse(buf.toString('utf8', 0, n));
     if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) return null;
     const agents = cfg.cost && typeof cfg.cost === 'object' ? cfg.cost.agents : undefined;
-    const tier = agents && typeof agents === 'object' && Object.hasOwn(agents, 'security-reviewer') ? agents['security-reviewer'] : undefined;
+    const tier = agents && typeof agents === 'object' && Object.hasOwn(agents, 'somi-security-reviewer') ? agents['somi-security-reviewer'] : undefined;
     if (tier === 'low' || tier === 'medium') return 'low';
     return tier === 'high' ? null : 'missing';
   } catch {

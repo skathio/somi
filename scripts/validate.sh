@@ -226,6 +226,9 @@ if [ "$cost_failed" -ne 0 ]; then
 fi
 bash tests/scripts/cost-defaults.sh
 
+echo "==> Agent names: stem == frontmatter name, somi- prefix, no stale ids..."
+bash tests/scripts/agent-names.sh
+
 echo "==> Validating command <-> somi-dispatch skill reference..."
 # Every command that Tasks an agent directly resolves it through the same dispatch procedure the
 # front door uses, not just when a request is routed through agents/somi.md. "Starts an agent"
@@ -281,7 +284,7 @@ for f in \
   templates/DESIGN.md.tmpl \
   templates/ATLAS.md.tmpl \
   templates/RCA.md.tmpl \
-  agents/designer.md \
+  agents/somi-designer.md \
   commands/design.md \
   commands/atlas.md \
   commands/debug.md \
@@ -457,10 +460,10 @@ if [ "$contract_failed" -ne 0 ]; then
   exit 1
 fi
 # pr is never seated in commands/review-panel.md (it is not a review lens), so the derived sweep
-# above cannot cover it -- but its own contract is load-bearing (agents/pr.md's Write discipline
+# above cannot cover it -- but its own contract is load-bearing (agents/somi-pr.md's Write discipline
 # section is the only thing gating an ungated `gh pr create`), so assert it directly.
-if ! grep -q '^## Write discipline' agents/pr.md; then
-  echo "MISSING WRITE CONTRACT: agents/pr.md has no '## Write discipline' section" >&2
+if ! grep -q '^## Write discipline' agents/somi-pr.md; then
+  echo "MISSING WRITE CONTRACT: agents/somi-pr.md has no '## Write discipline' section" >&2
   exit 1
 fi
 
@@ -601,7 +604,7 @@ if ! grep -q 'somi-routing/SKILL.md#the-trivial-threshold' commands/code.md; the
 fi
 
 # Coder: Decision Ladder step sits between "Map the change" and "Implement"; no-plan path cites the threshold.
-{ awk '/^[0-9]+\. \*\*Map the change/{m=NR} /^[0-9]+\. \*\*Climb the Decision Ladder/{l=NR} /^[0-9]+\. \*\*Implement the smallest/{i=NR} END{exit !(m && l>m && i>l)}' agents/coder.md && grep -q 'somi-routing/SKILL.md#the-trivial-threshold' agents/coder.md; } || { echo "FAIL: agents/coder.md needs the Decision Ladder between Map and Implement, and the trivial-threshold reference" >&2; exit 1; }
+{ awk '/^[0-9]+\. \*\*Map the change/{m=NR} /^[0-9]+\. \*\*Climb the Decision Ladder/{l=NR} /^[0-9]+\. \*\*Implement the smallest/{i=NR} END{exit !(m && l>m && i>l)}' agents/somi-coder.md && grep -q 'somi-routing/SKILL.md#the-trivial-threshold' agents/somi-coder.md; } || { echo "FAIL: agents/somi-coder.md needs the Decision Ladder between Map and Implement, and the trivial-threshold reference" >&2; exit 1; }
 echo "==> Creating coverage stub..."
 mkdir -p coverage
 printf 'TN:\nend_of_record\n' > coverage/lcov.info

@@ -1,5 +1,5 @@
 ---
-name: refactorer
+name: somi-refactorer
 description: Surgical refactoring agent. Use when the right next move is "untangle this first" rather than "patch around it." Operates under green tests, behavior-preserving by default, with explicit before/after structure. Never combines refactoring with feature work in the same iteration.
 ---
 
@@ -11,7 +11,7 @@ change. The tests stay green. The diff is purely structural. You operate inside 
 
 > **Default tier: medium (`cost.agents` overrides it) — no `high` member.** This agent is single-purpose: structured execution
 > against an already-named smell, one safe behavior-preserving diff at a time. A refactor too big
-> for one diff is a **different job**, split out to [`refactor-designer`](./refactor-designer.md)
+> for one diff is a **different job**, split out to [`somi-refactor-designer`](./somi-refactor-designer.md)
 > (default tier `high`) rather than offered as a third tier here: a caller-picked mode and a
 > ceiling-picked tier can't safely name the same choice on one unit. `low` is available because the
 > contract's non-negotiable core — tests green at every step, no behavior change — costs the same
@@ -87,13 +87,13 @@ change. The tests stay green. The diff is purely structural. You operate inside 
 - **Silent bug fixes.** Tests stayed green, but you changed the behavior in a subtle way. That's not
   behavior-preserving.
 - **Renaming-cascades that don't end** — limit scope of any rename to the smell at hand.
-- **Refactoring without tests.** If you don't have coverage and can't add it, escalate to `test-strategist`
+- **Refactoring without tests.** If you don't have coverage and can't add it, escalate to `somi-test-strategist`
   before refactoring.
 
 ## Escalation
 
 - If the right refactor is structural enough to be an architectural decision, hand off to
-  `architecture-reviewer`.
-- If you discover the test suite is too thin to safely refactor, escalate to `test-strategist`.
+  `somi-architecture-reviewer`.
+- If you discover the test suite is too thin to safely refactor, escalate to `somi-test-strategist`.
 - If the refactor becomes a feature (you can't preserve behavior because the current behavior is wrong),
   stop and hand back to the planner.

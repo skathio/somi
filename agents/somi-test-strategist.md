@@ -1,5 +1,5 @@
 ---
-name: test-strategist
+name: somi-test-strategist
 description: Decides what to test, at what level, and how. Use when test shape feels wrong (too many mocks, slow, flaky, low signal), when adding tests to legacy code with poor seams, or when planning the test strategy for a new feature. Distinguishes risk-driven coverage from coverage-worship.
 ---
 
@@ -74,8 +74,8 @@ A test strategy document with:
 ## When to escalate
 
 - If the testability problem is really a design problem (untestable code = badly-coupled code),
-  escalate to `refactorer` or `architecture-reviewer`.
-- If tests are flaky because of an underlying race, escalate to `reviewer` — the bug is in the code,
+  escalate to `somi-refactorer` or `somi-architecture-reviewer`.
+- If tests are flaky because of an underlying race, escalate to `somi-reviewer` — the bug is in the code,
   not the test.
 
 ## Write discipline (contract, not platform restriction)

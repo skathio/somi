@@ -9,22 +9,22 @@ re-researching. See [Cost tiering](#cost-tiering) below.
 
 | Agent                                                        | Default tier   | When                                                                  |
 |--------------------------------------------------------------|----------------|-----------------------------------------------------------------------|
-| [`discovery-analyst`](../agents/discovery-analyst.md)        | `high`         | New product / greenfield idea, before planning; requirements + research |
-| [`designer`](../agents/designer.md)                          | `high`         | Design-heavy feature / user story on an existing codebase, before planning |
-| [`atlas`](../agents/atlas.md)                                | `high`         | Build or refresh the repo-level map (`.somi/atlas.md`) that later design actions read first |
-| [`refactorer`](../agents/refactorer.md)                      | `medium`       | The next change needs untangling first, contained to one safe behavior-preserving diff |
-| [`refactor-designer`](../agents/refactor-designer.md)        | `high`         | The untangle spans many modules / needs a migration — too big for one diff; designs scope + brief |
-| [`reviewer`](../agents/reviewer.md)                          | `high`         | Before merge; whenever you want a skeptical second opinion            |
-| [`security-reviewer`](../agents/security-reviewer.md)        | `high`         | Auth, crypto, secrets, input validation, deserialization, file uploads |
-| [`architecture-reviewer`](../agents/architecture-reviewer.md)| `high`         | New module/service/contract; dependency direction change              |
-| [`plan-reviewer`](../agents/plan-reviewer.md)                | `high`         | An independent read of a plan, brief, or ADR before it is approved or executed |
-| [`sdlc-reviewer`](../agents/sdlc-reviewer.md)                | `high`         | Audit that progress, diary, decisions, and findings match the repository |
-| [`test-strategist`](../agents/test-strategist.md)            | `high`         | Test shape feels wrong; deciding unit vs. integration; flake debugging |
-| [`planner`](../agents/planner.md)                            | `medium`       | Non-trivial change; sequence the design (brief) into phases           |
-| [`coder`](../agents/coder.md)                                | `medium`       | Executing against an approved plan + brief; small, well-scoped tasks  |
-| [`impact`](../agents/impact.md)                              | `medium`       | Blast-radius mapping before committing to `/design` or `/plan`; lens selection for a diff |
-| [`pr`](../agents/pr.md)                                       | `medium`       | Compose a PR title + description from a work item's artifacts         |
-| [`incident`](../agents/incident.md)                          | `medium`       | Mitigate + mandatory debt capture once an incident is framed          |
+| [`somi-discovery-analyst`](../agents/somi-discovery-analyst.md)        | `high`         | New product / greenfield idea, before planning; requirements + research |
+| [`somi-designer`](../agents/somi-designer.md)                          | `high`         | Design-heavy feature / user story on an existing codebase, before planning |
+| [`somi-atlas`](../agents/somi-atlas.md)                                | `high`         | Build or refresh the repo-level map (`.somi/atlas.md`) that later design actions read first |
+| [`somi-refactorer`](../agents/somi-refactorer.md)                      | `medium`       | The next change needs untangling first, contained to one safe behavior-preserving diff |
+| [`somi-refactor-designer`](../agents/somi-refactor-designer.md)        | `high`         | The untangle spans many modules / needs a migration — too big for one diff; designs scope + brief |
+| [`somi-reviewer`](../agents/somi-reviewer.md)                          | `high`         | Before merge; whenever you want a skeptical second opinion            |
+| [`somi-security-reviewer`](../agents/somi-security-reviewer.md)        | `high`         | Auth, crypto, secrets, input validation, deserialization, file uploads |
+| [`somi-architecture-reviewer`](../agents/somi-architecture-reviewer.md)| `high`         | New module/service/contract; dependency direction change              |
+| [`somi-plan-reviewer`](../agents/somi-plan-reviewer.md)                | `high`         | An independent read of a plan, brief, or ADR before it is approved or executed |
+| [`somi-sdlc-reviewer`](../agents/somi-sdlc-reviewer.md)                | `high`         | Audit that progress, diary, decisions, and findings match the repository |
+| [`somi-test-strategist`](../agents/somi-test-strategist.md)            | `high`         | Test shape feels wrong; deciding unit vs. integration; flake debugging |
+| [`somi-planner`](../agents/somi-planner.md)                            | `medium`       | Non-trivial change; sequence the design (brief) into phases           |
+| [`somi-coder`](../agents/somi-coder.md)                                | `medium`       | Executing against an approved plan + brief; small, well-scoped tasks  |
+| [`somi-impact`](../agents/somi-impact.md)                              | `medium`       | Blast-radius mapping before committing to `/design` or `/plan`; lens selection for a diff |
+| [`somi-pr`](../agents/somi-pr.md)                                       | `medium`       | Compose a PR title + description from a work item's artifacts         |
+| [`somi-incident`](../agents/somi-incident.md)                          | `medium`       | Mitigate + mandatory debt capture once an incident is framed          |
 | [`somi`](../agents/somi.md)                                   | none           | GitHub Copilot session persona — not phase-specific; classifies the request and dispatches to whichever of the others fits (see "The front-door agent" below) |
 
 ## How agents get invoked
@@ -34,7 +34,7 @@ Three paths:
 1. **User invokes a command** (`/plan`, `/code`, `/review`) → command calls the corresponding
    core agent.
 2. **A core agent escalates** during its work — e.g., coder hits auth code and asks whether to
-   consult `security-reviewer`.
+   consult `somi-security-reviewer`.
 3. **User invokes a specialised command** (`/security-review`, `/architecture-review`,
    `/test-strategy`, `/refactor`) which directly targets a support agent. (Plan-level review
    uses `/review plan <slug>` — there is no separate `/plan-review`.)
@@ -52,7 +52,7 @@ agent references the skill somewhere in its own text, failing the build otherwis
 
 ## The discovery agent
 
-### discovery-analyst
+### somi-discovery-analyst
 
 Pre-development requirements engineering + competitive research + high-level software design, rolled
 into one. Turns a raw idea into the `.somi/rd/<slug>/` document set (research report, BRD, SRS, FRD,
@@ -77,10 +77,10 @@ non-obvious claim and never fabricates. Respects the **design-depth boundary**: 
 Invoke directly via `/discover`. Optional and upstream — incremental work with settled requirements
 goes straight to `/plan`.
 
-### designer
+### somi-designer
 
 Feature / user-story design at **`cost: high`**, against an **existing codebase**. Fills the gap
-between `discovery-analyst` (a whole new product) and `planner` (sequencing): when a requirement is
+between `somi-discovery-analyst` (a whole new product) and `somi-planner` (sequencing): when a requirement is
 clear but the architecture against this repo is not, the designer reads the codebase deeply, resolves
 the expensive-to-reverse decisions with the user (same verification protocol as the planner), maps
 the complexity hotspots, and compiles a dense [`brief.md`](../templates/BRIEF.md.tmpl) plus a
@@ -98,7 +98,7 @@ the complexity hotspots, and compiles a dense [`brief.md`](../templates/BRIEF.md
 
 Invoke directly via `/design`. Use *before* `/plan` when the architecture isn't settled.
 
-### atlas
+### somi-atlas
 
 One deep read of the whole repository, distilled into **`.somi/atlas.md`** (module map, dependency
 rules, conventions digest, hotspots, test topology) — the repo-level counterpart to `brief.md`:
@@ -117,7 +117,7 @@ Invoke directly via `/atlas`, or as `/adopt`'s Stage 1.
 
 ## The build agents
 
-### planner
+### somi-planner
 
 Staff-engineer-grade planning. Produces the `.somi/plans/<slug>/` artifact set (context, spec,
 decisions, progress, diary, phases). Pauses for **user verification** on every architectural or
@@ -128,7 +128,7 @@ questions) as escape hatches.
 - **Default tier**: `medium` (`low` opt-in) — planning is *sequencing an already-compiled design*, not
   open-ended research. When a design action ran upstream, the planner consumes its `brief.md` and
   slices it into phases. For a cold, design-heavy plan with no brief, the planner runs a **depth
-  gate** and recommends `/design` (Tasks `designer` at its default tier `high`) first. `low` still produces
+  gate** and recommends `/design` (Tasks `somi-designer` at its default tier `high`) first. `low` still produces
   the full artifact set (and still keeps the false-premise/contradiction checks, the depth gate,
   and `Pros`/`Cons`/`Reverses` on the recommended option) but trims the alternatives comparison and
   Discovery mode's guided flow — selected for a `low` ceiling (flag, env var, `cost.ceiling`, or one
@@ -141,7 +141,7 @@ questions) as escape hatches.
   request's premise** (false premise, XY problem, contradiction, already-solved need) before planning
   and pause if it doesn't hold.
 
-### coder
+### somi-coder
 
 Elite implementation. Executes against the plan with senior-level design judgment. Updates
 `progress.md`, the phase file, and `diary.md` as it works. Follows the **plan-change protocol**
@@ -162,7 +162,7 @@ appends a diary entry, surfaces to the user before continuing.
 - **Will**: stop and trigger the plan-change protocol if the planned approach is producing bad
   code or hits an unforeseen constraint.
 
-### reviewer
+### somi-reviewer
 
 Strict, skeptical, evidence-driven. Reviews code, plans (the `.somi/plans/<slug>/` artifact set), or
 architectural proposals. Checks plan-vs-code alignment: did the diff stay within scope, did
@@ -182,7 +182,7 @@ Severity-graded findings, will reject weak solutions.
 
 ## The support agents
 
-### security-reviewer
+### somi-security-reviewer
 
 OWASP-Top-10-lens audit. Trust-boundary-to-sink walks. Findings include **attack paths** in plain
 language (preconditions, what gets executed, what the attacker gains), not just CVE-name dropping.
@@ -195,7 +195,7 @@ territory (the reviewer auto-invokes when the consultant-trigger table fires).
   [`threat-modeling`](../skills/threat-modeling/SKILL.md) skills — on a technique divergence, the
   skill wins. The agent owns the actor role (when/how to trace, what to produce).
 
-### architecture-reviewer
+### somi-architecture-reviewer
 
 Structural decisions — new module/service, dependency direction, public-contract introduction,
 ADR review. Time horizon is years; reversibility is a first-class concern.
@@ -208,7 +208,7 @@ contract/module/service (the consultant-trigger table auto-invokes).
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`api-design`](../skills/api-design/SKILL.md) skills — skill wins on divergence.
 
-### plan-reviewer
+### somi-plan-reviewer
 
 An independent context window on a plan: premise, user-verified decisions with real options and a
 reversal cost, iteration sizing, concrete risks, and acceptance criteria that can actually fail.
@@ -218,7 +218,7 @@ Read-only; returns severity-graded findings.
 - **Canonical knowledge**: the [`plan-review`](../skills/plan-review/SKILL.md) skill — skill wins on
   divergence.
 
-### sdlc-reviewer
+### somi-sdlc-reviewer
 
 An independent audit of a work item's paper trail against the repository: `progress.md` accuracy,
 diary entries and compaction, decisions recorded before acted on, findings resolved by id, nothing
@@ -228,7 +228,7 @@ shipped that points into the planning folder. Read-only; returns severity-graded
 - **Canonical knowledge**: the [`sdlc-process`](../skills/sdlc-process/SKILL.md) skill — skill wins
   on divergence.
 
-### test-strategist
+### somi-test-strategist
 
 Decides what to test, at what level, and how. Distinguishes risk-driven coverage from
 coverage-worship. Identifies when the test shape is a *design* problem.
@@ -241,14 +241,14 @@ e2e-only-on-risky-code symptoms.
 - **Canonical knowledge**: the [`testing-playbook`](../skills/testing-playbook/SKILL.md) skill — skill wins
   on divergence.
 
-### refactorer
+### somi-refactorer
 
 Surgical, behavior-preserving structure changes. Tests stay green at every step. No feature work
 mixed in. Returns the codebase to a state where the next planned change is easy.
 
 - **Default tier**: `medium` (`low` opt-in) — no `high` member. Structured execution against an already-named
   smell, one safe diff at a time. A refactor too big for one diff is a different job, split out to
-  `refactor-designer` below rather than declared as a third tier here — a caller-picked mode and a
+  `somi-refactor-designer` below rather than declared as a third tier here — a caller-picked mode and a
   ceiling-picked tier can't safely name the same choice on one unit. `low` keeps the
   behavior-preservation contract (tests green after every individual transform, no behavior change)
   intact and trims commit granularity (batching mechanical steps only) plus the search for further
@@ -258,13 +258,13 @@ mixed in. Returns the codebase to a state where the next planned change is easy.
 - **Canonical knowledge**: the [`solid-principles`](../skills/solid-principles/SKILL.md) and
   [`clean-code`](../skills/clean-code/SKILL.md) skills — skill wins on divergence.
 
-### refactor-designer
+### somi-refactor-designer
 
 Front-loaded scope design for a refactor too big for one safe diff — it spans many modules, needs
 a migration, or changes a shared shape. Names the destination shape, maps seams and risks with
 `file:line` pointers, confirms test-coverage gaps, and compiles the
 [`brief.md`](../templates/BRIEF.md.tmpl) that `/plan-loop` → `/code-loop` execute against. The
-`refactorer`/`refactor-designer` split (mirrors `planner`/`designer`'s naming) exists because the
+`somi-refactorer`/`somi-refactor-designer` split (mirrors `somi-planner`/`somi-designer`'s naming) exists because the
 two jobs — surgical execution and scope design — have different requirements and cannot share one
 default tier.
 
@@ -274,7 +274,7 @@ default tier.
 - **Won't**: edit code; ship an empty brief; pick the destination shape or migration approach
   silently.
 - **Will**: reuse `.somi/atlas.md` when a fresh one exists rather than re-reading the repo; hand
-  off to `architecture-reviewer` or `test-strategist` when the destination or coverage gap needs
+  off to `somi-architecture-reviewer` or `somi-test-strategist` when the destination or coverage gap needs
   it.
 
 Invoke directly via `/refactor-design`. Use instead of `/refactor` when the target needs more than
@@ -282,7 +282,7 @@ one reviewable diff to reach its destination.
 
 ## The utility agents
 
-### impact
+### somi-impact
 
 Read-only change-impact analysis. Given a proposed change, a file/symbol, or a diff, maps the
 blast radius — callers/consumers, contracts crossed, test coverage, migration surface — atlas-first
@@ -293,7 +293,7 @@ when a fresh one exists, and recommends proceed / design-first / reconsider. Fee
   deliverable is the proceed/design-first/reconsider verdict and, in diff mode, the review-lens
   selection. A reduced-depth pass would undercount the blast radius (skipped indirect/dynamic
   tracing) and can return a false "proceed, small" with nothing downstream to re-check it, or drop
-  a warranted lens that then never runs — the same false-pass failure that keeps `reviewer` and the
+  a warranted lens that then never runs — the same false-pass failure that keeps `somi-reviewer` and the
   other judges off `low`. No `high` member either: even the full-depth pass is mechanical tracing
   over an already-written call graph, never open-ended research.
 - **Won't**: fix anything, scaffold artifacts, write unless asked to keep the report.
@@ -303,7 +303,7 @@ when a fresh one exists, and recommends proceed / design-first / reconsider. Fee
 Invoke directly via `/impact`. Use before committing to `/design` or `/plan` when the cost of a
 change is the open question.
 
-### pr
+### somi-pr
 
 Composes a PR title + description from a work item's `.somi/plans/<slug>/` artifacts (spec/rca,
 verified decisions, progress, review verdicts, open findings, diary highlights). Returns the
@@ -318,7 +318,7 @@ composed markdown; never opens the PR itself.
 Invoke via `/pr`. The calling command shows the composed output to the user and gets confirmation
 before publishing anything.
 
-### incident
+### somi-incident
 
 Runs the mitigate-then-account half of the incident lane, once `/incident`'s Stage 1 has framed
 the incident (impact, timeline, slug, scaffolded `diary.md` + `progress.md`). Mitigates via flag
@@ -392,10 +392,10 @@ one-file change.
 
 | Default tier | Agents | What it does |
 |------|--------|--------------|
-| **`high`** (no lower member) | `discovery-analyst`, `designer`, `security-reviewer`, `refactor-designer`, `atlas` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it (`atlas` front-loads a repo map instead of a work-item brief) |
-| **`high`** (also runs at `medium`; graded over one job) | `reviewer`, `architecture-reviewer`, `test-strategist`, `plan-reviewer`, `sdlc-reviewer` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept — the opt-in bar for `low` below does not extend to these: a weaker judge produces a false pass, not merely a lighter one |
-| **`medium`** (no lower or higher member) | `incident`, `impact` | `incident` executes against an already-framed incident without re-researching; every job is a live outage, so there is no lighter version of the mitigation/debt-capture call to make honestly. `impact` is a judge, reverted here from a `low` member: its verdict and (in diff mode) its review-lens selection would produce a false pass at reduced depth, and its full-depth pass is already mechanical call-graph tracing rather than open-ended design, so `high` buys nothing either |
-| **`medium`** (also runs at `low`; graded over one job) | `coder`, `planner`, `refactorer`, `pr` | `pr` grades one job over two depths — a fuller pass adds house-style matching, never required for correctness. The other three widened downward: `low` is a reduced-depth pass (each agent's own "Running at `low`" section names its trims), selected for a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a `cost.agents` entry of `low`, with the ceiling and its source announced before the first agent it applies to starts on every entry path — so the quality drop is a trade the user can see, not one made for them unseen |
+| **`high`** (no lower member) | `somi-discovery-analyst`, `somi-designer`, `somi-security-reviewer`, `somi-refactor-designer`, `somi-atlas` | Front-loads research, design, decisions, and complexity mapping into a `brief.md` — every job these agents accept needs it (`somi-atlas` front-loads a repo map instead of a work-item brief) |
+| **`high`** (also runs at `medium`; graded over one job) | `somi-reviewer`, `somi-architecture-reviewer`, `somi-test-strategist`, `somi-plan-reviewer`, `somi-sdlc-reviewer` | Provides fresh-eyes review at either depth; neither is insufficient for any input these agents accept — the opt-in bar for `low` below does not extend to these: a weaker judge produces a false pass, not merely a lighter one |
+| **`medium`** (no lower or higher member) | `somi-incident`, `somi-impact` | `somi-incident` executes against an already-framed incident without re-researching; every job is a live outage, so there is no lighter version of the mitigation/debt-capture call to make honestly. `somi-impact` is a judge, reverted here from a `low` member: its verdict and (in diff mode) its review-lens selection would produce a false pass at reduced depth, and its full-depth pass is already mechanical call-graph tracing rather than open-ended design, so `high` buys nothing either |
+| **`medium`** (also runs at `low`; graded over one job) | `somi-coder`, `somi-planner`, `somi-refactorer`, `somi-pr` | `somi-pr` grades one job over two depths — a fuller pass adds house-style matching, never required for correctness. The other three widened downward: `low` is a reduced-depth pass (each agent's own "Running at `low`" section names its trims), selected for a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a `cost.agents` entry of `low`, with the ceiling and its source announced before the first agent it applies to starts on every entry path — so the quality drop is a trade the user can see, not one made for them unseen |
 
 `somi` has no table entry — exempt, not a fifth `medium` member: the host binds the model
 when the user selects the agent, so a default tier here would control nothing. The table is
@@ -420,7 +420,7 @@ orchestrator is the cache-correct way to mix costs — the orchestrator's own pr
 intact while the subagent runs on its own tier. (Prompt caches are model-scoped, so the
 brief handoff is also a natural cache boundary.) **`/atlas` Tasks a `high`-default agent
 for its entire job** — the deep repo read is the whole task, so there is nothing left for the
-command to do at a different tier; `/adopt` Tasks that same `atlas` agent as its own Stage 1.
+command to do at a different tier; `/adopt` Tasks that same `somi-atlas` agent as its own Stage 1.
 **`/discover`, `/design`, and `/refactor-design` Task a `high`-default agent for the judgment-heavy
 core of their work** (their `brief.md` anchors the whole work item, so nothing about that core
 needs a lower tier) **but each keeps real work command-side**: scaffolding the artifact set, and
@@ -525,6 +525,6 @@ narrowing questions that power Discover mode); the command presents each decisio
 re-invokes the agent in **authoring mode** with a `VERIFIED-DECISIONS` block appended (append-only,
 so the stable briefing prefix stays cache-warm). Only then are decisions recorded with
 `Verified with user: yes` — an agent never marks a decision user-verified in the same pass that
-generated it. The same mechanics apply to `designer` and `discovery-analyst`.
+generated it. The same mechanics apply to `somi-designer` and `somi-discovery-analyst`.
 
-See [`agents/planner.md`](../agents/planner.md) for the full protocol, the block shapes, and examples.
+See [`agents/somi-planner.md`](../agents/somi-planner.md) for the full protocol, the block shapes, and examples.

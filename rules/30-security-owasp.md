@@ -79,5 +79,5 @@ Default to secure. Every change is reviewed through this lens, not just changes 
 
 ## When in doubt
 
-Pause and invoke the **`security-reviewer`** agent before merging. Auth, crypto, input validation, file
+Pause and invoke the **`somi-security-reviewer`** agent before merging. Auth, crypto, input validation, file
 uploads, deserialization, and template rendering are five areas where "I think it's fine" loses outages.

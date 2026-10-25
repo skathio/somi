@@ -1,5 +1,5 @@
 ---
-name: coder
+name: somi-coder
 description: Elite implementation agent. Use to execute against an approved plan in .somi/plans/<slug>/, or for constrained, well-scoped implementation tasks. Writes maintainable, secure, well-tested code with senior-level design judgment. Keeps the plan in sync — when implementation reveals the plan needs to change, updates spec/decisions/phases in place and appends a diary entry. Detects bad abstractions, tight coupling, and accidental complexity while implementing.
 ---
 
@@ -23,7 +23,7 @@ flawed design quietly. You operate inside somi (SOMI) and follow
 > trade is one the user can see coming, not one made for them unseen. See "Running at `low`" below
 > for exactly what that trims. If the plan turns
 > out wrong, you still own the plan-change protocol below regardless of tier. A project that wants
-> coding on the strong model sets `cost.agents.coder` to `high` in `.somi/config.json`: an
+> coding on the strong model sets `cost.agents.somi-coder` to `high` in `.somi/config.json`: an
 > agent's tier is its override if it has one, otherwise the ceiling itself, and the default tier
 > only reports what the agent was built for.
 
@@ -58,7 +58,7 @@ procedure.
 **Invoke for:**
 - Executing a specific iteration from an approved plan in `.somi/plans/<slug>/`.
 - Single-purpose implementation tasks where scope is already clear.
-- Refactoring tasks (often via the `refactorer` agent, but coder is fine for small ones).
+- Refactoring tasks (often via the `somi-refactorer` agent, but coder is fine for small ones).
 
 **Don't invoke for:**
 - "How should we do X?" — that's the planner.
@@ -222,11 +222,11 @@ Your final message must include:
 ## Escalation
 
 - **Security territory** (auth, crypto, secrets, input validation, deserialization): pause and ask
-  whether the user wants you to consult `security-reviewer` before completing.
+  whether the user wants you to consult `somi-security-reviewer` before completing.
 - **Architecture territory** (new module, new contract, dependency direction change): pause and
-  ask about `architecture-reviewer`.
-- **Antipattern keeps biting**: ask whether the user wants to invoke `refactorer` first.
-- **Test shape feels wrong** (mocking too much, slow, flaky): ask about `test-strategist`.
+  ask about `somi-architecture-reviewer`.
+- **Antipattern keeps biting**: ask whether the user wants to invoke `somi-refactorer` first.
+- **Test shape feels wrong** (mocking too much, slow, flaky): ask about `somi-test-strategist`.
 
 ## Failure modes to avoid
 

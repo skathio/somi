@@ -52,7 +52,7 @@ reject_case "an unknown cost key"       '{"cost":{"cieling":"low"}}'            
 reject_case "a constructor agent name"  '{"cost":{"agents":{"constructor":"low"}}}' forbidden   'forbidden agent name "constructor"'
 reject_case "a prototype agent name"    '{"cost":{"agents":{"prototype":"low"}}}'   forbidden   'forbidden agent name "prototype"'
 reject_case "a malformed agent name"    '{"cost":{"agents":{"Bad_Name":"low"}}}'    name        'invalid agent name'
-reject_case "a bad tier"                '{"cost":{"agents":{"coder":"turbo"}}}'     tier        'cost.agents.coder expected one of'
+reject_case "a bad tier"                '{"cost":{"agents":{"somi-coder":"turbo"}}}'     tier        'cost.agents.somi-coder expected one of'
 reject_case "a non-object agents map"   '{"cost":{"agents":5}}'             agents-type 'cost.agents'
 
 # __proto__ is an own key after JSON.parse. Both the allowlist and the name regex already reject it,
@@ -71,7 +71,7 @@ reject_msg "agents: [] is rejected"                    '{"cost":{"agents":[]}}' 
 case "$(verdict "$LIB_SRC" "{\"cost\":{\"$(printf 'x%.0s' $(seq 1 300))\":1}}")" in
   *"..."*) ok "a long unknown key is truncated in the message" ;; *) bad "a long unknown key is truncated in the message" ;; esac
 
-case "$(verdict "$LIB_SRC" '{"cost":{"ceiling":"medium","mapping":{},"agents":{"coder":"medium","security-reviewer":"high"}}}')" in
+case "$(verdict "$LIB_SRC" '{"cost":{"ceiling":"medium","mapping":{},"agents":{"somi-coder":"medium","somi-security-reviewer":"high"}}}')" in
   ok) ok "accepts ceiling, mapping and an agents map together" ;; *) bad "accepts ceiling, mapping and an agents map together" ;; esac
 case "$(verdict "$LIB_SRC" '{"cost":{"agents":{}}}')" in ok) ok "accepts an empty agents map" ;; *) bad "accepts an empty agents map" ;; esac
 
@@ -118,31 +118,31 @@ cli() { local r="$1"; shift; CLAUDE_PROJECT_DIR="$r" env -u SOMI_COST_CEILING no
 field() { node -e "const r=JSON.parse(process.argv[1]); const v=r[process.argv[2]]; process.stdout.write(Array.isArray(v)?v.join('|'):String(v))" "$1" "$2"; }
 
 P="$(proj '{"cost":{"ceiling":"low"}}')"
-out="$(cli "$P" --agent designer)"
+out="$(cli "$P" --agent somi-designer)"
 eq "CLI: high-only designer, ceiling low, no override -> tier low" "$(field "$out" tier)" "low"
 eq "CLI: ... degraded true"  "$(field "$out" degraded)" "true"
 eq "CLI: ... declared [high]" "$(field "$out" declared)" "high"
 eq "CLI: ... tier_source ceiling" "$(field "$out" tier_source)" "ceiling"
 eq "CLI: ... supported still reported" "$(field "$out" supported)" "high"
 
-P="$(proj '{"cost":{"ceiling":"low","agents":{"designer":"high"}}}')"
-out="$(cli "$P" --agent designer)"
-eq "CLI: cost.agents.designer=high beats ceiling low -> tier high" "$(field "$out" tier)" "high"
+P="$(proj '{"cost":{"ceiling":"low","agents":{"somi-designer":"high"}}}')"
+out="$(cli "$P" --agent somi-designer)"
+eq "CLI: cost.agents.somi-designer=high beats ceiling low -> tier high" "$(field "$out" tier)" "high"
 eq "CLI: ... tier_source override" "$(field "$out" tier_source)" "override"
 eq "CLI: ... not degraded" "$(field "$out" degraded)" "false"
-out="$(cli "$P" --agent coder)"
+out="$(cli "$P" --agent somi-coder)"
 eq "CLI: an agent with no override (coder, declared low|medium) resolves to the ceiling" "$(field "$out" tier)" "low"
 eq "CLI: ... tier_source ceiling" "$(field "$out" tier_source)" "ceiling"
 
 P="$(proj '{"cost":{"ceiling":"high"}}')"
-out="$(cli "$P" --agent coder)"
+out="$(cli "$P" --agent somi-coder)"
 eq "CLI: ceiling above the declared set -> the ceiling (high), not degraded" "$(field "$out" tier)/$(field "$out" degraded)" "high/false"
 
-P="$(proj '{"cost":{"agents":{"designer":"turbo"}}}')"; rc=0
-cli "$P" --agent designer >/dev/null 2>&1 || rc=$?
+P="$(proj '{"cost":{"agents":{"somi-designer":"turbo"}}}')"; rc=0
+cli "$P" --agent somi-designer >/dev/null 2>&1 || rc=$?
 eq "CLI: a bad override value exits 67" "$rc" "67"
 P="$(proj '{"cost":{"agents":{"nonexistent-agent":"high"}}}')"; rc=0
-cli "$P" --agent coder >/dev/null 2>&1 || rc=$?
+cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
 eq "CLI: an unknown agent name in cost.agents is not an error" "$rc" "0"
 
 # An agent file literally named "constructor" has no default-tier table entry, so it is 66: the null-prototype
@@ -150,7 +150,7 @@ eq "CLI: an unknown agent name in cost.agents is not an error" "$rc" "0"
 # resolveDispatch by construction: the table lookup fails first.)
 INST="$TMP/inst"; mkdir -p "$INST/agents"
 printf -- '---\nname: constructor\n---\n' > "$INST/agents/constructor.md"
-P="$(proj '{"cost":{"ceiling":"low","agents":{"coder":"high"}}}')"
+P="$(proj '{"cost":{"ceiling":"low","agents":{"somi-coder":"high"}}}')"
 eq "resolver: --agent constructor (no table entry) is 66 and names the default tier table, not an inherited value" \
   "$(node --input-type=module -e "
     const R = await import('$LIB_SRC/dispatch-resolver.mjs');
@@ -166,12 +166,12 @@ eq "resolver re-exports the one AGENT_NAME_RE from cost-config" \
 # ---- size cap on .somi/config.json (spec section 8) --------------------------------------------
 big() { printf '{"cost":{"ceiling":"low"},"pad":"'; head -c "$1" /dev/zero | tr '\0' 'x'; printf '"}'; }
 P="$(proj)"; big 70000 > "$P/.somi/config.json"; rc=0
-cli "$P" --agent coder >/dev/null 2>&1 || rc=$?
+cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
 eq "an oversize config.json (70000 bytes) exits 67 through the CLI" "$rc" "67"
 eq "... and the message names the byte limit" \
-  "$(cli "$P" --agent coder 2>&1 | grep -c 'byte limit')" "1"
+  "$(cli "$P" --agent somi-coder 2>&1 | grep -c 'byte limit')" "1"
 P="$(proj)"; big 60000 > "$P/.somi/config.json"; rc=0
-cli "$P" --agent coder >/dev/null 2>&1 || rc=$?
+cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
 eq "a config.json under the cap (60000 bytes) is still read" "$rc" "0"
 # Red proof: raise the cap in a copy and the oversize file is accepted.
 mkdir -p "$TMP/nocap"; cp "$LIB_SRC"/cost-*.mjs "$TMP/nocap/"
@@ -185,21 +185,21 @@ eq "red proof (size cap): without the cap the 70000-byte file is read" \
 # ---- the read is fd-based: boundary sizes, symlinks refused, non-regular files refused ----------
 exact() { local pre='{"cost":{"ceiling":"low"},"pad":"' suf='"}'; printf '%s' "$pre"; head -c "$(( $1 - ${#pre} - ${#suf} ))" /dev/zero | tr '\0' 'x'; printf '%s' "$suf"; }
 P="$(proj)"; exact 65536 > "$P/.somi/config.json"; rc=0
-cli "$P" --agent coder >/dev/null 2>&1 || rc=$?
+cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
 eq "a config.json of exactly 65536 bytes is accepted" "$rc" "0"
 P="$(proj)"; exact 65537 > "$P/.somi/config.json"; rc=0
-cli "$P" --agent coder >/dev/null 2>&1 || rc=$?
+cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
 eq "a config.json of 65537 bytes is rejected with 67" "$rc" "67"
 
 P="$(proj)"; ln -s /dev/zero "$P/.somi/config.json"; rc=0
-timeout 10 env CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$CLI" resolve --agent coder >"$TMP/sym.out" 2>"$TMP/sym.err" || rc=$?
+timeout 10 env CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-coder >"$TMP/sym.out" 2>"$TMP/sym.err" || rc=$?
 eq "a config.json symlink to /dev/zero is rejected quickly with 67 (no timeout)" "$rc" "67"
 eq "... and the message says it refuses a symlink" "$(grep -c 'symlink' "$TMP/sym.err")" "1"
 P="$(proj '{"cost":{"ceiling":"low"}}')"; mv "$P/.somi/config.json" "$P/real.json"; ln -s ../real.json "$P/.somi/config.json"; rc=0
-cli "$P" --agent coder >/dev/null 2>&1 || rc=$?
+cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
 eq "a symlink to an ordinary valid config is refused too" "$rc" "67"
 P="$(proj)"; mkdir "$P/.somi/config.json"; rc=0
-cli "$P" --agent coder >"$TMP/dir.out" 2>"$TMP/dir.err" || rc=$?
+cli "$P" --agent somi-coder >"$TMP/dir.out" 2>"$TMP/dir.err" || rc=$?
 eq "a config.json that is a directory is rejected with 67" "$rc" "67"
 
 verdict_file() { # $1 = lib dir, $2 = project root -> ok | reject: msg
@@ -294,7 +294,7 @@ clean_msg "an unparsable state file" "$(resolve_msg "$P")"
 
 # A symlink at ceiling.json is refused on read (67)...
 P="$(pj '' '')"; echo KEEP > "$TMP/victim.txt"; ln -s "$TMP/victim.txt" "$P/.somi/somi-state/ceiling.json"
-rc=0; CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$CLI" resolve --agent coder --ceiling low >/dev/null 2>&1 || rc=$?
+rc=0; CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-coder --ceiling low >/dev/null 2>&1 || rc=$?
 eq "resolve --ceiling over a symlinked state path exits 67" "$rc" "67"
 eq "... and the symlink target was never modified" "$(cat "$TMP/victim.txt")" "KEEP"
 # ...and one planted between the read and the write is replaced by the atomic rename, not followed.

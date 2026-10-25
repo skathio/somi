@@ -71,7 +71,7 @@ export function lowers(before, after, root) {
   const worst = (name) => decideDispatch(AGENT_DEFAULT_TIERS[name] ?? 'low', 'low', undefined).selected;
   if (a.json === b.json) return { lowers: false, reasons: [] };
   const reasons = new Set();
-  if (rank(a.tier('security-reviewer')) < rank('high')) reasons.add(REASONS.security);
+  if (rank(a.tier('somi-security-reviewer')) < rank('high')) reasons.add(REASONS.security);
   if (rank(a.ceiling) < rank(b.ceiling) || (ceilingGone && rank(b.ceiling) > rank('low'))) reasons.add(REASONS.ceiling);
   const noCeiling = !(isObj(after.cost) && VALID_COSTS.includes(after.cost.ceiling));
   for (const name of new Set([...Object.keys(AGENT_DEFAULT_TIERS), ...b.names, ...a.names])) {

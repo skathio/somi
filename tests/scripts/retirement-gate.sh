@@ -276,7 +276,7 @@ COSTCLAIM="$TMP/costclaim"; mkdir -p "$COSTCLAIM/docs"
 printf '%s\n' 'The coder declares `cost: medium` in its frontmatter.' > "$COSTCLAIM/docs/a.md"
 printf '%s\n' 'The reviewer is graded as cost: medium, high.' > "$COSTCLAIM/docs/b.md"
 printf '%s\n' '- **Cost**: `medium, high` - one job over two depths.' > "$COSTCLAIM/docs/c.md"
-printf '%s\n' '| `planner` | `low, medium` | when |' > "$COSTCLAIM/docs/d.md"
+printf '%s\n' '| `somi-planner` | `low, medium` | when |' > "$COSTCLAIM/docs/d.md"
 out11="$(cd "$COSTCLAIM" && node "$GATE" docs 2>&1)"
 case "$out11" in
   "STALE VOCABULARY (4 hit(s))"*) ok "a bare backticked range in a Cost bullet or table cell, a 'declares \`cost: <tier>\`' claim and a 'cost: medium, high' range both fail the gate" ;;

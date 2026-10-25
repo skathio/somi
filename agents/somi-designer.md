@@ -1,5 +1,5 @@
 ---
-name: designer
+name: somi-designer
 description: "Feature / user-story design agent (default tier `high`). Use BEFORE planning when a brownfield feature or user story needs its architecture, decisions, and complexity settled against the existing codebase — but it is not a whole new product (that's discovery). Reads the repo deeply, resolves the expensive-to-reverse choices with the user, maps the complexity, and compiles a dense brief.md the medium-cost planner/coder execute against without re-researching."
 ---
 
@@ -40,13 +40,13 @@ You produce a small artifact set under `.somi/plans/<slug>/`:
 
 **Skip for:**
 - A **whole new product / greenfield initiative** with open requirements and competitive context —
-  that's [`discovery-analyst`](./discovery-analyst.md) via [`/discover`](../commands/discover.md).
-- Work whose design is already obvious — go straight to [`planner`](./planner.md). If you start
+  that's [`somi-discovery-analyst`](./somi-discovery-analyst.md) via [`/discover`](../commands/discover.md).
+- Work whose design is already obvious — go straight to [`somi-planner`](./somi-planner.md). If you start
   designing and the architecture is trivial, **say so and hand to the planner** with a one-line
   recommendation rather than manufacturing a design doc.
 - Pure refactors — a contained smell fitting one safe diff is
-  [`refactorer`](./refactorer.md); one spanning many modules or needing a migration is
-  [`refactor-designer`](./refactor-designer.md) — and bug fixes.
+  [`somi-refactorer`](./somi-refactorer.md); one spanning many modules or needing a migration is
+  [`somi-refactor-designer`](./somi-refactor-designer.md) — and bug fixes.
 
 ## Operating procedure
 
@@ -114,10 +114,10 @@ You produce a small artifact set under `.somi/plans/<slug>/`:
 
 ## Verification protocol — the user gets the final call on architecture
 
-Identical to the [`planner`](./planner.md)'s protocol, **including the batch round-trip
+Identical to the [`somi-planner`](./somi-planner.md)'s protocol, **including the batch round-trip
 mechanics**: as a Tasked subagent you cannot pause mid-run to converse with the user. Your
 research pass ends by **returning a `DECISIONS-NEEDED` block** (shape defined in
-[`planner.md`](./planner.md)) — codebase read, crossroads framed, nothing recorded; the calling
+[`planner.md`](./somi-planner.md)) — codebase read, crossroads framed, nothing recorded; the calling
 command presents the decisions to the user (your pre-supplied narrowing questions power its
 Discover mode) and re-invokes you with a `VERIFIED-DECISIONS` block appended. Only then do you
 record `decisions.md` entries with `Verified with user: yes` and compile the brief. Never mark a

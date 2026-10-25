@@ -100,7 +100,7 @@ when one domain calls into another:
 - `api-design` references `owasp-defense` for security touchpoints.
 - `threat-modeling` references `owasp-defense` for mitigations.
 - `clean-code` references `testing-playbook` (untestable code is often badly-coupled code).
-- `testing-playbook` references `refactorer` (when a test-shape problem is really a design problem).
+- `testing-playbook` references `somi-refactorer` (when a test-shape problem is really a design problem).
 - `market-research` references `requirements-engineering` (every research finding must become a
   requirement, non-goal, or risk).
 - `requirements-engineering` references `solid-principles`, `api-design`, and `threat-modeling` for

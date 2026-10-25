@@ -15,7 +15,7 @@ into a [`brief.md`](../templates/BRIEF.md.tmpl) that the cheaper tier executes v
 > **The judgment-heavy core runs at the most capable tier — on the agent, not the command**, like
 > [`/design`](./design.md). This command declares no `cost:` and no `model:` of its own; it runs on
 > whatever model this session is already using, and Tasks the
-> [`refactor-designer`](../agents/refactor-designer.md) agent for the judgment-heavy core of the
+> [`somi-refactor-designer`](../agents/somi-refactor-designer.md) agent for the judgment-heavy core of the
 > work (naming the destination shape, mapping seams and risks, confirming test-coverage gaps); its
 > `brief.md` anchors the whole refactor, so the agent defaults to `high` with no lower member.
 > This command still does real work of its own — scaffolding the artifact set and owning the
@@ -48,12 +48,12 @@ user. Create `.somi/plans/<slug>/` with the same artifact set [`/design`](./desi
 [`/plan`](./plan.md) runs. If `.somi/README.md` does not yet exist at the repo root, also write it
 from [`templates/SOMI-README.md.tmpl`](../templates/SOMI-README.md.tmpl), same as `/design`.
 
-### 3. Invoke the `refactor-designer` agent
+### 3. Invoke the `somi-refactor-designer` agent
 
-Before this `Task`, call `somi_resolve` for `refactor-designer` (with `project_dir`), pass its
+Before this `Task`, call `somi_resolve` for `somi-refactor-designer` (with `project_dir`), pass its
 model, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
 (`somi_skill`, or `somi:somi-dispatch` on Claude Code). Brief
-[`agents/refactor-designer.md`](../agents/refactor-designer.md) via the Task tool with: the
+[`agents/somi-refactor-designer.md`](../agents/somi-refactor-designer.md) via the Task tool with: the
 refactor target, the slug and paths, and a reminder to name the destination shape, map the seams
 and risks (`file:line`), confirm or raise test-coverage gaps, and compile the brief.
 
@@ -68,7 +68,7 @@ Surface the destination shape and migration approach to the user before handing 
 batch round-trip ([`commands/plan.md`](./plan.md) §5): the research pass returns a
 `DECISIONS-NEEDED` block, this command presents it, and re-invokes the agent with a
 `VERIFIED-DECISIONS` block appended before it records `decisions.md` and compiles the brief. That
-re-invocation resolves fresh too — call `somi_resolve` for `refactor-designer` again before it, the
+re-invocation resolves fresh too — call `somi_resolve` for `somi-refactor-designer` again before it, the
 same as the first Task (full rules: the `somi-dispatch` skill).
 
 ### 6. The brief is the deliverable
@@ -94,5 +94,5 @@ it at `high` via [`/review`](./review.md) `design <slug>` (fresh context, bounde
 
 ## Quality bar
 
-See [`agents/refactor-designer.md`](../agents/refactor-designer.md). The brief alone must let a
+See [`agents/somi-refactor-designer.md`](../agents/somi-refactor-designer.md). The brief alone must let a
 planner sequence the work and a coder execute it without re-deriving the seam/risk map.

@@ -14,22 +14,22 @@ export const DEFAULT_CEILING_TIER = DEFAULT_CEILING;
 
 // Null-prototype and frozen: a plain lookup of "constructor" finds nothing, and nothing can edit it.
 export const AGENT_DEFAULT_TIERS = Object.freeze(Object.assign(Object.create(null), {
-  'architecture-reviewer': 'high',
-  atlas: 'high',
-  coder: 'medium',
-  designer: 'high',
-  'discovery-analyst': 'high',
-  impact: 'medium',
-  incident: 'medium',
-  'plan-reviewer': 'high',
-  planner: 'medium',
-  pr: 'medium',
-  'refactor-designer': 'high',
-  refactorer: 'medium',
-  reviewer: 'high',
-  'sdlc-reviewer': 'high',
-  'security-reviewer': 'high',
-  'test-strategist': 'high',
+  'somi-architecture-reviewer': 'high',
+  'somi-atlas': 'high',
+  'somi-coder': 'medium',
+  'somi-designer': 'high',
+  'somi-discovery-analyst': 'high',
+  'somi-impact': 'medium',
+  'somi-incident': 'medium',
+  'somi-plan-reviewer': 'high',
+  'somi-planner': 'medium',
+  'somi-pr': 'medium',
+  'somi-refactor-designer': 'high',
+  'somi-refactorer': 'medium',
+  'somi-reviewer': 'high',
+  'somi-sdlc-reviewer': 'high',
+  'somi-security-reviewer': 'high',
+  'somi-test-strategist': 'high',
 }));
 
 /**

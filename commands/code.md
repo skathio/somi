@@ -7,14 +7,14 @@ allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 # /code — Coding workflow
 
 You are running the **coding workflow** of somi. It has no `cost:` of its own — a command has no
-model to size — and runs entirely inline regardless of which branch step 1 takes; the `coder` it
+model to size — and runs entirely inline regardless of which branch step 1 takes; the `somi-coder` it
 Tasks defaults to `medium`. It runs the full procedure at any tier above `low`, for
 every accepted iteration — dispatch can't tell "the small one" apart from the rest, which is why
-`coder` has no job-shaped excuse to run lighter on its own initiative. It runs at `low` only for
+`somi-coder` has no job-shaped excuse to run lighter on its own initiative. It runs at `low` only for
 a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a
 `cost.agents` entry of `low`, in which case it still implements and tests the
 iteration but trims the proactive design-smell sweep and discloses the trade in its summary — see
-[`agents/coder.md`](../agents/coder.md)'s "Running at `low`" section for exactly what stays and
+[`agents/somi-coder.md`](../agents/somi-coder.md)'s "Running at `low`" section for exactly what stays and
 what trims. The expensive reasoning (architecture, decisions, complexity, repo conventions) was
 front-loaded by a design action upstream and lives in the work item — implement against it.
 
@@ -43,7 +43,7 @@ Parse the fenced user request (above) for the resolution shape:
 - If it's a free-form task description and **no work item exists** or applies, apply the trivial
   threshold in [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md#the-trivial-threshold):
   - If the request **meets** it, proceed without a work item or plan. No artifacts to update; skip
-    §2, §4, §5 and §7, and brief the `coder` with the request itself.
+    §2, §4, §5 and §7, and brief the `somi-coder` with the request itself.
   - If it **fails** it (any signal, or unsure), stop. Recommend `/debug <symptoms>` when the cause is
     not yet isolated, otherwise `/plan <problem>`.
 
@@ -71,9 +71,9 @@ all earlier ones are `done`).
 If the iteration is `blocked`, surface why (from `progress.md` and `diary.md`) and ask whether to
 unblock first, switch iterations, or proceed despite the block.
 
-### 3. Brief the `coder` agent
+### 3. Brief the `somi-coder` agent
 
-Before this `Task`, call `somi_resolve` for `coder` (with `project_dir`), pass its model, and put
+Before this `Task`, call `somi_resolve` for `somi-coder` (with `project_dir`), pass its model, and put
 the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
 or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
@@ -83,7 +83,7 @@ or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 - A reminder of the **plan-change protocol** (see §5 below).
 - Any context from the current conversation.
 
-The coder ([`agents/coder.md`](../agents/coder.md)) handles the implementation.
+The coder ([`agents/somi-coder.md`](../agents/somi-coder.md)) handles the implementation.
 
 ### 4. Mark iteration in-progress
 
@@ -146,8 +146,8 @@ Return with:
 - Tests added/changed.
 - Anything **not done**, with reason.
 - Any **plan changes** made during this iteration, with diary link.
-- Anything that crossed into security/architecture territory — and whether `security-reviewer` /
-  `architecture-reviewer` should be invoked before `/review`.
+- Anything that crossed into security/architecture territory — and whether `somi-security-reviewer` /
+  `somi-architecture-reviewer` should be invoked before `/review`.
 - A specific next step: `/review <slug>` to validate before merging.
 
 ## Guardrails
@@ -163,6 +163,6 @@ Return with:
 
 ## Quality bar
 
-See [`agents/coder.md`](../agents/coder.md). Matched the iteration, tests green, no leftover debug,
+See [`agents/somi-coder.md`](../agents/somi-coder.md). Matched the iteration, tests green, no leftover debug,
 no scope drift, surfaced any tradeoffs, plan kept in sync if it changed, diary entry made for any
 discovery worth recording.

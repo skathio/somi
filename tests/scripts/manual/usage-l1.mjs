@@ -42,7 +42,7 @@ export const EVENTS = [
   hook('post-tool.audit-log', 'hooks/post-tool/audit-log.mjs', write('PostToolUse')),
   { id: 'cli.somi-tier-resolve', command: [NODE, at('scripts/somi-tier.mjs'), 'resolve', '--signals', '-'], stdin: JSON.stringify(SIGNALS) },
   { id: 'cli.somi-config-show', command: [NODE, at('scripts/somi-config.mjs'), 'show'] },
-  { id: 'cli.somi-dispatch-resolve', command: [NODE, at('scripts/somi-dispatch.mjs'), 'resolve', '--agent', 'coder'] },
+  { id: 'cli.somi-dispatch-resolve', command: [NODE, at('scripts/somi-dispatch.mjs'), 'resolve', '--agent', 'somi-coder'] },
   { id: 'mcp.round-trip', mcp: true },
 ];
 
@@ -57,7 +57,7 @@ function mcpRoundTrip(event, ctx) {
     const rpc = (id, method, params) => child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
     const steps = [
       () => rpc(2, 'tools/list', {}),
-      () => rpc(3, 'tools/call', { name: 'somi_resolve', arguments: { agent: 'coder' } }),
+      () => rpc(3, 'tools/call', { name: 'somi_resolve', arguments: { agent: 'somi-coder' } }),
       () => child.stdin.end(),
     ];
     let buf = ''; let answered = 0;

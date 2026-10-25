@@ -28,7 +28,7 @@ is what keeps routing decisions in sync across every place a classification is m
 
 ## The trivial threshold
 
-"Trivial enough to just code" is defined here and nowhere else. `/code` and the `coder` point at
+"Trivial enough to just code" is defined here and nowhere else. `/code` and the `somi-coder` point at
 this section instead of restating it. A request is trivial only if **every** signal holds:
 
 1. **Small footprint** — one file, or one small contiguous change a reviewer reads in a minute.

@@ -58,7 +58,7 @@ The user's hint: **$ARGUMENTS**
    hint names a setting, put that choice first, but still ask: the hint is not an answer.
 4. **Classify the change before making it.** A change **lowers** when any of these holds: an agent's
    effective tier would drop; the ceiling would drop; a pin above the ceiling would be removed;
-   `security-reviewer` would run below `high`. Raising, or setting a value that does not change
+   `somi-security-reviewer` would run below `high`. Raising, or setting a value that does not change
    anything, is not a lowering.
 5. **A lowering needs an explicit yes.** Before calling the tool, say plainly what gets weaker
    (which

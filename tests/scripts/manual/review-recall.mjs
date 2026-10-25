@@ -378,7 +378,7 @@ async function main() {
     plugin = path.resolve(args['plugin-dir']);
     if (!fs.statSync(plugin, { throwIfNoEntry: false })?.isDirectory() || fs.existsSync(path.join(plugin, 'tests/evals')) || fs.existsSync(path.join(plugin, '.somi'))) die('--plugin-dir must be a directory without tests/evals and .somi');
   } else { try { plugin = buildPlugin({ repoRoot: REPO, runTmp }); } catch (e) { die(`the plugin could not be packed: ${e.message}`, 1); } }
-  const pluginHash = sha(...['agents/reviewer.md', 'commands/review.md'].map((f) => { try { return fs.readFileSync(path.join(plugin, f), 'utf8'); } catch { return ''; } }));
+  const pluginHash = sha(...['agents/somi-reviewer.md', 'commands/review.md'].map((f) => { try { return fs.readFileSync(path.join(plugin, f), 'utf8'); } catch { return ''; } }));
   const identity = (o) => JSON.stringify([o?.model, o?.ceiling, o?.seed, o?.plugin, o?.selection, o?.placeholder ?? 'comment']);
   const runInfo = { model: args.model, ceiling: args.ceiling, seed: args.seed, plugin: pluginHash, selection: selectionHash, placeholder: args.placeholder };
   // Rows written before the placeholder option existed used the comment style.

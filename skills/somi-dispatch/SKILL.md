@@ -80,7 +80,7 @@ The tool's JSON comes back in its text content; the CLI fallback prints the iden
 stdout:
 
 ```json
-{"agent": "coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
+{"agent": "somi-coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
 - `tier` — the cost tier the resolver selected for this agent, right now: the agent's own
@@ -100,7 +100,7 @@ stdout:
 
 **When `degraded` is `true`, say so in one line before the agent's `Task` call:**
 `running <agent> at <tier> (default <default tier>)` — for example
-`running security-reviewer at medium (default high)`. This is the hard cap working as designed, and
+`running somi-security-reviewer at medium (default high)`. This is the hard cap working as designed, and
 the user should see which agents are running below what they were built for.
 
 **Announce a `low` ceiling once per session, before the first agent it applies to starts** — not
@@ -132,7 +132,7 @@ which validates and writes it, and say it is saved only after that call returns 
 tool cannot be reached, tell the user to set `cost.ceiling` in `.somi/config.json` themselves
 (or pass `ceiling: <tier>` on each resolve you make for them), and **never say the change is
 saved** unless a config write actually happened. Lowering a tier (the ceiling, or any agent, above all
-`security-reviewer`) needs the user: confirm it with them first, expect the host to ask them too, and if
+`somi-security-reviewer`) needs the user: confirm it with them first, expect the host to ask them too, and if
 the tool refuses it (exit `64`) do not work around it. Repeat every entry of the result's `warnings`
 verbatim; never drop or soften one.
 
@@ -226,7 +226,7 @@ cost briefing line in that agent's own briefing.
    `enforced` is `true`: `dispatched at cost: <tier>`. When it is `false`:
    `requested cost: <tier> (not enforced: no mapped model)` — **`dispatched at cost:` is
    reserved for enforced dispatches**, so a briefing never claims a tier no model was pinned to.
-   `coder`, `planner`, and `refactorer` take their "Running at `low`" trim from **either** line
+   `somi-coder`, `somi-planner`, and `somi-refactorer` take their "Running at `low`" trim from **either** line
    (`dispatched at cost: low` or `requested cost: low`) — the trim is about the procedure, not the
    model, so it follows the requested tier; without a cost line, their disclosure instruction can
    never fire.
@@ -238,7 +238,7 @@ cost briefing line in that agent's own briefing.
    dispatch once without a model argument and say you're doing so. A model that came from the
    project's own `cost.mapping` is never retried this way — if the host rejects a **mapped** model,
    fail loudly and say so.
-5. **If the host rejects the agent type itself** (e.g. Copilot's `Unknown agent_type: coder`: its
+5. **If the host rejects the agent type itself** (e.g. Copilot's `Unknown agent_type: somi-coder`: its
    subagent tool accepts only built-in types, not plugin agents), call
    `somi_agent({name: "<agent name>"})` for that agent's instructions and start the host's built-in
    general-purpose subagent instead. Its prompt is that text, then the briefing from steps 1 and 3;

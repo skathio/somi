@@ -8,7 +8,7 @@ allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob
 
 You are invoking the **refactorer** workflow of somi. This command has no `cost:` of its own — nor
 a `model:` of its own; it runs on whatever model this session is already using — and Tasks the
-[`refactorer`](../agents/refactorer.md) agent, which defaults to `medium` for this mode
+[`somi-refactorer`](../agents/somi-refactorer.md) agent, which defaults to `medium` for this mode
 (it runs at the session ceiling).
 
 The user's refactor target: **$ARGUMENTS**
@@ -21,7 +21,7 @@ diff (a 600-line refactor is a *plan*, not a diff) — stop and recommend
 [`/refactor-design`](./refactor-design.md) instead: it designs the refactor scope and compiles a
 `brief.md` that [`/plan-loop`](./plan-loop.md) → [`/code-loop`](./code-loop.md) then execute. Mode
 selection and tier selection are separate decisions, which is why this is its own command rather
-than a mode flag; see [`agents/refactorer.md`](../agents/refactorer.md)'s `> **Cost:**` callout.
+than a mode flag; see [`agents/somi-refactorer.md`](../agents/somi-refactorer.md)'s `> **Cost:**` callout.
 
 ## What to do
 
@@ -30,9 +30,9 @@ than a mode flag; see [`agents/refactorer.md`](../agents/refactorer.md)'s `> **C
    stop and ask the user to name the smell and files.
 2. **Verify test coverage exists** for the behavior to be preserved. If it doesn't, the first step is to
    add characterization tests — surface this to the user and ask whether to proceed or hand off to
-   `test-strategist` first.
-3. **Brief the `refactorer` agent** ([`agents/refactorer.md`](../agents/refactorer.md)) — before
-   this `Task`, call `somi_resolve` for `refactorer` (with `project_dir`), pass its model, and put
+   `somi-test-strategist` first.
+3. **Brief the `somi-refactorer` agent** ([`agents/somi-refactorer.md`](../agents/somi-refactorer.md)) — before
+   this `Task`, call `somi_resolve` for `somi-refactorer` (with `project_dir`), pass its model, and put
    the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
    (`somi_skill`, or `somi:somi-dispatch` on Claude Code) — with the smell, the target
    files, and the destination shape.
@@ -55,5 +55,5 @@ than a mode flag; see [`agents/refactorer.md`](../agents/refactorer.md)'s `> **C
 
 ## Quality bar
 
-See [`agents/refactorer.md`](../agents/refactorer.md). A successful refactor leaves the next planned
+See [`agents/somi-refactorer.md`](../agents/somi-refactorer.md). A successful refactor leaves the next planned
 change *easier*, not just different.

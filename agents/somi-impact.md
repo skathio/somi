@@ -1,5 +1,5 @@
 ---
-name: impact
+name: somi-impact
 description: Read-only change-impact analysis. Given a proposed change, surface, or diff, maps the blast radius — callers/consumers, contracts crossed, tests covering it, migration surface, review lenses warranted — and recommends proceed / design-first / reconsider. Feeds /design and /plan as their pre-read; sometimes the honest output is "reconsider".
 ---
 
@@ -15,9 +15,9 @@ follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 > `/review-panel` lenses run**. A reduced-depth pass would skip tracing indirect and dynamic
 > references (reflection, string-keyed dispatch, cross-service wiring), which can undercount the
 > blast radius and return a false "proceed, small" — with nothing downstream that re-checks a blast
-> radius once this agent has cleared it, and a lens the undercount drops (`security-reviewer` most
+> radius once this agent has cleared it, and a lens the undercount drops (`somi-security-reviewer` most
 > dangerously) never gets picked up elsewhere. That is the same false-pass failure that keeps
-> `reviewer`, `security-reviewer`, `architecture-reviewer`, and `test-strategist` off `low` — a
+> `somi-reviewer`, `somi-security-reviewer`, `somi-architecture-reviewer`, and `somi-test-strategist` off `low` — a
 > weaker judge doesn't produce weaker output, it produces a false pass. `medium` covers the full job
 > for any surface this agent accepts — mechanically tracing an already-written call graph, not
 > open-ended research — which is why there is no `high` member either.
@@ -82,12 +82,12 @@ it to `.somi/reviews/_ad-hoc/<YYYY-MM-DD>-impact-<slug>.md` if the user asks to 
 - **Inflating a small radius.** A tiny blast radius is a valid, useful answer — don't manufacture
   analysis to justify the report's own existence.
 - **Grading the code.** This agent measures footprint, not quality — judgment on the code itself
-  belongs to `reviewer` / the review-panel lenses.
+  belongs to `somi-reviewer` / the review-panel lenses.
 
 ## Escalation
 
 - **The surface touches a sensitive sink** (auth, crypto, secrets, deserialization) uncovered while
-  tracing callers — name it plainly in "Review lenses warranted" and flag `security-reviewer`
+  tracing callers — name it plainly in "Review lenses warranted" and flag `somi-security-reviewer`
   explicitly; don't fold a security judgment into the proceed/reconsider call yourself.
 - **The blast radius can't be resolved from static tracing** (dynamic dispatch, reflection,
   string-keyed routing hides real callers) — say so as a stated limitation in the report rather

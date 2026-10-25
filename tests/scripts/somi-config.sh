@@ -47,7 +47,7 @@ check "show: no warnings for a fresh default config" "$(jf 'o.warnings')" "[]"
 check "show output is one ASCII line" "$(wc -l < "$TMP/out" | tr -d ' ')|$(ascii_only "$TMP/out")" "1|yes"
 P="$(proj)"
 check "show with no config file: exists false, ceiling default medium" "$(cfg "$CLI" "$P" show)|$(jf 'o.exists')|$(jf 'o.ceiling')" '0|false|{"value":"medium","source":"default"}'
-check "show with no config: agents follow the ceiling, security-reviewer warning present" "$(jf 'o.agents.find((a) => a.name === "security-reviewer").tier + "/" + o.agents.find((a) => a.name === "security-reviewer").source')|$(jf 'o.warnings.length')" "medium/ceiling|1"
+check "show with no config: agents follow the ceiling, security-reviewer warning present" "$(jf 'o.agents.find((a) => a.name === "somi-security-reviewer").tier + "/" + o.agents.find((a) => a.name === "somi-security-reviewer").source')|$(jf 'o.warnings.length')" "medium/ceiling|1"
 check "show created nothing" "$([ -e "$P/.somi" ] && echo made || echo none)" "none"
 
 # --- show --host: the unmapped-host warning (#36) --------------------------------------------------
@@ -67,37 +67,37 @@ check "--host with a bad name is a usage error (64)" "$(cfg "$CLI" "$P" show --h
 # --- get / set / unset ----------------------------------------------------------------------------
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
 check "get cost.ceiling" "$(cfg "$CLI" "$P" get cost.ceiling)|$(jf 'o.value + "/" + o.source')" "0|medium/config"
-check "get cost.agents.coder" "$(cfg "$CLI" "$P" get cost.agents.coder)|$(jf 'o.value + "/" + o.source')" "0|medium/override"
+check "get cost.agents.somi-coder" "$(cfg "$CLI" "$P" get cost.agents.somi-coder)|$(jf 'o.value + "/" + o.source')" "0|medium/override"
 check "get cost.agents.nobody -> null" "$(cfg "$CLI" "$P" get cost.agents.nobody)|$(jf 'o.value + "/" + o.source')" "0|null/none"
 check "set cost.ceiling low" "$(cfg "$CLI" "$P" set cost.ceiling low)|$(jf 'o.changed')" "0|true"
-out="$(res "$P" coder)"
+out="$(res "$P" somi-coder)"
 check "resolver agrees: the new ceiling is live, coder (pinned medium) stays medium" "$(fld "$out" ceiling)/$(fld "$out" tier)" "low/medium"
-cfg "$CLI" "$P" set cost.agents.designer low > /dev/null
-out="$(res "$P" designer)"
-check "resolver agrees: set cost.agents.designer low -> low/override" "$(fld "$out" tier)/$(fld "$out" tier_source)" "low/override"
-cfg "$CLI" "$P" set cost.agents.designer high > /dev/null
-out="$(res "$P" designer)"
-check "resolver agrees: set cost.agents.designer high -> high/override (above the low ceiling)" "$(fld "$out" tier)/$(fld "$out" tier_source)" "high/override"
-check "set to the same value is a no-op (changed false)" "$(cfg "$CLI" "$P" set cost.agents.designer high)|$(jf 'o.changed')" "0|false"
-cfg "$CLI" "$P" unset cost.agents.designer > /dev/null
-out="$(res "$P" designer)"
+cfg "$CLI" "$P" set cost.agents.somi-designer low > /dev/null
+out="$(res "$P" somi-designer)"
+check "resolver agrees: set cost.agents.somi-designer low -> low/override" "$(fld "$out" tier)/$(fld "$out" tier_source)" "low/override"
+cfg "$CLI" "$P" set cost.agents.somi-designer high > /dev/null
+out="$(res "$P" somi-designer)"
+check "resolver agrees: set cost.agents.somi-designer high -> high/override (above the low ceiling)" "$(fld "$out" tier)/$(fld "$out" tier_source)" "high/override"
+check "set to the same value is a no-op (changed false)" "$(cfg "$CLI" "$P" set cost.agents.somi-designer high)|$(jf 'o.changed')" "0|false"
+cfg "$CLI" "$P" unset cost.agents.somi-designer > /dev/null
+out="$(res "$P" somi-designer)"
 check "unset removes the pin: designer follows the ceiling" "$(fld "$out" tier)/$(fld "$out" tier_source)" "low/ceiling"
-check "unset of an absent entry succeeds with changed:false" "$(cfg "$CLI" "$P" unset cost.agents.designer)|$(jf 'o.changed')" "0|false"
+check "unset of an absent entry succeeds with changed:false" "$(cfg "$CLI" "$P" unset cost.agents.somi-designer)|$(jf 'o.changed')" "0|false"
 check "no temp file is left behind" "$(ls -A "$P/.somi" | tr '\n' ' ')" "config.json "
 P2="$(proj)"; cfg "$CLI" "$P2" set cost.ceiling high > /dev/null
 check "set on an absent config starts from the default file (pins exist) with the change applied" "$(node -e "const a=JSON.parse(require('fs').readFileSync('$P2/.somi/config.json','utf8')), d=JSON.parse(require('fs').readFileSync('$EXPECT','utf8')); d.cost.ceiling='high'; process.stdout.write(String(JSON.stringify(a)===JSON.stringify(d)))")" "true"
 P2="$(proj)"
-check "unset on an absent config is a no-op: changed false, nothing created" "$(cfg "$CLI" "$P2" unset cost.agents.coder)|$(jf 'o.changed')|$([ -e "$P2/.somi" ] && echo made || echo none)" "0|false|none"
+check "unset on an absent config is a no-op: changed false, nothing created" "$(cfg "$CLI" "$P2" unset cost.agents.somi-coder)|$(jf 'o.changed')|$([ -e "$P2/.somi" ] && echo made || echo none)" "0|false|none"
 P2="$(proj)"; cfg "$CLI" "$P2" init > /dev/null; sleep 1; before="$(stat -c '%i %Y' "$P2/.somi/config.json")"
 check "unset of an absent entry writes nothing (inode and mtime unchanged)" "$(cfg "$CLI" "$P2" unset cost.agents.nobody)|$(jf 'o.changed')|$(stat -c '%i %Y' "$P2/.somi/config.json")" "0|false|$before"
 
 # --- preservation and ordering --------------------------------------------------------------------
 P="$(proj)"; mkdir "$P/.somi"
-printf '%s' '{"zeta":{"keep":[1,2,{"a":null}]},"loop":{"max":3},"cost":{"mapping":{},"ceiling":"high","agents":{"coder":"low"}},"alpha":"x"}' > "$P/.somi/config.json"
-cfg "$CLI" "$P" set cost.agents.planner medium > /dev/null
+printf '%s' '{"zeta":{"keep":[1,2,{"a":null}]},"loop":{"max":3},"cost":{"mapping":{},"ceiling":"high","agents":{"somi-coder":"low"}},"alpha":"x"}' > "$P/.somi/config.json"
+cfg "$CLI" "$P" set cost.agents.somi-planner medium > /dev/null
 check "unrelated and unknown top-level keys are preserved, key order is stable, new entry appended" \
   "$(node -e "const o=JSON.parse(require('fs').readFileSync('$P/.somi/config.json','utf8')); process.stdout.write(Object.keys(o).join()+'|'+Object.keys(o.cost).join()+'|'+Object.keys(o.cost.agents).join()+'|'+JSON.stringify(o.zeta)+o.alpha+o.loop.max)")" \
-  'zeta,loop,cost,alpha|mapping,ceiling,agents|coder,planner|{"keep":[1,2,{"a":null}]}x3'
+  'zeta,loop,cost,alpha|mapping,ceiling,agents|somi-coder,somi-planner|{"keep":[1,2,{"a":null}]}x3'
 check "file is 2-space JSON with a trailing newline" "$(head -c 3 "$P/.somi/config.json" | tr '\n' '$')|$(tail -c 2 "$P/.somi/config.json" | od -An -c | tr -d ' ')" '{$ |}\n'
 printf '%s' '{"cost":{"ceiling":"high"}}' > "$P/.somi/config.json"; chmod 600 "$P/.somi/config.json"
 cfg "$CLI" "$P" set cost.ceiling low > /dev/null
@@ -105,16 +105,16 @@ check "an existing file's mode is kept" "$(stat -c %a "$P/.somi/config.json")" "
 
 # --- warnings --------------------------------------------------------------------------------------
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
-check "set security-reviewer low: succeeds with the fixed warning" "$(cfg "$CLI" "$P" set cost.agents.security-reviewer low)|$(jf 'o.warnings')" '0|["security-reviewer runs below high; pin it with: set cost.agents.security-reviewer high"]'
+check "set security-reviewer low: succeeds with the fixed warning" "$(cfg "$CLI" "$P" set cost.agents.somi-security-reviewer low)|$(jf 'o.warnings')" '0|["somi-security-reviewer runs below high; pin it with: set cost.agents.somi-security-reviewer high"]'
 check "show carries the same warning" "$(cfg "$CLI" "$P" show)|$(jf 'o.warnings.length')" "0|1"
-check "set security-reviewer back to high clears it" "$(cfg "$CLI" "$P" set cost.agents.security-reviewer high)|$(jf 'o.warnings')" "0|[]"
+check "set security-reviewer back to high clears it" "$(cfg "$CLI" "$P" set cost.agents.somi-security-reviewer high)|$(jf 'o.warnings')" "0|[]"
 check "set an agent not in the default table: accepted, unknown warning" "$(cfg "$CLI" "$P" set cost.agents.my-agent high)|$(jf 'o.warnings.length')" "0|1"
 cfg "$CLI" "$P" show > /dev/null
 check "show flags the extra name unknown:true with no default" "$(jf 'JSON.stringify(o.agents.find((a) => a.name === "my-agent"))')" '{"name":"my-agent","tier":"high","source":"override","default":null,"unknown":true}'
 
 # --- 64: arguments ---------------------------------------------------------------------------------
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null; cp "$P/.somi/config.json" "$TMP/before"
-for args in "set cost.mapping.x low" "set cost.foo low" "set loop.max 3" "set cost.ceiling turbo" "set cost.agents.coder turbo" "set cost.agents.Bad_Name low" "set cost.agents.constructor low" "set cost.agents.__proto__ low" "unset cost.ceiling" "unset loop" "get loop.max" "set cost.ceiling" "frobnicate" "show extra" "set cost.ceiling low --bogus x"; do
+for args in "set cost.mapping.x low" "set cost.foo low" "set loop.max 3" "set cost.ceiling turbo" "set cost.agents.somi-coder turbo" "set cost.agents.Bad_Name low" "set cost.agents.constructor low" "set cost.agents.__proto__ low" "unset cost.ceiling" "unset loop" "get loop.max" "set cost.ceiling" "frobnicate" "show extra" "set cost.ceiling low --bogus x"; do
   # shellcheck disable=SC2086
   rc="$(cfg "$CLI" "$P" $args)"
   check "bad input exits 64 and prints nothing on stdout: $args" "$rc|$(wc -c < "$TMP/out" | tr -d ' ')" "64|0"
@@ -133,7 +133,7 @@ bad_cfg() { # $1 = label, $2 = body
 bad_cfg "invalid JSON" '{ not json'
 bad_cfg "a JSON array" '[1]'
 bad_cfg "an unknown cost key" '{"cost":{"cieling":"low"}}'
-bad_cfg "a bad tier in the existing file" '{"cost":{"agents":{"coder":"turbo"}}}'
+bad_cfg "a bad tier in the existing file" '{"cost":{"agents":{"somi-coder":"turbo"}}}'
 bad_cfg "a bad ceiling value in the existing file" '{"cost":{"ceiling":"turbo"}}'
 bad_cfg "a top-level ceiling" '{"ceiling":"low"}'
 P="$(proj)"; mkdir "$P/.somi"; head -c 70000 /dev/zero | tr '\0' ' ' > "$P/.somi/config.json"; printf '{}' >> "$P/.somi/config.json"; cp "$P/.somi/config.json" "$TMP/big.before"
@@ -190,8 +190,8 @@ check "numbers and duplicates inside strings, safe integers and 1.0 do not trigg
 envcfg() { local p=$1; shift; env SOMI_COST_CEILING="$ENVV" node "$CLI" "$@" --project-dir "$p" > "$TMP/out" 2> "$TMP/err"; echo $?; }
 P="$(proj)"; mkdir "$P/.somi"; printf '%s' '{"cost":{"ceiling":"high"}}' > "$P/.somi/config.json"
 ENVV=low
-check "SOMI_COST_CEILING outranks the config: effective ceiling low from env, tiers follow it, warnings say why" "$(envcfg "$P" show)|$(jf 'JSON.stringify(o.effective_ceiling)')|$(jf 'o.agents.find((a) => a.name === "coder").tier')|$(jf 'o.warnings.length')|$(jf 'o.ceiling.value')" '0|{"value":"low","source":"env"}|low|2|high'
-check "set reports the effective ceiling too" "$(envcfg "$P" set cost.agents.coder medium)|$(jf 'o.effective_ceiling.source')|$(jf 'o.warnings.length')" "0|env|2"
+check "SOMI_COST_CEILING outranks the config: effective ceiling low from env, tiers follow it, warnings say why" "$(envcfg "$P" show)|$(jf 'JSON.stringify(o.effective_ceiling)')|$(jf 'o.agents.find((a) => a.name === "somi-coder").tier')|$(jf 'o.warnings.length')|$(jf 'o.ceiling.value')" '0|{"value":"low","source":"env"}|low|2|high'
+check "set reports the effective ceiling too" "$(envcfg "$P" set cost.agents.somi-coder medium)|$(jf 'o.effective_ceiling.source')|$(jf 'o.warnings.length')" "0|env|2"
 ENVV=turbo
 check "an invalid SOMI_COST_CEILING is exit 64" "$(envcfg "$P" show)" "64"
 P="$(proj)"; mkdir -p "$P/.somi/somi-state"; printf '%s' '{}' > "$P/.somi/config.json"; printf '%s' '{"ceiling":"low","ceiling_origin":"cli"}' > "$P/.somi/somi-state/ceiling.json"
@@ -200,7 +200,7 @@ printf '%s' '{"ceiling":"low","ceiling_origin":"config"}' > "$P/.somi/somi-state
 check "a persisted ceiling that was not set by a flag or env is ignored: default medium" "$(cfg "$CLI" "$P" show)|$(jf 'JSON.stringify(o.effective_ceiling)')" '0|{"value":"medium","source":"default"}'
 printf '%s' '{"cost":{"ceiling":"high"}}' > "$P/.somi/config.json"; printf '%s' '{"ceiling":"low","ceiling_origin":"cli"}' > "$P/.somi/somi-state/ceiling.json"
 check "the config outranks a persisted ceiling" "$(cfg "$CLI" "$P" show)|$(jf 'JSON.stringify(o.effective_ceiling)')" '0|{"value":"high","source":"config"}'
-out="$(CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$ROOT_REPO/scripts/somi-dispatch.mjs" resolve --agent coder)"
+out="$(CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$ROOT_REPO/scripts/somi-dispatch.mjs" resolve --agent somi-coder)"
 check "and the resolver agrees with that" "$(fld "$out" ceiling)/$(fld "$out" ceiling_source)" "high/config"
 P="$(proj)"; mkdir -p "$P/.somi/somi-state"; printf '%s' '{}' > "$P/.somi/config.json"; printf '{ bad' > "$P/.somi/somi-state/ceiling.json"
 check "a corrupt state file is exit 67 for show" "$(cfg "$CLI" "$P" show)" "67"

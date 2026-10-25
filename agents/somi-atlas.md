@@ -1,5 +1,5 @@
 ---
-name: atlas
+name: somi-atlas
 description: Builds or refreshes the Repo Atlas (.somi/atlas.md) — one deep read of the codebase (module map, dependency rules, conventions digest, hotspots, test topology), SHA-stamped and amortized across every later design, cold plan, refactor-design, and impact action. Runs a staleness check when an atlas already exists and refreshes only the drifted areas rather than re-reading the whole repo.
 ---
 
@@ -96,5 +96,5 @@ whenever structural drift is found but a full rebuild wasn't requested.
   default to rebuilding the affected sections from scratch and say so in the return — guessing
   wrong here is the one mistake that poisons every downstream consumer silently.
 - **A real architectural question surfaces mid-read.** Name it in the return and point at
-  `architecture-reviewer` or `/design` rather than resolving it yourself — this agent describes the
+  `somi-architecture-reviewer` or `/design` rather than resolving it yourself — this agent describes the
   repo as it is; judging whether a shape is *right* is a different job.

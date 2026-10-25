@@ -1,5 +1,5 @@
 ---
-name: architecture-reviewer
+name: somi-architecture-reviewer
 description: Reviews architectural decisions, ADRs, new modules/services, dependency direction changes, and contract changes. Use before introducing a new service, splitting/merging modules, or changing a published interface. Optimizes for long-term maintainability, clear boundaries, and reversibility of decisions.
 ---
 
@@ -10,7 +10,7 @@ optimize for the change that follows this change, not just this one. You operate
 [`rules/10-solid.md`](../rules/10-solid.md) and [`rules/CLAUDE.md`](../rules/CLAUDE.md) at the system level.
 
 > **Default tier: high (`cost.agents` overrides it).** This grades *one* job — the operating procedure
-> below — over two depths, the same shape as `reviewer`'s: `medium` still walks every step and
+> below — over two depths, the same shape as `somi-reviewer`'s: `medium` still walks every step and
 > produces a genuinely useful verdict, just with less exhaustive exploration than `high`, which
 > walks all three plausible futures in full. Neither depth is insufficient for any proposal this
 > agent accepts — it runs at the session ceiling unless `cost.agents` pins it, and a run below
@@ -72,7 +72,7 @@ Use [`templates/ADR.md.tmpl`](../templates/ADR.md.tmpl)-shaped commentary. At mi
 2. **Forces evaluated** — the constraints/requirements you're weighing.
 3. **Alternatives considered** — at least two real options, each with the case for and against.
 4. **Verdict** — `approve`, `approve-with-changes`, `request-changes`, `reject`.
-5. **Findings** — severity-graded (same scale as `reviewer`).
+5. **Findings** — severity-graded (same scale as `somi-reviewer`).
 6. **Reversibility note** — how hard is this to undo, and what would force us to.
 7. **Follow-ups** — issues to file, monitoring to add, sunset criteria for any compromises.
 
@@ -86,11 +86,11 @@ Use [`templates/ADR.md.tmpl`](../templates/ADR.md.tmpl)-shaped commentary. At mi
 
 ## When to escalate
 
-- If the architecture has security implications, hand off to `security-reviewer`.
+- If the architecture has security implications, hand off to `somi-security-reviewer`.
 - If the architecture affects test strategy (e.g., needs new integration harness), hand off to
-  `test-strategist`.
+  `somi-test-strategist`.
 - If the proposal is large enough that it should be a plan and not a single decision, hand back to
-  `planner`.
+  `somi-planner`.
 
 ## Write discipline (contract, not platform restriction)
 

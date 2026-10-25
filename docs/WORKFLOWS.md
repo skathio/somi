@@ -9,7 +9,7 @@ work.
 
 - **High-cost front-loads:** `/discover` (a whole new product), `/design` (a brownfield
   feature/story), and `/refactor-design` (a large refactor) — each compiles a `brief.md`.
-  `/review`'s `reviewer` defaults to `high` — it runs at the session ceiling unless
+  `/review`'s `somi-reviewer` defaults to `high` — it runs at the session ceiling unless
   `cost.agents` pins it (pin it to `high` for the fresh-eyes judgment this stage wants).
 - **Medium-cost execution:** `/plan` (+ `/plan-loop`) sequences the brief into phases; `/code`
   (+ `/code-loop`, `/code-parallel`) implements against it.
@@ -57,7 +57,7 @@ never refused, and reported as degraded when that is below what it declared.
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
 │   PLANNING      │ ───▶ │     CODING      │ ───▶ │   REVIEWING     │
 │   /plan         │      │     /code       │      │   /review       │
-│   agent:planner │      │   agent:coder   │      │ agent:reviewer  │
+│   agent:somi-planner │      │   agent:somi-coder   │      │ agent:somi-reviewer  │
 │  → .somi/plans/<slug>/│      │   → diff+tests  │      │ → reviews/...md │
 │   (6 docs +     │      │  + updates spec/│      │ + updates diary │
 │   phases/)      │      │  diary on change│      │ if plan affected│
@@ -122,7 +122,7 @@ Status lives in `progress.md`, not in the directory location. Only humans delete
 foundation — *before* planning or coding. This is the requirements-engineering and high-level
 software-design phase of the SDLC. Its output is the cornerstone the planner consumes.
 
-**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md), Tasked at its default tier `high` — the most
+**Agent**: [`somi-discovery-analyst`](../agents/somi-discovery-analyst.md), Tasked at its default tier `high` — the most
 capable tier this repo maps — for the judgment-heavy core of the work, because the output anchors
 the entire project. `/discover` itself declares no `cost:` and no `model:` of its own; it runs on
 whatever model the session is already using, and still scaffolds `.somi/rd/<slug>/` and owns the
@@ -169,7 +169,7 @@ codebase — *before* planning — and compile it into the `brief.md` execution 
 fills the gap between discovery (a whole new product) and planning (sequencing): the requirement is
 clear, but how it should be shaped against *this* repo is not.
 
-**Agent**: [`designer`](../agents/designer.md), Tasked at its default tier `high` — the most capable tier this
+**Agent**: [`somi-designer`](../agents/somi-designer.md), Tasked at its default tier `high` — the most capable tier this
 repo maps — for the judgment-heavy core of the work, because its `brief.md` anchors the whole work
 item. `/design` itself declares no `cost:` and no `model:` of its own, like `/discover`; it runs on
 whatever model the session is already using, and still scaffolds the artifact set and owns the
@@ -199,7 +199,7 @@ design, review it at its default tier `high` first via `/review design <slug>` (
 
 **Purpose**: produce deep implementation plans before any code is written.
 
-**Agent**: [`planner`](../agents/planner.md).
+**Agent**: [`somi-planner`](../agents/somi-planner.md).
 
 **Premise check first.** Before scaffolding a plan, the planner challenges the request itself — false
 premise, XY problem (Y asked, X is the real goal), contradictory requirements, or an already-solved
@@ -241,7 +241,7 @@ executed.
 **Purpose**: implement against an approved plan with senior-level design judgment, keeping the
 plan in sync with reality.
 
-**Agent**: [`coder`](../agents/coder.md).
+**Agent**: [`somi-coder`](../agents/somi-coder.md).
 
 **Input**: a work-item slug + iteration reference (e.g., `phase 1, iteration 1`), or a
 self-contained trivial task.
@@ -275,10 +275,10 @@ and the summary.
 
 **Purpose**: strict, skeptical, evidence-driven review of code, plans, or architectural proposals.
 
-**Agent**: [`reviewer`](../agents/reviewer.md). Calls in
-[`security-reviewer`](../agents/security-reviewer.md),
-[`architecture-reviewer`](../agents/architecture-reviewer.md), or
-[`test-strategist`](../agents/test-strategist.md) when the change matches their territory.
+**Agent**: [`somi-reviewer`](../agents/somi-reviewer.md). Calls in
+[`somi-security-reviewer`](../agents/somi-security-reviewer.md),
+[`somi-architecture-reviewer`](../agents/somi-architecture-reviewer.md), or
+[`somi-test-strategist`](../agents/somi-test-strategist.md) when the change matches their territory.
 
 **Input**: a work-item slug (most common), or a diff (working tree, range, PR), a plan, an ADR, or
 a file.
@@ -304,8 +304,8 @@ When findings point at the *plan* (not just the code), the reviewer says so and 
 run applies the plan-change protocol.
 
 **The parallel panel ([`/review-panel`](../commands/review-panel.md))** — for a high-stakes change
-that crosses several concerns at once, the panel seats the relevant lenses (`reviewer` plus
-`security-reviewer` / `architecture-reviewer` / `test-strategist` / `plan-reviewer` / `sdlc-reviewer` as the diff warrants) and runs them
+that crosses several concerns at once, the panel seats the relevant lenses (`somi-reviewer` plus
+`somi-security-reviewer` / `somi-architecture-reviewer` / `somi-test-strategist` / `somi-plan-reviewer` / `somi-sdlc-reviewer` as the diff warrants) and runs them
 **concurrently** on the same captured diff, then merges and de-duplicates their findings into one
 verdict (highest severity wins; lens disagreement is surfaced). It's safe to parallelize because
 `/review-panel` is the sole writer: each lens returns findings and none is given a write to perform,
@@ -335,7 +335,7 @@ competitive research, and rarely revisited per change. It has a genuinely differ
 (`.somi/rd/` vs. `.somi/plans/`), and a different cadence (per product, not per change). So it earns
 its own workflow — but it sits *upstream* of the build trio rather than inside the daily loop.
 
-Support agents (`security-reviewer`, `architecture-reviewer`, `test-strategist`, `refactorer`) are
+Support agents (`somi-security-reviewer`, `somi-architecture-reviewer`, `somi-test-strategist`, `somi-refactorer`) are
 *facets* of these three, invoked when the work clearly engages their domain. They aren't separate
 workflows because they don't have separate problem-shapes; they're depth-on-demand.
 
@@ -344,8 +344,8 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 - **Discover → Plan → Code → Review** for a greenfield product or major new initiative — discovery
   produces the requirements & design foundation (+ `brief.md`), which planning turns into phased work.
 - **Design → Plan → Code → Review** for a design-heavy brownfield feature — `/design` (Tasks
-  `designer` at its default tier `high`) compiles the `brief.md`; `/plan` (Tasks `planner`, default `medium`)
-  sequences it; `/code-loop` (Tasks `coder`, default `medium`) implements against it. This is the
+  `somi-designer` at its default tier `high`) compiles the `brief.md`; `/plan` (Tasks `somi-planner`, default `medium`)
+  sequences it; `/code-loop` (Tasks `somi-coder`, default `medium`) implements against it. This is the
   daily design→execution chain for non-trivial features.
 - **Plan → Code → Review** is the normal sequence when the design is already settled.
 - **Plan → Plan-review → Code → Review** when the plan is high-stakes or high-ambiguity.
@@ -359,8 +359,8 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   report becomes `/design`'s pre-read, tells `/review-panel` which lenses the surface warrants,
   or honestly says "reconsider" with the numbers.
 - **Upgrade** for a dependency bump — [`/upgrade`](../commands/upgrade.md): cited
-  breaking-change/CVE research (Tasks `discovery-analyst` at its default tier `high`) → usage scan →
-  mini-brief (doubles as the dep-gate sign-off) → migration under `/code-loop` (Tasks `coder`,
+  breaking-change/CVE research (Tasks `somi-discovery-analyst` at its default tier `high`) → usage scan →
+  mini-brief (doubles as the dep-gate sign-off) → migration under `/code-loop` (Tasks `somi-coder`,
   default `medium`).
 - **Release-readiness** before shipping a set of work items —
   [`/release-readiness`](../commands/release-readiness.md): a deterministic checklist over the
@@ -410,7 +410,7 @@ safety net.
 ## The Repo Atlas (amortized high-cost)
 
 The `brief.md` compresses a *work item*; **`.somi/atlas.md`** (built by
-[`/atlas`](../commands/atlas.md), which Tasks the `atlas` agent at its default tier `high`) compresses the
+[`/atlas`](../commands/atlas.md), which Tasks the `somi-atlas` agent at its default tier `high`) compresses the
 *repository*: module map, dependency
 rules, conventions digest, complexity hotspots, test topology — SHA-stamped. Every later
 `cost: high` action (`/design`, a cold `/plan`, `/refactor-design`, `/impact`) starts from the

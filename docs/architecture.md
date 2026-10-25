@@ -84,9 +84,9 @@ and the `cost: medium` execution that consumes it sit on either side of a natura
 which is why `/ship-loop` places its single human gate right there: once the design action has
 produced `brief.md`, before planning consumes it (falling to after `/plan-loop` on a cold start
 with no design action). `/discover`, `/design`, `/refactor-design`, and `/atlas` are the commands
-that Task a `cost: high` agent for their **entire** job — `discovery-analyst`, `designer`, and
-`refactor-designer`'s framing is judgment-heavy and their brief anchors the work item; `atlas` is
-one high-quality deep repo read, paid once. `/adopt` Tasks the `atlas` agent as its own Stage 1, at
+that Task a `cost: high` agent for their **entire** job — `somi-discovery-analyst`, `somi-designer`, and
+`somi-refactor-designer`'s framing is judgment-heavy and their brief anchors the work item; `somi-atlas` is
+one high-quality deep repo read, paid once. `/adopt` Tasks the `somi-atlas` agent as its own Stage 1, at
 the agent's own default tier — it does not inline that read.
 
 **How dispatch actually happens.** Neither a command nor the front door hands a whole command's
@@ -117,7 +117,7 @@ user: "/discover <idea>"
     reads $ARGUMENTS, validates it's a researchable idea
   → command derives slug, scaffolds .somi/rd/<slug>/ from templates/ (RD-README, RESEARCH, BRD,
     SRS, FRD, SDD, TDD + reused DECISIONS/DIARY)
-  → invokes Task[subagent_type=discovery-analyst, prompt=<idea + slug + paths + context>]
+  → invokes Task[subagent_type=somi-discovery-analyst, prompt=<idea + slug + paths + context>]
   → analyst researches via WebSearch/WebFetch: competitors, complaints, churn, failure modes
     (every non-obvious claim cited; signal distinguished from noise; nothing fabricated)
   → analyst synthesises findings → opportunities / must-avoid pitfalls / risks
@@ -139,7 +139,7 @@ user: "/plan <problem>" (or "/plan <slug>" pointing at a discovery foundation)
   → command derives slug, scaffolds .somi/plans/<slug>/ from templates/
   → IF .somi/rd/<slug>/ exists: command passes its paths to the planner, which treats the
     SRS/FRD as the requirements source and the SDD/TDD as architectural direction (no re-deriving)
-  → invokes Task[subagent_type=planner, prompt=<problem + slug + paths + rd-foundation + context>]
+  → invokes Task[subagent_type=somi-planner, prompt=<problem + slug + paths + rd-foundation + context>]
   → planner reads repo (Read/Grep/Glob), drafts context.md, then spec skeleton
   → planner PAUSES on each architectural decision: presents 2–4 concrete options with
     pros/cons, recommends one, offers Other / Discover escape hatches
@@ -155,7 +155,7 @@ user: "/plan <problem>" (or "/plan <slug>" pointing at a discovery foundation)
 user: "/code <slug> [phase N, iteration M]"
   → command /code resolves work item, reads spec.md + phases/<NN>-*.md + recent diary
   → marks iteration in-progress in progress.md
-  → invokes Task[subagent_type=coder, prompt=<iteration + slug + paths + context>]
+  → invokes Task[subagent_type=somi-coder, prompt=<iteration + slug + paths + context>]
   → coder reads relevant files in the repo
   → coder edits/writes code, runs tests via Bash
   → PreToolUse hooks may block dangerous operations
@@ -175,11 +175,11 @@ user: "/code <slug> [phase N, iteration M]"
 ```
 user: "/review <slug>" (or working tree / range / PR / plan)
   → command /review resolves target and work-item context
-  → invokes Task[subagent_type=reviewer, prompt=<target + spec + phases + diary + context>]
+  → invokes Task[subagent_type=somi-reviewer, prompt=<target + spec + phases + diary + context>]
   → reviewer reads diff in surroundings, walks trust boundaries / abstractions / failure paths
   → reviewer checks plan-vs-code alignment (scope drift, missing diary entries, accuracy of
     progress.md, decisions silently contradicted)
-  → reviewer may invoke Task[subagent_type=security-reviewer | architecture-reviewer | test-strategist]
+  → reviewer may invoke Task[subagent_type=somi-security-reviewer | somi-architecture-reviewer | somi-test-strategist]
   → reviewer aggregates findings, severity-grades them
   → reviewer writes review file at .somi/reviews/<slug>/<YYYY-MM-DD>-…md using
     templates/REVIEW.md.tmpl

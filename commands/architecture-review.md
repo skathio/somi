@@ -32,9 +32,9 @@ is for cases where structure is the primary subject.
 Use the same resolution logic as [`/review`](./review.md): slug, working tree, range, PR, file,
 or `plan <slug>`.
 
-### 2. Brief the `architecture-reviewer` agent
+### 2. Brief the `somi-architecture-reviewer` agent
 
-Before this `Task`, call `somi_resolve` for `architecture-reviewer` (with `project_dir`), pass its
+Before this `Task`, call `somi_resolve` for `somi-architecture-reviewer` (with `project_dir`), pass its
 model, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
 (`somi_skill`, or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
@@ -45,7 +45,7 @@ model, and put the cost line in the briefing (`dispatched at cost: <tier>` only 
   stress-test the contract against three plausible future requirements, check reversibility, check
   team fit.
 
-The `architecture-reviewer` agent is read-only **by contract, not by platform restriction** — it
+The `somi-architecture-reviewer` agent is read-only **by contract, not by platform restriction** — it
 holds Write/Edit but is forbidden from using them, so the command owns every write. Have it **return** its findings;
 the command owns all writes.
 
@@ -60,7 +60,7 @@ the command owns all writes.
 - **Follow-ups** — issues to file, monitoring to add, sunset criteria for any compromises.
 
 If the architecture has security implications, the command **must** also invoke
-`security-reviewer` via Task — call `somi_resolve` for `security-reviewer` first (full rules: the
+`somi-security-reviewer` via Task — call `somi_resolve` for `somi-security-reviewer` first (full rules: the
 `somi-dispatch` skill) — and merge those findings.
 
 ### 4. Write the review

@@ -12,10 +12,10 @@ The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, i
 
 This command automates the manual `/code` → `/review` → `/code` cycle for a single iteration,
 with **hard gates** that ensure it terminates. It has no `cost:` of its own — a command has no
-model to size — and runs entirely inline; the `coder` it Tasks defaults to `medium`
+model to size — and runs entirely inline; the `somi-coder` it Tasks defaults to `medium`
 (it runs at the session ceiling; executing against the work item's
-`brief.md` + plan), while the `reviewer` it Tasks defaults
-to `high` — it runs at the session ceiling unless `cost.agents` pins it (pin `reviewer`
+`brief.md` + plan), while the `somi-reviewer` it Tasks defaults
+to `high` — it runs at the session ceiling unless `cost.agents` pins it (pin `somi-reviewer`
 to `high` for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by
 the
 coder's reasoning).
@@ -33,7 +33,7 @@ coder's reasoning).
 | `SEVERITY_FLOOR` — verdicts that re-loop | `Major` (Blocker + Major) | `SOMI_CODE_LOOP_SEVERITY_FLOOR` (`Blocker` to only re-loop on Blockers) |
 | `DIFF_CAP_LINES` — cumulative diff across passes | `400` | `SOMI_CODE_LOOP_DIFF_CAP` |
 | `CIRCUIT_BREAKER` — stop if the same finding (file + symbol + title) recurs in 2 consecutive passes | always on | (n/a) |
-| `REVIEW_MODE` — `single` (Task `reviewer`) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens) | `single` | `SOMI_CODE_LOOP_REVIEW` (`panel`) |
+| `REVIEW_MODE` — `single` (Task `somi-reviewer`) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens) | `single` | `SOMI_CODE_LOOP_REVIEW` (`panel`) |
 | `HUMAN_CHECKPOINT` — pause between passes if user reply `stop` is detected | always on | (n/a) |
 
 **Precedence:** CLI flag (`--max-passes`, `--diff-cap`) > env var (session override) >
@@ -111,10 +111,10 @@ while true:
     exit 2 → STOP — write remaining ≥Major findings as progress.md follow-ups (by F-id),
              summarise, exit "max-passes-exceeded"
 
-  # 3b. Code — call somi_resolve for coder first (project_dir, model, cost line in
+  # 3b. Code — call somi_resolve for somi-coder first (project_dir, model, cost line in
   #     the briefing); full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch on
   #     Claude Code)
-  Task coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
+  Task somi-coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
 
   # 3c. Diff & scope gate (deterministic — cumulative vs the recorded baseline, working tree
   #     included, .somi/.claude excluded; out-of-scope lines count DOUBLE)
@@ -126,8 +126,8 @@ while true:
   if REVIEW_MODE == "panel":
     Task /review-panel ( = <slug> phase <N>, iteration <M> )   # a command — resolves its own lenses
   else:
-    # call somi_resolve for reviewer first; full rules: the somi-dispatch skill
-    Task reviewer ( = /review <slug>, scope = this iteration's diff )
+    # call somi_resolve for somi-reviewer first; full rules: the somi-dispatch skill
+    Task somi-reviewer ( = /review <slug>, scope = this iteration's diff )
 
   # 3e. Record the pass + findings. The ledger computes recurrence on a STABLE locus
   #     (file + symbol + normalized title — never the raw line number, which drifts between
