@@ -10,11 +10,11 @@ import assert from 'node:assert/strict';
 const WS = process.env.TASK_WORKSPACE;
 const RUNNER = fileURLToPath(new URL('./render.mjs', import.meta.url));
 let hung = false; // once a call that uses double brackets times out, later such calls fail at once instead of waiting again
-function render(md, { slow = false } = {}) {
+function render(md) {
   const wikiInput = md.includes('[[');
   assert.ok(!(wikiInput && hung), 'an earlier call timed out');
   const nonce = randomUUID();
-  const r = spawnSync(process.execPath, [RUNNER, nonce], { cwd: WS, env: process.env, input: JSON.stringify({ md }), encoding: 'utf8', timeout: slow ? 4000 : 2000, killSignal: 'SIGKILL', maxBuffer: 16 << 20 });
+  const r = spawnSync(process.execPath, [RUNNER, nonce], { cwd: WS, env: process.env, input: JSON.stringify({ md }), encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL', maxBuffer: 16 << 20 });
   if (r.error) { if (wikiInput) hung = true; assert.fail('rendering did not finish: ' + r.error.code); }
   const m = new RegExp('\\nH7:' + nonce + ':(.*)\\n').exec(r.stdout ?? '');
   assert.ok(m, 'the renderer did not report');
@@ -39,8 +39,8 @@ function page(a) {
   return decodeURIComponent(rest);
 }
 const tidy = (s) => s.replace(/\s+/g, ' ').trim();
-function wiki(md, opts) { const html = render(md, opts); const a = anchors(html).filter((x) => x.href.startsWith('/wiki/')); return { html, a }; }
-function one(md, opts) { const r = wiki(md, opts); assert.equal(r.a.length, 1, 'expected one wiki link in ' + r.html.slice(0, 300)); return { html: r.html, link: r.a[0] }; }
+function wiki(md) { const html = render(md); const a = anchors(html).filter((x) => x.href.startsWith('/wiki/')); return { html, a }; }
+function one(md) { const r = wiki(md); assert.equal(r.a.length, 1, 'expected one wiki link in ' + r.html.slice(0, 300)); return { html: r.html, link: r.a[0] }; }
 const without = (html, link) => html.replace(link.whole, '@');
 
 const RESERVED = ['a/b', 'what? yes', 'C# notes', 'AT&T', 'x=1;y=2', 'a+b', 'a:b@c', 'back\\slash', 'Q&A / FAQ?'];
@@ -176,9 +176,12 @@ test('AC7 [safety] text that cannot be written in an address does not make the r
   assert.ok(html.includes('bad') && html.includes('name'), html);
 });
 // README: "Size ... a 200 KB document renders in well under a second, so no rule may take more than linear time on long runs of unclosed or repeated markers."
+// Each input is the README's 200 KB, under a 2 s budget that includes starting node: a linear rule takes
+// milliseconds, a quadratic one many seconds on any machine. Smaller inputs under a 4 s budget let a
+// quadratic rule pass on a fast CI runner and fail on a slow laptop.
 test('AC7 [boundary] very long runs of unclosed brackets are rendered quickly', () => {
-  for (const md of ['[[a '.repeat(40000), '[['.repeat(60000), '[[x|'.repeat(40000), '[[' + 'word '.repeat(40000)]) {
-    const { link } = one(md + ' [[Ok]]', { slow: true });
+  for (const md of ['[[a '.repeat(50000), '[['.repeat(100000), '[[x|'.repeat(50000), '[[' + 'word '.repeat(40000)]) {
+    const { link } = one(md + ' [[Ok]]');
     assert.equal(page(link), 'Ok');
   }
 });
