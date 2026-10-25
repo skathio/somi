@@ -39,6 +39,8 @@ export const RESUME_PROMPT = 'Approved. Continue to completion without further q
 const AUTH_STDERR = /\b401\b|not logged in|invalid (api key|authentication)|authentication[_ ]error|oauth token.{0,40}(expired|revoked)/i;
 const TERMINAL_QUESTION = /\?[\s"'*_)\]`]*$/;
 const CHECKPOINT_MENU = /\bapprove\b[^\n]{0,120}\brevise\b[^\n]{0,120}\babort\b/i;
+// ship-loop's Stage -1 gate laid out as a list: "Reply to continue:" with `approve` and `abort` on later lines, as newer models lay it out.
+const GATE_MENU = /\b(reply|respond|answer)\b[\s\S]{0,120}?\bapprove\b[\s\S]{0,400}?\babort\b/i;
 const EXPLICIT_REQUEST = /\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\bneeds? your (verdict|decision|approval|input)\b|\b(shall|should|may) I\b[^.]*\?/i;
 
 // ---- command line and environment ----------------------------------------------------------------------------
@@ -68,12 +70,12 @@ export function childEnv({ token, tmp, tokenFd = false }) {
 
 /**
  * Pause heuristic. A SoMi turn is waiting for the operator ONLY when its last assistant text (1) ends in a question, or (2) shows the
- * checkpoint menu (approve, revise, abort), or (3) explicitly asks for approval or confirmation. Words like "approve" or "confirmed"
+ * checkpoint menu (approve, revise, abort) or a reply cue followed by approve and abort, or (3) explicitly asks for approval or confirmation. Words like "approve" or "confirmed"
  * inside a status report are not a pause.
  */
 export function looksPaused(text) {
   const t = String(text ?? '').trim();
-  return TERMINAL_QUESTION.test(t) || CHECKPOINT_MENU.test(t) || EXPLICIT_REQUEST.test(t);
+  return TERMINAL_QUESTION.test(t) || CHECKPOINT_MENU.test(t) || GATE_MENU.test(t) || EXPLICIT_REQUEST.test(t);
 }
 
 /** The env file -> {ok: true, token} or {ok: false, reason}. Owner-only, one regular file, one key, no echo of its content. */
