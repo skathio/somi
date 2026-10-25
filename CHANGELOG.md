@@ -6,103 +6,89 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
-**Fix — Stage -1 sizing is easier for weaker models.** The `somi_tier` tool now advertises the
-rubric's exact signal ids in its input schema, and `scripts/somi-tier.mjs resolve` lists keys it
-does not recognise (`unrecognized`, with `expected`) when there are any, so a model that invented
-names can correct them; the decision itself is unchanged (a missing signal is still read as its
-worst case). `/ship-loop` Stage -1 now tells the model to load the routing skill first and to use
-the `somi_tier` tool for the computation, and says how to spell the CLI path for `--record`.
+## [4.0.0] — 2026-10-25 — feat!: a hard cost cap, per-agent tiers in config, a sized `/ship-loop` and a usage measurement system
 
-**Fix — agents no longer declare `model:`, so the session tier is a real cap.** BEHAVIOUR CHANGE:
-a launch that skips the resolver (no `model` passed to `Task`) used to run at the agent's declared
-top-tier `model:`; it now inherits the session's model. This closes a leak where pinned-`low`
-reviewer calls ran on the top tier. The way back to the old depth is a `cost.agents` entry for
-the agent, or passing the model on the launch. `scripts/validate.sh` now fails the build on any
-`agents/*.md` that declares `model:`. On Copilot CLI, where the agent's own `model:` may have
-governed, the host's default model now applies.
+**Major — one behaviour change to cost resolution, plus new commands and tooling.** 3.1.x is merged in
+(the `somi_agent` tool, the frontmatter gate and the `enforced` flag are unchanged). Nothing below
+claims a cost or speed saving: the measurement system in this release exists so later changes can be
+judged against a recorded baseline, and it records none.
 
-**Minor (proposed, version files untouched) — the cost ceiling is a hard cap, with per-agent
-overrides.** Before, an agent ran at the highest tier it declared that fit under the ceiling, and
-at its cheapest declared tier when none fit, so a `medium` session still ran high-only agents at
-`high`. Now an agent runs at the ceiling tier itself, or at its own `cost.agents` entry.
+### Changed — behaviour
 
-- **BEHAVIOUR CHANGE: default ceiling `medium`.** With no `.somi/config.json`, every agent runs at
-  `medium`. Ten agents previously ran at `high` and now drop to `medium`: `reviewer`,
-  `architecture-reviewer`, `test-strategist`, `plan-reviewer` and `sdlc-reviewer` (declared
-  `medium, high`), and `designer`, `atlas`, `discovery-analyst`, `refactor-designer` and
-  `security-reviewer` (declared `high` only). Under a `low` ceiling the judging agents now run at
-  `low`, reported as degraded. Raising `cost.ceiling` to `high` is not the way back: it also lifts
-  every unpinned agent (`coder`, `planner`, `refactorer`, `pr`, `incident`, `impact`) to `high`.
-  The way back is a `cost.agents` entry of `high` for each of those ten agents. A default config
-  and `/somi-config` to manage these are planned for later phases and are not shipped yet. An
-  agent with no entry follows the ceiling even above its declared set, so cost can rise as well as
-  fall.
-- **`cost.agents` overrides.** `.somi/config.json` may map an agent name to a tier; an entry wins
-  over the ceiling, even above it. Unknown agent names are accepted and ignored.
-- **Config read live.** `cost.ceiling` is read on every dispatch. Precedence: `--ceiling` flag,
-  then `SOMI_COST_CEILING`, then the config, then a ceiling an earlier call set from the flag or
-  env var, then `medium`. A persisted flag/env ceiling is therefore outranked by the config; an
-  in-chat raise does not last where the config sets one. State written with origin `default`,
-  `config` or no origin never outranks the config or the default. `config-stale` and `unknown`
-  are no longer reported.
-- **Result fields.** `somi_resolve` and `somi-dispatch resolve` add `declared`, `degraded` (the
-  tier is below the highest declared one) and `tier_source` (`override` or `ceiling`).
-  `ceiling_source` and `ceiling_origin` remain. The dispatch skill prints a line when an agent
-  runs degraded.
-- **Config hardening.** The committed config is refused (exit 67) when it is a symlink, not a
-  regular file, or over 64 KiB; unknown `cost.*` keys, bad agent names and bad tiers are 67. The
-  ceiling state file is read the same way and written atomically.
-- **Not measured.** No cost saving is claimed.
+- **The cost ceiling is a hard cap, with per-agent overrides.** Before, an agent ran at the highest
+  tier it declared that fit under the ceiling, and at its cheapest declared tier when none fit, so a
+  `medium` session still ran high-only agents at `high`. Now an agent runs at its own
+  `cost.agents` entry, or at the ceiling when it has none, and an entry wins even above the ceiling.
+  An agent with no entry follows the ceiling even above the tier it was built for, so cost can rise
+  as well as fall. The default ceiling is `medium`.
+- **A default config is written at session start.** When a project has no `.somi/config.json`, the
+  SessionStart hook creates one with `cost.ceiling: medium` and every agent pinned to its default
+  tier (`reviewer`, `plan-reviewer`, `architecture-reviewer`, `test-strategist`, `sdlc-reviewer`,
+  `designer`, `atlas`, `discovery-analyst`, `refactor-designer` and `security-reviewer` at `high`;
+  `coder`, `planner`, `refactorer`, `pr`, `incident` and `impact` at `medium`). A project that
+  already has a config is only read, never written; if its `security-reviewer` tier is missing or
+  below `high`, the hook prints one fixed notice. Without that file (for example a host where the
+  hook does not run) the ten high-tier agents fall to `medium` under the default ceiling. The way
+  back is a `cost.agents` entry of `high` for each of them; raising `cost.ceiling` to `high` is not
+  the way, because it also lifts every unpinned agent.
+- **Lowering needs you.** A change to `.somi/config.json` that lowers any agent's effective tier,
+  the ceiling, or the `security-reviewer` below `high` is held for confirmation by a PreToolUse
+  hook; the `somi_config` tool refuses a lowering unless it runs from the plugin install.
+- **Agents no longer declare `model:` or `cost:`.** A launch that skips the resolver (no `model`
+  passed to `Task`) used to run at the agent's declared top-tier model; it now inherits the
+  session's model, which closes a leak where pinned-`low` reviewer calls ran on the top tier. The
+  agents' tier now comes from one shipped table (`scripts/lib/cost-defaults.mjs`) plus
+  `cost.agents`. `scripts/validate.sh` fails the build on any `agents/*.md` that declares `model:`
+  or `cost:`. On Copilot CLI, where the agent's own `model:` may have governed, the host's default
+  model now applies.
+- **Result fields.** `somi_resolve` and `somi-dispatch resolve` add `declared` (now the one default
+  tier), `degraded` (the chosen tier is below it) and `tier_source` (`override` or `ceiling`).
+  `ceiling_source` and `ceiling_origin` remain. A project's `cost:` left in an agent file is
+  ignored.
+- **Config read live, with precedence.** `cost.ceiling` is read on every dispatch: `--ceiling` flag,
+  then `SOMI_COST_CEILING`, then the config, then a ceiling an earlier call set from the flag or env
+  var, then `medium`. `config-stale` and `unknown` are no longer reported. The committed config is
+  refused (exit 67) when it is a symlink, not a regular file, or over 64 KiB; unknown `cost.*` keys,
+  bad agent names and bad tiers are 67.
 
-**Minor (proposed, version files untouched) — `/ship-loop` sizes the work before it runs.** A new
-Stage -1 reads the request against the code and picks `trivial`, `small` or `full`; `trivial` and
-`small` stop at one human gate and skip planning, `full` is the previous flow unchanged. Escape:
-`SOMI_SHIP_LOOP_TIER=full` (set by the operator) or reply `full` at the gate.
+### Added
 
-- **Rubric in one place.** The `somi-routing` skill's Size tiers section defines the signals and
-  limits; `scripts/lib/size-tier.mjs` decides, and a drift guard keeps the two equal.
-- **Security floor.** Work touching auth, crypto, secrets, PII or an untrusted-input boundary, and
-  work that cannot be shown free of them, is `full`; a downward override below that is refused (65).
-- **`scripts/somi-tier.mjs`** — `resolve` (tier, override, attempts log, tier record) and `approve`
-  (stamps the human approval and the brief hash). `scripts/somi-loop.mjs init` refuses a brief-only
-  work item without that stamp. `/code` and `/code-loop` accept such an item as iteration 1.1.
-- **`somi_tier` MCP tool** — runs the same CLI, so Copilot gets identical results and exit codes.
-- **Not measured.** No cost or time saving is claimed; the live comparison is still to run, and the
-  thresholds (100 production lines, 6 files, 2 modules) are provisional.
+- **`/somi-config`** (and the `somi_config` MCP tool) — read and change `cost.ceiling` and
+  per-agent tiers from chat, with the lowering gate above.
+- **`/ship-loop` sizes the work before it runs.** A new Stage -1 reads the request against the code
+  and picks `trivial`, `small` or `full`; `trivial` and `small` stop at one human gate and skip
+  planning, `full` is the previous flow unchanged. Escape: `SOMI_SHIP_LOOP_TIER=full` (set by the
+  operator) or reply `full` at the gate. The rubric lives in the `somi-routing` skill's Size tiers
+  section and `scripts/lib/size-tier.mjs` decides, with a drift guard between them. Work touching
+  auth, crypto, secrets, PII or an untrusted-input boundary, and work that cannot be shown free of
+  them, is `full`; a downward override below that is refused. `scripts/somi-tier.mjs` (`resolve`,
+  `approve`) and the `somi_tier` MCP tool run the same decision; `scripts/somi-loop.mjs init`
+  refuses a brief-only work item without the approval stamp. The `somi_tier` tool advertises the
+  rubric's exact signal ids and `resolve` lists keys it does not recognise, so a weaker model can
+  correct invented names; Stage -1 loads the routing skill first. The thresholds (100 production
+  lines, 6 files, 2 modules) are provisional.
+- **A usage and speed measurement system** (`docs/USAGE-BENCHMARK.md`, `benchmarks/usage-speed/`).
+  L0 counts the bytes of instruction text injected for each standard scenario; L1 times hooks,
+  scripts and an MCP round trip locally; L2 runs paired live draws with and without SoMi. A
+  pre-registered rule (version 1, sealed) turns two baselines into better, worse, inconclusive or
+  inconclusive-guarded, using a ratio of medians with a 90% bootstrap interval, a minimum effect per
+  layer and a quality non-inferiority guard. The committed baseline was recorded on the pre-4.0.0
+  commit with the low tier and every agent pinned. Limits: live L2 resolves only changes of roughly
+  50% or more; one scenario (T1) is reported as a distribution, not a ratio; it cannot certify
+  quality equality. The drivers and tests live under `tests/` and `benchmarks/` and are not shipped.
 
-## [3.1.0] — 2026-10-02 — fix: SoMi agents unusable on GitHub Copilot
+### Fixed
 
-**Minor — one new MCP tool, plus fixes** ([#30](https://github.com/skathio/somi/issues/30)).
-On GitHub Copilot the front door could not start SoMi's agents, for three reasons.
+- **A hook no longer hangs on an audit path that cannot be created** (a `SOMI_AUDIT_LOG` under
+  `/proc`): directory creation is bounded and the hook fails fast.
 
-- **Invalid YAML frontmatter.** Copilot rejects frontmatter that Claude Code tolerates, and
-  skipped `designer`, `refactor-designer` and `reviewer` with "mapping values are not allowed".
-  Their `description:` values contained an unquoted `: `, as did `commands/atlas.md`,
-  `commands/design.md` and `commands/ship-loop.md`. `commands/atlas.md`'s `argument-hint:` started
-  with `[`. The `argument-hint:` of `/review`, `/security-review` and `/architecture-review`
-  contained ` #`, which YAML reads as a comment, so everything after `<PR` was silently dropped.
-  All are now quoted.
-- **A real frontmatter gate.** `scripts/check-frontmatter.mjs` replaces `validate.sh`'s "a line
-  starts with `---`" check. It requires flat `key: value` frontmatter and fails the plain-scalar
-  forms YAML rejects or truncates. It is a targeted check, not a YAML parser, which keeps the suite
-  zero-dependency; every file it passes also parses with PyYAML.
-- **New `somi_agent` MCP tool.** Copilot's subagent tool accepts only its built-in agent types
-  (`Unknown agent_type: coder`), so plugin agents cannot be started by name there. `somi_agent`
-  returns an agent's instructions without frontmatter. When the host rejects an agent type, the
-  `somi-dispatch` skill (§5, step 5) now starts the built-in general-purpose subagent with that text
-  and the resolved model. This keeps a reviewer's fresh context, which running the role inline
-  would lose. `somi_command` and `somi_skill` now share one reader with it, with the same name
-  allowlist and unchanged messages.
-- **`model: null` on Copilot is expected**, because SoMi ships no Copilot model mapping. The
-  dispatch skill now says that the host's own "don't set a model" instruction wins over its
-  visible-model pick, and that `cost.mapping` is how to bind tiers to models.
-- **Docs:** `docs/PLUGIN.md` lists `somi_agent` and notes that a second install under
-  `~/.vscode/agent-plugins/` is skipped by Copilot.
+### Migration
 
-Not verified on a real Copilot host: whether general-purpose subagents there accept the `model`
-argument.
-
-No migration action required.
+- Projects with a `.somi/config.json` keep it untouched; add `cost.agents` entries for any agent
+  you want to stay above the `medium` ceiling.
+- Custom agents you added under `agents/` need an entry in `cost.agents` (an agent file with no
+  default-table entry is refused with exit 66 when dispatched).
+- Anything that read `cost:` or `model:` from agent frontmatter must read `somi_resolve` instead.
 
 ## [3.1.1] — 2026-10-05 — fix: unenforced cost tier reported as dispatched on Copilot
 
