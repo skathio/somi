@@ -69,7 +69,7 @@
 //      block-secret-writes.mjs's own basename note, on the safe side here too.
 
 import path from 'node:path';
-import { readPayload, field, denyPretool, runHook, projectRoot, config } from '../lib/common.mjs';
+import { readPayload, field, denyPretool, runHook, projectRoot, config, writeTargets } from '../lib/common.mjs';
 
 const PROTECTED_GLOBS = [
   // Source-control internals.
@@ -126,9 +126,15 @@ function lockfilesAllowed() {
 function main() {
   const payload = readPayload();
   const tool = field(payload, '.tool_name');
-  let pathInput = field(payload, '.tool_input.file_path');
-  if (!pathInput) return;
+  const { paths, known } = writeTargets(payload);
+  if (!known) {
+    denyPretool(payload, `somi refused to ${tool}: it could not tell which file this writes, so the protected-path guard cannot check it.`);
+  }
+  for (const target of paths) checkPath(payload, tool, target);
+}
 
+function checkPath(payload, tool, target) {
+  let pathInput = target;
   // Normalise relative paths so the leading-`*/` globs above still match (a relative
   // `node_modules/x.js` would otherwise slip past `*/node_modules/*`). Reuses common.mjs's
   // projectRoot() — the centralized ${...}-unexpanded-variable guard — rather than

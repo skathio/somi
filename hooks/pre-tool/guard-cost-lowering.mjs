@@ -22,12 +22,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { readPayload, field, askPretool, HookExit, projectRoot } from '../lib/common.mjs';
+import { readPayload, field, askPretool, HookExit, projectRoot, writeTargets } from '../lib/common.mjs';
 
 const LIB = path.join(import.meta.dirname, '..', '..', 'scripts', 'lib');
 const UNEVALUABLE = 'SoMi: this change to .somi/config.json could not be evaluated, so it needs your confirmation.';
 const OUTSIDE = 'SoMi: this call names a project directory outside the project root, so it needs your confirmation.';
 const STATE_WRITE = 'SoMi: this writes the persisted cost ceiling (.somi/somi-state/ceiling.json), which can lower the ceiling, so it needs your confirmation.';
+const UNREADABLE_WRITE = 'SoMi: this writes the SoMi cost config or ceiling in a form the guard cannot evaluate, so it needs your confirmation.';
 const RESOLVE_LOWER = 'SoMi: this somi_resolve call sets a session ceiling lower than the current one, so it needs your confirmation.';
 const SECURITY_ONLY = 'SoMi: after this change security-reviewer would run below high (it is not pinned to high). Confirm only if you intend that.';
 const reasonFor = (reasons, REASONS) => (reasons.length === 1 && reasons[0] === REASONS.security
@@ -115,6 +116,14 @@ async function main() {
 
   const root = projectRoot();
   if (isResolve) return resolveCheck(payload, input, root);
+  // Copilot CLI's file tools (Write with `path`, Edit with a raw patch) carry no file_path and no
+  // before/after the evaluation below can read: a write that reaches the config or the persisted
+  // ceiling in that shape asks. One whose target cannot be read at all is the path guards' to refuse.
+  if (isFileTool && !(typeof input.file_path === 'string' && input.file_path !== '')) {
+    const { paths } = writeTargets(payload);
+    if (paths.some((p) => isConfigPath(root, p) || isStatePath(root, p))) askPretool(payload, UNREADABLE_WRITE);
+    return;
+  }
   // Any write to the persisted ceiling file asks: it is the other way to lower the ceiling.
   if (isFileTool && typeof input.file_path === 'string' && input.file_path !== '' && isStatePath(root, input.file_path)) askPretool(payload, STATE_WRITE);
   let projDir = root; // the directory whose config is evaluated (and whose persisted ceiling applies)

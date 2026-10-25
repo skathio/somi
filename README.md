@@ -99,10 +99,10 @@ Once installed, use `@somi` in GitHub Copilot chat:
 > **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Three things do **not** carry
 > over, because they depend on Claude Code host capabilities Copilot doesn't expose:
 >
-> - **The deterministic guardrail hooks do not fire.** Blocking dangerous bash, secret-writes,
->   protected-path writes, dep-install gating, and the audit log are Claude Code `hooks` — on Copilot
->   they are **absent**, so those safety nets are not enforced. The agent/skill judgment still
->   applies, but the hard stops don't.
+> - **The guardrail hooks run on Copilot CLI only.** Copilot CLI (checked live on 1.0.103) runs
+>   SoMi's hooks: SessionStart, the PreToolUse blocks for dangerous bash, secret-writes and protected
+>   paths, and the audit log; an `ask` verdict becomes a refusal where it cannot prompt. Other Copilot
+>   surfaces (VS Code Chat) are unverified, so don't count on the hard stops there.
 > - **Multi-agent orchestration degrades to sequential.** The loops (`/code-loop`, `/plan-loop`,
 >   `/ship`) and the parallel commands (`/review-panel`, `/code-parallel`) drive Claude Code
 >   sub-agents via the Task tool. Where the host can't spawn sub-agents concurrently, these run

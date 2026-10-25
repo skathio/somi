@@ -117,6 +117,16 @@ judged against a recorded baseline, and it records none.
 - **Repo-awareness never echoes a hostile folder name into the model's context**: a nested
   CLAUDE.md/AGENTS.md path is listed only when every segment is a plain name, otherwise it is counted;
   the scan is bounded by an entry budget and a 1 s deadline (the class ponytail 5.1.1 fixed).
+- **The write guards fail closed on Copilot CLI's file tools.** Copilot CLI runs SoMi's hooks, but
+  its create tool arrives as `Write` with `tool_input.path` and its apply_patch as `Edit` with the raw
+  patch text; the secret-write and protected-path guards read only `file_path` and let both through
+  (a `.env` was written in a live run). A shared `writeTargets` reads all three shapes, the guards
+  check every target and refuse a write whose target cannot be read, the cost guard asks before a
+  Copilot-shaped write to `.somi/config.json` or the persisted ceiling, and the audit log records the
+  paths. Verified live on Copilot CLI 1.0.103 after the fix (`.env` refused; ordinary edits pass).
+- **`somi_config` refuses lowerings and remaps on Copilot CLI** (`COPILOT_PLUGIN_ROOT` set): Copilot
+  also sets `CLAUDE_PLUGIN_ROOT`, which the tool took to mean "a hook can ask", but it names the tool
+  `somi-somi_config`, which the hook's matcher does not catch.
 - The convergence-runner test diffs the set of live `somi-eval-src-*` worktrees instead of a
   repo-wide count, which flaked (#39).
 - **A hook no longer hangs on an audit path that cannot be created** (a `SOMI_AUDIT_LOG` under

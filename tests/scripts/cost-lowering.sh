@@ -82,6 +82,11 @@ check "MCP set that lowers one agent: ask" "$(verdict "$HOOK" "$P" "$(mcp $T set
 check "MCP unset of a pin above the ceiling (after the ceiling was lowered by hand): ask" "$(P2="$(proj)"; node "$CLI" set cost.ceiling low --project-dir "$P2" > /dev/null; verdict "$HOOK" "$P2" "$(mcp $T unset cost.agents.somi-designer)")" "ask"
 check "MCP set of a model mapping: ask (a remap cannot be ranked)" "$(verdict "$HOOK" "$P" "$(mcp $T set cost.mapping.copilot.high big-a)")" "ask"
 case "$(reason_of "$P" "$(mcp $T set cost.mapping.copilot.high big-a)")" in *"(a tier would be mapped to a different model)"*) ok "... and the reason names the remap" ;; *) bad "... and the reason names the remap" ;; esac
+cp_json() { node -e 'const [t, k, v] = process.argv.slice(1); console.log(JSON.stringify({tool_name: t, tool_input: k === "-" ? v : {[k]: v, file_text: "{}"}}))' "$@"; }
+check "Copilot Write (tool_input.path) to .somi/config.json: ask" "$(verdict "$HOOK" "$P" "$(cp_json Write path "$P/.somi/config.json")")" "ask"
+check "Copilot apply_patch touching .somi/config.json: ask" "$(verdict "$HOOK" "$P" "$(cp_json Edit - "$(printf '*** Begin Patch\n*** Update File: .somi/config.json\n@@\n-a\n+b\n*** End Patch\n')")")" "ask"
+check "Copilot apply_patch touching the persisted ceiling: ask" "$(verdict "$HOOK" "$P" "$(cp_json Edit - "$(printf '*** Begin Patch\n*** Add File: .somi/somi-state/ceiling.json\n+{}\n*** End Patch\n')")")" "ask"
+check "Copilot apply_patch on an ordinary file: silent" "$(verdict "$HOOK" "$P" "$(cp_json Edit - "$(printf '*** Begin Patch\n*** Update File: calc.py\n@@\n-a\n+b\n*** End Patch\n')")")" "silent"
 check "MCP raise: silent" "$(verdict "$HOOK" "$P" "$(mcp $T set cost.agents.somi-coder high)")" "silent"
 check "MCP no-op: silent" "$(verdict "$HOOK" "$P" "$(mcp $T set cost.agents.somi-coder medium)")" "silent"
 check "MCP show / get / init: silent" "$(verdict "$HOOK" "$P" "$(mcp $T show)")|$(verdict "$HOOK" "$P" "$(mcp $T get cost.ceiling)")|$(verdict "$HOOK" "$P" "$(mcp $T init)")" "silent|silent|silent"

@@ -70,9 +70,11 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   root and are refused (exit 67) when only a model-supplied `project_dir` exists; run the CLI yourself
   then. A set or unset refuses (67) a file a rewrite could not reproduce faithfully (duplicate keys, an
   integer beyond the safe range, a number outside the double range) or that would grow past 64 KiB.
-  Lowering a tier needs the user: with the SoMi hooks running, a PreToolUse hook asks before a lowering
-  `set`/`unset`; when `CLAUDE_PLUGIN_ROOT` is not set in the server's environment (a heuristic for "no
-  hook can ask", for example Copilot) the tool refuses a lowering with exit 64 and points to the CLI.
+  Lowering a tier or remapping a model needs the user: on Claude Code a PreToolUse hook asks before such
+  a `set`/`unset`. Anywhere else the tool refuses it with exit 64 and points to the CLI: when
+  `CLAUDE_PLUGIN_ROOT` is unset, and on Copilot CLI (`COPILOT_PLUGIN_ROOT` set), which runs SoMi's hooks
+  but names this tool `somi-somi_config`, a name the hook's matcher does not catch. On Copilot CLI the
+  server also gets no project root of its own, so every write is refused (67) and you run the CLI.
   The CLI is also usable directly:
   `node scripts/somi-config.mjs <show|get|set|unset|init> [key] [value] [--project-dir DIR]`.
 - **`somi_agent_info`** — read-only agent registry and dispatch lookup. With no `agent`, the
@@ -212,9 +214,11 @@ After `/plugin install somi@...`:
 SoMi is also a GitHub Copilot extension, distributed through the same marketplace pattern as
 the Claude Code plugin.
 
-> **Parity caveat.** Copilot gets the commands, agents, skills, rules, and templates — but **not** the
-> hook-enforced guardrails (dangerous-bash / secret-write / protected-path blocks, dep-install
-> gating, audit log are Claude Code `hooks` and simply don't run here) and **not** concurrent
+> **Parity caveat.** Copilot gets the commands, agents, skills, rules, and templates. The hook-enforced
+> guardrails (dangerous-bash / secret-write / protected-path blocks, dep-install gating, audit log)
+> run on Copilot CLI (checked live on 1.0.103, including its own file-tool shapes: `Write` with
+> `path`, `Edit` carrying an `apply_patch` body) but are unverified on other Copilot surfaces; and it
+> does **not** get concurrent
 > sub-agent orchestration (the loops and the `/review-panel` / `/code-parallel` parallel fan-outs run
 > sequentially when the host can't spawn sub-agents). The judgment layer is identical; the
 > enforcement and concurrency layers are Claude Code-only. Don't rely on the hard stops on Copilot —

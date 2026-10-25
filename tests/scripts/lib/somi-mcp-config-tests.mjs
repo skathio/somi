@@ -74,7 +74,7 @@ await withClient(alias, async (client) => {
 
 // Lowering needs the user. With no CLAUDE_PLUGIN_ROOT (a heuristic for "no hook can ask") the tool refuses
 // a lowering; with it set the hook asks instead, so the tool does not refuse.
-for (const [label, env, lowersOk] of [['without CLAUDE_PLUGIN_ROOT', { CLAUDE_PLUGIN_ROOT: '' }, false], ['with CLAUDE_PLUGIN_ROOT set', { CLAUDE_PLUGIN_ROOT: ROOT }, true]]) {
+for (const [label, env, lowersOk] of [['without CLAUDE_PLUGIN_ROOT', { CLAUDE_PLUGIN_ROOT: '' }, false], ['with CLAUDE_PLUGIN_ROOT set', { CLAUDE_PLUGIN_ROOT: ROOT, COPILOT_PLUGIN_ROOT: '' }, true], ['under Copilot CLI (COPILOT_PLUGIN_ROOT set too: its tool name escapes the hook matcher)', { CLAUDE_PLUGIN_ROOT: ROOT, COPILOT_PLUGIN_ROOT: ROOT }, false]]) {
   const p = fresh();
   await withClient(p, async (client) => {
     await call(client, { action: 'init', project_dir: p });

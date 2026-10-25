@@ -35,7 +35,7 @@
 // naive `split('\t')` consumer). Preserved as-is: it is inherited bash behavior, and the
 // hook's contract is to keep that behavior, so escaping would be a behavior change.
 
-import { readPayload, field, audit, runHook } from '../lib/common.mjs';
+import { readPayload, field, audit, runHook, writeTargets } from '../lib/common.mjs';
 
 // bash: `head -c 240`, used identically for both the Bash-command summary and the default
 // branch's compact tool_input summary.
@@ -75,7 +75,8 @@ function main() {
     case 'Write':
     case 'Edit':
     case 'Read': {
-      const filePath = field(payload, '.tool_input.file_path');
+      // writeTargets reads Claude Code's file_path and Copilot CLI's path / patch headers alike.
+      const filePath = truncateBytes(writeTargets(payload).paths.join(','), MAX_SUMMARY_BYTES);
       summary = `path="${filePath}"`;
       break;
     }

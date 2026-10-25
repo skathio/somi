@@ -373,11 +373,14 @@ async function callSomiConfig(args) {
   if (args.key !== undefined) argv.push(args.key);
   if (args.value !== undefined) argv.push(args.value);
   if (args.host !== undefined) argv.push('--host', args.host);
-  // Lowering a tier needs the user. Where the SoMi plugin's hooks run (CLAUDE_PLUGIN_ROOT is set in this
-  // server's environment) the cost-lowering PreToolUse hook asks the user; where it is not, nothing can
-  // ask, so the CLI refuses a lowering. This is a heuristic for "a hook can ask", not a guarantee.
+  // Lowering a tier or remapping a model needs the user. Where Claude Code runs the SoMi plugin's hooks
+  // (CLAUDE_PLUGIN_ROOT set) the cost-lowering PreToolUse hook asks; elsewhere nothing can ask, so the CLI
+  // refuses. Copilot CLI also sets CLAUDE_PLUGIN_ROOT, but names this tool `somi-somi_config`, which the
+  // hook's matcher does not catch (verified live on 1.0.103), so COPILOT_PLUGIN_ROOT means "refuse".
+  // A heuristic for "a hook can ask", failing closed on any host it does not recognise.
   const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
-  if ((args.action === 'set' || args.action === 'unset') && !(pluginRoot && !pluginRoot.includes('${'))) argv.push('--refuse-lowering');
+  const hookCanAsk = pluginRoot && !pluginRoot.includes('${') && !process.env.COPILOT_PLUGIN_ROOT;
+  if ((args.action === 'set' || args.action === 'unset') && !hookCanAsk) argv.push('--refuse-lowering');
   argv.push('--project-dir', fs.realpathSync(rootOutcome.root));
   const r = spawnSync(process.execPath, argv, { encoding: 'utf8', timeout: 10000 });
   if (r.status === 0) return textResult(r.stdout.trimEnd());

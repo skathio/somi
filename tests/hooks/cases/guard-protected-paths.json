@@ -1,34 +1,180 @@
 {
   "script": "pre-tool/guard-protected-paths.mjs",
   "cases": [
-    { "name": "write-tier-record", "expect": "deny",
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/.somi/somi-state/tier/x.json" } } },
-    { "name": "write-signals-file-allowed", "expect": "allow",
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/.somi/somi-state/x-signals.json" } } },
-    { "name": "write-node-modules-absolute", "expect": "deny",
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/node_modules/lodash/index.js" } } },
-    { "name": "write-node-modules-relative", "expect": "deny",
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "node_modules/lodash/index.js" } } },
-    { "name": "write-git-internals", "expect": "deny",
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/.git/config" } } },
-    { "name": "write-dist-relative", "expect": "deny",
-      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "dist/bundle.js" } } },
-    { "name": "write-somi-plugin-install", "expect": "deny",
-      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/home/u/.claude/plugins/somi/rules/CLAUDE.md" } } },
-    { "name": "edit-package-lock", "expect": "deny",
-      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/repo/package-lock.json" } } },
-
-    { "name": "edit-package-lock-opted-in", "expect": "allow",
-      "env": { "SOMI_ALLOW_LOCKFILES": "1" },
-      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/repo/package-lock.json" } } },
-    { "name": "edit-package-lock-config-policy", "expect": "allow",
-      "config": { "lockfiles": { "allow_edit": true } },
-      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/repo/package-lock.json" } } },
-    { "name": "edit-package-lock-env-zero-beats-config", "expect": "deny",
-      "env": { "SOMI_ALLOW_LOCKFILES": "0" },
-      "config": { "lockfiles": { "allow_edit": true } },
-      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "/repo/package-lock.json" } } },
-    { "name": "write-source-file", "expect": "allow",
-      "payload": { "tool_name": "Write", "tool_input": { "file_path": "/repo/src/app.ts" } } }
+    {
+      "name": "write-tier-record",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/repo/.somi/somi-state/tier/x.json"
+        }
+      }
+    },
+    {
+      "name": "write-signals-file-allowed",
+      "expect": "allow",
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/repo/.somi/somi-state/x-signals.json"
+        }
+      }
+    },
+    {
+      "name": "write-node-modules-absolute",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/repo/node_modules/lodash/index.js"
+        }
+      }
+    },
+    {
+      "name": "write-node-modules-relative",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "node_modules/lodash/index.js"
+        }
+      }
+    },
+    {
+      "name": "write-git-internals",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/repo/.git/config"
+        }
+      }
+    },
+    {
+      "name": "write-dist-relative",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": {
+          "file_path": "dist/bundle.js"
+        }
+      }
+    },
+    {
+      "name": "write-somi-plugin-install",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": {
+          "file_path": "/home/u/.claude/plugins/somi/rules/CLAUDE.md"
+        }
+      }
+    },
+    {
+      "name": "edit-package-lock",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": {
+          "file_path": "/repo/package-lock.json"
+        }
+      }
+    },
+    {
+      "name": "edit-package-lock-opted-in",
+      "expect": "allow",
+      "env": {
+        "SOMI_ALLOW_LOCKFILES": "1"
+      },
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": {
+          "file_path": "/repo/package-lock.json"
+        }
+      }
+    },
+    {
+      "name": "edit-package-lock-config-policy",
+      "expect": "allow",
+      "config": {
+        "lockfiles": {
+          "allow_edit": true
+        }
+      },
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": {
+          "file_path": "/repo/package-lock.json"
+        }
+      }
+    },
+    {
+      "name": "edit-package-lock-env-zero-beats-config",
+      "expect": "deny",
+      "env": {
+        "SOMI_ALLOW_LOCKFILES": "0"
+      },
+      "config": {
+        "lockfiles": {
+          "allow_edit": true
+        }
+      },
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": {
+          "file_path": "/repo/package-lock.json"
+        }
+      }
+    },
+    {
+      "name": "write-source-file",
+      "expect": "allow",
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/repo/src/app.ts"
+        }
+      }
+    },
+    {
+      "name": "copilot-write-into-node-modules-via-path",
+      "_note": "Copilot CLI shape, captured live (1.0.103): create arrives as Write with tool_input.path; apply_patch arrives as Edit with tool_input = the raw patch text. Reading only file_path let both through unchecked.",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Write",
+        "tool_input": {
+          "path": "/repo/node_modules/x/index.js",
+          "file_text": "x"
+        }
+      }
+    },
+    {
+      "name": "copilot-patch-into-git-dir",
+      "_note": "Copilot CLI shape, captured live (1.0.103): create arrives as Write with tool_input.path; apply_patch arrives as Edit with tool_input = the raw patch text. Reading only file_path let both through unchecked.",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": "*** Begin Patch\n*** Update File: src/a.js\n@@\n-a\n+b\n*** Add File: .git/hooks/pre-commit\n+echo hi\n*** End Patch\n"
+      }
+    },
+    {
+      "name": "copilot-patch-ordinary-file",
+      "_note": "Copilot CLI shape, captured live (1.0.103): create arrives as Write with tool_input.path; apply_patch arrives as Edit with tool_input = the raw patch text. Reading only file_path let both through unchecked.",
+      "expect": "allow",
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": "*** Begin Patch\n*** Update File: calc.py\n@@\n-    return a + b\n+    return b + a\n*** End Patch\n"
+      }
+    },
+    {
+      "name": "edit-with-unparseable-patch-fails-closed",
+      "_note": "An Edit whose input is text with no file header has no readable target: refused.",
+      "expect": "deny",
+      "payload": {
+        "tool_name": "Edit",
+        "tool_input": "just some text"
+      }
+    }
   ]
 }
