@@ -31,34 +31,34 @@ covers boundaries but lacks a true concurrency assertion).
 
 ### Majors
 
-#### 1. [Major / High] `Allow` signature couples the in-memory impl to a Redis-shaped future
+#### [Major / High] `Allow` signature couples the in-memory impl to a Redis-shaped future
 
 - **Where**: `internal/ratelimit/limiter.go:9-15`
-- **What this is**: the limiter interface every caller uses:
-  `Allow(ctx context.Context, key string, n int) (bool, time.Duration, error)`.
-- **Problem**: the in-memory impl always returns a `nil` error, and every current caller in tests
-  ignores it. When the Redis-backed impl lands in Phase 2 and a Redis timeout returns an error, those
-  callers drop it and treat the request as allowed or denied by accident.
-- **Fix**: either (a) wire a deliberate logged-and-counted error in the test fake so the contract is
-  exercised, or (b) start with `Allow(ctx, key, n) (bool, time.Duration)` and add `error` in Phase 2.
-  I'd pick (a): it keeps the interface stable.
-- **If skipped**: Phase 2 ships callers that have spent two months learning to ignore the error.
+- **What's wrong**: `Allow(ctx context.Context, key string, n int) (bool, time.Duration, error)`
+  returns an `error` and a `retryAfter` duration that the in-memory limiter will never actually use.
+  The in-memory impl always returns `nil` error and computes `retryAfter` deterministically. Every
+  current caller in tests ignores the error.
+- **Why it matters**: when the Redis-backed impl lands in Phase 2, it will start returning errors
+  that callers have spent two months learning to ignore. The interface should either exercise the
+  contract in this iteration or drop it until Phase 2.
+- **Suggested fix**: either (a) wire a deliberate logged-and-counted error in the test fake so the
+  contract is exercised, or (b) start with `Allow(ctx, key, n) (bool, time.Duration)` and add `error`
+  in Phase 2 when there's a real source of error. I'd pick (a) — keeps the interface stable.
 
 ### Minors
 
-#### 2. [Minor / Medium] Concurrency test isn't actually concurrent
+#### [Minor / Medium] Concurrency test isn't actually concurrent
 
 - **Where**: `internal/ratelimit/inmem_test.go:88-104`
-- **What this is**: `TestConcurrentAllow`, the one test meant to prove the bucket is thread-safe.
-- **Problem**: it waits on a `sync.WaitGroup` *after* each goroutine has already finished its work,
-  so the goroutines run one after another; a bucket with no locking at all passes it.
-- **Fix**: gate the goroutines on one starting line (a `chan struct{}` close) so they fire in a tight
-  burst; then assert the total `Allow`s ≤ budget.
-- **If skipped**: a data race in the bucket ships with a green test that claims it can't.
+- **What's wrong**: `TestConcurrentAllow` spawns goroutines but synchronises them with a `sync.WaitGroup`
+  *after* each one has already finished its work — the goroutines effectively run sequentially.
+- **Why it matters**: this test passes whether or not the bucket is actually thread-safe.
+- **Suggested fix**: gate the goroutines on a single `sync.Mutex.Lock`-style starting line (or
+  `chan struct{}` close) so they fire in a tight burst; then assert the total `Allow`s ≤ budget.
 
 ### Nits
 
-#### 3. [Nit / Low] Variable name `n` in `Allow` is opaque
+#### [Nit / Low] Variable name `n` in `Allow` is opaque
 
 - **Where**: `internal/ratelimit/limiter.go:14`
 - **Suggestion**: rename to `cost` or `tokens` so callers don't have to read the godoc to know what

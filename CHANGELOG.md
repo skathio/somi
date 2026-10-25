@@ -34,17 +34,15 @@ judged against a recorded baseline, and it records none.
   release notes:
   - every reply that did work ends with one or two lines: what was skipped or not checked, and any
     risk the user must know (digest and `rules/50`);
-  - `somi-reviewer`: a "Check before you report" gate (no concrete case, no finding; re-read and
-    confirm the premise; smallest fix, deletion preferred; no "consider"), the expected load stated and
-    judged against, a Lean category (delete, reuse, stdlib, yagni, merge, split) and a scale lens;
-    findings numbered across severities with What this is / Problem / Fix / If skipped; closing
-    `Lean:` and `Not checked:` lines. A hunch is now a question for the author, not a Low-confidence
-    finding. Same shape in `templates/REVIEW.md.tmpl` and the example review;
   - `somi-coder` maps every place a change must reach (callers, fixtures, config, exports) and what it
     could break, fixes a bug once in the shared code, and marks a kept shortcut as
-    `shortcut: <the limit>, <when to upgrade>`, which reviewers treat as a decision.
-  L0 cost: +97 bytes on every prompt; the review scenario +2.7 KB, code-loop +3.4 KB. Its effect on
-  review precision and recall is not measured yet.
+    `shortcut: <the limit>, <when to upgrade>`;
+  - code-review findings add **If skipped** (what ships unfixed) and must name the concrete input or
+    path. ponytail-review's fuller shape (a "check before you report" gate, numbered What this is /
+    Problem / Fix findings, Lean and scale lenses) was tried and not kept: on the review-recall set
+    (Haiku 5.5, 40 mutants, 10 clean diffs) it caught 35 mutants against 39 for the reviewer kept, and
+    flagged 9 clean diffs against 8.
+  L0 cost: +97 bytes on every prompt.
 - **The cost ceiling is a hard cap, with per-agent overrides.** Before, an agent ran at the highest
   tier it declared that fit under the ceiling, and at its cheapest declared tier when none fit, so a
   `medium` session still ran high-only agents at `high`. Now an agent runs at its own

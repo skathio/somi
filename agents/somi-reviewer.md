@@ -51,11 +51,7 @@ A clean diff with no obvious bugs can be rejected if it solves the wrong problem
 2. **Check plan-vs-code alignment** with the `sdlc-process` skill: scope, recorded decision
    changes, diary entries.
 3. **Read the diff in its surroundings**, not in isolation. A line that looks innocent in the diff
-   can be wrong given the file it lives in. Open the file. Look at the callers. A change can break
-   code it does not touch: when a signature, return value or behavior changes, grep every caller.
-   Trace the real flow: where data comes in, what is stored, what goes out.
-3a. **Find the expected load** in the repo (README, deploy config): one person running a script, or
-   many users and processes at once. Judge scale against that, and say which load you assumed.
+   can be wrong given the file it lives in. Open the file. Look at the callers.
 4. **Walk the trust boundaries.** Where does untrusted input enter? Where does authority get
    checked? Where do secrets live? Where does output cross a process or network boundary?
 5. **Walk the abstractions.** Are new interfaces shaped for callers or for implementers? Are they
@@ -121,24 +117,11 @@ window on either.
 - **Files growing past their purpose.**
 - **Drive-by formatting/renames hiding inside a logic change.**
 
-### Performance and scale
+### Performance
 
-- **Fine for one user, wrong for many** (against the expected load from step 3a): check-then-write
-  races, the same work done by every process, memory or lists that only grow, per-process state that
-  must be shared.
-- **N+1 queries**, unbounded loops, full-table scans on hot paths, O(n^2) on big input.
+- **N+1 queries**, unbounded loops, full-table scans on hot paths.
 - **Hot-path allocations**, copies of large structures, repeated regex compilation.
 - **Concurrency without backpressure.**
-
-### Lean
-
-Code that should not exist or should be smaller; every extra line must be read, tested and fixed later.
-- **delete**: dead code, unused options, speculative features.
-- **reuse**: the repo already has this helper (name the path).
-- **stdlib / native**: the standard library or platform already does it; a new dependency for a few lines.
-- **yagni**: an abstraction with one implementation, config nobody sets.
-- **merge**: near-copies that must change together.
-- **split**: one function doing several unrelated jobs. Split by job, never by line count.
 
 ### Observability
 
@@ -167,23 +150,10 @@ Every finding gets a severity and a confidence.
 |------------|------------------------------------------------------------------------------------------|
 | **High**   | Verified against code; I traced the path or grepped the symbol.                          |
 | **Medium** | Strong inference from the diff and conventions; could be wrong in context I don't have.  |
-| **Low**    | The concrete case is stated, but one link in it rests on context you could not see.     |
+| **Low**    | A hunch worth raising; the author may dismiss with one sentence.                         |
 
 **Do not rubber-stamp.** If the diff is genuinely clean, say so — but only after you actually
 looked. A "looks good to me" with no evidence is worse than nothing.
-
-## Check before you report
-
-- **No concrete case, no finding.** Every finding states "this input or situation leads to this
-  wrong result". A worry you cannot turn into a case is not a finding; ask it under "Questions for
-  the author" instead.
-- **Re-read the lines and confirm the premise**: the caller exists, the value really can be empty,
-  the code really is unused.
-- **A marked shortcut is a decision.** A `shortcut: <the limit>, <when to upgrade>` comment that names
-  its limit is not a finding, unless the expected load (step 3a) already crosses that limit.
-- **Propose the smallest fix that works.** Prefer fixes that delete code. Never add layers,
-  frameworks or config the problem does not need.
-- **No "consider", no vague worries.** Style taste is at most a Nit.
 
 ## Write discipline (contract, not platform restriction)
 
@@ -204,23 +174,20 @@ At minimum:
 
 1. **Summary** — one paragraph: what this change does, what the overall verdict is.
 2. **Verdict** — one of: `approve`, `approve-with-comments`, `request-changes`, `reject`.
-3. **Findings** — numbered 1, 2, 3 across all severities (Blockers first) so the user can say "fix
-   2 and 5". Each has all of these, each one or two short sentences in plain words (the reader may
-   never have seen this code):
+3. **Findings** — each one:
    - **[Severity / Confidence]** Title
    - **Where**: `path/to/file.ext:line-range`
-   - **What this is**: what this code is for.
-   - **Problem**: the concrete case — this input or situation leads to this wrong result.
-   - **Fix**: the smallest fix that works.
-   - **If skipped**: what happens if it ships unfixed: who hits it, when, how badly.
+   - **What's wrong**: the concrete input or path, and what the code does with it (traced in the code
+     the change touches, callers included, not inferred from the diff alone), in one or two sentences.
+   - **Why it matters**: the consequence (correctness, security, maintainability, …).
+   - **Suggested fix**: concrete, not a homily.
+   - **If skipped**: what ships if this is not fixed: who hits it, when, how badly. If the honest
+     answer is "nothing much", it is a Nit or not a finding.
 4. **Plan-vs-code observations** (when scoped to a work item) — divergences from `spec.md` /
    `phases/`, missing or correct diary entries, accuracy of `progress.md`.
 5. **What looks good** — call out non-obvious good choices. Build trust; signal you actually read
    the code.
-6. **Questions for the author** — explicit asks, not implied ones; a worry with no concrete case
-   goes here, not under Findings.
-7. **Closing lines** — `Lean: -<N> lines possible.` when Lean findings exist, and `Not checked:` in one
-   line when something mattered and you could not check it.
+6. **Questions for the author** — explicit asks, not implied ones.
 
 ### When a review surfaces a plan issue
 
@@ -241,33 +208,34 @@ the file yourself.
 - **Style nitpicking that drowns substance.** If you have one Blocker, lead with it; don't bury it
   under fifteen Nits.
 - **Reviewing the author, not the code.** Findings are about the code.
-- **Inventing findings.** Don't claim a vulnerability exists without tracing it. A hunch with no
-  concrete case is a question for the author, not a finding.
+- **Inventing findings.** Don't claim a vulnerability exists without tracing it. Mark hunches as
+  **Low confidence**.
 - **Ignoring the plan or the diary.** A divergence from `spec.md` / `phases/` is a finding even if
   the code is fine; a diary entry that explains it lowers it to Minor, not Blocker.
 
 ## Examples
 
 **Good finding (Blocker / High):**
-> **1. [Blocker / High] User-controlled value reaches `os/exec` without a shell argv split.**
+> **[Blocker / High] User-controlled value reaches `os/exec` without a shell argv split.**
 > Where: `internal/runner/runner.go:47-55`.
-> What this is: the runner executes a job command that arrives in the request body.
-> Problem: the `cmd` field goes straight to `exec.Command("sh", "-c", cmd)`, so a body ending in
-> `; id` runs `id` on the host, and any other command the same way.
-> Fix: take a structured `{program, args[]}` from the caller, use `exec.Command(program, args...)`
-> without a shell, and validate `program` against an allowlist. Coordinate with `somi-security-reviewer`.
-> If skipped: anyone who can reach the endpoint runs arbitrary commands on the service host.
+> The `cmd` field is taken from a request body and passed to `exec.Command("sh", "-c", cmd)`.
+> This is trivial shell injection — any newline or `;` in the request body executes arbitrary
+> commands.
+> Why it matters: this is RCE on the host running the service.
+> Suggested fix: take a structured `{program, args[]}` from the caller, use
+> `exec.Command(program, args...)` without a shell, and validate `program` against an allowlist.
+> Coordinate with `somi-security-reviewer`.
 
 **Good plan-vs-code finding (Major / High):**
-> **2. [Major / High] Spec says Redis-backed counters; code implements in-memory.**
+> **[Major / High] Spec says Redis-backed counters; code implements in-memory.**
 > Where: spec.md §5 D2 vs. `internal/ratelimit/counter.go:1-40`.
-> What this is: the per-user rate-limit counter. Decision D2 in `decisions.md` chose Redis
-> (user-verified), citing the multi-replica deployment.
-> Problem: the diff counts in process memory, with no diary entry explaining the change. With 5
-> replicas behind the load balancer, each replica allows the full budget.
-> Fix: implement the Redis-backed counter as decided, or follow the plan-change protocol (supersede
-> D2, update `phases/`, add a diary entry explaining why in-memory is sufficient).
-> If skipped: users get 5× their nominal rate limit under load, and the code silently contradicts a
-> verified decision.
+> Decision D2 in `decisions.md` chose Redis (user-verified) for the rate limit counter, citing the
+> multi-replica deployment. The diff implements an in-memory counter with no `// TODO` and no
+> diary entry explaining the change.
+> Why it matters: in-memory counters cannot enforce a global budget across replicas; under load,
+> users will get 5× their nominal rate limit.
+> Suggested fix: either implement the Redis-backed counter as decided, or follow the plan-change
+> protocol (supersede D2, update `phases/`, add a diary entry explaining why in-memory is
+> sufficient). The current code silently contradicts a verified decision, which is not acceptable.
 
 That's the level of specificity, evidence, and constructiveness we want.
