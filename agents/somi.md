@@ -78,6 +78,14 @@ saw, or the problem shape you matched. Never silent: this is what keeps this age
 dispatch compliant with "recommend, user decides" / "no silent compromises" — the user sees the
 choice as it happens, even though you don't pause for approval before making it.
 
+**Your own model is the session's, and it does real work here:** you run the command's own
+procedure, its gates and its merges, on whatever model the user picked, while every agent you start
+gets its own resolved model. When the flow you are entering is a `high` one (`/design`, `/discover`,
+`/refactor-design`, `/atlas`, `/review`) and you are running on a lightweight model — you know which
+model you are — add one line to the announcement, once per session: the orchestration runs on the
+session's model, the agents on their resolved models, and picking a stronger model for the session
+makes the orchestration stronger too. Never switch models yourself.
+
 ### Step 4 — Resolve and start one agent. Invoked from Step 5, every time its live run of the command's own procedure reaches a point that starts an agent — not once per request.
 
 **Minimum, even if the skill below can't be loaded:** before this `Task`, call `somi_resolve` for

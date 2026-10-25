@@ -178,5 +178,19 @@ case "$guarded_out" in
     ok "execution did not continue past a partial derivation failure" ;;
 esac
 
+# --- ordered preference lists (#35) ---------------------------------------------------------------
+M2='{h:{low:["m-a","m-b"],medium:"m-c",high:["m-d"]}}'
+check "a list resolves to its candidates in order" "$(run "process.stdout.write(JSON.stringify(M.resolveModelCandidates('low','h',$M2)))")" '["m-a","m-b"]'
+check "resolveModel on a list returns the first candidate" "$(run "process.stdout.write(M.resolveModel('low','h',$M2))")" "m-a"
+check "a plain string is a one-candidate list" "$(run "process.stdout.write(JSON.stringify(M.resolveModelCandidates('medium','h',$M2)))")" '["m-c"]'
+check "a one-element list behaves like the string" "$(run "process.stdout.write(M.resolveModel('high','h',$M2))")" "m-d"
+check "an unmapped host still gives null candidates" "$(run "process.stdout.write(String(M.resolveModelCandidates('low','nope',$M2)))")" "null"
+expect_exit "an empty list throws" 1 "M.resolveModelCandidates('low','h',{h:{low:[]}})"
+expect_exit "a list longer than the cap throws" 1 "M.resolveModelCandidates('low','h',{h:{low:Array.from({length:M.MAX_MODEL_CANDIDATES+1},(_, i)=>'m'+i)}})"
+expect_exit "a duplicate in the list throws" 1 "M.resolveModelCandidates('low','h',{h:{low:['m-a','m-a']}})"
+expect_exit "a non-string in the list throws" 1 "M.resolveModelCandidates('low','h',{h:{low:['m-a',5]}})"
+expect_exit "an invalid id in the list throws" 1 "M.resolveModelCandidates('low','h',{h:{low:['m-a','bad id']}})"
+expect_exit "a nested list throws" 1 "M.resolveModelCandidates('low','h',{h:{low:[['m-a']]}})"
+
 echo "cost model tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

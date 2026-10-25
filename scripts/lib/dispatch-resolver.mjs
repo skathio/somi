@@ -40,7 +40,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveCeiling, decideDispatch, modelForDispatch, readCostConfig, CEILING_ENV } from './cost-ceiling.mjs';
 import { AGENT_NAME_RE } from './cost-config.mjs';
-import { HOST_MODELS, mergeHostMapping, VALID_COSTS } from './cost-model.mjs';
+import { HOST_MODELS, mergeHostMapping, resolveModelCandidates, VALID_COSTS } from './cost-model.mjs';
 import { AGENT_DEFAULT_TIERS } from './cost-defaults.mjs';
 import { buildRegistry, agentTypeFor } from './agent-registry.mjs';
 
@@ -202,8 +202,10 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
   // and the message says so explicitly. Only a host the project's mapping never mentioned failing
   // this way would point at a bug in the shipped HOST_MODELS table itself, which stays 66.
   let model;
+  let candidates;
   try {
     model = modelForDispatch(decision, HOST, mapping);
+    candidates = resolveModelCandidates(decision.selected, HOST, mapping);
   } catch (e) {
     if (projectMapping && Object.hasOwn(projectMapping, HOST)) {
       return err(EXIT_PROJECT_ENV, `${e.message} (in .somi/config.json cost.mapping)`);
@@ -230,6 +232,8 @@ export function resolveDispatch({ agent, host, ceiling, projectRoot, installRoot
       degraded: decision.degraded,
       tier_source: decision.tier_source,
       model,
+      // Only for a preference list (#35): pass the first candidate the host offers; `model` is the first.
+      ...(candidates && candidates.length > 1 ? { model_candidates: candidates } : {}),
       ...modelFields,
       ceiling: ceilingResult.ceiling,
       ceiling_source: ceilingResult.source,

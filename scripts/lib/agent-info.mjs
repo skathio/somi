@@ -77,6 +77,7 @@ export async function agentInfo(args, { resolveRoot, installRoot }) {
       tier_source: r.tier_source,
       degraded: r.degraded,
       model: r.model,
+      ...(r.model_candidates ? { model_candidates: r.model_candidates } : {}),
       enforced: r.enforced,
       ...(r.reason ? { reason: r.reason } : {}),
     },

@@ -448,5 +448,18 @@ case "$msg" in
   *) bad "... the message does not name the table (got: $msg)" ;;
 esac
 
+# --- #35: a preference list in cost.mapping -> model is the first, model_candidates the list ---------
+P35="$(mktemp -d)"; mkdir "$P35/.somi"
+printf '{"cost":{"ceiling":"high","mapping":{"copilot":{"low":"m-l","medium":"m-m","high":["m-h1","m-h2"]}}}}\n' > "$P35/.somi/config.json"
+out35="$(CLAUDE_PROJECT_DIR="$P35" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-designer --host copilot)"
+check "#35: a list mapping resolves model to the first candidate, enforced, with model_candidates" \
+  "$(node -e 'const o=JSON.parse(process.argv[1]); process.stdout.write([o.model, o.enforced, JSON.stringify(o.model_candidates)].join("|"))' "$out35")" 'm-h1|true|["m-h1","m-h2"]'
+out35b="$(CLAUDE_PROJECT_DIR="$P35" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-coder --host copilot --ceiling medium)"
+check "#35: a plain-string tier carries no model_candidates field" "$(node -e 'process.stdout.write(String("model_candidates" in JSON.parse(process.argv[1])))' "$out35b")" "false"
+printf '{"cost":{"ceiling":"high","mapping":{"copilot":{"low":"m-l","medium":"m-m","high":[]}}}}\n' > "$P35/.somi/config.json"
+rc35=0; CLAUDE_PROJECT_DIR="$P35" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-designer --host copilot >/dev/null 2>&1 || rc35=$?
+check "#35: an empty list in the project's mapping is a project config failure (67)" "$rc35" "67"
+rm -rf "$P35"
+
 echo "somi-dispatch tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

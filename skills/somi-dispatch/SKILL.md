@@ -95,9 +95,9 @@ stdout:
   an override; the agent's default tier only feeds `declared` and `degraded`.
 - `declared` (same as `supported`) — the agent's default tier, as a one-element list (the table in
   `scripts/lib/cost-defaults.mjs`). `degraded` is `true` when the selected `tier` is below it.
-- `model` — pass this to `Task` when it is non-null. When it is `null` (no mapping for this
-  host/tier), see "No mapped model" below — never omit a model silently *and* never invent one
-  without saying so.
+- `model` — pass this to `Task` when it is non-null; with `model_candidates` (a preference list from
+  `cost.mapping`), pass the first candidate the subagent tool's own model list offers, else `model`.
+  When `model` is `null` (no mapping), see "No mapped model" below — never omit or invent one silently.
 - `enforced` — `true` only when `model` is a concrete id from a mapping (the shipped table or the
   project's `cost.mapping`). `false` means nothing pins this tier on this host: the agent runs on
   whatever model the host gives it. Then `reason` says why (e.g. `no model mapping for host
@@ -168,16 +168,14 @@ none, and say no model was pinned for the resolved tier, and that
 `cost.mapping` is how to bind one. `null` is expected on Copilot, which has no shipped mapping
 because its model ids vary by plan and editor.
 
-**Unenforced notice.** When `enforced` is `false` and the resolved `tier` is `high`, print ONE
-user-visible line per agent type per session (once in this conversation's visible context, as with
-the `low` announcement), before that agent's `Task` call: `<agent> is high-tier but no model is
-pinned on <host>, so its model was not chosen by SoMi. To pin models, set cost.mapping.<host> with
-low, medium and high in .somi/config.json (see docs/USAGE.md, "Pinning models per tier on
-Copilot").` Name all three tiers: a host named in `cost.mapping` replaces its whole tier map, so a
-high-only block fails the other tiers with exit `67`. Lower tiers get the briefing line only. If the host then rejects
-a model you *did* pick yourself, retry the same dispatch once without it and say you're doing so
-(§5 below) — never silently pass nothing while claiming a choice was made, and never retry more
-than once.
+**Unenforced notice, then the picker.** When `enforced` is `false` and the resolved `tier` is
+`high`, print ONE user-visible line per agent type per session (as with the `low` announcement)
+before its `Task`: `<agent> is high-tier but no model is pinned on <host>, so its model was not chosen
+by SoMi.` Then, the first time this happens in the session, offer the `/somi-config` model picker
+(its "Model picker" section: one question per tier from the ids you can see, or "use the host default
+this session", which ends the asking) before continuing; never pick and save models without that.
+Lower tiers get the briefing line only. If the host then rejects a model you *did* pick yourself,
+retry once without it and say so (§5) — never silently pass nothing while claiming a choice was made.
 
 ## 3. Failures — map each exit code, and stop; never guess a model or tier to keep going
 
@@ -251,9 +249,9 @@ pass its `model`, start it as its `agent_type`, and put the cost line in the bri
    whatever your own instruction says to pass) — never a paraphrase of the whole command standing
    in for the agent's own prompt.
 5. **If the host rejects a model you picked yourself** (§2's no-mapped-model case), retry the same
-   dispatch once without a model argument and say you're doing so. A model that came from the
-   project's own `cost.mapping` is never retried this way — if the host rejects a **mapped** model,
-   fail loudly and say so.
+   dispatch once without a model argument and say you're doing so. A **mapped** model is never
+   dropped this way: if the host rejects it, try the next `model_candidates` entry, and when none is
+   left, fail loudly and say so.
 6. **If the agent cannot be started as its `agent_type`** — `agent_type` is `null` (a host with no
    registration), or the host rejects the type (`Unknown agent_type`, a disabled subagent, the plugin
    not installed or not enabled) — **stop**. Tell the user, in one line, which canonical agent could

@@ -640,6 +640,18 @@ Give all three tiers: a host named in `cost.mapping` replaces its whole tier map
 mapping counts as the user naming the model, so it takes precedence over a host rule such as "do
 not set `model` unless the user names one". With it, `somi_resolve` returns `"enforced": true`.
 
+A tier can also name an **ordered preference list**, for ids that differ between plans and editors:
+`"high": ["gpt-5", "gpt-5.1"]`. `somi_resolve` then returns the first as `model` and the
+list as `model_candidates`, and the dispatching agent passes the first one its host offers (a mapped
+model the host rejects moves to the next candidate, never to no model). Up to 8 distinct ids.
+
+You don't have to write this by hand: `/somi-config` has a **model picker** that asks once per tier,
+offering the ids the session can see, and saves your choices with
+`somi-config.mjs set cost.mapping.<host>.<tier> <id>[,<id>...]`. The first unenforced `high` dispatch
+of a session offers it too. Any change to `cost.mapping` counts as a remap that needs you: where SoMi's
+hooks run, the host asks before the write; where they don't (Copilot), the tool refuses it and gives
+you the commands to run yourself, so injected text can never repoint a tier at a weaker model.
+
 `/somi-config` checks this for you: `somi-config.mjs show --host copilot` (and the `somi_config` tool's
 `show` with `host`) adds a warning when the host has no mapping while any agent resolves to `high`.
 

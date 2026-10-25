@@ -200,15 +200,17 @@ const TOOLS = [
       'Show or change the cost settings in the project\'s .somi/config.json by running ' +
       '`node scripts/somi-config.mjs`, and return its one JSON line unchanged. Actions: show ' +
       '(every agent\'s effective tier and warnings), get, set, unset, init (create the default file ' +
-      'when absent). Only cost.ceiling and cost.agents.<name> can be changed, to low|medium|high; ' +
+      'when absent). cost.ceiling and cost.agents.<name> take low|medium|high; ' +
+      'cost.mapping.<host>.<tier> takes a model id or a comma-separated preference list (unset ' +
+      'cost.mapping.<host> removes a host map). Any lowering or remap needs the user; ' +
       'the change is live, since the config is read on every dispatch. Failures report the CLI exit ' +
       'code: 64 usage (bad key, tier or name), 67 the project\'s config or .somi is unusable.',
     inputSchema: {
       type: 'object',
       properties: {
         action: { type: 'string', description: 'show, get, set, unset or init' },
-        key: { type: 'string', description: 'cost.ceiling or cost.agents.<name> (get, set, unset)' },
-        value: { type: 'string', description: 'low, medium or high (set)' },
+        key: { type: 'string', description: 'cost.ceiling, cost.agents.<name>, or cost.mapping.<host>[.<tier>] (get, set, unset)' },
+        value: { type: 'string', description: 'set: low, medium or high; for cost.mapping.<host>.<tier>, model-id[,model-id...]' },
         project_dir: { type: 'string', description: 'absolute path of the project, as for somi_resolve' },
         host: { type: 'string', description: 'show only: the host this session runs on (claude-code, copilot), as for somi_resolve; adds a warning when it has no model mapping' },
       },

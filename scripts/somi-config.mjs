@@ -6,7 +6,8 @@
 //                                 else the ceiling), plus fixed warnings
 //   get cost.ceiling | cost.agents.<name>
 //   set cost.ceiling <low|medium|high> | set cost.agents.<name> <low|medium|high>
-//   unset cost.agents.<name>
+//   set cost.mapping.<host>.<tier> <model-id[,model-id...]>   (a preference list, first offered wins)
+//   unset cost.agents.<name> | unset cost.mapping.<host>
 //   init                          create the default file when absent (the exact text the SessionStart
 //                                 hook writes); a no-op if anything exists at the path
 //   [--project-dir DIR]           default: CLAUDE_PROJECT_DIR, else the current directory
@@ -15,7 +16,8 @@
 //   [--refuse-lowering]           (set, unset) exit 64 and write nothing if the change would lower any
 //                                 agent's effective tier (see scripts/lib/cost-lowering.mjs)
 //
-// Only those keys can be changed. The config is read on every dispatch, so a set or unset takes effect
+// Only those keys can be changed. Any cost.mapping change counts as needing the user (cost-lowering.mjs),
+// so --refuse-lowering refuses it: which model a tier means cannot be ranked here. The config is read on every dispatch, so a set or unset takes effect
 // on the very next resolve. Everything else in the file is preserved as parsed.
 //
 // A set or unset rewrites the whole file, so it refuses (67, nothing written) any file whose content
@@ -52,11 +54,11 @@ import { readTextFile, loadState, decideDispatch, DEFAULT_CEILING, MAX_CONFIG_BY
 import { quote } from './lib/cost-config.mjs';
 import { VALID_COSTS, HOST_MODELS } from './lib/cost-model.mjs';
 import { AGENT_DEFAULT_TIERS, serializeDefaultConfig } from './lib/cost-defaults.mjs';
-import { EditError, applyEdit, parseKey, validateCostBlock } from './lib/cost-config-edit.mjs';
-import { lowers } from './lib/cost-lowering.mjs';
+import { EditError, applyEdit, parseKey, validateCostBlock, missingMappingTiers } from './lib/cost-config-edit.mjs';
+import { lowers, REASONS } from './lib/cost-lowering.mjs';
 
 const PROG = 'somi-config';
-const USAGE = `usage: ${PROG}.mjs show [--host NAME] | get <key> | set <key> <tier> | unset cost.agents.<name> | init  [--project-dir DIR] [--refuse-lowering]  (keys: cost.ceiling, cost.agents.<name>)`;
+const USAGE = `usage: ${PROG}.mjs show [--host NAME] | get <key> | set <key> <value> | unset <key> | init  [--project-dir DIR] [--refuse-lowering]  (keys: cost.ceiling, cost.agents.<name>, cost.mapping.<host>.<tier> = model-id[,model-id...]; unset cost.agents.<name> or cost.mapping.<host>)`;
 const HOST_RE = /^[a-z][a-z0-9-]{0,31}$/;
 const EXIT_USAGE = 64;
 const EXIT_PROJECT = 67;
@@ -66,6 +68,7 @@ const ENV_WARNING = 'SOMI_COST_CEILING is set in this environment and outranks c
 const STATE_WARNING = 'a ceiling set earlier by a flag or SOMI_COST_CEILING is in force because cost.ceiling is not set in the config';
 const UNKNOWN_WARNING = 'that agent name is not a shipped agent; the entry is accepted but may never be used';
 const unmappedWarning = (host, n) => `${host} has no model mapping, so ${n} high-tier agent(s) run on whatever model the host picks; set cost.mapping.${host} with low, medium and high (docs/USAGE.md, "Pinning models per tier on Copilot")`;
+const MAPPING_MESSAGE = 'this change remaps a tier to a different model and needs the user: ask them to run node scripts/somi-config.mjs themselves or edit .somi/config.json';
 const LOWERING_MESSAGE = 'this change lowers a tier and needs the user: ask them to run node scripts/somi-config.mjs themselves or edit .somi/config.json';
 const WRITE_FLAGS = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
 
@@ -214,6 +217,10 @@ function effective(name, cost, ceiling) {
 
 function warningsFor(cost, force, extra = []) {
   const w = [...extra];
+  for (const host of Object.keys(cost?.mapping ?? {}).sort()) {
+    const missing = missingMappingTiers(cost, host);
+    if (missing.length) w.push(`cost.mapping.${host} has no ${missing.join(', ')} entry yet, so a dispatch at that tier on ${host} fails until it is set`);
+  }
   if (force.source === 'env' && cost?.ceiling !== undefined && cost.ceiling !== force.value) w.push(ENV_WARNING);
   if (force.source === 'state') w.push(STATE_WARNING);
   if (effective('somi-security-reviewer', cost, force.value).tier !== 'high') w.push(SEC_WARNING);
@@ -298,13 +305,18 @@ function main() {
   }
 
   const k = cmd === 'show' ? null : edit(() => parseKey(pos[0]));
-  if (cmd === 'unset' && k.kind !== 'agent') usage('only cost.agents.<name> can be unset');
+  if (cmd === 'unset' && !(k.kind === 'agent' || (k.kind === 'mapping' && k.tier === undefined))) usage('only cost.agents.<name> and cost.mapping.<host> can be unset');
   const cfg = load(root, loc, cmd === 'set' || cmd === 'unset');
   if (cmd === 'show') return show(root, loc, cfg, host);
 
   if (cmd === 'get') {
     const force = ceilingInForce(root, cfg.cost);
     if (k.kind === 'ceiling') return { key: pos[0], value: cfg.cost?.ceiling ?? DEFAULT_CEILING, source: cfg.cost?.ceiling === undefined ? 'default' : 'config', effective_ceiling: force };
+    if (k.kind === 'mapping') {
+      const hostMap = cfg.cost?.mapping?.[k.host];
+      const value = hostMap === undefined ? null : (k.tier === undefined ? hostMap : (hostMap[k.tier] ?? null));
+      return { key: pos[0], value, source: value === null ? 'none' : 'config' };
+    }
     const has = cfg.cost?.agents && Object.hasOwn(cfg.cost.agents, k.name);
     return { key: pos[0], value: has ? cfg.cost.agents[k.name] : null, source: has ? 'override' : 'none' };
   }
@@ -315,8 +327,11 @@ function main() {
   const { next, changed } = edit(() => applyEdit(absent ? null : cfg, { action: cmd, key: pos[0], value: pos[1] }));
   if (!changed) return { path: rel, key: pos[0], changed: false, warnings: warningsFor(cfg.cost, ceilingInForce(root, cfg.cost)) };
   checkCost(next.cost, (m) => usage(m)); // the whole resulting block; a failure here is the caller's input
-  if (refuse && lowers(beforeCfg, next, root).lowers) usage(LOWERING_MESSAGE);
-  const value = cmd === 'set' ? pos[1] : undefined;
+  if (refuse) {
+    const v = lowers(beforeCfg, next, root);
+    if (v.lowers) usage(v.reasons.every((r) => r === REASONS.mapping) ? MAPPING_MESSAGE : LOWERING_MESSAGE);
+  }
+  const value = cmd !== 'set' ? undefined : (k.kind === 'mapping' ? next.cost.mapping[k.host][k.tier] : pos[1]);
   const extra = k.kind === 'agent' && cmd === 'set' && !(k.name in AGENT_DEFAULT_TIERS) && k.name !== 'somi' ? [UNKNOWN_WARNING] : [];
   if (changed) {
     let text;

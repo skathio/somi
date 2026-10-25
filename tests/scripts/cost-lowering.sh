@@ -32,6 +32,10 @@ rules() {
     t('init from an absent file (defaults) does not lower', r({}, d()), 'false:0');
     t('raising the ceiling does not lower', r(d(), mod((c) => { c.ceiling = 'high'; })), 'false:0');
     t('raising an agent does not lower', r(d(), mod((c) => { c.agents['somi-coder'] = 'high'; })), 'false:0');
+    t('adding a model mapping needs the user (remap)', L.lowers(d(), mod((c) => { c.mapping = { copilot: { low: 'a', medium: 'b', high: 'c' } }; })).reasons.join('|'), L.REASONS.mapping);
+    t('changing one mapped model needs the user', L.lowers(mod((c) => { c.mapping = { h: { low: 'a', medium: 'b', high: 'c' } }; }), mod((c) => { c.mapping = { h: { low: 'a', medium: 'b', high: 'cheap' } }; })).reasons.join('|'), L.REASONS.mapping);
+    t('reordering a preference list needs the user', r(mod((c) => { c.mapping = { h: { low: 'a', medium: 'b', high: ['x', 'y'] } }; }), mod((c) => { c.mapping = { h: { low: 'a', medium: 'b', high: ['y', 'x'] } }; })), 'true:1');
+    t('an identical mapping is a no-op', r(mod((c) => { c.mapping = { h: { low: 'a', medium: 'b', high: 'c' } }; }), mod((c) => { c.mapping = { h: { low: 'a', medium: 'b', high: 'c' } }; })), 'false:0');
     t('pinning security-reviewer to high does not lower', r({ cost: { ceiling: 'low' } }, { cost: { ceiling: 'low', agents: { 'somi-security-reviewer': 'high' } } }), 'false:0');
     t('lowering the ceiling lowers (unpinned agents drop)', L.lowers({ cost: { ceiling: 'high' } }, { cost: { ceiling: 'medium' } }).reasons.includes(L.REASONS.ceiling), true);
     t('lowering an agent lowers', L.lowers(d(), mod((c) => { c.agents['somi-coder'] = 'low'; })).reasons.join('|'), L.REASONS.agent);
@@ -76,6 +80,8 @@ check "MCP set that lowers security-reviewer: ask" "$(verdict "$HOOK" "$P" "$(mc
 check "MCP set that lowers the ceiling: ask" "$(verdict "$HOOK" "$P" "$(mcp $T set cost.ceiling low)")" "ask"
 check "MCP set that lowers one agent: ask" "$(verdict "$HOOK" "$P" "$(mcp $T set cost.agents.somi-coder low)")" "ask"
 check "MCP unset of a pin above the ceiling (after the ceiling was lowered by hand): ask" "$(P2="$(proj)"; node "$CLI" set cost.ceiling low --project-dir "$P2" > /dev/null; verdict "$HOOK" "$P2" "$(mcp $T unset cost.agents.somi-designer)")" "ask"
+check "MCP set of a model mapping: ask (a remap cannot be ranked)" "$(verdict "$HOOK" "$P" "$(mcp $T set cost.mapping.copilot.high big-a)")" "ask"
+case "$(reason_of "$P" "$(mcp $T set cost.mapping.copilot.high big-a)")" in *"(a tier would be mapped to a different model)"*) ok "... and the reason names the remap" ;; *) bad "... and the reason names the remap" ;; esac
 check "MCP raise: silent" "$(verdict "$HOOK" "$P" "$(mcp $T set cost.agents.somi-coder high)")" "silent"
 check "MCP no-op: silent" "$(verdict "$HOOK" "$P" "$(mcp $T set cost.agents.somi-coder medium)")" "silent"
 check "MCP show / get / init: silent" "$(verdict "$HOOK" "$P" "$(mcp $T show)")|$(verdict "$HOOK" "$P" "$(mcp $T get cost.ceiling)")|$(verdict "$HOOK" "$P" "$(mcp $T init)")" "silent|silent|silent"

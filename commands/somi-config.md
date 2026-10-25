@@ -1,5 +1,5 @@
 ---
-description: Show and change SoMi's cost settings (the ceiling and each agent's tier) in .somi/config.json, with a question for every change. Lowering a tier needs your explicit confirmation.
+description: Show and change SoMi's cost settings (the ceiling, each agent's tier, and the model each tier means on a host) in .somi/config.json, with a question for every change. Lowering a tier or remapping a model needs your explicit confirmation.
 argument-hint: "[what to change, e.g. ceiling or security-reviewer]"
 allowed-tools: AskUserQuestion, Read, Bash
 ---
@@ -52,6 +52,7 @@ The user's hint: **$ARGUMENTS**
    - put **all agents on one tier** (a preset for fair comparisons and benchmarks: set the ceiling
      to
      that tier, then pin every listed agent to it with one `set` per agent);
+   - pin models per tier for this host (the model picker, below);
    - create the default config (when none exists);
    - done.
    Offer the tiers `low`, `medium` and `high` as options, and the agent names from the table. If the
@@ -86,6 +87,25 @@ The user's hint: **$ARGUMENTS**
    user
    sees the live effective tiers. Then ask whether to change something else, or finish.
 
+## Model picker (pin models per tier)
+
+Offered in step 3, and run when the `somi-dispatch` skill sends you here because a dispatch on this
+host came back `enforced: false` (no `cost.mapping.<host>`). It binds tiers to models; it never
+changes a tier.
+
+1. **Collect the model ids you can actually see** this turn, for example the subagent tool's own
+   `model` parameter. Never invent one. If none are visible, say so, and give the user the
+   `cost.mapping` example from `docs/USAGE.md` ("Pinning models per tier on Copilot") instead.
+2. **Ask once per tier** (`low`, then `medium`, then `high`), with `AskUserQuestion`: up to three
+   visible ids as options, plus **use the host default this session**. That last option is a choice:
+   ask nothing more this session and leave the config alone.
+3. **Every chosen id is a remap and needs the user.** Name what changes (`high` on copilot -> `<id>`),
+   then save it with `{ "action": "set", "key": "cost.mapping.<host>.<tier>", "value": "<id>" }` (a
+   preference list is `"<id>,<id>"`; the first one the host offers is used). Set all three tiers: a
+   host named in `cost.mapping` replaces its whole tier map, and the tool warns while one is missing.
+   Where the tool refuses a remap (exit `64`, hosts without hooks), stop and give the user the three
+   `node scripts/somi-config.mjs set cost.mapping.<host>.<tier> <id>` commands to run themselves.
+
 ## Hosts without hooks (for example GitHub Copilot)
 
 The host's confirmation prompt for lowering comes from a SoMi hook. Where hooks do not run, the tool
@@ -96,9 +116,8 @@ supplied; if the tool says there is none, give the same CLI command.
 
 ## Guardrails
 
-- **Only `cost.ceiling` and `cost.agents.<name>`.** Nothing else in the file is touched, and the
-  tool
-  refuses any other key.
+- **Only `cost.ceiling`, `cost.agents.<name>` and `cost.mapping.<host>.<tier>`.** Nothing else in
+  the file is touched, and the tool refuses any other key.
 - **Never write the file or the persisted ceiling directly**, and never use `Bash` to change either.
   The `Bash` tool here is only for the read-only `show` fallback.
 - **Never pass a hint, a file's text or a guess as a key or value.** The user's answers choose them.

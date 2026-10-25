@@ -11,6 +11,7 @@
 //   - the ceiling is lower than before
 //   - an agent's effective tier is lower than before; when that is a removed pin above the ceiling
 //     the reason says so
+//   - cost.mapping changes in any way (which model a tier means cannot be ranked here)
 //   - the new config is not an object, or its cost block is not valid
 // Whether a state file appears later cannot change a verdict: a config that has NO cost.ceiling after the
 // change is judged against the worst case, so deleting cost.ceiling (or unpinning an agent in a config
@@ -34,6 +35,7 @@ export const REASONS = Object.freeze({
   agent: 'an agent tier would be lowered',
   pin: 'a pin above the ceiling would be removed',
   invalid: 'the new config is not valid',
+  mapping: 'a tier would be mapped to a different model',
 });
 
 const rank = (t) => VALID_COSTS.indexOf(t);
@@ -57,7 +59,7 @@ function view(cfg, fallback) {
   const agents = isObj(cost.agents) ? cost.agents : {};
   const pin = (name) => (Object.hasOwn(agents, name) && VALID_COSTS.includes(agents[name]) ? agents[name] : undefined);
   const tier = (name) => decideDispatch(AGENT_DEFAULT_TIERS[name] ?? ceiling, ceiling, pin(name)).selected;
-  return { ceiling, pin, tier, names: Object.keys(agents), json: JSON.stringify(cost) };
+  return { ceiling, pin, tier, names: Object.keys(agents), json: JSON.stringify(cost), mapping: JSON.stringify(cost.mapping ?? null) };
 }
 
 /** @returns {{lowers: boolean, reasons: string[]}}; `root` is the project directory (for the persisted ceiling). */
@@ -71,6 +73,9 @@ export function lowers(before, after, root) {
   const worst = (name) => decideDispatch(AGENT_DEFAULT_TIERS[name] ?? 'low', 'low', undefined).selected;
   if (a.json === b.json) return { lowers: false, reasons: [] };
   const reasons = new Set();
+  // Which model a tier means is not comparable here (no prices), so any mapping change needs the user:
+  // pointing `high` at a cheap model is a lowering this function could not otherwise see.
+  if (a.mapping !== b.mapping) reasons.add(REASONS.mapping);
   if (rank(a.tier('somi-security-reviewer')) < rank('high')) reasons.add(REASONS.security);
   if (rank(a.ceiling) < rank(b.ceiling) || (ceilingGone && rank(b.ceiling) > rank('low'))) reasons.add(REASONS.ceiling);
   const noCeiling = !(isObj(after.cost) && VALID_COSTS.includes(after.cost.ceiling));

@@ -50,6 +50,22 @@ check "show with no config file: exists false, ceiling default medium" "$(cfg "$
 check "show with no config: agents follow the ceiling, security-reviewer warning present" "$(jf 'o.agents.find((a) => a.name === "somi-security-reviewer").tier + "/" + o.agents.find((a) => a.name === "somi-security-reviewer").source')|$(jf 'o.warnings.length')" "medium/ceiling|1"
 check "show created nothing" "$([ -e "$P/.somi" ] && echo made || echo none)" "none"
 
+# --- cost.mapping.<host>.<tier>: the writer behind the Copilot model picker (#34, #35) ---------------
+P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
+check "set cost.mapping.copilot.high to a preference list: stored as an array, parsed value echoed" \
+  "$(cfg "$CLI" "$P" set cost.mapping.copilot.high 'big-a, big-b')|$(jf 'JSON.stringify(o.value)')|$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).cost.mapping.copilot.high))' "$P/.somi/config.json")" \
+  '0|["big-a","big-b"]|["big-a","big-b"]'
+check "... with a warning naming the tiers the host map still lacks" "$(jf 'o.warnings.some((w) => w.startsWith("cost.mapping.copilot has no low, medium entry yet"))')" "true"
+cfg "$CLI" "$P" set cost.mapping.copilot.low mini-x > /dev/null; cfg "$CLI" "$P" set cost.mapping.copilot.medium mid-x > /dev/null
+check "a single id is stored as a string; a complete host map has no incomplete-map warning" "$(cfg "$CLI" "$P" get cost.mapping.copilot.low)|$(jf 'o.value')|$(cfg "$CLI" "$P" show)|$(jf 'o.warnings.some((w) => w.includes("cost.mapping"))')" "0|mini-x|0|false"
+check "the resolver now enforces copilot's high tier with the first candidate" "$(CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$ROOT_REPO/scripts/somi-dispatch.mjs" resolve --agent somi-designer --host copilot | node -e 'const o=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(o.model+"/"+o.enforced)')" "big-a/true"
+check "a remap with --refuse-lowering is refused (64) with its own message" "$(cfg "$CLI" "$P" set cost.mapping.copilot.high cheap-x --refuse-lowering)|$(grep -c 'remaps a tier to a different model' "$TMP/err")" "64|1"
+for v in 'bad id' 'a,a' ',' "$(printf 'm%d,' 1 2 3 4 5 6 7 8 9 | sed 's/,$//')"; do
+  check "a bad model value is a usage error (64): $v" "$(cfg "$CLI" "$P" set cost.mapping.copilot.high "$v")" "64"
+done
+check "set on a whole host map (no tier) is a usage error (64)" "$(cfg "$CLI" "$P" set cost.mapping.copilot gpt-x)" "64"
+check "unset cost.mapping.copilot removes the host map" "$(cfg "$CLI" "$P" unset cost.mapping.copilot)|$(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).cost.mapping))' "$P/.somi/config.json")" "0|undefined"
+
 # --- show --host: the unmapped-host warning (#36) --------------------------------------------------
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
 check "show --host copilot, default config (10 agents pinned high), no mapping: one unmapped warning naming the count" \
@@ -221,7 +237,7 @@ mut() { # $1 = name, $2 = file (relative to scripts/), $3 = exact text, $4 = rep
 mut_more() { M_FILE="$TMP/$1/scripts/$2" M_FROM="$3" M_TO="$4" node -e "const f=process.env.M_FILE,fs=require('fs'),s=fs.readFileSync(f,'utf8');if(!s.includes(process.env.M_FROM))process.exit(3);fs.writeFileSync(f,s.replace(process.env.M_FROM,()=>process.env.M_TO))" || bad "mutant $1 (second edit) did not apply"; }
 mut allowlist lib/cost-config-edit.mjs "if (!m) throw new EditError(" "if (false) throw new EditError("
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
-rc="$(cfg "$TMP/allowlist/scripts/somi-config.mjs" "$P" set cost.mapping.x low)"
+rc="$(cfg "$TMP/allowlist/scripts/somi-config.mjs" "$P" set cost.bogus.x low)"
 if [ "$rc" != 64 ]; then ok "red proof: without the key allowlist a bad key is no longer a clean 64 (rc $rc)"; else bad "red proof: allowlist mutant still gives 64"; fi
 mut wholeblock somi-config.mjs "checkCost(next.cost, (m) => usage(m));" ""
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
