@@ -109,7 +109,7 @@ Once installed, use `@somi` in GitHub Copilot chat:
 >   **one lens / one iteration at a time** — same result, no parallelism.
 > - **Per-call model binding is not confirmed on every host.** The cost tiers themselves (the
 >   `low`/`medium`/`high` axis, the session ceiling, the dispatch resolver) are host-agnostic — every
->   agent declares its own tier and the resolver selects among it the same way everywhere it's
+>   agent's tier comes from one default table plus `cost.agents`, resolved the same way everywhere it's
 >   dispatched, whether that's through the `somi` front door or a command typed directly (both
 >   follow [`skills/somi-dispatch`](skills/somi-dispatch/SKILL.md), the one canonical resolve-then-
 >   start procedure), including on Copilot. What varies is only whether a *concrete model* can be
@@ -118,10 +118,14 @@ Once installed, use `@somi` in GitHub Copilot chat:
 >   host's default model applies, because agents no longer declare a frontmatter `model:`. Where a model can't be
 >   bound per call, the dispatcher still names the tier it selected and says plainly that its model
 >   pick could not be applied — the tier decision itself is the same everywhere.
+> - **Agents start as the type the host registered.** Claude Code and Copilot CLI both register
+>   SoMi's agents as `somi:somi-<name>`, and every dispatch starts that real agent. VS Code Copilot
+>   Chat is not a supported dispatch host: if it refuses the type, SoMi stops and says so instead of
+>   running a stand-in. See [Agent dispatch](docs/PLUGIN.md#agent-dispatch).
 >
 > The commands, agents, skills, rules, and templates are shared; **enforcement and concurrency are
 > Claude Code features**; cost tiering is shared, with per-call model binding confirmed on Claude
-> Code and VS Code and falling back to the agent's own declared model elsewhere. Treat Copilot as
+> Code and VS Code and falling back to the host's default model elsewhere. Treat Copilot as
 > the portable subset, not a drop-in equal. See [`docs/HOOKS.md`](docs/HOOKS.md) and
 > [`docs/PLUGIN.md`](docs/PLUGIN.md).
 

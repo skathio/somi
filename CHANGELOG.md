@@ -6,15 +6,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
-## [4.0.0] — 2026-10-25 — feat!: a hard cost cap, per-agent tiers in config, a sized `/ship-loop` and a usage measurement system
+## [4.0.0] — 2026-10-25 — feat!: a hard cost cap, `somi-` agent names with native dispatch, per-agent tiers in config, a sized `/ship-loop` and a usage measurement system
 
-**Major — one behaviour change to cost resolution, plus new commands and tooling.** 3.1.x is merged in
-(the `somi_agent` tool, the frontmatter gate and the `enforced` flag are unchanged). Nothing below
+**Major — behaviour changes to cost resolution and to agent identity and dispatch, plus new commands
+and tooling.** 3.1.x is merged in (the frontmatter gate and the `enforced` flag are unchanged; the
+`somi_agent` tool stays but is no longer a dispatch path). Nothing below
 claims a cost or speed saving: the measurement system in this release exists so later changes can be
 judged against a recorded baseline, and it records none.
 
 ### Changed — behaviour
 
+- **Every specialist agent is named `somi-<name>`** (`somi-coder`, `somi-reviewer`, …: file stem and
+  frontmatter `name`); the front door keeps the name `somi`, and slash commands and skills are
+  unchanged. Hosts register plugin agents as `<plugin>:<stem>`, so the ids are `somi:somi-<name>`.
+  The old bare names are not aliases: anywhere an agent is named (`cost.agents`, `somi_resolve`,
+  `somi_agent_info`) they are unknown, and `somi_agent_info` answers with a "renamed" hint.
+- **Agents start as the type the host registered, or not at all.** The dispatch procedure starts
+  every agent as `agent_type` (`somi:somi-<name>`, now in `somi_resolve`'s result). The 3.1.0
+  fallback (on `Unknown agent_type`, start a general-purpose subagent carrying the agent's text from
+  `somi_agent`) is removed on every host; a refused type is a stop that names the agent, the type, the
+  host and its reason. Claude Code and Copilot CLI dispatch natively (Copilot CLI checked against its
+  own plugin loader, 1.0.70); VS Code Copilot Chat is not a supported dispatch host.
+- **A change to `cost.mapping` needs the user**, like a lowering: which model a tier means cannot be
+  ranked, so repointing `high` at a weak model used to pass silently. The PreToolUse hook asks;
+  `somi_config` refuses it where no hook can ask.
+- **Replies close with what was skipped or not verified, and the risk that remains** (always-on
+  digest and `rules/50`), and code-review findings add **If skipped** (what ships unfixed) and must
+  name the concrete input or path. Adapted from ponytail 5.0. Costs 76 bytes on every prompt.
 - **The cost ceiling is a hard cap, with per-agent overrides.** Before, an agent ran at the highest
   tier it declared that fit under the ceiling, and at its cheapest declared tier when none fit, so a
   `medium` session still ran high-only agents at `high`. Now an agent runs at its own
@@ -23,16 +41,16 @@ judged against a recorded baseline, and it records none.
   as well as fall. The default ceiling is `medium`.
 - **A default config is written at session start.** When a project has no `.somi/config.json`, the
   SessionStart hook creates one with `cost.ceiling: medium` and every agent pinned to its default
-  tier (`reviewer`, `plan-reviewer`, `architecture-reviewer`, `test-strategist`, `sdlc-reviewer`,
-  `designer`, `atlas`, `discovery-analyst`, `refactor-designer` and `security-reviewer` at `high`;
-  `coder`, `planner`, `refactorer`, `pr`, `incident` and `impact` at `medium`). A project that
-  already has a config is only read, never written; if its `security-reviewer` tier is missing or
+  tier (`somi-reviewer`, `somi-plan-reviewer`, `somi-architecture-reviewer`, `somi-test-strategist`, `somi-sdlc-reviewer`,
+  `somi-designer`, `somi-atlas`, `somi-discovery-analyst`, `somi-refactor-designer` and `somi-security-reviewer` at `high`;
+  `somi-coder`, `somi-planner`, `somi-refactorer`, `somi-pr`, `somi-incident` and `somi-impact` at `medium`). A project that
+  already has a config is only read, never written; if its `somi-security-reviewer` tier is missing or
   below `high`, the hook prints one fixed notice. Without that file (for example a host where the
   hook does not run) the ten high-tier agents fall to `medium` under the default ceiling. The way
   back is a `cost.agents` entry of `high` for each of them; raising `cost.ceiling` to `high` is not
   the way, because it also lifts every unpinned agent.
 - **Lowering needs you.** A change to `.somi/config.json` that lowers any agent's effective tier,
-  the ceiling, or the `security-reviewer` below `high` is held for confirmation by a PreToolUse
+  the ceiling, or the `somi-security-reviewer` below `high` is held for confirmation by a PreToolUse
   hook; the `somi_config` tool refuses a lowering unless it runs from the plugin install.
 - **Agents no longer declare `model:` or `cost:`.** A launch that skips the resolver (no `model`
   passed to `Task`) used to run at the agent's declared top-tier model; it now inherits the
@@ -53,6 +71,23 @@ judged against a recorded baseline, and it records none.
 
 ### Added
 
+- **`somi_agent_info`** (MCP, read-only): with no `agent`, the catalog of canonical agents, their
+  registered aliases and default tiers; with a name or alias and a host, the canonical name, the alias
+  matched, `agent_type`, the session ceiling and the tier and model a dispatch would get now, from the
+  same resolver as `somi_resolve` with nothing written. Aliases live in one table,
+  `scripts/lib/agent-registry.mjs`, which refuses a collision at start.
+- **Model preference lists** (#35): a `cost.mapping` tier may name up to 8 ids in order;
+  `somi_resolve` adds `model_candidates`, and dispatch passes the first one the host offers.
+- **A model picker in `/somi-config`** (#34): one question per tier from the ids the session can see,
+  saved with the new `set cost.mapping.<host>.<tier>` (and `unset cost.mapping.<host>`); offered on the
+  first unenforced `high` dispatch of a session. On a host without hooks it hands you the commands
+  instead of saving.
+- **`somi-config show --host <host>`** (and `somi_config`'s `host`) warns when the host has no model
+  mapping while any agent resolves to `high` (#36).
+- The front door says once, on a `high` flow, when it orchestrates on a lightweight session model (#37).
+- New gates: `tests/scripts/agent-names.sh` (names, prefix, no stale ids) and
+  `tests/scripts/dispatch-line-gate.sh` (one canonical dispatch phrase, the requested-tier disclosure,
+  no `somi_agent` stand-in) (#38).
 - **`/somi-config`** (and the `somi_config` MCP tool) — read and change `cost.ceiling` and
   per-agent tiers from chat, with the lowering gate above.
 - **`/ship-loop` sizes the work before it runs.** A new Stage -1 reads the request against the code
@@ -79,11 +114,21 @@ judged against a recorded baseline, and it records none.
 
 ### Fixed
 
+- **Repo-awareness never echoes a hostile folder name into the model's context**: a nested
+  CLAUDE.md/AGENTS.md path is listed only when every segment is a plain name, otherwise it is counted;
+  the scan is bounded by an entry budget and a 1 s deadline (the class ponytail 5.1.1 fixed).
+- The convergence-runner test diffs the set of live `somi-eval-src-*` worktrees instead of a
+  repo-wide count, which flaked (#39).
 - **A hook no longer hangs on an audit path that cannot be created** (a `SOMI_AUDIT_LOG` under
   `/proc`): directory creation is bounded and the hook fails fast.
 
 ### Migration
 
+- Rename any agent you name yourself: `cost.agents.security-reviewer` becomes
+  `cost.agents.somi-security-reviewer`, and so on. A `.somi/config.json` written by a 4.0.0
+  pre-release with the old keys is refused (exit 67); rename the keys or delete the file and let
+  SessionStart write the default. Copilot users who selected a specialist agent by its old name
+  select `somi-<name>` (or the `somi` front door).
 - Projects with a `.somi/config.json` keep it untouched; add `cost.agents` entries for any agent
   you want to stay above the `medium` ceiling.
 - Custom agents you added under `agents/` need an entry in `cost.agents` (an agent file with no
