@@ -228,7 +228,17 @@ is the shipped example), resolve each one back-to-back, immediately before issui
 still not once for the whole command, and each still gets its own `project_dir`, model, and
 cost briefing line in that agent's own briefing.
 
-1. **State the cost line in the agent's briefing**, using §1's resolved `tier` verbatim. When
+Every entry path that starts an agent states this step in one canonical phrase, copied verbatim
+(`tests/scripts/dispatch-line-gate.sh` holds each copy to it):
+
+<!-- dispatch-line:start -->
+pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`)
+<!-- dispatch-line:end -->
+
+1. **Start the agent as its `agent_type`** (`somi:somi-coder`): the type the host itself registered,
+   on Claude Code and Copilot CLI alike — never a bare name, never a general-purpose agent carrying
+   the agent's text, never its role played inline. The real agent runs, from a fresh context.
+2. **State the cost line in the agent's briefing**, using §1's resolved `tier` verbatim. When
    `enforced` is `true`: `dispatched at cost: <tier>`. When it is `false`:
    `requested cost: <tier> (not enforced: no mapped model)` — **`dispatched at cost:` is
    reserved for enforced dispatches**, so a briefing never claims a tier no model was pinned to.
@@ -236,20 +246,20 @@ cost briefing line in that agent's own briefing.
    (`dispatched at cost: low` or `requested cost: low`) — the trim is about the procedure, not the
    model, so it follows the requested tier; without a cost line, their disclosure instruction can
    never fire.
-2. **Pass §2's `model`** — the mapped value, or your own no-mapped-model pick when it applies.
-3. **Hand it the scope your own procedure defines** (the iteration, the slug, the target file —
+3. **Pass §2's `model`** — the mapped value, or your own no-mapped-model pick when it applies.
+4. **Hand it the scope your own procedure defines** (the iteration, the slug, the target file —
    whatever your own instruction says to pass) — never a paraphrase of the whole command standing
    in for the agent's own prompt.
-4. **If the host rejects a model you picked yourself** (§2's no-mapped-model case), retry the same
+5. **If the host rejects a model you picked yourself** (§2's no-mapped-model case), retry the same
    dispatch once without a model argument and say you're doing so. A model that came from the
    project's own `cost.mapping` is never retried this way — if the host rejects a **mapped** model,
    fail loudly and say so.
-5. **If the host rejects the agent type itself** (e.g. Copilot's `Unknown agent_type: somi-coder`: its
-   subagent tool accepts only built-in types, not plugin agents), call
-   `somi_agent({name: "<agent name>"})` for that agent's instructions and start the host's built-in
-   general-purpose subagent instead. Its prompt is that text, then the briefing from steps 1 and 3;
-   pass the same model. Say once per session that agents run this way on this host. Never adopt
-   the agent's role inline instead: a reviewer has to start from a fresh context.
+6. **If the agent cannot be started as its `agent_type`** — `agent_type` is `null` (a host with no
+   registration), or the host rejects the type (`Unknown agent_type`, a disabled subagent, the plugin
+   not installed or not enabled) — **stop**. Tell the user, in one line, which canonical agent could
+   not start, as which type, on which host, and the host's reason (`could not start somi-coder as
+   somi:somi-coder on copilot: Unknown agent_type`). Never substitute an agent, run its procedure
+   yourself, or report the step done. The fix is host-side: enable the plugin, or check `/subagents`.
 
 **A dispatched agent's own checkpoints stay in force.** Resolving and starting it never itself
 authorizes an outward-facing action a checkpoint still gates — a `gh pr create` confirmation, an
@@ -273,6 +283,9 @@ dispatched agent's or command's own text says they do.
   never a silent omission when one genuinely was visible.
 - **Dispatching without a cost briefing line.** Without `dispatched at cost: <tier>` or `requested
   cost: <tier>`, the agent's own "Running at `low`" disclosure can never fire, even when it should.
+- **Starting a stand-in.** A general-purpose or built-in agent given the SoMi agent's text, a bare or
+  pre-4.0.0 name as the type, or the agent's procedure run inline when its `agent_type` was refused:
+  each hides which agent actually ran. Stop and report it instead (§5, step 6).
 - **Writing `dispatched at cost: <tier>` for an unenforced dispatch** (`enforced: false`), or staying
   silent about a high-tier agent whose model nothing pinned. Use `requested cost: <tier> (not enforced: no mapped model)` and print the unenforced notice (§2).
 

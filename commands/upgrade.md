@@ -31,8 +31,7 @@ path: apply, test, done — no ceremony.
 ### 2. Research (default `high` — Task the `somi-discovery-analyst`'s discipline at upgrade scope)
 
 Task the [`somi-discovery-analyst`](../agents/somi-discovery-analyst.md) (default `high`) — before this `Task`,
-call `somi_resolve` for `somi-discovery-analyst` (with `project_dir`), pass its model, and put
-the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
+call `somi_resolve` for `somi-discovery-analyst` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
 or `somi:somi-dispatch` on Claude Code) — scoped to the upgrade —
 **research integrity rules apply** (cite every claim; "no evidence found" is a valid result;
 never fabricate a changelog entry):

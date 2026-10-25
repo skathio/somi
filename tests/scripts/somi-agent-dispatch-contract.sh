@@ -128,12 +128,19 @@ else
   # dispatch-reference line now names `somi_resolve`/`somi_skill` directly (not just a link to the
   # skill), so a stale or invented tool name there would otherwise go unchecked: the skill/front-door
   # pair alone can't see a typo that only ever appears in a command file.
-  REAL_TOOLS="$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).sort().join(" "))' "$SCHEMA_JSON")"
+  # somi_agent is a read-only text reader that dispatch must NOT use (an agent starts as its agent_type),
+  # so it is the one real tool the dispatch text is required to leave unnamed.
+  REAL_TOOLS="$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).filter((t) => t !== "somi_agent").sort().join(" "))' "$SCHEMA_JSON")"
   PROMPT_TOOLS="$(grep -ohE '`somi_[a-z_]+`' "$AGENT_MD" "$SKILL_MD" $COMMAND_MDS | tr -d '`' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
   if [ "$REAL_TOOLS" = "$PROMPT_TOOLS" ]; then
     ok "agents/somi.md + skills/somi-dispatch/SKILL.md + commands/*.md together name exactly the server's real tools ($REAL_TOOLS)"
   else
     bad "tool-name mismatch -- server: [$REAL_TOOLS] vs agents/somi.md + skills/somi-dispatch/SKILL.md + commands/*.md: [$PROMPT_TOOLS]"
+  fi
+  if node -e 'process.exit(Object.keys(JSON.parse(process.argv[1])).includes("somi_agent") ? 0 : 1)' "$SCHEMA_JSON"; then
+    ok "somi_agent still exists as a reader, and the dispatch text above names it nowhere"
+  else
+    bad "somi_agent disappeared from the server -- its removal needs an audit of its consumers first"
   fi
 
   # somi_resolve: every REAL property must be named somewhere across the two files (nothing silently

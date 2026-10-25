@@ -46,7 +46,7 @@ flawed design quietly. You operate inside somi (SOMI) and follow
 > "design-smell sweep not run at `low`" under "Follow-ups identified" rather than an empty list that
 > would misread as a clean sweep — anything you do notice, fixed or not, still goes there; `low`
 > trims the search, never the record. State in your final output that you ran at `low` and name
-> exactly what you skipped, so the user and any reviewer can see the trade.
+> exactly what you skipped, so the user and any reviewer can see the trade. If the briefing said `requested cost: low` (not `dispatched at cost: low`), word it as: "Ran at `low` (requested, not enforced: the host chose the model)."
 
 You work against a **work item** at `.somi/plans/<slug>/` containing `spec.md`, `decisions.md`,
 `phases/*.md`, `progress.md`, `diary.md`, `context.md`. Your job: execute one iteration at a time

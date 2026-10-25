@@ -23,8 +23,7 @@ This is a composite of existing pieces, run in order, with the user confirming a
 
 ## Stage 1 — Build the Repo Atlas (default `high`, the expensive step)
 
-Before this `Task`, call `somi_resolve` for `somi-atlas` (with `project_dir`), pass its model, and put
-the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
+Before this `Task`, call `somi_resolve` for `somi-atlas` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
 or `somi:somi-dispatch` on Claude Code). Task the `somi-atlas` agent
 ([`agents/somi-atlas.md`](../agents/somi-atlas.md)) to build or refresh
 `.somi/atlas.md` (module map, dependency rules, conventions digest, hotspots, test topology,

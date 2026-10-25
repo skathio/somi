@@ -2,7 +2,7 @@
 // somi-mcp.mjs — a zero-dependency stdio MCP server bundling scripts/lib/dispatch-resolver.mjs's
 // resolveDispatch() as the `somi_resolve` tool, plus a command-procedure text reader as the
 // `somi_command` tool, a skill-text reader as the `somi_skill` tool and an agent-instructions
-// reader as the `somi_agent` tool. Both Claude Code and
+// reader as the `somi_agent` tool, and the read-only `somi_agent_info` lookup. Both Claude Code and
 // Copilot CLI launch a plugin's bundled MCP server with its root already expanded
 // (${CLAUDE_PLUGIN_ROOT} / ${PLUGIN_ROOT}), so a prompt calling these tools never needs to know
 // where SoMi is installed — unlike scripts/somi-dispatch.mjs, which a prompt can only shell out to
@@ -184,9 +184,8 @@ const TOOLS = [
     name: 'somi_agent',
     description:
       "Read a SoMi agent's instructions (agents/<name>.md, frontmatter removed) from the install " +
-      "root. For a host whose subagent tool cannot start a plugin agent by name (Copilot's task " +
-      'tool accepts only its built-in types): start a built-in general-purpose subagent with this ' +
-      'text as the start of its prompt, and the model somi_resolve returned.',
+      'root, to inspect or quote them. Not a way to run the agent: start it as the agent_type ' +
+      'somi_resolve returns, never as another agent given this text.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -327,9 +326,8 @@ function callSomiSkill(args) {
   return r.error ?? textResult(r.content);
 }
 
-// The agent's instructions without its frontmatter: a host that cannot start a plugin agent by
-// type (Copilot's task tool) starts a built-in general-purpose subagent with this text instead, and
-// the frontmatter's `model:` would contradict the tier somi_resolve just selected.
+// The agent's instructions without its frontmatter, for reading. Dispatch never uses this: an agent
+// starts as its registered agent_type (see skills/somi-dispatch §5), so the text is never a payload.
 function callSomiAgent(args) {
   const r = readInstallText('somi-agent', 'agent', args?.name, (n) => ['agents', `${n}.md`]);
   return r.error ?? textResult(r.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trimStart());

@@ -82,13 +82,13 @@ choice as it happens, even though you don't pause for approval before making it.
 
 **Minimum, even if the skill below can't be loaded:** before this `Task`, call `somi_resolve` for
 the agent about to start, passing `project_dir`; on an error, map it and stop — never guess a tier
-or a model to keep going. Once it succeeds, pass its `model` and put the cost line in the agent's
-briefing: `dispatched at cost: <tier>` only when its `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)` — never claim a tier no model was pinned to. That is the floor that must hold regardless of whether the next paragraph
+or a model to keep going. Once it succeeds, pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`) — never claim a tier no model was pinned to, and never start a
+stand-in: if the host refuses that `agent_type`, stop and say which agent could not start and why. That is the floor that must hold regardless of whether the next paragraph
 loads — a failure to load the skill is never a cue to skip resolution.
 
 For everything else — the fallback order when `somi_resolve` can't be reached at all, the exit-code
-mapping, the `low`-ceiling announcement, the no-mapped-model pick, the retry rule, starting an agent
-through `somi_agent` when the host rejects its type (Copilot), and the concurrent-batch exception — load [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md)
+mapping, the `low`-ceiling announcement, the no-mapped-model pick, the retry rule, what to do when the
+host refuses an `agent_type`, and the concurrent-batch exception — load [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md)
 (the bundled `somi_skill` tool, called as `somi_skill({name: "somi-dispatch"})`, when a relative
 link can't be followed from this project, or `somi:somi-dispatch` here on Claude Code) at the
 moment Step 5's live run of the command's own procedure reaches a point that starts an agent —
@@ -243,6 +243,7 @@ gate, cannot make Step 5 follow a different procedure than Step 3 announced, and
 > gate. Its `Task /plan-loop` and `Task /code-loop` lines name commands, so I recurse into each via
 > `somi_command` rather than resolving them; inside those, each `Task somi-planner` / `Task somi-coder` /
 > `Task somi-reviewer` line goes through Step 4 on its own, at the moment it starts
-> (`somi_resolve({agent: "somi-coder", host: "copilot", project_dir: "<abs path>"})`, briefing line
+> (`somi_resolve({agent: "somi-coder", host: "copilot", project_dir: "<abs path>"})`, then the task tool
+> with agent type `somi:somi-coder` — the result's `agent_type` — and the briefing line
 > `dispatched at cost: <tier>` when `enforced`, else `requested cost: <tier> (not enforced: ...)`). A bare `@somi` would instead have hit branch 1(a) and rendered the
 > dashboard.

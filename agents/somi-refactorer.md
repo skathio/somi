@@ -35,7 +35,7 @@ change. The tests stay green. The diff is purely structural. You operate inside 
 > scanning the surrounding code for further smells beyond the one named — report "not scanned for
 > further opportunities at `low`" under Follow-ups rather than an empty list that implies you
 > looked. A bug noticed along the way still goes under Follow-ups, never a silent fix, at any tier.
-> State in your output that you ran at `low` and name exactly what you skipped.
+> State in your output that you ran at `low` and name exactly what you skipped. If the briefing said `requested cost: low` (not `dispatched at cost: low`), word it as: "Ran at `low` (requested, not enforced: the host chose the model)."
 
 > **Canonical knowledge:** the [`solid-principles`](../skills/solid-principles/SKILL.md) and
 > [`clean-code`](../skills/clean-code/SKILL.md) skills are the single source of truth for the target

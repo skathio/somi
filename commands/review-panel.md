@@ -74,8 +74,8 @@ the panel's value (it shows the surface was considered, not ignored).
 ### 3. Run the panel **in parallel**
 
 Issue the seated lenses as **multiple `Task` calls in a single turn** so they run concurrently —
-call `somi_resolve` for each lens back-to-back immediately before the batch (each call's own
-`project_dir`, model, and cost line (`dispatched at cost: <tier>` only when `enforced`, else `requested cost: <tier> (not enforced: no mapped model)`) in that lens's own briefing — this is the
+call `somi_resolve` for each lens back-to-back immediately before the batch (each with its own
+`project_dir`); for each, pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`) — in that lens's own briefing; this is the
 concurrent-batch case the `somi-dispatch` skill's §5 names explicitly). Give each the *same* scoped
 diff and work-item context, and each its own briefing:
 

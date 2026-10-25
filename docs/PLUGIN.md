@@ -93,11 +93,9 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   loaded by every entry path that starts an agent — is readable this way too
   (`somi_skill({name: "somi-dispatch"})`), not only by name on a host that supports Skill-tool
   loading.
-- **`somi_agent`** — returns a SoMi agent's instructions (`agents/<name>.md`, frontmatter removed).
-  GitHub Copilot's subagent tool accepts only its built-in agent types, so a plugin agent such as
-  `somi-coder` or `somi-reviewer` cannot be started by name there (`Unknown agent_type`). The front door then
-  starts the built-in general-purpose subagent with this text and the model `somi_resolve` returned,
-  which keeps a reviewer's fresh context. The procedure is in the `somi-dispatch` skill, §5.
+- **`somi_agent`** — returns a SoMi agent's instructions (`agents/<name>.md`, frontmatter removed),
+  for reading. It is not a dispatch path: every agent starts as its own registered type (see
+  [Agent dispatch](#agent-dispatch) below), never as a general-purpose agent carrying this text.
 
 All three readers share the same `^[a-z][a-z0-9-]*$` name allowlist as `somi_resolve`'s `agent`
 argument, checked before any of them touches a filesystem path.
@@ -237,7 +235,7 @@ the Claude Code plugin.
   bare-checkout collision (Copilot has no equivalent "open this plugin's own repo as a project"
   auto-load path this repo has hit). No reference from `extension.json` is needed. Tool naming
   inside an agent's own reasoning isn't documented for Copilot; refer to `somi_resolve` /
-  `somi_command` / `somi_skill` / `somi_agent` by their bare names — a host may surface them namespaced by plugin
+  `somi_agent_info` / `somi_command` / `somi_skill` / `somi_agent` by their bare names — a host may surface them namespaced by plugin
   and server (as Claude Code does).
 
 ### Installing
@@ -269,6 +267,24 @@ in the same turn** — resolving and `Task`ing every agent the flow starts throu
 resolver a direct command uses, the same way a command body dispatches on Claude Code. On Claude
 Code the direct commands already select the right agent and run their own procedure themselves, so
 `somi` mainly matters here, on Copilot.
+
+### Agent dispatch
+
+Every SoMi agent starts as the subagent type the host itself registered for it. Both supported
+hosts namespace plugin agents as `<plugin>:<file stem>`, so the type is `somi:somi-<name>`
+(`somi:somi-coder`, `somi:somi-reviewer`, …). `somi_resolve` returns it as `agent_type`, and the
+[`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill passes it together with the resolved model.
+
+| Host | Dispatch |
+|---|---|
+| Claude Code | Native: the Task tool takes `somi:somi-<name>`. |
+| GitHub Copilot CLI | Native: the task tool takes `somi:somi-<name>` once the plugin is installed and enabled. Checked against the CLI's own plugin loader (1.0.70); a bare `somi-coder` is `Unknown agent_type`. |
+| VS Code Copilot Chat | Not a supported dispatch host. An earlier release found its subagent tool refused plugin agents; if it refuses `somi:somi-<name>`, SoMi stops and says which agent could not start, instead of running a stand-in. Not re-tested with the `somi:` ids. |
+
+There is no fallback that hands an agent's text to a general-purpose agent (3.1.0 had one; 4.0.0
+removes it): a run either starts the real agent, from a fresh context, or stops with the canonical
+name, the type it tried, and the host's reason. When dispatch fails on Copilot CLI, check that the
+plugin is enabled (`copilot plugin list`) and that the agent is not turned off in `/subagents`.
 
 ### Available commands
 

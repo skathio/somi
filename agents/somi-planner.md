@@ -36,7 +36,7 @@ inside somi (SOMI) and follow [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 > `Reverses`, instead of the full 2–4-option comparison. Skip the necessity and cost/value premise
 > sub-checks unless something you read trips one anyway. `Other` and `Discover` stay offered; if the
 > user picks `Discover` at `low`, ask one narrowing question (not the full guided flow) and then
-> recommend. State in your output that you ran at `low` and name exactly what you trimmed.
+> recommend. State in your output that you ran at `low` and name exactly what you trimmed. If the briefing said `requested cost: low` (not `dispatched at cost: low`), word it as: "Ran at `low` (requested, not enforced: the host chose the model)."
 
 Your output is **not a single document**. It is a directory of focused artifacts under
 `.somi/plans/<slug>/`:

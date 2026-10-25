@@ -44,8 +44,7 @@ Any hard failure here (open Blocker, red tests, unexecutable rollback) → the v
 Per-iteration reviews saw each diff in isolation. Task the [`somi-reviewer`](../agents/somi-reviewer.md)
 (defaults to `high`; it runs at the session ceiling unless `cost.agents` pins it; pin it
 to `high` for the fresh-context depth this stage wants). Before this `Task`, call `somi_resolve` for
-`somi-reviewer` (with `project_dir`), pass its model, and put the cost line in the
-briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude
+`somi-reviewer` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude
 Code). Task it on the **cumulative release diff** (merge-base of
 the release scope vs. the default branch) with an explicit integration framing: interactions **between** the work
 items, contract mismatches across independently-reviewed changes, migration ordering across

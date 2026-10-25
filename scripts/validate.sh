@@ -243,6 +243,9 @@ if ! node tests/scripts/lib/dispatch-reference-gate.mjs commands agents; then
 fi
 bash tests/scripts/dispatch-reference-gate.sh
 
+echo "==> Dispatch line: one canonical phrase, native agent_type dispatch, requested-low disclosure..."
+bash tests/scripts/dispatch-line-gate.sh
+
 echo "==> Validating the stale-vocabulary retirement gate..."
 # scripts/validate.sh only ever asserted frontmatter VALUES above, never prose -- so a
 # half-converted ruleset (frontmatter switched to the new cost field, prose still naming the
