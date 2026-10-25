@@ -10,6 +10,8 @@
 //   init                          create the default file when absent (the exact text the SessionStart
 //                                 hook writes); a no-op if anything exists at the path
 //   [--project-dir DIR]           default: CLAUDE_PROJECT_DIR, else the current directory
+//   [--host NAME]                 (show) the host this session runs on; adds a warning when that host has
+//                                 no model mapping while any agent resolves to high (#36)
 //   [--refuse-lowering]           (set, unset) exit 64 and write nothing if the change would lower any
 //                                 agent's effective tier (see scripts/lib/cost-lowering.mjs)
 //
@@ -48,13 +50,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readTextFile, loadState, decideDispatch, DEFAULT_CEILING, MAX_CONFIG_BYTES } from './lib/cost-ceiling.mjs';
 import { quote } from './lib/cost-config.mjs';
-import { VALID_COSTS } from './lib/cost-model.mjs';
+import { VALID_COSTS, HOST_MODELS } from './lib/cost-model.mjs';
 import { AGENT_DEFAULT_TIERS, serializeDefaultConfig } from './lib/cost-defaults.mjs';
 import { EditError, applyEdit, parseKey, validateCostBlock } from './lib/cost-config-edit.mjs';
 import { lowers } from './lib/cost-lowering.mjs';
 
 const PROG = 'somi-config';
-const USAGE = `usage: ${PROG}.mjs show | get <key> | set <key> <tier> | unset cost.agents.<name> | init  [--project-dir DIR] [--refuse-lowering]  (keys: cost.ceiling, cost.agents.<name>)`;
+const USAGE = `usage: ${PROG}.mjs show [--host NAME] | get <key> | set <key> <tier> | unset cost.agents.<name> | init  [--project-dir DIR] [--refuse-lowering]  (keys: cost.ceiling, cost.agents.<name>)`;
+const HOST_RE = /^[a-z][a-z0-9-]{0,31}$/;
 const EXIT_USAGE = 64;
 const EXIT_PROJECT = 67;
 
@@ -62,6 +65,7 @@ const SEC_WARNING = 'security-reviewer runs below high; pin it with: set cost.ag
 const ENV_WARNING = 'SOMI_COST_CEILING is set in this environment and outranks cost.ceiling in the config';
 const STATE_WARNING = 'a ceiling set earlier by a flag or SOMI_COST_CEILING is in force because cost.ceiling is not set in the config';
 const UNKNOWN_WARNING = 'that agent name is not a shipped agent; the entry is accepted but may never be used';
+const unmappedWarning = (host, n) => `${host} has no model mapping, so ${n} high-tier agent(s) run on whatever model the host picks; set cost.mapping.${host} with low, medium and high (docs/USAGE.md, "Pinning models per tier on Copilot")`;
 const LOWERING_MESSAGE = 'this change lowers a tier and needs the user: ask them to run node scripts/somi-config.mjs themselves or edit .somi/config.json';
 const WRITE_FLAGS = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
 
@@ -82,8 +86,14 @@ function parseArgs(argv) {
   const pos = [];
   let dir;
   let refuse = false;
+  let host;
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--refuse-lowering') refuse = true;
+    else if (rest[i] === '--host') {
+      if (host !== undefined) usage('--host given twice');
+      host = rest[++i];
+      if (host === undefined || !HOST_RE.test(host)) usage(`--host must match ${HOST_RE}`);
+    }
     else if (rest[i] === '--project-dir') {
       if (dir !== undefined) usage('--project-dir given twice');
       dir = rest[++i];
@@ -95,7 +105,8 @@ function parseArgs(argv) {
   if (!Object.hasOwn(want, cmd ?? '')) usage(cmd ? `unknown command: ${quote(cmd)}` : 'a command is required');
   if (pos.length !== want[cmd]) usage(`${cmd} takes ${want[cmd]} argument(s)`);
   if (refuse && cmd !== 'set' && cmd !== 'unset') usage('--refuse-lowering applies to set and unset only');
-  return { cmd, pos, dir, refuse };
+  if (host !== undefined && cmd !== 'show') usage('--host applies to show only');
+  return { cmd, pos, dir, refuse, host };
 }
 
 function projectRoot(dir) {
@@ -209,7 +220,7 @@ function warningsFor(cost, force, extra = []) {
   return w;
 }
 
-function show(root, loc, cfg) {
+function show(root, loc, cfg, host) {
   const cost = cfg.cost ?? {};
   const force = ceilingInForce(root, cost);
   const names = Object.keys(AGENT_DEFAULT_TIERS).sort();
@@ -218,13 +229,18 @@ function show(root, loc, cfg) {
     const e = effective(name, cost, force.value);
     return { name, tier: e.tier, source: e.source, default: unknown ? null : AGENT_DEFAULT_TIERS[name], ...(unknown ? { unknown: true } : {}) };
   };
+  const agents = [...names.map((n) => agent(n, false)), ...extras.map((n) => agent(n, true))];
+  const extra = [];
+  const mapped = host !== undefined && (Object.hasOwn(HOST_MODELS, host) || (cost.mapping && Object.hasOwn(cost.mapping, host)));
+  const highs = agents.filter((a) => a.tier === 'high').length;
+  if (host !== undefined && !mapped && highs > 0) extra.push(unmappedWarning(host, highs));
   return {
     path: path.join('.somi', 'config.json'),
     exists: loc.fileExists,
     ceiling: cost.ceiling === undefined ? { value: DEFAULT_CEILING, source: 'default' } : { value: cost.ceiling, source: 'config' },
     effective_ceiling: force,
-    agents: [...names.map((n) => agent(n, false)), ...extras.map((n) => agent(n, true))],
-    warnings: warningsFor(cost, force),
+    agents,
+    warnings: warningsFor(cost, force, extra),
   };
 }
 
@@ -270,7 +286,7 @@ function writeAtomic(loc, text, { noClobber = false, mode } = {}) {
 }
 
 function main() {
-  const { cmd, pos, dir, refuse } = parseArgs(process.argv.slice(2));
+  const { cmd, pos, dir, refuse, host } = parseArgs(process.argv.slice(2));
   const root = projectRoot(dir);
   const loc = locate(root);
   const rel = path.join('.somi', 'config.json');
@@ -284,7 +300,7 @@ function main() {
   const k = cmd === 'show' ? null : edit(() => parseKey(pos[0]));
   if (cmd === 'unset' && k.kind !== 'agent') usage('only cost.agents.<name> can be unset');
   const cfg = load(root, loc, cmd === 'set' || cmd === 'unset');
-  if (cmd === 'show') return show(root, loc, cfg);
+  if (cmd === 'show') return show(root, loc, cfg, host);
 
   if (cmd === 'get') {
     const force = ceilingInForce(root, cfg.cost);

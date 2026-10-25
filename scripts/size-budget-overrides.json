@@ -58,10 +58,10 @@
   {
     "file": "tests/scripts/convergence-runner.sh",
     "budget": 800,
-    "current_size": 1510,
-    "source": "6d9dec9",
-    "at": "2026-10-01",
-    "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
+    "current_size": 1514,
+    "source": "release/4.0.0 (#39)",
+    "at": "2026-10-25",
+    "reason": "Over budget at the time the gate was introduced; +4 for #39 (set-based worktree-leak helper and its positive control). Split to drive the ledger to zero."
   },
   {
     "file": "tests/scripts/evals-fixtures.sh",

@@ -640,8 +640,11 @@ Give all three tiers: a host named in `cost.mapping` replaces its whole tier map
 mapping counts as the user naming the model, so it takes precedence over a host rule such as "do
 not set `model` unless the user names one". With it, `somi_resolve` returns `"enforced": true`.
 
-`cost.ceiling` is an **upper bound, not a model request**: `high` (the default) means "no
-restriction", not "use a high model". Only `cost.mapping` turns a tier into a model.
+`/somi-config` checks this for you: `somi-config.mjs show --host copilot` (and the `somi_config` tool's
+`show` with `host`) adds a warning when the host has no mapping while any agent resolves to `high`.
+
+`cost.ceiling` is an **upper bound, not a model request**: `high` means "no restriction", not "use a
+high model". Only `cost.mapping` turns a tier into a model.
 
 ### Session ceiling
 

@@ -209,6 +209,7 @@ const TOOLS = [
         key: { type: 'string', description: 'cost.ceiling or cost.agents.<name> (get, set, unset)' },
         value: { type: 'string', description: 'low, medium or high (set)' },
         project_dir: { type: 'string', description: 'absolute path of the project, as for somi_resolve' },
+        host: { type: 'string', description: 'show only: the host this session runs on (claude-code, copilot), as for somi_resolve; adds a warning when it has no model mapping' },
       },
       required: ['action'],
     },
@@ -341,6 +342,9 @@ async function callSomiConfig(args) {
   if (typeof args.action !== 'string' || !['show', 'get', 'set', 'unset', 'init'].includes(args.action)) {
     return textResult('somi-config: action must be one of show, get, set, unset, init (exit 64)', true);
   }
+  if (args.host !== undefined && (args.action !== 'show' || typeof args.host !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(args.host))) {
+    return textResult('somi-config: host applies to show only and must be a lowercase host name (exit 64)', true);
+  }
   if (!text(args.key) || !text(args.value) || [args.key, args.value].some((v) => v !== undefined && (v === '' || v.startsWith('-') || /[\u0000-\u001f\u007f]/.test(v)))) {
     return textResult('somi-config: key and value must be non-empty strings without control characters that do not start with a dash (exit 64)', true);
   }
@@ -357,6 +361,7 @@ async function callSomiConfig(args) {
   const argv = [path.join(installRoot(), 'scripts', 'somi-config.mjs'), args.action];
   if (args.key !== undefined) argv.push(args.key);
   if (args.value !== undefined) argv.push(args.value);
+  if (args.host !== undefined) argv.push('--host', args.host);
   // Lowering a tier needs the user. Where the SoMi plugin's hooks run (CLAUDE_PLUGIN_ROOT is set in this
   // server's environment) the cost-lowering PreToolUse hook asks the user; where it is not, nothing can
   // ask, so the CLI refuses a lowering. This is a heuristic for "a hook can ask", not a guarantee.

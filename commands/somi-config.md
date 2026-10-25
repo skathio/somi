@@ -30,10 +30,10 @@ The user's hint: **$ARGUMENTS**
 ## What to do
 
 1. **Look first.** Call the `somi_config` tool with `{ "action": "show", "project_dir": "<absolute
-   path of the project you are working in>" }`. Never guess the path; give the folder this session
+   path of the project you are working in>", "host": "<claude-code or copilot, the host this turn runs on>" }`. Never guess the path; give the folder this session
    is
    working in. Where the tool cannot be called but a shell is available, run
-   `node scripts/somi-config.mjs show` from the SoMi install instead (only if its path is already
+   `node scripts/somi-config.mjs show --host <host>` from the SoMi install instead (only if its path is already
    known). If neither is possible, say so and stop.
 2. **Present it compactly.** One line for the ceiling and its source (`config`, `env`, `state` or
    `default`; note the config's own value if an env or persisted value outranks it). Then a table,

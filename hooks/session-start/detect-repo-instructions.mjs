@@ -143,6 +143,22 @@ const MAX_DEPTH = 3; // bash: find -maxdepth 3
 const MIN_DEPTH = 2; // bash: -mindepth 2
 const MAX_NESTED_RESULTS = 10; // bash: | head -n 10
 
+// The walk's own bounds, beyond depth: a repo with a huge directory at depth <= 3 must not stall
+// session start. The entry budget is the deterministic bound (tested); the deadline is the
+// backstop for a slow filesystem. Hitting either just ends the scan with what was found so far.
+const MAX_ENTRIES_VISITED = 5000;
+const SCAN_DEADLINE_MS = 1000;
+
+// Directory names are repo-controlled text, and this hook's output lands in the model's context.
+// A nested path is listed only when every segment is a plain name; anything else (spaces, newlines,
+// backticks, prose) is counted but never echoed, so a folder cannot be named into an instruction.
+// Tradeoff, named: a legitimate folder like "my app/CLAUDE.md" is counted, not listed.
+const SAFE_SEGMENT_RE = /^[A-Za-z0-9._-]{1,64}$/;
+
+function isListablePath(rel) {
+  return rel.split(/[\\/]/).every((seg) => SAFE_SEGMENT_RE.test(seg));
+}
+
 // bash's closing directive line (verbatim, including the embedded single quotes bash's
 // `$'...'\''...'\''...'` escaping decodes to). Byte-exact against the fixture's
 // expect_context substrings.
@@ -174,9 +190,12 @@ function isDirectory(p) {
 // this never matters for what's actually asserted.
 function scanNested(root) {
   const results = [];
+  const deadline = Date.now() + SCAN_DEADLINE_MS;
+  let visited = 0;
 
   function walk(dir, depth) {
     if (results.length >= MAX_NESTED_RESULTS) return;
+    if (visited >= MAX_ENTRIES_VISITED || Date.now() > deadline) return;
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -185,6 +204,7 @@ function scanNested(root) {
     }
     for (const entry of entries) {
       if (results.length >= MAX_NESTED_RESULTS) return;
+      if (++visited > MAX_ENTRIES_VISITED) return;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (depth === 1 && PRUNED_TOP_LEVEL_DIRS.has(entry.name)) continue;
@@ -224,8 +244,10 @@ function main() {
   for (const f of ROOT_FILES) {
     if (isFile(path.join(root, f))) found.push(f);
   }
+  let unlisted = 0;
   for (const rel of scanNested(root)) {
-    found.push(rel);
+    if (isListablePath(rel)) found.push(rel);
+    else unlisted += 1;
   }
 
   let repoAgents = '';
@@ -237,7 +259,7 @@ function main() {
     }
   }
 
-  if (found.length === 0 && !repoAgents) return;
+  if (found.length === 0 && !repoAgents && unlisted === 0) return;
 
   let msg =
     'somi repo-awareness — this repository ships its own instructions/agents. Respect them as context:';
@@ -252,6 +274,9 @@ function main() {
     if (seen.has(f)) continue;
     seen.add(f);
     msg += `\n  - ${f}`;
+  }
+  if (unlisted > 0) {
+    msg += `\n  - ${unlisted} nested CLAUDE.md/AGENTS.md file(s) under folder names with unusual characters (not listed; find them with a file search)`;
   }
   if (repoAgents) msg += `\n  - ${repoAgents}`;
   msg += DIRECTIVE;

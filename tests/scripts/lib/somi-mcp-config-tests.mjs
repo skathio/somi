@@ -59,6 +59,11 @@ await withClient('', async (client) => {
   }
   const r = await call(client, { action: 'show', project_dir: lone });
   check('without a host root show still works from project_dir', [r.isError, JSON.parse(text(r)).exists], [undefined, false]);
+  const hp = fresh(); mkdirSync(path.join(hp, '.somi')); writeFileSync(path.join(hp, '.somi', 'config.json'), '{"cost":{"ceiling":"high"}}\n');
+  const h = await call(client, { action: 'show', project_dir: hp, host: 'copilot' });
+  check('show with host copilot passes --host through: the unmapped warning appears', [h.isError, JSON.parse(text(h)).warnings.some((w) => w.startsWith('copilot has no model mapping'))], [undefined, true]);
+  const hs = await call(client, { action: 'set', key: 'cost.ceiling', value: 'high', project_dir: lone, host: 'copilot' });
+  check('host on a non-show action is refused (64) before anything runs', exits(hs, 64), [true, true]);
 });
 // With a host root the CLI receives the real path of the root.
 const hostReal = fresh(); const alias = path.join(fresh(), 'alias'); symlinkSync(hostReal, alias);

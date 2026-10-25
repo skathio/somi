@@ -50,6 +50,20 @@ check "show with no config file: exists false, ceiling default medium" "$(cfg "$
 check "show with no config: agents follow the ceiling, security-reviewer warning present" "$(jf 'o.agents.find((a) => a.name === "security-reviewer").tier + "/" + o.agents.find((a) => a.name === "security-reviewer").source')|$(jf 'o.warnings.length')" "medium/ceiling|1"
 check "show created nothing" "$([ -e "$P/.somi" ] && echo made || echo none)" "none"
 
+# --- show --host: the unmapped-host warning (#36) --------------------------------------------------
+P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
+check "show --host copilot, default config (10 agents pinned high), no mapping: one unmapped warning naming the count" \
+  "$(cfg "$CLI" "$P" show --host copilot)|$(jf 'o.warnings.filter((w) => w.startsWith("copilot has no model mapping, so 10 high-tier agent(s)")).length')" "0|1"
+check "show --host claude-code: shipped mapping, no unmapped warning" "$(cfg "$CLI" "$P" show --host claude-code)|$(jf 'o.warnings')" "0|[]"
+check "show without --host: no unmapped warning (the host is unknown)" "$(cfg "$CLI" "$P" show)|$(jf 'o.warnings')" "0|[]"
+node -e 'const f=process.argv[1];const c=JSON.parse(require("fs").readFileSync(f,"utf8"));c.cost.mapping={copilot:{low:"m-low",medium:"m-mid",high:"m-high"}};require("fs").writeFileSync(f,JSON.stringify(c,null,2)+"\n")' "$P/.somi/config.json"
+check "show --host copilot with cost.mapping.copilot set: no unmapped warning" "$(cfg "$CLI" "$P" show --host copilot)|$(jf 'o.warnings')" "0|[]"
+P="$(proj)"; mkdir -p "$P/.somi"
+printf '{"cost":{"ceiling":"low"}}\n' > "$P/.somi/config.json"
+check "show --host copilot where nothing resolves high: no unmapped warning" "$(cfg "$CLI" "$P" show --host copilot)|$(jf 'o.warnings.some((w) => w.includes("no model mapping"))')" "0|false"
+check "--host on set is a usage error (64)" "$(cfg "$CLI" "$P" set cost.ceiling high --host copilot)" "64"
+check "--host with a bad name is a usage error (64)" "$(cfg "$CLI" "$P" show --host 'Co pilot')" "64"
+
 # --- get / set / unset ----------------------------------------------------------------------------
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
 check "get cost.ceiling" "$(cfg "$CLI" "$P" get cost.ceiling)|$(jf 'o.value + "/" + o.source')" "0|medium/config"
