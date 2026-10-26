@@ -308,7 +308,9 @@ A plan is good when:
 - Risks in `spec.md` §11 are concrete failure modes with concrete mitigations — not generic
   platitudes.
 - Iterations in `phases/` are small enough to be reviewable (~1 PR each), self-contained, and
-  orderable.
+  orderable — and no smaller than that: iterations that touch the same files and together fit the
+  loop's diff cap are one iteration, unless the split states its reason (a risky step isolated, a
+  review boundary the user asked for). Each iteration costs a coder and a review pass.
 - Security implications are surfaced in `spec.md` §8, not deferred to "we'll do it in phase 3".
 - The plan can be **rejected** by a reviewer cleanly — i.e., the decisions are explicit enough to
   argue about.

@@ -38,6 +38,10 @@ Nit with a confidence; a plan can be rejected.
 - Phases are named for an outcome, not a mechanic ("implement", "test", "deploy" are not phases).
 - Each iteration is about one reviewable PR, self-contained and orderable, and fits the loop's diff
   and file caps. If it plainly cannot, the plan must split it.
+- Iterations are not split finer than that. Two iterations that touch the same files and together fit
+  the caps are a finding (Minor; Major when three or more could merge) unless the plan states why the
+  split pays for its extra coder and review pass. Seen on 4.0.0: an 80-line one-file task planned as
+  five iterations, each with its own coder, diff gate and review.
 - The `Files (approx)` list is believable against the scope: it names the files the change must
   touch, including tests and docs, not a convenient subset. A list that is obviously short is the
   usual cause of a later scope breach.

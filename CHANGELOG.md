@@ -121,6 +121,10 @@ work finds none (cost and time inconclusive, instruction text +2.3%; see the mea
   rubric's exact signal ids and `resolve` lists keys it does not recognise, so a weaker model can
   correct invented names; Stage -1 loads the routing skill first. The thresholds (100 production
   lines, 6 files, 2 modules) are provisional.
+- **Plans no longer split work finer than one reviewable change** (issue #40). The planner merges
+  iterations that touch the same files and together fit the loop's diff cap unless it states why the
+  split pays for another coder and review pass; plan-review reports an unjustified split (Minor, Major
+  at three or more). A recorded `full` run had planned an 80-line one-file task as five iterations.
 - **A usage and speed measurement system** (`docs/USAGE-BENCHMARK.md`, `benchmarks/usage-speed/`).
   L0 counts the bytes of instruction text injected for each standard scenario; L1 times hooks,
   scripts and an MCP round trip locally; L2 runs paired live draws with and without SoMi. A
