@@ -106,6 +106,12 @@ L1 across machines.
 Never start a paid draw without the user's explicit go-ahead for that run, a stated budget, and a stated
 cap. See section 10.
 
+The default scenarios are S1, S2 and S3. Two more are opt-in with `--scenarios`: S5, a security-sensitive
+task (H4, files served by a name the user gives), and S6, a migration with design choices (H2). The sizing
+probe S4-T1 runs only the sizing step on T1-proration, the task whose tier varied between draws. A
+comparison needs the same scenario list on both sides, so record an opt-in scenario on both baselines or on
+neither.
+
 Build the plugin directory from the candidate commit without the test tree, because the driver refuses a
 plugin that carries `tests/evals` or `.somi`:
 

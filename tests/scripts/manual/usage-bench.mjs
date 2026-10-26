@@ -18,8 +18,12 @@
 //       run through the same scoreHidden runner as the A/B tasks, after the draw.
 //   S2  T1 (tests/evals/ab/T1-proration) through /somi:ship-loop; the bare arm gets the task text. Hidden suite of the task.
 //   S3  M01 bracket seeding (tests/evals/ab-micro/M01-bracket-seeding), same arms and scoring as S2.
+//   S5  H4 static files (tests/evals/ab/H4-static-files): a security-sensitive task (paths a user names), same arms and scoring.
+//   S6  H2 ledger migration (tests/evals/ab/H2-ledger-migration): a migration with design choices, same arms and scoring.
+//       S5 and S6 are opt-in (--scenarios); the default set stays S1,S2,S3 so earlier baselines remain comparable.
 //   S4-M01, S4-M03, S4-M05, S4-M08  sizing probes (--sizing-probe): SoMi arm only, one call, zero resumes, the draw ends where
 //       the sizing step stops, never scored. The row is outcome invalid with reason probe; its stratum is the phase.
+//   S4-T1  the same probe on T1-proration, the task whose sizing varied between draws; opt-in like S5 and S6.
 //
 // Plan and resume: the first run writes plan.json (seed, model, caps, scenarios, rule hash, plugin hash, ordered draws, rounds
 // interleave arms and scenarios). A re-run into the same --out recomputes the plan from its flags and refuses on any
@@ -66,6 +70,9 @@ const SCENARIOS = {
   S1: { kind: 'fixture', slug: 'expired-token', iteration: '1.1' },
   S2: { kind: 'task', corpus: 'tests/evals/ab', task: 'T1-proration' },
   S3: { kind: 'task', corpus: 'tests/evals/ab-micro', task: 'M01-bracket-seeding' },
+  S5: { kind: 'task', corpus: 'tests/evals/ab', task: 'H4-static-files' },
+  S6: { kind: 'task', corpus: 'tests/evals/ab', task: 'H2-ledger-migration' },
+  'S4-T1': { kind: 'task', corpus: 'tests/evals/ab', task: 'T1-proration', probe: true },
   ...Object.fromEntries(Object.entries(PROBES).map(([id, task]) => [id, { kind: 'task', corpus: 'tests/evals/ab-micro', task, probe: true }])),
 };
 // S1 hidden checks: [name, expression]. `T` is the candidate's src/auth/token.mjs, `S` its session.mjs, `now` epoch seconds,
