@@ -89,93 +89,55 @@ stdout:
 {"agent": "somi-coder", "agent_type": "somi:somi-coder", "supported": ["medium"], "declared": ["medium"], "tier": "medium", "tier_source": "ceiling", "degraded": false, "model": "<mapped model>", "enforced": true, "ceiling": "medium", "ceiling_source": "default", "ceiling_origin": "default"}
 ```
 
-- `tier` — the cost tier the resolver selected for this agent, right now: the agent's own
-  `cost.agents` entry in `.somi/config.json` if it has one (`tier_source: "override"`), otherwise
-  the ceiling itself (`tier_source: "ceiling"`). The ceiling is a hard cap for every agent without
-  an override; the agent's default tier only feeds `declared` and `degraded`.
-- `declared` (same as `supported`) — the agent's default tier, as a one-element list (the table in
-  `scripts/lib/cost-defaults.mjs`). `degraded` is `true` when the selected `tier` is below it.
-- `model` — pass this to `Task` when it is non-null; with `model_candidates` (a preference list from
-  `cost.mapping`), pass the first candidate the subagent tool's own model list offers, else `model`.
-  When `model` is `null` (no mapping), see "No mapped model" below — never omit or invent one silently.
-- `enforced` — `true` only when `model` is a concrete id from a mapping (the shipped table or the
-  project's `cost.mapping`). `false` means nothing pins this tier on this host: the agent runs on
-  whatever model the host gives it. Then `reason` says why (e.g. `no model mapping for host
-  copilot`). The tier is still the one *requested*; it is never a claim about what ran.
-- `ceiling` / `ceiling_source` / `ceiling_origin` — see the announcement rule immediately below.
+- `tier` — the tier selected now: the agent's `cost.agents` entry if it has one (`tier_source:
+  "override"`), else the ceiling (`tier_source: "ceiling"`). The ceiling is a hard cap for every agent
+  without an override.
+- `declared` (same as `supported`) — the agent's default tier, one element (`scripts/lib/cost-defaults.mjs`);
+  `degraded` is `true` when `tier` is below it.
+- `model` — pass it to `Task` when non-null; with `model_candidates` (a `cost.mapping` preference list),
+  pass the first candidate the subagent tool's own model list offers, else `model`. An unresolved launch
+  inherits the session's model, so always pass the resolved one.
+- `enforced` — `true` only when `model` is a concrete id from a mapping. `false`: nothing pins this tier on
+  this host, `reason` says why (e.g. `no model mapping for host copilot`), and the tier is only *requested*,
+  never a claim about what ran.
+- `ceiling` / `ceiling_source` / `ceiling_origin` — for the announcement below.
+- `warnings` — repeat each verbatim; never drop or soften one.
 
-**When `degraded` is `true`, say so in one line before the agent's `Task` call:**
-`running <agent> at <tier> (default <default tier>)` — for example
-`running somi-security-reviewer at medium (default high)`. This is the hard cap working as designed, and
-the user should see which agents are running below what they were built for.
+**`degraded`: one line before the `Task`:** `running <agent> at <tier> (default <default tier>)`, e.g.
+`running somi-security-reviewer at medium (default high)` — the hard cap working as designed, made visible.
 
-**Announce a `low` ceiling once per session, before the first agent it applies to starts** — not
-once per command, and not again for every later agent this session that also resolves `low`.
-"Once per session" means **once in this conversation's visible context** — a repeat is fine, not a
-violation, after a context compaction (the earlier announcement is no longer visible to check
-against) or inside a Tasked command's own fresh context (a subagent has no visibility into what the
-orchestrator already announced). The first time a resolve call in the *currently visible* context
-comes back with `ceiling: "low"`, say so in one line before that agent's `Task` call, naming its
-source: `ceiling_source`, unless that is `state` (a value an earlier call set explicitly), in
-which case name `ceiling_origin` instead — the actual reason a remembered `low` is in force:
+**A `low` ceiling: announce it once per session, before the first agent it applies to starts.** "Once"
+means once in the context you can currently see: a repeat after a compaction or inside a Tasked command's
+fresh context is fine. Name its source: `ceiling_source`, or `ceiling_origin` when the source is `state` (an
+earlier explicit value). `config` is `cost.ceiling` in `.somi/config.json`, read live; `cli` / `env` is an
+explicit override (`--ceiling`, `SOMI_COST_CEILING`, or `somi_resolve`'s `ceiling`), possibly remembered.
+This lets the user raise the ceiling before work starts.
 
-- `config` — a committed project policy: `cost.ceiling` in `.somi/config.json`, read live, so
-  editing the file moves the ceiling on the next resolve.
-- `cli` / `env` — an explicit override (a `--ceiling` flag, `SOMI_COST_CEILING`, or `somi_resolve`'s
-  `ceiling` argument), possibly remembered from an earlier session.
+**Changing the ceiling mid-session** is `/somi-config`'s job (or `somi_config` `set cost.ceiling`): it lives
+in `cost.ceiling`, which outranks a remembered value. Say it is saved only after the tool returns success;
+if the tool is unreachable, tell the user to set it themselves. Lowering any tier, above all
+`somi-security-reviewer`'s, needs the user; a refusal (exit `64`) is not worked around.
 
+**No mapped model — which rule wins.** When `enforced` is `false`, first match wins, and the briefing (§5)
+reports what happened, never what was hoped for:
 
-This is what lets the user raise the ceiling before work starts, rather than discovering the
-reduced depth after the fact.
+1. **A `cost.mapping` entry** — the resolver already applied it (`model` non-null, `enforced: true`). Pass
+   it: a configured mapping counts as the user naming the model, so a host rule "do not set `model` unless
+   the user names one" does **not** block it.
+2. **The host's own guidance** — if it says not to set a model unless the user names one, pass none and
+   state `requested cost: <tier> (not enforced: no mapped model)`; `cost.mapping` is how to pin one.
+3. **Your own pick** — only from model ids **visible to you this turn** (e.g. the subagent tool's `model`
+   parameter): the lightest for `low`, the strongest for `high`. Say it is your choice; `enforced` stays
+   `false`, so use the `requested cost:` line. No ids visible: pass none and say so. Never invent one.
 
-**In-chat ceiling raise.** The ceiling the user wants must live in `.somi/config.json`'s
-`cost.ceiling`, because that file is read live and outranks anything remembered. A ceiling passed
-to `somi_resolve` (or `--ceiling`) is used for that call and remembered, but outranked whenever the
-config sets one. So when the user asks mid-session to raise or lower the ceiling, point them at
-`/somi-config` (or run its procedure), or call the
-`somi_config` tool (`somi_config({ action: "set", key: "cost.ceiling", value: "<tier>", project_dir: "<project>" })`),
-which validates and writes it, and say it is saved only after that call returns success. If the
-tool cannot be reached, tell the user to set `cost.ceiling` in `.somi/config.json` themselves
-(or pass `ceiling: <tier>` on each resolve you make for them), and **never say the change is
-saved** unless a config write actually happened. Lowering a tier (the ceiling, or any agent, above all
-`somi-security-reviewer`) needs the user: confirm it with them first, expect the host to ask them too, and if
-the tool refuses it (exit `64`) do not work around it. Repeat every entry of the result's `warnings`
-verbatim; never drop or soften one.
+`null` is expected on Copilot, which ships no mapping because its ids vary by plan and editor.
 
-An unresolved launch (no `model` passed) inherits the session's model, so always pass the resolved model. **No mapped model — which rule wins.** `enforced: false` (a `null` model) is settled in this order,
-first match wins, and the briefing (§5) reports what actually happened, never what was hoped for:
-
-1. **A `cost.mapping` entry in `.somi/config.json`** — the resolver already applied it, so `model`
-   is non-null and `enforced` is `true`. Pass it. A configured mapping counts as the user naming
-   the model, so a host rule such as "do not set `model` unless the user names one" does **not**
-   block it.
-2. **The host's own guidance** — if it says not to set a model unless the user names one, pass none.
-   Nothing pins the agent's model: state `requested cost: <tier> (not enforced: no mapped model)`.
-3. **Your own pick** (the paragraph below) — only when neither of the above applies. Passing a model
-   you picked yourself still leaves `enforced: false`: say it is your choice, and use the
-   `requested cost:` line.
-
-Pick only from model identifiers **actually
-visible to you this turn** — e.g. the subagent tool's own `model` parameter, when it lists
-candidates — to match the resolved `tier`: the lightest visible model for `low`, the strongest for
-`high`. Say plainly that this is your own choice, not a value the mapping supplied, and pass it to
-`Task`. A project's own `.somi/config.json` `cost.mapping` always wins over this when it names one
-— this pick applies only when the resolver reported none. **If no model identifiers are visible to
-you this turn, pass no model at all and say so**: the agent then runs on the session's own model, and `cost.mapping` is how a project binds tiers to specific
-models on this host — never invent an identifier you cannot actually see. **The host's own
-instructions win over this pick:** if they say not to set a model unless the user names one, pass
-none, and say no model was pinned for the resolved tier, and that
-`cost.mapping` is how to bind one. `null` is expected on Copilot, which has no shipped mapping
-because its model ids vary by plan and editor.
-
-**Unenforced notice, then the picker.** When `enforced` is `false` and the resolved `tier` is
-`high`, print ONE user-visible line per agent type per session (as with the `low` announcement)
-before its `Task`: `<agent> is high-tier but no model is pinned on <host>, so its model was not chosen
-by SoMi.` Then, the first time this happens in the session, offer the `/somi-config` model picker
-(its "Model picker" section: one question per tier from the ids you can see, or "use the host default
-this session", which ends the asking) before continuing; never pick and save models without that.
-Lower tiers get the briefing line only. If the host then rejects a model you *did* pick yourself,
-retry once without it and say so (§5) — never silently pass nothing while claiming a choice was made.
+**Unenforced notice, then the picker.** When `enforced` is `false` and `tier` is `high`, print ONE
+user-visible line per agent type per session before its `Task`: `<agent> is high-tier but no model is pinned
+on <host>, so its model was not chosen by SoMi.` The first time in a session, offer the `/somi-config` model
+picker (one question per tier from the ids you can see, or "use the host default this session", which ends
+the asking) before continuing; never pick and save models without it. Lower tiers get the briefing line
+only. If the host rejects a model you picked yourself, retry once without it and say so (§5).
 
 ## 3. Failures — map each exit code, and stop; never guess a model or tier to keep going
 

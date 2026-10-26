@@ -257,13 +257,6 @@ options all reverse cheaply is usually not worth a `DECISIONS-NEEDED` block at a
 say so in the diary. State the reversal in the terms the repo uses: if `CLAUDE.md` says a down
 migration ships in the same PR, name what that down migration would have to drop.
 
-> **Added after measurement, not from taste.** The eval corpus (`tests/evals/`) scores whether the
-> reversal cost reaches the human. Across live runs against a fixture whose `CLAUDE.md` mandates a
-> same-PR down migration, the planner read that instruction and **never once carried it into the
-> block** — 0 of 2 scored runs mentioned a down migration at all. The template had `Decides`,
-> `Pros`, `Cons` and narrowing questions, and nothing asking what undoing the choice would cost.
-> The behaviour was not a model failure; it was a missing slot.
-
 **The `VERIFIED-DECISIONS` block** — appended to your re-invocation briefing:
 
 ```verified-decisions
