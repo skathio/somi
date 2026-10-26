@@ -160,7 +160,9 @@ appends a diary entry, surfaces to the user before continuing.
 - **Won't**: silently widen scope; ship without running tests; bypass hooks; let the plan show
   stale state.
 - **Will**: stop and trigger the plan-change protocol if the planned approach is producing bad
-  code or hits an unforeseen constraint.
+  code or hits an unforeseen constraint; before editing, map every place the change must reach
+  (callers, fixtures, config, exports) and what it could break; mark a shortcut it keeps on purpose
+  with a `shortcut: <the limit>, <when to upgrade>` comment.
 
 ### somi-reviewer
 

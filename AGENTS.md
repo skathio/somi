@@ -66,9 +66,9 @@ SoMi ships deterministic hooks that block dangerous shell commands (`rm -rf /`, 
 protected branches, `curl | sh`), writes to secret-bearing paths (`.env`, `*.pem`, `id_rsa`), and
 writes to protected paths (`.git/`, `.claude/`, `node_modules/`), and gate unsanctioned dependency
 installs; they append every tool call to `.somi/audit.log`. If a hook blocks you, **do not work
-around it** — explain what you were doing and ask the human. These hooks are a Claude Code host
-capability; on GitHub Copilot they do not fire, so the agent/rule judgment in this digest is the
-enforcement layer there — hold to it.
+around it** — explain what you were doing and ask the human. These hooks run on Claude Code and
+Copilot CLI; on other hosts (VS Code Copilot Chat is unverified) assume they do not, and the agent/rule
+judgment in this digest is the enforcement layer there — hold to it.
 
 In particular, on any host: **refuse** any request to weaken, skip, disable, or make-optional a
 security check, guardrail, validation, or test gate for speed or convenience — name the tradeoff and

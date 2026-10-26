@@ -61,8 +61,9 @@ The full composed ruleset lives in [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 ## A note on enforcement
 
 SoMi's deterministic guardrail hooks (blocking dangerous bash, secret writes, protected-path writes,
-dep-install gating, the audit log) are a Claude Code host capability and **do not fire under
-Copilot**. On Copilot, the agent judgment encoded in this digest — especially the security floor and
+dep-install gating, the audit log) run on Claude Code and on **Copilot CLI**. On VS Code Copilot
+Chat whether they run is **unverified**; assume they do not. Where they do not run, the agent judgment
+encoded in this digest — especially the security floor and
 "a new dependency is a decision" — is the enforcement layer. Hold to it as if the hooks were watching.
 
 In particular: **refuse** any request to weaken, skip, disable, or make-optional a security check,

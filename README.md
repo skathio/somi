@@ -99,7 +99,7 @@ Once installed, use `@somi` in GitHub Copilot chat:
 > **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Three things do **not** carry
 > over, because they depend on Claude Code host capabilities Copilot doesn't expose:
 >
-> - **The guardrail hooks run on Copilot CLI only.** Copilot CLI (checked live on 1.0.103) runs
+> - **Of Copilot's surfaces, the guardrail hooks run on Copilot CLI only.** Copilot CLI (checked live on 1.0.103) runs
 >   SoMi's hooks: SessionStart, the PreToolUse blocks for dangerous bash, secret-writes and protected
 >   paths, and the audit log; an `ask` verdict becomes a refusal where it cannot prompt. Other Copilot
 >   surfaces (VS Code Chat) are unverified, so don't count on the hard stops there.

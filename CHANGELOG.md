@@ -12,7 +12,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 and tooling.** 3.1.x is merged in (the frontmatter gate and the `enforced` flag are unchanged; the
 `somi_agent` tool stays but is no longer a dispatch path). Nothing below
 claims a cost or speed saving: the measurement system in this release exists so later changes can be
-judged against a recorded baseline, and it records none.
+judged against a recorded baseline, and its comparison of this release with the start of the 4.0.0
+work finds none (cost and time inconclusive, instruction text +2.3%; see the measurement entry below).
 
 ### Changed — behaviour
 
@@ -117,8 +118,13 @@ judged against a recorded baseline, and it records none.
   scripts and an MCP round trip locally; L2 runs paired live draws with and without SoMi. A
   pre-registered rule (version 1, sealed) turns two baselines into better, worse, inconclusive or
   inconclusive-guarded, using a ratio of medians with a 90% bootstrap interval, a minimum effect per
-  layer and a quality non-inferiority guard. The committed baseline was recorded on the pre-4.0.0
-  commit with the low tier and every agent pinned. Limits: live L2 resolves only changes of roughly
+  layer and a quality non-inferiority guard. The first baseline was recorded on the pre-4.0.0
+  commit with the low tier and every agent pinned. The low-tier model alias has since moved to a newer
+  model, so that commit was recorded again next to the release candidate
+  (`baseline-8c44e2d-rerecord.json`, `baseline-1c32277.json`, report
+  `reports/1c32277-vs-8c44e2d.md`): L2 cost overhead ×1.01 [0.80, 1.38] and time ×1.09 [0.88, 1.32],
+  both inconclusive; L0 ×1.023, worse; L1 inconclusive; quality guard clear. The live driver now also
+  resumes `/ship-loop`'s Stage -1 gate when the model lays it out as a list. Limits: live L2 resolves only changes of roughly
   50% or more; one scenario (T1) is reported as a distribution, not a ratio; it cannot certify
   quality equality. The drivers and tests live under `tests/` and `benchmarks/` and are not shipped.
 

@@ -106,9 +106,10 @@ changes a tier.
    Where the tool refuses a remap (exit `64`, hosts without hooks), stop and give the user the three
    `node scripts/somi-config.mjs set cost.mapping.<host>.<tier> <id>` commands to run themselves.
 
-## Hosts without hooks (for example GitHub Copilot)
+## Hosts where no hook can ask (for example GitHub Copilot)
 
-The host's confirmation prompt for lowering comes from a SoMi hook. Where hooks do not run, the tool
+The host's confirmation prompt for lowering comes from a SoMi hook. Where no hook can ask about this
+tool (hooks do not run, or, on Copilot CLI, they run but do not see this tool), the tool
 itself refuses any lowering (exit `64`) and raises still work. Tell the user that, and for a
 lowering
 give them the CLI command from step 7 to run themselves. Writes also need a project root the host

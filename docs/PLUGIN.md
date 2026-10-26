@@ -8,14 +8,15 @@ The hook scripts and state tooling underneath are zero-dependency Node (`.mjs`) 
 macOS. (One open caveat on Windows path-separator coverage in the path-matching guards: see
 [`HOOKS.md`](./HOOKS.md).)
 
-> **The two hosts are not feature-equivalent.** The shared markdown is portable, but two layers are
-> **Claude Code capabilities that don't carry to Copilot**: the deterministic **guardrail hooks**
-> (they don't fire on Copilot — no blocking of dangerous bash / secret writes / protected paths, no
-> dep-install gate, no audit log) and **concurrent multi-agent orchestration** (the loops and the
-> `/review-panel` / `/code-parallel` fan-outs degrade to sequential where the host can't spawn
-> sub-agents). Treat the Copilot extension as the **portable subset** — same prompts and judgment,
-> without the enforcement and concurrency layers. See the parity caveat in the
-> [`GitHub Copilot extension`](#github-copilot-extension) section below and [`HOOKS.md`](./HOOKS.md).
+> **The two hosts are not feature-equivalent.** The shared markdown is portable, but there are two
+> **layers that don't fully carry to Copilot**: the deterministic **guardrail hooks** run on Copilot
+> CLI (checked live on 1.0.103) but are unverified on VS Code Copilot Chat, where you should assume no
+> blocking of dangerous bash / secret writes / protected paths, no dep-install gate and no audit log;
+> and **concurrent multi-agent orchestration** (the loops and the `/review-panel` / `/code-parallel`
+> fan-outs degrade to sequential where the host can't spawn sub-agents). Treat Copilot Chat as the
+> **portable subset** — same prompts and judgment, without the enforcement and concurrency layers.
+> See the parity caveat in the [`GitHub Copilot extension`](#github-copilot-extension) section below and
+> [`HOOKS.md`](./HOOKS.md).
 
 ---
 
@@ -221,8 +222,8 @@ the Claude Code plugin.
 > does **not** get concurrent
 > sub-agent orchestration (the loops and the `/review-panel` / `/code-parallel` parallel fan-outs run
 > sequentially when the host can't spawn sub-agents). The judgment layer is identical; the
-> enforcement and concurrency layers are Claude Code-only. Don't rely on the hard stops on Copilot —
-> but do install [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) as a git pre-commit hook / CI
+> concurrency layer is Claude Code-only, and the enforcement layer is Claude Code and Copilot CLI.
+> Don't rely on the hard stops on other Copilot surfaces — and on any host, install [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) as a git pre-commit hook / CI
 > step: it carries the working-tree subset of the guarantees (staged secrets, lockfile hand-edits,
 > loose-end markers) to any host. See [`HOOKS.md`](./HOOKS.md#somi-check--the-portable-working-tree-guard).
 

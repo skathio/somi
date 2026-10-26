@@ -4,10 +4,14 @@ Hooks are **deterministic guardrails**. They run in Claude Code's hook framework
 and can block, modify, or log tool calls without consulting the agent's judgment. SoMi uses hooks for
 non-negotiables and uses agents for judgment-heavy work.
 
-> **Claude Code only.** Hooks are a Claude Code host capability. On the **GitHub Copilot** extension
-> they do **not** run — none of the blocks below are enforced and nothing is written to the audit
-> log. The agent/skill/rule judgment still applies on Copilot, but the *hard stops* in this document
-> are specific to the Claude Code plugin. See the parity caveat in [`PLUGIN.md`](./PLUGIN.md).
+> **Claude Code and Copilot CLI.** Both hosts run these hooks. On Copilot CLI (checked live on
+> 1.0.103) `SessionStart`, the `PreToolUse` guards and the audit log fire; its file tools arrive in
+> their own shapes (`Write` with `tool_input.path`, `Edit` carrying an `apply_patch` body), which the
+> write guards read, refusing a write whose target they cannot read; and in a non-interactive run an
+> `ask` verdict becomes a refusal. Whether an interactive Copilot CLI session shows the `ask` prompt is
+> unverified. On **VS Code Copilot Chat** whether hooks run is unverified: assume none of the blocks
+> below are enforced there. The agent/skill/rule judgment applies on every host. See the parity
+> caveat in [`PLUGIN.md`](./PLUGIN.md).
 > **Partial portable fallback:** [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) (below) carries
 > the working-tree subset of these guarantees to any host as a git pre-commit hook or CI step.
 
@@ -172,10 +176,8 @@ those), and the file is never written.
 
 To change the settings afterwards, run `/somi-config` or edit the `cost` block of `.somi/config.json`.
 
-**GitHub Copilot: unverified.** The opening note of this document says hooks do not fire there. A
-user reported seeing SoMi audit state populated under Copilot, which contradicts that. Whether
-`SessionStart` hooks fire on Copilot has not been checked, so this page does not claim either way.
-On a host where this hook does not run, the project simply has no default file and every agent
+**GitHub Copilot.** On Copilot CLI this hook runs (checked live on 1.0.103: it wrote the default
+config). On VS Code Copilot Chat it is unverified. On a host where this hook does not run, the project simply has no default file and every agent
 follows the ceiling (`medium`); run `/somi-config` and choose the default config (the `somi_config` tool's `init` action), or create
 and edit `.somi/config.json` by hand.
 
@@ -215,9 +217,10 @@ Whether a path is the config is decided by file identity (same inode, same direc
 by how it is spelled. A change that leaves `somi-security-reviewer` below `high` without lowering anything else
 gets its own wording rather than "lowers".
 
-Where the SoMi hooks do not run (for example GitHub Copilot, where whether hooks run is unverified), the
-`somi_config` tool refuses a lowering itself: it passes `--refuse-lowering` to the CLI whenever
-`CLAUDE_PLUGIN_ROOT` is not set in the MCP server's environment, exit `64`, and asks the model to have the
+Where no SoMi hook can ask about the tool's write, the `somi_config` tool refuses a lowering (and a
+`cost.mapping` change) itself: it passes `--refuse-lowering` to the CLI whenever `CLAUDE_PLUGIN_ROOT` is
+not set in the MCP server's environment, or `COPILOT_PLUGIN_ROOT` is (Copilot CLI sets both, but names
+the tool `somi-somi_config`, which this hook's matcher does not catch), exit `64`, and asks the model to have the
 user run the CLI. The CLI run directly by the user is never restricted.
 
 Limits, accepted and worth knowing:
@@ -235,8 +238,8 @@ Limits, accepted and worth knowing:
 
 ## `somi-check` — the portable working-tree guard
 
-Tool-call-time hooks are Claude Code-only; **commit-time and CI-time enforcement works
-everywhere**. [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) (also exposed as the
+Tool-call-time hooks run on Claude Code and Copilot CLI only; **commit-time and CI-time enforcement
+works everywhere**. [`scripts/somi-check.mjs`](../scripts/somi-check.mjs) (also exposed as the
 `somi-check` npm bin) re-checks the working-tree subset of the hook guarantees:
 
 - staged **secret-bearing files** (same basename patterns as `block-secret-writes.mjs`;
