@@ -566,13 +566,13 @@
     "outcome": "scored",
     "costUsd": 0.03980463500000001,
     "durationMs": 138429,
-    "turns": 8,
+    "turns": 24,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 168,
-      "output": 73353,
-      "cacheRead": 3050358,
-      "cacheCreation": 324642
+      "input": 56,
+      "output": 24451,
+      "cacheRead": 1016786,
+      "cacheCreation": 108214
      }
     },
     "toolCalls": 38,
@@ -647,13 +647,13 @@
     "outcome": "scored",
     "costUsd": 0.03787913999999999,
     "durationMs": 117435,
-    "turns": 10,
+    "turns": 26,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 180,
-      "output": 68577,
-      "cacheRead": 3188697,
-      "cacheCreation": 297135
+      "input": 60,
+      "output": 22859,
+      "cacheRead": 1062899,
+      "cacheCreation": 99045
      }
     },
     "toolCalls": 37,
@@ -782,13 +782,13 @@
     "outcome": "scored",
     "costUsd": 0.09261612,
     "durationMs": 195315,
-    "turns": 10,
+    "turns": 27,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 290,
-      "output": 127681,
-      "cacheRead": 5188673,
-      "cacheCreation": 430912
+      "input": 146,
+      "output": 64345,
+      "cacheRead": 2623337,
+      "cacheCreation": 216414
      }
     },
     "toolCalls": 37,
@@ -863,13 +863,13 @@
     "outcome": "scored",
     "costUsd": 0.036240259999999996,
     "durationMs": 137513,
-    "turns": 10,
+    "turns": 21,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 124,
-      "output": 45610,
-      "cacheRead": 2009802,
-      "cacheCreation": 184946
+      "input": 62,
+      "output": 22805,
+      "cacheRead": 1004901,
+      "cacheCreation": 92473
      }
     },
     "toolCalls": 48,
@@ -944,13 +944,13 @@
     "outcome": "scored",
     "costUsd": 0.37898371000000003,
     "durationMs": 522286,
-    "turns": 18,
+    "turns": 69,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 1848,
-      "output": 1360732,
-      "cacheRead": 53683754,
-      "cacheCreation": 3949931
+      "input": 192,
+      "output": 141637,
+      "cacheRead": 5487530,
+      "cacheCreation": 426269
      }
     },
     "toolCalls": 116,
@@ -998,13 +998,13 @@
     "outcome": "scored",
     "costUsd": 0.9772754450000005,
     "durationMs": 1509838,
-    "turns": 6,
+    "turns": 66,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 4360,
-      "output": 4119675,
-      "cacheRead": 134449260,
-      "cacheCreation": 9745315
+      "input": 502,
+      "output": 506709,
+      "cacheRead": 15464534,
+      "cacheCreation": 1171377
      }
     },
     "toolCalls": 234,
@@ -1160,13 +1160,13 @@
     "outcome": "scored",
     "costUsd": 0.07641456499999999,
     "durationMs": 201197,
-    "turns": 14,
+    "turns": 34,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 312,
-      "output": 194972,
-      "cacheRead": 6974842,
-      "cacheCreation": 673920
+      "input": 84,
+      "output": 52310,
+      "cacheRead": 1842049,
+      "cacheCreation": 193497
      }
     },
     "toolCalls": 45,
@@ -1214,13 +1214,13 @@
     "outcome": "scored",
     "costUsd": 0.04902173500000001,
     "durationMs": 141665,
-    "turns": 15,
+    "turns": 33,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 92,
-      "output": 62529,
-      "cacheRead": 2084596,
-      "cacheCreation": 198702
+      "input": 50,
+      "output": 33167,
+      "cacheRead": 1107706,
+      "cacheCreation": 115578
      }
     },
     "toolCalls": 34,
@@ -1295,13 +1295,13 @@
     "outcome": "scored",
     "costUsd": 0.160956325,
     "durationMs": 335838,
-    "turns": 16,
+    "turns": 46,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 878,
-      "output": 677799,
-      "cacheRead": 20816221,
-      "cacheCreation": 1956367
+      "input": 134,
+      "output": 101367,
+      "cacheRead": 3123505,
+      "cacheCreation": 308593
      }
     },
     "toolCalls": 78,
@@ -1349,13 +1349,13 @@
     "outcome": "scored",
     "costUsd": 0.05631427500000001,
     "durationMs": 154005,
-    "turns": 14,
+    "turns": 29,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 110,
-      "output": 63959,
-      "cacheRead": 2760951,
-      "cacheCreation": 232974
+      "input": 60,
+      "output": 34705,
+      "cacheRead": 1468305,
+      "cacheCreation": 133796
      }
     },
     "toolCalls": 26,
@@ -1511,13 +1511,13 @@
     "outcome": "scored",
     "costUsd": 0.10403907999999999,
     "durationMs": 447031,
-    "turns": 13,
+    "turns": 30,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 206,
-      "output": 290965,
-      "cacheRead": 5160434,
-      "cacheCreation": 601127
+      "input": 74,
+      "output": 100411,
+      "cacheRead": 1806768,
+      "cacheCreation": 223851
      }
     },
     "toolCalls": 35,
@@ -1565,13 +1565,13 @@
     "outcome": "scored",
     "costUsd": 0.126888215,
     "durationMs": 325263,
-    "turns": 17,
+    "turns": 35,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 180,
-      "output": 239637,
-      "cacheRead": 5086345,
-      "cacheCreation": 518682
+      "input": 64,
+      "output": 83623,
+      "cacheRead": 1752815,
+      "cacheCreation": 195118
      }
     },
     "toolCalls": 39,
@@ -1592,13 +1592,13 @@
     "outcome": "scored",
     "costUsd": 0.09235717,
     "durationMs": 397832,
-    "turns": 19,
+    "turns": 25,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 148,
-      "output": 167194,
-      "cacheRead": 3391808,
-      "cacheCreation": 363050
+      "input": 78,
+      "output": 85977,
+      "cacheRead": 1760927,
+      "cacheCreation": 197959
      }
     },
     "toolCalls": 41,
@@ -1646,13 +1646,13 @@
     "outcome": "scored",
     "costUsd": 0.11135806000000001,
     "durationMs": 734483,
-    "turns": 14,
+    "turns": 21,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 164,
-      "output": 214436,
-      "cacheRead": 4161965,
-      "cacheCreation": 427505
+      "input": 86,
+      "output": 109201,
+      "cacheRead": 2144456,
+      "cacheCreation": 229718
      }
     },
     "toolCalls": 39,
@@ -1727,13 +1727,13 @@
     "outcome": "scored",
     "costUsd": 0.10743997000000001,
     "durationMs": 461802,
-    "turns": 22,
+    "turns": 36,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 286,
-      "output": 273441,
-      "cacheRead": 7397244,
-      "cacheCreation": 574476
+      "input": 102,
+      "output": 93985,
+      "cacheRead": 2578532,
+      "cacheCreation": 212862
      }
     },
     "toolCalls": 54,
@@ -1781,13 +1781,13 @@
     "outcome": "scored",
     "costUsd": 0.11688379000000002,
     "durationMs": 486609,
-    "turns": 12,
+    "turns": 31,
     "tokens": {
      "claude-haiku-5-5": {
-      "input": 312,
-      "output": 455267,
-      "cacheRead": 7534550,
-      "cacheCreation": 889190
+      "input": 84,
+      "output": 116948,
+      "cacheRead": 1980989,
+      "cacheCreation": 246674
      }
     },
     "toolCalls": 41,

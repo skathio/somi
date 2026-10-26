@@ -163,6 +163,10 @@ if (mode === 'unit') {
   const s3 = S.createSink(`${d}/s3.jsonl`, { token: T, canary: 'CANARY1234567890ab', task: 'T1-proration' });
   s3.feed(Buffer.from(`{"type":"user","message":"${T}`)); s3.turn(); s3.feed(Buffer.from('\n'));
   check('an unterminated last line is processed before the next invocation starts', s3.state.leaks.has('token') && !fs.readFileSync(`${d}/s3.jsonl`, 'utf8').includes('SECRETSECRET'));
+  const s4 = S.createSink(`${d}/s4.jsonl`, { token: T, canary: 'CANARY1234567890ab', task: 'T1-proration' });
+  const r4 = (c, n) => `{"type":"result","total_cost_usd":${c},"num_turns":${n}}\n`;
+  s4.feed(Buffer.from(r4(0.2, 12) + r4(0.2, 2) + r4(0.3, 7))); const t4 = s4.state.turns; const c4 = s4.state.result.total_cost_usd; s4.turn(); s4.feed(Buffer.from(r4(0.7, 4)));
+  check('turns add over every result event of a call (one per background wait) and restart with the next call; the last event carries the cost', t4 === 21 && c4 === 0.3 && s4.state.turns === 4);
   const cap = S.createSink(`${d}/c.jsonl`, { token: 't', canary: 'CANARY1234567890ab', task: 'x', maxBytes: 10 }); cap.feed(Buffer.alloc(11, 97));
   check('sink: output over the cap is flagged', cap.state.capped === true);
   const C = (run, arm = 'somi') => L.classify({ run: { cost: 1, resumes: 0, leaks: [], stderr: '', text: '', ...run }, arm, budget: 8 });

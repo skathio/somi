@@ -227,7 +227,7 @@ export async function runDraw({ model, arm, prompt, budget, timeoutMs, claude, e
       const res = sink.state.result; run.result = res;
       if (r.error || r.timedOut || sink.state.capped || !res) break;
       run.cost += Number.isFinite(res.total_cost_usd) ? res.total_cost_usd : 0;
-      run.turns += Number.isInteger(res.num_turns) ? res.num_turns : 0;
+      run.turns += sink.state.turns;
       for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
       session = typeof res.session_id === 'string' ? res.session_id : null;
       if (sink.state.limit || arm !== 'somi' || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= maxResumes) break;

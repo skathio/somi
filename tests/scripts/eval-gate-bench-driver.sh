@@ -208,7 +208,11 @@ if (mode === 'unit') {
   const stream = (name, lines) => { const f = `${dir}/${name}`; fs.writeFileSync(f, lines.join('\n') + '\n'); return f; };
   const good = U.parseStream(stream('good', [asst(tu('a', 'Bash'), tu('b', 'Agent')), asst(tu('c', 'Task'), tu('a', 'Bash')), ev({ type: 'user', message: { content: [tu('u1', 'Agent'), { type: 'tool_result', content: 'x' }] } }), res(), res({ total_cost_usd: 0.5, num_turns: 3 })]));
   check('tool calls count assistant tool_use blocks once per id; a user-event tool_use is not counted', good.toolCalls === 3 && good.subagents === 2);
-  check('tokens, cost and turns are summed over every result line (a resume is another one)', eq(good.tokens, { 'm-1': { input: 10, output: 12, cacheRead: 14, cacheCreation: 16 } }) && good.costUsd === 0.75 && good.turns === 5 && good.results === 2);
+  check('adjacent result lines are one call: its last line carries the cumulative tokens and cost, turns add up', eq(good.tokens, { 'm-1': { input: 5, output: 6, cacheRead: 7, cacheCreation: 8 } }) && good.costUsd === 0.5 && good.turns === 5 && good.results === 2);
+  const u = (n) => ({ 'm-1': { inputTokens: n, outputTokens: 10 * n, cacheReadInputTokens: 100 * n, cacheCreationInputTokens: 1000 * n } });
+  const twoCalls = U.parseStream(stream('two-calls', [asst(tu('a', 'Agent')), res({ total_cost_usd: 0.2, num_turns: 12, modelUsage: u(1) }), res({ total_cost_usd: 0.2, num_turns: 2, modelUsage: u(1) }), res({ total_cost_usd: 0.3, num_turns: 7, modelUsage: u(3) }),
+    ev({ type: 'system', subtype: 'init' }), asst(tu('b', 'Bash')), res({ total_cost_usd: 0.7, num_turns: 4, modelUsage: u(5) }), res({ total_cost_usd: 0.7, num_turns: 3, modelUsage: u(5) })]));
+  check('a resume is another call: per-call totals add, a call\'s repeated cumulative totals are not re-counted (the recorded 4.0.0 S2 shape)', eq(twoCalls.tokens, { 'm-1': { input: 8, output: 80, cacheRead: 800, cacheCreation: 8000 } }) && Math.abs(twoCalls.costUsd - 1.0) < 1e-9 && twoCalls.turns === 28 && twoCalls.results === 5);
   const hostile = U.parseStream(stream('hostile', ['not json', '[1,2]', '"result"', '{"__proto__":{"type":"result"}}', ev({ type: 'assistant', message: null }), ev({ type: 'assistant', message: { content: 'x' } }), asst({ type: 'tool_use', name: 5 }, 'junk', null, tu('z', 'Bash')),
     ev({ type: 'user', message: { content: [{ type: 'tool_result', content: '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Agent"}]}}' }] } }),
     '{"type":"result","total_cost_usd":-1,"num_turns":1.5,"modelUsage":{"m-2":{"inputTokens":-5,"outputTokens":"7","cacheReadInputTokens":1.5,"cacheCreationInputTokens":2},"__proto__":{"inputTokens":9}}}']));
@@ -356,7 +360,8 @@ red_unit() { # name file from to
 }
 red_unit mut-unpinned tests/evals/lib/bench-usage.mjs "else if (!seen.every((m) => isPinned(m, draw.model, draw.pinnedExtra))) fail('unpinned-model');" "else if (false) fail('unpinned-model');"
 red_unit mut-refinish tests/evals/lib/bench-usage.mjs "filter((e) => e.status === 'done').map((e) => e.draw))" "filter((e) => e.status === 'never').map((e) => e.draw))"
-red_unit mut-forged tests/evals/lib/bench-usage.mjs "} else if (type === 'assistant') {" "} else if (type === 'assistant' || type === 'user') {"
+red_unit mut-forged tests/evals/lib/bench-usage.mjs "      if (type === 'assistant') {" "      if (type === 'assistant' || type === 'user') {"
+red_unit mut-cumulative tests/evals/lib/bench-usage.mjs "call.cost = cost;" "call.cost += cost;"
 red_unit mut-haltedrow tests/evals/lib/bench-usage.mjs "if (e.status === 'halted') { if (e.row !== null" "if (e.status === 'halted') { if (false && e.row !== null"
 red_unit mut-mismatch tests/evals/lib/bench-usage.mjs "canon(stored[k]) !== canon(fresh[k])" "false"
 red_unit mut-skipbad tests/evals/lib/bench-usage.mjs 'catch { return { ok: false, reason: `${at} is not JSON` }; }' 'catch { continue; }'

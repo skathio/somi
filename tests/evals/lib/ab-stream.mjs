@@ -59,7 +59,7 @@ const parse = (l) => { try { const v = JSON.parse(l); return typeof v === 'objec
 export function createSink(file, { token, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES }) {
   const fd = fs.openSync(file, 'a', 0o600);
   let dec = new StringDecoder('utf8');
-  const s = { bytes: 0, capped: false, leaks: new Set(), result: null, text: '', limit: false, reset: null };
+  const s = { bytes: 0, capped: false, leaks: new Set(), result: null, turns: 0, text: '', limit: false, reset: null };
   const limitText = (t) => { if (typeof t === 'string' && LIMIT_TEXT.test(t)) { s.limit = true; s.reset ??= RESET_TEXT.exec(t)?.[0].replace(/^resets /i, '').trim() ?? null; } };
   let pending = '';
   const paths = [['ab-path', 'tests/evals/ab'], ['task-hidden', `${task}/hidden`], ['task-oracle', `${task}/oracle`], ['eval-env', '.somi/eval.env']];
@@ -78,7 +78,8 @@ export function createSink(file, { token, canary, task, absAb, ownTmp, maxBytes 
       if ((ownTmp ? raw.split(ownTmp).join('').split(own).join('') : raw).includes('/ab-draw-')) s.leaks.add('other-draw');
     }
     if (ev?.type === 'rate_limit_event' && /"status":"rejected"/.test(raw)) s.limit = true;
-    if (ev?.type === 'result') { s.result = ev; limitText(ev.result); }
+    // A call ends in one result event per background wait: the last carries the call's cumulative cost, turns are per event.
+    if (ev?.type === 'result') { s.result = ev; if (Number.isInteger(ev.num_turns) && ev.num_turns >= 0) s.turns += ev.num_turns; limitText(ev.result); }
     if (ev?.type === 'assistant' && Array.isArray(ev.message?.content)) {
       const t = ev.message.content.filter((b) => b?.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
       if (t !== '') { s.text = t; limitText(t); }
@@ -101,7 +102,7 @@ export function createSink(file, { token, canary, task, absAb, ownTmp, maxBytes 
       drain(false);
     },
     // An unterminated last line of the previous invocation is a line of its own, not the start of the next one.
-    turn() { if (!s.capped) { pending += dec.end(); drain(true); } dec = new StringDecoder('utf8'); s.result = null; s.text = ''; },
+    turn() { if (!s.capped) { pending += dec.end(); drain(true); } dec = new StringDecoder('utf8'); s.result = null; s.turns = 0; s.text = ''; },
     end() { if (!s.capped) { pending += dec.end(); drain(true); } try { fs.closeSync(fd); } catch { /* closed */ } },
   };
 }

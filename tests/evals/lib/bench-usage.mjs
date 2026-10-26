@@ -66,6 +66,22 @@ export function parseStream(file, { maxBytes = MAX_STREAM_FILE, maxLine = MAX_LI
     if (!st.isFile() || st.size > maxBytes) return null;
     const tokens = new Map(); const seen = new Set(); const ids = new Set();
     const out = { toolCalls: 0, subagents: 0, turns: 0, costUsd: 0, results: 0, skipped: 0, modelsTruncated: false };
+    // One CLI call ends in a run of adjacent result events, one per background wait. Within the run, cost and modelUsage are
+    // cumulative (the last one is the call's total) and num_turns is per segment (summed). A resume is a new call.
+    let call = null;
+    const closeCall = (c) => {
+      out.costUsd += c.cost;
+      const usage = c.usage;
+      if (!plain(usage)) return;
+      if (Object.keys(usage).length > MAX_MODELS) out.modelsTruncated = true;
+      for (const m of Object.keys(usage).slice(0, MAX_MODELS)) {
+        if (m.length > 120) { out.modelsTruncated = true; continue; }
+        seen.add(m);
+        const t = tokens.get(m) ?? Object.fromEntries(TOKEN_CLASSES.map((k) => [k, 0]));
+        for (const k of TOKEN_CLASSES) t[k] = Math.min(1e12, t[k] + count(own(own(usage, m), CLASS_KEYS[k])));
+        tokens.set(m, t);
+      }
+    };
     for (const raw of lines(fd, maxLine)) {
       if (raw === null) { out.skipped++; continue; }
       if (raw.trim() === '') continue;
@@ -73,19 +89,16 @@ export function parseStream(file, { maxBytes = MAX_STREAM_FILE, maxLine = MAX_LI
       const type = own(ev, 'type');
       if (type === 'result') {
         out.results++;
+        if (call === null) call = { cost: 0, usage: null };
         const cost = own(ev, 'total_cost_usd');
-        if (typeof cost === 'number' && Number.isFinite(cost) && cost >= 0) out.costUsd += cost;
+        if (typeof cost === 'number' && Number.isFinite(cost) && cost >= 0) call.cost = cost;
         out.turns += count(own(ev, 'num_turns'), 1e6);
         const usage = own(ev, 'modelUsage');
-        if (plain(usage) && Object.keys(usage).length > MAX_MODELS) out.modelsTruncated = true;
-        if (plain(usage)) for (const m of Object.keys(usage).slice(0, MAX_MODELS)) {
-          if (m.length > 120) { out.modelsTruncated = true; continue; }
-          seen.add(m);
-          const t = tokens.get(m) ?? Object.fromEntries(TOKEN_CLASSES.map((c) => [c, 0]));
-          for (const c of TOKEN_CLASSES) t[c] = Math.min(1e12, t[c] + count(own(own(usage, m), CLASS_KEYS[c])));
-          tokens.set(m, t);
-        }
-      } else if (type === 'assistant') {
+        if (plain(usage)) call.usage = usage;
+        continue;
+      }
+      if (call !== null) { closeCall(call); call = null; }
+      if (type === 'assistant') {
         const msg = own(ev, 'message');
         const model = own(msg, 'model');
         if (typeof model === 'string' && model !== '<synthetic>') { if (model.length <= 120 && seen.size < MAX_MODELS) seen.add(model); else out.modelsTruncated = true; }
@@ -101,6 +114,7 @@ export function parseStream(file, { maxBytes = MAX_STREAM_FILE, maxLine = MAX_LI
         }
       }
     }
+    if (call !== null) closeCall(call);
     if (out.results === 0) return null;
     const valid = [...tokens].filter(([m]) => ID.test(m)); const keep = valid.slice(0, 16);
     if (valid.length > 16) out.modelsTruncated = true;
