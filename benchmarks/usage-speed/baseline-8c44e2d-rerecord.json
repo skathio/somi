@@ -1,0 +1,1804 @@
+{
+ "schema": 1,
+ "sha": "8c44e2d5a98b2f40babe306ce0a19230a2ca1329",
+ "pluginVersion": "4.0.0",
+ "date": "2026-10-26",
+ "rule": {
+  "version": 1,
+  "hash": "2fa87a08e2c9592d9c625ae8c5418a4026b5cb7cf475a4f3a33f5672b662b78e"
+ },
+ "model": {
+  "alias": "haiku",
+  "tier": "low"
+ },
+ "pinAll": true,
+ "host": {
+  "cpuModel": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
+  "cores": 8,
+  "memGb": 15,
+  "osRelease": "6.8.0-147-generic",
+  "nodeVersion": "v26.2.0",
+  "pluginVersion": "4.0.0"
+ },
+ "scenarios": [
+  {
+   "id": "S1",
+   "repeats": 8,
+   "requiredTier": null
+  },
+  {
+   "id": "S2",
+   "repeats": 8,
+   "requiredTier": null
+  },
+  {
+   "id": "S3",
+   "repeats": 8,
+   "requiredTier": null
+  }
+ ],
+ "L0": {
+  "bytes": {
+   "session-start": 184,
+   "first-prompt": 3004,
+   "rules-digest": 2846,
+   "plan": 43002,
+   "code-loop": 46912,
+   "ship-loop-stage-m1": 35636,
+   "review": 28171,
+   "dispatch": 38277
+  }
+ },
+ "L1": {
+  "events": {
+   "hook.session-start.detect-repo-instructions": [
+    43.30973399999999,
+    40.815177000000006,
+    39.55910299999999,
+    43.71939599999999,
+    40.76941900000003,
+    44.52777900000001,
+    42.87864099999996,
+    43.19771700000001,
+    44.11970600000001,
+    39.87049200000007,
+    41.399271999999996,
+    43.46425899999997,
+    45.209260000000086,
+    45.44963100000007,
+    48.512384,
+    44.36002700000006,
+    42.236086,
+    42.65770699999996,
+    41.607557999999926,
+    45.472267999999985,
+    37.23965799999996,
+    44.093853999999965,
+    43.31937100000005,
+    42.33690699999988,
+    43.01397799999995,
+    39.83198500000003,
+    40.05803100000003,
+    44.588133999999854,
+    37.157342999999855,
+    45.05709200000001
+   ],
+   "hook.session-start.ensure-default-config": [
+    43.79453699999999,
+    40.122863999999936,
+    36.732275999999956,
+    41.764977000000044,
+    40.61452200000008,
+    38.370226,
+    38.57248400000003,
+    42.709571000000096,
+    43.51710100000014,
+    43.89319699999987,
+    38.42919699999993,
+    44.97985500000004,
+    40.5172399999999,
+    37.681066999999985,
+    40.33922699999994,
+    47.744191999999885,
+    39.28250200000002,
+    40.44642000000022,
+    39.82325700000001,
+    36.41567400000031,
+    49.03370700000005,
+    44.01582699999972,
+    38.417491000000155,
+    39.7208270000001,
+    39.769272999999885,
+    41.56453999999985,
+    42.55123999999978,
+    41.75640700000031,
+    43.31579300000021,
+    41.26075700000001
+   ],
+   "hook.user-prompt-submit.inject-workflow-context": [
+    58.21110399999998,
+    56.59597299999996,
+    65.16133600000012,
+    60.62348299999985,
+    61.99401399999988,
+    55.646823999999924,
+    57.92618600000014,
+    53.54206199999999,
+    61.234218000000055,
+    56.42513700000018,
+    54.81537900000012,
+    54.09581599999956,
+    56.886237000000165,
+    57.07360999999992,
+    61.78725600000007,
+    52.78259900000012,
+    52.1978909999998,
+    53.34098600000016,
+    61.91536300000007,
+    59.828132000000096,
+    61.102808000000095,
+    53.052030999999715,
+    59.94704700000011,
+    56.6539600000001,
+    59.828058000000055,
+    56.45661399999972,
+    57.25188100000014,
+    61.03942800000004,
+    70.62707899999987,
+    54.98305699999946
+   ],
+   "hook.pre-tool.block-dangerous-bash": [
+    50.56551899999977,
+    42.9867320000003,
+    42.632730000000265,
+    40.16116099999999,
+    43.04109700000026,
+    43.14133700000002,
+    44.91739899999993,
+    44.785595999999714,
+    48.77592999999979,
+    47.25008799999978,
+    44.4201520000006,
+    40.824053000000276,
+    42.86759699999948,
+    48.50755600000048,
+    41.876579999999194,
+    42.521426999999676,
+    49.61000999999942,
+    42.67299400000047,
+    42.364864000000125,
+    41.62456800000018,
+    49.85337100000015,
+    42.16190099999949,
+    40.7209069999999,
+    41.318458999999166,
+    44.78385100000014,
+    43.17223800000011,
+    46.16171299999951,
+    48.49022799999966,
+    42.305435999999645,
+    44.85722600000008
+   ],
+   "hook.pre-tool.gate-dep-install": [
+    44.82751300000018,
+    41.429565000000366,
+    40.30634900000041,
+    39.96247200000016,
+    46.33431299999938,
+    37.98842500000046,
+    39.79461199999969,
+    37.603493000000526,
+    48.050554999999804,
+    38.29419699999926,
+    53.18225199999961,
+    41.384493000000475,
+    39.46030299999984,
+    43.884328999999525,
+    45.00094100000024,
+    39.051038999999946,
+    44.18729100000019,
+    37.36272799999915,
+    38.16513500000019,
+    36.70356300000003,
+    42.59896300000037,
+    37.92157899999984,
+    40.712642999999844,
+    41.52294600000005,
+    44.48447599999963,
+    44.24050100000022,
+    38.151812000000064,
+    45.66704899999968,
+    38.85002599999916,
+    39.621280999999726
+   ],
+   "hook.pre-tool.guard-cost-lowering": [
+    42.66132099999959,
+    38.05058899999949,
+    40.43852500000048,
+    41.56128600000011,
+    46.95629999999983,
+    43.94134200000008,
+    40.818357999999535,
+    44.11081100000047,
+    38.369220999999925,
+    41.85613099999955,
+    41.56530600000042,
+    39.821092999999564,
+    39.01910399999997,
+    39.708668999999645,
+    41.784865999999965,
+    37.90373199999976,
+    44.05558299999939,
+    43.35787600000003,
+    42.022187999999915,
+    41.365585999999894,
+    38.3452699999998,
+    38.32112899999993,
+    46.04970300000059,
+    39.60219099999995,
+    50.949367999999595,
+    42.04864699999962,
+    46.15408600000046,
+    47.412631999999576,
+    46.77127599999949,
+    38.69971799999985
+   ],
+   "hook.pre-tool.block-secret-writes": [
+    35.38134499999978,
+    41.4735010000004,
+    40.84684399999969,
+    40.55347299999994,
+    39.44757100000061,
+    40.276912999999695,
+    42.69941199999994,
+    39.096325000000434,
+    47.8972870000016,
+    39.768919000000096,
+    39.41050200000063,
+    43.644781999999395,
+    39.06735300000037,
+    34.87991599999987,
+    47.15552399999979,
+    44.72345300000052,
+    37.339953999999125,
+    41.13343700000041,
+    39.81205199999931,
+    47.10812299999998,
+    42.850053000000116,
+    38.08949799999937,
+    40.46660999999949,
+    43.987450999999055,
+    37.393536999999924,
+    46.74537400000008,
+    37.06573099999878,
+    37.03779200000099,
+    36.49782899999991,
+    44.84862500000054
+   ],
+   "hook.pre-tool.guard-protected-paths": [
+    42.16345200000069,
+    39.64568899999904,
+    39.39067700000123,
+    43.83007399999951,
+    49.431039999999484,
+    44.20469899999989,
+    40.729755000000296,
+    38.45254700000078,
+    46.067995999999766,
+    45.46234800000093,
+    41.588754000000336,
+    41.56211099999928,
+    43.235220999999,
+    41.43922100000054,
+    39.1141060000009,
+    40.56675499999983,
+    39.51787999999942,
+    35.779640000000654,
+    37.80606799999987,
+    40.540069000000585,
+    42.195394000000306,
+    37.815998999998556,
+    39.75960100000157,
+    47.31185699999878,
+    40.47721799999999,
+    40.45404099999905,
+    37.975504,
+    41.441899999999805,
+    63.10190800000055,
+    64.01630900000055
+   ],
+   "hook.post-tool.lint-changed-files": [
+    41.758622999999716,
+    42.50190199999997,
+    40.70292800000061,
+    48.174339000001055,
+    40.87464800000089,
+    42.685513999998875,
+    39.02037500000006,
+    46.99000200000046,
+    40.996337999999014,
+    41.914270999999644,
+    40.08038400000078,
+    43.79323099999965,
+    41.42535599999974,
+    44.724670999999944,
+    41.836365000001024,
+    39.88407400000142,
+    44.324491999999736,
+    44.04360900000029,
+    39.90426600000137,
+    43.09009300000071,
+    41.93306499999926,
+    39.573388999999224,
+    38.505857000000105,
+    39.224254999999175,
+    37.91658699999971,
+    42.55725800000073,
+    38.68467799999962,
+    39.98879400000078,
+    39.71742499999891,
+    42.822870999998486
+   ],
+   "hook.post-tool.audit-log": [
+    41.323991999999635,
+    39.80110500000046,
+    37.61334299999908,
+    37.17440499999975,
+    38.930325000001176,
+    36.37586400000146,
+    42.77793499999825,
+    37.204084999999395,
+    38.713306999999986,
+    43.798885000000155,
+    40.29730000000018,
+    42.17089599999963,
+    43.252479999999196,
+    46.02968399999918,
+    40.04139799999939,
+    39.001446999998734,
+    44.59688199999982,
+    41.29752300000109,
+    46.209359999998924,
+    40.62067299999944,
+    39.89066399999865,
+    40.13521899999978,
+    52.39775700000064,
+    43.54635899999994,
+    37.394516999998814,
+    39.15182400000049,
+    38.24579100000119,
+    42.13145500000064,
+    41.88609499999984,
+    41.29363799999919
+   ],
+   "cli.somi-tier-resolve": [
+    52.810536999999385,
+    59.99572100000114,
+    52.385755999999674,
+    52.766239999999016,
+    53.47522000000026,
+    47.54885899999863,
+    54.44810300000063,
+    54.06115900000077,
+    49.150024000000485,
+    50.90936300000067,
+    53.73982699999942,
+    49.56330699999853,
+    52.10433499999999,
+    50.57517300000109,
+    61.332116999999926,
+    52.260425000000396,
+    55.61163399999896,
+    51.48226900000009,
+    50.589020999999775,
+    64.8326990000005,
+    51.29131899999993,
+    52.7698079999991,
+    54.05934999999954,
+    56.127872999999454,
+    48.719842999998946,
+    57.18965200000093,
+    50.178916000000754,
+    75.93229999999858,
+    57.05478099999891,
+    55.073279000000184
+   ],
+   "cli.somi-config-show": [
+    52.834483999999065,
+    49.27908899999966,
+    53.47680599999876,
+    50.13298700000087,
+    55.90418899999895,
+    57.61916399999973,
+    58.18303900000137,
+    53.78660099999979,
+    51.96834000000126,
+    46.89473399999952,
+    50.118389000001116,
+    53.469240000000354,
+    50.14102199999979,
+    54.793948999998975,
+    51.46020099999987,
+    52.38561500000105,
+    56.06670899999881,
+    49.70092199999999,
+    48.32767299999978,
+    51.51900500000011,
+    49.93812000000071,
+    60.76569799999925,
+    46.25070200000118,
+    49.250725000001694,
+    55.920711000002484,
+    60.67186500000025,
+    55.294378999999026,
+    48.423265000001265,
+    51.873077000000194,
+    57.2257720000016
+   ],
+   "cli.somi-dispatch-resolve": [
+    55.29443099999844,
+    45.959758000000875,
+    53.49967900000047,
+    49.33723199999804,
+    49.24340200000006,
+    55.96945300000152,
+    46.57325800000035,
+    50.06232799999998,
+    50.07317999999941,
+    48.3560350000007,
+    50.90114799999719,
+    56.16305199999988,
+    51.07073500000115,
+    44.41239599999972,
+    62.253106000000116,
+    55.100147000001016,
+    49.430544999999256,
+    49.5710889999973,
+    58.956442000002426,
+    47.03210299999773,
+    50.03521499999988,
+    46.28580900000088,
+    53.28851199999917,
+    46.943521000001056,
+    49.916519000002154,
+    46.73832200000106,
+    48.56522899999982,
+    50.168485000001965,
+    54.543853999999556,
+    48.88873800000147
+   ],
+   "mcp.round-trip": [
+    51.63520100000096,
+    52.760027000000264,
+    60.67104499999914,
+    56.22940100000051,
+    54.47869300000093,
+    57.173077999999805,
+    59.83156299999973,
+    61.55800899999667,
+    55.735444999998435,
+    61.8110889999989,
+    49.59764400000131,
+    53.82546999999977,
+    55.54560400000264,
+    54.30715699999928,
+    53.310912000000826,
+    58.174489000000904,
+    53.10681399999885,
+    54.5969929999992,
+    58.99961700000131,
+    53.470219000002544,
+    55.182614999997895,
+    52.92963400000008,
+    54.33359900000141,
+    55.91426499999943,
+    66.1487249999991,
+    56.11086200000136,
+    62.14037100000132,
+    60.112105000000156,
+    53.42148599999928,
+    62.578027999999904
+   ]
+  }
+ },
+ "L2": {
+  "rows": [
+   {
+    "scenario": "S1",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.06850065999999999,
+    "durationMs": 127957,
+    "turns": 11,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 206,
+      "output": 81483,
+      "cacheRead": 3336433,
+      "cacheCreation": 377050
+     }
+    },
+    "toolCalls": 39,
+    "subagents": 2,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00436093,
+    "durationMs": 17246,
+    "turns": 7,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 10,
+      "output": 2293,
+      "cacheRead": 94243,
+      "cacheCreation": 11355
+     }
+    },
+    "toolCalls": 6,
+    "subagents": 0,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.035330105000000014,
+    "durationMs": 122285,
+    "turns": 8,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 168,
+      "output": 63285,
+      "cacheRead": 2907294,
+      "cacheCreation": 282762
+     }
+    },
+    "toolCalls": 32,
+    "subagents": 2,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00411043,
+    "durationMs": 15925,
+    "turns": 7,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 8,
+      "output": 2442,
+      "cacheRead": 70983,
+      "cacheCreation": 10894
+     }
+    },
+    "toolCalls": 6,
+    "subagents": 0,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00433604,
+    "durationMs": 17167,
+    "turns": 8,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 10,
+      "output": 2356,
+      "cacheRead": 93104,
+      "cacheCreation": 11130
+     }
+    },
+    "toolCalls": 7,
+    "subagents": 0,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.03448874,
+    "durationMs": 131671,
+    "turns": 9,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 180,
+      "output": 63096,
+      "cacheRead": 3141777,
+      "cacheCreation": 244926
+     }
+    },
+    "toolCalls": 36,
+    "subagents": 2,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00406028,
+    "durationMs": 15527,
+    "turns": 7,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 10,
+      "output": 2087,
+      "cacheRead": 91638,
+      "cacheCreation": 10497
+     }
+    },
+    "toolCalls": 6,
+    "subagents": 0,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.032375205000000004,
+    "durationMs": 120034,
+    "turns": 8,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 150,
+      "output": 57957,
+      "cacheRead": 2440599,
+      "cacheCreation": 276918
+     }
+    },
+    "toolCalls": 31,
+    "subagents": 2,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "invalid",
+    "costUsd": 0.07277298000000001,
+    "durationMs": 241930,
+    "turns": 10,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 540,
+      "output": 233490,
+      "cacheRead": 12314065,
+      "cacheCreation": 774655
+     }
+    },
+    "toolCalls": 60,
+    "subagents": 4,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00368739,
+    "durationMs": 15520,
+    "turns": 6,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 8,
+      "output": 1726,
+      "cacheRead": 70979,
+      "cacheCreation": 10569
+     }
+    },
+    "toolCalls": 5,
+    "subagents": 0,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.03971243000000001,
+    "durationMs": 143707,
+    "turns": 5,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 186,
+      "output": 81615,
+      "cacheRead": 3132054,
+      "cacheCreation": 298113
+     }
+    },
+    "toolCalls": 37,
+    "subagents": 2,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00452596,
+    "durationMs": 17896,
+    "turns": 8,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 10,
+      "output": 2729,
+      "cacheRead": 92646,
+      "cacheCreation": 11170
+     }
+    },
+    "toolCalls": 7,
+    "subagents": 0,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00556174,
+    "durationMs": 22596,
+    "turns": 8,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 10,
+      "output": 3923,
+      "cacheRead": 95284,
+      "cacheCreation": 13232
+     }
+    },
+    "toolCalls": 7,
+    "subagents": 0,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.040789765,
+    "durationMs": 163132,
+    "turns": 10,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 192,
+      "output": 87057,
+      "cacheRead": 3207357,
+      "cacheCreation": 291348
+     }
+    },
+    "toolCalls": 38,
+    "subagents": 2,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.0038730699999999997,
+    "durationMs": 14224,
+    "turns": 7,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 8,
+      "output": 2109,
+      "cacheRead": 71057,
+      "cacheCreation": 10536
+     }
+    },
+    "toolCalls": 6,
+    "subagents": 0,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S1",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.031446264999999994,
+    "durationMs": 110126,
+    "turns": 7,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 156,
+      "output": 57816,
+      "cacheRead": 2632077,
+      "cacheCreation": 238302
+     }
+    },
+    "toolCalls": 35,
+    "subagents": 2,
+    "green": 9,
+    "total": 9,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "full",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.4831855699999999,
+    "durationMs": 1326265,
+    "turns": 4,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 1134,
+      "output": 2057363,
+      "cacheRead": 36558396,
+      "cacheCreation": 3983210
+     }
+    },
+    "toolCalls": 134,
+    "subagents": 6,
+    "green": 0,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.01092379,
+    "durationMs": 52451,
+    "turns": 11,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 20,
+      "output": 9817,
+      "cacheRead": 233469,
+      "cacheCreation": 18393
+     }
+    },
+    "toolCalls": 10,
+    "subagents": 0,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.072094815,
+    "durationMs": 194202,
+    "turns": 28,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 80,
+      "output": 49320,
+      "cacheRead": 1631764,
+      "cacheCreation": 188568
+     }
+    },
+    "toolCalls": 45,
+    "subagents": 3,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.0072774300000000005,
+    "durationMs": 30075,
+    "turns": 7,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 10,
+      "output": 6643,
+      "cacheRead": 96673,
+      "cacheCreation": 14941
+     }
+    },
+    "toolCalls": 6,
+    "subagents": 0,
+    "green": 30,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.008866460000000001,
+    "durationMs": 38209,
+    "turns": 13,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 14,
+      "output": 8052,
+      "cacheRead": 152746,
+      "cacheCreation": 16558
+     }
+    },
+    "toolCalls": 12,
+    "subagents": 0,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "full",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.8977828649999999,
+    "durationMs": 713259,
+    "turns": 22,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 810,
+      "output": 1233277,
+      "cacheRead": 22368759,
+      "cacheCreation": 2686364
+     }
+    },
+    "toolCalls": 101,
+    "subagents": 4,
+    "green": 0,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00798619,
+    "durationMs": 34644,
+    "turns": 10,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 12,
+      "output": 7216,
+      "cacheRead": 124999,
+      "cacheCreation": 15635
+     }
+    },
+    "toolCalls": 9,
+    "subagents": 0,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "full",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.33640761000000013,
+    "durationMs": 776321,
+    "turns": 8,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 1038,
+      "output": 1160162,
+      "cacheRead": 27805628,
+      "cacheCreation": 2836190
+     }
+    },
+    "toolCalls": 109,
+    "subagents": 7,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "full",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.5777199150000001,
+    "durationMs": 1026584,
+    "turns": 8,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 2124,
+      "output": 2404584,
+      "cacheRead": 61774668,
+      "cacheCreation": 5661791
+     }
+    },
+    "toolCalls": 140,
+    "subagents": 11,
+    "green": 26,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.00887167,
+    "durationMs": 37585,
+    "turns": 10,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 16,
+      "output": 7871,
+      "cacheRead": 175397,
+      "cacheCreation": 15903
+     }
+    },
+    "toolCalls": 9,
+    "subagents": 0,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "full",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.9991666250000002,
+    "durationMs": 1363146,
+    "turns": 17,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 1544,
+      "output": 2309802,
+      "cacheRead": 48578017,
+      "cacheCreation": 4758341
+     }
+    },
+    "toolCalls": 167,
+    "subagents": 7,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.01033354,
+    "durationMs": 48031,
+    "turns": 12,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 14,
+      "output": 9906,
+      "cacheRead": 162974,
+      "cacheCreation": 18747
+     }
+    },
+    "toolCalls": 11,
+    "subagents": 0,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.007761870000000001,
+    "durationMs": 35383,
+    "turns": 6,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 12,
+      "output": 7169,
+      "cacheRead": 122057,
+      "cacheCreation": 14778
+     }
+    },
+    "toolCalls": 5,
+    "subagents": 0,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.27750679000000006,
+    "durationMs": 455580,
+    "turns": 15,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 1338,
+      "output": 1188646,
+      "cacheRead": 34250669,
+      "cacheCreation": 3039542
+     }
+    },
+    "toolCalls": 109,
+    "subagents": 8,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.010104910000000002,
+    "durationMs": 43800,
+    "turns": 12,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 18,
+      "output": 9011,
+      "cacheRead": 199861,
+      "cacheCreation": 17995
+     }
+    },
+    "toolCalls": 11,
+    "subagents": 0,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S2",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.046189935,
+    "durationMs": 132759,
+    "turns": 15,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 80,
+      "output": 61971,
+      "cacheRead": 1758526,
+      "cacheCreation": 179663
+     }
+    },
+    "toolCalls": 24,
+    "subagents": 1,
+    "green": 31,
+    "total": 31,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.09013372500000001,
+    "durationMs": 310349,
+    "turns": 35,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 76,
+      "output": 76381,
+      "cacheRead": 2005015,
+      "cacheCreation": 183598
+     }
+    },
+    "toolCalls": 43,
+    "subagents": 2,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.02619681,
+    "durationMs": 142552,
+    "turns": 12,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 20,
+      "output": 29445,
+      "cacheRead": 393611,
+      "cacheCreation": 37681
+     }
+    },
+    "toolCalls": 11,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.13350661,
+    "durationMs": 352007,
+    "turns": 18,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 150,
+      "output": 138199,
+      "cacheRead": 4699099,
+      "cacheCreation": 318140
+     }
+    },
+    "toolCalls": 42,
+    "subagents": 1,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.025794139999999997,
+    "durationMs": 138015,
+    "turns": 13,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 16,
+      "output": 29949,
+      "cacheRead": 305744,
+      "cacheCreation": 38803
+     }
+    },
+    "toolCalls": 12,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.028584760000000004,
+    "durationMs": 152987,
+    "turns": 14,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 24,
+      "output": 31424,
+      "cacheRead": 482736,
+      "cacheCreation": 40215
+     }
+    },
+    "toolCalls": 13,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.06398888999999999,
+    "durationMs": 252267,
+    "turns": 23,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 42,
+      "output": 56444,
+      "cacheRead": 1241649,
+      "cacheCreation": 116731
+     }
+    },
+    "toolCalls": 20,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.026624980000000003,
+    "durationMs": 138170,
+    "turns": 13,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 26,
+      "output": 27758,
+      "cacheRead": 521098,
+      "cacheCreation": 37662
+     }
+    },
+    "toolCalls": 12,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.09522842500000003,
+    "durationMs": 414864,
+    "turns": 14,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 194,
+      "output": 266585,
+      "cacheRead": 4932219,
+      "cacheCreation": 527447
+     }
+    },
+    "toolCalls": 37,
+    "subagents": 2,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.139196945,
+    "durationMs": 353565,
+    "turns": 37,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 78,
+      "output": 80940,
+      "cacheRead": 2232198,
+      "cacheCreation": 190935
+     }
+    },
+    "toolCalls": 39,
+    "subagents": 2,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.02799454,
+    "durationMs": 155416,
+    "turns": 10,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 14,
+      "output": 33933,
+      "cacheRead": 262024,
+      "cacheCreation": 42032
+     }
+    },
+    "toolCalls": 9,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.09717866,
+    "durationMs": 427049,
+    "turns": 17,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 226,
+      "output": 265922,
+      "cacheRead": 5387060,
+      "cacheCreation": 535852
+     }
+    },
+    "toolCalls": 43,
+    "subagents": 2,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.030279900000000002,
+    "durationMs": 157317,
+    "turns": 11,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 22,
+      "output": 33889,
+      "cacheRead": 474680,
+      "cacheCreation": 42932
+     }
+    },
+    "toolCalls": 10,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.027733980000000005,
+    "durationMs": 147949,
+    "turns": 14,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 22,
+      "output": 30592,
+      "cacheRead": 447818,
+      "cacheCreation": 39788
+     }
+    },
+    "toolCalls": 13,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "small",
+    "tierSource": "file",
+    "outcome": "scored",
+    "costUsd": 0.108670355,
+    "durationMs": 356182,
+    "turns": 16,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 118,
+      "output": 154362,
+      "cacheRead": 3493652,
+      "cacheCreation": 308849
+     }
+    },
+    "toolCalls": 30,
+    "subagents": 1,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "bare",
+    "phase": "experiment",
+    "tier": null,
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.025924729999999993,
+    "durationMs": 136987,
+    "turns": 14,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 18,
+      "output": 29347,
+      "cacheRead": 344523,
+      "cacheCreation": 39021
+     }
+    },
+    "toolCalls": 13,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   },
+   {
+    "scenario": "S3",
+    "arm": "somi",
+    "phase": "experiment",
+    "tier": "unknown",
+    "tierSource": "none",
+    "outcome": "scored",
+    "costUsd": 0.03901425,
+    "durationMs": 148128,
+    "turns": 10,
+    "tokens": {
+     "claude-haiku-5-5": {
+      "input": 20,
+      "output": 34007,
+      "cacheRead": 448375,
+      "cacheCreation": 87625
+     }
+    },
+    "toolCalls": 7,
+    "subagents": 0,
+    "green": 103,
+    "total": 103,
+    "paused": false,
+    "models": [
+     "claude-haiku-5-5"
+    ]
+   }
+  ]
+ }
+}
