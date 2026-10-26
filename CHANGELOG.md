@@ -125,6 +125,14 @@ work finds none (cost and time inconclusive, instruction text +2.3%; see the mea
   iterations that touch the same files and together fit the loop's diff cap unless it states why the
   split pays for another coder and review pass; plan-review reports an unjustified split (Minor, Major
   at three or more). A recorded `full` run had planned an 80-line one-file task as five iterations.
+- **Repair passes re-review the fix, not the whole iteration** (issue #40). From pass 2,
+  `somi-loop review-scope` gives the generalist reviewer the change since the last reviewed tree
+  (`git diff <from> <to>`, untracked files included) plus the open findings to re-check; pass 1 and
+  the last allowed pass are reviewed in full, and the security lens and the panel always read the
+  whole iteration. `record-pass` stores each reviewed tree, built through a throwaway copy of the index
+  so the caller's index is untouched. `code_loop.review_scope: full` (or
+  `SOMI_CODE_LOOP_REVIEW_SCOPE=full`) restores full re-review. The default `delta` is provisional
+  until the 4.0.0 measurement shows no recall loss.
 - **A usage and speed measurement system** (`docs/USAGE-BENCHMARK.md`, `benchmarks/usage-speed/`).
   L0 counts the bytes of instruction text injected for each standard scenario; L1 times hooks,
   scripts and an MCP round trip locally; L2 runs paired live draws with and without SoMi. A

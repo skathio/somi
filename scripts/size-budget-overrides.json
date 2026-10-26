@@ -24,14 +24,6 @@
     "reason": "Over budget at the time the gate was introduced; split to drive the ledger to zero."
   },
   {
-    "file": "scripts/somi-loop.mjs",
-    "budget": 500,
-    "current_size": 533,
-    "source": "df8cf8b",
-    "at": "2026-10-26",
-    "reason": "Over budget when the gate was introduced; split to drive the ledger to zero. +9 lines in 2026-10 for the brief-only entry check (adaptive ship-loop D12), kept in init so the refusal cannot be skipped. +2 in 2026-10-26 (issue #40): the import and the one call that carries the sizing record's security lens into the loop state; the logic lives in scripts/lib/loop-review.mjs."
-  },
-  {
     "file": "tests/evals/convergence.mjs",
     "budget": 500,
     "current_size": 1218,

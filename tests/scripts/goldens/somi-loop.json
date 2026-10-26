@@ -118,7 +118,7 @@
       "2"
     ],
     "exit": 0,
-    "stdout": "{\"pass\":2,\"verdict\":\"request-changes\",\"blockers\":0,\"majors\":2,\"diff_lines\":7,\"at\":\"<TS>\"}",
+    "stdout": "{\"pass\":2,\"verdict\":\"request-changes\",\"blockers\":0,\"majors\":2,\"diff_lines\":7,\"tree\":\"<SHA>\",\"at\":\"<TS>\"}",
     "stderr": ""
   },
   {
@@ -132,7 +132,7 @@
       "1.1"
     ],
     "exit": 0,
-    "stdout": "{\"slug\":\"g\",\"loop\":\"code\",\"iteration\":\"1.1\",\"baseline_sha\":\"<SHA>\",\"started\":\"<TS>\",\"status\":\"running\",\"caps\":{\"max_passes\":2,\"diff_cap_lines\":10,\"severity_floor\":\"Major\"},\"iteration_files\":[\"src/a.txt\"],\"pass\":2,\"history\":[{\"pass\":2,\"verdict\":\"request-changes\",\"blockers\":0,\"majors\":2,\"diff_lines\":7,\"at\":\"<TS>\"}]}",
+    "stdout": "{\"slug\":\"g\",\"loop\":\"code\",\"iteration\":\"1.1\",\"baseline_sha\":\"<SHA>\",\"started\":\"<TS>\",\"status\":\"running\",\"caps\":{\"max_passes\":2,\"diff_cap_lines\":10,\"severity_floor\":\"Major\"},\"iteration_files\":[\"src/a.txt\"],\"pass\":2,\"history\":[{\"pass\":2,\"verdict\":\"request-changes\",\"blockers\":0,\"majors\":2,\"diff_lines\":7,\"tree\":\"<SHA>\",\"at\":\"<TS>\"}]}",
     "stderr": ""
   },
   {
@@ -162,7 +162,7 @@
       "1.1"
     ],
     "exit": 0,
-    "stdout": "{\n  \"slug\": \"g\",\n  \"loop\": \"code\",\n  \"iteration\": \"1.1\",\n  \"baseline_sha\": \"<SHA>\",\n  \"started\": \"<TS>\",\n  \"status\": \"stopped-diff-cap\",\n  \"caps\": {\n    \"max_passes\": 2,\n    \"diff_cap_lines\": 10,\n    \"severity_floor\": \"Major\"\n  },\n  \"iteration_files\": [\n    \"src/a.txt\"\n  ],\n  \"pass\": 2,\n  \"history\": [\n    {\n      \"pass\": 2,\n      \"verdict\": \"request-changes\",\n      \"blockers\": 0,\n      \"majors\": 2,\n      \"diff_lines\": 7,\n      \"at\": \"<TS>\"\n    }\n  ],\n  \"finished\": \"<TS>\"\n}",
+    "stdout": "{\n  \"slug\": \"g\",\n  \"loop\": \"code\",\n  \"iteration\": \"1.1\",\n  \"baseline_sha\": \"<SHA>\",\n  \"started\": \"<TS>\",\n  \"status\": \"stopped-diff-cap\",\n  \"caps\": {\n    \"max_passes\": 2,\n    \"diff_cap_lines\": 10,\n    \"severity_floor\": \"Major\"\n  },\n  \"iteration_files\": [\n    \"src/a.txt\"\n  ],\n  \"pass\": 2,\n  \"history\": [\n    {\n      \"pass\": 2,\n      \"verdict\": \"request-changes\",\n      \"blockers\": 0,\n      \"majors\": 2,\n      \"diff_lines\": 7,\n      \"tree\": \"<SHA>\",\n      \"at\": \"<TS>\"\n    }\n  ],\n  \"finished\": \"<TS>\"\n}",
     "stderr": ""
   }
 ]

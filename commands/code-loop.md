@@ -33,13 +33,14 @@ coder's reasoning).
 | `SEVERITY_FLOOR` — verdicts that re-loop | `Major` (Blocker + Major) | `SOMI_CODE_LOOP_SEVERITY_FLOOR` (`Blocker` to only re-loop on Blockers) |
 | `DIFF_CAP_LINES` — cumulative diff across passes | `400` | `SOMI_CODE_LOOP_DIFF_CAP` |
 | `CIRCUIT_BREAKER` — stop if the same finding (file + symbol + title) recurs in 2 consecutive passes | always on | (n/a) |
-| `REVIEW_MODE` — `single` (Task `somi-reviewer`), `security` (`somi-reviewer` and `somi-security-reviewer` in parallel on the same scope) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens). At least `security` whenever `init` or `pass` prints `review_min: security` (the sizing record says the work may handle untrusted input or touch auth, crypto, secrets or PII); `panel` also satisfies it | `single` | `SOMI_CODE_LOOP_REVIEW` (`security`, `panel`) |
+| `REVIEW_MODE` — `single` (Task `somi-reviewer`), `security` (`somi-reviewer` and `somi-security-reviewer` in parallel; the security lens reads the whole iteration) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens). At least `security` whenever `init` or `pass` prints `review_min: security` (the sizing record says the work may handle untrusted input or touch auth, crypto, secrets or PII); `panel` also satisfies it | `single` | `SOMI_CODE_LOOP_REVIEW` (`security`, `panel`) |
+| `REVIEW_SCOPE` — what the generalist reviewer reads from pass 2: `delta` (the change since the last reviewed tree, plus the open findings) or `full` (the whole iteration). Pass 1 and the last allowed pass are always full; the security lens and the `panel` mode always read the whole iteration | `delta` | `SOMI_CODE_LOOP_REVIEW_SCOPE` (`full`) |
 | `HUMAN_CHECKPOINT` — pause between passes if user reply `stop` is detected | always on | (n/a) |
 
 **Precedence:** CLI flag (`--max-passes`, `--diff-cap`) > env var (session override) >
 `.somi/config.json` (committed project policy — keys
 `code_loop.max_passes`, `code_loop.severity_floor`, `code_loop.diff_cap_lines`,
-`code_loop.review_mode`) > the defaults above. Read both at the start of the run; record the
+`code_loop.review_mode`, `code_loop.review_scope`) > the defaults above. Read both at the start of the run; record the
 effective values in the first diary entry of the loop.
 
 `MAX_PASSES` and `DIFF_CAP_LINES` are **re-resolved on every `pass` / `check-diff` call**, not
@@ -122,17 +123,24 @@ while true:
     exit 3 → STOP — exit "diff-cap-exceeded"; if the printed JSON's out_of_scope is non-empty,
              report the stop as "scope-expansion" and name the files
 
-  # 3d. Review — single reviewer, reviewer + security lens, or the parallel panel
+  # 3d. Review — single reviewer, reviewer + security lens, or the parallel panel.
+  #     First ask what the generalist reads (the script decides, not the orchestrator):
+  node scripts/somi-loop.mjs review-scope --slug <slug> --iteration <N>.<M>
+    scope == "delta" → its brief: "review only the change from <from> to <to> (`git diff <from> <to>`:
+                       <files>), and re-check each open finding in the ledger: resolved, or still open with
+                       its evidence. Do not re-review code outside that change; it was reviewed on pass
+                       <since_pass>." A defect the delta introduces anywhere is in scope.
+    scope == "full"  → this iteration's whole diff, as on pass 1
   if REVIEW_MODE == "panel":
     Task /review-panel ( = <slug> phase <N>, iteration <M> )   # a command — resolves its own lenses
   elif REVIEW_MODE == "security":                               # also whenever pass printed review_min: security
     # call somi_resolve for both first; Task both in ONE message so they run in parallel
-    Task somi-reviewer          ( = /review <slug>, scope = this iteration's diff )
-    Task somi-security-reviewer ( = security lens on this iteration's diff )
+    Task somi-reviewer          ( = /review <slug>, scope = the review-scope result )
+    Task somi-security-reviewer ( = security lens on this iteration's WHOLE diff, every pass )
     # merge: one findings list, de-duplicated by locus, severity = the highest either lens gave
   else:
     # call somi_resolve for somi-reviewer first; full rules: the somi-dispatch skill
-    Task somi-reviewer ( = /review <slug>, scope = this iteration's diff )
+    Task somi-reviewer ( = /review <slug>, scope = the review-scope result )
 
   # 3e. Record the pass + findings. The ledger computes recurrence on a STABLE locus
   #     (file + symbol + normalized title — never the raw line number, which drifts between

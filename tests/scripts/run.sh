@@ -104,6 +104,34 @@ out="$(node "$LOOP" init --force --slug lens --loop plan --iteration 1.1)"
 check "review lens: a plan loop carries no review_min" "$(jq -e '.review_min == null' <<<"$out" >/dev/null; echo $?)"
 rm -rf .somi/plans/bo .somi/plans/lens .somi/somi-state/tier
 
+# --- somi-loop: review scope (delta re-review from pass 2; full on the first and the last pass) ---
+node "$LOOP" init --force --slug scope --loop code --iteration 1.1 --max-passes 3 --files "src/" >/dev/null
+node "$LOOP" pass --slug scope --iteration 1.1 >/dev/null
+out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: pass 1 is reviewed in full" "$(jq -e '.scope == "full" and .why == "first-pass"' <<<"$out" >/dev/null; echo $?)"
+idx_before="$(git ls-files -s | sha256sum)"; staged_before="$(git diff --cached --name-only | sha256sum)"
+node "$LOOP" record-pass --slug scope --iteration 1.1 --verdict request-changes --blockers 0 --majors 1 >/dev/null
+check "review scope: record-pass stores the reviewed tree" "$(node "$LOOP" stats --slug scope --iteration 1.1 | jq -e '.history[0].tree | test("^[0-9a-f]{40}$")' >/dev/null; echo $?)"
+check "review scope: snapshotting leaves the caller's index untouched" "$([[ "$(git ls-files -s | sha256sum)" == "$idx_before" && "$(git diff --cached --name-only | sha256sum)" == "$staged_before" ]]; echo $?)"
+printf 'fixed\n' >> src/a.txt; printf 'new\n' > src/new-untracked.txt
+node "$LOOP" pass --slug scope --iteration 1.1 >/dev/null
+out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: pass 2 sees only the delta since the reviewed tree, untracked files included" \
+  "$(jq -e '.scope == "delta" and .since_pass == 1 and (.files | sort) == ["src/a.txt","src/new-untracked.txt"]' <<<"$out" >/dev/null; echo $?)"
+check "review scope: the delta's trees reproduce the change" "$(git diff "$(jq -r .from <<<"$out")" "$(jq -r .to <<<"$out")" -- src/a.txt | grep -qx '+fixed'; echo $?)"
+out="$(SOMI_CODE_LOOP_REVIEW_SCOPE=full node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: SOMI_CODE_LOOP_REVIEW_SCOPE=full restores full re-review" "$(jq -e '.scope == "full" and .why == "setting"' <<<"$out" >/dev/null; echo $?)"
+printf '{"code_loop": {"review_scope": "full"}}\n' > .somi/config.json
+out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: code_loop.review_scope full in config restores full re-review" "$(jq -e '.scope == "full"' <<<"$out" >/dev/null; echo $?)"
+printf '{"code_loop": {"max_passes": 2, "diff_cap_lines": 10}}\n' > .somi/config.json
+expect_exit "review scope: an unknown setting is refused" 64 env SOMI_CODE_LOOP_REVIEW_SCOPE=partial node "$LOOP" review-scope --slug scope --iteration 1.1
+node "$LOOP" record-pass --slug scope --iteration 1.1 --verdict request-changes --blockers 0 --majors 1 >/dev/null
+node "$LOOP" pass --slug scope --iteration 1.1 >/dev/null
+out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: the last allowed pass is reviewed in full" "$(jq -e '.scope == "full" and .why == "last-pass"' <<<"$out" >/dev/null; echo $?)"
+git checkout -q -- src/a.txt; rm -f src/new-untracked.txt
+
 # --- somi-loop: pass counting ---------------------------------------------------
 node "$LOOP" pass --slug demo --iteration 1.1 >/dev/null
 expect_exit "pass: exceeding max_passes exits 2" 2 \

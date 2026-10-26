@@ -32,7 +32,7 @@
 //                             out-of-scope lines count double)
 //   64 usage / environment error
 //
-// Subcommands: init | resume | pass | check-diff | record-pass | finish | stats
+// Subcommands: init | resume | pass | check-diff | review-scope | record-pass | finish | stats
 // (see scripts/somi-loop.sh for the full per-subcommand doc — unchanged here).
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
@@ -41,7 +41,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { verifyBriefOnly } from './lib/tier-record.mjs';
-import { reviewMinFor } from './lib/loop-review.mjs';
+import { REVIEW_SCOPES, reviewMinFor, reviewScope, snapshotTree } from './lib/loop-review.mjs';
+import { computeDiff } from './lib/loop-diff.mjs';
 
 const PROG = 'somi-loop';
 
@@ -113,96 +114,6 @@ function firstDefined(...vals) {
 function nowIso() {
   // `date -u +%Y-%m-%dT%H:%M:%SZ` — no milliseconds.
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-}
-
-// Untracked, non-ignored files as synthetic `--numstat` rows (all lines added).
-// `git diff` reads the index and the work tree, but a file git has never been
-// told about is in neither -- so a brand-new file counts ZERO until someone runs
-// `git add`. That made the cap under-measure by the entire size of every new
-// file an iteration introduced, silently, in the direction that lets work
-// through (measured 248 against a true 503 on one real iteration).
-// Enumerated separately and merged into the same stream rather than fixed with
-// `git add -N`, which would mutate the caller's index as a side effect of a
-// read-only query.
-function untrackedNumstat(root, pathspec) {
-  let listed = '';
-  try {
-    listed = execFileSync(
-      'git',
-      ['-C', root, 'ls-files', '--others', '--exclude-standard', '--', ...pathspec],
-      { encoding: 'utf8' },
-    );
-  } catch (e) {
-    listed = e.stdout ? e.stdout.toString() : '';
-  }
-  const rows = [];
-  for (const file of listed.split('\n')) {
-    if (file === '') continue;
-    let buf;
-    try {
-      buf = fs.readFileSync(path.join(root, file));
-    } catch {
-      continue; // raced away between listing and reading
-    }
-    // git calls a blob binary on a NUL in the first 8000 bytes and reports `-`.
-    if (buf.subarray(0, 8000).includes(0)) {
-      rows.push(`-\t-\t${file}`);
-      continue;
-    }
-    const text = buf.toString('utf8');
-    const added = text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-    rows.push(`${added}\t0\t${file}`);
-  }
-  return rows.join('\n');
-}
-
-// Weighted cumulative diff vs baseline. Out-of-scope lines count double.
-// Covers tracked changes, staged changes, AND untracked files (see above) --
-// the whole working tree, which is what the cap is meant to bound.
-function computeDiff(root, baseline, iterationFiles) {
-  const pathspec = ['.', ':(exclude).somi', ':(exclude).claude'];
-  let output = '';
-  try {
-    output = execFileSync(
-      'git',
-      ['-C', root, 'diff', '--numstat', baseline, '--', ...pathspec],
-      { encoding: 'utf8' },
-    );
-  } catch (e) {
-    output = e.stdout ? e.stdout.toString() : '';
-  }
-  const untracked = untrackedNumstat(root, pathspec);
-  if (untracked !== '') output = output === '' ? untracked : `${output}\n${untracked}`;
-  let total = 0;
-  let weighted = 0;
-  const outOfScope = [];
-  for (const line of output.split('\n')) {
-    if (line === '') continue;
-    const parts = line.split('\t');
-    let added = parts[0];
-    let deleted = parts[1];
-    const file = parts.slice(2).join('\t');
-    if (!file) continue;
-    added = added === '-' ? 0 : Number(added); // binary
-    deleted = deleted === '-' ? 0 : Number(deleted);
-    const lines = added + deleted;
-    total += lines;
-    let inScope = false;
-    for (const entry of iterationFiles) {
-      if (!entry) continue;
-      if (file === entry || (entry.endsWith('/') && file.startsWith(entry))) {
-        inScope = true;
-        break;
-      }
-    }
-    if (inScope) {
-      weighted += lines;
-    } else {
-      weighted += 2 * lines;
-      outOfScope.push(file);
-    }
-  }
-  return { total, weighted, outOfScope };
 }
 
 // --- mid-loop cap re-resolution --------------------------------------------
@@ -345,7 +256,7 @@ function main() {
     }
   }
 
-  if (!CMD) die('usage: somi-loop.mjs <init|resume|pass|check-diff|record-pass|finish|stats> --slug <slug> …');
+  if (!CMD) die('usage: somi-loop.mjs <init|resume|pass|check-diff|review-scope|record-pass|finish|stats> --slug <slug> …');
   if (!SLUG) die('--slug is required');
 
   function stateFile() {
@@ -476,6 +387,15 @@ function main() {
       break;
     }
 
+    case 'review-scope': {
+      requireState();
+      const state = loadState();
+      const setting = firstDefined(process.env.SOMI_CODE_LOOP_REVIEW_SCOPE, configVal(readConfig(root), ['code_loop', 'review_scope']), 'delta');
+      if (!REVIEW_SCOPES.includes(setting)) die(`review scope must be one of ${REVIEW_SCOPES.join('|')}, got ${JSON.stringify(setting)}`);
+      console.log(JSON.stringify({ ...reviewScope(root, state, setting), ...(state.review_min ? { review_min: state.review_min } : {}) }));
+      break;
+    }
+
     case 'record-pass': {
       requireState();
       if (!VERDICT) die('record-pass requires --verdict');
@@ -487,6 +407,7 @@ function main() {
         blockers: Number(BLOCKERS),
         majors: Number(MAJORS),
         diff_lines: total,
+        tree: snapshotTree(root) ?? undefined, // the reviewed tree: the next pass's delta starts here
         at: nowIso(),
       };
       state.history.push(entry);

@@ -555,7 +555,7 @@ optional; omit anything you don't want to change:
 
 ```json
 {
-  "code_loop":     { "max_passes": 3, "severity_floor": "Major", "diff_cap_lines": 400, "review_mode": "single" },
+  "code_loop":     { "max_passes": 3, "severity_floor": "Major", "diff_cap_lines": 400, "review_mode": "single", "review_scope": "delta" },
   "plan_loop":     { "max_passes": 3, "severity_floor": "Major" },
   "ship_loop":     { "global_budget_passes": 15 },
   "design_loop":   { "max_passes": 2 },
