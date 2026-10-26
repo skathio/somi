@@ -72,7 +72,7 @@ expect_exit "init: refuses to clobber a running loop without --force" 64 \
 mkdir -p .somi/plans/bo
 printf 'brief one\n' > .somi/plans/bo/brief.md
 TIER="$ROOT/scripts/somi-tier.mjs"
-node -e 'const s={};for(const k of ["T1","T2","T3","T4","T5"])s[k]={value:k!=="T2",evidence:"e"};Object.assign(s,{hard_surface:{value:false,evidence:"e"},design_open:{value:false,evidence:"e"},open_questions:{value:0,evidence:"e"},acceptance_testable:{value:true,evidence:"e"},modules_touched:{value:1,evidence:"e"},est_files:{value:2,evidence:"e"},est_diff_lines:{value:80,evidence:"e"},existing_work_item:{value:false,evidence:"e"},brief_exists:{value:false,evidence:"e"}});console.log(JSON.stringify(s))' > "$TMP/small-signals.json"
+node -e 'const s={};for(const k of ["T1","T2","T3","T4","T5"])s[k]={value:k!=="T2",evidence:"e"};Object.assign(s,{sensitive_core:{value:false,evidence:"e"},hard_surface:{value:false,evidence:"e"},design_open:{value:false,evidence:"e"},open_questions:{value:0,evidence:"e"},acceptance_testable:{value:true,evidence:"e"},modules_touched:{value:1,evidence:"e"},est_files:{value:2,evidence:"e"},est_diff_lines:{value:80,evidence:"e"},existing_work_item:{value:false,evidence:"e"},brief_exists:{value:false,evidence:"e"}});console.log(JSON.stringify(s))' > "$TMP/small-signals.json"
 expect_exit "brief-only: refused with no tier record" 64 \
   node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
 node "$TIER" resolve --signals "$TMP/small-signals.json" --record bo --project-dir "$REPO" >/dev/null
@@ -88,7 +88,21 @@ expect_exit "brief-only: refused once the brief changed after approval" 64 \
 mkdir -p .somi/plans/bo/phases
 expect_exit "a plan with phases/ is unaffected" 0 \
   node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files "src/a.txt"
-rm -rf .somi/plans/bo .somi/somi-state/tier
+out="$(node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files "src/a.txt")"
+check "review lens: a record proven free of untrusted input and the core asks for no lens" \
+  "$(jq -e '.review_min == null' <<<"$out" >/dev/null && jq -e '.security_lens == false' .somi/somi-state/tier/bo.json >/dev/null; echo $?)"
+jq '.T3.value = false' "$TMP/small-signals.json" > "$TMP/lens-signals.json"
+node "$TIER" resolve --signals "$TMP/lens-signals.json" --record lens --project-dir "$REPO" >/dev/null
+check "review lens: untrusted input alone stays small and records the security lens" \
+  "$(jq -e '.tier == "small" and .security_lens == true' .somi/somi-state/tier/lens.json >/dev/null; echo $?)"
+mkdir -p .somi/plans/lens/phases
+out="$(node "$LOOP" init --force --slug lens --loop code --iteration 1.1 --files "src/a.txt")"
+check "review lens: init carries review_min security from the tier record" "$(jq -e '.review_min == "security"' <<<"$out" >/dev/null; echo $?)"
+out="$(node "$LOOP" pass --slug lens --iteration 1.1)"
+check "review lens: every pass repeats review_min" "$(jq -e '.pass == 1 and .review_min == "security"' <<<"$out" >/dev/null; echo $?)"
+out="$(node "$LOOP" init --force --slug lens --loop plan --iteration 1.1)"
+check "review lens: a plan loop carries no review_min" "$(jq -e '.review_min == null' <<<"$out" >/dev/null; echo $?)"
+rm -rf .somi/plans/bo .somi/plans/lens .somi/somi-state/tier
 
 # --- somi-loop: pass counting ---------------------------------------------------
 node "$LOOP" pass --slug demo --iteration 1.1 >/dev/null

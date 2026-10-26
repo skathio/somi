@@ -33,7 +33,7 @@ coder's reasoning).
 | `SEVERITY_FLOOR` — verdicts that re-loop | `Major` (Blocker + Major) | `SOMI_CODE_LOOP_SEVERITY_FLOOR` (`Blocker` to only re-loop on Blockers) |
 | `DIFF_CAP_LINES` — cumulative diff across passes | `400` | `SOMI_CODE_LOOP_DIFF_CAP` |
 | `CIRCUIT_BREAKER` — stop if the same finding (file + symbol + title) recurs in 2 consecutive passes | always on | (n/a) |
-| `REVIEW_MODE` — `single` (Task `somi-reviewer`) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens) | `single` | `SOMI_CODE_LOOP_REVIEW` (`panel`) |
+| `REVIEW_MODE` — `single` (Task `somi-reviewer`), `security` (`somi-reviewer` and `somi-security-reviewer` in parallel on the same scope) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens). At least `security` whenever `init` or `pass` prints `review_min: security` (the sizing record says the work may handle untrusted input or touch auth, crypto, secrets or PII); `panel` also satisfies it | `single` | `SOMI_CODE_LOOP_REVIEW` (`security`, `panel`) |
 | `HUMAN_CHECKPOINT` — pause between passes if user reply `stop` is detected | always on | (n/a) |
 
 **Precedence:** CLI flag (`--max-passes`, `--diff-cap`) > env var (session override) >
@@ -122,9 +122,14 @@ while true:
     exit 3 → STOP — exit "diff-cap-exceeded"; if the printed JSON's out_of_scope is non-empty,
              report the stop as "scope-expansion" and name the files
 
-  # 3d. Review — single reviewer, or the parallel panel when REVIEW_MODE == panel
+  # 3d. Review — single reviewer, reviewer + security lens, or the parallel panel
   if REVIEW_MODE == "panel":
     Task /review-panel ( = <slug> phase <N>, iteration <M> )   # a command — resolves its own lenses
+  elif REVIEW_MODE == "security":                               # also whenever pass printed review_min: security
+    # call somi_resolve for both first; Task both in ONE message so they run in parallel
+    Task somi-reviewer          ( = /review <slug>, scope = this iteration's diff )
+    Task somi-security-reviewer ( = security lens on this iteration's diff )
+    # merge: one findings list, de-duplicated by locus, severity = the highest either lens gave
   else:
     # call somi_resolve for somi-reviewer first; full rules: the somi-dispatch skill
     Task somi-reviewer ( = /review <slug>, scope = this iteration's diff )

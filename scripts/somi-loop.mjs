@@ -41,6 +41,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { verifyBriefOnly } from './lib/tier-record.mjs';
+import { reviewMinFor } from './lib/loop-review.mjs';
 
 const PROG = 'somi-loop';
 
@@ -429,8 +430,9 @@ function main() {
         pass: 0,
         history: [],
       };
+      if (LOOP === 'code') state.review_min = reviewMinFor(root, SLUG) ?? undefined; // undefined: not serialised
       saveState(state);
-      console.log(JSON.stringify({ baseline_sha: state.baseline_sha, caps: state.caps, state_file: SF }));
+      console.log(JSON.stringify({ baseline_sha: state.baseline_sha, caps: state.caps, state_file: SF, ...(state.review_min ? { review_min: state.review_min } : {}) }));
       break;
     }
 
@@ -454,7 +456,7 @@ function main() {
       }
       state.pass = cur + 1;
       saveState(state);
-      console.log(JSON.stringify({ pass: state.pass, max_passes: max }));
+      console.log(JSON.stringify({ pass: state.pass, max_passes: max, ...(state.review_min ? { review_min: state.review_min } : {}) }));
       break;
     }
 

@@ -408,7 +408,8 @@ de-duplicated, severity-graded verdict (highest severity wins; lens disagreement
 
 Use it for a high-stakes change that crosses several concerns at once; use plain `/review` for the
 everyday single pass. Inside `/code-loop`, set `SOMI_CODE_LOOP_REVIEW=panel` to make the loop review
-with the panel. (On hosts without concurrent sub-agents — e.g. Copilot — the lenses run
+with the panel, or `security` for the generalist plus the security lens only. A work item whose sizing
+record carries `security_lens: true` is reviewed with at least `security` without being asked. (On hosts without concurrent sub-agents — e.g. Copilot — the lenses run
 sequentially; same result, slower.)
 
 ### `/impact`

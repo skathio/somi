@@ -221,7 +221,7 @@ const TOOLS = [
     name: 'somi_tier',
     description:
       "Size a request: run `node scripts/somi-tier.mjs resolve` (no --record) on the signals you " +
-      'extracted and return its one JSON line unchanged (tier, effective, source, floor, reasons, ' +
+      'extracted and return its one JSON line unchanged (tier, effective, source, floor, security_lens, reasons, ' +
       'basis). The rubric is the skill somi-routing, section Size tiers; this tool states no ' +
       'thresholds. The signal ids in `signals` are exact: use these names and no others. A name that ' +
       'is not one is ignored and listed back as `unrecognized` next to `expected`, and a missing ' +

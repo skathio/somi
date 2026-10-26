@@ -38,13 +38,13 @@ const build = (c) => {
 };
 
 check('thresholds and ids', [m.MAX_MODULES, m.MAX_FILES, m.MAX_DIFF_LINES, m.TRIVIAL_MAX_FILES, m.TRIVIAL_MAX_MODULES, m.TRIVIAL_MAX_DIFF_LINES, m.MAX_EVIDENCE_CHARS, SIGNAL_IDS.join()],
-  [2, 6, 100, 1, 1, 50, 300, 'T1,T2,T3,T4,T5,hard_surface,design_open,open_questions,acceptance_testable,modules_touched,est_files,est_diff_lines,existing_work_item,brief_exists']);
+  [2, 6, 100, 1, 1, 50, 300, 'T1,T2,T3,T4,T5,sensitive_core,hard_surface,design_open,open_questions,acceptance_testable,modules_touched,est_files,est_diff_lines,existing_work_item,brief_exists']);
 
 for (const c of cases) {
   const input = 'raw' in c ? c.raw : build(c);
   const ids = (x) => (x === 'ALL' ? [...SIGNAL_IDS] : x || []);
   const unknown = ids(c.expect.unknown), invalid = ids(c.expect.invalid);
-  const want = { tier: c.expect.tier, floor: c.expect.floor || null,
+  const want = { tier: c.expect.tier, floor: c.expect.floor || null, securityLens: c.expect.securityLens === true,
     failed: SIGNAL_IDS.filter((id) => unknown.includes(id) || invalid.includes(id)), unknown, invalid, reasons: c.expect.reasons };
   const got = safe(() => decideTier(input));
   const { basis, ...rest } = got;
@@ -56,13 +56,13 @@ for (const c of cases) {
   let lowered = [];
   for (const id of SIGNAL_IDS) for (const value of ['unknown', 'bogus']) {
     const after = decideTier({ ...input, [id]: { value, evidence: 'e' } });
-    if (rank[after.tier] < rank[before.tier] || (before.floor && !after.floor) || !after.failed.includes(id)) lowered.push(id + ':' + value);
+    if (rank[after.tier] < rank[before.tier] || (before.floor && !after.floor) || (before.securityLens && !after.securityLens) || !after.failed.includes(id)) lowered.push(id + ':' + value);
   }
   check('unknown or invalid never lowers: ' + c.name, lowered, []);
 }
 
-check('fullBasis shows every signal read cleanly even at full', [Object.keys(decideTier(build({ set: { hard_surface: true } })).basis), Object.keys(decideTier(build({ set: { hard_surface: true } }), { fullBasis: true }).basis).length], [['T3'], SIGNAL_IDS.length]);
-const shapeOk = (r) => j(r) === j({ tier: 'full', floor: 'full', failed: [...SIGNAL_IDS], unknown: [], invalid: [...SIGNAL_IDS], reasons: ['signals_unreadable'], basis: {} });
+check('fullBasis shows every signal read cleanly even at full', [Object.keys(decideTier(build({ set: { hard_surface: true } })).basis), Object.keys(decideTier(build({ set: { hard_surface: true } }), { fullBasis: true }).basis).length], [['T3', 'sensitive_core'], SIGNAL_IDS.length]);
+const shapeOk = (r) => j(r) === j({ tier: 'full', floor: 'full', securityLens: true, failed: [...SIGNAL_IDS], unknown: [], invalid: [...SIGNAL_IDS], reasons: ['signals_unreadable'], basis: {} });
 const good = () => Object.fromEntries(Object.keys(base).map((id) => [id, entry(base[id])]));
 let reads = 0;
 const getterEntry = Object.defineProperty({ evidence: 'e' }, 'value', { get() { reads++; throw new Error('boom'); }, enumerable: true });
@@ -140,9 +140,15 @@ mutate "evidence cap 300 -> 301" "s.replace('MAX_EVIDENCE_CHARS = 300','MAX_EVID
 mutate "control characters allowed in evidence" "s.replace('&& !CONTROL_CHARS.test(e)','')"
 mutate "count minimum dropped (0 allowed)" "s.replace('modules_touched: 1, est_files: 1, est_diff_lines: 1 }','modules_touched: 0, est_files: 0, est_diff_lines: 0 }')"
 mutate "unknown work-item reason suffix removed" "s.replace('? \`\${id}_unknown\` : id','? id : id')"
-mutate "basis drops T3" "s.replace(\"(id === 'T3' || decided.tier !== 'full')\",\"decided.tier !== 'full'\")"
+mutate "basis drops T3" "s.replace(\"(id === 'T3' || id === 'sensitive_core' || decided.tier !== 'full')\",\"(id === 'sensitive_core' || decided.tier !== 'full')\")"
+mutate "basis drops sensitive_core" "s.replace(\"(id === 'T3' || id === 'sensitive_core' || decided.tier !== 'full')\",\"(id === 'T3' || decided.tier !== 'full')\")"
 mutate "worst case of T3 flipped to true" "s.replace('T3: false, T4','T3: true, T4')"
-mutate "floor dropped" "s.replace(\"floor: v.T3 === true ? null : 'full'\",'floor: null')"
+mutate "worst case of sensitive_core flipped to false" "s.replace('sensitive_core: true,\n','sensitive_core: false,\n')"
+mutate "floor dropped" "s.replace(\"floor: v.sensitive_core === false ? null : 'full'\",'floor: null')"
+mutate "sensitive_core rule removed" "s.replace(\"v.sensitive_core === true ? { tier: 'full', reasons: ['sensitive_core'] } : null\",'null')"
+mutate "security lens ignores T3" "s.replace('securityLens: v.T3 !== true || ','securityLens: ')"
+mutate "security lens ignores an unknown core" "s.replace(' || v.sensitive_core !== false, failed',', failed')"
+mutate "core contradiction check removed" "s.replace(\"read.T3.state === 'ok' && read.T3.value && read.sensitive_core\",'false && read.sensitive_core')"
 # Rules 4 and 5 can never both match (the size caps sit above the trivial caps), so only 1-4 are swapped.
 for i in 0 1 2; do
   j=$((i+1))
@@ -176,17 +182,17 @@ const run = (args, { input, env = {}, cwd, timeout } = {}) => {
 };
 const json = (s) => { try { return JSON.parse(s); } catch { return 'NOT JSON'; } };
 const isAscii = (s) => /^[\x00-\x7f]*$/.test(s);
-const BASE = { T1: true, T2: true, T3: true, T4: true, T5: true, hard_surface: false, design_open: false, open_questions: 0,
+const BASE = { T1: true, T2: true, T3: true, T4: true, T5: true, sensitive_core: false, hard_surface: false, design_open: false, open_questions: 0,
   acceptance_testable: true, modules_touched: 1, est_files: 1, est_diff_lines: 40, existing_work_item: false, brief_exists: false };
 const signals = (over = {}) => Object.fromEntries(Object.entries({ ...BASE, ...over }).map(([k, v]) => [k, { value: v, evidence: 'e' }]));
 const write = (name, content) => { const f = path.join(work, name); fs.writeFileSync(f, typeof content === 'string' || Buffer.isBuffer(content) ? content : JSON.stringify(content)); return f; };
 const F = {
   trivial: write('trivial.json', signals()),
   small: write('small.json', signals({ T2: false, est_diff_lines: 80 })),
-  floor: write('floor.json', signals({ T3: false, hard_surface: true })),
+  floor: write('floor.json', signals({ T3: false, sensitive_core: true, hard_surface: true })),
   nofloor: write('nofloor.json', signals({ hard_surface: true })),
 };
-const KEYS = ['basis', 'effective', 'failed', 'floor', 'invalid', 'reasons', 'source', 'tier', 'unknown'];
+const KEYS = ['basis', 'effective', 'failed', 'floor', 'invalid', 'reasons', 'security_lens', 'source', 'tier', 'unknown'];
 
 // resolve: one result per corpus tier, by file and by stdin
 for (const [name, tier, floor] of [['trivial', 'trivial', null], ['small', 'small', null], ['floor', 'full', 'full'], ['nofloor', 'full', null]]) {
@@ -214,7 +220,7 @@ for (const [name, tier, floor] of [['trivial', 'trivial', null], ['small', 'smal
   const arr = run(['resolve', '--signals', '-'], { input: '[]' });
   check('a non-object input is still a usage error', arr.rc, 64);
 }
-check('resolve: reasons and failed are echoed', (({ reasons, failed }) => [reasons, failed])(json(run(['resolve', '--signals', F.floor]).out)), [['T3'], []]);
+check('resolve: reasons and failed are echoed', (({ reasons, failed }) => [reasons, failed])(json(run(['resolve', '--signals', F.floor]).out)), [['sensitive_core'], []]);
 
 // input errors
 const big = write('big.json', ' '.repeat(70000) + '{}');
@@ -316,7 +322,7 @@ const doc = readRec('my-item');
 check('record: exit 0, stdout gains the relative path, other keys unchanged', [r.rc, json(r.out).recorded, Object.keys(json(r.out)).sort()], [0, '.somi/somi-state/tier/my-item.json', ['recorded', ...KEYS].sort()]);
 check('record: modes 0600 file, 0700 directories', [mode9(file), mode9(tierDir), mode9(path.dirname(tierDir)), mode9(path.join(proj, '.somi'))], ['600', '700', '700', '700']);
 check('record: content is the computed result', [doc.slug, doc.tier, doc.source, doc.computed_tier, doc.floor, doc.reasons, doc.failed, Object.keys(doc).sort()],
-  ['my-item', 'small', 'computed', 'small', null, ['T2', 'est_diff_lines'], [], ['attempt', 'basis', 'computed_tier', 'failed', 'floor', 'prior', 'reasons', 'recorded_at', 'signals_sha256', 'slug', 'source', 'tier']]);
+  ['my-item', 'small', 'computed', 'small', null, ['T2', 'est_diff_lines'], [], ['attempt', 'basis', 'computed_tier', 'failed', 'floor', 'prior', 'reasons', 'recorded_at', 'security_lens', 'signals_sha256', 'slug', 'source', 'tier']]);
 check('record: timestamp is ISO', new Date(doc.recorded_at).toISOString(), doc.recorded_at);
 check('record: sha256 covers the signal entries', doc.signals_sha256, hashOf(F.small));
 rec('reordered', write('reordered.json', Object.fromEntries(Object.entries(JSON.parse(fs.readFileSync(F.small, 'utf8'))).reverse())));
@@ -361,8 +367,8 @@ r = rec('lower', F.floor);
 check('a re-record with an equal or higher computed tier is allowed', [r.rc, readRec('lower').attempt], [0, 4]);
 check('a refused floor override is logged before the failure exit', [logOf('s3').length, logOf('s3')[0].outcome, logOf('s3')[0].requested], [1, 'refused_floor', 'small']);
 r = ov(F.nofloor, 'small');
-check('a lowering override shows the whole basis', [Object.keys(json(r.out).basis).length, json(ov(F.nofloor, null).out).basis && Object.keys(json(ov(F.nofloor, null).out).basis)], [IDS.length, ['T3']]);
-check('a non-lowering override keeps the short basis', Object.keys(json(ov(F.nofloor, 'full').out).basis), ['T3']);
+check('a lowering override shows the whole basis', [Object.keys(json(r.out).basis).length, json(ov(F.nofloor, null).out).basis && Object.keys(json(ov(F.nofloor, null).out).basis)], [IDS.length, ['T3', 'sensitive_core']]);
+check('a non-lowering override keeps the short basis', Object.keys(json(ov(F.nofloor, 'full').out).basis), ['T3', 'sensitive_core']);
 const victim = path.join(work, 'victim-log.txt'); fs.writeFileSync(victim, 'keep');
 const evil = path.join(tierDir, 'evil.attempts.jsonl'); fs.symlinkSync(victim, evil);
 r = rec('evil', F.small);

@@ -5,7 +5,9 @@
 //   resolve --signals <file|-> [--override small|full] [--record <slug> [--project-dir <dir>]]
 //       Reads signals JSON (a file path, or - for stdin; at most 64 KiB; a path must be a regular
 //       file, never a symlink or FIFO), calls decideTier, applies the optional override, prints one
-//       JSON line: { tier, effective, source, floor, failed, unknown, invalid, reasons, basis }.
+//       JSON line: { tier, effective, source, floor, security_lens, failed, unknown, invalid, reasons, basis }.
+//       security_lens is true unless the request is proven free of untrusted input and of auth, crypto,
+//       secrets and PII; /code-loop then reviews with the security lens at any tier.
 //       When the input holds keys that are not signal ids, the line also carries `unrecognized` (at
 //       most 8 of those names, each cut to 40 characters and ASCII-escaped; values are never
 //       echoed) and `expected` (the exact signal ids), so a caller can correct its input. Those two
@@ -21,7 +23,7 @@
 //
 //       --record <slug> also writes <project>/.somi/somi-state/tier/<slug>.json from that same
 //       result, so the recorded tier, source, floor and signals hash are the computed ones by
-//       construction: { slug, tier (the effective one), source, computed_tier, floor, reasons,
+//       construction: { slug, tier (the effective one), source, computed_tier, floor, security_lens, reasons,
 //       failed, basis, signals_sha256, attempt, prior, recorded_at }, and the stdout line gains
 //       `recorded` (the path relative to the project). Every attempt that computed a tier, refusals
 //       included, is first appended to tier/<slug>.attempts.jsonl (append-only, 0600, links never
@@ -335,7 +337,7 @@ function resolve(args) {
   // An override that lowers the tier shows the whole basis, not only the security signal's.
   const shown = requested && rank(effective) < rank(r.tier) ? decideTier(signals, { fullBasis: true }) : r;
   const out = {
-    tier: r.tier, effective, source, floor: r.floor, failed: r.failed, unknown: r.unknown,
+    tier: r.tier, effective, source, floor: r.floor, security_lens: r.securityLens, failed: r.failed, unknown: r.unknown,
     invalid: r.invalid, reasons: r.reasons, basis: shown.basis,
   };
   const strange = signals !== null && typeof signals === 'object' && !Array.isArray(signals) ? Object.keys(signals).filter((k) => !SIGNAL_IDS.includes(k)) : [];
@@ -346,7 +348,7 @@ function resolve(args) {
   if (slug) {
     log('accepted');
     out.recorded = writeRecord(dirs, slug, {
-      slug, tier: effective, source, computed_tier: r.tier, floor: r.floor,
+      slug, tier: effective, source, computed_tier: r.tier, floor: r.floor, security_lens: r.securityLens,
       reasons: r.reasons, failed: r.failed, basis: shown.basis, signals_sha256: hash,
       attempt: prior.length + 1, prior, recorded_at: new Date().toISOString(),
     });

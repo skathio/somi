@@ -16,14 +16,17 @@
 // Input: { <id>: { value, evidence } }; evidence is 1..MAX_EVIDENCE_CHARS characters with no
 // control characters. Output, always the same keys:
 //   tier     'trivial' | 'small' | 'full'
-//   floor    'full' | null — 'full' whenever T3 is not a proven true, whichever rule fired first
-//            (a security doubt must survive an existing-work-item match); no override may go below it
+//   floor    'full' | null — 'full' whenever sensitive_core is not a proven false, whichever rule fired
+//            first (a doubt about auth, crypto, secrets or PII must survive an existing-work-item
+//            match); no override may go below it
+//   securityLens  true unless T3 is a proven true and sensitive_core a proven false: the change may
+//            handle untrusted input or touch the core, so the security lens reviews it at any tier
 //   failed   ids that were read as their worst case = unknown + invalid, in SIGNAL_IDS order
 //   unknown  ids the extractor explicitly marked null / 'unknown'
 //   invalid  ids that were missing, malformed, over the evidence cap, or contradicted by the counts
 //   reasons  signal ids that fired the deciding rule (`<id>_unknown` for an unknown work-item or
 //            brief signal); for small, the signals that kept it from trivial; for trivial, empty
-//   basis    { id: evidence } for T3 and, when the tier is below full, every signal read cleanly,
+//   basis    { id: evidence } for T3 and sensitive_core and, when the tier is below full, every signal read cleanly,
 //            so a human can see why security and size were ruled out
 //
 // Hostile input: the function runs no user code of its own making. It reads own data properties
@@ -43,7 +46,7 @@ export const TRIVIAL_MAX_DIFF_LINES = 50;
 export const MAX_EVIDENCE_CHARS = 300;
 
 export const SIGNAL_IDS = Object.freeze([
-  'T1', 'T2', 'T3', 'T4', 'T5',
+  'T1', 'T2', 'T3', 'T4', 'T5', 'sensitive_core',
   'hard_surface', 'design_open', 'open_questions', 'acceptance_testable',
   'modules_touched', 'est_files', 'est_diff_lines',
   'existing_work_item', 'brief_exists',
@@ -56,14 +59,14 @@ const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u20
 
 // What an unreadable signal is taken to be: the answer that sends the tier up.
 const WORST = Object.freeze({
-  T1: false, T2: false, T3: false, T4: false, T5: false,
+  T1: false, T2: false, T3: false, T4: false, T5: false, sensitive_core: true,
   hard_surface: true, design_open: true, acceptance_testable: false,
   existing_work_item: true, brief_exists: true,
   open_questions: Infinity, modules_touched: Infinity, est_files: Infinity, est_diff_lines: Infinity,
 });
 
 const REFUSED = () => ({
-  tier: 'full', floor: 'full', failed: [...SIGNAL_IDS], unknown: [], invalid: [...SIGNAL_IDS],
+  tier: 'full', floor: 'full', securityLens: true, failed: [...SIGNAL_IDS], unknown: [], invalid: [...SIGNAL_IDS],
   reasons: ['signals_unreadable'], basis: {},
 });
 
@@ -107,6 +110,10 @@ function readSignals(input) {
       read.T1 = { state: 'invalid' };
     }
   }
+  // "Not security-sensitive" contradicts "touches auth, crypto, secrets or PII": the T3 claim is not believed.
+  if (read.T3.state === 'ok' && read.T3.value && read.sensitive_core.state === 'ok' && read.sensitive_core.value) {
+    read.T3 = { state: 'invalid' };
+  }
   for (const id of SIGNAL_IDS) v[id] = read[id].state === 'ok' ? read[id].value : WORST[id];
   const unknown = SIGNAL_IDS.filter((id) => read[id].state === 'unknown');
   const invalid = SIGNAL_IDS.filter((id) => read[id].state === 'invalid');
@@ -122,7 +129,9 @@ const RULES = [
     const hit = fired(v, [['existing_work_item', (x) => x], ['brief_exists', (x) => x]]);
     return hit.length ? { tier: 'full', reasons: hit } : null;
   },
-  (v) => (v.T3 === false ? { tier: 'full', reasons: ['T3'] } : null),
+  // Auth, crypto, secrets or PII: a security floor no override can lower. Untrusted input alone (a false T3) is not
+  // trivial and gets the security lens, but does not by itself need the planning pipeline.
+  (v) => (v.sensitive_core === true ? { tier: 'full', reasons: ['sensitive_core'] } : null),
   (v) => {
     const hit = fired(v, [
       ['hard_surface', (x) => x], ['design_open', (x) => x], ['open_questions', (x) => x > 0],
@@ -169,7 +178,7 @@ export function decideTier(signals, { fullBasis = false } = {}) {
   const reasons = decided.reasons.map((id) => ((id === 'existing_work_item' || id === 'brief_exists') && failed.includes(id) ? `${id}_unknown` : id));
   const basis = {};
   for (const id of SIGNAL_IDS) {
-    if (read[id].state === 'ok' && (fullBasis || (id === 'T3' || decided.tier !== 'full'))) basis[id] = read[id].evidence;
+    if (read[id].state === 'ok' && (fullBasis || (id === 'T3' || id === 'sensitive_core' || decided.tier !== 'full'))) basis[id] = read[id].evidence;
   }
-  return { tier: decided.tier, floor: v.T3 === true ? null : 'full', failed, unknown, invalid, reasons, basis };
+  return { tier: decided.tier, floor: v.sensitive_core === false ? null : 'full', securityLens: v.T3 !== true || v.sensitive_core !== false, failed, unknown, invalid, reasons, basis };
 }

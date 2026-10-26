@@ -394,8 +394,9 @@ It's identical to running (an optional `cost: high` front-load, then) `/plan`, t
 
 `/ship-loop` first **sizes the work** (Stage -1): `trivial` and `small` requests stop at one human
 gate and skip planning (`small` runs `/code-loop` on a brief-only work item); `full` is the flow
-below. The rubric is the routing skill's Size tiers section; work touching security-sensitive
-surface is always `full`. The operator can force `full` with `SOMI_SHIP_LOOP_TIER=full`, or lower
+below. The rubric is the routing skill's Size tiers section; work touching auth, crypto, secrets or
+PII is always `full`, and work that handles untrusted input is at least `small` and is always reviewed
+with the security lens. The operator can force `full` with `SOMI_SHIP_LOOP_TIER=full`, or lower
 the tier with `small` (the security floor refuses that).
 
 `/ship-loop <problem>` is the **continuous** path of the design→execution economy: it front-loads a

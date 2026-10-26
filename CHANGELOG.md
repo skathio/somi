@@ -106,8 +106,16 @@ work finds none (cost and time inconclusive, instruction text +2.3%; see the mea
   planning, `full` is the previous flow unchanged. Escape: `SOMI_SHIP_LOOP_TIER=full` (set by the
   operator) or reply `full` at the gate. The rubric lives in the `somi-routing` skill's Size tiers
   section and `scripts/lib/size-tier.mjs` decides, with a drift guard between them. Work touching
-  auth, crypto, secrets, PII or an untrusted-input boundary, and work that cannot be shown free of
-  them, is `full`; a downward override below that is refused. `scripts/somi-tier.mjs` (`resolve`,
+  auth, crypto, secrets or PII (the `sensitive_core` signal), and work that cannot be shown free of
+  them, is `full`; a downward override below that is refused. Work that only handles untrusted input
+  is at least `small` and carries `security_lens`: the tier record keeps it, `somi-loop init` turns it
+  into `review_min: security`, and every `/code-loop` pass is then reviewed by `somi-reviewer` and
+  `somi-security-reviewer` together (the new `security` review mode) instead of the whole panel.
+  Measured reason (issue #40): one undefined term, "untrusted-input boundary", sent the same
+  80-line pure-function task to `full` in 7 of 16 recorded draws, where it cost $0.34–1.00 and fully
+  passed 3 of 7 times, against $0.04–0.38 and 9 of 9 at `small`. The term is now defined: data
+  entering from outside the process or reaching a sink, not argument checks in an in-process
+  function. `scripts/somi-tier.mjs` (`resolve`,
   `approve`) and the `somi_tier` MCP tool run the same decision; `scripts/somi-loop.mjs init`
   refuses a brief-only work item without the approval stamp. The `somi_tier` tool advertises the
   rubric's exact signal ids and `resolve` lists keys it does not recognise, so a weaker model can

@@ -29,12 +29,12 @@ async function run() {
   await withClient({}, async (client) => {
     await client.initialize();
     const TIER_CLI = path.join(ROOT, 'scripts', 'somi-tier.mjs');
-    const base = { T1: true, T2: true, T3: true, T4: true, T5: true, hard_surface: false, design_open: false, open_questions: 0, acceptance_testable: true, modules_touched: 1, est_files: 1, est_diff_lines: 40, existing_work_item: false, brief_exists: false };
+    const base = { T1: true, T2: true, T3: true, T4: true, T5: true, sensitive_core: false, hard_surface: false, design_open: false, open_questions: 0, acceptance_testable: true, modules_touched: 1, est_files: 1, est_diff_lines: 40, existing_work_item: false, brief_exists: false };
     const sig = (over = {}) => Object.fromEntries(Object.entries({ ...base, ...over }).map(([k, v]) => [k, { value: v, evidence: 'e' }]));
     const cases = [
       ['trivial', sig(), undefined], ['small', sig({ T2: false, est_diff_lines: 80 }), undefined],
-      ['floor', sig({ T3: false, hard_surface: true }), undefined], ['unknown signal', { ...sig(), T3: { value: null, evidence: 'x' } }, undefined],
-      ['raise', sig(), 'full'], ['lower below the floor', sig({ T3: false }), 'small'],
+      ['floor', sig({ T3: false, sensitive_core: true, hard_surface: true }), undefined], ['security lens, no floor', sig({ T3: false }), undefined], ['unknown signal', { ...sig(), T3: { value: null, evidence: 'x' } }, undefined],
+      ['raise', sig(), 'full'], ['lower below the floor', sig({ T3: false, sensitive_core: true }), 'small'],
     ];
     for (const [label, signals, override] of cases) {
       const argv = [TIER_CLI, 'resolve', '--signals', '-', ...(override ? ['--override', override] : [])];

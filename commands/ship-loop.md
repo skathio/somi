@@ -121,9 +121,10 @@ as operator.
 - `small` first writes the approved inline brief verbatim to `.somi/plans/<slug>/brief.md` and a
   `progress.md` from `templates/PROGRESS.md.tmpl` with the single iteration `1.1`, then runs `node scripts/somi-tier.mjs approve --slug <slug>` once, which stamps the approval and the
   brief's hash into the tier record (`/code-loop` refuses the item without it), then runs `Task /code-loop "<slug> phase 1, iteration 1"` on the brief-only work item, with
-  review at the session's reviewer tier and no `/plan-loop`. When any `basis` evidence cites input
-  handling, run it with the review panel (`SOMI_CODE_LOOP_REVIEW=panel`), which adds the security
-  lens. If `/code-loop` does not accept the brief-only item, stop with `small-stopped` and
+  review at the session's reviewer tier and no `/plan-loop`. The security lens comes from the tier
+  record, not from reading the evidence: when it carries `security_lens: true`, `/code-loop`'s
+  `init` prints `review_min: security` and every pass is reviewed by `somi-reviewer` and
+  `somi-security-reviewer` together. The full panel is not seated for that alone. If `/code-loop` does not accept the brief-only item, stop with `small-stopped` and
   recommend `full`; never run `/code` instead. A diff-cap, scope or other non-`done` stop hands
   back as `small-stopped` and **recommends `full`**; it never escalates by itself, because
   escalation spends. The global budget and the cross-layer breaker below apply to `small` too.
