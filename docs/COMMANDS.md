@@ -8,30 +8,31 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 
 | Command                                                  | Workflow            | Agent(s) invoked                                                                          | Output                                                                       |
 |----------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev) | `discovery-analyst` (`cost: high`)                                                                  | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README, **brief**) |
-| [`/design`](../commands/design.md)                       | Feature design | `designer` (`cost: high`)                                                                               | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — the design→execution handoff for a brownfield feature |
-| [`/atlas`](../commands/atlas.md)                         | Repo cartography | `atlas` (`cost: high`)                                                                                    | `.somi/atlas.md` — SHA-stamped repo map (modules, dependency rules, conventions, hotspots, test topology) that later design actions consume instead of re-reading the repo |
-| [`/plan`](../commands/plan.md)                           | Planning      | `planner` (`cost: low, medium`)                                                                            | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
-| [`/plan-loop`](../commands/plan-loop.md)                 | Bounded planning    | `planner` (`cost: low, medium`) + `reviewer` (`cost: medium, high`)                       | `.somi/plans/<slug>/` + plan reviews under `.somi/reviews/<slug>/`           |
-| [`/code`](../commands/code.md)                           | Coding              | `coder` (`cost: low, medium`)                                                             | diff + tests; updates `progress.md` + `diary.md`                             |
-| [`/debug`](../commands/debug.md)                         | Debugging           | `coder` (`cost: low, medium`) (+ `reviewer` (`cost: medium, high`) as high-cost diagnosis hatch, `test-strategist` (`cost: medium, high`) on test-shape gaps) | `.somi/plans/<slug>/rca.md` (root-cause record) + repro test + fix diff (via `/code-loop`) |
-| [`/code-loop`](../commands/code-loop.md)                 | Bounded coding      | `coder` (`cost: low, medium`) + `reviewer` (`cost: medium, high`) (or `/review-panel`'s four lenses when `SOMI_CODE_LOOP_REVIEW=panel`) | diff + tests + per-pass review files; bounded by caps                        |
+| [`/discover`](../commands/discover.md)                   | Discovery (pre-dev) | `somi-discovery-analyst` (default `high`)                                                                  | `.somi/rd/<slug>/` (research report, BRD, SRS, FRD, SDD, TDD, decisions, diary, README, **brief**) |
+| [`/design`](../commands/design.md)                       | Feature design | `somi-designer` (default `high`)                                                                               | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — the design→execution handoff for a brownfield feature |
+| [`/atlas`](../commands/atlas.md)                         | Repo cartography | `somi-atlas` (default `high`)                                                                                    | `.somi/atlas.md` — SHA-stamped repo map (modules, dependency rules, conventions, hotspots, test topology) that later design actions consume instead of re-reading the repo |
+| [`/plan`](../commands/plan.md)                           | Planning      | `somi-planner` (default `medium`)                                                                            | `.somi/plans/<slug>/` (context, spec, decisions, progress, diary, phases/)   |
+| [`/plan-loop`](../commands/plan-loop.md)                 | Bounded planning    | `somi-planner` (default `medium`) + `somi-reviewer` (default `high`)                       | `.somi/plans/<slug>/` + plan reviews under `.somi/reviews/<slug>/`           |
+| [`/code`](../commands/code.md)                           | Coding              | `somi-coder` (default `medium`)                                                             | diff + tests; updates `progress.md` + `diary.md`                             |
+| [`/debug`](../commands/debug.md)                         | Debugging           | `somi-coder` (default `medium`) (+ `somi-reviewer` (default `high`) as high-cost diagnosis hatch, `somi-test-strategist` (default `high`) on test-shape gaps) | `.somi/plans/<slug>/rca.md` (root-cause record) + repro test + fix diff (via `/code-loop`) |
+| [`/code-loop`](../commands/code-loop.md)                 | Bounded coding      | `somi-coder` (default `medium`) + `somi-reviewer` (default `high`) (plus `somi-security-reviewer` in `security` mode, which the sizing record can require; or `/review-panel`'s four lenses when `SOMI_CODE_LOOP_REVIEW=panel`) | diff + tests + per-pass review files; from pass 2 the generalist reviews the delta; bounded by caps |
 | [`/code-parallel`](../commands/code-parallel.md)         | Parallel coding     | none of its own — router; per eligible iteration: `/code-loop` (see its row) in an isolated git worktree | diffs built in parallel, **integrated sequentially** behind a per-merge test + review gate |
-| [`/review`](../commands/review.md)                       | Reviewing           | `reviewer` (`cost: medium, high`) (+ `security-reviewer` (`cost: high`) / `architecture-reviewer` (`cost: medium, high`) / `test-strategist` (`cost: medium, high`) per triggers) | `.somi/reviews/<slug>/<YYYY-MM-DD>-…md` (code or plan review)                |
-| [`/review-panel`](../commands/review-panel.md)           | Parallel review     | `reviewer` (`cost: medium, high`) + `security-reviewer` (`cost: high`) / `architecture-reviewer` (`cost: medium, high`) / `test-strategist` (`cost: medium, high`) / `plan-reviewer` (`cost: medium, high`) / `sdlc-reviewer` (`cost: medium, high`), run **concurrently** | `.somi/reviews/<slug>/<YYYY-MM-DD>-…-panel-<verdict>.md` (one merged, de-duplicated verdict) |
-| [`/security-review`](../commands/security-review.md)     | Security QA         | `security-reviewer` (`cost: high`)                                                        | `.somi/reviews/<slug>/<YYYY-MM-DD>-security-…md`                             |
-| [`/architecture-review`](../commands/architecture-review.md) | Architecture QA | `architecture-reviewer` (`cost: medium, high`) (+ `security-reviewer` (`cost: high`) when relevant) | `.somi/reviews/<slug>/<YYYY-MM-DD>-arch-…md`                                 |
-| [`/test-strategy`](../commands/test-strategy.md)         | Test-strategy QA    | `test-strategist` (`cost: medium, high`)                                                  | `.somi/reviews/<slug>/<YYYY-MM-DD>-test-strategy-…md`                        |
-| [`/refactor`](../commands/refactor.md)                   | Refactoring | `refactorer` (`cost: low, medium`)                                                               | diff (behavior-preserving)                                                   |
-| [`/refactor-design`](../commands/refactor-design.md)     | Large-refactor scope design | `refactor-designer` (`cost: high`)                                                | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — feeds `/plan-loop` → `/code-loop` |
-| [`/impact`](../commands/impact.md)                       | Impact analysis     | `impact` (`cost: medium`; read-only tracing, atlas-first)                                  | blast-radius report: callers, contracts, test gaps, warranted review lenses, proceed/design-first/reconsider recommendation |
-| [`/adopt`](../commands/adopt.md)                         | Onboarding          | `atlas` (`cost: high`) (+ `test-strategist` (`cost: medium, high`) for depth)              | atlas + confirmed `99-overrides.md` + adoption gap report + calibration recommendation |
-| [`/upgrade`](../commands/upgrade.md)                     | Dependency upgrade  | `discovery-analyst` (`cost: high`) (research) + `/code-loop` (see its row) (migration)     | cited breaking-change mini-brief + migrated call sites + green suite         |
-| [`/release-readiness`](../commands/release-readiness.md) | Release gate        | `reviewer` (`cost: medium, high`; one integration pass; checklist is deterministic)        | release verdict (`ready` / `-with-conditions` / `not-ready`) + evidence table + draft release notes |
-| [`/incident`](../commands/incident.md)                   | Incident lane       | `incident` (`cost: medium`; frame stays in the command; seeds `/debug` or `/plan` after)   | mitigation + diary timeline + mandatory postmortem note + seeded follow-up work item |
-| [`/ship`](../commands/ship.md)                           | Full pipeline       | `planner` (`cost: low, medium`) + (per iteration) `/code-loop` (see its row)               | full `.somi/plans/<slug>/` set + iteration diffs + reviews                   |
-| [`/ship-loop`](../commands/ship-loop.md)                 | Bounded pipeline    | none of its own — router; `/plan-loop` (see its row) → `/code-loop` (see its row) per iteration | as `/ship`, with both layers under caps and a hard human gate between them   |
-| [`/pr`](../commands/pr.md)                               | PR handoff          | `pr` (`cost: low, medium`; composes from artifacts, returns text; `gh` after confirmation, run by the command) | PR title + description distilled from the work item; optionally the opened PR |
+| [`/review`](../commands/review.md)                       | Reviewing           | `somi-reviewer` (default `high`) (+ `somi-security-reviewer` (default `high`) / `somi-architecture-reviewer` (default `high`) / `somi-test-strategist` (default `high`) per triggers) | `.somi/reviews/<slug>/<YYYY-MM-DD>-…md` (code or plan review)                |
+| [`/review-panel`](../commands/review-panel.md)           | Parallel review     | `somi-reviewer` (default `high`) + `somi-security-reviewer` (default `high`) / `somi-architecture-reviewer` (default `high`) / `somi-test-strategist` (default `high`) / `somi-plan-reviewer` (default `high`) / `somi-sdlc-reviewer` (default `high`), run **concurrently** | `.somi/reviews/<slug>/<YYYY-MM-DD>-…-panel-<verdict>.md` (one merged, de-duplicated verdict) |
+| [`/security-review`](../commands/security-review.md)     | Security QA         | `somi-security-reviewer` (default `high`)                                                        | `.somi/reviews/<slug>/<YYYY-MM-DD>-security-…md`                             |
+| [`/architecture-review`](../commands/architecture-review.md) | Architecture QA | `somi-architecture-reviewer` (default `high`) (+ `somi-security-reviewer` (default `high`) when relevant) | `.somi/reviews/<slug>/<YYYY-MM-DD>-arch-…md`                                 |
+| [`/test-strategy`](../commands/test-strategy.md)         | Test-strategy QA    | `somi-test-strategist` (default `high`)                                                  | `.somi/reviews/<slug>/<YYYY-MM-DD>-test-strategy-…md`                        |
+| [`/refactor`](../commands/refactor.md)                   | Refactoring | `somi-refactorer` (default `medium`)                                                               | diff (behavior-preserving)                                                   |
+| [`/refactor-design`](../commands/refactor-design.md)     | Large-refactor scope design | `somi-refactor-designer` (default `high`)                                                | `.somi/plans/<slug>/` (design, decisions, **brief**, diary) — feeds `/plan-loop` → `/code-loop` |
+| [`/impact`](../commands/impact.md)                       | Impact analysis     | `somi-impact` (default `medium`; read-only tracing, atlas-first)                                  | blast-radius report: callers, contracts, test gaps, warranted review lenses, proceed/design-first/reconsider recommendation |
+| [`/adopt`](../commands/adopt.md)                         | Onboarding          | `somi-atlas` (default `high`) (+ `somi-test-strategist` (default `high`) for depth)              | atlas + confirmed `99-overrides.md` + adoption gap report + calibration recommendation |
+| [`/upgrade`](../commands/upgrade.md)                     | Dependency upgrade  | `somi-discovery-analyst` (default `high`) (research) + `/code-loop` (see its row) (migration)     | cited breaking-change mini-brief + migrated call sites + green suite         |
+| [`/release-readiness`](../commands/release-readiness.md) | Release gate        | `somi-reviewer` (default `high`; one integration pass; checklist is deterministic)        | release verdict (`ready` / `-with-conditions` / `not-ready`) + evidence table + draft release notes |
+| [`/incident`](../commands/incident.md)                   | Incident lane       | `somi-incident` (default `medium`; frame stays in the command; seeds `/debug` or `/plan` after)   | mitigation + diary timeline + mandatory postmortem note + seeded follow-up work item |
+| [`/ship`](../commands/ship.md)                           | Full pipeline       | `somi-planner` (default `medium`) + (per iteration) `/code-loop` (see its row)               | full `.somi/plans/<slug>/` set + iteration diffs + reviews                   |
+| [`/ship-loop`](../commands/ship-loop.md)                 | Bounded pipeline    | none of its own — router; `/plan-loop` (see its row) → `/code-loop` (see its row) per iteration | sizes first (`trivial`/`small`/`full`, one gate; auth, crypto, secrets or PII always `full`, untrusted input at least `small` with the security lens); `full` as `/ship`, both layers under caps and an optional wall-time budget, a hard human gate between them |
+| [`/pr`](../commands/pr.md)                               | PR handoff          | `somi-pr` (default `medium`; composes from artifacts, returns text; `gh` after confirmation, run by the command) | PR title + description distilled from the work item; optionally the opened PR |
+| [`/somi-config`](../commands/somi-config.md)             | Cost settings       | none — inline; reads and writes `cost.ceiling` / `cost.agents` / `cost.mapping` through the `somi_config` tool | the project's `.somi/config.json`; shows every agent's effective tier, asks before each change, needs explicit confirmation to lower a tier or change a model mapping, and offers a per-tier model picker |
 
 > **Note:** `/plan-review` no longer exists as a separate command — plan-level review is part of
 > `/review` (use `/review plan <slug>` or pass an `.somi/plans/<slug>/` path).
@@ -81,10 +82,10 @@ The heavy lifting lives in **agents**. Commands are deliberately small because:
   touching the command.
 - They carry no `cost:` of their own, and no `model:` either — `cost:` sizes an agent instance
   being spawned, and a command runs on whatever model the session is already using — and simply
-  Task the tier-appropriate agent: **`cost: high`** agents (design,
-  discovery, review) for front-loaded reasoning, **`cost: low, medium`** agents (planner, coder)
+  Task the tier-appropriate agent: **default-`high`** agents (design,
+  discovery, review) for front-loaded reasoning, **default-`medium`** agents (planner, coder)
   for execution against the brief, reduced-depth at `low` only when the user set the session
-  ceiling there. Tasking a differently-costed subagent from an uncosted orchestrator is the
+  ceiling there. Tasking a subagent with a different default tier from a tierless orchestrator is the
   cache-correct way to mix tiers. See [Cost tiering](./AGENTS.md#cost-tiering).
 
 ## Model & tool grants
@@ -97,10 +98,11 @@ constrained by a **`## Write discipline` contract in their own prompt**, not by 
 
 **Commands declare no `cost:` of their own, and no `model:` either** — `scripts/validate.sh` fails
 the build if a command declares either field; a command runs on whatever model the session is
-already using. The agent a command Tasks runs on its own **cost tier** — `cost: high` for high-cost agents
-(design, discovery, review), `cost: low, medium` for the builder agents (planner, coder,
-refactorer) — `low` selected whenever the session ceiling resolves there (an explicit CLI flag or
-`SOMI_COST_CEILING`, a committed `.somi/config.json`, or persisted state), with the ceiling and its
+already using. The agent a command Tasks runs on its own **default tier** (from `scripts/lib/cost-defaults.mjs`, overridable in `cost.agents`) — `high` for high-cost agents
+(design, discovery, review), `medium` for the builder agents (planner, coder,
+refactorer) — `low` selected for
+a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a
+`cost.agents` entry of `low`, with the ceiling and its
 source announced before the first agent it applies to starts. Every command that Tasks an agent
 directly is instructed to resolve it per
 [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md) — the same resolve-then-start procedure
@@ -113,7 +115,7 @@ and append diary entries — they're not pure read-only at the command level eve
 underlying review agents are contractually forbidden from writing.
 
 > **`/atlas` Tasks a `cost: high` agent for its entire job — `/discover`, `/design`, and
-> `/refactor-design` don't, quite.** `/atlas` hands the whole task to the `atlas` agent: the read is
+> `/refactor-design` don't, quite.** `/atlas` hands the whole task to the `somi-atlas` agent: the read is
 > the whole job, so there's nothing left for the command to do at a different tier. `/discover`,
 > `/design`, and `/refactor-design` also Task a `cost: high` agent for the judgment-heavy core of
 > the work (framing, reading the codebase, shaping crossroads) — their `brief.md` anchors the whole
@@ -122,9 +124,9 @@ underlying review agents are contractually forbidden from writing.
 > the user (the `DECISIONS-NEEDED` / `VERIFIED-DECISIONS` round trip), which can't live inside a
 > single `Task` call because a Tasked run can't pause to converse. That command-side work has no
 > `cost:` to declare — a command has no referent for one — but it is real. `/adopt` Tasks the same
-> `atlas` agent as its Stage 1 rather than reading the repo itself. All four still feed the
+> `somi-atlas` agent as its Stage 1 rather than reading the repo itself. All four still feed the
 > high-cost front-load of the design→execution economy — intentional, not an oversight, and each
-> `cost:` declaration lives on the agent Tasked, never on the command doing the Tasking.
+> default tier belongs to the agent Tasked, never to the command doing the Tasking.
 
 ## How `$ARGUMENTS` works
 

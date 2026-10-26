@@ -6,7 +6,199 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
-_Nothing yet._
+## [4.0.0] — 2026-10-25 — feat!: a hard cost cap, `somi-` agent names with native dispatch, per-agent tiers in config, a sized `/ship-loop` and a usage measurement system
+
+**Major — behaviour changes to cost resolution and to agent identity and dispatch, plus new commands
+and tooling.** 3.1.x is merged in (the frontmatter gate and the `enforced` flag are unchanged; the
+`somi_agent` tool stays but is no longer a dispatch path). Nothing below
+claims a cost or speed saving the sealed rule did not call: the issue #40 changes measured
+inconclusive on cost and time (ratios 0.88 and 0.79 on S1 to S3, intervals crossing 1), with the
+quality guard clear; what moved is sizing (T1-proration no longer flips to `full`: 0 of 8 against 3 of 8)
+and finished work on a security-sensitive task (S5: 6 of 8 draws fully green against 3 of 8). See the
+measurement entry below.
+
+### Changed — behaviour
+
+- **Every specialist agent is named `somi-<name>`** (`somi-coder`, `somi-reviewer`, …: file stem and
+  frontmatter `name`); the front door keeps the name `somi`, and slash commands and skills are
+  unchanged. Hosts register plugin agents as `<plugin>:<stem>`, so the ids are `somi:somi-<name>`.
+  The old bare names are not aliases: anywhere an agent is named (`cost.agents`, `somi_resolve`,
+  `somi_agent_info`) they are unknown, and `somi_agent_info` answers with a "renamed" hint.
+- **Agents start as the type the host registered, or not at all.** The dispatch procedure starts
+  every agent as `agent_type` (`somi:somi-<name>`, now in `somi_resolve`'s result). The 3.1.0
+  fallback (on `Unknown agent_type`, start a general-purpose subagent carrying the agent's text from
+  `somi_agent`) is removed on every host; a refused type is a stop that names the agent, the type, the
+  host and its reason. Claude Code and Copilot CLI dispatch natively (Copilot CLI checked against its
+  own plugin loader, 1.0.70); VS Code Copilot Chat is not a supported dispatch host.
+- **A change to `cost.mapping` needs the user**, like a lowering: which model a tier means cannot be
+  ranked, so repointing `high` at a weak model used to pass silently. The PreToolUse hook asks;
+  `somi_config` refuses it where no hook can ask.
+- **Adopted from ponytail v5.3.2's own skills** (`ponytail` and `ponytail-review`, MIT), not only its
+  release notes:
+  - every reply that did work ends with one or two lines: what was skipped or not checked, and any
+    risk the user must know (digest and `rules/50`);
+  - `somi-coder` maps every place a change must reach (callers, fixtures, config, exports) and what it
+    could break, fixes a bug once in the shared code, and marks a kept shortcut as
+    `shortcut: <the limit>, <when to upgrade>`;
+  - code-review findings add **If skipped** (what ships unfixed) and must name the concrete input or
+    path. ponytail-review's fuller shape (a "check before you report" gate, numbered What this is /
+    Problem / Fix findings, Lean and scale lenses) was tried and not kept: on the review-recall set
+    (Haiku 5.5, 40 mutants, 10 clean diffs) it caught 35 mutants against 39 for the reviewer kept, and
+    flagged 9 clean diffs against 8.
+  L0 cost: +97 bytes on every prompt.
+- **The cost ceiling is a hard cap, with per-agent overrides.** Before, an agent ran at the highest
+  tier it declared that fit under the ceiling, and at its cheapest declared tier when none fit, so a
+  `medium` session still ran high-only agents at `high`. Now an agent runs at its own
+  `cost.agents` entry, or at the ceiling when it has none, and an entry wins even above the ceiling.
+  An agent with no entry follows the ceiling even above the tier it was built for, so cost can rise
+  as well as fall. The default ceiling is `medium`.
+- **A default config is written at session start.** When a project has no `.somi/config.json`, the
+  SessionStart hook creates one with `cost.ceiling: medium` and every agent pinned to its default
+  tier (`somi-reviewer`, `somi-plan-reviewer`, `somi-architecture-reviewer`, `somi-test-strategist`, `somi-sdlc-reviewer`,
+  `somi-designer`, `somi-atlas`, `somi-discovery-analyst`, `somi-refactor-designer` and `somi-security-reviewer` at `high`;
+  `somi-coder`, `somi-planner`, `somi-refactorer`, `somi-pr`, `somi-incident` and `somi-impact` at `medium`). A project that
+  already has a config is only read, never written; if its `somi-security-reviewer` tier is missing or
+  below `high`, the hook prints one fixed notice. Without that file (for example a host where the
+  hook does not run) the ten high-tier agents fall to `medium` under the default ceiling. The way
+  back is a `cost.agents` entry of `high` for each of them; raising `cost.ceiling` to `high` is not
+  the way, because it also lifts every unpinned agent.
+- **Lowering needs you.** A change to `.somi/config.json` that lowers any agent's effective tier,
+  the ceiling, or the `somi-security-reviewer` below `high` is held for confirmation by a PreToolUse
+  hook; the `somi_config` tool refuses a lowering unless it runs from the plugin install.
+- **Agents no longer declare `model:` or `cost:`.** A launch that skips the resolver (no `model`
+  passed to `Task`) used to run at the agent's declared top-tier model; it now inherits the
+  session's model, which closes a leak where pinned-`low` reviewer calls ran on the top tier. The
+  agents' tier now comes from one shipped table (`scripts/lib/cost-defaults.mjs`) plus
+  `cost.agents`. `scripts/validate.sh` fails the build on any `agents/*.md` that declares `model:`
+  or `cost:`. On Copilot CLI, where the agent's own `model:` may have governed, the host's default
+  model now applies.
+- **Result fields.** `somi_resolve` and `somi-dispatch resolve` add `declared` (now the one default
+  tier), `degraded` (the chosen tier is below it) and `tier_source` (`override` or `ceiling`).
+  `ceiling_source` and `ceiling_origin` remain. A project's `cost:` left in an agent file is
+  ignored.
+- **Config read live, with precedence.** `cost.ceiling` is read on every dispatch: `--ceiling` flag,
+  then `SOMI_COST_CEILING`, then the config, then a ceiling an earlier call set from the flag or env
+  var, then `medium`. `config-stale` and `unknown` are no longer reported. The committed config is
+  refused (exit 67) when it is a symlink, not a regular file, or over 64 KiB; unknown `cost.*` keys,
+  bad agent names and bad tiers are 67.
+
+### Added
+
+- **`somi_agent_info`** (MCP, read-only): with no `agent`, the catalog of canonical agents, their
+  registered aliases and default tiers; with a name or alias and a host, the canonical name, the alias
+  matched, `agent_type`, the session ceiling and the tier and model a dispatch would get now, from the
+  same resolver as `somi_resolve` with nothing written. Aliases live in one table,
+  `scripts/lib/agent-registry.mjs`, which refuses a collision at start.
+- **Model preference lists** (#35): a `cost.mapping` tier may name up to 8 ids in order;
+  `somi_resolve` adds `model_candidates`, and dispatch passes the first one the host offers.
+- **A model picker in `/somi-config`** (#34): one question per tier from the ids the session can see,
+  saved with the new `set cost.mapping.<host>.<tier>` (and `unset cost.mapping.<host>`); offered on the
+  first unenforced `high` dispatch of a session. On a host without hooks it hands you the commands
+  instead of saving.
+- **`somi-config show --host <host>`** (and `somi_config`'s `host`) warns when the host has no model
+  mapping while any agent resolves to `high` (#36).
+- The front door says once, on a `high` flow, when it orchestrates on a lightweight session model (#37).
+- New gates: `tests/scripts/agent-names.sh` (names, prefix, no stale ids) and
+  `tests/scripts/dispatch-line-gate.sh` (one canonical dispatch phrase, the requested-tier disclosure,
+  no `somi_agent` stand-in) (#38).
+- **`/somi-config`** (and the `somi_config` MCP tool) — read and change `cost.ceiling` and
+  per-agent tiers from chat, with the lowering gate above.
+- **`/ship-loop` sizes the work before it runs.** A new Stage -1 reads the request against the code
+  and picks `trivial`, `small` or `full`; `trivial` and `small` stop at one human gate and skip
+  planning, `full` is the previous flow unchanged. Escape: `SOMI_SHIP_LOOP_TIER=full` (set by the
+  operator) or reply `full` at the gate. The rubric lives in the `somi-routing` skill's Size tiers
+  section and `scripts/lib/size-tier.mjs` decides, with a drift guard between them. Work touching
+  auth, crypto, secrets or PII (the `sensitive_core` signal), and work that cannot be shown free of
+  them, is `full`; a downward override below that is refused. Work that only handles untrusted input
+  is at least `small` and carries `security_lens`: the tier record keeps it, `somi-loop init` turns it
+  into `review_min: security`, and every `/code-loop` pass is then reviewed by `somi-reviewer` and
+  `somi-security-reviewer` together (the new `security` review mode) instead of the whole panel.
+  Measured reason (issue #40): one undefined term, "untrusted-input boundary", sent the same
+  80-line pure-function task to `full` in 7 of 16 recorded draws, where it cost $0.34–1.00 and fully
+  passed 3 of 7 times, against $0.04–0.38 and 9 of 9 at `small`. The term is now defined: data
+  entering from outside the process or reaching a sink, not argument checks in an in-process
+  function. `scripts/somi-tier.mjs` (`resolve`,
+  `approve`) and the `somi_tier` MCP tool run the same decision; `scripts/somi-loop.mjs init`
+  refuses a brief-only work item without the approval stamp. The `somi_tier` tool advertises the
+  rubric's exact signal ids and `resolve` lists keys it does not recognise, so a weaker model can
+  correct invented names; Stage -1 loads the routing skill first. The thresholds (100 production
+  lines, 6 files, 2 modules) are provisional.
+- **Plans no longer split work finer than one reviewable change** (issue #40). The planner merges
+  iterations that touch the same files and together fit the loop's diff cap unless it states why the
+  split pays for another coder and review pass; plan-review reports an unjustified split (Minor, Major
+  at three or more). A recorded `full` run had planned an 80-line one-file task as five iterations.
+- **Repair passes re-review the fix, not the whole iteration** (issue #40). From pass 2,
+  `somi-loop review-scope` gives the generalist reviewer the change since the last reviewed tree
+  (`git diff <from> <to>`, untracked files included) plus the open findings to re-check; pass 1 and
+  the last allowed pass are reviewed in full, and the security lens and the panel always read the
+  whole iteration. `record-pass` stores each reviewed tree, built through a throwaway copy of the index
+  so the caller's index is untouched. `code_loop.review_scope: full` (or
+  `SOMI_CODE_LOOP_REVIEW_SCOPE=full`) restores full re-review. Measured on 4.0.0: delta review ran in 2 S1 draws and both passed
+  every hidden test, so `delta` stays the default on that small sample.
+- **Loops record what each agent was dispatched with** (issue #40). `somi-loop record-dispatch
+  --agent <name> [--host <host>]` re-resolves the agent through the same resolver as `somi_resolve`
+  and appends `{pass, agent, host, tier, degraded, model, enforced, ceiling, reason}` to the loop
+  state; `finish` lists them, and `/code-loop` and `/plan-loop` record every start and name each
+  `enforced: false` one in their summary. The entry is SoMi's decision, never the caller's claim;
+  which model a host ran when nothing was enforced stays invisible to a plugin.
+- **`/ship-loop` can stop on time, not only on passes** (issue #40). `ship_loop.max_minutes` (or
+  `SOMI_SHIP_LOOP_MAX_MINUTES`) sets a wall-time budget; `somi-loop run-start` records the run's start
+  once the slug is known (a resumed run keeps it), and every later `pass` of any plan or code loop on
+  that slug exits 4 (`time-budget`) once the budget is spent, so the stop needs no orchestrator to
+  watch the clock. Unset by default. A spend budget in money is not possible: a plugin cannot see
+  what a session has cost.
+- **A usage and speed measurement system** (`docs/USAGE-BENCHMARK.md`, `benchmarks/usage-speed/`).
+  L0 counts the bytes of instruction text injected for each standard scenario; L1 times hooks,
+  scripts and an MCP round trip locally; L2 runs paired live draws with and without SoMi. A
+  pre-registered rule (version 1, sealed) turns two baselines into better, worse, inconclusive or
+  inconclusive-guarded, using a ratio of medians with a 90% bootstrap interval, a minimum effect per
+  layer and a quality non-inferiority guard. The first baseline was recorded on the pre-4.0.0
+  commit with the low tier and every agent pinned. The low-tier model alias has since moved to a newer
+  model, so that commit was recorded again next to the release candidate
+  (`baseline-8c44e2d-rerecord.json`, `baseline-1c32277.json`, report
+  `reports/1c32277-vs-8c44e2d.md`): L2 cost overhead ×1.01 [0.80, 1.38] and time ×1.09 [0.88, 1.32],
+  both inconclusive; L0 ×1.023, worse; L1 inconclusive; quality guard clear. The live driver now also
+  resumes `/ship-loop`'s Stage -1 gate when the model lays it out as a list, and counts tokens and turns
+  per CLI call (they were over- and under-counted on draws that wait on background agents; both 4.0.0
+  baselines were re-derived from their transcripts). The issue #40 changes have their own report
+  (`reports/f4e7cc1-vs-1c32277.md`, `baseline-f4e7cc1.json` is the new reference) and two opt-in
+  scenarios, S5 (security-sensitive) and S6 (a migration), plus a T1 sizing probe. Not measured:
+  `/code-parallel` (no parallel-eligible fixture yet), human effort, escaped defects. Limits: live L2 resolves only changes of roughly
+  50% or more; one scenario (T1) is reported as a distribution, not a ratio; it cannot certify
+  quality equality. The drivers and tests live under `tests/` and `benchmarks/` and are not shipped.
+
+### Fixed
+
+- **Repo-awareness never echoes a hostile folder name into the model's context**: a nested
+  CLAUDE.md/AGENTS.md path is listed only when every segment is a plain name, otherwise it is counted;
+  the scan is bounded by an entry budget and a 1 s deadline (the class ponytail 5.1.1 fixed).
+- **The write guards fail closed on Copilot CLI's file tools.** Copilot CLI runs SoMi's hooks, but
+  its create tool arrives as `Write` with `tool_input.path` and its apply_patch as `Edit` with the raw
+  patch text; the secret-write and protected-path guards read only `file_path` and let both through
+  (a `.env` was written in a live run). A shared `writeTargets` reads all three shapes, the guards
+  check every target and refuse a write whose target cannot be read, the cost guard asks before a
+  Copilot-shaped write to `.somi/config.json` or the persisted ceiling, and the audit log records the
+  paths. Verified live on Copilot CLI 1.0.103 after the fix (`.env` refused; ordinary edits pass).
+- **`somi_config` refuses lowerings and remaps on Copilot CLI** (`COPILOT_PLUGIN_ROOT` set): Copilot
+  also sets `CLAUDE_PLUGIN_ROOT`, which the tool took to mean "a hook can ask", but it names the tool
+  `somi-somi_config`, which the hook's matcher does not catch.
+- The convergence-runner test diffs the set of live `somi-eval-src-*` worktrees instead of a
+  repo-wide count, which flaked (#39).
+- **A hook no longer hangs on an audit path that cannot be created** (a `SOMI_AUDIT_LOG` under
+  `/proc`): directory creation is bounded and the hook fails fast.
+
+### Migration
+
+- Rename any agent you name yourself: `cost.agents.security-reviewer` becomes
+  `cost.agents.somi-security-reviewer`, and so on. A `.somi/config.json` written by a 4.0.0
+  pre-release with the old keys is refused (exit 67); rename the keys or delete the file and let
+  SessionStart write the default. Copilot users who selected a specialist agent by its old name
+  select `somi-<name>` (or the `somi` front door).
+- Projects with a `.somi/config.json` keep it untouched; add `cost.agents` entries for any agent
+  you want to stay above the `medium` ceiling.
+- Custom agents you added under `agents/` need an entry in `cost.agents` (an agent file with no
+  default-table entry is refused with exit 66 when dispatched).
+- Anything that read `cost:` or `model:` from agent frontmatter must read `somi_resolve` instead.
 
 ## [3.1.1] — 2026-10-05 — fix: unenforced cost tier reported as dispatched on Copilot
 

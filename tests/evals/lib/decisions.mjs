@@ -7,7 +7,7 @@
 // the >=99% consistency the error budget assumes is a category error, not a corpus defect that
 // sharpening can fix — two rounds of sharpening moved nothing.
 //
-// The criteria were semantic because prose was all there was to score. `agents/planner.md` mandates
+// The criteria were semantic because prose was all there was to score. `agents/somi-planner.md` mandates
 // a STRUCTURED `DECISIONS-NEEDED` block, but `commands/plan.md` relays it to the user, and in
 // `--print` mode with no structured-question tool that relay is narrative prose. Measured: zero of
 // four runs emitted the fenced block; `D1:` never appeared. The structure exists at the agent

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-hooks.json",
-  "description": "somi deterministic guardrails: dangerous-bash / secret-writes / protected-paths / dep-install gates, lint surfacing, audit logging, workflow context injection, repo-instruction detection.",
+  "description": "somi deterministic guardrails: dangerous-bash / secret-writes / protected-paths / dep-install gates, lint surfacing, audit logging, workflow context injection, repo-instruction detection, default cost config, cost-lowering confirmation.",
   "hooks": {
     "SessionStart": [
       {
@@ -8,6 +8,10 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start/detect-repo-instructions.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start/ensure-default-config.mjs"
           }
         ]
       }
@@ -23,6 +27,15 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/gate-dep-install.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|mcp__.*somi_config|mcp__.*somi_resolve",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-cost-lowering.mjs"
           }
         ]
       },

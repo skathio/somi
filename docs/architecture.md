@@ -48,10 +48,10 @@ Each layer has a clear job:
 
 The four layers above describe *structure*. A second, orthogonal axis describes *economics*: which
 model runs which work. SoMi tiers by **SDLC phase**, not by orchestration depth — and the
-declaration lives on **agents only**: `cost:` sizes an agent instance being spawned, and a
+default tier lives on **agents only**, in a table (`scripts/lib/cost-defaults.mjs`) that `cost.agents` in `.somi/config.json` can override: a
 command is instructions, not an instance, so it declares neither `cost:` nor `model:` of its own —
-it runs on whatever model the session is already using — and simply `Task`s the agent whose own
-frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
+it runs on whatever model the session is already using — and simply `Task`s the agent whose default
+tier the table holds (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
 
 ```
         cost: high                                       cost: medium
@@ -70,23 +70,24 @@ frontmatter carries the tier (see [`docs/AGENTS.md`](./AGENTS.md#cost-tiering)).
   inlining them, and carries an explicit *"What execution does NOT need to re-research"* list.
 - **`cost: medium`** sequences and implements **against** the brief, so the high-volume work runs
   cheap. This is the **plan-and-execute / model-cascade** pattern (strong planner, cheap executor).
-- A unit's declared `cost:` is a **capability set**, not a single value — every tier it can
-  honestly run at. The session ceiling selects the highest permitted member; it never blocks a
-  unit down to a tier it didn't declare, and a unit declaring only `high` (no cheaper mode exists)
-  still runs even under a lower ceiling, at its cheapest declared member.
+- An agent's default tier is the tier it was built for; a lower one must be acceptable for every job
+  it accepts. The session ceiling is a hard cap: an agent runs at the ceiling tier itself, or
+  at its
+  own `cost.agents` entry in `.somi/config.json` when it has one (an entry wins, even above the
+  ceiling). The default tier is read only to report when a run is below it (`degraded`).
 
 **Interaction with the layers.** Commands (the orchestration layer) carry no `cost:` of their own
-and simply `Task` the tier-appropriate agent, which resolves its own model from its own declared
-set. Tasking a differently-costed subagent from an uncosted command is the **cache-correct** way to
+and simply `Task` the tier-appropriate agent, which resolves its own model from its default
+tier. Tasking a differently-costed subagent from an uncosted command is the **cache-correct** way to
 mix models — and because prompt caches are model-scoped, a `cost: high` design action's `brief.md`
 and the `cost: medium` execution that consumes it sit on either side of a natural cache boundary,
 which is why `/ship-loop` places its single human gate right there: once the design action has
 produced `brief.md`, before planning consumes it (falling to after `/plan-loop` on a cold start
 with no design action). `/discover`, `/design`, `/refactor-design`, and `/atlas` are the commands
-that Task a `cost: high` agent for their **entire** job — `discovery-analyst`, `designer`, and
-`refactor-designer`'s framing is judgment-heavy and their brief anchors the work item; `atlas` is
-one high-quality deep repo read, paid once. `/adopt` Tasks the `atlas` agent as its own Stage 1, at
-the agent's own declared tier — it does not inline that read.
+that Task a `cost: high` agent for their **entire** job — `somi-discovery-analyst`, `somi-designer`, and
+`somi-refactor-designer`'s framing is judgment-heavy and their brief anchors the work item; `somi-atlas` is
+one high-quality deep repo read, paid once. `/adopt` Tasks the `somi-atlas` agent as its own Stage 1, at
+the agent's own default tier — it does not inline that read.
 
 **How dispatch actually happens.** Neither a command nor the front door hands a whole command's
 procedure to one Tasked agent that runs it end-to-end. On Claude Code, invoking a command runs its
@@ -96,9 +97,10 @@ that procedure starts — one `Task` call per agent, never the whole command in 
 its cost tier and model through `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)
 skill, served over the bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP
 isn't reachable — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) before the `Task`, and
-the spawned agent's briefing states `dispatched at cost: <tier>` when a model was enforced, or `requested cost: <tier> (not enforced: no mapped model)` when none was. The session ceiling **selects**
-the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
-declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
+the spawned agent's briefing states `dispatched at cost: <tier>` when a model was enforced, or `requested cost: <tier> (not enforced: no mapped model)` when none was. The session ceiling is a
+**hard cap**: the unit runs at the ceiling tier, or at its `cost.agents` override when the config
+has
+one — never refused, and reported as degraded when that is below what it declared.
 
 **Repo-awareness.** A SessionStart hook surfaces repo-local instruction files (`CLAUDE.md`,
 `AGENTS.md`, `.github/copilot-instructions.md`, …) and agents; the high-cost design agents read
@@ -111,11 +113,11 @@ Repo-local instructions win over SoMi defaults; SoMi never auto-invokes foreign 
 
 ```
 user: "/discover <idea>"
-  → command /discover (no `cost:` of its own; Tasks discovery-analyst at `cost: high` end-to-end)
+  → command /discover (no `cost:` of its own; Tasks discovery-analyst at its default tier `high` end-to-end)
     reads $ARGUMENTS, validates it's a researchable idea
   → command derives slug, scaffolds .somi/rd/<slug>/ from templates/ (RD-README, RESEARCH, BRD,
     SRS, FRD, SDD, TDD + reused DECISIONS/DIARY)
-  → invokes Task[subagent_type=discovery-analyst, prompt=<idea + slug + paths + context>]
+  → invokes Task[subagent_type=somi-discovery-analyst, prompt=<idea + slug + paths + context>]
   → analyst researches via WebSearch/WebFetch: competitors, complaints, churn, failure modes
     (every non-obvious claim cited; signal distinguished from noise; nothing fabricated)
   → analyst synthesises findings → opportunities / must-avoid pitfalls / risks
@@ -137,7 +139,7 @@ user: "/plan <problem>" (or "/plan <slug>" pointing at a discovery foundation)
   → command derives slug, scaffolds .somi/plans/<slug>/ from templates/
   → IF .somi/rd/<slug>/ exists: command passes its paths to the planner, which treats the
     SRS/FRD as the requirements source and the SDD/TDD as architectural direction (no re-deriving)
-  → invokes Task[subagent_type=planner, prompt=<problem + slug + paths + rd-foundation + context>]
+  → invokes Task[subagent_type=somi-planner, prompt=<problem + slug + paths + rd-foundation + context>]
   → planner reads repo (Read/Grep/Glob), drafts context.md, then spec skeleton
   → planner PAUSES on each architectural decision: presents 2–4 concrete options with
     pros/cons, recommends one, offers Other / Discover escape hatches
@@ -153,7 +155,7 @@ user: "/plan <problem>" (or "/plan <slug>" pointing at a discovery foundation)
 user: "/code <slug> [phase N, iteration M]"
   → command /code resolves work item, reads spec.md + phases/<NN>-*.md + recent diary
   → marks iteration in-progress in progress.md
-  → invokes Task[subagent_type=coder, prompt=<iteration + slug + paths + context>]
+  → invokes Task[subagent_type=somi-coder, prompt=<iteration + slug + paths + context>]
   → coder reads relevant files in the repo
   → coder edits/writes code, runs tests via Bash
   → PreToolUse hooks may block dangerous operations
@@ -173,11 +175,11 @@ user: "/code <slug> [phase N, iteration M]"
 ```
 user: "/review <slug>" (or working tree / range / PR / plan)
   → command /review resolves target and work-item context
-  → invokes Task[subagent_type=reviewer, prompt=<target + spec + phases + diary + context>]
+  → invokes Task[subagent_type=somi-reviewer, prompt=<target + spec + phases + diary + context>]
   → reviewer reads diff in surroundings, walks trust boundaries / abstractions / failure paths
   → reviewer checks plan-vs-code alignment (scope drift, missing diary entries, accuracy of
     progress.md, decisions silently contradicted)
-  → reviewer may invoke Task[subagent_type=security-reviewer | architecture-reviewer | test-strategist]
+  → reviewer may invoke Task[subagent_type=somi-security-reviewer | somi-architecture-reviewer | somi-test-strategist]
   → reviewer aggregates findings, severity-grades them
   → reviewer writes review file at .somi/reviews/<slug>/<YYYY-MM-DD>-…md using
     templates/REVIEW.md.tmpl

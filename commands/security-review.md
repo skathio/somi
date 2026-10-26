@@ -20,10 +20,9 @@ Use the same resolution logic as [`/review`](./review.md):
 - **A work-item slug** → review the latest iteration's diff, scoped to security.
 - **Empty / range / PR / file** → resolve as in `/review`.
 
-### 2. Brief the `security-reviewer` agent
+### 2. Brief the `somi-security-reviewer` agent
 
-Before this `Task`, call `somi_resolve` for `security-reviewer` (with `project_dir`), pass its
-model, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
+Before this `Task`, call `somi_resolve` for `somi-security-reviewer` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
 (`somi_skill`, or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The diff and the relevant repo context.
@@ -31,13 +30,15 @@ model, and put the cost line in the briefing (`dispatched at cost: <tier>` only 
   `diary.md` entries) when scoped.
 - The expectation: walk trust boundaries to sinks, produce **attack-path-grounded** findings.
 - The expectation that it **returns** its findings as text rather than writing them. The
-  `security-reviewer` agent is read-only **by contract, not by platform restriction** — it holds
+  `somi-security-reviewer` agent is read-only **by contract, not by platform restriction** — it holds
   Write/Edit and its `## Write discipline` section forbids using them, so this command owns every
   write (the review file, `progress.md`, `diary.md`).
 
-`security-reviewer` declares `cost: high` alone, no lower member. If the session ceiling has no
-member at or below that, do not run a substitute lighter pass and report it as this review — stop
-and surface the refusal to the user.
+`somi-security-reviewer` defaults to `high` alone. It runs at the session ceiling (`medium` by
+default) unless `cost.agents` in `.somi/config.json` pins it, and the dispatch skill prints a
+degraded line when that is below `high`. The config is respected: there is no floor in code. Say
+plainly in the review that it ran below its default tier, and that setting
+`"somi-security-reviewer": "high"` under `cost.agents` is how to keep the strong pass.
 
 ### 3. Findings must include
 

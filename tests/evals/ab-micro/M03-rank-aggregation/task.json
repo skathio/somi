@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create aggregate.mjs at the workspace root: an ES module with one named function export, aggregate(ballots). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "ballots must be an array of ballots; a ballot is an array of tiers, best tier first; a tier is an array of identifiers; an identifier is a string. Anything else, anywhere in the input, throws a TypeError whose code property is 'E_TYPE'. This check covers every ballot before the check of the next statement starts.",
+    "Only after the previous check has passed for all ballots: if one ballot names the same identifier twice, whether in one tier or in two different tiers, the function throws a TypeError whose code property is 'E_BALLOT'. The same identifier in different ballots is normal.",
+    "The candidates are the distinct identifiers over all ballots together; let C be their number. Within a ballot, a tier holding t identifiers whose earlier tiers in that ballot hold p identifiers in total receives the points C-1-p, C-2-p, down to C-p-t. Each identifier of the tier gets the plain average of those t points. An empty tier holds no identifiers and has no effect.",
+    "A candidate that a ballot does not name is unmentioned in it. If the ballot names M identifiers in total, all its unmentioned candidates together receive the points C-1-M, C-2-M, down to 0, and each of them gets the plain average of these points. A ballot with no identifiers at all therefore gives every candidate the same average.",
+    "A candidate's score is the exact arithmetic mean, over all ballots including those that do not name it, of the points it receives. It is reported as a fraction in lowest terms, as integers num and den with den greater than zero; a score of zero is num 0 and den 1. Rounded or approximate decimal values are wrong.",
+    "The result is an array with one object per candidate, each having exactly the properties id, num and den, ordered by score from highest to lowest; equal scores are ordered by id ascending, comparing strings by UTF-16 code unit values, so every uppercase ASCII letter comes before every lowercase one. With no ballots, or no candidates, the result is an empty array.",
+    "The function is pure: no I/O, no shared state, and the arguments are not mutated."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M03-7c1e49a2d58b306f",
+  "source": [
+    "aggregate.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement aggregate.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

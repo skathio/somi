@@ -129,9 +129,9 @@ does it end up?** When you load this skill, do this walk:
 - `JSON.parse` of `req.body` with no schema; then field access without type checks.
 - A redirect URL taken from a query parameter without an allowlist.
 
-## When to invoke `security-reviewer`
+## When to invoke `somi-security-reviewer`
 
-Loading this skill means *you are aware*. It does not replace the [`security-reviewer`](../../agents/security-reviewer.md)
+Loading this skill means *you are aware*. It does not replace the [`somi-security-reviewer`](../../agents/somi-security-reviewer.md)
 agent. Invoke that agent when:
 
 - The change introduces a new ingress or sink.

@@ -29,7 +29,7 @@
 // cut the unsafe way. The Linux fixture corpus validates only the posix axis.
 
 import path from 'node:path';
-import { readPayload, field, denyPretool, matchesAny, runHook } from '../lib/common.mjs';
+import { readPayload, field, denyPretool, matchesAny, runHook, writeTargets } from '../lib/common.mjs';
 
 const SECRET_PATTERNS = [
   // env files (allow .env.example, .env.sample, .env.template explicitly)
@@ -76,17 +76,18 @@ const EXAMPLE_BASENAMES = ['.env.example', '.env.sample', '.env.template', '.env
 function main() {
   const payload = readPayload();
   const tool = field(payload, '.tool_name');
-  const pathInput = field(payload, '.tool_input.file_path');
-  if (!pathInput) return;
-
-  // Normalise to basename for pattern matching.
-  const basename = path.basename(pathInput);
-
-  if (EXAMPLE_BASENAMES.includes(basename)) return;
-
-  if (matchesAny(basename, SECRET_PATTERNS)) {
-    denyPretool(payload, `somi refused to ${tool} \`${pathInput}\`: this path is in the secret-bearing allowlist.
+  const { paths, known } = writeTargets(payload);
+  if (!known) {
+    denyPretool(payload, `somi refused to ${tool}: it could not tell which file this writes, so the secret-write guard cannot check it.`);
+  }
+  for (const pathInput of paths) {
+    // Normalise to basename for pattern matching.
+    const basename = path.basename(pathInput);
+    if (EXAMPLE_BASENAMES.includes(basename)) continue;
+    if (matchesAny(basename, SECRET_PATTERNS)) {
+      denyPretool(payload, `somi refused to ${tool} \`${pathInput}\`: this path is in the secret-bearing allowlist.
 Bootstrap secret files by hand, or commit only \`.env.example\`-style templates.`);
+    }
   }
 }
 

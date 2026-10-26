@@ -27,25 +27,25 @@ It is designed to be:
 
 | Command       | Agent cost | Agent           | Purpose                                                                                  |
 |---------------|--------|---------------------|------------------------------------------------------------------------------------------|
-| `/discover`   | high   | `discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
-| `/design`     | high   | `designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
-| `/plan`       | medium | `planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
-| `/code`       | medium | `coder`             | Execute against an approved plan + brief with senior-level design judgment               |
-| `/debug`      | medium | `coder` | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop` (a `cost: high` hatch is available if isolation escalates), keep the repro test as the regression guard; writes a one-page `rca.md` |
-| `/review`     | medium, high | `reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
-| `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `cost: high` front-load), gated at every stage |
+| `/discover`   | high   | `somi-discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
+| `/design`     | high   | `somi-designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
+| `/plan`       | medium | `somi-planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
+| `/code`       | medium | `somi-coder`             | Execute against an approved plan + brief with senior-level design judgment               |
+| `/debug`      | medium | `somi-coder` | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop` (a `cost: high` hatch is available if isolation escalates), keep the repro test as the regression guard; writes a one-page `rca.md` |
+| `/review`     | high | `somi-reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
+| `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `high`-tier front-load), gated at every stage |
 
-**Cost tiers in practice.** `cost:` (and `model:`) are declared by **agents**, not commands —
-`cost:` sizes an agent instance being spawned, and a command declares neither field, running on
+**Cost tiers in practice.** Default tiers belong to **agents**, not commands —
+a tier sizes an agent instance being spawned, and a command has none, running on
 whatever model the session is already using — so the tier above is the tier of the agent that
-command Tasks. The **`cost: high`** tier front-loads expensive reasoning — research, design,
+command Tasks (the table is `scripts/lib/cost-defaults.mjs`; `cost.agents` overrides it). The **`cost: high`** tier front-loads expensive reasoning — research, design,
 decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The
 **`cost: medium`** tier executes against that brief *without re-researching*, so the high-volume
 work (plan detail, iterative coding) runs cheaply. `/discover` (new product) and `/design`
 (brownfield feature) are the high-cost front-loads that feed `/plan`; `/ship-loop` runs the whole
 pipeline continuously, gating once at the brief handoff (before planning consumes the brief). Supporting agents invoked by
-handoff, at whichever cost their own frontmatter declares: `security-reviewer`,
-`architecture-reviewer`, `test-strategist`, `refactor-designer` — see
+handoff, at whichever default tier the table gives them: `somi-security-reviewer`,
+`somi-architecture-reviewer`, `somi-test-strategist`, `somi-refactor-designer` — see
 [`docs/AGENTS.md`](docs/AGENTS.md#cost-tiering) for the exact shape per agent.
 
 ---
@@ -99,29 +99,33 @@ Once installed, use `@somi` in GitHub Copilot chat:
 > **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Three things do **not** carry
 > over, because they depend on Claude Code host capabilities Copilot doesn't expose:
 >
-> - **The deterministic guardrail hooks do not fire.** Blocking dangerous bash, secret-writes,
->   protected-path writes, dep-install gating, and the audit log are Claude Code `hooks` — on Copilot
->   they are **absent**, so those safety nets are not enforced. The agent/skill judgment still
->   applies, but the hard stops don't.
+> - **Of Copilot's surfaces, the guardrail hooks run on Copilot CLI only.** Copilot CLI (checked live on 1.0.103) runs
+>   SoMi's hooks: SessionStart, the PreToolUse blocks for dangerous bash, secret-writes and protected
+>   paths, and the audit log; an `ask` verdict becomes a refusal where it cannot prompt. Other Copilot
+>   surfaces (VS Code Chat) are unverified, so don't count on the hard stops there.
 > - **Multi-agent orchestration degrades to sequential.** The loops (`/code-loop`, `/plan-loop`,
 >   `/ship`) and the parallel commands (`/review-panel`, `/code-parallel`) drive Claude Code
 >   sub-agents via the Task tool. Where the host can't spawn sub-agents concurrently, these run
 >   **one lens / one iteration at a time** — same result, no parallelism.
 > - **Per-call model binding is not confirmed on every host.** The cost tiers themselves (the
 >   `low`/`medium`/`high` axis, the session ceiling, the dispatch resolver) are host-agnostic — every
->   agent declares its own tier and the resolver selects among it the same way everywhere it's
+>   agent's tier comes from one default table plus `cost.agents`, resolved the same way everywhere it's
 >   dispatched, whether that's through the `somi` front door or a command typed directly (both
 >   follow [`skills/somi-dispatch`](skills/somi-dispatch/SKILL.md), the one canonical resolve-then-
 >   start procedure), including on Copilot. What varies is only whether a *concrete model* can be
 >   bound per `Task` call:
 >   confirmed on Claude Code and on VS Code's Copilot; undocumented on Copilot CLI, where the
->   agent's own frontmatter `model:` may be what actually governs instead. Where a model can't be
+>   host's default model applies, because agents no longer declare a frontmatter `model:`. Where a model can't be
 >   bound per call, the dispatcher still names the tier it selected and says plainly that its model
->   pick could not be applied — the tier decision itself never degrades.
+>   pick could not be applied — the tier decision itself is the same everywhere.
+> - **Agents start as the type the host registered.** Claude Code and Copilot CLI both register
+>   SoMi's agents as `somi:somi-<name>`, and every dispatch starts that real agent. VS Code Copilot
+>   Chat is not a supported dispatch host: if it refuses the type, SoMi stops and says so instead of
+>   running a stand-in. See [Agent dispatch](docs/PLUGIN.md#agent-dispatch).
 >
 > The commands, agents, skills, rules, and templates are shared; **enforcement and concurrency are
 > Claude Code features**; cost tiering is shared, with per-call model binding confirmed on Claude
-> Code and VS Code and falling back to the agent's own declared model elsewhere. Treat Copilot as
+> Code and VS Code and falling back to the host's default model elsewhere. Treat Copilot as
 > the portable subset, not a drop-in equal. See [`docs/HOOKS.md`](docs/HOOKS.md) and
 > [`docs/PLUGIN.md`](docs/PLUGIN.md).
 
@@ -172,7 +176,7 @@ For a **brand-new product**, start one step earlier with discovery:
 # /plan clinic-scheduler — the planner consumes that foundation.
 ```
 
-For a **design-heavy feature on an existing repo**, front-load the design (`cost: high`) so
+For a **design-heavy feature on an existing repo**, front-load the design (default `high`) so
 planning and coding run cheaply against it:
 
 ```text
@@ -215,7 +219,8 @@ For the all-in-one pipeline: `/ship <problem statement>`.
 **Lost?** On GitHub Copilot, select the `somi` agent — bare `@somi` renders a status dashboard of
 everything in flight (with a next action per item), and `@somi <what you want to do>` routes to
 the right command. When a work item is ready to merge, `/pr <slug>` turns its artifacts into the
-pull-request description.
+pull-request description. To see or change which cost tier each agent runs at, `/somi-config` shows the
+settings and asks before each change; lowering a tier needs your explicit confirmation.
 
 ---
 

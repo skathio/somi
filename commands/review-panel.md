@@ -15,15 +15,16 @@ target such as a PR / commit range / working tree).
 
 The orchestrator (this command) has no `cost:` of its own — nor a `model:` of its own; it runs on
 whatever model this session is already using — and runs entirely inline. Each lens it Tasks
-resolves its model from its **own** declared set:
-`reviewer`, `architecture-reviewer`,
-`test-strategist`, `plan-reviewer`, and `sdlc-reviewer` declare `cost: medium, high` (the ceiling picks the highest permitted member,
-typically `high` for the fresh-eyes depth a panel wants); `security-reviewer` declares `cost: high`
-alone — a missed vulnerability outweighs a lighter generalist pass, so it has no lower mode (see
-its own `> **Cost:**` callout). The lenses are read-only **by contract, not by platform
+resolves its model through the dispatch skill: its `cost.agents` entry if the config has
+one, otherwise the session ceiling itself. `somi-reviewer`, `somi-architecture-reviewer`, `somi-test-strategist`,
+`somi-plan-reviewer`, and `somi-sdlc-reviewer` default to `high`; pin them to `high` under
+`cost.agents` for the fresh-eyes depth a panel wants. `somi-security-reviewer` defaults to `high`
+alone — a missed vulnerability outweighs a lighter generalist pass — so pin it to `high` too (see
+its own `> **Cost:**` callout); an unpinned lens runs at the ceiling and is reported as degraded.
+The lenses are read-only **by contract, not by platform
 restriction** — they return findings; this command owns every write (the merged review file,
-`progress.md`, `diary.md`). The session ceiling selects each lens's tier and never refuses one: a lens whose declared tiers
-all sit above the ceiling still runs, at its cheapest declared tier.
+`progress.md`, `diary.md`). The session ceiling is a hard cap that sets each lens's tier and never
+refuses one.
 
 > **Why this exists.** A single reviewer carries one set of priorities at a time; running the
 > specialist lenses *in parallel* on one diff catches what a sequential, escalation-only pass misses
@@ -55,17 +56,17 @@ lens so they all review the identical change.
 
 ### 2. Select the lenses (which panelists sit for this review)
 
-Always seat **`reviewer`** (the generalist). Seat a specialist **only when the diff actually engages
+Always seat **`somi-reviewer`** (the generalist). Seat a specialist **only when the diff actually engages
 its domain** — seating an irrelevant lens is wasted spend and dilutes signal:
 
 | Lens | Seat it when the diff… |
 |---|---|
-| `reviewer` | always |
-| `security-reviewer` | touches auth/authz, crypto, secrets, input validation, deserialization, file uploads, third-party data, templating, or user-controlled input reaching a sink |
-| `architecture-reviewer` | adds/splits a module or service, changes a public contract, or changes dependency direction |
-| `test-strategist` | adds/changes meaningful test surface, or the diff's risk is concentrated where tests are thin/over-mocked/flaky |
-| `plan-reviewer` | the review target is a plan or design (a `.somi/plans/<slug>/` artifact set, a `brief.md`, or an ADR), or the diff changes `spec.md` / `decisions.md` / `phases/` / `brief.md` — the plan's shape is what is under review, not only the code |
-| `sdlc-reviewer` | a work-item `<slug>` was given, or the diff touches `progress.md` / `diary.md` / the findings ledger — so the planning record can be checked against what the diff actually did |
+| `somi-reviewer` | always |
+| `somi-security-reviewer` | touches auth/authz, crypto, secrets, input validation, deserialization, file uploads, third-party data, templating, or user-controlled input reaching a sink |
+| `somi-architecture-reviewer` | adds/splits a module or service, changes a public contract, or changes dependency direction |
+| `somi-test-strategist` | adds/changes meaningful test surface, or the diff's risk is concentrated where tests are thin/over-mocked/flaky |
+| `somi-plan-reviewer` | the review target is a plan or design (a `.somi/plans/<slug>/` artifact set, a `brief.md`, or an ADR), or the diff changes `spec.md` / `decisions.md` / `phases/` / `brief.md` — the plan's shape is what is under review, not only the code |
+| `somi-sdlc-reviewer` | a work-item `<slug>` was given, or the diff touches `progress.md` / `diary.md` / the findings ledger — so the planning record can be checked against what the diff actually did |
 
 Record which lenses you seated and **why each unseated one was skipped** — that record is part of
 the panel's value (it shows the surface was considered, not ignored).
@@ -73,18 +74,18 @@ the panel's value (it shows the surface was considered, not ignored).
 ### 3. Run the panel **in parallel**
 
 Issue the seated lenses as **multiple `Task` calls in a single turn** so they run concurrently —
-call `somi_resolve` for each lens back-to-back immediately before the batch (each call's own
-`project_dir`, model, and cost line (`dispatched at cost: <tier>` only when `enforced`, else `requested cost: <tier> (not enforced: no mapped model)`) in that lens's own briefing — this is the
+call `somi_resolve` for each lens back-to-back immediately before the batch (each with its own
+`project_dir`); for each, pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`) — in that lens's own briefing; this is the
 concurrent-batch case the `somi-dispatch` skill's §5 names explicitly). Give each the *same* scoped
 diff and work-item context, and each its own briefing:
 
 ```text
-Task reviewer            (= /review <target>, scope = this diff)
-Task security-reviewer   (= security lens on this diff)            # if seated
-Task architecture-reviewer (= structural lens on this diff)        # if seated
-Task test-strategist     (= test-shape lens on this diff)          # if seated
-Task plan-reviewer       (= plan lens on the plan artifacts)       # if seated
-Task sdlc-reviewer       (= process lens on the planning record)   # if seated
+Task somi-reviewer            (= /review <target>, scope = this diff)
+Task somi-security-reviewer   (= security lens on this diff)            # if seated
+Task somi-architecture-reviewer (= structural lens on this diff)        # if seated
+Task somi-test-strategist     (= test-shape lens on this diff)          # if seated
+Task somi-plan-reviewer       (= plan lens on the plan artifacts)       # if seated
+Task somi-sdlc-reviewer       (= process lens on the planning record)   # if seated
 ```
 
 > **Copilot / sequential fallback.** Parallel sub-agent execution is a Claude Code capability. Where

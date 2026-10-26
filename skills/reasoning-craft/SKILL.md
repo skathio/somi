@@ -208,6 +208,6 @@ substituting a different task (root-cause now, refuse to bump).
 ## When to escalate
 
 n/a — this is cross-cutting reasoning/voice craft applied on every response, not a domain with a
-specialist agent to hand off to (unlike, say, `owasp-defense` → `security-reviewer`). There is
+specialist agent to hand off to (unlike, say, `owasp-defense` → `somi-security-reviewer`). There is
 nothing to escalate to; apply it inline. Named explicitly so the absence reads as a decision, not
 an oversight.

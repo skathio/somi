@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "sealed": true,
+  "bootstrap": { "level": 0.9, "resamples": 10000, "seed": 20261020 },
+  "minEffect": {
+    "L0": 0.01,
+    "L1": { "effect": 0.1, "minRepeats": 30 },
+    "L2": { "time": 0.3, "cost": 0.2, "tokens": 0.2, "turns": 0.2 }
+  },
+  "qualityGuard": { "medianDrop": 0.2, "invalidShareIncrease": 0.25 },
+  "scope": { "distributionOnly": ["S2"] },
+  "metrics": [
+    { "layer": "L0", "metrics": ["bytes"], "primary": "absolute bytes, SoMi side, exact", "secondary": "none", "primaryBasis": "absolute", "secondaryBasis": null },
+    { "layer": "L1", "metrics": ["ms"], "primary": "absolute median ms, same host fingerprint", "secondary": "none", "primaryBasis": "absolute", "secondaryBasis": null },
+    { "layer": "L2 time and cost", "metrics": ["time", "cost"], "primary": "overhead ratio (somi median / bare median) per scenario, pooled by geometric mean; cancels provider and load drift", "secondary": "absolute SoMi-arm ratio", "primaryBasis": "overhead", "secondaryBasis": "absolute" },
+    { "layer": "L2 tokens and turns", "metrics": ["tokens", "turns"], "primary": "absolute SoMi-arm ratio of medians", "secondary": "overhead ratio", "primaryBasis": "absolute", "secondaryBasis": "overhead" }
+  ]
+}

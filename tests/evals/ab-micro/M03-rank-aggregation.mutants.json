@@ -1,0 +1,74 @@
+[
+ {
+  "name": "unmentioned-get-zero",
+  "file": "aggregate.mjs",
+  "find": "twice.get(id) + (C - p) - 1)",
+  "replace": "twice.get(id) + 0)"
+ },
+ {
+  "name": "tie-gets-top-point",
+  "file": "aggregate.mjs",
+  "find": "2 * (C - p) - tier.length - 1)",
+  "replace": "2 * (C - p) - 2)"
+ },
+ {
+  "name": "earlier-count-is-tiers",
+  "file": "aggregate.mjs",
+  "find": "      p += tier.length;",
+  "replace": "      p += 1;"
+ },
+ {
+  "name": "candidates-counted-per-ballot",
+  "file": "aggregate.mjs",
+  "find": "    let p = 0;\n",
+  "replace": "    let p = 0;\n    const C = ballot.flat().length;\n"
+ },
+ {
+  "name": "sum-not-mean",
+  "file": "aggregate.mjs",
+  "find": "const den = 2 * ballots.length;",
+  "replace": "const den = 2;"
+ },
+ {
+  "name": "no-lowest-terms",
+  "file": "aggregate.mjs",
+  "find": "const g = gcd(num, den);",
+  "replace": "const g = 1;"
+ },
+ {
+  "name": "zero-keeps-denominator",
+  "file": "aggregate.mjs",
+  "find": "const g = gcd(num, den);",
+  "replace": "const g = num === 0 ? 1 : gcd(num, den);"
+ },
+ {
+  "name": "locale-id-order",
+  "file": "aggregate.mjs",
+  "find": "(a.id < b.id ? -1 : 1)",
+  "replace": "a.id.localeCompare(b.id)"
+ },
+ {
+  "name": "duplicate-only-within-tier",
+  "file": "aggregate.mjs",
+  "find": "for (const id of ballot.flat()) {\n      if (seen.has(id)) throw bad('E_BALLOT');\n      seen.add(id);\n    }",
+  "replace": "for (const tier of ballot) {\n      const inTier = new Set();\n      for (const id of tier) {\n        if (inTier.has(id)) throw bad('E_BALLOT');\n        inTier.add(id);\n      }\n    }"
+ },
+ {
+  "name": "duplicates-checked-before-types",
+  "file": "aggregate.mjs",
+  "find": "  if (!Array.isArray(ballots)) throw bad('E_TYPE');\n  for (const ballot of ballots) {\n    if (!Array.isArray(ballot)) throw bad('E_TYPE');\n    for (const tier of ballot) {\n      if (!Array.isArray(tier)) throw bad('E_TYPE');\n      for (const id of tier) if (typeof id !== 'string') throw bad('E_TYPE');\n    }\n  }\n  for (const ballot of ballots) {\n    const seen = new Set();\n    for (const id of ballot.flat()) {\n      if (seen.has(id)) throw bad('E_BALLOT');\n      seen.add(id);\n    }\n  }",
+  "replace": "  if (!Array.isArray(ballots)) throw bad('E_TYPE');\n  for (const ballot of ballots) {\n    if (!Array.isArray(ballot)) throw bad('E_TYPE');\n    for (const tier of ballot) {\n      if (!Array.isArray(tier)) throw bad('E_TYPE');\n      const seen = new Set();\n      for (const id of ballot.flat()) {\n        if (typeof id === 'string' && seen.has(id)) throw bad('E_BALLOT');\n        seen.add(id);\n      }\n      for (const id of tier) if (typeof id !== 'string') throw bad('E_TYPE');\n    }\n  }"
+ },
+ {
+  "name": "empty-ballots-not-counted-in-mean",
+  "file": "aggregate.mjs",
+  "find": "const den = 2 * ballots.length;",
+  "replace": "const den = 2 * ballots.filter((b) => b.flat().length > 0).length;"
+ },
+ {
+  "name": "ties-by-first-appearance",
+  "file": "aggregate.mjs",
+  "find": "|| (a.id < b.id ? -1 : 1)",
+  "replace": "|| 0"
+ }
+]

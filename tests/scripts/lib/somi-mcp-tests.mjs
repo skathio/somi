@@ -8,7 +8,7 @@
 // Invoked from tests/scripts/somi-mcp.sh, which is wired into scripts/validate.sh.
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +31,13 @@ const tmpRoot = mkdtempSync(path.join(tmpdir(), 'somi-mcp-test-'));
 function fresh() {
   const d = path.join(tmpRoot, `p${Math.random().toString(36).slice(2)}`);
   mkdirSync(d, { recursive: true });
+  return d;
+}
+
+function projWith(body) {
+  const d = fresh();
+  mkdirSync(path.join(d, '.somi'), { recursive: true });
+  writeFileSync(path.join(d, '.somi', 'config.json'), body);
   return d;
 }
 
@@ -63,7 +70,7 @@ async function run() {
 
     const list = await client.request('tools/list', {});
     const names = (list.tools || []).map((t) => t.name).sort();
-    check('tools/list carries exactly somi_resolve, somi_command, somi_skill and somi_agent', names, ['somi_agent', 'somi_command', 'somi_resolve', 'somi_skill']);
+    check('tools/list carries exactly somi_resolve, somi_agent_info, somi_command, somi_skill, somi_agent, somi_tier and somi_config', names, ['somi_agent', 'somi_agent_info', 'somi_command', 'somi_config', 'somi_resolve', 'somi_skill', 'somi_tier']);
 
     const ping = await client.request('ping', {});
     check('ping returns an empty result', ping, {});
@@ -73,10 +80,10 @@ async function run() {
   await withClient({}, async (client) => {
     await client.initialize();
     const proj = fresh();
-    const result = await toolCall(client, 'somi_resolve', { agent: 'coder', host: 'claude-code', project_dir: proj });
+    const result = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', host: 'claude-code', ceiling: 'low', project_dir: proj });
     const mcpJson = JSON.parse(toolText(result));
 
-    const cliOut = execFileSync(process.execPath, [CLI, 'resolve', '--agent', 'coder', '--host', 'claude-code'], {
+    const cliOut = execFileSync(process.execPath, [CLI, 'resolve', '--agent', 'somi-coder', '--host', 'claude-code', '--ceiling', 'low'], {
       env: { ...process.env, CLAUDE_PROJECT_DIR: fresh() },
       encoding: 'utf8',
     });
@@ -89,20 +96,33 @@ async function run() {
     check('the resolved project dir is where ceiling state actually landed', existsSync(path.join(proj, '.somi', 'somi-state', 'ceiling.json')), true);
   });
 
+  // --- CLI vs MCP parity with NO ceiling argument: config decides, and a bare resolve writes no state
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const mk = () => projWith('{"cost":{"ceiling":"low"}}');
+    const proj = mk();
+    const mcpJson = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'somi-coder', project_dir: proj })));
+    const cliJson = JSON.parse(execFileSync(process.execPath, [CLI, 'resolve', '--agent', 'somi-coder'], {
+      env: { ...process.env, CLAUDE_PROJECT_DIR: mk(), SOMI_COST_CEILING: '' },
+    }).toString());
+    check('no ceiling argument: MCP and CLI both resolve ceiling low from the config', [mcpJson.ceiling, mcpJson.ceiling_source, cliJson.ceiling, cliJson.ceiling_source], ['low', 'config', 'low', 'config']);
+    check('a bare MCP resolve writes no .somi/somi-state', existsSync(path.join(proj, '.somi', 'somi-state')), false);
+  });
+
   // --- #32: enforced/reason are exposed, and a config mapping makes copilot enforced ----------
   await withClient({}, async (client) => {
     await client.initialize();
-    const bare = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'copilot', project_dir: fresh() })));
+    const bare = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'somi-designer', host: 'copilot', ceiling: 'high', project_dir: fresh() })));
     check('copilot, no mapping: model null, enforced false, reason names host',
       [bare.model, bare.enforced, /no model mapping for host copilot.*low, medium and high/.test(bare.reason ?? '')], [null, false, true]);
     const mapped = fresh();
     mkdirSync(path.join(mapped, '.somi'), { recursive: true });
     writeFileSync(path.join(mapped, '.somi', 'config.json'),
       JSON.stringify({ cost: { mapping: { copilot: { low: 'gpt-5-mini', medium: 'gpt-5', high: 'gpt-5-pro' } } } }));
-    const m = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'copilot', project_dir: mapped })));
+    const m = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'somi-designer', host: 'copilot', ceiling: 'high', project_dir: mapped })));
     check('copilot with config mapping: model set, enforced true, no reason',
       [m.model, m.enforced, 'reason' in m], ['gpt-5-pro', true, false]);
-    const cc = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'designer', host: 'claude-code', project_dir: fresh() })));
+    const cc = JSON.parse(toolText(await toolCall(client, 'somi_resolve', { agent: 'somi-designer', host: 'claude-code', project_dir: fresh() })));
     check('claude-code default: model set, enforced true', [typeof cc.model, cc.enforced], ['string', true]);
   });
 
@@ -126,9 +146,27 @@ async function run() {
     const brokenProj = fresh();
     mkdirSync(path.join(brokenProj, '.somi'), { recursive: true });
     writeFileSync(path.join(brokenProj, '.somi', 'config.json'), '{"cost": {"ceiling": "low"}\n'); // missing brace
-    r = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: brokenProj });
+    r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', project_dir: brokenProj });
     check('67 (project environment failure: unparsable config.json) is isError', r.isError, true);
     check('67 appears in the error text', /\(exit 67\)/.test(toolText(r)), true);
+  });
+
+  // --- hard cap / overrides / size cap surface through somi_resolve unchanged -----------------
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const withConfig = projWith;
+    let r = await toolCall(client, 'somi_resolve', { agent: 'somi-designer', project_dir: withConfig('{"cost":{"ceiling":"low"}}') });
+    let j = JSON.parse(toolText(r));
+    check('hard cap: high-only designer under ceiling low is clamped, degraded, tier_source ceiling', [j.tier, j.degraded, j.declared, j.tier_source], ['low', true, ['high'], 'ceiling']);
+    r = await toolCall(client, 'somi_resolve', { agent: 'somi-designer', project_dir: withConfig('{"cost":{"ceiling":"low","agents":{"somi-designer":"high"}}}') });
+    j = JSON.parse(toolText(r));
+    check('a cost.agents override wins over the ceiling', [j.tier, j.degraded, j.tier_source], ['high', false, 'override']);
+
+    r = await toolCall(client, 'somi_resolve', { agent: 'somi-designer', project_dir: withConfig('{"cost":{"agents":{"somi-designer":"turbo"}}}') });
+    check('a bad override value is isError with exit 67', [r.isError, /\(exit 67\)/.test(toolText(r))], [true, true]);
+
+    r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', project_dir: withConfig(`{"pad":"${'x'.repeat(70000)}"}`) });
+    check('an oversize config.json is isError with exit 67', [r.isError, /\(exit 67\)/.test(toolText(r))], [true, true]);
   });
 
   // --- path traversal rejected before any read ----------------------------------------------
@@ -176,8 +214,8 @@ async function run() {
   // --- somi_agent: the agent's instructions without frontmatter, same allowlist ------------
   await withClient({}, async (client) => {
     await client.initialize();
-    const r = await toolCall(client, 'somi_agent', { name: 'reviewer' });
-    check('somi_agent returns agents/reviewer.md content, not an error', r.isError, undefined);
+    const r = await toolCall(client, 'somi_agent', { name: 'somi-reviewer' });
+    check('somi_agent returns agents/somi-reviewer.md content, not an error', r.isError, undefined);
     check('the returned text starts at the body: no frontmatter, no model: line', /^---|^model:/m.test(toolText(r)), false);
     check('the returned text is really the reviewer body', toolText(r).length > 1000 && /reviewer/i.test(toolText(r)), true);
 
@@ -223,7 +261,7 @@ async function run() {
   await withClient({}, async (client) => {
     await client.initialize();
     const proj = fresh();
-    const r = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: proj });
+    const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: 'low', project_dir: proj });
     check('no host root: project_dir alone decides', r.isError, undefined);
     check('ceiling state landed under the project_dir argument', existsSync(path.join(proj, '.somi', 'somi-state')), true);
   });
@@ -233,7 +271,7 @@ async function run() {
     const envProj = fresh();
     await withClient({ CLAUDE_PROJECT_DIR: envProj }, async (client) => {
       await client.initialize();
-      const r = await toolCall(client, 'somi_resolve', { agent: 'coder' });
+      const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: 'low' });
       check('CLAUDE_PROJECT_DIR is used when no project_dir is given', r.isError, undefined);
       check('ceiling state landed under CLAUDE_PROJECT_DIR', existsSync(path.join(envProj, '.somi', 'somi-state')), true);
     });
@@ -247,7 +285,7 @@ async function run() {
     const outsideProj = fresh();
     await withClient({ CLAUDE_PROJECT_DIR: hostProj }, async (client) => {
       await client.initialize();
-      const r = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: outsideProj });
+      const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', project_dir: outsideProj });
       check('M3: project_dir outside the host root is refused', r.isError, true);
       check('M3: the refusal is a usage error (64)', /\(exit 64\)/.test(toolText(r)), true);
       check('M3: no .somi/ written under the host root', existsSync(path.join(hostProj, '.somi')), false);
@@ -263,12 +301,12 @@ async function run() {
     mkdirSync(insideProj, { recursive: true });
     await withClient({ CLAUDE_PROJECT_DIR: hostProj }, async (client) => {
       await client.initialize();
-      const r = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: insideProj });
+      const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: 'low', project_dir: insideProj });
       check('M3: project_dir inside the host root is allowed', r.isError, undefined);
       check('M3: ceiling state landed under project_dir itself, not the host root', existsSync(path.join(insideProj, '.somi', 'somi-state')), true);
       check('M3: the host root itself got no .somi/ written', existsSync(path.join(hostProj, '.somi')), false);
 
-      const r2 = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: hostProj });
+      const r2 = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', project_dir: hostProj });
       check('M3: project_dir equal to the host root is allowed', r2.isError, undefined);
     });
   }
@@ -278,7 +316,7 @@ async function run() {
     await client.initialize({ roots: {} });
     const rootsProj = fresh();
     client.rootsHandler = () => [rootsProj];
-    const r = await toolCall(client, 'somi_resolve', { agent: 'coder' });
+    const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: 'low' });
     check('M1: a single MCP root is used when the client declares the capability', r.isError, undefined);
     check('M1: the server actually asked for roots/list', client.messages.some((m) => m.method === 'roots/list'), true);
     check('M1: ceiling state landed under the root the client returned', existsSync(path.join(rootsProj, '.somi', 'somi-state')), true);
@@ -289,7 +327,7 @@ async function run() {
   await withClient({}, async (client) => {
     await client.initialize({ roots: {} });
     client.rootsHandler = () => [{ uri: 'not-a-file-uri' }];
-    const r = await toolCall(client, 'somi_resolve', { agent: 'coder' });
+    const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: 'low' });
     check('M1: a non-file root URI is rejected outright (never resolved as a relative path)', r.isError, true);
     check('M1: with only a non-file root offered, "no root" (67) is reported, not a guessed path', /\(exit 67\)/.test(toolText(r)), true);
   });
@@ -306,7 +344,7 @@ async function run() {
     await withClient({}, async (client) => {
       await client.initialize({ roots: {} });
       client.rootsHandler = () => [{ uri: `file://${encodeURI(spaced)}` }];
-      const r = await toolCall(client, 'somi_resolve', { agent: 'coder' });
+      const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: 'low' });
       check('M1: a percent-encoded root URI resolves (isError undefined)', r.isError, undefined);
       check('M1: it decodes to the REAL space directory, not the literal-percent one', existsSync(path.join(spaced, '.somi', 'somi-state')), true);
       check('M1: the literal "a%20b" directory is untouched', existsSync(path.join(literalPercent, '.somi')), false);
@@ -320,12 +358,12 @@ async function run() {
     const rootA = fresh();
     const rootB = fresh();
     client.rootsHandler = () => [rootA, rootB];
-    const r = await toolCall(client, 'somi_resolve', { agent: 'coder' });
+    const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: 'low' });
     check('M1: more than one root with no project_dir is ambiguous and refused', r.isError, true);
     check('M1/M3: ambiguous roots refusal is the project-environment family (67)', /\(exit 67\)/.test(toolText(r)), true);
     check('M1: neither offered root got a .somi/ written', existsSync(path.join(rootA, '.somi')) || existsSync(path.join(rootB, '.somi')), false);
 
-    const r2 = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: rootB });
+    const r2 = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: 'low', project_dir: rootB });
     check('M1+M3: project_dir selecting one of several ambiguous roots is allowed', r2.isError, undefined);
     check('M1+M3: state landed under the SELECTED root', existsSync(path.join(rootB, '.somi', 'somi-state')), true);
     check('M1+M3: the other offered root got nothing written', existsSync(path.join(rootA, '.somi')), false);
@@ -337,7 +375,7 @@ async function run() {
     await client.initialize({ roots: {} });
     const missing = path.join(tmpRoot, `missing-${Math.random().toString(36).slice(2)}`);
     client.rootsHandler = () => [missing];
-    const r = await toolCall(client, 'somi_resolve', { agent: 'coder' });
+    const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder' });
     check('M1: a nonexistent MCP root is rejected', r.isError, true);
     check('M1: it is never silently created', existsSync(missing), false);
   });
@@ -346,14 +384,14 @@ async function run() {
   // malformed project_dir (relative, nonexistent) is a usage error (64) regardless.
   await withClient({}, async (client) => {
     await client.initialize(); // no `roots` capability declared
-    const r = await toolCall(client, 'somi_resolve', { agent: 'coder' });
+    const r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder' });
     check('no root establishable is isError', r.isError, true);
     check('the error names the reason and how to fix it', /project_dir/.test(toolText(r)), true);
     check('the exit-67 family is used for "cannot establish a root"', /\(exit 67\)/.test(toolText(r)), true);
 
-    let r2 = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: 'relative/path' });
+    let r2 = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', project_dir: 'relative/path' });
     check('a non-absolute project_dir is rejected (64)', /\(exit 64\)/.test(toolText(r2)), true);
-    r2 = await toolCall(client, 'somi_resolve', { agent: 'coder', project_dir: '/definitely/does/not/exist/anywhere' });
+    r2 = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', project_dir: '/definitely/does/not/exist/anywhere' });
     check('a nonexistent project_dir is rejected (64)', /\(exit 64\)/.test(toolText(r2)), true);
   });
 
@@ -361,12 +399,12 @@ async function run() {
   await withClient({}, async (client) => {
     await client.initialize();
     const proj = fresh();
-    let r = await toolCall(client, 'somi_resolve', { agent: 'coder', host: ['copilot'], project_dir: proj });
+    let r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', host: ['copilot'], project_dir: proj });
     check('m1: an array-valued host is rejected (64), not silently defaulted', /\(exit 64\)/.test(toolText(r)), true);
     check('m1: a rejected host leaves the project root untouched', existsSync(path.join(proj, '.somi')), false);
 
     const proj2 = fresh();
-    r = await toolCall(client, 'somi_resolve', { agent: 'coder', ceiling: '', project_dir: proj2 });
+    r = await toolCall(client, 'somi_resolve', { agent: 'somi-coder', ceiling: '', project_dir: proj2 });
     check('m1: an empty-string ceiling is rejected (64), not silently defaulted', /\(exit 64\)/.test(toolText(r)), true);
     check('m1: a rejected ceiling leaves the project root untouched', existsSync(path.join(proj2, '.somi')), false);
   });
@@ -388,8 +426,8 @@ async function run() {
   {
     const badInputs = [
       { name: 'invalid agent name', args: { agent: 'Not-Valid' } },
-      { name: 'unrecognized ceiling', args: { agent: 'coder', ceiling: 'ultra' } },
-      { name: 'somi is exempt from cost:', args: { agent: 'somi' } },
+      { name: 'unrecognized ceiling', args: { agent: 'somi-coder', ceiling: 'ultra' } },
+      { name: 'somi is exempt from cost resolution', args: { agent: 'somi' } },
       { name: 'unknown agent', args: { agent: 'totally-not-a-real-agent' } },
     ];
     for (const { name, args } of badInputs) {

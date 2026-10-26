@@ -10,7 +10,7 @@ The principles are in [`rules/40-engineering-practices.md`](../../rules/40-engin
 tables, level-selection trees, mock policy with reasons, determinism patterns. Don't restate the
 rule's bullets here; if you find a line that's word-for-word the rule, replace it with a pointer.
 
-The supporting agent is [`test-strategist`](../../agents/test-strategist.md). Load this skill when you
+The supporting agent is [`somi-test-strategist`](../../agents/somi-test-strategist.md). Load this skill when you
 are *writing* tests for a change you're already coding. Invoke the agent when the test shape itself is
 a problem.
 
@@ -123,7 +123,7 @@ If you skip coverage **and don't say why**, you're hiding risk.
 100% line coverage doesn't mean safe. 60% coverage of the risky paths is safer than 100% coverage of
 getters. Aim for **coverage where it matters**, not coverage as a number.
 
-## When to invoke `test-strategist`
+## When to invoke `somi-test-strategist`
 
 - The codebase has poor seams and you can't write the tests you want without refactoring first.
 - Tests are flaky and you suspect the design, not the test code.

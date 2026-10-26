@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "src/pricing.mjs has grown into one function of over 300 lines that nobody dares to touch. Restructure it so the rules live in separate modules, as the statements below describe. quote(cart) must keep working for every caller exactly as it does today.",
+    "Create four modules under src/: rounding.mjs (rounding of amounts), discounts.mjs (quantity, member and coupon discounts), shipping.mjs (shipping and handling charges) and tax.mjs (tax). Each holds its part of the logic and exports at least one function.",
+    "src/pricing.mjs stays the public entry point and only coordinates the steps: at most 120 lines. Everything it exports today (quote, PricingError, SUPPORTED_CURRENCIES, couponCodes) is still exported from it, unchanged, so callers import from it as before.",
+    "No file under src/ is longer than 200 lines.",
+    "Amounts are rounded in one place: no file under src/ other than rounding.mjs calls Math.round or toFixed.",
+    "The modules do not import each other in a circle, and none of them imports src/pricing.mjs.",
+    "Nothing changes in the numbers: for every cart, quote returns exactly the same result as today, amount for amount down to the last digit, with the same fields and the same lists in the same order. Do not fix anything that looks like a bug.",
+    "Invalid carts are refused with the same PricingError (same code, same message) as today, whichever check fails first today.",
+    "quote does not modify the cart it is given (it also works on a frozen cart), and depends on nothing but the cart: the same cart gives the same result every time, in any order of calls.",
+    "The existing tests keep passing, and each of the four modules gets a test file next to them, named after it (test/rounding.test.mjs, test/discounts.test.mjs, test/shipping.test.mjs, test/tax.test.mjs). The README names the modules and what each owns."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-H5-6c2e9a41d7b3f085",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Split src/pricing.mjs into the modules the numbered ticket statements name, keeping quote(cart) and everything else it exports exactly as it behaves today, add a test file per new module under test/ and describe the modules in the README. Follow the conventions in the README. Change only what the ticket needs."
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create order.mjs at the workspace root: an ES module with one named function export, orderTasks(items, edges). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "items must be an array of strings and edges an array of arrays that each hold exactly two strings, otherwise the function throws a TypeError whose code property is 'E_TYPE'. Both arguments are checked for this before anything else, so a problem of this kind wins over every other error.",
+    "Any string, including the empty string, is a valid identifier. An identifier may appear more than once in items: its position is that of its first occurrence, and the result holds every distinct identifier exactly once.",
+    "An edge [before, after] requires before to appear earlier than after in the result. An identifier in an edge that is not in items is never added: the function throws a RangeError whose code property is 'E_UNKNOWN'. That check runs after the type check and before the cycle check. A repeated edge counts once.",
+    "The result is a new array of the distinct identifiers that satisfies every edge and is the smallest such order when two orders are compared from the front, identifier by identifier, by position in items (earlier position is smaller). Alphabetical order plays no part.",
+    "When no order satisfies every edge the function throws a RangeError whose code property is 'E_CYCLE' and whose nodes property is an array of every identifier that cannot be placed (those on a cycle and those that depend, directly or not, on one), in order of position in items. An edge from an identifier to itself is a cycle.",
+    "The function is pure: it does not modify items or edges, does no I/O, keeps no state between calls, and calling it twice with the same arguments gives the same result."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M04-3c9e71a05d2b84f6",
+  "source": [
+    "order.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement order.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

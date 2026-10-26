@@ -8,19 +8,19 @@ allowed-tools: Task, Read, Grep, Glob, Write, Edit, WebSearch, WebFetch, Bash
 
 You are running the **design workflow** of somi — the front-loaded, expensive-reasoning step that
 turns a feature or user story into a settled architecture against the **existing codebase**, then
-compiles it into a dense [`brief.md`](../templates/BRIEF.md.tmpl) the cheaper (`cost: medium`) tier
+compiles it into a dense [`brief.md`](../templates/BRIEF.md.tmpl) the cheaper (default `medium`) tier
 executes against **without re-researching**. All artifacts live under `.somi/plans/<slug>/`.
 
 > **The judgment-heavy core runs at the most capable tier — on the agent, not the command.** This
 > command declares no `cost:` and no `model:` of its own; it runs on whatever model this session is
-> already using, and Tasks the [`designer`](../agents/designer.md)
+> already using, and Tasks the [`somi-designer`](../agents/somi-designer.md)
 > agent for the judgment-heavy core of the work (framing the feature, reading the codebase,
 > shaping crossroads); its `brief.md` anchors everything execution does, so the designer declares
 > `cost: high` with no lower member. This command still does real work of its own — scaffolding the
 > artifact set and owning the crossroads conversation with the user, which can't live inside a
 > single `Task` call because a Tasked run can't pause to converse — but that work has no `cost:` of
 > its own to declare. This is the high-cost layer of SoMi's design→execution economy; the cost is
-> justified because it lets plan and code run at `cost: medium`. See
+> justified because it lets plan and code run at `medium`. See
 > [`docs/COMMANDS.md`](../docs/COMMANDS.md).
 
 > **/design vs /discover vs /plan.** [`/discover`](./discover.md) is for a **whole new product** —
@@ -79,12 +79,11 @@ Create `.somi/plans/<slug>/` with the design artifact set from [`templates/`](..
 If `.somi/README.md` does not yet exist at the repo root, also write it from
 [`templates/SOMI-README.md.tmpl`](../templates/SOMI-README.md.tmpl).
 
-### 4. Invoke the `designer` agent
+### 4. Invoke the `somi-designer` agent
 
-Before this `Task`, call `somi_resolve` for `designer` (with `project_dir`), pass its model, and put
-the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
+Before this `Task`, call `somi_resolve` for `somi-designer` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
 or `somi:somi-dispatch` on Claude Code). Brief
-[`agents/designer.md`](../agents/designer.md) via the Task tool with:
+[`agents/somi-designer.md`](../agents/somi-designer.md) via the Task tool with:
 - The full feature (kept inside the `user-feature` fence).
 - The slug and `.somi/plans/<slug>/` paths.
 - A reminder to follow the operating procedure: premise-check, **read the codebase deeply**, ingest
@@ -111,7 +110,7 @@ with the user, so run the **shared batch round-trip** (see [`commands/plan.md`](
    framed, nothing recorded).
 2. **You present each decision to the user faithfully** — options, pros/cons, recommendation, the
    escape hatches; the designer's pre-supplied narrowing questions power Discover mode.
-3. This re-invocation resolves fresh too — call `somi_resolve` for `designer` again before it, same
+3. This re-invocation resolves fresh too — call `somi_resolve` for `somi-designer` again before it, same
    as the first Task (full rules: the `somi-dispatch` skill). Re-invoke the designer with a
    **`VERIFIED-DECISIONS` block appended** to the same briefing; it
    then records `decisions.md` entries with `Verified with user: yes` and compiles the brief.
@@ -124,15 +123,15 @@ user-verified without an actual user verdict from step 2.
 Hold the designer to the brief quality bar: it must be **dense, bounded (≤ ~400 lines / ~6k tokens),
 reference-not-inline**, and its **"What execution does NOT need to re-research"** section must be
 concrete and honest — that section is what earns the higher spend and lets `/plan`/`/code` run at
-`cost: medium`.
+`medium`.
 
-### 8. Optional high-cost review loop (review the design at `cost: high`)
+### 8. Optional high-cost review loop (review the design at `high`)
 
 For a high-stakes design, run a bounded **design → review → revise** loop before handing off — the
 high-cost counterpart to [`/plan-loop`](./plan-loop.md) / [`/code-loop`](./code-loop.md):
 
-- Task [`architecture-reviewer`](../agents/architecture-reviewer.md) (and
-  [`reviewer`](../agents/reviewer.md) for the brief's completeness) — call `somi_resolve` for each
+- Task [`somi-architecture-reviewer`](../agents/somi-architecture-reviewer.md) (and
+  [`somi-reviewer`](../agents/somi-reviewer.md) for the brief's completeness) — call `somi_resolve` for each
   first (full rules: the `somi-dispatch` skill) — on a **fresh context** — give it
   the artifacts only (`design.md`, `decisions.md`, `brief.md`), **not** the design conversation, so
   the review is unbiased.
@@ -148,8 +147,8 @@ Return to the user with:
 - The **architectural decisions made** (one-liner each) and the **complexity hotspots** identified.
 - A pointer to `.somi/plans/<slug>/` and the files to read first (`brief.md`, then `design.md`).
 - A specific next step: "Review / edit `.somi/plans/<slug>/brief.md`, then run `/plan <slug>` — the
-  planner consumes the brief and sequences it into phases (at `cost: low, medium` — `medium`
-  unless the session ceiling resolves to `low`)."
+  planner consumes the brief and sequences it into phases (default tier `medium` — it runs at the
+  session ceiling)."
 
 ## Guardrails
 
@@ -167,5 +166,5 @@ Return to the user with:
 The design is acceptable when the **brief alone** lets a planner sequence the work and a coder
 execute it without re-deriving the architecture; every architectural decision in `decisions.md` is
 user-verified; the complexity map names specific `file:line` hotspots; and `design.md` sets direction
-without drifting into the planner's file-by-file design. See [`agents/designer.md`](../agents/designer.md)
+without drifting into the planner's file-by-file design. See [`agents/somi-designer.md`](../agents/somi-designer.md)
 for the full quality bar.

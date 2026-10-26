@@ -139,5 +139,5 @@ SOLID is a response to real change pressure. If there's no pressure, the princip
 ## When to escalate
 
 If you spot a SOLID violation that's deeper than this skill can fix — for example, the dependency
-direction is wrong throughout a layer — escalate to [`architecture-reviewer`](../../agents/architecture-reviewer.md)
+direction is wrong throughout a layer — escalate to [`somi-architecture-reviewer`](../../agents/somi-architecture-reviewer.md)
 rather than patching locally.

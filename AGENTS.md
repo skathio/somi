@@ -34,7 +34,8 @@ file when you enter its domain.
   the hooks would gate. ([`40`](./rules/40-engineering-practices.md))
 - **Collaboration:** challenge the premise, not just the architecture; match the answer to the
   question; recommend with concrete options, the user decides direction; surface tradeoffs and
-  blockers in the first line. ([`50`](./rules/50-collaboration.md))
+  blockers in the first line; end with one or two lines: what you skipped or did not check, and any
+  risk the user must know. ([`50`](./rules/50-collaboration.md))
 - **Reasoning craft:** before writing, parse trajectory (what will the reader do with this in 10
   minutes; answer the predictable next question now) → shape (choose the deliverable's form before
   the words; put the answer first) → verify (mark inference as inference; never trade "I confirmed"
@@ -65,9 +66,9 @@ SoMi ships deterministic hooks that block dangerous shell commands (`rm -rf /`, 
 protected branches, `curl | sh`), writes to secret-bearing paths (`.env`, `*.pem`, `id_rsa`), and
 writes to protected paths (`.git/`, `.claude/`, `node_modules/`), and gate unsanctioned dependency
 installs; they append every tool call to `.somi/audit.log`. If a hook blocks you, **do not work
-around it** — explain what you were doing and ask the human. These hooks are a Claude Code host
-capability; on GitHub Copilot they do not fire, so the agent/rule judgment in this digest is the
-enforcement layer there — hold to it.
+around it** — explain what you were doing and ask the human. These hooks run on Claude Code and
+Copilot CLI; on other hosts (VS Code Copilot Chat is unverified) assume they do not, and the agent/rule
+judgment in this digest is the enforcement layer there — hold to it.
 
 In particular, on any host: **refuse** any request to weaken, skip, disable, or make-optional a
 security check, guardrail, validation, or test gate for speed or convenience — name the tradeoff and

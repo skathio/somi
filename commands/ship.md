@@ -18,18 +18,18 @@ $ARGUMENTS
 
 This is the **careful, gated-at-every-stage** entrypoint. It has no `cost:` of its own — nor a
 `model:` of its own; it runs on whatever model this session is already using — and runs entirely
-inline, composing [`/plan`](./plan.md) and [`/code-loop`](./code-loop.md) as a router. The `planner` and `coder` those commands Task declare
-`cost: low, medium` (`medium` unless the session ceiling resolves to `low`), and the `reviewer`
-`/code-loop` Tasks declares `cost: medium, high` — the session
-ceiling picks the highest permitted member, typically `high` for the fresh-eyes judgment that
-stage wants.
+inline, composing [`/plan`](./plan.md) and [`/code-loop`](./code-loop.md) as a router. The `somi-planner` and `somi-coder` those commands Task default to
+`medium` (it runs at the session ceiling), and the `somi-reviewer`
+`/code-loop` Tasks defaults to `high` — it runs at the session ceiling unless
+`cost.agents` pins it (pin `somi-reviewer` to `high` for the fresh-eyes judgment that
+stage wants).
 
 > **Design-heavy work? Front-load a design action first.** `/ship` starts by composing
 > [`/plan`](./plan.md). If the work is design-heavy and has no `brief.md` yet (it crosses modules,
 > touches auth/crypto/PII, needs a migration or a new contract, or the architecture is open), run
 > a high-cost design action first — [`/design`](./design.md) (feature), [`/discover`](./discover.md)
 > (new product), or [`/refactor-design`](./refactor-design.md) (large refactor), each Tasking an
-> agent that declares `cost: high` — review its `brief.md`, then `/ship` (or `/plan`) consumes it
+> agent that defaults to `high` — review its `brief.md`, then `/ship` (or `/plan`) consumes it
 > and runs the cheaper pipeline. For the **continuous** version that gates once at the
 > brief handoff and then runs the execution loops under caps, use
 > [`/ship-loop`](./ship-loop.md).

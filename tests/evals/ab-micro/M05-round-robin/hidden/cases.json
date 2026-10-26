@@ -1,0 +1,7537 @@
+{
+ "canary": "SOMI-CANARY-M05-8c41e07b92d5a3f6",
+ "module": "schedule.mjs",
+ "export": "schedule",
+ "timeoutMs": 10000,
+ "families": [
+  {
+   "name": "functional",
+   "cases": [
+    {
+     "id": "c004",
+     "ac": 3,
+     "args": [
+      [
+       "owl",
+       "b"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "owl",
+          "b"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c005",
+     "ac": 3,
+     "args": [
+      [
+       "A",
+       "B",
+       "C"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "A",
+          "B"
+         ]
+        ],
+        "rest": "C"
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "C"
+         ]
+        ],
+        "rest": "A"
+       },
+       {
+        "matches": [
+         [
+          "C",
+          "A"
+         ]
+        ],
+        "rest": "B"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c006",
+     "ac": 3,
+     "args": [
+      [
+       "zeta",
+       "yak",
+       "xi"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "zeta",
+          "yak"
+         ]
+        ],
+        "rest": "xi"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "xi"
+         ]
+        ],
+        "rest": "zeta"
+       },
+       {
+        "matches": [
+         [
+          "xi",
+          "zeta"
+         ]
+        ],
+        "rest": "yak"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c007",
+     "ac": 3,
+     "args": [
+      [
+       "é",
+       "emu",
+       " a"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "é",
+          "emu"
+         ]
+        ],
+        "rest": " a"
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          " a"
+         ]
+        ],
+        "rest": "é"
+       },
+       {
+        "matches": [
+         [
+          " a",
+          "é"
+         ]
+        ],
+        "rest": "emu"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c008",
+     "ac": 3,
+     "args": [
+      [
+       "__proto__",
+       "toString",
+       "yak"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "__proto__",
+          "toString"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "yak"
+         ]
+        ],
+        "rest": "__proto__"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "__proto__"
+         ]
+        ],
+        "rest": "toString"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c009",
+     "ac": 3,
+     "args": [
+      [
+       "yak",
+       "hasOwnProperty",
+       "ß"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "yak",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": "ß"
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "ß"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "yak"
+         ]
+        ],
+        "rest": "hasOwnProperty"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c010",
+     "ac": 3,
+     "args": [
+      [
+       "yak",
+       "",
+       "é"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "yak",
+          ""
+         ]
+        ],
+        "rest": "é"
+       },
+       {
+        "matches": [
+         [
+          "",
+          "é"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "yak"
+         ]
+        ],
+        "rest": ""
+       }
+      ]
+     }
+    },
+    {
+     "id": "c011",
+     "ac": 5,
+     "args": [
+      [
+       "A",
+       "B",
+       "C",
+       "D"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "A",
+          "B"
+         ],
+         [
+          "C",
+          "D"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "C"
+         ],
+         [
+          "B",
+          "D"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "D",
+          "A"
+         ],
+         [
+          "B",
+          "C"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c012",
+     "ac": 5,
+     "args": [
+      [
+       "zeta",
+       "yak",
+       "xi",
+       "wolf"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "zeta",
+          "yak"
+         ],
+         [
+          "xi",
+          "wolf"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "xi"
+         ],
+         [
+          "yak",
+          "wolf"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "wolf",
+          "zeta"
+         ],
+         [
+          "yak",
+          "xi"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c013",
+     "ac": 5,
+     "args": [
+      [
+       "delta",
+       "Alpha",
+       "zeta",
+       "B"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "delta",
+          "Alpha"
+         ],
+         [
+          "zeta",
+          "B"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "zeta"
+         ],
+         [
+          "Alpha",
+          "B"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "delta"
+         ],
+         [
+          "Alpha",
+          "zeta"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c016",
+     "ac": 5,
+     "args": [
+      [
+       "toString",
+       "é",
+       "2",
+       "Alpha"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "toString",
+          "é"
+         ],
+         [
+          "2",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "2"
+         ],
+         [
+          "é",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "Alpha",
+          "toString"
+         ],
+         [
+          "é",
+          "2"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c017",
+     "ac": 5,
+     "args": [
+      [
+       "x y",
+       "toString",
+       "10",
+       "ß"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "x y",
+          "toString"
+         ],
+         [
+          "10",
+          "ß"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "x y",
+          "10"
+         ],
+         [
+          "toString",
+          "ß"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "x y"
+         ],
+         [
+          "toString",
+          "10"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c018",
+     "ac": 5,
+     "args": [
+      [
+       "constructor",
+       "b",
+       " a",
+       "zeta"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "constructor",
+          "b"
+         ],
+         [
+          " a",
+          "zeta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          " a"
+         ],
+         [
+          "b",
+          "zeta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "constructor"
+         ],
+         [
+          "b",
+          " a"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c019",
+     "ac": 5,
+     "args": [
+      [
+       "A",
+       "B",
+       "C",
+       "D",
+       "E"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "A",
+          "B"
+         ],
+         [
+          "C",
+          "D"
+         ]
+        ],
+        "rest": "E"
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "C"
+         ],
+         [
+          "B",
+          "E"
+         ]
+        ],
+        "rest": "D"
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "C"
+         ],
+         [
+          "E",
+          "D"
+         ]
+        ],
+        "rest": "A"
+       },
+       {
+        "matches": [
+         [
+          "D",
+          "A"
+         ],
+         [
+          "C",
+          "E"
+         ]
+        ],
+        "rest": "B"
+       },
+       {
+        "matches": [
+         [
+          "E",
+          "A"
+         ],
+         [
+          "D",
+          "B"
+         ]
+        ],
+        "rest": "C"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c020",
+     "ac": 5,
+     "args": [
+      [
+       "zeta",
+       "yak",
+       "xi",
+       "wolf",
+       "vole"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "zeta",
+          "yak"
+         ],
+         [
+          "xi",
+          "wolf"
+         ]
+        ],
+        "rest": "vole"
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "xi"
+         ],
+         [
+          "yak",
+          "vole"
+         ]
+        ],
+        "rest": "wolf"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "xi"
+         ],
+         [
+          "vole",
+          "wolf"
+         ]
+        ],
+        "rest": "zeta"
+       },
+       {
+        "matches": [
+         [
+          "wolf",
+          "zeta"
+         ],
+         [
+          "xi",
+          "vole"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "vole",
+          "zeta"
+         ],
+         [
+          "wolf",
+          "yak"
+         ]
+        ],
+        "rest": "xi"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c021",
+     "ac": 5,
+     "args": [
+      [
+       "hasOwnProperty",
+       " a",
+       "",
+       "1",
+       "yak"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          " a"
+         ],
+         [
+          "",
+          "1"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          ""
+         ],
+         [
+          " a",
+          "yak"
+         ]
+        ],
+        "rest": "1"
+       },
+       {
+        "matches": [
+         [
+          " a",
+          ""
+         ],
+         [
+          "yak",
+          "1"
+         ]
+        ],
+        "rest": "hasOwnProperty"
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "hasOwnProperty"
+         ],
+         [
+          "",
+          "yak"
+         ]
+        ],
+        "rest": " a"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "hasOwnProperty"
+         ],
+         [
+          "1",
+          " a"
+         ]
+        ],
+        "rest": ""
+       }
+      ]
+     }
+    },
+    {
+     "id": "c024",
+     "ac": 5,
+     "args": [
+      [
+       "emu",
+       "Alpha",
+       "yak",
+       "2",
+       "é"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "emu",
+          "Alpha"
+         ],
+         [
+          "yak",
+          "2"
+         ]
+        ],
+        "rest": "é"
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "yak"
+         ],
+         [
+          "Alpha",
+          "é"
+         ]
+        ],
+        "rest": "2"
+       },
+       {
+        "matches": [
+         [
+          "Alpha",
+          "yak"
+         ],
+         [
+          "é",
+          "2"
+         ]
+        ],
+        "rest": "emu"
+       },
+       {
+        "matches": [
+         [
+          "2",
+          "emu"
+         ],
+         [
+          "yak",
+          "é"
+         ]
+        ],
+        "rest": "Alpha"
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "emu"
+         ],
+         [
+          "2",
+          "Alpha"
+         ]
+        ],
+        "rest": "yak"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c025",
+     "ac": 5,
+     "args": [
+      [
+       "yak",
+       "1",
+       "é",
+       "x y",
+       "hasOwnProperty"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "yak",
+          "1"
+         ],
+         [
+          "é",
+          "x y"
+         ]
+        ],
+        "rest": "hasOwnProperty"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "é"
+         ],
+         [
+          "1",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": "x y"
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "é"
+         ],
+         [
+          "hasOwnProperty",
+          "x y"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "x y",
+          "yak"
+         ],
+         [
+          "é",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": "1"
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "yak"
+         ],
+         [
+          "x y",
+          "1"
+         ]
+        ],
+        "rest": "é"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c026",
+     "ac": 5,
+     "args": [
+      [
+       "toString",
+       "delta",
+       "hasOwnProperty",
+       "10",
+       "a"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "toString",
+          "delta"
+         ],
+         [
+          "hasOwnProperty",
+          "10"
+         ]
+        ],
+        "rest": "a"
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "hasOwnProperty"
+         ],
+         [
+          "delta",
+          "a"
+         ]
+        ],
+        "rest": "10"
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "hasOwnProperty"
+         ],
+         [
+          "a",
+          "10"
+         ]
+        ],
+        "rest": "toString"
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "toString"
+         ],
+         [
+          "hasOwnProperty",
+          "a"
+         ]
+        ],
+        "rest": "delta"
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "toString"
+         ],
+         [
+          "10",
+          "delta"
+         ]
+        ],
+        "rest": "hasOwnProperty"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c027",
+     "ac": 5,
+     "args": [
+      [
+       "owl",
+       "1",
+       "fox",
+       "emu",
+       " a"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "owl",
+          "1"
+         ],
+         [
+          "fox",
+          "emu"
+         ]
+        ],
+        "rest": " a"
+       },
+       {
+        "matches": [
+         [
+          "owl",
+          "fox"
+         ],
+         [
+          "1",
+          " a"
+         ]
+        ],
+        "rest": "emu"
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "fox"
+         ],
+         [
+          " a",
+          "emu"
+         ]
+        ],
+        "rest": "owl"
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "owl"
+         ],
+         [
+          "fox",
+          " a"
+         ]
+        ],
+        "rest": "1"
+       },
+       {
+        "matches": [
+         [
+          " a",
+          "owl"
+         ],
+         [
+          "emu",
+          "1"
+         ]
+        ],
+        "rest": "fox"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c028",
+     "ac": 5,
+     "args": [
+      [
+       "Z",
+       "x y",
+       "",
+       "9",
+       "2"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "Z",
+          "x y"
+         ],
+         [
+          "",
+          "9"
+         ]
+        ],
+        "rest": "2"
+       },
+       {
+        "matches": [
+         [
+          "Z",
+          ""
+         ],
+         [
+          "x y",
+          "2"
+         ]
+        ],
+        "rest": "9"
+       },
+       {
+        "matches": [
+         [
+          "x y",
+          ""
+         ],
+         [
+          "2",
+          "9"
+         ]
+        ],
+        "rest": "Z"
+       },
+       {
+        "matches": [
+         [
+          "9",
+          "Z"
+         ],
+         [
+          "",
+          "2"
+         ]
+        ],
+        "rest": "x y"
+       },
+       {
+        "matches": [
+         [
+          "2",
+          "Z"
+         ],
+         [
+          "9",
+          "x y"
+         ]
+        ],
+        "rest": ""
+       }
+      ]
+     }
+    },
+    {
+     "id": "c029",
+     "ac": 5,
+     "args": [
+      [
+       "zeta",
+       "emu",
+       "Z",
+       "b",
+       "ß"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "zeta",
+          "emu"
+         ],
+         [
+          "Z",
+          "b"
+         ]
+        ],
+        "rest": "ß"
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "Z"
+         ],
+         [
+          "emu",
+          "ß"
+         ]
+        ],
+        "rest": "b"
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "Z"
+         ],
+         [
+          "ß",
+          "b"
+         ]
+        ],
+        "rest": "zeta"
+       },
+       {
+        "matches": [
+         [
+          "b",
+          "zeta"
+         ],
+         [
+          "Z",
+          "ß"
+         ]
+        ],
+        "rest": "emu"
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "zeta"
+         ],
+         [
+          "b",
+          "emu"
+         ]
+        ],
+        "rest": "Z"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c030",
+     "ac": 6,
+     "args": [
+      [
+       "A",
+       "B",
+       "C",
+       "D",
+       "E",
+       "F"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "A",
+          "B"
+         ],
+         [
+          "C",
+          "D"
+         ],
+         [
+          "E",
+          "F"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "C"
+         ],
+         [
+          "B",
+          "E"
+         ],
+         [
+          "D",
+          "F"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "D",
+          "A"
+         ],
+         [
+          "B",
+          "F"
+         ],
+         [
+          "C",
+          "E"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "F",
+          "A"
+         ],
+         [
+          "C",
+          "B"
+         ],
+         [
+          "E",
+          "D"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "E"
+         ],
+         [
+          "B",
+          "D"
+         ],
+         [
+          "F",
+          "C"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c031",
+     "ac": 6,
+     "args": [
+      [
+       "zeta",
+       "yak",
+       "xi",
+       "wolf",
+       "vole",
+       "urus"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "zeta",
+          "yak"
+         ],
+         [
+          "xi",
+          "wolf"
+         ],
+         [
+          "vole",
+          "urus"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "xi"
+         ],
+         [
+          "yak",
+          "vole"
+         ],
+         [
+          "wolf",
+          "urus"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "wolf",
+          "zeta"
+         ],
+         [
+          "yak",
+          "urus"
+         ],
+         [
+          "xi",
+          "vole"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "urus",
+          "zeta"
+         ],
+         [
+          "xi",
+          "yak"
+         ],
+         [
+          "vole",
+          "wolf"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "vole"
+         ],
+         [
+          "yak",
+          "wolf"
+         ],
+         [
+          "urus",
+          "xi"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c032",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "delta",
+       "hasOwnProperty",
+       "",
+       "fox",
+       "ß"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "a",
+          "delta"
+         ],
+         [
+          "hasOwnProperty",
+          ""
+         ],
+         [
+          "fox",
+          "ß"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "hasOwnProperty"
+         ],
+         [
+          "delta",
+          "fox"
+         ],
+         [
+          "",
+          "ß"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "",
+          "a"
+         ],
+         [
+          "delta",
+          "ß"
+         ],
+         [
+          "hasOwnProperty",
+          "fox"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "a"
+         ],
+         [
+          "hasOwnProperty",
+          "delta"
+         ],
+         [
+          "fox",
+          ""
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "fox"
+         ],
+         [
+          "delta",
+          ""
+         ],
+         [
+          "ß",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c035",
+     "ac": 6,
+     "args": [
+      [
+       "delta",
+       "B",
+       "Z",
+       "yak",
+       "9",
+       "hasOwnProperty"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "delta",
+          "B"
+         ],
+         [
+          "Z",
+          "yak"
+         ],
+         [
+          "9",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "Z"
+         ],
+         [
+          "B",
+          "9"
+         ],
+         [
+          "yak",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "delta"
+         ],
+         [
+          "B",
+          "hasOwnProperty"
+         ],
+         [
+          "Z",
+          "9"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "delta"
+         ],
+         [
+          "Z",
+          "B"
+         ],
+         [
+          "9",
+          "yak"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "9"
+         ],
+         [
+          "B",
+          "yak"
+         ],
+         [
+          "hasOwnProperty",
+          "Z"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c036",
+     "ac": 6,
+     "args": [
+      [
+       "1",
+       "yak",
+       " a",
+       "B",
+       "2",
+       "hasOwnProperty"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "1",
+          "yak"
+         ],
+         [
+          " a",
+          "B"
+         ],
+         [
+          "2",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "1",
+          " a"
+         ],
+         [
+          "yak",
+          "2"
+         ],
+         [
+          "B",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "1"
+         ],
+         [
+          "yak",
+          "hasOwnProperty"
+         ],
+         [
+          " a",
+          "2"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "1"
+         ],
+         [
+          " a",
+          "yak"
+         ],
+         [
+          "2",
+          "B"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "2"
+         ],
+         [
+          "yak",
+          "B"
+         ],
+         [
+          "hasOwnProperty",
+          " a"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c037",
+     "ac": 6,
+     "args": [
+      [
+       "constructor",
+       " a",
+       "fox",
+       "Alpha",
+       "yak",
+       "delta"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "constructor",
+          " a"
+         ],
+         [
+          "fox",
+          "Alpha"
+         ],
+         [
+          "yak",
+          "delta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          "fox"
+         ],
+         [
+          " a",
+          "yak"
+         ],
+         [
+          "Alpha",
+          "delta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "Alpha",
+          "constructor"
+         ],
+         [
+          " a",
+          "delta"
+         ],
+         [
+          "fox",
+          "yak"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "constructor"
+         ],
+         [
+          "fox",
+          " a"
+         ],
+         [
+          "yak",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          "yak"
+         ],
+         [
+          " a",
+          "Alpha"
+         ],
+         [
+          "delta",
+          "fox"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c038",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "9",
+       "zeta",
+       "B",
+       "ß",
+       "10"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "a",
+          "9"
+         ],
+         [
+          "zeta",
+          "B"
+         ],
+         [
+          "ß",
+          "10"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "zeta"
+         ],
+         [
+          "9",
+          "ß"
+         ],
+         [
+          "B",
+          "10"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "a"
+         ],
+         [
+          "9",
+          "10"
+         ],
+         [
+          "zeta",
+          "ß"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "a"
+         ],
+         [
+          "zeta",
+          "9"
+         ],
+         [
+          "ß",
+          "B"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "ß"
+         ],
+         [
+          "9",
+          "B"
+         ],
+         [
+          "10",
+          "zeta"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c039",
+     "ac": 6,
+     "args": [
+      [
+       "1",
+       "9",
+       "B",
+       "é",
+       "ß",
+       "toString"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "1",
+          "9"
+         ],
+         [
+          "B",
+          "é"
+         ],
+         [
+          "ß",
+          "toString"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "B"
+         ],
+         [
+          "9",
+          "ß"
+         ],
+         [
+          "é",
+          "toString"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "1"
+         ],
+         [
+          "9",
+          "toString"
+         ],
+         [
+          "B",
+          "ß"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "1"
+         ],
+         [
+          "B",
+          "9"
+         ],
+         [
+          "ß",
+          "é"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "ß"
+         ],
+         [
+          "9",
+          "é"
+         ],
+         [
+          "toString",
+          "B"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c040",
+     "ac": 6,
+     "args": [
+      [
+       "owl",
+       "b",
+       "a",
+       "Alpha",
+       "1",
+       "fox"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "owl",
+          "b"
+         ],
+         [
+          "a",
+          "Alpha"
+         ],
+         [
+          "1",
+          "fox"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "owl",
+          "a"
+         ],
+         [
+          "b",
+          "1"
+         ],
+         [
+          "Alpha",
+          "fox"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "Alpha",
+          "owl"
+         ],
+         [
+          "b",
+          "fox"
+         ],
+         [
+          "a",
+          "1"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          "owl"
+         ],
+         [
+          "a",
+          "b"
+         ],
+         [
+          "1",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "owl",
+          "1"
+         ],
+         [
+          "b",
+          "Alpha"
+         ],
+         [
+          "fox",
+          "a"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c041",
+     "ac": 6,
+     "args": [
+      [
+       "é",
+       "2",
+       "a",
+       "Z",
+       "delta",
+       "__proto__"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "é",
+          "2"
+         ],
+         [
+          "a",
+          "Z"
+         ],
+         [
+          "delta",
+          "__proto__"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "a"
+         ],
+         [
+          "2",
+          "delta"
+         ],
+         [
+          "Z",
+          "__proto__"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "Z",
+          "é"
+         ],
+         [
+          "2",
+          "__proto__"
+         ],
+         [
+          "a",
+          "delta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "é"
+         ],
+         [
+          "a",
+          "2"
+         ],
+         [
+          "delta",
+          "Z"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "delta"
+         ],
+         [
+          "2",
+          "Z"
+         ],
+         [
+          "__proto__",
+          "a"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c042",
+     "ac": 6,
+     "args": [
+      [
+       "fox",
+       "é",
+       "constructor",
+       "a",
+       "",
+       "Alpha"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "fox",
+          "é"
+         ],
+         [
+          "constructor",
+          "a"
+         ],
+         [
+          "",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          "constructor"
+         ],
+         [
+          "é",
+          ""
+         ],
+         [
+          "a",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "fox"
+         ],
+         [
+          "é",
+          "Alpha"
+         ],
+         [
+          "constructor",
+          ""
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "Alpha",
+          "fox"
+         ],
+         [
+          "constructor",
+          "é"
+         ],
+         [
+          "",
+          "a"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          ""
+         ],
+         [
+          "é",
+          "a"
+         ],
+         [
+          "Alpha",
+          "constructor"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c043",
+     "ac": 6,
+     "args": [
+      [
+       "A",
+       "B",
+       "C",
+       "D",
+       "E",
+       "F",
+       "G"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "A",
+          "B"
+         ],
+         [
+          "C",
+          "D"
+         ],
+         [
+          "E",
+          "F"
+         ]
+        ],
+        "rest": "G"
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "C"
+         ],
+         [
+          "B",
+          "D"
+         ],
+         [
+          "E",
+          "G"
+         ]
+        ],
+        "rest": "F"
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "C"
+         ],
+         [
+          "D",
+          "E"
+         ],
+         [
+          "F",
+          "G"
+         ]
+        ],
+        "rest": "A"
+       },
+       {
+        "matches": [
+         [
+          "D",
+          "A"
+         ],
+         [
+          "F",
+          "B"
+         ],
+         [
+          "G",
+          "C"
+         ]
+        ],
+        "rest": "E"
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "E"
+         ],
+         [
+          "B",
+          "G"
+         ],
+         [
+          "C",
+          "F"
+         ]
+        ],
+        "rest": "D"
+       },
+       {
+        "matches": [
+         [
+          "F",
+          "A"
+         ],
+         [
+          "C",
+          "E"
+         ],
+         [
+          "G",
+          "D"
+         ]
+        ],
+        "rest": "B"
+       },
+       {
+        "matches": [
+         [
+          "G",
+          "A"
+         ],
+         [
+          "E",
+          "B"
+         ],
+         [
+          "D",
+          "F"
+         ]
+        ],
+        "rest": "C"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c044",
+     "ac": 6,
+     "args": [
+      [
+       "zeta",
+       "yak",
+       "xi",
+       "wolf",
+       "vole",
+       "urus",
+       "tern"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "zeta",
+          "yak"
+         ],
+         [
+          "xi",
+          "wolf"
+         ],
+         [
+          "vole",
+          "urus"
+         ]
+        ],
+        "rest": "tern"
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "xi"
+         ],
+         [
+          "yak",
+          "wolf"
+         ],
+         [
+          "vole",
+          "tern"
+         ]
+        ],
+        "rest": "urus"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "xi"
+         ],
+         [
+          "wolf",
+          "vole"
+         ],
+         [
+          "urus",
+          "tern"
+         ]
+        ],
+        "rest": "zeta"
+       },
+       {
+        "matches": [
+         [
+          "wolf",
+          "zeta"
+         ],
+         [
+          "urus",
+          "yak"
+         ],
+         [
+          "tern",
+          "xi"
+         ]
+        ],
+        "rest": "vole"
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "vole"
+         ],
+         [
+          "yak",
+          "tern"
+         ],
+         [
+          "xi",
+          "urus"
+         ]
+        ],
+        "rest": "wolf"
+       },
+       {
+        "matches": [
+         [
+          "urus",
+          "zeta"
+         ],
+         [
+          "xi",
+          "vole"
+         ],
+         [
+          "tern",
+          "wolf"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "tern",
+          "zeta"
+         ],
+         [
+          "vole",
+          "yak"
+         ],
+         [
+          "wolf",
+          "urus"
+         ]
+        ],
+        "rest": "xi"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c045",
+     "ac": 6,
+     "args": [
+      [
+       "2",
+       "constructor",
+       "b",
+       "delta",
+       "owl",
+       "B",
+       "Z"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "2",
+          "constructor"
+         ],
+         [
+          "b",
+          "delta"
+         ],
+         [
+          "owl",
+          "B"
+         ]
+        ],
+        "rest": "Z"
+       },
+       {
+        "matches": [
+         [
+          "2",
+          "b"
+         ],
+         [
+          "constructor",
+          "delta"
+         ],
+         [
+          "owl",
+          "Z"
+         ]
+        ],
+        "rest": "B"
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          "b"
+         ],
+         [
+          "delta",
+          "owl"
+         ],
+         [
+          "B",
+          "Z"
+         ]
+        ],
+        "rest": "2"
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "2"
+         ],
+         [
+          "B",
+          "constructor"
+         ],
+         [
+          "Z",
+          "b"
+         ]
+        ],
+        "rest": "owl"
+       },
+       {
+        "matches": [
+         [
+          "2",
+          "owl"
+         ],
+         [
+          "constructor",
+          "Z"
+         ],
+         [
+          "b",
+          "B"
+         ]
+        ],
+        "rest": "delta"
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "2"
+         ],
+         [
+          "b",
+          "owl"
+         ],
+         [
+          "Z",
+          "delta"
+         ]
+        ],
+        "rest": "constructor"
+       },
+       {
+        "matches": [
+         [
+          "Z",
+          "2"
+         ],
+         [
+          "owl",
+          "constructor"
+         ],
+         [
+          "delta",
+          "B"
+         ]
+        ],
+        "rest": "b"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c048",
+     "ac": 6,
+     "args": [
+      [
+       "__proto__",
+       "ant",
+       "constructor",
+       "emu",
+       "",
+       "fox",
+       "Z"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "__proto__",
+          "ant"
+         ],
+         [
+          "constructor",
+          "emu"
+         ],
+         [
+          "",
+          "fox"
+         ]
+        ],
+        "rest": "Z"
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "constructor"
+         ],
+         [
+          "ant",
+          "emu"
+         ],
+         [
+          "",
+          "Z"
+         ]
+        ],
+        "rest": "fox"
+       },
+       {
+        "matches": [
+         [
+          "ant",
+          "constructor"
+         ],
+         [
+          "emu",
+          ""
+         ],
+         [
+          "fox",
+          "Z"
+         ]
+        ],
+        "rest": "__proto__"
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "__proto__"
+         ],
+         [
+          "fox",
+          "ant"
+         ],
+         [
+          "Z",
+          "constructor"
+         ]
+        ],
+        "rest": ""
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          ""
+         ],
+         [
+          "ant",
+          "Z"
+         ],
+         [
+          "constructor",
+          "fox"
+         ]
+        ],
+        "rest": "emu"
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          "__proto__"
+         ],
+         [
+          "constructor",
+          ""
+         ],
+         [
+          "Z",
+          "emu"
+         ]
+        ],
+        "rest": "ant"
+       },
+       {
+        "matches": [
+         [
+          "Z",
+          "__proto__"
+         ],
+         [
+          "",
+          "ant"
+         ],
+         [
+          "emu",
+          "fox"
+         ]
+        ],
+        "rest": "constructor"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c049",
+     "ac": 6,
+     "args": [
+      [
+       "Z",
+       "ant",
+       "a",
+       "__proto__",
+       "zeta",
+       "constructor",
+       "B"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "Z",
+          "ant"
+         ],
+         [
+          "a",
+          "__proto__"
+         ],
+         [
+          "zeta",
+          "constructor"
+         ]
+        ],
+        "rest": "B"
+       },
+       {
+        "matches": [
+         [
+          "Z",
+          "a"
+         ],
+         [
+          "ant",
+          "__proto__"
+         ],
+         [
+          "zeta",
+          "B"
+         ]
+        ],
+        "rest": "constructor"
+       },
+       {
+        "matches": [
+         [
+          "ant",
+          "a"
+         ],
+         [
+          "__proto__",
+          "zeta"
+         ],
+         [
+          "constructor",
+          "B"
+         ]
+        ],
+        "rest": "Z"
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "Z"
+         ],
+         [
+          "constructor",
+          "ant"
+         ],
+         [
+          "B",
+          "a"
+         ]
+        ],
+        "rest": "zeta"
+       },
+       {
+        "matches": [
+         [
+          "Z",
+          "zeta"
+         ],
+         [
+          "ant",
+          "B"
+         ],
+         [
+          "a",
+          "constructor"
+         ]
+        ],
+        "rest": "__proto__"
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          "Z"
+         ],
+         [
+          "a",
+          "zeta"
+         ],
+         [
+          "B",
+          "__proto__"
+         ]
+        ],
+        "rest": "ant"
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "Z"
+         ],
+         [
+          "zeta",
+          "ant"
+         ],
+         [
+          "__proto__",
+          "constructor"
+         ]
+        ],
+        "rest": "a"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c050",
+     "ac": 6,
+     "args": [
+      [
+       "yak",
+       "10",
+       "x y",
+       "constructor",
+       "Z",
+       "",
+       "delta"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "yak",
+          "10"
+         ],
+         [
+          "x y",
+          "constructor"
+         ],
+         [
+          "Z",
+          ""
+         ]
+        ],
+        "rest": "delta"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "x y"
+         ],
+         [
+          "10",
+          "constructor"
+         ],
+         [
+          "Z",
+          "delta"
+         ]
+        ],
+        "rest": ""
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "x y"
+         ],
+         [
+          "constructor",
+          "Z"
+         ],
+         [
+          "",
+          "delta"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          "yak"
+         ],
+         [
+          "",
+          "10"
+         ],
+         [
+          "delta",
+          "x y"
+         ]
+        ],
+        "rest": "Z"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "Z"
+         ],
+         [
+          "10",
+          "delta"
+         ],
+         [
+          "x y",
+          ""
+         ]
+        ],
+        "rest": "constructor"
+       },
+       {
+        "matches": [
+         [
+          "",
+          "yak"
+         ],
+         [
+          "x y",
+          "Z"
+         ],
+         [
+          "delta",
+          "constructor"
+         ]
+        ],
+        "rest": "10"
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "yak"
+         ],
+         [
+          "Z",
+          "10"
+         ],
+         [
+          "constructor",
+          ""
+         ]
+        ],
+        "rest": "x y"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c051",
+     "ac": 6,
+     "args": [
+      [
+       "__proto__",
+       "9",
+       "1",
+       "toString",
+       "constructor",
+       "2",
+       "a"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "__proto__",
+          "9"
+         ],
+         [
+          "1",
+          "toString"
+         ],
+         [
+          "constructor",
+          "2"
+         ]
+        ],
+        "rest": "a"
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "1"
+         ],
+         [
+          "9",
+          "toString"
+         ],
+         [
+          "constructor",
+          "a"
+         ]
+        ],
+        "rest": "2"
+       },
+       {
+        "matches": [
+         [
+          "9",
+          "1"
+         ],
+         [
+          "toString",
+          "constructor"
+         ],
+         [
+          "2",
+          "a"
+         ]
+        ],
+        "rest": "__proto__"
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "__proto__"
+         ],
+         [
+          "2",
+          "9"
+         ],
+         [
+          "a",
+          "1"
+         ]
+        ],
+        "rest": "constructor"
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "constructor"
+         ],
+         [
+          "9",
+          "a"
+         ],
+         [
+          "1",
+          "2"
+         ]
+        ],
+        "rest": "toString"
+       },
+       {
+        "matches": [
+         [
+          "2",
+          "__proto__"
+         ],
+         [
+          "1",
+          "constructor"
+         ],
+         [
+          "a",
+          "toString"
+         ]
+        ],
+        "rest": "9"
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "__proto__"
+         ],
+         [
+          "constructor",
+          "9"
+         ],
+         [
+          "toString",
+          "2"
+         ]
+        ],
+        "rest": "1"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c052",
+     "ac": 6,
+     "args": [
+      [
+       "1",
+       "a",
+       "owl",
+       "emu",
+       "toString",
+       "é",
+       "x y"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "1",
+          "a"
+         ],
+         [
+          "owl",
+          "emu"
+         ],
+         [
+          "toString",
+          "é"
+         ]
+        ],
+        "rest": "x y"
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "owl"
+         ],
+         [
+          "a",
+          "emu"
+         ],
+         [
+          "toString",
+          "x y"
+         ]
+        ],
+        "rest": "é"
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "owl"
+         ],
+         [
+          "emu",
+          "toString"
+         ],
+         [
+          "é",
+          "x y"
+         ]
+        ],
+        "rest": "1"
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "1"
+         ],
+         [
+          "é",
+          "a"
+         ],
+         [
+          "x y",
+          "owl"
+         ]
+        ],
+        "rest": "toString"
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "toString"
+         ],
+         [
+          "a",
+          "x y"
+         ],
+         [
+          "owl",
+          "é"
+         ]
+        ],
+        "rest": "emu"
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "1"
+         ],
+         [
+          "owl",
+          "toString"
+         ],
+         [
+          "x y",
+          "emu"
+         ]
+        ],
+        "rest": "a"
+       },
+       {
+        "matches": [
+         [
+          "x y",
+          "1"
+         ],
+         [
+          "toString",
+          "a"
+         ],
+         [
+          "emu",
+          "é"
+         ]
+        ],
+        "rest": "owl"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c053",
+     "ac": 6,
+     "args": [
+      [
+       "hasOwnProperty",
+       "delta",
+       "owl",
+       "x y",
+       "9",
+       "zeta",
+       "a"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "delta"
+         ],
+         [
+          "owl",
+          "x y"
+         ],
+         [
+          "9",
+          "zeta"
+         ]
+        ],
+        "rest": "a"
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "owl"
+         ],
+         [
+          "delta",
+          "x y"
+         ],
+         [
+          "9",
+          "a"
+         ]
+        ],
+        "rest": "zeta"
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "owl"
+         ],
+         [
+          "x y",
+          "9"
+         ],
+         [
+          "zeta",
+          "a"
+         ]
+        ],
+        "rest": "hasOwnProperty"
+       },
+       {
+        "matches": [
+         [
+          "x y",
+          "hasOwnProperty"
+         ],
+         [
+          "zeta",
+          "delta"
+         ],
+         [
+          "a",
+          "owl"
+         ]
+        ],
+        "rest": "9"
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "9"
+         ],
+         [
+          "delta",
+          "a"
+         ],
+         [
+          "owl",
+          "zeta"
+         ]
+        ],
+        "rest": "x y"
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "hasOwnProperty"
+         ],
+         [
+          "owl",
+          "9"
+         ],
+         [
+          "a",
+          "x y"
+         ]
+        ],
+        "rest": "delta"
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "hasOwnProperty"
+         ],
+         [
+          "9",
+          "delta"
+         ],
+         [
+          "x y",
+          "zeta"
+         ]
+        ],
+        "rest": "owl"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c054",
+     "ac": 6,
+     "args": [
+      [
+       "Z",
+       "9",
+       "é",
+       "fox",
+       "hasOwnProperty",
+       "delta",
+       "2"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "Z",
+          "9"
+         ],
+         [
+          "é",
+          "fox"
+         ],
+         [
+          "hasOwnProperty",
+          "delta"
+         ]
+        ],
+        "rest": "2"
+       },
+       {
+        "matches": [
+         [
+          "Z",
+          "é"
+         ],
+         [
+          "9",
+          "fox"
+         ],
+         [
+          "hasOwnProperty",
+          "2"
+         ]
+        ],
+        "rest": "delta"
+       },
+       {
+        "matches": [
+         [
+          "9",
+          "é"
+         ],
+         [
+          "fox",
+          "hasOwnProperty"
+         ],
+         [
+          "delta",
+          "2"
+         ]
+        ],
+        "rest": "Z"
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          "Z"
+         ],
+         [
+          "delta",
+          "9"
+         ],
+         [
+          "2",
+          "é"
+         ]
+        ],
+        "rest": "hasOwnProperty"
+       },
+       {
+        "matches": [
+         [
+          "Z",
+          "hasOwnProperty"
+         ],
+         [
+          "9",
+          "2"
+         ],
+         [
+          "é",
+          "delta"
+         ]
+        ],
+        "rest": "fox"
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "Z"
+         ],
+         [
+          "é",
+          "hasOwnProperty"
+         ],
+         [
+          "2",
+          "fox"
+         ]
+        ],
+        "rest": "9"
+       },
+       {
+        "matches": [
+         [
+          "2",
+          "Z"
+         ],
+         [
+          "hasOwnProperty",
+          "9"
+         ],
+         [
+          "fox",
+          "delta"
+         ]
+        ],
+        "rest": "é"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c055",
+     "ac": 6,
+     "args": [
+      [
+       "ß",
+       "10",
+       "a",
+       "1",
+       "ant",
+       "Alpha",
+       "b"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "ß",
+          "10"
+         ],
+         [
+          "a",
+          "1"
+         ],
+         [
+          "ant",
+          "Alpha"
+         ]
+        ],
+        "rest": "b"
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "a"
+         ],
+         [
+          "10",
+          "1"
+         ],
+         [
+          "ant",
+          "b"
+         ]
+        ],
+        "rest": "Alpha"
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "a"
+         ],
+         [
+          "1",
+          "ant"
+         ],
+         [
+          "Alpha",
+          "b"
+         ]
+        ],
+        "rest": "ß"
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "ß"
+         ],
+         [
+          "Alpha",
+          "10"
+         ],
+         [
+          "b",
+          "a"
+         ]
+        ],
+        "rest": "ant"
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "ant"
+         ],
+         [
+          "10",
+          "b"
+         ],
+         [
+          "a",
+          "Alpha"
+         ]
+        ],
+        "rest": "1"
+       },
+       {
+        "matches": [
+         [
+          "Alpha",
+          "ß"
+         ],
+         [
+          "a",
+          "ant"
+         ],
+         [
+          "b",
+          "1"
+         ]
+        ],
+        "rest": "10"
+       },
+       {
+        "matches": [
+         [
+          "b",
+          "ß"
+         ],
+         [
+          "ant",
+          "10"
+         ],
+         [
+          "1",
+          "Alpha"
+         ]
+        ],
+        "rest": "a"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c059",
+     "ac": 6,
+     "args": [
+      [
+       "fox",
+       "x y",
+       "owl",
+       "10",
+       "",
+       "2",
+       "emu",
+       "toString"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "fox",
+          "x y"
+         ],
+         [
+          "owl",
+          "10"
+         ],
+         [
+          "",
+          "2"
+         ],
+         [
+          "emu",
+          "toString"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          "owl"
+         ],
+         [
+          "x y",
+          "10"
+         ],
+         [
+          "",
+          "emu"
+         ],
+         [
+          "2",
+          "toString"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "fox"
+         ],
+         [
+          "x y",
+          "owl"
+         ],
+         [
+          "toString",
+          ""
+         ],
+         [
+          "2",
+          "emu"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          ""
+         ],
+         [
+          "emu",
+          "x y"
+         ],
+         [
+          "owl",
+          "2"
+         ],
+         [
+          "10",
+          "toString"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          "2"
+         ],
+         [
+          "x y",
+          ""
+         ],
+         [
+          "toString",
+          "owl"
+         ],
+         [
+          "emu",
+          "10"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "fox"
+         ],
+         [
+          "2",
+          "x y"
+         ],
+         [
+          "owl",
+          "emu"
+         ],
+         [
+          "10",
+          ""
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "fox"
+         ],
+         [
+          "x y",
+          "toString"
+         ],
+         [
+          "",
+          "owl"
+         ],
+         [
+          "10",
+          "2"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c060",
+     "ac": 6,
+     "args": [
+      [
+       "toString",
+       "ant",
+       "10",
+       "owl",
+       "2",
+       "yak",
+       "delta",
+       "é"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "toString",
+          "ant"
+         ],
+         [
+          "10",
+          "owl"
+         ],
+         [
+          "2",
+          "yak"
+         ],
+         [
+          "delta",
+          "é"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "10"
+         ],
+         [
+          "ant",
+          "owl"
+         ],
+         [
+          "2",
+          "delta"
+         ],
+         [
+          "yak",
+          "é"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "owl",
+          "toString"
+         ],
+         [
+          "ant",
+          "10"
+         ],
+         [
+          "é",
+          "2"
+         ],
+         [
+          "yak",
+          "delta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "2"
+         ],
+         [
+          "delta",
+          "ant"
+         ],
+         [
+          "10",
+          "yak"
+         ],
+         [
+          "owl",
+          "é"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "yak"
+         ],
+         [
+          "ant",
+          "2"
+         ],
+         [
+          "é",
+          "10"
+         ],
+         [
+          "delta",
+          "owl"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "toString"
+         ],
+         [
+          "yak",
+          "ant"
+         ],
+         [
+          "10",
+          "delta"
+         ],
+         [
+          "owl",
+          "2"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "toString"
+         ],
+         [
+          "ant",
+          "é"
+         ],
+         [
+          "2",
+          "10"
+         ],
+         [
+          "owl",
+          "yak"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c061",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "fox",
+       "owl",
+       "ß",
+       "b",
+       "1",
+       "__proto__",
+       "constructor"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "a",
+          "fox"
+         ],
+         [
+          "owl",
+          "ß"
+         ],
+         [
+          "b",
+          "1"
+         ],
+         [
+          "__proto__",
+          "constructor"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "owl"
+         ],
+         [
+          "fox",
+          "ß"
+         ],
+         [
+          "b",
+          "__proto__"
+         ],
+         [
+          "1",
+          "constructor"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "a"
+         ],
+         [
+          "fox",
+          "owl"
+         ],
+         [
+          "constructor",
+          "b"
+         ],
+         [
+          "1",
+          "__proto__"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "b"
+         ],
+         [
+          "__proto__",
+          "fox"
+         ],
+         [
+          "owl",
+          "1"
+         ],
+         [
+          "ß",
+          "constructor"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "1"
+         ],
+         [
+          "fox",
+          "b"
+         ],
+         [
+          "constructor",
+          "owl"
+         ],
+         [
+          "__proto__",
+          "ß"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          "a"
+         ],
+         [
+          "1",
+          "fox"
+         ],
+         [
+          "owl",
+          "__proto__"
+         ],
+         [
+          "ß",
+          "b"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "a"
+         ],
+         [
+          "fox",
+          "constructor"
+         ],
+         [
+          "b",
+          "owl"
+         ],
+         [
+          "ß",
+          "1"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c062",
+     "ac": 6,
+     "args": [
+      [
+       "B",
+       "zeta",
+       "b",
+       "1",
+       "",
+       "2",
+       "constructor",
+       "hasOwnProperty"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "B",
+          "zeta"
+         ],
+         [
+          "b",
+          "1"
+         ],
+         [
+          "",
+          "2"
+         ],
+         [
+          "constructor",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "b"
+         ],
+         [
+          "zeta",
+          "1"
+         ],
+         [
+          "",
+          "constructor"
+         ],
+         [
+          "2",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "B"
+         ],
+         [
+          "zeta",
+          "b"
+         ],
+         [
+          "hasOwnProperty",
+          ""
+         ],
+         [
+          "2",
+          "constructor"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          ""
+         ],
+         [
+          "constructor",
+          "zeta"
+         ],
+         [
+          "b",
+          "2"
+         ],
+         [
+          "1",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "2"
+         ],
+         [
+          "zeta",
+          ""
+         ],
+         [
+          "hasOwnProperty",
+          "b"
+         ],
+         [
+          "constructor",
+          "1"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "B"
+         ],
+         [
+          "2",
+          "zeta"
+         ],
+         [
+          "b",
+          "constructor"
+         ],
+         [
+          "1",
+          ""
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          "B"
+         ],
+         [
+          "zeta",
+          "hasOwnProperty"
+         ],
+         [
+          "",
+          "b"
+         ],
+         [
+          "1",
+          "2"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c063",
+     "ac": 6,
+     "args": [
+      [
+       "__proto__",
+       "yak",
+       "ant",
+       "toString",
+       "fox",
+       "b",
+       "B",
+       "owl"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "__proto__",
+          "yak"
+         ],
+         [
+          "ant",
+          "toString"
+         ],
+         [
+          "fox",
+          "b"
+         ],
+         [
+          "B",
+          "owl"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "ant"
+         ],
+         [
+          "yak",
+          "toString"
+         ],
+         [
+          "fox",
+          "B"
+         ],
+         [
+          "b",
+          "owl"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "__proto__"
+         ],
+         [
+          "yak",
+          "ant"
+         ],
+         [
+          "owl",
+          "fox"
+         ],
+         [
+          "b",
+          "B"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "fox"
+         ],
+         [
+          "B",
+          "yak"
+         ],
+         [
+          "ant",
+          "b"
+         ],
+         [
+          "toString",
+          "owl"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "b"
+         ],
+         [
+          "yak",
+          "fox"
+         ],
+         [
+          "owl",
+          "ant"
+         ],
+         [
+          "B",
+          "toString"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "owl",
+          "__proto__"
+         ],
+         [
+          "b",
+          "yak"
+         ],
+         [
+          "ant",
+          "B"
+         ],
+         [
+          "toString",
+          "fox"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "__proto__"
+         ],
+         [
+          "yak",
+          "owl"
+         ],
+         [
+          "fox",
+          "ant"
+         ],
+         [
+          "toString",
+          "b"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c064",
+     "ac": 6,
+     "args": [
+      [
+       "__proto__",
+       "constructor",
+       "é",
+       "delta",
+       "x y",
+       "Z",
+       "9",
+       "1"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "__proto__",
+          "constructor"
+         ],
+         [
+          "é",
+          "delta"
+         ],
+         [
+          "x y",
+          "Z"
+         ],
+         [
+          "9",
+          "1"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "é"
+         ],
+         [
+          "constructor",
+          "delta"
+         ],
+         [
+          "x y",
+          "9"
+         ],
+         [
+          "Z",
+          "1"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "delta",
+          "__proto__"
+         ],
+         [
+          "constructor",
+          "é"
+         ],
+         [
+          "1",
+          "x y"
+         ],
+         [
+          "Z",
+          "9"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "x y"
+         ],
+         [
+          "9",
+          "constructor"
+         ],
+         [
+          "é",
+          "Z"
+         ],
+         [
+          "delta",
+          "1"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "Z"
+         ],
+         [
+          "constructor",
+          "x y"
+         ],
+         [
+          "1",
+          "é"
+         ],
+         [
+          "9",
+          "delta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "__proto__"
+         ],
+         [
+          "Z",
+          "constructor"
+         ],
+         [
+          "é",
+          "9"
+         ],
+         [
+          "delta",
+          "x y"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "9",
+          "__proto__"
+         ],
+         [
+          "constructor",
+          "1"
+         ],
+         [
+          "x y",
+          "é"
+         ],
+         [
+          "delta",
+          "Z"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c065",
+     "ac": 6,
+     "args": [
+      [
+       "10",
+       "a",
+       "9",
+       "__proto__",
+       "constructor",
+       "ß",
+       "hasOwnProperty",
+       ""
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "10",
+          "a"
+         ],
+         [
+          "9",
+          "__proto__"
+         ],
+         [
+          "constructor",
+          "ß"
+         ],
+         [
+          "hasOwnProperty",
+          ""
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "9"
+         ],
+         [
+          "a",
+          "__proto__"
+         ],
+         [
+          "constructor",
+          "hasOwnProperty"
+         ],
+         [
+          "ß",
+          ""
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "__proto__",
+          "10"
+         ],
+         [
+          "a",
+          "9"
+         ],
+         [
+          "",
+          "constructor"
+         ],
+         [
+          "ß",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "constructor"
+         ],
+         [
+          "hasOwnProperty",
+          "a"
+         ],
+         [
+          "9",
+          "ß"
+         ],
+         [
+          "__proto__",
+          ""
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "ß"
+         ],
+         [
+          "a",
+          "constructor"
+         ],
+         [
+          "",
+          "9"
+         ],
+         [
+          "hasOwnProperty",
+          "__proto__"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "",
+          "10"
+         ],
+         [
+          "ß",
+          "a"
+         ],
+         [
+          "9",
+          "hasOwnProperty"
+         ],
+         [
+          "__proto__",
+          "constructor"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "10"
+         ],
+         [
+          "a",
+          ""
+         ],
+         [
+          "constructor",
+          "9"
+         ],
+         [
+          "__proto__",
+          "ß"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c066",
+     "ac": 6,
+     "args": [
+      [
+       "é",
+       "",
+       "__proto__",
+       "2",
+       "ß",
+       "Z",
+       "ant",
+       "1"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "é",
+          ""
+         ],
+         [
+          "__proto__",
+          "2"
+         ],
+         [
+          "ß",
+          "Z"
+         ],
+         [
+          "ant",
+          "1"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "__proto__"
+         ],
+         [
+          "",
+          "2"
+         ],
+         [
+          "ß",
+          "ant"
+         ],
+         [
+          "Z",
+          "1"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "2",
+          "é"
+         ],
+         [
+          "",
+          "__proto__"
+         ],
+         [
+          "1",
+          "ß"
+         ],
+         [
+          "Z",
+          "ant"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "ß"
+         ],
+         [
+          "ant",
+          ""
+         ],
+         [
+          "__proto__",
+          "Z"
+         ],
+         [
+          "2",
+          "1"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "Z"
+         ],
+         [
+          "",
+          "ß"
+         ],
+         [
+          "1",
+          "__proto__"
+         ],
+         [
+          "ant",
+          "2"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "1",
+          "é"
+         ],
+         [
+          "Z",
+          ""
+         ],
+         [
+          "__proto__",
+          "ant"
+         ],
+         [
+          "2",
+          "ß"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "ant",
+          "é"
+         ],
+         [
+          "",
+          "1"
+         ],
+         [
+          "ß",
+          "__proto__"
+         ],
+         [
+          "2",
+          "Z"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c067",
+     "ac": 6,
+     "args": [
+      [
+       "hasOwnProperty",
+       "b",
+       "x y",
+       "B",
+       "__proto__",
+       "emu",
+       "é",
+       "zeta"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "b"
+         ],
+         [
+          "x y",
+          "B"
+         ],
+         [
+          "__proto__",
+          "emu"
+         ],
+         [
+          "é",
+          "zeta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "x y"
+         ],
+         [
+          "b",
+          "B"
+         ],
+         [
+          "__proto__",
+          "é"
+         ],
+         [
+          "emu",
+          "zeta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "hasOwnProperty"
+         ],
+         [
+          "b",
+          "x y"
+         ],
+         [
+          "zeta",
+          "__proto__"
+         ],
+         [
+          "emu",
+          "é"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "__proto__"
+         ],
+         [
+          "é",
+          "b"
+         ],
+         [
+          "x y",
+          "emu"
+         ],
+         [
+          "B",
+          "zeta"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "hasOwnProperty",
+          "emu"
+         ],
+         [
+          "b",
+          "__proto__"
+         ],
+         [
+          "zeta",
+          "x y"
+         ],
+         [
+          "é",
+          "B"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "hasOwnProperty"
+         ],
+         [
+          "emu",
+          "b"
+         ],
+         [
+          "x y",
+          "é"
+         ],
+         [
+          "B",
+          "__proto__"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "hasOwnProperty"
+         ],
+         [
+          "b",
+          "zeta"
+         ],
+         [
+          "__proto__",
+          "x y"
+         ],
+         [
+          "B",
+          "emu"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c068",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "hasOwnProperty",
+       "2",
+       "toString",
+       "fox",
+       "Z",
+       "",
+       "é"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "a",
+          "hasOwnProperty"
+         ],
+         [
+          "2",
+          "toString"
+         ],
+         [
+          "fox",
+          "Z"
+         ],
+         [
+          "",
+          "é"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "2"
+         ],
+         [
+          "hasOwnProperty",
+          "toString"
+         ],
+         [
+          "fox",
+          ""
+         ],
+         [
+          "Z",
+          "é"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          "a"
+         ],
+         [
+          "hasOwnProperty",
+          "2"
+         ],
+         [
+          "é",
+          "fox"
+         ],
+         [
+          "Z",
+          ""
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "fox"
+         ],
+         [
+          "",
+          "hasOwnProperty"
+         ],
+         [
+          "2",
+          "Z"
+         ],
+         [
+          "toString",
+          "é"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "Z"
+         ],
+         [
+          "hasOwnProperty",
+          "fox"
+         ],
+         [
+          "é",
+          "2"
+         ],
+         [
+          "",
+          "toString"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "a"
+         ],
+         [
+          "Z",
+          "hasOwnProperty"
+         ],
+         [
+          "2",
+          ""
+         ],
+         [
+          "toString",
+          "fox"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "",
+          "a"
+         ],
+         [
+          "hasOwnProperty",
+          "é"
+         ],
+         [
+          "fox",
+          "2"
+         ],
+         [
+          "toString",
+          "Z"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "boundary",
+   "cases": [
+    {
+     "id": "c001",
+     "ac": 3,
+     "args": [
+      [
+       "A",
+       "B"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "A",
+          "B"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c002",
+     "ac": 3,
+     "args": [
+      [
+       "zeta",
+       "yak"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "zeta",
+          "yak"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c003",
+     "ac": 3,
+     "args": [
+      [
+       "ß",
+       "é"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "ß",
+          "é"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c056",
+     "ac": 6,
+     "args": [
+      [
+       "A",
+       "B",
+       "C",
+       "D",
+       "E",
+       "F",
+       "G",
+       "H"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "A",
+          "B"
+         ],
+         [
+          "C",
+          "D"
+         ],
+         [
+          "E",
+          "F"
+         ],
+         [
+          "G",
+          "H"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "C"
+         ],
+         [
+          "B",
+          "D"
+         ],
+         [
+          "E",
+          "G"
+         ],
+         [
+          "F",
+          "H"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "D",
+          "A"
+         ],
+         [
+          "B",
+          "C"
+         ],
+         [
+          "H",
+          "E"
+         ],
+         [
+          "F",
+          "G"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "E"
+         ],
+         [
+          "G",
+          "B"
+         ],
+         [
+          "C",
+          "F"
+         ],
+         [
+          "D",
+          "H"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "A",
+          "F"
+         ],
+         [
+          "B",
+          "E"
+         ],
+         [
+          "H",
+          "C"
+         ],
+         [
+          "G",
+          "D"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "H",
+          "A"
+         ],
+         [
+          "F",
+          "B"
+         ],
+         [
+          "C",
+          "G"
+         ],
+         [
+          "D",
+          "E"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "G",
+          "A"
+         ],
+         [
+          "B",
+          "H"
+         ],
+         [
+          "E",
+          "C"
+         ],
+         [
+          "D",
+          "F"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c057",
+     "ac": 6,
+     "args": [
+      [
+       "zeta",
+       "yak",
+       "xi",
+       "wolf",
+       "vole",
+       "urus",
+       "tern",
+       "seal"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "zeta",
+          "yak"
+         ],
+         [
+          "xi",
+          "wolf"
+         ],
+         [
+          "vole",
+          "urus"
+         ],
+         [
+          "tern",
+          "seal"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "xi"
+         ],
+         [
+          "yak",
+          "wolf"
+         ],
+         [
+          "vole",
+          "tern"
+         ],
+         [
+          "urus",
+          "seal"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "wolf",
+          "zeta"
+         ],
+         [
+          "yak",
+          "xi"
+         ],
+         [
+          "seal",
+          "vole"
+         ],
+         [
+          "urus",
+          "tern"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "vole"
+         ],
+         [
+          "tern",
+          "yak"
+         ],
+         [
+          "xi",
+          "urus"
+         ],
+         [
+          "wolf",
+          "seal"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "urus"
+         ],
+         [
+          "yak",
+          "vole"
+         ],
+         [
+          "seal",
+          "xi"
+         ],
+         [
+          "tern",
+          "wolf"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "seal",
+          "zeta"
+         ],
+         [
+          "urus",
+          "yak"
+         ],
+         [
+          "xi",
+          "tern"
+         ],
+         [
+          "wolf",
+          "vole"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "tern",
+          "zeta"
+         ],
+         [
+          "yak",
+          "seal"
+         ],
+         [
+          "vole",
+          "xi"
+         ],
+         [
+          "wolf",
+          "urus"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c058",
+     "ac": 6,
+     "args": [
+      [
+       "é",
+       "toString",
+       "1",
+       "emu",
+       "B",
+       " a",
+       "b",
+       "Alpha"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "é",
+          "toString"
+         ],
+         [
+          "1",
+          "emu"
+         ],
+         [
+          "B",
+          " a"
+         ],
+         [
+          "b",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "1"
+         ],
+         [
+          "toString",
+          "emu"
+         ],
+         [
+          "B",
+          "b"
+         ],
+         [
+          " a",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "é"
+         ],
+         [
+          "toString",
+          "1"
+         ],
+         [
+          "Alpha",
+          "B"
+         ],
+         [
+          " a",
+          "b"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "B"
+         ],
+         [
+          "b",
+          "toString"
+         ],
+         [
+          "1",
+          " a"
+         ],
+         [
+          "emu",
+          "Alpha"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "é",
+          " a"
+         ],
+         [
+          "toString",
+          "B"
+         ],
+         [
+          "Alpha",
+          "1"
+         ],
+         [
+          "b",
+          "emu"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "Alpha",
+          "é"
+         ],
+         [
+          " a",
+          "toString"
+         ],
+         [
+          "1",
+          "b"
+         ],
+         [
+          "emu",
+          "B"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "b",
+          "é"
+         ],
+         [
+          "toString",
+          "Alpha"
+         ],
+         [
+          "B",
+          "1"
+         ],
+         [
+          "emu",
+          " a"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c069",
+     "ac": 2,
+     "args": [
+      []
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_COUNT"
+      }
+     }
+    },
+    {
+     "id": "c070",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_COUNT"
+      }
+     }
+    },
+    {
+     "id": "c071",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e",
+       "f",
+       "g",
+       "h",
+       "i"
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_COUNT"
+      }
+     }
+    },
+    {
+     "id": "c072",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e",
+       "f",
+       "g",
+       "h",
+       "i",
+       "j"
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_COUNT"
+      }
+     }
+    },
+    {
+     "id": "c073",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "a"
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_DUPLICATE"
+      }
+     }
+    },
+    {
+     "id": "c074",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b",
+       "a"
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_DUPLICATE"
+      }
+     }
+    },
+    {
+     "id": "c075",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e",
+       "f",
+       "g",
+       "a"
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_DUPLICATE"
+      }
+     }
+    },
+    {
+     "id": "c076",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e",
+       "f",
+       "g",
+       "h"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "a",
+          "b"
+         ],
+         [
+          "c",
+          "d"
+         ],
+         [
+          "e",
+          "f"
+         ],
+         [
+          "g",
+          "h"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "c"
+         ],
+         [
+          "b",
+          "d"
+         ],
+         [
+          "e",
+          "g"
+         ],
+         [
+          "f",
+          "h"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "d",
+          "a"
+         ],
+         [
+          "b",
+          "c"
+         ],
+         [
+          "h",
+          "e"
+         ],
+         [
+          "f",
+          "g"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "e"
+         ],
+         [
+          "g",
+          "b"
+         ],
+         [
+          "c",
+          "f"
+         ],
+         [
+          "d",
+          "h"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "f"
+         ],
+         [
+          "b",
+          "e"
+         ],
+         [
+          "h",
+          "c"
+         ],
+         [
+          "g",
+          "d"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "h",
+          "a"
+         ],
+         [
+          "f",
+          "b"
+         ],
+         [
+          "c",
+          "g"
+         ],
+         [
+          "d",
+          "e"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "g",
+          "a"
+         ],
+         [
+          "b",
+          "h"
+         ],
+         [
+          "e",
+          "c"
+         ],
+         [
+          "d",
+          "f"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "safety",
+   "cases": [
+    {
+     "id": "c014",
+     "ac": 5,
+     "args": [
+      [
+       "Alpha",
+       "yak",
+       "2",
+       "constructor"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "Alpha",
+          "yak"
+         ],
+         [
+          "2",
+          "constructor"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "Alpha",
+          "2"
+         ],
+         [
+          "yak",
+          "constructor"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "constructor",
+          "Alpha"
+         ],
+         [
+          "yak",
+          "2"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c015",
+     "ac": 5,
+     "args": [
+      [
+       "owl",
+       "toString",
+       "x y",
+       "fox"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "owl",
+          "toString"
+         ],
+         [
+          "x y",
+          "fox"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "owl",
+          "x y"
+         ],
+         [
+          "toString",
+          "fox"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          "owl"
+         ],
+         [
+          "toString",
+          "x y"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c022",
+     "ac": 5,
+     "args": [
+      [
+       "fox",
+       "yak",
+       " a",
+       "2",
+       "a"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "fox",
+          "yak"
+         ],
+         [
+          " a",
+          "2"
+         ]
+        ],
+        "rest": "a"
+       },
+       {
+        "matches": [
+         [
+          "fox",
+          " a"
+         ],
+         [
+          "yak",
+          "a"
+         ]
+        ],
+        "rest": "2"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          " a"
+         ],
+         [
+          "a",
+          "2"
+         ]
+        ],
+        "rest": "fox"
+       },
+       {
+        "matches": [
+         [
+          "2",
+          "fox"
+         ],
+         [
+          " a",
+          "a"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "fox"
+         ],
+         [
+          "2",
+          "yak"
+         ]
+        ],
+        "rest": " a"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c023",
+     "ac": 5,
+     "args": [
+      [
+       "toString",
+       "a",
+       "",
+       "zeta",
+       "yak"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "toString",
+          "a"
+         ],
+         [
+          "",
+          "zeta"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "toString",
+          ""
+         ],
+         [
+          "a",
+          "yak"
+         ]
+        ],
+        "rest": "zeta"
+       },
+       {
+        "matches": [
+         [
+          "a",
+          ""
+         ],
+         [
+          "yak",
+          "zeta"
+         ]
+        ],
+        "rest": "toString"
+       },
+       {
+        "matches": [
+         [
+          "zeta",
+          "toString"
+         ],
+         [
+          "",
+          "yak"
+         ]
+        ],
+        "rest": "a"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "toString"
+         ],
+         [
+          "zeta",
+          "a"
+         ]
+        ],
+        "rest": ""
+       }
+      ]
+     }
+    },
+    {
+     "id": "c033",
+     "ac": 6,
+     "args": [
+      [
+       "owl",
+       "ß",
+       "fox",
+       "9",
+       "hasOwnProperty",
+       "emu"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "owl",
+          "ß"
+         ],
+         [
+          "fox",
+          "9"
+         ],
+         [
+          "hasOwnProperty",
+          "emu"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "owl",
+          "fox"
+         ],
+         [
+          "ß",
+          "hasOwnProperty"
+         ],
+         [
+          "9",
+          "emu"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "9",
+          "owl"
+         ],
+         [
+          "ß",
+          "emu"
+         ],
+         [
+          "fox",
+          "hasOwnProperty"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "owl"
+         ],
+         [
+          "fox",
+          "ß"
+         ],
+         [
+          "hasOwnProperty",
+          "9"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "owl",
+          "hasOwnProperty"
+         ],
+         [
+          "ß",
+          "9"
+         ],
+         [
+          "emu",
+          "fox"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c034",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "Z",
+       "2",
+       "B",
+       "x y",
+       "9"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "a",
+          "Z"
+         ],
+         [
+          "2",
+          "B"
+         ],
+         [
+          "x y",
+          "9"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "2"
+         ],
+         [
+          "Z",
+          "x y"
+         ],
+         [
+          "B",
+          "9"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "B",
+          "a"
+         ],
+         [
+          "Z",
+          "9"
+         ],
+         [
+          "2",
+          "x y"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "9",
+          "a"
+         ],
+         [
+          "2",
+          "Z"
+         ],
+         [
+          "x y",
+          "B"
+         ]
+        ],
+        "rest": null
+       },
+       {
+        "matches": [
+         [
+          "a",
+          "x y"
+         ],
+         [
+          "Z",
+          "B"
+         ],
+         [
+          "9",
+          "2"
+         ]
+        ],
+        "rest": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "c046",
+     "ac": 6,
+     "args": [
+      [
+       "10",
+       "é",
+       "fox",
+       "emu",
+       "zeta",
+       "b",
+       "x y"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "10",
+          "é"
+         ],
+         [
+          "fox",
+          "emu"
+         ],
+         [
+          "zeta",
+          "b"
+         ]
+        ],
+        "rest": "x y"
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "fox"
+         ],
+         [
+          "é",
+          "emu"
+         ],
+         [
+          "zeta",
+          "x y"
+         ]
+        ],
+        "rest": "b"
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "fox"
+         ],
+         [
+          "emu",
+          "zeta"
+         ],
+         [
+          "b",
+          "x y"
+         ]
+        ],
+        "rest": "10"
+       },
+       {
+        "matches": [
+         [
+          "emu",
+          "10"
+         ],
+         [
+          "b",
+          "é"
+         ],
+         [
+          "x y",
+          "fox"
+         ]
+        ],
+        "rest": "zeta"
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "zeta"
+         ],
+         [
+          "é",
+          "x y"
+         ],
+         [
+          "fox",
+          "b"
+         ]
+        ],
+        "rest": "emu"
+       },
+       {
+        "matches": [
+         [
+          "b",
+          "10"
+         ],
+         [
+          "fox",
+          "zeta"
+         ],
+         [
+          "x y",
+          "emu"
+         ]
+        ],
+        "rest": "é"
+       },
+       {
+        "matches": [
+         [
+          "x y",
+          "10"
+         ],
+         [
+          "zeta",
+          "é"
+         ],
+         [
+          "emu",
+          "b"
+         ]
+        ],
+        "rest": "fox"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c047",
+     "ac": 6,
+     "args": [
+      [
+       "ß",
+       "é",
+       "a",
+       "yak",
+       "__proto__",
+       "x y",
+       "10"
+      ]
+     ],
+     "want": {
+      "value": [
+       {
+        "matches": [
+         [
+          "ß",
+          "é"
+         ],
+         [
+          "a",
+          "yak"
+         ],
+         [
+          "__proto__",
+          "x y"
+         ]
+        ],
+        "rest": "10"
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "a"
+         ],
+         [
+          "é",
+          "yak"
+         ],
+         [
+          "__proto__",
+          "10"
+         ]
+        ],
+        "rest": "x y"
+       },
+       {
+        "matches": [
+         [
+          "é",
+          "a"
+         ],
+         [
+          "yak",
+          "__proto__"
+         ],
+         [
+          "x y",
+          "10"
+         ]
+        ],
+        "rest": "ß"
+       },
+       {
+        "matches": [
+         [
+          "yak",
+          "ß"
+         ],
+         [
+          "x y",
+          "é"
+         ],
+         [
+          "10",
+          "a"
+         ]
+        ],
+        "rest": "__proto__"
+       },
+       {
+        "matches": [
+         [
+          "ß",
+          "__proto__"
+         ],
+         [
+          "é",
+          "10"
+         ],
+         [
+          "a",
+          "x y"
+         ]
+        ],
+        "rest": "yak"
+       },
+       {
+        "matches": [
+         [
+          "x y",
+          "ß"
+         ],
+         [
+          "a",
+          "__proto__"
+         ],
+         [
+          "10",
+          "yak"
+         ]
+        ],
+        "rest": "é"
+       },
+       {
+        "matches": [
+         [
+          "10",
+          "ß"
+         ],
+         [
+          "__proto__",
+          "é"
+         ],
+         [
+          "yak",
+          "x y"
+         ]
+        ],
+        "rest": "a"
+       }
+      ]
+     }
+    },
+    {
+     "id": "c077",
+     "ac": 2,
+     "args": [
+      null
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c078",
+     "ac": 2,
+     "args": [
+      {
+       "$undef": 1
+      }
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c079",
+     "ac": 2,
+     "args": [
+      "abcd"
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c080",
+     "ac": 2,
+     "args": [
+      5
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c081",
+     "ac": 2,
+     "args": [
+      {}
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c082",
+     "ac": 2,
+     "args": [
+      {
+       "0": "a",
+       "1": "b",
+       "2": "c",
+       "length": 3
+      }
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c083",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       1
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c084",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       null
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c085",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       [
+        "b"
+       ],
+       "c"
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c086",
+     "ac": 2,
+     "args": [
+      [
+       7
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c087",
+     "ac": 2,
+     "args": [
+      [
+       1,
+       1
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c088",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "a",
+       5
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c089",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e",
+       "f",
+       "g",
+       "h",
+       "i",
+       5
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "c090",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "a",
+       "c"
+      ]
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_DUPLICATE"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

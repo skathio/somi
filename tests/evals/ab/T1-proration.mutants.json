@@ -1,0 +1,23 @@
+[
+ {"name": "local-time-days", "file": "prorate.mjs", "find": "Date.UTC(year, month - 1, day)", "replace": "new Date(year, month - 1, day).getTime()"},
+ {"name": "no-round-trip-check", "file": "prorate.mjs", "find": "d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day", "replace": "false"},
+ {"name": "floor-not-half-up", "file": "prorate.mjs", "find": " + BigInt(total)) / (2n * BigInt(total))", "replace": ") / (2n * BigInt(total))"},
+ {"name": "naive-float-round", "file": "prorate.mjs", "find": "return Number((2n * BigInt(planCents) * BigInt(days) + BigInt(total)) / (2n * BigInt(total)));", "replace": "return Math.round(planCents * days / total);"},
+ {"name": "float-floor-style", "file": "prorate.mjs", "find": "return Number((2n * BigInt(planCents) * BigInt(days) + BigInt(total)) / (2n * BigInt(total)));", "replace": "return Math.floor((2 * planCents * days + total) / (2 * total));"},
+ {"name": "end-boundary-excluded", "file": "prorate.mjs", "find": "change > end", "replace": "change >= end"},
+ {"name": "start-boundary-excluded", "file": "prorate.mjs", "find": "change < start", "replace": "change <= start"},
+ {"name": "inclusive-end", "file": "prorate.mjs", "find": "remaining: end - change }", "replace": "remaining: end - change + 1 }"},
+ {"name": "amount-cap-too-low", "file": "prorate.mjs", "find": "planCents < 0)", "replace": "planCents < 0 || planCents > 1000000000)"},
+ {"name": "amount-typeof-only", "file": "prorate.mjs", "find": "!Number.isSafeInteger(planCents)", "replace": "typeof planCents !== 'number'"},
+ {"name": "period-equal-allowed", "file": "prorate.mjs", "find": "start >= end", "replace": "start > end"},
+ {"name": "year-range-removed", "file": "prorate.mjs", "find": "year < 1900 || year > 2100", "replace": "false"},
+ {"name": "unanchored-format", "file": "prorate.mjs", "find": "/^(\\d{4})-(\\d{2})-(\\d{2})$/", "replace": "/(\\d{4})-(\\d{2})-(\\d{2})/"},
+ {"name": "only-first-date-validated", "file": "prorate.mjs", "find": "const end = dayNumber(periodEnd);\n  const change = dayNumber(changeDate);", "replace": "const end = Math.floor(Date.parse(periodEnd) / 86400000);\n  const change = Math.floor(Date.parse(changeDate) / 86400000);"},
+ {"name": "credit-rounded-independently", "file": "prorate.mjs", "find": "credit: planCents - charge + 0", "replace": "credit: share(planCents, total - remaining, total)"},
+ {"name": "credit-negative-zero", "file": "prorate.mjs", "find": "planCents - charge + 0", "replace": "planCents - charge"},
+ {"name": "full-period-returns-plan-as-given", "file": "prorate.mjs", "find": "const { total, remaining } = check(planCents, periodStart, periodEnd, changeDate);\n  return share", "replace": "const { total, remaining } = check(planCents, periodStart, periodEnd, changeDate);\n  if (remaining === total) return planCents;\n  return share"},
+ {"name": "range-checked-before-period", "file": "prorate.mjs", "find": "  if (start >= end) throw fail('E_PERIOD', 'periodStart must be before periodEnd');\n  if (change < start || change > end) throw fail('E_RANGE', 'changeDate must be within the period');", "replace": "  if (change < start || change > end) throw fail('E_RANGE', 'changeDate must be within the period');\n  if (start >= end) throw fail('E_PERIOD', 'periodStart must be before periodEnd');"},
+ {"name": "amount-checked-after-dates", "file": "prorate.mjs", "find": "  if (!Number.isSafeInteger(planCents) || planCents < 0) throw fail('E_AMOUNT', 'planCents must be a safe integer, 0 or more');\n  const start = dayNumber(periodStart);", "replace": "  const start = dayNumber(periodStart);\n  if (!Number.isSafeInteger(planCents) || planCents < 0) throw fail('E_AMOUNT', 'planCents must be a safe integer, 0 or more');"},
+ {"name": "typeof-date-check-removed", "file": "prorate.mjs", "find": "const m = typeof value === 'string' ? DATE.exec(value) : null;", "replace": "const m = DATE.exec(value);"},
+ {"name": "neg-zero-rejected", "file": "prorate.mjs", "find": "planCents < 0)", "replace": "planCents < 0 || Object.is(planCents, -0))"}
+]

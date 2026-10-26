@@ -17,13 +17,14 @@ $ARGUMENTS
 
 This command automates the manual `/plan` → `/review plan <slug>` → `/plan` cycle, with **hard
 gates** that ensure it terminates. It has no `cost:` of its own — nor a `model:` of its own; it runs
-on whatever model this session is already using — and runs entirely inline; the `planner` it Tasks
-declares `cost: low,
-medium` (`medium` unless the session ceiling resolves to `low`; executing against an upstream
-`brief.md` when one exists), while the `reviewer` it Tasks declares
-`cost: medium, high` — the session ceiling picks the highest permitted member, typically `high`
-for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by the
-planner's reasoning.
+on whatever model this session is already using — and runs entirely inline; the `somi-planner` it Tasks
+defaults to
+`medium` (it runs at the session ceiling; executing against an upstream
+`brief.md` when one exists), while the `somi-reviewer` it Tasks defaults
+to `high` — it runs at the session ceiling unless `cost.agents` pins it (pin `somi-reviewer`
+to `high` for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by
+the
+planner's reasoning).
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > and `spec.md §1` — in the **same order at the front** of each pass's planner brief, and append the
@@ -96,18 +97,20 @@ Pass counting and finding recurrence are owned by the shipped scripts
 while true:
   # 3a. Pass gate (deterministic)
   node scripts/somi-loop.mjs pass --slug <slug>
+    exit 4 → STOP — the /ship-loop run's time budget is spent: same summary, exit "time-budget"
     exit 2 → STOP — summarise current best plan + remaining findings (by F-id),
              exit "max-passes-exceeded"
 
   # 3b. Plan (the batch verification round-trip pauses here for the user when the
   #     planner returns DECISIONS-NEEDED — that pause never counts as a pass, and the
   #     re-invocation after it resolves fresh too, same as any other start). Call somi_resolve
-  #     for planner first; full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch
-  #     on Claude Code).
-  Task planner (= /plan <problem>  or  /plan revision <slug> with prior findings as brief)
+  #     for somi-planner first; full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch
+  #     on Claude Code). Record every start:
+  #       node scripts/somi-loop.mjs record-dispatch --slug <slug> --agent <agent> [--host <host>]
+  Task somi-planner (= /plan <problem>  or  /plan revision <slug> with prior findings as brief)
 
-  # 3c. Plan review — call somi_resolve for reviewer first; full rules: the somi-dispatch skill
-  Task reviewer (= /review plan <slug>)
+  # 3c. Plan review — call somi_resolve for somi-reviewer first; full rules: the somi-dispatch skill
+  Task somi-reviewer (= /review plan <slug>)
 
   # 3d. Record the pass + findings (locus file for a plan finding is the artifact —
   #     e.g. spec.md / decisions.md / phases/02-…md — symbol is the section)
@@ -159,6 +162,7 @@ while true:
 
 - Loop status: `done` | `max-passes-exceeded` | `divergence` | `user-stop`.
 - Passes used (out of `MAX_PASSES`).
+- What ran: `finish`'s `dispatches` (agent, tier, model, enforced); name every `enforced: false` start.
 - Final verdict + count by severity.
 - Top 3 open findings (if any).
 - Pointer to the plan files (`.somi/plans/<slug>/`) and review files

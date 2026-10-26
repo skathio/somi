@@ -16,7 +16,7 @@ case_fm() { local name="$1" want="$2" got=0
   [[ "$got" == "$want" ]] || { echo "FAIL: $name -- expected exit $want, got $got" >&2; failures=$((failures+1)); }
   total=$((total+1)); }
 
-case_fm "plain values pass" 0 $'name: a\ndescription: Reviews plans, code and designs.\ncost: medium, high'
+case_fm "plain values pass" 0 $'name: a\ndescription: Reviews plans, code and designs.\ntools: Read, Grep'
 case_fm "double-quoted value with ': ' passes" 0 $'name: a\ndescription: "checks divergence: did it follow"'
 case_fm "single-quoted value with ': ' passes" 0 $'name: a\ndescription: \'it\'\'s a: test\''
 case_fm "plain value containing ': ' fails (#30, reviewer)" 1 $'name: a\ndescription: checks divergence: did it follow'

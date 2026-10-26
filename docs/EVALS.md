@@ -40,9 +40,9 @@ passes**. The unit of measurement is a *task-dimension* — task 01's S2, task 0
 | **S6** | Reasoning transparency | The tradeoff is stated, not implied |
 | **S7** | Over-production | Nothing is invented that the input did not supply |
 
-## Coverage across all 24 commands
+## Coverage across all 25 commands
 
-R4 sets three tiers: **gate a few, smoke the rest, structurally check all**. All 24 commands get
+R4 sets three tiers: **gate a few, smoke the rest, structurally check all**. All 25 commands get
 the third tier unconditionally — `scripts/validate.sh` checks frontmatter presence and resolves
 every relative markdown link, on every `npm test` run. What differs is what a command gets *above*
 that floor.
@@ -50,7 +50,7 @@ that floor.
 Three commands carry live-model corpus evidence: `/plan`, `/code`, and `/review` (the three task
 specs above). `/code-loop` carries a fourth, structurally different gate: its own convergence gate
 (a Mann-Whitney comparison of passes-to-approve, unrelated to task
-criteria — see "The convergence gate" below) has landed. The other 20 get **smoke**:
+criteria — see "The convergence gate" below) has landed. The other 21 get **smoke**:
 `tests/evals/lib/smoke.mjs` installs the definition set for real and validates the *installed*
 frontmatter and that the installed tree carries every `DEFINITION_DIRS` entry — **not** every
 referenced path; that's `scripts/check-links.mjs`'s job — at zero model calls.
@@ -88,6 +88,7 @@ capability at all, not a smaller share of one (the zero-dimension exception).
 | `/review-panel` | smoke | frontmatter + install check |
 | `/security-review` | smoke | frontmatter + install check |
 | `/ship` | smoke | frontmatter + install check |
+| `/somi-config` | smoke | frontmatter + install check |
 | `/test-strategy` | smoke | frontmatter + install check |
 | `/upgrade` | smoke | frontmatter + install check |
 
@@ -120,11 +121,11 @@ since landed the extractor, the rank test, the driver, and a runnable CLI
 same case**: `/ship-loop`'s gate is deferred *indefinitely* (nothing currently owns it); `/code-loop`'s gate is this tool's own
 centrepiece, and it has landed.
 
-**The smoke tier covers 20 commands.** `/code-loop` moved OUT of it in 3.4 — the mirror of
+**The smoke tier covers 21 commands.** `/code-loop` moved OUT of it in 3.4 — the mirror of
 how `/ship-loop` moved INTO it **at 2.5** (before which it had coverage in neither tier) — which
 took the tier from 21 to 20. A new command, `/refactor-design`, then joined the smoke tier like any
-other un-gated command, with no gate or mechanism of its own, which took it back to 21; removing `/somi` (2.2.1) took it to 20.
-`discoverUngatedCommands()` (`tests/evals/lib/smoke.mjs`) returns all 20 today;
+other un-gated command, with no gate or mechanism of its own, which took it back to 21; removing `/somi` (2.2.1) took it to 20; `/somi-config` took it to 21.
+`discoverUngatedCommands()` (`tests/evals/lib/smoke.mjs`) returns all 21 today;
 `tests/scripts/eval-runner.sh` pins the count and, separately, the exact set of command names this
 table claims, so a 21st command reappearing here, or a renamed one, fails the suite rather than
 only looking wrong here.
@@ -218,6 +219,28 @@ definition sets live in one run, and reading them from the working tree would ma
 depend on which branch happened to be checked out. A path source records `sha: null` rather than
 implying a commit it cannot reproduce.
 
+## Running both arms on one tier (A/B driver)
+
+By default `tests/scripts/manual/ab-experiment.mjs` writes `cost.ceiling: "medium"` into each
+draw's `.somi/config.json`, so the SoMi arm's agents follow the ceiling. To compare the arms on one
+tier, pass `--ceiling-somi <low|medium|high>` and `--pin-all`:
+
+```sh
+node tests/scripts/manual/ab-experiment.mjs --model <alias> --ceiling-somi medium --pin-all
+```
+
+`--pin-all` adds a `cost.agents` entry for every agent (the `agents/*.md` file names of the plugin
+directory in use: `--plugin-dir` if given, else this repository), each set to the `--ceiling-somi`
+tier, so no agent runs above or below it. The driver knows no model names. A tier becomes a model
+through the plugin's `cost.mapping`, and `--model` is only the CLI alias for the session, so choose
+the tier that corresponds to the `--model` you pass; the driver does not check that they match.
+
+Both arms' workspaces get the same config. The bare arm has no plugin, so the file is inert there;
+writing it anyway keeps the two workspaces differing only where the experiment differs. A dry run
+prints `cost config (both arms, same content): ceiling <tier>, pin-all <on|off> (<n> agents pinned)`
+and each results row records `ceilingSomi` and `pinAll`. Rows written before these fields existed
+still report; the report does not read them.
+
 ## Why certification failed, and what fixed the approach
 
 Task 01's first certification attempt **could not pass** — 4 failures against a budget of 2, with
@@ -236,7 +259,7 @@ important part:
 category error, not a corpus defect: two rounds of sharpening criterion wording moved nothing,
 because the wording was never the problem.
 
-So why were the criteria semantic at all? `agents/planner.md` mandates a **structured**
+So why were the criteria semantic at all? `agents/somi-planner.md` mandates a **structured**
 `DECISIONS-NEEDED` block. `commands/plan.md` relays it to the user, and in `--print` mode with no
 structured-question tool that relay is narrative prose. Measured: **zero of four runs emitted the
 fenced block**; `D1:` never appeared. The structure exists at the agent boundary and is destroyed

@@ -33,7 +33,8 @@ This file mirrors [`AGENTS.md`](../AGENTS.md) at the repo root — same digest, 
   the hooks would gate. ([`40`](../rules/40-engineering-practices.md))
 - **Collaboration:** challenge the premise, not just the architecture; match the answer to the
   question; recommend with concrete options, the user decides direction; surface tradeoffs and
-  blockers in the first line. ([`50`](../rules/50-collaboration.md))
+  blockers in the first line; end with one or two lines: what you skipped or did not check, and any
+  risk the user must know. ([`50`](../rules/50-collaboration.md))
 - **Reasoning craft:** before writing, parse trajectory (what will the reader do with this in 10
   minutes; answer the predictable next question now) → shape (choose the deliverable's form before
   the words; put the answer first) → verify (mark inference as inference; never trade "I confirmed"
@@ -60,8 +61,9 @@ The full composed ruleset lives in [`rules/CLAUDE.md`](../rules/CLAUDE.md).
 ## A note on enforcement
 
 SoMi's deterministic guardrail hooks (blocking dangerous bash, secret writes, protected-path writes,
-dep-install gating, the audit log) are a Claude Code host capability and **do not fire under
-Copilot**. On Copilot, the agent judgment encoded in this digest — especially the security floor and
+dep-install gating, the audit log) run on Claude Code and on **Copilot CLI**. On VS Code Copilot
+Chat whether they run is **unverified**; assume they do not. Where they do not run, the agent judgment
+encoded in this digest — especially the security floor and
 "a new dependency is a decision" — is the enforcement layer. Hold to it as if the hooks were watching.
 
 In particular: **refuse** any request to weaken, skip, disable, or make-optional a security check,

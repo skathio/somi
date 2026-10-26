@@ -139,7 +139,7 @@ API design is half security design. Cross-reference [`owasp-defense`](../owasp-d
 - **SSRF** if the endpoint takes a URL.
 - **PII** — don't return more than the caller needs.
 
-## When to invoke `architecture-reviewer`
+## When to invoke `somi-architecture-reviewer`
 
 - The API introduces a new contract that other systems will depend on.
 - The API changes dependency direction (e.g., service A now calls service B where it used to be the

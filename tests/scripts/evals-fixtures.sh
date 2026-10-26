@@ -347,7 +347,7 @@ fi
 # contract above) is ever broadened from the resolved per-task directory to the fixtures root --
 # the same shape as the $WORK-must-be-outside-the-checkout leak fixtures/README.md:47-51 already
 # names ("the bug and the leak were the same character").
-# Nothing above inspects run.mjs. This narrows that gap with two greps -- existential facts about
+# Nothing above inspects run.mjs. Two greps narrow it (`startsWith` moved to lib/source.mjs) -- facts about
 # the source text, not a parse of it -- plus a pinned occurrence count. Two greps alone would pass
 # an ADDED, broader copy sitting right next to an untouched anchor line (both greps still match),
 # which is the silent case: the per-task copy still lands correctly, the run behaves normally, and
@@ -369,7 +369,7 @@ fi
 n_cp=$(grep -o 'cpSync(' tests/evals/run.mjs | wc -l | tr -d ' ')
 check "run.mjs's cpSync( occurrence count is unchanged (4)" "$n_cp" "4"
 if grep -qF 'cpSync(fixtureDir, work' tests/evals/run.mjs \
-   && grep -qF 'startsWith(`task${id}-`)' tests/evals/run.mjs; then
+   && grep -qF 'startsWith(`task${id}-`)' tests/evals/lib/source.mjs; then
   ok "run.mjs's live reconstruction copies the resolved per-task dir, not the fixtures root"
 else
   bad "run.mjs's live reconstruction copies the resolved per-task dir, not the fixtures root"

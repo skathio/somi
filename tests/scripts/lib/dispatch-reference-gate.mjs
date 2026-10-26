@@ -36,11 +36,11 @@ function callSitePatterns(name) {
   const n = name.replace(/-/g, '\\-');
   const verbs = 'Brief|Task|Invoke|Start|Spawn|Dispatch|Run';
   return [
-    `(?:${verbs})\\s+the\\s+\`${n}\`\\s+agent`, // Brief the `atlas` agent / Run the `atlas` agent
-    `(?:${verbs})\\s+the\\s+\\[\`${n}\`\\]`, // Task the [`reviewer`](../agents/reviewer.md)
-    `(?:${verbs})\\s+\\[\`${n}\`\\]`, // Task [`architecture-reviewer`](../agents/architecture-reviewer.md)
-    `(?:${verbs})\\s+\\[\`agents/${n}\\.md\`\\]`, // Brief [`agents/designer.md`](../agents/designer.md)
-    `Task\\s+${n}\\s*\\(`, // Task coder ( = ... )
+    `(?:${verbs})\\s+the\\s+\`${n}\`\\s+agent`, // Brief the `somi-atlas` agent / Run the `somi-atlas` agent
+    `(?:${verbs})\\s+the\\s+\\[\`${n}\`\\]`, // Task the [`somi-reviewer`](../agents/somi-reviewer.md)
+    `(?:${verbs})\\s+\\[\`${n}\`\\]`, // Task [`somi-architecture-reviewer`](../agents/somi-architecture-reviewer.md)
+    `(?:${verbs})\\s+\\[\`agents/${n}\\.md\`\\]`, // Brief [`agents/somi-designer.md`](../agents/somi-designer.md)
+    `Task\\s+${n}\\s*\\(`, // Task somi-coder ( = ... )
   ];
 }
 

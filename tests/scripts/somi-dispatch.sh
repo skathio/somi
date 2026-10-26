@@ -3,8 +3,8 @@
 # to for "which tier and model should this agent run at, right now" -- the first real call site for
 # decideDispatch/modelForDispatch (nothing before this composed them together outside a test).
 #
-# Exercises: resolution against real shipped agents at every representative declared shape
-# (high-only, medium+high, low+medium) across all three ceilings; ceiling_source surfacing each of
+# Exercises: resolution against real shipped agents at every representative default tier
+# (high, medium) across all three ceilings; ceiling_source surfacing each of
 # cli/env/config/state/default; an unmapped host resolving to model: null rather than a guess; the
 # project's `.somi/config.json` `cost.mapping` override (an unmapped host gaining a mapped model, a
 # single claude-code tier overridden, a __proto__ key rejected, a malformed mapping -- missing tier
@@ -12,13 +12,12 @@
 # --agent rejected before any file is read, in either direction (`../` and a bare `/`); the somi
 # exemption and an unknown agent each failing with their own distinct, clear, non-zero exit code;
 # an empty or missing value for --host/--ceiling/--agent rejected outright rather than falling
-# through to a silent default; and the three exit codes (usage / unknown agent / malformed
-# declaration) staying distinct from each other and from success.
+# through to a silent default; and the three exit codes (usage / unknown agent / no tier source) staying distinct from each other and from success.
 #
 # Every invocation is scoped to its OWN throwaway CLAUDE_PROJECT_DIR, so the real repo's
-# .somi/somi-state/ceiling.json is never read or written by this suite -- agent frontmatter itself
-# is still read from the REAL agents/ directory (the resolver's install root, not the project
-# root), which is the behavior under test, not something to fake.
+# .somi/somi-state/ceiling.json is never read or written by this suite -- agent FILES are still looked up in
+# the REAL agents/ directory (the resolver's install root, not the project root), while each agent's
+# tier comes from scripts/lib/cost-defaults.mjs -- the behavior under test, not something to fake.
 set -uo pipefail
 
 ROOT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -51,59 +50,78 @@ expect_exit() { # $1 = name, $2 = expected exit code, $3 = project root, remaini
   if [ "$got" = "$want" ]; then ok "$name"; else bad "$name (expected exit $want, got $got)"; fi
 }
 
-# --- high-only (`designer`, cost: high): no cheaper mode exists, so every ceiling still runs high -
-for c in low medium high; do
-  out="$(run "$(fresh)" resolve --agent designer --ceiling "$c")"
-  check "designer (high-only) under ceiling=$c: tier is high -- no cheaper mode to select" \
-    "$(field "$out" tier)" "high"
-  check "designer under ceiling=$c: model is opus" "$(field "$out" model)" "opus"
+# --- high-only (`somi-designer`, cost: high): the ceiling is a hard cap, so it runs AT the ceiling and
+# is reported degraded when that is below its default tier high ----------------------------------------
+for spec in low:haiku:true medium:sonnet:true high:opus:false; do
+  IFS=: read -r c m d <<<"$spec"
+  out="$(run "$(fresh)" resolve --agent somi-designer --ceiling "$c")"
+  check "designer (high-only) under ceiling=$c: tier is the ceiling (hard cap)" "$(field "$out" tier)" "$c"
+  check "designer under ceiling=$c: model is $m" "$(field "$out" model)" "$m"
+  check "designer under ceiling=$c: degraded is $d, tier_source ceiling" \
+    "$(field "$out" degraded)/$(field "$out" tier_source)" "$d/ceiling"
 done
+# An agent override wins over the ceiling, through the CLI.
+R_OVR="$(fresh)"; mkdir -p "$R_OVR/.somi"
+printf '{"cost": {"ceiling": "low", "agents": {"somi-designer": "high"}}}\n' > "$R_OVR/.somi/config.json"
+out="$(run "$R_OVR" resolve --agent somi-designer)"
+check "cost.agents.somi-designer=high beats ceiling=low: tier high, model opus, tier_source override" \
+  "$(field "$out" tier)/$(field "$out" model)/$(field "$out" tier_source)" "high/opus/override"
 
-# --- graded medium/high (`reviewer`): ceiling picks the highest permitted member -----------------
-out="$(run "$(fresh)" resolve --agent reviewer --ceiling low)"
-check "reviewer (medium,high) under ceiling=low: no member fits, selects cheapest (medium)" \
-  "$(field "$out" tier)" "medium"
-out="$(run "$(fresh)" resolve --agent reviewer --ceiling medium)"
+# --- default high, also acceptable at medium (`somi-reviewer`): the tier is the ceiling itself; degraded when below the default -
+out="$(run "$(fresh)" resolve --agent somi-reviewer --ceiling low)"
+check "reviewer (default high) under ceiling=low: clamped to the ceiling (low), degraded" \
+  "$(field "$out" tier)/$(field "$out" degraded)" "low/true"
+out="$(run "$(fresh)" resolve --agent somi-reviewer --ceiling medium)"
 check "reviewer under ceiling=medium: selects medium" "$(field "$out" tier)" "medium"
-out="$(run "$(fresh)" resolve --agent reviewer --ceiling high)"
+out="$(run "$(fresh)" resolve --agent somi-reviewer --ceiling high)"
 check "reviewer under ceiling=high: selects high" "$(field "$out" tier)" "high"
 
-# --- graded low/medium (`coder`): the opt-in `low` bar's shipped example ------------------------
-out="$(run "$(fresh)" resolve --agent coder --ceiling low)"
-check "coder (low,medium) under ceiling=low: selects low" "$(field "$out" tier)" "low"
+# --- default medium, opt-in low (`somi-coder`): the opt-in `low` bar's shipped example ------------------------
+out="$(run "$(fresh)" resolve --agent somi-coder --ceiling low)"
+check "coder (default medium) under ceiling=low: selects low" "$(field "$out" tier)" "low"
 check "coder under ceiling=low: model is haiku" "$(field "$out" model)" "haiku"
-out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
+out="$(run "$(fresh)" resolve --agent somi-coder --ceiling medium)"
 check "coder under ceiling=medium: selects medium" "$(field "$out" tier)" "medium"
-out="$(run "$(fresh)" resolve --agent coder --ceiling high)"
-check "coder under ceiling=high: selects its own top member (medium), never invents high" \
-  "$(field "$out" tier)" "medium"
-check "coder under ceiling=high: model is sonnet, not opus" "$(field "$out" model)" "sonnet"
+out="$(run "$(fresh)" resolve --agent somi-coder --ceiling high)"
+check "coder under ceiling=high: runs at the ceiling (high), not degraded" \
+  "$(field "$out" tier)/$(field "$out" degraded)/$(field "$out" tier_source)" "high/false/ceiling"
+check "coder under ceiling=high: model is opus" "$(field "$out" model)" "opus"
 
-# --- ceiling_source covers all five origins -- this is what lets a dispatcher announce a `low`
+# --- ceiling_source covers all of cli/env/config/state/default -- this is what lets a dispatcher announce a `low`
 # ceiling honestly, by its real source, not just its bare value. -----------------------------------
-out="$(run "$(fresh)" resolve --agent coder)"
+out="$(run "$(fresh)" resolve --agent somi-coder)"
 check "no config, no env, no --ceiling: ceiling_source is default" "$(field "$out" ceiling_source)" "default"
 
-out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
+out="$(run "$(fresh)" resolve --agent somi-coder --ceiling medium)"
 check "explicit --ceiling: ceiling_source is cli" "$(field "$out" ceiling_source)" "cli"
 
 R_ENV="$(fresh)"
-out="$(CLAUDE_PROJECT_DIR="$R_ENV" SOMI_COST_CEILING=medium node "$CLI" resolve --agent coder)"
+out="$(CLAUDE_PROJECT_DIR="$R_ENV" SOMI_COST_CEILING=medium node "$CLI" resolve --agent somi-coder)"
 check "SOMI_COST_CEILING set, no --ceiling: ceiling_source is env" "$(field "$out" ceiling_source)" "env"
 
 R_CFG="$(fresh)"; mkdir -p "$R_CFG/.somi"
 printf '{"cost": {"ceiling": "low"}}\n' > "$R_CFG/.somi/config.json"
-out="$(run "$R_CFG" resolve --agent coder)"
-check "bootstrap from .somi/config.json's cost.ceiling: ceiling_source is config" \
-  "$(field "$out" ceiling_source)" "config"
-out2="$(run "$R_CFG" resolve --agent coder)"
-check "a second call against the same project root: ceiling_source is state, not config again" \
-  "$(field "$out2" ceiling_source)" "state"
+out="$(run "$R_CFG" resolve --agent somi-coder)"
+check "cost.ceiling in .somi/config.json: ceiling_source is config" "$(field "$out" ceiling_source)" "config"
+out2="$(run "$R_CFG" resolve --agent somi-coder)"
+check "a second call is config again (config is read live, not remembered as state)" \
+  "$(field "$out2" ceiling_source)/$(field "$out2" ceiling_origin)" "config/config"
+printf '{"cost": {"ceiling": "high"}}\n' > "$R_CFG/.somi/config.json"
+out="$(run "$R_CFG" resolve --agent somi-coder)"
+check "editing the config between two calls moves the ceiling" "$(field "$out" ceiling)/$(field "$out" tier)" "high/high"
+out="$(run "$R_CFG" resolve --agent somi-coder --ceiling low)"
+check "--ceiling beats the config and persists" "$(field "$out" ceiling_source)/$(field "$out" ceiling)" "cli/low"
+rm "$R_CFG/.somi/config.json"
+out="$(run "$R_CFG" resolve --agent somi-coder)"
+check "with the config gone, the persisted CLI ceiling is state with origin cli" \
+  "$(field "$out" ceiling_source)/$(field "$out" ceiling_origin)/$(field "$out" ceiling)" "state/cli/low"
+out="$(run "$(fresh)" resolve --agent somi-coder)"
+check "no config, no state: the default ceiling is medium" "$(field "$out" ceiling)/$(field "$out" tier)" "medium/medium"
 
 # --- unmapped host: model is null (let the host choose), never a guessed name -------------------
-out="$(run "$(fresh)" resolve --agent coder --host some-future-host)"
+out="$(run "$(fresh)" resolve --agent somi-coder --host some-future-host --ceiling high)"
 check "unmapped host: model is null" "$(field "$out" model)" "null"
-check "unmapped host: tier still resolves normally" "$(field "$out" tier)" "medium"
+check "unmapped host: tier still resolves normally (the ceiling, high)" "$(field "$out" tier)" "high"
 
 # --- .somi/config.json's cost.mapping override: how a host SoMi doesn't map (e.g. Copilot) is told
 # which of ITS OWN models is low/medium/high -- reused via readCostConfig, merged via
@@ -126,18 +144,18 @@ expect_malformed() { # $1=name $2=want-exit-code $3=proj, remaining = CLI args
 }
 
 # Otherwise-unmapped host, mapped by the project: resolves to it for the tier actually selected
-# (coder is low,medium; default ceiling high -> its own top member, medium). Without the mapping,
+# (--ceiling high -> coder resolves to high, so the high entry is used). Without the mapping,
 # same as any unmapped host: null.
 R_MAP="$(fresh)"; mkdir -p "$R_MAP/.somi"
 printf '{"cost": {"mapping": {"copilot": {"low": "gpt-5-mini", "medium": "gpt-5", "high": "gpt-5-pro"}}}}\n' \
   > "$R_MAP/.somi/config.json"
-out="$(run "$R_MAP" resolve --agent coder --host copilot)"
-check "copilot mapped via project config: model is the mapped medium entry" "$(field "$out" model)" "gpt-5"
-out="$(run "$(fresh)" resolve --agent coder --host copilot)"
+out="$(run "$R_MAP" resolve --agent somi-coder --host copilot --ceiling high)"
+check "copilot mapped via project config: model is the mapped high entry" "$(field "$out" model)" "gpt-5-pro"
+out="$(run "$(fresh)" resolve --agent somi-coder --host copilot)"
 check "copilot with no project mapping: model is null" "$(field "$out" model)" "null"
 
 # #32: `enforced` is true only when a concrete model id was resolved; otherwise false with a reason.
-out="$(run "$(fresh)" resolve --agent designer --host copilot)"
+out="$(run "$(fresh)" resolve --agent somi-designer --host copilot)"
 check "copilot, no mapping, high agent: model is null" "$(field "$out" model)" "null"
 check "copilot, no mapping: enforced is false" "$(field "$out" enforced)" "false"
 case "$(field "$out" reason)" in
@@ -148,11 +166,11 @@ case "$(field "$out" reason)" in
   *"no model mapping for host copilot"*) ok "copilot, no mapping: reason names the host" ;;
   *) bad "copilot, no mapping: reason names the host (got '$(field "$out" reason)')" ;;
 esac
-out="$(run "$R_MAP" resolve --agent designer --host copilot)"
+out="$(run "$R_MAP" resolve --agent somi-designer --host copilot --ceiling high)"
 check "copilot with a config mapping: model is the mapped high entry" "$(field "$out" model)" "gpt-5-pro"
 check "copilot with a config mapping: enforced is true" "$(field "$out" enforced)" "true"
 check "copilot with a config mapping: no reason key" "$(field "$out" reason)" "undefined"
-out="$(run "$(fresh)" resolve --agent designer --host claude-code)"
+out="$(run "$(fresh)" resolve --agent somi-designer --host claude-code)"
 check "claude-code default: enforced is true" "$(field "$out" enforced)" "true"
 
 # #32: the dispatch skill keeps the honesty rule -- a text-level guard so it cannot be edited away.
@@ -175,7 +193,7 @@ for c in "$ROOT_REPO"/commands/*.md "$ROOT_REPO"/agents/*.md; do
 done
 check "every command/agent naming 'dispatched at cost:' also names the unenforced 'requested cost' line" "$unguarded" ""
 trim_missing=""
-for a in coder planner refactorer; do
+for a in somi-coder somi-planner somi-refactorer; do
   flat="$(tr '\n' ' ' < "$ROOT_REPO/agents/$a.md" | tr -s ' ')"
   case "$flat" in *'dispatched at cost: low` or `requested cost: low'*) ;; *) trim_missing="$trim_missing $a" ;; esac
 done
@@ -183,20 +201,20 @@ check "coder/planner/refactorer trim on 'requested cost: low' as well as 'dispat
 check "the unenforced briefing line reads 'no mapped model' everywhere" \
   "$(grep -rlE 'running on the host model' "$ROOT_REPO/commands" "$ROOT_REPO/agents" "$ROOT_REPO/skills" "$ROOT_REPO/docs" | tr '\n' ' ')" ""
 
-# A project mapping can override a single claude-code tier; designer (cost: high, no cheaper mode)
-# always selects high, isolating the override to exactly the tier it names.
+# A project mapping can override a single claude-code tier; designer at --ceiling high selects high,
+# isolating the override to exactly the tier it names.
 R_OVERRIDE="$(fresh)"; mkdir -p "$R_OVERRIDE/.somi"
 printf '{"cost": {"mapping": {"claude-code": {"low": "haiku", "medium": "sonnet", "high": "custom-opus"}}}}\n' \
   > "$R_OVERRIDE/.somi/config.json"
-out="$(run "$R_OVERRIDE" resolve --agent designer)"
+out="$(run "$R_OVERRIDE" resolve --agent somi-designer --ceiling high)"
 check "project mapping overrides claude-code's high tier" "$(field "$out" model)" "custom-opus"
 
 # A __proto__ key is rejected outright (mergeHostMapping's denylist) -- this is the PROJECT's own
 # config.json being malformed, exit 67, never merged.
 R_PROTO="$(fresh)"; mkdir -p "$R_PROTO/.somi"
 printf '{"cost": {"mapping": {"__proto__": {"low": "x"}}}}\n' > "$R_PROTO/.somi/config.json"
-expect_malformed "a __proto__ key in cost.mapping" 67 "$R_PROTO" resolve --agent coder
-proto_err="$(run "$R_PROTO" resolve --agent coder 2>&1 >/dev/null)"
+expect_malformed "a __proto__ key in cost.mapping" 67 "$R_PROTO" resolve --agent somi-coder
+proto_err="$(run "$R_PROTO" resolve --agent somi-coder 2>&1 >/dev/null)"
 case "$proto_err" in
   *"__proto__"*) ok "the __proto__ rejection names the disallowed key" ;;
   *) bad "the __proto__ rejection does not name the key (got: $proto_err)" ;;
@@ -210,8 +228,8 @@ esac
 # broken in the STRUCTURAL sense mergeHostMapping checks, but these two are still its own data).
 R_PARTIAL="$(fresh)"; mkdir -p "$R_PARTIAL/.somi"
 printf '{"cost": {"mapping": {"copilot": {"low": "gpt-5-mini"}}}}\n' > "$R_PARTIAL/.somi/config.json"
-expect_malformed "a mapped host missing the selected tier" 67 "$R_PARTIAL" resolve --agent coder --host copilot
-partial_msg="$(run "$R_PARTIAL" resolve --agent coder --host copilot 2>&1 >/dev/null || true)"
+expect_malformed "a mapped host missing the selected tier" 67 "$R_PARTIAL" resolve --agent somi-coder --host copilot
+partial_msg="$(run "$R_PARTIAL" resolve --agent somi-coder --host copilot 2>&1 >/dev/null || true)"
 case "$partial_msg" in
   *".somi/config.json cost.mapping"*) ok "the missing-tier error names .somi/config.json cost.mapping" ;;
   *) bad "the missing-tier error does not name .somi/config.json cost.mapping (got: $partial_msg)" ;;
@@ -220,8 +238,8 @@ esac
 R_NONSTRING="$(fresh)"; mkdir -p "$R_NONSTRING/.somi"
 printf '{"cost": {"mapping": {"copilot": {"low": "gpt-5-mini", "medium": 5, "high": "gpt-5-pro"}}}}\n' \
   > "$R_NONSTRING/.somi/config.json"
-expect_malformed "a non-string mapped model" 67 "$R_NONSTRING" resolve --agent coder --host copilot
-nonstring_msg="$(run "$R_NONSTRING" resolve --agent coder --host copilot 2>&1 >/dev/null || true)"
+expect_malformed "a non-string mapped model" 67 "$R_NONSTRING" resolve --agent somi-coder --host copilot --ceiling medium
+nonstring_msg="$(run "$R_NONSTRING" resolve --agent somi-coder --host copilot --ceiling medium 2>&1 >/dev/null || true)"
 case "$nonstring_msg" in
   *".somi/config.json cost.mapping"*) ok "the non-string-model error names .somi/config.json cost.mapping" ;;
   *) bad "the non-string-model error does not name .somi/config.json cost.mapping (got: $nonstring_msg)" ;;
@@ -234,8 +252,8 @@ esac
 R_SHIPPED_PARTIAL="$(fresh)"; mkdir -p "$R_SHIPPED_PARTIAL/.somi"
 printf '{"cost": {"mapping": {"claude-code": {"high": "custom-opus"}}}}\n' > "$R_SHIPPED_PARTIAL/.somi/config.json"
 expect_malformed "a partial override of the shipped claude-code host drops its other tiers" 67 \
-  "$R_SHIPPED_PARTIAL" resolve --agent coder
-shipped_partial_msg="$(run "$R_SHIPPED_PARTIAL" resolve --agent coder 2>&1 >/dev/null || true)"
+  "$R_SHIPPED_PARTIAL" resolve --agent somi-coder --ceiling medium
+shipped_partial_msg="$(run "$R_SHIPPED_PARTIAL" resolve --agent somi-coder --ceiling medium 2>&1 >/dev/null || true)"
 case "$shipped_partial_msg" in
   *".somi/config.json cost.mapping"*) ok "the shipped-host partial-override error names .somi/config.json cost.mapping" ;;
   *) bad "the shipped-host partial-override error does not name .somi/config.json cost.mapping (got: $shipped_partial_msg)" ;;
@@ -245,7 +263,7 @@ esac
 # (mergeHostMapping's own check, same as __proto__ above) -- exit 67, not 66.
 R_BADTIER="$(fresh)"; mkdir -p "$R_BADTIER/.somi"
 printf '{"cost": {"mapping": {"copilot": {"lo": "gpt-5-mini"}}}}\n' > "$R_BADTIER/.somi/config.json"
-expect_malformed "a tier key outside low|medium|high in cost.mapping" 67 "$R_BADTIER" resolve --agent coder --host copilot
+expect_malformed "a tier key outside low|medium|high in cost.mapping" 67 "$R_BADTIER" resolve --agent somi-coder --host copilot
 
 # A named regression test: bootstrap normally (valid config, ceiling state written), THEN corrupt
 # config.json -- the ceiling itself doesn't re-read config after bootstrap, but the mapping
@@ -253,10 +271,10 @@ expect_malformed "a tier key outside low|medium|high in cost.mapping" 67 "$R_BAD
 # (67), never as agent coder's own cost: declaration being malformed (66).
 R_POSTBOOT="$(fresh)"; mkdir -p "$R_POSTBOOT/.somi"
 printf '{"cost": {"ceiling": "high"}}\n' > "$R_POSTBOOT/.somi/config.json"
-run "$R_POSTBOOT" resolve --agent coder >/dev/null # bootstrap: writes .somi/somi-state/ceiling.json
+run "$R_POSTBOOT" resolve --agent somi-coder >/dev/null # bootstrap: writes .somi/somi-state/ceiling.json
 printf '{"cost": {"ceiling": "high"}\n' > "$R_POSTBOOT/.somi/config.json"  # now corrupt (missing brace)
 postboot_rc=0
-run "$R_POSTBOOT" resolve --agent coder >/dev/null 2>&1 || postboot_rc=$?
+run "$R_POSTBOOT" resolve --agent somi-coder >/dev/null 2>&1 || postboot_rc=$?
 check "config corrupted AFTER a successful bootstrap: exit 67, not 66" "$postboot_rc" "67"
 
 # --- path traversal in --agent: rejected before any file is read, in either direction ------------
@@ -300,19 +318,19 @@ check "the CLI's own EXIT_* constants are pairwise distinct, and none is 0 (succ
 
 # --- bad args: missing --agent, unknown subcommand, unknown flag --------------------------------
 expect_exit "missing --agent is a usage error" 64 "$(fresh)" resolve
-expect_exit "unknown subcommand is a usage error" 64 "$(fresh)" bogus-subcommand --agent coder
-expect_exit "unknown flag is a usage error" 64 "$(fresh)" resolve --agent coder --bogus-flag x
+expect_exit "unknown subcommand is a usage error" 64 "$(fresh)" bogus-subcommand --agent somi-coder
+expect_exit "unknown flag is a usage error" 64 "$(fresh)" resolve --agent somi-coder --bogus-flag x
 expect_exit "no subcommand at all is a usage error" 64 "$(fresh)"
 
 # --- an empty or missing flag value is rejected outright, never silently defaulted --------------
 expect_exit "--host with an explicitly empty value is a usage error, not a silent default" 64 \
-  "$(fresh)" resolve --agent coder --host ""
+  "$(fresh)" resolve --agent somi-coder --host ""
 expect_exit "a trailing --host with no value at all is a usage error" 64 \
-  "$(fresh)" resolve --agent coder --host
+  "$(fresh)" resolve --agent somi-coder --host
 expect_exit "--ceiling with an explicitly empty value is a usage error" 64 \
-  "$(fresh)" resolve --agent coder --ceiling ""
+  "$(fresh)" resolve --agent somi-coder --ceiling ""
 expect_exit "a trailing --ceiling with no value at all is a usage error" 64 \
-  "$(fresh)" resolve --agent coder --ceiling
+  "$(fresh)" resolve --agent somi-coder --ceiling
 expect_exit "--agent with an explicitly empty value is a usage error" 64 \
   "$(fresh)" resolve --agent ""
 
@@ -321,8 +339,8 @@ expect_exit "--agent with an explicitly empty value is a usage error" 64 \
 # resolveCeiling() ever touches disk, so a rejected value leaves no .somi/ state behind. -----------
 R_BADCEIL="$(fresh)"
 expect_exit "an invalid --ceiling VALUE ('critical') is a usage error, not a project-env failure" 64 \
-  "$R_BADCEIL" resolve --agent coder --ceiling critical
-badceil_msg="$(run "$R_BADCEIL" resolve --agent coder --ceiling critical 2>&1 >/dev/null || true)"
+  "$R_BADCEIL" resolve --agent somi-coder --ceiling critical
+badceil_msg="$(run "$R_BADCEIL" resolve --agent somi-coder --ceiling critical 2>&1 >/dev/null || true)"
 case "$badceil_msg" in
   *"--ceiling"*"critical"*) ok "the bad --ceiling error names the flag and the rejected value" ;;
   *) bad "the bad --ceiling error is unclear (got: $badceil_msg)" ;;
@@ -339,8 +357,8 @@ fi
 R_CFG_BROKEN="$(fresh)"; mkdir -p "$R_CFG_BROKEN/.somi"
 printf '{"cost": {"ceiling": "low"}\n' > "$R_CFG_BROKEN/.somi/config.json"  # missing closing brace
 expect_exit "an unparsable .somi/config.json is a project-env failure (67), not usage or malformed" 67 \
-  "$R_CFG_BROKEN" resolve --agent coder
-cfg_broken_msg="$(run "$R_CFG_BROKEN" resolve --agent coder 2>&1 >/dev/null || true)"
+  "$R_CFG_BROKEN" resolve --agent somi-coder
+cfg_broken_msg="$(run "$R_CFG_BROKEN" resolve --agent somi-coder 2>&1 >/dev/null || true)"
 case "$cfg_broken_msg" in
   *"config.json"*) ok "the unparsable-config error names config.json" ;;
   *) bad "the unparsable-config error does not name config.json (got: $cfg_broken_msg)" ;;
@@ -349,8 +367,8 @@ esac
 R_STATE_BROKEN="$(fresh)"; mkdir -p "$R_STATE_BROKEN/.somi/somi-state"
 printf '{"ceiling": "low"\n' > "$R_STATE_BROKEN/.somi/somi-state/ceiling.json"  # missing closing brace
 expect_exit "an unparsable .somi/somi-state/ceiling.json is a project-env failure (67)" 67 \
-  "$R_STATE_BROKEN" resolve --agent coder
-state_broken_msg="$(run "$R_STATE_BROKEN" resolve --agent coder 2>&1 >/dev/null || true)"
+  "$R_STATE_BROKEN" resolve --agent somi-coder
+state_broken_msg="$(run "$R_STATE_BROKEN" resolve --agent somi-coder 2>&1 >/dev/null || true)"
 case "$state_broken_msg" in
   *"ceiling.json"*) ok "the unparsable-state error names ceiling.json" ;;
   *) bad "the unparsable-state error does not name ceiling.json (got: $state_broken_msg)" ;;
@@ -362,52 +380,86 @@ esac
 # a bad --ceiling value above.
 R_ENV_BAD="$(fresh)"
 env_bad_rc=0
-CLAUDE_PROJECT_DIR="$R_ENV_BAD" SOMI_COST_CEILING=critical node "$CLI" resolve --agent coder >/dev/null 2>&1 || env_bad_rc=$?
+CLAUDE_PROJECT_DIR="$R_ENV_BAD" SOMI_COST_CEILING=critical node "$CLI" resolve --agent somi-coder >/dev/null 2>&1 || env_bad_rc=$?
 check "a malformed SOMI_COST_CEILING is a usage error (64), not a project-env failure" "$env_bad_rc" "64"
 if [ -e "$R_ENV_BAD/.somi" ]; then
   bad "a rejected SOMI_COST_CEILING must be caught before the ceiling state is ever touched (found .somi/ in the project root)"
 else
   ok "a rejected SOMI_COST_CEILING ('critical') leaves the project root untouched -- validated before resolveCeiling touches disk"
 fi
-envbad_msg="$(CLAUDE_PROJECT_DIR="$(fresh)" SOMI_COST_CEILING=critical node "$CLI" resolve --agent coder 2>&1 >/dev/null || true)"
+envbad_msg="$(CLAUDE_PROJECT_DIR="$(fresh)" SOMI_COST_CEILING=critical node "$CLI" resolve --agent somi-coder 2>&1 >/dev/null || true)"
 case "$envbad_msg" in
   *"SOMI_COST_CEILING"*"critical"*) ok "the bad SOMI_COST_CEILING error names the variable and the rejected value" ;;
   *) bad "the bad SOMI_COST_CEILING error is unclear (got: $envbad_msg)" ;;
 esac
 
 # --- output shape: exactly the documented fields (`enforced` added by #32; `reason` only when unenforced), and a real JSON array for `supported` -----
-out="$(run "$(fresh)" resolve --agent coder --ceiling medium)"
-check "JSON output carries exactly agent/ceiling/ceiling_origin/ceiling_source/enforced/model/supported/tier" \
+out="$(run "$(fresh)" resolve --agent somi-coder --ceiling medium)"
+check "JSON output carries exactly agent/agent_type/ceiling/ceiling_origin/ceiling_source/declared/degraded/enforced/model/supported/tier/tier_source" \
   "$(node -e 'process.stdout.write(Object.keys(JSON.parse(process.argv[1])).sort().join("|"))' "$out")" \
-  "agent|ceiling|ceiling_origin|ceiling_source|enforced|model|supported|tier"
-check "coder's supported set is exactly [low, medium], echoing its declared frontmatter" \
+  "agent|agent_type|ceiling|ceiling_origin|ceiling_source|declared|degraded|enforced|model|supported|tier|tier_source"
+check "coder's supported set is exactly [medium], echoing its default tier from the table" \
   "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" \
-  "low,medium"
+  "medium"
 
 # --- ceiling_origin surfaces through the CLI, not just the library: the source/origin distinction
 # that makes "ceiling_source: state" actionable round-trips through the JSON. ---------------------
-out="$(run "$(fresh)" resolve --agent coder)"
+out="$(run "$(fresh)" resolve --agent somi-coder)"
 check "fresh project, no override: ceiling_origin matches ceiling_source ('default')" \
   "$(field "$out" ceiling_origin)" "default"
 
 R_ORIGIN="$(fresh)"; mkdir -p "$R_ORIGIN/.somi"
 printf '{"cost": {"ceiling": "low"}}\n' > "$R_ORIGIN/.somi/config.json"
-run "$R_ORIGIN" resolve --agent coder >/dev/null  # bootstrap from config
-out="$(run "$R_ORIGIN" resolve --agent coder)"    # a later bare call: state now on disk
-check "a later call: ceiling_source is 'state' but ceiling_origin still says 'config' -- actionable" \
-  "$(field "$out" ceiling_source),$(field "$out" ceiling_origin)" "state,config"
+run "$R_ORIGIN" resolve --agent somi-coder --ceiling medium >/dev/null  # persisted from the CLI; config still outranks it
+rm "$R_ORIGIN/.somi/config.json"
+out="$(run "$R_ORIGIN" resolve --agent somi-coder)"    # a later bare call, config gone: state on disk
+check "a later call: ceiling_source is 'state' but ceiling_origin still says 'cli' -- actionable" \
+  "$(field "$out" ceiling_source),$(field "$out" ceiling_origin)" "state,cli"
 
-# --- CRLF checkout (#28): a Windows clone with core.autocrlf rewrites agent files to CRLF; the
-# frontmatter delimiter is then `---\r`, which must still parse. Run a copy of the install whose
-# agent files are CRLF. -----------------------------------------------------------------------------
-CRLF_INSTALL="$(fresh)"
-cp -R "$ROOT_REPO/scripts" "$ROOT_REPO/agents" "$CRLF_INSTALL/"
-for f in "$CRLF_INSTALL"/agents/*.md; do sed -i 's/$/\r/' "$f"; done
-crlf_rc=0
-out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CRLF_INSTALL/scripts/somi-dispatch.mjs" resolve --agent planner --host copilot 2>&1)" || crlf_rc=$?
-check "CRLF agent files: resolve exits 0 (was 66, 'declares no cost:')" "$crlf_rc" "0"
-[ "$crlf_rc" = 0 ] && check "CRLF agent files: planner's supported set parses without a trailing CR" \
-  "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" "low,medium"
+# --- the tier comes from the default table, never from the agent file --------------------------------
+# A leftover `cost:` line in an agent file (step one of retiring it) is ignored, and so is the file's
+# line-ending style (#28: a Windows clone rewrites agent files to CRLF). Run a copy of the install whose
+# planner declares `cost: low` and whose agent files are all CRLF.
+LEFTOVER_INSTALL="$(fresh)"
+cp -R "$ROOT_REPO/scripts" "$ROOT_REPO/agents" "$LEFTOVER_INSTALL/"
+sed -i '0,/^description:/s/^description:/cost: low\ndescription:/' "$LEFTOVER_INSTALL/agents/somi-planner.md"
+for f in "$LEFTOVER_INSTALL"/agents/*.md; do sed -i 's/$/\r/' "$f"; done
+leftover_rc=0
+out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$LEFTOVER_INSTALL/scripts/somi-dispatch.mjs" resolve --agent somi-planner --host copilot 2>&1)" || leftover_rc=$?
+check "a leftover cost: line in a CRLF agent file: resolve exits 0" "$leftover_rc" "0"
+[ "$leftover_rc" = 0 ] && check "... and planner's supported set is the table's [medium], not the file's low" \
+  "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" "medium"
+grep -q '^cost: low' "$LEFTOVER_INSTALL/agents/somi-planner.md" || bad "fixture did not plant the leftover cost: line"
+# Red proof: if the resolver took the tier from anywhere but the table, the same assertion would see it.
+sed -i "s/const defaultTier = AGENT_DEFAULT_TIERS\[agent\];/const defaultTier = 'low';/" "$LEFTOVER_INSTALL/scripts/lib/dispatch-resolver.mjs"
+out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$LEFTOVER_INSTALL/scripts/somi-dispatch.mjs" resolve --agent somi-planner --host copilot 2>&1)" || true
+check "red proof: a resolver that ignores the table reports a different supported set" \
+  "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).supported.join(","))' "$out")" "low"
+
+# An agent file with no table entry (and not the exempt somi) is a gap in the plugin itself: 66, naming the table.
+GHOST_INSTALL="$(fresh)"
+cp -R "$ROOT_REPO/scripts" "$ROOT_REPO/agents" "$GHOST_INSTALL/"
+printf -- '---\nname: ghost\ndescription: d\n---\nbody\n' > "$GHOST_INSTALL/agents/ghost.md"
+ghost_rc=0
+msg="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$GHOST_INSTALL/scripts/somi-dispatch.mjs" resolve --agent ghost 2>&1 >/dev/null)" || ghost_rc=$?
+check "an agent file with no default-tier table entry exits 66" "$ghost_rc" "66"
+case "$msg" in
+  *"default tier table"*) ok "... and the message names the table" ;;
+  *) bad "... the message does not name the table (got: $msg)" ;;
+esac
+
+# --- #35: a preference list in cost.mapping -> model is the first, model_candidates the list ---------
+P35="$(mktemp -d)"; mkdir "$P35/.somi"
+printf '{"cost":{"ceiling":"high","mapping":{"copilot":{"low":"m-l","medium":"m-m","high":["m-h1","m-h2"]}}}}\n' > "$P35/.somi/config.json"
+out35="$(CLAUDE_PROJECT_DIR="$P35" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-designer --host copilot)"
+check "#35: a list mapping resolves model to the first candidate, enforced, with model_candidates" \
+  "$(node -e 'const o=JSON.parse(process.argv[1]); process.stdout.write([o.model, o.enforced, JSON.stringify(o.model_candidates)].join("|"))' "$out35")" 'm-h1|true|["m-h1","m-h2"]'
+out35b="$(CLAUDE_PROJECT_DIR="$P35" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-coder --host copilot --ceiling medium)"
+check "#35: a plain-string tier carries no model_candidates field" "$(node -e 'process.stdout.write(String("model_candidates" in JSON.parse(process.argv[1])))' "$out35b")" "false"
+printf '{"cost":{"ceiling":"high","mapping":{"copilot":{"low":"m-l","medium":"m-m","high":[]}}}}\n' > "$P35/.somi/config.json"
+rc35=0; CLAUDE_PROJECT_DIR="$P35" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-designer --host copilot >/dev/null 2>&1 || rc35=$?
+check "#35: an empty list in the project's mapping is a project config failure (67)" "$rc35" "67"
+rm -rf "$P35"
 
 echo "somi-dispatch tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

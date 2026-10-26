@@ -12,7 +12,7 @@ derive() { grep -oE '^\| *`[a-z][a-z0-9-]*`' "$1/commands/review-panel.md" | tr 
 
 echo "== review-panel seated-lens derivation =="
 seated="$(derive "$ROOT")"
-for a in reviewer security-reviewer architecture-reviewer test-strategist plan-reviewer sdlc-reviewer; do
+for a in somi-reviewer somi-security-reviewer somi-architecture-reviewer somi-test-strategist somi-plan-reviewer somi-sdlc-reviewer; do
   if grep -qx "$a" <<<"$seated"; then ok "derived membership includes $a"; else bad "derived membership is missing $a"; fi
   grep -q '^## Write discipline' "$ROOT/agents/$a.md" && ok "agents/$a.md has Write discipline" || bad "agents/$a.md lacks Write discipline"
 done
@@ -23,7 +23,7 @@ done
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 cp -a "$ROOT/commands" "$ROOT/agents" "$TMP/"
-sed -i '/^## Write discipline/d' "$TMP/agents/plan-reviewer.md"
+sed -i '/^## Write discipline/d' "$TMP/agents/somi-plan-reviewer.md"
 red=0
 for a in $(derive "$TMP"); do grep -q '^## Write discipline' "$TMP/agents/$a.md" || red=$((red+1)); done
 [ "$red" -eq 1 ] && ok "RED: removing plan-reviewer's Write discipline is caught via the derived table" || bad "RED fixture caught $red agents, expected 1"

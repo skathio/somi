@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create schedule.mjs at the workspace root: an ES module with one named function export, schedule(teams). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "teams lists distinct team names; the position of a team in the array is its index. Checks run in this order, the first failure decides: teams is not an array or an entry is not a string, TypeError code 'E_TYPE'; fewer than 2 or more than 8 entries, RangeError code 'E_COUNT'; a repeated name, RangeError code 'E_DUPLICATE'.",
+    "The result is an array of rounds in play order. A round is an object {matches, rest}: matches is an array of [home, away] pairs of team names, rest is the name of the team that has no match in that round, or null when every team plays. Every two teams meet exactly once in the whole schedule and a team plays at most once per round.",
+    "With an even number of teams every team plays in every round. With an odd number of teams exactly one team rests in each round and every team rests exactly once. Inside a round the matches are listed by the smaller team index of their two teams, lowest first.",
+    "The first team of a pair is the home team. Looking only at the games a team plays, in schedule order (a round in which it rests is not a game), it is never home in more than two consecutive games. At the end of the schedule the numbers of home games of any two teams differ by at most 1.",
+    "Among all schedules that satisfy the rules above, the result is the smallest one. To compare two schedules, list the matches of each in output order (round after round) and look at the first position where they differ. At that position the match whose home team has the lower index is smaller; when home teams are equal, the one whose away team has the lower index is smaller.",
+    "A schedule satisfying the rules exists for every allowed number of teams. The function is pure: no I/O, no shared state, the input is not mutated, and new arrays are returned."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M05-8c41e07b92d5a3f6",
+  "source": [
+    "schedule.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement schedule.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

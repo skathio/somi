@@ -9,7 +9,7 @@ The collaboration and priority rules in [`rules/50-collaboration.md`](../../rule
 and [`rules/00-priorities.md`](../../rules/00-priorities.md) are the always-on floor. This skill adds
 **operational depth** for the discovery phase: how to write a requirement that can't be misread, how
 to split documents, and how to keep everything traceable. The owning agent is
-[`discovery-analyst`](../../agents/discovery-analyst.md); load this skill when you are *authoring or
+[`somi-discovery-analyst`](../../agents/somi-discovery-analyst.md); load this skill when you are *authoring or
 reviewing* requirements/design docs under `.somi/rd/<slug>/`.
 
 Pair it with [`market-research`](../market-research/SKILL.md) (where requirements come from),
@@ -122,7 +122,7 @@ good default:
 - For a **small, well-understood internal tool**, a single SRS may absorb the FRD — don't force five
   documents. Omit with a reason in `README.md`.
 - For work that already has a settled spec, skip discovery and hand to the
-  [`planner`](../../agents/planner.md).
+  [`somi-planner`](../../agents/somi-planner.md).
 - Don't gold-plate NFRs for a prototype — state the targets that matter and explicitly defer the
   rest.
 
@@ -130,7 +130,7 @@ good default:
 
 - **To the user (verification protocol)** — any requirement- or direction-shaping decision: target
   persona, scope boundary, build-vs-integrate, an expensive-to-reverse architectural call.
-- **To the [`planner`](../../agents/planner.md)** — once the SRS/SDD are ready; the planner turns
+- **To the [`somi-planner`](../../agents/somi-planner.md)** — once the SRS/SDD are ready; the planner turns
   direction into detailed, phased design. Don't do its job in the SDD.
 - **To [`threat-modeling`](../threat-modeling/SKILL.md) / [`owasp-defense`](../owasp-defense/SKILL.md)**
   — when the product introduces a real attack surface; the security NFRs and trust boundaries belong

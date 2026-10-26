@@ -28,25 +28,25 @@ import os from "node:os";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dispatch-gate-unit-"));
 fs.mkdirSync(path.join(tmp, "agents"));
-for (const n of ["coder", "reviewer", "architecture-reviewer"]) {
+for (const n of ["somi-coder", "somi-reviewer", "somi-architecture-reviewer"]) {
   fs.writeFileSync(path.join(tmp, "agents", n + ".md"), "---\nname: " + n + "\n---\n");
 }
 fs.writeFileSync(path.join(tmp, "agents", "somi.md"), "---\nname: somi\n---\n");
 const names = agentNamesFrom(path.join(tmp, "agents"));
 
 const cases = [
-  ["Brief the `coder` agent via the Task tool with:", "coder"],
-  ["Task coder ( = /code <slug> )", "coder"],
-  ["Task the [`reviewer`](../agents/reviewer.md) on a fresh context", "reviewer"],
-  ["Task [`architecture-reviewer`](../agents/architecture-reviewer.md) (and more)", "architecture-reviewer"],
-  ["Brief [`agents/coder.md`](../agents/coder.md) via the Task tool with:", "coder"],
+  ["Brief the `somi-coder` agent via the Task tool with:", "somi-coder"],
+  ["Task somi-coder ( = /code <slug> )", "somi-coder"],
+  ["Task the [`somi-reviewer`](../agents/somi-reviewer.md) on a fresh context", "somi-reviewer"],
+  ["Task [`somi-architecture-reviewer`](../agents/somi-architecture-reviewer.md) (and more)", "somi-architecture-reviewer"],
+  ["Brief [`agents/somi-coder.md`](../agents/somi-coder.md) via the Task tool with:", "somi-coder"],
   // The newer call-site verbs, and case-insensitivity on all of them.
-  ["Start the `coder` agent via the Task tool with:", "coder"],
-  ["Spawn the `reviewer` agent for a fresh-context pass", "reviewer"],
-  ["Dispatch the `coder` agent with the current findings", "coder"],
-  ["Run the `reviewer` agent on the same diff", "reviewer"],
-  ["run the `coder` agent (lowercase verb)", "coder"],
-  ["brief the `reviewer` agent (lowercase verb)", "reviewer"],
+  ["Start the `somi-coder` agent via the Task tool with:", "somi-coder"],
+  ["Spawn the `somi-reviewer` agent for a fresh-context pass", "somi-reviewer"],
+  ["Dispatch the `somi-coder` agent with the current findings", "somi-coder"],
+  ["Run the `somi-reviewer` agent on the same diff", "somi-reviewer"],
+  ["run the `somi-coder` agent (lowercase verb)", "somi-coder"],
+  ["brief the `somi-reviewer` agent (lowercase verb)", "somi-reviewer"],
   // A router Tasking another COMMAND, never an agent -- must NOT match.
   ["Task /code-loop \"<slug> phase <N>, iteration <M>\"", null],
   // Coincidental English-word / cross-reference prose -- must NOT match (no real call-site shape).
@@ -76,7 +76,7 @@ const refCases = [
   ["full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude Code) only, nothing else", false],
   // The real shape every rewritten command reference line now uses -- true because it names
   // `somi_resolve` literally, not because it mentions the skill by name.
-  ["Before this `Task`, call `somi_resolve` for `coder` (with `project_dir`), pass its model, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude Code).", true],
+  ["Before this `Task`, call `somi_resolve` for `somi-coder` (with `project_dir`), pass its model, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude Code).", true],
   // The older full-path markdown-link shape still satisfies it too.
   ["started per [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md)", true],
   ["no dispatch reference here at all", false],

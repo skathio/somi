@@ -48,7 +48,7 @@ import { pathToFileURL } from 'node:url';
 import { installSomi, invokeCommand, preflight, SESSION_LIMIT_SIGNATURE } from './lib/install.mjs';
 import { capBreached, passesToApprove, terminalVerdict, terminalOutcome, censoredDrawSnapshot, breachReason } from './lib/convergence.mjs';
 import { mannWhitneyU, DEFAULT_RESAMPLES } from './lib/mann-whitney.mjs';
-import { shardDir, resolveSource, fixtureFor } from './run.mjs';
+import { shardDir, resolveSource, fixtureFor } from './lib/source.mjs';
 
 // D2: the floor at which an inconclusive result reads as inconclusive rather than an accepted
 // pass. Pinned as a literal -- acceptance point 4's first half asserts this exact value,

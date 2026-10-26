@@ -68,6 +68,101 @@ check "init: CLI flag beats env and config" \
 expect_exit "init: refuses to clobber a running loop without --force" 64 \
   node "$LOOP" init --slug demo --loop code --iteration 1.1 --files "src/a.txt"
 
+# --- somi-loop: a brief-only work item (plan dir without phases/) needs the approved tier record ---
+mkdir -p .somi/plans/bo
+printf 'brief one\n' > .somi/plans/bo/brief.md
+TIER="$ROOT/scripts/somi-tier.mjs"
+node -e 'const s={};for(const k of ["T1","T2","T3","T4","T5"])s[k]={value:k!=="T2",evidence:"e"};Object.assign(s,{sensitive_core:{value:false,evidence:"e"},hard_surface:{value:false,evidence:"e"},design_open:{value:false,evidence:"e"},open_questions:{value:0,evidence:"e"},acceptance_testable:{value:true,evidence:"e"},modules_touched:{value:1,evidence:"e"},est_files:{value:2,evidence:"e"},est_diff_lines:{value:80,evidence:"e"},existing_work_item:{value:false,evidence:"e"},brief_exists:{value:false,evidence:"e"}});console.log(JSON.stringify(s))' > "$TMP/small-signals.json"
+expect_exit "brief-only: refused with no tier record" 64 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
+node "$TIER" resolve --signals "$TMP/small-signals.json" --record bo --project-dir "$REPO" >/dev/null
+check "brief-only: tier record is small" "$(jq -e '.tier == "small"' .somi/somi-state/tier/bo.json >/dev/null; echo $?)"
+expect_exit "brief-only: refused when sized but not approved" 64 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
+node "$TIER" approve --slug bo --project-dir "$REPO" >/dev/null
+expect_exit "brief-only: accepted once approved" 0 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
+printf 'brief two\n' > .somi/plans/bo/brief.md
+expect_exit "brief-only: refused once the brief changed after approval" 64 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files ".somi/plans/bo/brief.md"
+mkdir -p .somi/plans/bo/phases
+expect_exit "a plan with phases/ is unaffected" 0 \
+  node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files "src/a.txt"
+out="$(node "$LOOP" init --force --slug bo --loop code --iteration 1.1 --files "src/a.txt")"
+check "review lens: a record proven free of untrusted input and the core asks for no lens" \
+  "$(jq -e '.review_min == null' <<<"$out" >/dev/null && jq -e '.security_lens == false' .somi/somi-state/tier/bo.json >/dev/null; echo $?)"
+jq '.T3.value = false' "$TMP/small-signals.json" > "$TMP/lens-signals.json"
+node "$TIER" resolve --signals "$TMP/lens-signals.json" --record lens --project-dir "$REPO" >/dev/null
+check "review lens: untrusted input alone stays small and records the security lens" \
+  "$(jq -e '.tier == "small" and .security_lens == true' .somi/somi-state/tier/lens.json >/dev/null; echo $?)"
+mkdir -p .somi/plans/lens/phases
+out="$(node "$LOOP" init --force --slug lens --loop code --iteration 1.1 --files "src/a.txt")"
+check "review lens: init carries review_min security from the tier record" "$(jq -e '.review_min == "security"' <<<"$out" >/dev/null; echo $?)"
+out="$(node "$LOOP" pass --slug lens --iteration 1.1)"
+check "review lens: every pass repeats review_min" "$(jq -e '.pass == 1 and .review_min == "security"' <<<"$out" >/dev/null; echo $?)"
+out="$(node "$LOOP" init --force --slug lens --loop plan --iteration 1.1)"
+check "review lens: a plan loop carries no review_min" "$(jq -e '.review_min == null' <<<"$out" >/dev/null; echo $?)"
+rm -rf .somi/plans/bo .somi/plans/lens .somi/somi-state/tier
+
+# --- somi-loop: review scope (delta re-review from pass 2; full on the first and the last pass) ---
+node "$LOOP" init --force --slug scope --loop code --iteration 1.1 --max-passes 3 --files "src/" >/dev/null
+node "$LOOP" pass --slug scope --iteration 1.1 >/dev/null
+out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: pass 1 is reviewed in full" "$(jq -e '.scope == "full" and .why == "first-pass"' <<<"$out" >/dev/null; echo $?)"
+idx_before="$(git ls-files -s | sha256sum)"; staged_before="$(git diff --cached --name-only | sha256sum)"
+node "$LOOP" record-pass --slug scope --iteration 1.1 --verdict request-changes --blockers 0 --majors 1 >/dev/null
+check "review scope: record-pass stores the reviewed tree" "$(node "$LOOP" stats --slug scope --iteration 1.1 | jq -e '.history[0].tree | test("^[0-9a-f]{40}$")' >/dev/null; echo $?)"
+check "review scope: snapshotting leaves the caller's index untouched" "$([[ "$(git ls-files -s | sha256sum)" == "$idx_before" && "$(git diff --cached --name-only | sha256sum)" == "$staged_before" ]]; echo $?)"
+printf 'fixed\n' >> src/a.txt; printf 'new\n' > src/new-untracked.txt
+node "$LOOP" pass --slug scope --iteration 1.1 >/dev/null
+out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: pass 2 sees only the delta since the reviewed tree, untracked files included" \
+  "$(jq -e '.scope == "delta" and .since_pass == 1 and (.files | sort) == ["src/a.txt","src/new-untracked.txt"]' <<<"$out" >/dev/null; echo $?)"
+check "review scope: the delta's trees reproduce the change" "$(git diff "$(jq -r .from <<<"$out")" "$(jq -r .to <<<"$out")" -- src/a.txt | grep -qx '+fixed'; echo $?)"
+out="$(SOMI_CODE_LOOP_REVIEW_SCOPE=full node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: SOMI_CODE_LOOP_REVIEW_SCOPE=full restores full re-review" "$(jq -e '.scope == "full" and .why == "setting"' <<<"$out" >/dev/null; echo $?)"
+printf '{"code_loop": {"review_scope": "full"}}\n' > .somi/config.json
+out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: code_loop.review_scope full in config restores full re-review" "$(jq -e '.scope == "full"' <<<"$out" >/dev/null; echo $?)"
+printf '{"code_loop": {"max_passes": 2, "diff_cap_lines": 10}}\n' > .somi/config.json
+expect_exit "review scope: an unknown setting is refused" 64 env SOMI_CODE_LOOP_REVIEW_SCOPE=partial node "$LOOP" review-scope --slug scope --iteration 1.1
+node "$LOOP" record-pass --slug scope --iteration 1.1 --verdict request-changes --blockers 0 --majors 1 >/dev/null
+node "$LOOP" pass --slug scope --iteration 1.1 >/dev/null
+out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
+check "review scope: the last allowed pass is reviewed in full" "$(jq -e '.scope == "full" and .why == "last-pass"' <<<"$out" >/dev/null; echo $?)"
+git checkout -q -- src/a.txt; rm -f src/new-untracked.txt
+
+# --- somi-loop: a /ship-loop run's wall-time budget, enforced at every pass on the slug ---
+out="$(node "$LOOP" run-start --slug clock)"
+check "run-start: without a budget the start is recorded and max_minutes is null" "$(jq -e '.max_minutes == null and (.started | test("T"))' <<<"$out" >/dev/null; echo $?)"
+node "$LOOP" init --force --slug clock --loop plan >/dev/null
+expect_exit "pass: no budget, no time stop" 0 node "$LOOP" pass --slug clock
+out="$(node "$LOOP" run-start --slug clock --max-minutes 30)"
+check "run-start: a resumed run keeps its clock and budget" "$(jq -e '.resumed == true and .max_minutes == null' <<<"$out" >/dev/null; echo $?)"
+out="$(SOMI_SHIP_LOOP_MAX_MINUTES=30 node "$LOOP" run-start --force --slug clock)"
+check "run-start: the env budget is recorded" "$(jq -e '.max_minutes == 30' <<<"$out" >/dev/null; echo $?)"
+expect_exit "pass: inside the budget" 0 node "$LOOP" pass --slug clock
+jq '.started = "2000-01-01T00:00:00.000Z"' .somi/somi-state/run/clock.json > "$TMP/clock.json" && cp "$TMP/clock.json" .somi/somi-state/run/clock.json
+expect_exit "pass: an exhausted time budget stops every loop on the slug (exit 4)" 4 node "$LOOP" pass --slug clock
+check "pass: the refused pass is not counted" "$(node "$LOOP" stats --slug clock | jq -e '.pass == 2' >/dev/null; echo $?)"
+jq '.started = "not a date"' .somi/somi-state/run/clock.json > "$TMP/clock.json" && cp "$TMP/clock.json" .somi/somi-state/run/clock.json
+expect_exit "pass: an unreadable start fails closed" 4 node "$LOOP" pass --slug clock
+expect_exit "run-start: a zero budget is refused" 64 node "$LOOP" run-start --force --slug clock --max-minutes 0
+expect_exit "run-start: a malformed budget is refused" 64 node "$LOOP" run-start --force --slug clock --max-minutes soon
+rm -rf .somi/somi-state/run
+
+# --- somi-loop: the dispatch record is the resolver's answer, never the caller's claim ---
+out="$(node "$LOOP" record-dispatch --slug scope --iteration 1.1 --agent somi-coder)"
+check "record-dispatch: claude-code entry carries tier, model and enforced from the resolver" \
+  "$(jq -e '.agent == "somi-coder" and .host == "claude-code" and .pass == 3 and (.tier | type) == "string" and .enforced == true and (.model | type) == "string"' <<<"$out" >/dev/null; echo $?)"
+out="$(node "$LOOP" record-dispatch --slug scope --iteration 1.1 --agent somi-reviewer --host copilot)"
+check "record-dispatch: an unmapped host is recorded as not enforced, with the reason" \
+  "$(jq -e '.host == "copilot" and .model == null and .enforced == false and (.reason | test("no model mapping"))' <<<"$out" >/dev/null; echo $?)"
+expect_exit "record-dispatch: an unknown agent is refused with the resolver's code" 65 node "$LOOP" record-dispatch --slug scope --iteration 1.1 --agent reviewer
+expect_exit "record-dispatch: --agent is required" 64 node "$LOOP" record-dispatch --slug scope --iteration 1.1
+out="$(node "$LOOP" finish --slug scope --iteration 1.1 --status done)"
+check "finish: the summary lists every recorded dispatch" "$(jq -e '(.dispatches | length) == 2 and .dispatches[1].enforced == false' <<<"$out" >/dev/null; echo $?)"
+
 # --- somi-loop: pass counting ---------------------------------------------------
 node "$LOOP" pass --slug demo --iteration 1.1 >/dev/null
 expect_exit "pass: exceeding max_passes exits 2" 2 \

@@ -30,16 +30,31 @@
 //   2  max-passes-exceeded   (`pass` would exceed the cap)
 //   3  diff-cap-exceeded     (`check-diff`: weighted lines over the cap;
 //                             out-of-scope lines count double)
-//   64 usage / environment error
+//   4  time-budget-exceeded  (`pass`: the /ship-loop run started by `run-start` on this slug is out of time)
+//   64 usage / environment error (65: record-dispatch's resolver refused the agent)
 //
-// Subcommands: init | resume | pass | check-diff | record-pass | finish | stats
-// (see scripts/somi-loop.sh for the full per-subcommand doc — unchanged here).
+// Subcommands (each prints one JSON object):
+//   run-start      record a /ship-loop run's start and optional --max-minutes budget (kept on resume)
+//   init           new loop state: baseline SHA, resolved caps, review_min from the sizing record
+//   resume | stats the stored state
+//   pass           next pass, or exit 2 (cap) / 4 (time budget); repeats review_min
+//   check-diff     weighted cumulative diff against the baseline, or exit 3
+//   review-scope   what the generalist reviewer reads this pass: delta (from/to trees, files) or full
+//   record-dispatch  append the resolver's answer for --agent [--host] to the state
+//   record-pass    append the verdict and counts, with the reviewed tree
+//   finish         terminal status, cap overrides, dispatches
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { verifyBriefOnly } from './lib/tier-record.mjs';
+import { REVIEW_SCOPES, reviewMinFor, reviewScope, snapshotTree } from './lib/loop-review.mjs';
+import { computeDiff } from './lib/loop-diff.mjs';
+import { dispatchEntry } from './lib/loop-dispatch.mjs';
+import { checkRun, startRun } from './lib/run-budget.mjs';
 
 const PROG = 'somi-loop';
 
@@ -111,96 +126,6 @@ function firstDefined(...vals) {
 function nowIso() {
   // `date -u +%Y-%m-%dT%H:%M:%SZ` — no milliseconds.
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-}
-
-// Untracked, non-ignored files as synthetic `--numstat` rows (all lines added).
-// `git diff` reads the index and the work tree, but a file git has never been
-// told about is in neither -- so a brand-new file counts ZERO until someone runs
-// `git add`. That made the cap under-measure by the entire size of every new
-// file an iteration introduced, silently, in the direction that lets work
-// through (measured 248 against a true 503 on one real iteration).
-// Enumerated separately and merged into the same stream rather than fixed with
-// `git add -N`, which would mutate the caller's index as a side effect of a
-// read-only query.
-function untrackedNumstat(root, pathspec) {
-  let listed = '';
-  try {
-    listed = execFileSync(
-      'git',
-      ['-C', root, 'ls-files', '--others', '--exclude-standard', '--', ...pathspec],
-      { encoding: 'utf8' },
-    );
-  } catch (e) {
-    listed = e.stdout ? e.stdout.toString() : '';
-  }
-  const rows = [];
-  for (const file of listed.split('\n')) {
-    if (file === '') continue;
-    let buf;
-    try {
-      buf = fs.readFileSync(path.join(root, file));
-    } catch {
-      continue; // raced away between listing and reading
-    }
-    // git calls a blob binary on a NUL in the first 8000 bytes and reports `-`.
-    if (buf.subarray(0, 8000).includes(0)) {
-      rows.push(`-\t-\t${file}`);
-      continue;
-    }
-    const text = buf.toString('utf8');
-    const added = text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-    rows.push(`${added}\t0\t${file}`);
-  }
-  return rows.join('\n');
-}
-
-// Weighted cumulative diff vs baseline. Out-of-scope lines count double.
-// Covers tracked changes, staged changes, AND untracked files (see above) --
-// the whole working tree, which is what the cap is meant to bound.
-function computeDiff(root, baseline, iterationFiles) {
-  const pathspec = ['.', ':(exclude).somi', ':(exclude).claude'];
-  let output = '';
-  try {
-    output = execFileSync(
-      'git',
-      ['-C', root, 'diff', '--numstat', baseline, '--', ...pathspec],
-      { encoding: 'utf8' },
-    );
-  } catch (e) {
-    output = e.stdout ? e.stdout.toString() : '';
-  }
-  const untracked = untrackedNumstat(root, pathspec);
-  if (untracked !== '') output = output === '' ? untracked : `${output}\n${untracked}`;
-  let total = 0;
-  let weighted = 0;
-  const outOfScope = [];
-  for (const line of output.split('\n')) {
-    if (line === '') continue;
-    const parts = line.split('\t');
-    let added = parts[0];
-    let deleted = parts[1];
-    const file = parts.slice(2).join('\t');
-    if (!file) continue;
-    added = added === '-' ? 0 : Number(added); // binary
-    deleted = deleted === '-' ? 0 : Number(deleted);
-    const lines = added + deleted;
-    total += lines;
-    let inScope = false;
-    for (const entry of iterationFiles) {
-      if (!entry) continue;
-      if (file === entry || (entry.endsWith('/') && file.startsWith(entry))) {
-        inScope = true;
-        break;
-      }
-    }
-    if (inScope) {
-      weighted += lines;
-    } else {
-      weighted += 2 * lines;
-      outOfScope.push(file);
-    }
-  }
-  return { total, weighted, outOfScope };
 }
 
 // --- mid-loop cap re-resolution --------------------------------------------
@@ -319,6 +244,9 @@ function main() {
   let BLOCKERS = '0';
   let MAJORS = '0';
   let STATUS = '';
+  let AGENT = '';
+  let HOST;
+  let ARG_MAX_MINUTES = '';
   let FORCE = false;
   let ARG_MAX_PASSES = '';
   let ARG_DIFF_CAP = '';
@@ -338,12 +266,15 @@ function main() {
       case '--blockers': BLOCKERS = rest[1]; rest = rest.slice(2); break;
       case '--majors': MAJORS = rest[1]; rest = rest.slice(2); break;
       case '--status': STATUS = rest[1]; rest = rest.slice(2); break;
+      case '--agent': AGENT = rest[1]; rest = rest.slice(2); break;
+      case '--host': HOST = rest[1]; rest = rest.slice(2); break;
+      case '--max-minutes': ARG_MAX_MINUTES = rest[1]; rest = rest.slice(2); break;
       case '--force': FORCE = true; rest = rest.slice(1); break;
       default: die(`unknown argument: ${a}`);
     }
   }
 
-  if (!CMD) die('usage: somi-loop.mjs <init|resume|pass|check-diff|record-pass|finish|stats> --slug <slug> …');
+  if (!CMD) die('usage: somi-loop.mjs <run-start|init|resume|pass|check-diff|review-scope|record-dispatch|record-pass|finish|stats> --slug <slug> …');
   if (!SLUG) die('--slug is required');
 
   function stateFile() {
@@ -365,7 +296,16 @@ function main() {
     fs.writeFileSync(SF, JSON.stringify(state));
   }
 
+  const RUN_ROOT = path.dirname(STATE_DIR);
   switch (CMD) {
+    case 'run-start': {
+      const raw = firstDefined(ARG_MAX_MINUTES, process.env.SOMI_SHIP_LOOP_MAX_MINUTES, configVal(readConfig(root), ['ship_loop', 'max_minutes']));
+      const max = raw === undefined ? null : validateCap(raw, 'max_minutes');
+      if (max === 0) die('max_minutes: 0 would disable the budget; leave it unset instead');
+      console.log(JSON.stringify(startRun(RUN_ROOT, SLUG, max, { force: FORCE })));
+      break;
+    }
+
     case 'init': {
       fs.mkdirSync(STATE_DIR, { recursive: true });
       if (fs.existsSync(SF) && !FORCE) {
@@ -378,6 +318,14 @@ function main() {
         if (status === 'running') {
           die(`loop state already running at ${SF} — use 'resume' to continue it, or 'init --force' to discard`);
         }
+      }
+
+      // A brief-only work item (a plan directory with no phases/) exists only for the sized, human-
+      // approved small tier of /ship-loop: refuse it without the tier record's approval stamp.
+      const planDir = path.join(root, '.somi', 'plans', SLUG);
+      if (LOOP === 'code' && fs.existsSync(planDir) && !fs.existsSync(path.join(planDir, 'phases'))) {
+        const v = verifyBriefOnly(root, SLUG);
+        if (!v.ok) die(`brief-only work item refused: ${v.reason}; use /plan or /ship-loop`);
       }
 
       // Cap resolution: CLI > env > config > default (per loop type), through the
@@ -420,8 +368,9 @@ function main() {
         pass: 0,
         history: [],
       };
+      if (LOOP === 'code') state.review_min = reviewMinFor(root, SLUG) ?? undefined; // undefined: not serialised
       saveState(state);
-      console.log(JSON.stringify({ baseline_sha: state.baseline_sha, caps: state.caps, state_file: SF }));
+      console.log(JSON.stringify({ baseline_sha: state.baseline_sha, caps: state.caps, state_file: SF, ...(state.review_min ? { review_min: state.review_min } : {}) }));
       break;
     }
 
@@ -443,9 +392,11 @@ function main() {
       if (cur + 1 > max) {
         fail(2, `max-passes-exceeded: pass ${cur + 1} > cap ${max}`);
       }
+      const run = checkRun(RUN_ROOT, SLUG);
+      if (run?.over) fail(4, `time-budget-exceeded: ${run.elapsed_minutes} of ${run.max_minutes} minutes used by this run`);
       state.pass = cur + 1;
       saveState(state);
-      console.log(JSON.stringify({ pass: state.pass, max_passes: max }));
+      console.log(JSON.stringify({ pass: state.pass, max_passes: max, ...(state.review_min ? { review_min: state.review_min } : {}) }));
       break;
     }
 
@@ -465,6 +416,28 @@ function main() {
       break;
     }
 
+    case 'review-scope': {
+      requireState();
+      const state = loadState();
+      const setting = firstDefined(process.env.SOMI_CODE_LOOP_REVIEW_SCOPE, configVal(readConfig(root), ['code_loop', 'review_scope']), 'delta');
+      if (!REVIEW_SCOPES.includes(setting)) die(`review scope must be one of ${REVIEW_SCOPES.join('|')}, got ${JSON.stringify(setting)}`);
+      console.log(JSON.stringify({ ...reviewScope(root, state, setting), ...(state.review_min ? { review_min: state.review_min } : {}) }));
+      break;
+    }
+
+    case 'record-dispatch': {
+      requireState();
+      if (!AGENT) die('record-dispatch requires --agent');
+      const state = loadState();
+      const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+      const d = dispatchEntry({ root, installRoot, agent: AGENT, host: HOST, pass: state.pass });
+      if (!d.ok) fail(d.code, `${PROG}: ${d.message}`);
+      (state.dispatches ??= []).push(d.entry);
+      saveState(state);
+      console.log(JSON.stringify(d.entry));
+      break;
+    }
+
     case 'record-pass': {
       requireState();
       if (!VERDICT) die('record-pass requires --verdict');
@@ -476,6 +449,7 @@ function main() {
         blockers: Number(BLOCKERS),
         majors: Number(MAJORS),
         diff_lines: total,
+        tree: snapshotTree(root) ?? undefined, // the reviewed tree: the next pass's delta starts here
         at: nowIso(),
       };
       state.history.push(entry);
@@ -496,6 +470,7 @@ function main() {
         pass: state.pass,
         history: state.history.length,
         cap_overrides: state.cap_overrides || [],
+        ...(state.dispatches ? { dispatches: state.dispatches } : {}),
       }));
       break;
     }

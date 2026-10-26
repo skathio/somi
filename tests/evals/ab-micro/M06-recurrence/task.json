@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create recurrence.mjs at the workspace root: an ES module with one named function export, nextOccurrences(rule, afterDate, count). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/. Dates are ISO strings YYYY-MM-DD in the Gregorian calendar; no clocks, no time zones.",
+    "rule is an object with freq ('monthly' or 'yearly'), interval (integer 1..120), start (a date), exactly one of byDay (an object with nth, an integer -5..5 but not 0, and weekday, an integer 0..6) or byMonthDay (an integer -31..31 but not 0), and optional onMissing ('skip' or 'clamp') and exceptions (an array of dates). afterDate is a date and count an integer 0..60.",
+    "A date is a real date written exactly YYYY-MM-DD, year 1900..2200. A wrong type (dates, freq and onMissing are strings; the numbers are finite numbers; rule and byDay are plain objects; exceptions is an array) throws a TypeError, code 'E_TYPE'. Right type but invalid value, or both or neither of byDay and byMonthDay, throws a RangeError, code 'E_RANGE'. Type checks run before any range check.",
+    "Time is cut into periods 0, 1, 2 and so on. Monthly: period k is the month that is k times interval months after the month of start. Yearly: period k is the month of start in the year that is k times interval years after the year of start. Periods are counted from start, never from afterDate. Each period yields at most one date; a period that yields none still counts.",
+    "byMonthDay of 5 means the 5th day of the period's month; a negative value counts from the end, so -1 is the last day and -2 the day before it. byDay means the nth day of the month that falls on weekday, nth counted from the first of the month, or from the end when negative (-1 is the last such day). Weekday 0 is Monday, 1 is Tuesday, up to 6 for Sunday.",
+    "When the requested day does not exist in that month (day 30 in February, a 5th Friday, -5 Sunday), onMissing decides, and it defaults to 'skip': the period yields no date. With 'clamp' the period yields the existing day nearest the requested position: the last matching day when the request counted from the start, the first matching day when it counted from the end.",
+    "The result lists, in ascending order, the first count dates that are strictly after afterDate, not before start, and not in exceptions. A date in exceptions is dropped and does not count toward count. Dates after 2200-12-31 are never produced, so the result can be shorter than count, or empty.",
+    "The function is pure: no I/O, no shared state, the arguments are not mutated, and a new array is returned."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M06-7c2e91ab40d5f863",
+  "source": [
+    "recurrence.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement recurrence.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

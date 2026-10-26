@@ -27,10 +27,9 @@ Target: **$ARGUMENTS** (empty = scoped to the single in-progress work item if ex
 - **A file path** → review tests adjacent to (and exercising) that file.
 - **A free-form description** → ask the user to point at the code if not obvious.
 
-### 2. Brief the `test-strategist` agent
+### 2. Brief the `somi-test-strategist` agent
 
-Before this `Task`, call `somi_resolve` for `test-strategist` (with `project_dir`), pass its model,
-and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
+Before this `Task`, call `somi_resolve` for `somi-test-strategist` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill
 (`somi_skill`, or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The work-item or code paths.
@@ -38,7 +37,7 @@ and put the cost line in the briefing (`dispatched at cost: <tier>` only when `e
 - The expectation: identify risks, identify testable surface, pick the right level per concern,
   decide mock policy, design for diagnosis, define what's intentionally **not** covered.
 
-The `test-strategist` agent is read-only **by contract, not by platform restriction** — it holds
+The `somi-test-strategist` agent is read-only **by contract, not by platform restriction** — it holds
 Write/Edit but is forbidden from using them, so the command owns every write. Have it **return** its strategy;
 the command owns all writes.
 

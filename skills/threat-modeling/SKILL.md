@@ -10,7 +10,7 @@ new surface and we want to think about how it gets abused, before we ship*. 30â€
 thinking, not weeks.
 
 Pair with [`owasp-defense`](../owasp-defense/SKILL.md) (which is about mitigations) and
-[`security-reviewer`](../../agents/security-reviewer.md) (which does the deep audit).
+[`somi-security-reviewer`](../../agents/somi-security-reviewer.md) (which does the deep audit).
 
 ## When to threat-model
 
@@ -111,7 +111,7 @@ Even a one-page note that lives next to the code. Future you / on-call / the nex
 
 ## When to escalate
 
-- **High-impact surface** (auth, payments, PII at scale): escalate to `security-reviewer` for the audit
+- **High-impact surface** (auth, payments, PII at scale): escalate to `somi-security-reviewer` for the audit
   pass, in addition to this skill.
-- **New architecture**: pair with `architecture-reviewer` to ensure the threat model and the
+- **New architecture**: pair with `somi-architecture-reviewer` to ensure the threat model and the
   architecture stay in sync.

@@ -12,12 +12,13 @@ The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, i
 
 This command automates the manual `/code` → `/review` → `/code` cycle for a single iteration,
 with **hard gates** that ensure it terminates. It has no `cost:` of its own — a command has no
-model to size — and runs entirely inline; the `coder` it Tasks declares `cost: low, medium`
-(`medium` unless the session ceiling resolves to `low`; executing against the work item's
-`brief.md` + plan), while the `reviewer` it Tasks declares
-`cost: medium, high` — the session ceiling picks the highest permitted member, typically `high`
-for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by the
-coder's reasoning.
+model to size — and runs entirely inline; the `somi-coder` it Tasks defaults to `medium`
+(it runs at the session ceiling; executing against the work item's
+`brief.md` + plan), while the `somi-reviewer` it Tasks defaults
+to `high` — it runs at the session ceiling unless `cost.agents` pins it (pin `somi-reviewer`
+to `high` for the fresh-eyes judgment this loop wants, run on a cold context so it isn't biased by
+the
+coder's reasoning).
 
 > **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
 > `spec.md`, and the active `phases/<NN>-*.md` — in the **same order at the front** of each pass's
@@ -32,13 +33,14 @@ coder's reasoning.
 | `SEVERITY_FLOOR` — verdicts that re-loop | `Major` (Blocker + Major) | `SOMI_CODE_LOOP_SEVERITY_FLOOR` (`Blocker` to only re-loop on Blockers) |
 | `DIFF_CAP_LINES` — cumulative diff across passes | `400` | `SOMI_CODE_LOOP_DIFF_CAP` |
 | `CIRCUIT_BREAKER` — stop if the same finding (file + symbol + title) recurs in 2 consecutive passes | always on | (n/a) |
-| `REVIEW_MODE` — `single` (Task `reviewer`) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens) | `single` | `SOMI_CODE_LOOP_REVIEW` (`panel`) |
+| `REVIEW_MODE` — `single` (Task `somi-reviewer`), `security` (`somi-reviewer` and `somi-security-reviewer` in parallel; the security lens reads the whole iteration) or `panel` (Task [`/review-panel`](./review-panel.md), parallel multi-lens). At least `security` whenever `init` or `pass` prints `review_min: security` (the sizing record says the work may handle untrusted input or touch auth, crypto, secrets or PII); `panel` also satisfies it | `single` | `SOMI_CODE_LOOP_REVIEW` (`security`, `panel`) |
+| `REVIEW_SCOPE` — what the generalist reviewer reads from pass 2: `delta` (the change since the last reviewed tree, plus the open findings) or `full` (the whole iteration). Pass 1 and the last allowed pass are always full; the security lens and the `panel` mode always read the whole iteration | `delta` | `SOMI_CODE_LOOP_REVIEW_SCOPE` (`full`) |
 | `HUMAN_CHECKPOINT` — pause between passes if user reply `stop` is detected | always on | (n/a) |
 
 **Precedence:** CLI flag (`--max-passes`, `--diff-cap`) > env var (session override) >
 `.somi/config.json` (committed project policy — keys
 `code_loop.max_passes`, `code_loop.severity_floor`, `code_loop.diff_cap_lines`,
-`code_loop.review_mode`) > the defaults above. Read both at the start of the run; record the
+`code_loop.review_mode`, `code_loop.review_scope`) > the defaults above. Read both at the start of the run; record the
 effective values in the first diary entry of the loop.
 
 `MAX_PASSES` and `DIFF_CAP_LINES` are **re-resolved on every `pass` / `check-diff` call**, not
@@ -63,6 +65,11 @@ adjusting either mid-loop still means starting a fresh loop.
 
 Same logic as [`/code`](./code.md) §1–§2. If the iteration is missing or already `done`, stop and
 ask the user.
+
+A **brief-only work item** (`brief.md` and `progress.md`, no `phases/`) is iteration `1.1`. Refuse
+it, stopping before `init` and recommending `/plan <problem>`, unless the CLI's tier record for the
+slug exists with a non-null `signals_sha256` and `tier` equal to `small`, stamped approved for the current `brief.md` (`init` enforces this); never
+create or edit that record by hand. Use the brief's expected files as `--files`.
 
 ### 2. Initialize loop state (deterministic, resumable)
 
@@ -102,13 +109,16 @@ session death at `.somi/somi-state/loop/<slug>.<N>.<M>.json`.
 while true:
   # 3a. Pass gate (deterministic)
   node scripts/somi-loop.mjs pass --slug <slug> --iteration <N>.<M>
+    exit 4 → STOP — the /ship-loop run's time budget is spent: same follow-ups, exit "time-budget"
     exit 2 → STOP — write remaining ≥Major findings as progress.md follow-ups (by F-id),
              summarise, exit "max-passes-exceeded"
 
-  # 3b. Code — call somi_resolve for coder first (project_dir, model, cost line in
+  # 3b. Code — call somi_resolve for somi-coder first (project_dir, model, cost line in
   #     the briefing); full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch on
-  #     Claude Code)
-  Task coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
+  #     Claude Code). Every agent this loop starts is also recorded (the script re-resolves it;
+  #     it records what SoMi decided, not your claim):
+  #       node scripts/somi-loop.mjs record-dispatch --slug <slug> --iteration <N>.<M> --agent <agent> [--host <host>]
+  Task somi-coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
 
   # 3c. Diff & scope gate (deterministic — cumulative vs the recorded baseline, working tree
   #     included, .somi/.claude excluded; out-of-scope lines count DOUBLE)
@@ -116,12 +126,24 @@ while true:
     exit 3 → STOP — exit "diff-cap-exceeded"; if the printed JSON's out_of_scope is non-empty,
              report the stop as "scope-expansion" and name the files
 
-  # 3d. Review — single reviewer, or the parallel panel when REVIEW_MODE == panel
+  # 3d. Review — single reviewer, reviewer + security lens, or the parallel panel.
+  #     First ask what the generalist reads (the script decides, not the orchestrator):
+  node scripts/somi-loop.mjs review-scope --slug <slug> --iteration <N>.<M>
+    scope == "delta" → its brief: "review only the change from <from> to <to> (`git diff <from> <to>`:
+                       <files>), and re-check each open finding in the ledger: resolved, or still open with
+                       its evidence. Do not re-review code outside that change; it was reviewed on pass
+                       <since_pass>." A defect the delta introduces anywhere is in scope.
+    scope == "full"  → this iteration's whole diff, as on pass 1
   if REVIEW_MODE == "panel":
     Task /review-panel ( = <slug> phase <N>, iteration <M> )   # a command — resolves its own lenses
+  elif REVIEW_MODE == "security":                               # also whenever pass printed review_min: security
+    # call somi_resolve for both first; Task both in ONE message so they run in parallel
+    Task somi-reviewer          ( = /review <slug>, scope = the review-scope result )
+    Task somi-security-reviewer ( = security lens on this iteration's WHOLE diff, every pass )
+    # merge: one findings list, de-duplicated by locus, severity = the highest either lens gave
   else:
-    # call somi_resolve for reviewer first; full rules: the somi-dispatch skill
-    Task reviewer ( = /review <slug>, scope = this iteration's diff )
+    # call somi_resolve for somi-reviewer first; full rules: the somi-dispatch skill
+    Task somi-reviewer ( = /review <slug>, scope = the review-scope result )
 
   # 3e. Record the pass + findings. The ledger computes recurrence on a STABLE locus
   #     (file + symbol + normalized title — never the raw line number, which drifts between
@@ -177,6 +199,8 @@ while true:
   `circuit-breaker` | `user-stop`.
 - Passes used (out of `MAX_PASSES`) — from `somi-loop.mjs stats` (also the run's telemetry:
   per-pass verdicts, Blocker/Major counts, diff sizes).
+- What ran: `finish`'s `dispatches`, one line per agent start (agent, tier, model, enforced). Name
+  every `enforced: false` start; the host chose that model, not SoMi.
 - Final verdict + count by severity.
 - Cumulative diff size and any out-of-scope files touched.
 - Pointer to all review files under `.somi/reviews/<slug>/` from this loop.

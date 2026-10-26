@@ -37,9 +37,8 @@
 //     `CLAUDE_CODE_TOOLS` (its own doc comment below) when this repo adopts one not yet listed.
 //
 // No `model` check here any more: commands declare no `model:` of their own (the front door
-// dispatches this command's paired agent at the agent's own declared cost/model instead) —
-// `scripts/validate.sh` fails the build if one does. Model tiers stay an agent-roster concept,
-// checked there against `agents/*.md`'s own `model:` frontmatter, not here.
+// dispatches this command's paired agent at the resolved tier instead) —
+// `scripts/validate.sh` fails the build if one does, and if an agent does.
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -53,7 +52,7 @@ import { DEFINITION_DIRS, installSomi } from './install.mjs';
  */
 export const CLAUDE_CODE_TOOLS = new Set([
   'Task', 'Bash', 'Glob', 'Grep', 'Read', 'Edit', 'Write', 'NotebookEdit',
-  'WebFetch', 'WebSearch', 'TodoWrite', 'BashOutput', 'KillShell', 'ExitPlanMode', 'SlashCommand',
+  'WebFetch', 'WebSearch', 'TodoWrite', 'BashOutput', 'KillShell', 'ExitPlanMode', 'SlashCommand', 'AskUserQuestion',
 ]);
 
 /** Parses the flat `key: value` frontmatter block between the first two `---` lines. Hand-rolled,

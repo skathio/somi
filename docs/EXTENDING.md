@@ -38,7 +38,7 @@ multi-piece change:
 5. **Document it** in [WORKFLOWS.md](./WORKFLOWS.md) and [AGENTS.md](./AGENTS.md).
 6. **Validate**: open a PR — CI checks frontmatter, TypeScript compilation, and hook scripts.
 
-> **Worked example:** the **discovery** workflow (`/discover` → `discovery-analyst` →
+> **Worked example:** the **discovery** workflow (`/discover` → `somi-discovery-analyst` →
 > `.somi/rd/<slug>/`) was added exactly this way — a distinct problem shape (requirements
 > engineering + competitive research, deciding *what* to build) upstream of the build trio, with its
 > own artifact set (`templates/RD-README`, `RESEARCH`, `BRD`, `SRS`, `FRD`, `SDD`, `TDD`), two
@@ -52,8 +52,6 @@ multi-piece change:
 ---
 name: <name>
 description: When to invoke this agent (concrete trigger conditions, not topic). The model uses this to decide whether to call it.
-model: <the model scripts/lib/cost-model.mjs maps your cost set's top tier to for claude-code>
-cost: <every tier acceptable for every job this unit accepts>
 ---
 
 # <name>
@@ -65,14 +63,15 @@ quality bar, output shape, failure modes to avoid, escalation rules, examples.>
 Rules of thumb:
 
 - **`description`** is the single most important field. Get it right.
-- **`model` / `cost`** — `cost:` is a capability set: a unit declares a tier only if that tier is
-  acceptable for *everything the unit accepts*, never "this tier for the easy jobs, that tier for
-  the hard ones." See [docs/USAGE.md § Cost tiers and model
-  resolution](./USAGE.md#cost-tiers-and-model-resolution) for the three declared shapes (graded /
-  alternative-modes / sequential-stages) and a worked example — don't re-derive the rule here, a
-  restatement is exactly what went stale. Keep `model:` beside it — set it to whichever concrete
-  model [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs) maps that `cost` value's top
-  tier to for `claude-code` today.
+- **Default tier** — add the agent to `AGENT_DEFAULT_TIERS` in
+  [`scripts/lib/cost-defaults.mjs`](../scripts/lib/cost-defaults.mjs), with a tier that is acceptable
+  for *everything the agent accepts*, never "this tier for the easy jobs, that tier for the hard
+  ones." `tests/scripts/cost-defaults.sh` fails the build if the table and `agents/*.md` disagree.
+  See [docs/USAGE.md § Cost tiers and model resolution](./USAGE.md#cost-tiers-and-model-resolution)
+  for the rule and a worked example — don't re-derive it here, a restatement is exactly what went
+  stale. Do **not** put `cost:` or `model:` in the frontmatter — the resolver's result, passed as
+  the Task model argument, is the only tier-to-model step, and an unresolved launch must inherit
+  the session's model. `scripts/validate.sh` fails the build on an agent that declares either.
 - Omit `tools:` — SoMi's agents are trusted with full tool access by design; review-type agents are
   constrained by a **write-discipline contract in their own prompt**, not by platform restriction.
   This is a deliberate simplicity choice, **not** a compatibility requirement: both hosts support the
@@ -125,9 +124,9 @@ instructions, not an instance being spawned, so there is nothing here to size or
 
 **No `cost:` field.** `cost:` sizes an agent instance being spawned; a command isn't one. If the
 command does meaningful work of its own rather than only routing to other commands, give it a
-paired `agents/<name>.md` and Task it; that agent's own `cost:` (and its own `model:`) follows the
+paired `agents/<name>.md` and Task it; that agent's default tier follows the
 rule in "Adding an agent" above. Keep commands thin; agents do the heavy lifting.
-`scripts/validate.sh` fails the build on a command that declares `cost:`. Add a catalogue-table row
+`scripts/validate.sh` fails the build on a command that declares `cost:` or `model:`. Add a catalogue-table row
 linking `../commands/<name>.md` to [`docs/COMMANDS.md`](./COMMANDS.md) — `scripts/validate.sh` fails
 the build otherwise (`COMMAND NOT INDEXED`).
 

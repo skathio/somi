@@ -39,7 +39,7 @@ else
   bad "neither agents/somi.md nor skills/somi-dispatch/SKILL.md names the resolve --agent/--host CLI fallback shape -- if the wording changed intentionally, update this test to match it"
 fi
 
-out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent coder --host claude-code)"; rc=$?
+out="$(CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent somi-coder --host claude-code)"; rc=$?
 if [ "$rc" -eq 0 ] && node -e 'JSON.parse(process.argv[1])' "$out" >/dev/null 2>&1; then
   ok "the literal CLI-fallback invocation Step 4 names succeeds against the real CLI and prints valid JSON"
 else
@@ -55,7 +55,7 @@ else
 fi
 for h in claude-code copilot; do
   hrc=0
-  CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent coder --host "$h" >/dev/null 2>&1 || hrc=$?
+  CLAUDE_PROJECT_DIR="$(fresh)" node "$CLI" resolve --agent somi-coder --host "$h" >/dev/null 2>&1 || hrc=$?
   if [ "$hrc" = "0" ]; then ok "--host $h is accepted by the real CLI"; else bad "--host $h was rejected (rc=$hrc)"; fi
 done
 
@@ -71,31 +71,33 @@ fi
 # --- each code Step 4 maps is genuinely reachable against the real CLI, not merely documented -----
 reach "64 (usage) is reachable: missing --agent" 64
 reach "65 (unknown agent) is reachable" 65 --agent totally-not-a-real-agent
-reach "66 (malformed declaration) is reachable: somi is exempt from cost:" 66 --agent somi
+reach "66 (no tier source) is reachable: somi is exempt from cost resolution" 66 --agent somi
 
 R67="$(fresh)"; mkdir -p "$R67/.somi"
 printf '{"cost": {"ceiling": "low"}\n' > "$R67/.somi/config.json"  # missing closing brace
 r67rc=0
-CLAUDE_PROJECT_DIR="$R67" node "$CLI" resolve --agent coder >/dev/null 2>&1 || r67rc=$?
+CLAUDE_PROJECT_DIR="$R67" node "$CLI" resolve --agent somi-coder >/dev/null 2>&1 || r67rc=$?
 if [ "$r67rc" = "67" ]; then
   ok "67 (project environment/config failure) is reachable: unparsable .somi/config.json"
 else
   bad "67 was not reachable via an unparsable config.json (got $r67rc)"
 fi
 
-# 67 is also reachable AFTER a session already bootstrapped successfully (M1: a config error must
+# 67 is also reachable AFTER an earlier successful call persisted a ceiling (M1: a config error must
 # never surface as 66, blamed on the agent's own cost: declaration, just because it happened on a
-# LATER call than the one that wrote .somi/somi-state/ceiling.json).
+# LATER call than the one that wrote .somi/somi-state/ceiling.json). The first call passes
+# --ceiling so state really exists before the config is corrupted.
 R67_POST="$(fresh)"; mkdir -p "$R67_POST/.somi"
 printf '{"cost": {"ceiling": "high"}}\n' > "$R67_POST/.somi/config.json"
-CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent coder >/dev/null 2>&1 # bootstrap
+CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent somi-coder --ceiling high >/dev/null 2>&1 # persists state
+[ -f "$R67_POST/.somi/somi-state/ceiling.json" ] || bad "the first call did not persist a ceiling state file"
 printf '{"cost": {"ceiling": "high"}\n' > "$R67_POST/.somi/config.json"  # now corrupt
 r67postrc=0
-CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent coder >/dev/null 2>&1 || r67postrc=$?
+CLAUDE_PROJECT_DIR="$R67_POST" node "$CLI" resolve --agent somi-coder >/dev/null 2>&1 || r67postrc=$?
 if [ "$r67postrc" = "67" ]; then
-  ok "67 is reachable even AFTER a successful bootstrap, not just on a fresh project"
+  ok "67 is reachable even AFTER state was persisted, not just on a fresh project"
 else
-  bad "config corrupted after bootstrap did not reach 67 (got $r67postrc) -- may be misattributed to 66"
+  bad "config corrupted after state was persisted did not reach 67 (got $r67postrc) -- may be misattributed to 66"
 fi
 
 
@@ -126,12 +128,19 @@ else
   # dispatch-reference line now names `somi_resolve`/`somi_skill` directly (not just a link to the
   # skill), so a stale or invented tool name there would otherwise go unchecked: the skill/front-door
   # pair alone can't see a typo that only ever appears in a command file.
-  REAL_TOOLS="$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).sort().join(" "))' "$SCHEMA_JSON")"
+  # somi_agent is a read-only text reader that dispatch must NOT use (an agent starts as its agent_type),
+  # so it is the one real tool the dispatch text is required to leave unnamed.
+  REAL_TOOLS="$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).filter((t) => t !== "somi_agent").sort().join(" "))' "$SCHEMA_JSON")"
   PROMPT_TOOLS="$(grep -ohE '`somi_[a-z_]+`' "$AGENT_MD" "$SKILL_MD" $COMMAND_MDS | tr -d '`' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
   if [ "$REAL_TOOLS" = "$PROMPT_TOOLS" ]; then
     ok "agents/somi.md + skills/somi-dispatch/SKILL.md + commands/*.md together name exactly the server's real tools ($REAL_TOOLS)"
   else
     bad "tool-name mismatch -- server: [$REAL_TOOLS] vs agents/somi.md + skills/somi-dispatch/SKILL.md + commands/*.md: [$PROMPT_TOOLS]"
+  fi
+  if node -e 'process.exit(Object.keys(JSON.parse(process.argv[1])).includes("somi_agent") ? 0 : 1)' "$SCHEMA_JSON"; then
+    ok "somi_agent still exists as a reader, and the dispatch text above names it nowhere"
+  else
+    bad "somi_agent disappeared from the server -- its removal needs an audit of its consumers first"
   fi
 
   # somi_resolve: every REAL property must be named somewhere across the two files (nothing silently

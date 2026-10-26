@@ -38,6 +38,10 @@ Nit with a confidence; a plan can be rejected.
 - Phases are named for an outcome, not a mechanic ("implement", "test", "deploy" are not phases).
 - Each iteration is about one reviewable PR, self-contained and orderable, and fits the loop's diff
   and file caps. If it plainly cannot, the plan must split it.
+- Iterations are not split finer than that. Two iterations that touch the same files and together fit
+  the caps are a finding (Minor; Major when three or more could merge) unless the plan states why the
+  split pays for its extra coder and review pass. Seen on 4.0.0: an 80-line one-file task planned as
+  five iterations, each with its own coder, diff gate and review.
 - The `Files (approx)` list is believable against the scope: it names the files the change must
   touch, including tests and docs, not a convenient subset. A list that is obviously short is the
   usual cause of a later scope breach.
@@ -48,7 +52,7 @@ Nit with a confidence; a plan can be rejected.
 - Each risk names a specific failure mode and a mitigation that could be carried out. Generic
   platitudes ("scope may grow", "performance may suffer") are findings.
 - Security implications are in the spec's security section with the phase that triggers
-  `security-reviewer`; contract-breaking changes name the version bump and deprecation path.
+  `somi-security-reviewer`; contract-breaking changes name the version bump and deprecation path.
 
 ### 5. Acceptance criteria can fail
 - Every criterion states evidence of a **kind** (a named test, a command and its expected output,

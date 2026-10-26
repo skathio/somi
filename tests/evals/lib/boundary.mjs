@@ -16,7 +16,7 @@
  * @param {{status:string,path:string}[]} changed  working-tree entries, relative to the repo root
  * @param {string|null} slug  the plan slug THIS draw created -- the SOLE directory found under
  *   `.somi/plans/` (corrected 2026-08-12, review pass 1 Blocker F-43: keying on `decisions.md`'s
- *   presence left `slug` null on the conforming DECISIONS-NEEDED pause `agents/planner.md`
+ *   presence left `slug` null on the conforming DECISIONS-NEEDED pause `agents/somi-planner.md`
  *   mandates). `null` on zero or more than one such directory: the allowlist then falls back to
  *   the broad `.somi/plans/` prefix rather than rejecting every write -- a false `fail` on a
  *   gating dimension is worse than the over-permissiveness the narrowing replaces, and this is the

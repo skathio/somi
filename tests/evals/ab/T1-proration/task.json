@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create prorate.mjs at the workspace root: an ES module with two named function exports, prorate(planCents, periodStart, periodEnd, changeDate) and settle(planCents, periodStart, periodEnd, changeDate). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "A date argument must be a string that names a real calendar date of the proleptic Gregorian calendar in the exact form YYYY-MM-DD, with a year from 1900 to 2100 inclusive. Any other value is invalid and the function throws a RangeError whose code property is 'E_DATE'.",
+    "planCents must be a safe integer from 0 to Number.MAX_SAFE_INTEGER inclusive; -0 is accepted as 0. Any other value is invalid and the function throws a RangeError whose code property is 'E_AMOUNT'.",
+    "The billing period is half-open: periodStart is included and periodEnd is excluded. periodStart must be strictly before periodEnd, otherwise the function throws a RangeError whose code property is 'E_PERIOD'.",
+    "changeDate must satisfy periodStart <= changeDate <= periodEnd, otherwise the function throws a RangeError whose code property is 'E_RANGE'.",
+    "Arguments are checked in a fixed order and the first failing check decides the error: planCents, then periodStart, periodEnd and changeDate in that order (each for format and calendar validity), then the period, then the range of changeDate. An invalid call throws before returning anything.",
+    "Days are whole calendar days. totalDays is the number of days in the period; remainingDays is the number of days from changeDate (included) to periodEnd (excluded).",
+    "prorate returns planCents * remainingDays / totalDays rounded to the nearest whole cent, with exact halves rounded up, exact for every valid input. The result is a safe integer and never -0.",
+    "settle returns an object with the properties credit and charge. charge equals what prorate returns for the same arguments; credit is the part of planCents already used (periodStart included, changeDate excluded) and equals planCents minus charge, so credit + charge equals planCents exactly. Both are safe integers and never -0.",
+    "Leap years follow the Gregorian calendar rule.",
+    "Both functions are pure: they perform no I/O, read no clock, keep no shared state and do not mutate their arguments."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-T1-9f3a7c21b84e60d5",
+  "source": [
+    "prorate.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement prorate.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

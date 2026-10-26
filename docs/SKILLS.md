@@ -21,7 +21,7 @@ not a replacement for the global ruleset; they're depth-on-demand.
 | [`observability`](../skills/observability/SKILL.md)            | Logs, metrics, traces, alerting philosophy                                        |
 | [`threat-modeling`](../skills/threat-modeling/SKILL.md)        | New attack surface: webhook, OAuth, file upload, new service                      |
 | [`reasoning-craft`](../skills/reasoning-craft/SKILL.md)        | Before answering a substantive question, or self-editing a draft for hedging and bland phrasing |
-| [`somi-routing`](../skills/somi-routing/SKILL.md)              | Classifying a free-form request into the right SoMi command — used by the `somi` agent (Copilot's front door) |
+| [`somi-routing`](../skills/somi-routing/SKILL.md)              | Classifying a free-form request into the right SoMi command, and sizing it (`trivial` / `small` / `full`) — used by the `somi` agent (Copilot's front door) and `/ship-loop` |
 | [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)            | Resolving and starting a SoMi agent's dispatch tier/model — shared by every command that Tasks an agent and the `somi` agent |
 
 ## When to invoke a skill
@@ -100,7 +100,7 @@ when one domain calls into another:
 - `api-design` references `owasp-defense` for security touchpoints.
 - `threat-modeling` references `owasp-defense` for mitigations.
 - `clean-code` references `testing-playbook` (untestable code is often badly-coupled code).
-- `testing-playbook` references `refactorer` (when a test-shape problem is really a design problem).
+- `testing-playbook` references `somi-refactorer` (when a test-shape problem is really a design problem).
 - `market-research` references `requirements-engineering` (every research finding must become a
   requirement, non-goal, or risk).
 - `requirements-engineering` references `solid-principles`, `api-design`, and `threat-modeling` for

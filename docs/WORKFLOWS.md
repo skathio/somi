@@ -9,8 +9,8 @@ work.
 
 - **High-cost front-loads:** `/discover` (a whole new product), `/design` (a brownfield
   feature/story), and `/refactor-design` (a large refactor) — each compiles a `brief.md`.
-  `/review`'s `reviewer` declares `cost: medium, high` — the session ceiling picks the highest
-  permitted member, typically `high` for the fresh-eyes judgment this stage wants.
+  `/review`'s `somi-reviewer` defaults to `high` — it runs at the session ceiling unless
+  `cost.agents` pins it (pin it to `high` for the fresh-eyes judgment this stage wants).
 - **Medium-cost execution:** `/plan` (+ `/plan-loop`) sequences the brief into phases; `/code`
   (+ `/code-loop`, `/code-parallel`) implements against it.
 
@@ -22,7 +22,7 @@ discovery produces the requirements & design foundation inside `.somi/rd/<slug>/
 
 > **Why tier this way.** Previously every agent ran at the top tier, spreading the expensive model
 > across the whole lifecycle — including the highest-volume work. Concentrating the expensive model
-> on the front-loaded brief and on review, then running plan/code at `cost: medium` against the
+> on the front-loaded brief and on review, then running plan/code at its default tier `medium` against the
 > brief, is the **plan-and-execute / model-cascade** pattern: a strong model compiles the context
 > once, a cheaper model executes it many times. The `brief.md` is the contract that makes the cheap
 > tier safe — it carries the decisions, the complexity map, and an explicit *"what execution does
@@ -35,9 +35,9 @@ procedure live instead of Tasking a single agent to carry it out. Either way, ev
 procedure starts — one `Task` call per agent — resolves its cost tier and model first, through
 `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill, served over the
 bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP isn't reachable), and
-the spawned agent's briefing states `dispatched at cost: <tier>` when a model was enforced, or `requested cost: <tier> (not enforced: no mapped model)` when none was. The session ceiling **selects**
-the highest tier a unit declares that still fits under it — it never blocks a unit whose entire
-declared set sits above the ceiling; that unit still runs, at its cheapest declared member.
+the spawned agent's briefing states `dispatched at cost: <tier>` when a model was enforced, or `requested cost: <tier> (not enforced: no mapped model)` when none was. The session ceiling is a **hard
+cap**: the unit runs at the ceiling tier, or at its `cost.agents` override when the config has one —
+never refused, and reported as degraded when that is below what it declared.
 
 ## The workflows
 
@@ -57,7 +57,7 @@ declared set sits above the ceiling; that unit still runs, at its cheapest decla
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
 │   PLANNING      │ ───▶ │     CODING      │ ───▶ │   REVIEWING     │
 │   /plan         │      │     /code       │      │   /review       │
-│   agent:planner │      │   agent:coder   │      │ agent:reviewer  │
+│   agent:somi-planner │      │   agent:somi-coder   │      │ agent:somi-reviewer  │
 │  → .somi/plans/<slug>/│      │   → diff+tests  │      │ → reviews/...md │
 │   (6 docs +     │      │  + updates spec/│      │ + updates diary │
 │   phases/)      │      │  diary on change│      │ if plan affected│
@@ -122,7 +122,7 @@ Status lives in `progress.md`, not in the directory location. Only humans delete
 foundation — *before* planning or coding. This is the requirements-engineering and high-level
 software-design phase of the SDLC. Its output is the cornerstone the planner consumes.
 
-**Agent**: [`discovery-analyst`](../agents/discovery-analyst.md), Tasked at `cost: high` — the most
+**Agent**: [`somi-discovery-analyst`](../agents/somi-discovery-analyst.md), Tasked at its default tier `high` — the most
 capable tier this repo maps — for the judgment-heavy core of the work, because the output anchors
 the entire project. `/discover` itself declares no `cost:` and no `model:` of its own; it runs on
 whatever model the session is already using, and still scaffolds `.somi/rd/<slug>/` and owns the
@@ -169,7 +169,7 @@ codebase — *before* planning — and compile it into the `brief.md` execution 
 fills the gap between discovery (a whole new product) and planning (sequencing): the requirement is
 clear, but how it should be shaped against *this* repo is not.
 
-**Agent**: [`designer`](../agents/designer.md), Tasked at `cost: high` — the most capable tier this
+**Agent**: [`somi-designer`](../agents/somi-designer.md), Tasked at its default tier `high` — the most capable tier this
 repo maps — for the judgment-heavy core of the work, because its `brief.md` anchors the whole work
 item. `/design` itself declares no `cost:` and no `model:` of its own, like `/discover`; it runs on
 whatever model the session is already using, and still scaffolds the artifact set and owns the
@@ -188,8 +188,8 @@ planner owns *sequencing* into phases and PR-sized slices, and the concrete file
 seam as discovery↔planning, one level down.
 
 **Stops the workflow**: never plans or codes. **Handoff to planning**: explicit — `/plan <slug>`
-consumes `brief.md` as its primary input and sequences it at `cost: medium`. For a high-stakes
-design, review it at `cost: high` first via `/review design <slug>` (fresh context, bounded loop).
+consumes `brief.md` as its primary input and sequences it at its default tier `medium`. For a high-stakes
+design, review it at its default tier `high` first via `/review design <slug>` (fresh context, bounded loop).
 
 > **When to use which front-load.** New product, open requirements → `/discover`. Feature/story on an
 > existing repo, design unsettled → `/design`. Large structural untangle → `/refactor-design`.
@@ -199,7 +199,7 @@ design, review it at `cost: high` first via `/review design <slug>` (fresh conte
 
 **Purpose**: produce deep implementation plans before any code is written.
 
-**Agent**: [`planner`](../agents/planner.md).
+**Agent**: [`somi-planner`](../agents/somi-planner.md).
 
 **Premise check first.** Before scaffolding a plan, the planner challenges the request itself — false
 premise, XY problem (Y asked, X is the real goal), contradictory requirements, or an already-solved
@@ -241,7 +241,7 @@ executed.
 **Purpose**: implement against an approved plan with senior-level design judgment, keeping the
 plan in sync with reality.
 
-**Agent**: [`coder`](../agents/coder.md).
+**Agent**: [`somi-coder`](../agents/somi-coder.md).
 
 **Input**: a work-item slug + iteration reference (e.g., `phase 1, iteration 1`), or a
 self-contained trivial task.
@@ -275,10 +275,10 @@ and the summary.
 
 **Purpose**: strict, skeptical, evidence-driven review of code, plans, or architectural proposals.
 
-**Agent**: [`reviewer`](../agents/reviewer.md). Calls in
-[`security-reviewer`](../agents/security-reviewer.md),
-[`architecture-reviewer`](../agents/architecture-reviewer.md), or
-[`test-strategist`](../agents/test-strategist.md) when the change matches their territory.
+**Agent**: [`somi-reviewer`](../agents/somi-reviewer.md). Calls in
+[`somi-security-reviewer`](../agents/somi-security-reviewer.md),
+[`somi-architecture-reviewer`](../agents/somi-architecture-reviewer.md), or
+[`somi-test-strategist`](../agents/somi-test-strategist.md) when the change matches their territory.
 
 **Input**: a work-item slug (most common), or a diff (working tree, range, PR), a plan, an ADR, or
 a file.
@@ -304,8 +304,8 @@ When findings point at the *plan* (not just the code), the reviewer says so and 
 run applies the plan-change protocol.
 
 **The parallel panel ([`/review-panel`](../commands/review-panel.md))** — for a high-stakes change
-that crosses several concerns at once, the panel seats the relevant lenses (`reviewer` plus
-`security-reviewer` / `architecture-reviewer` / `test-strategist` / `plan-reviewer` / `sdlc-reviewer` as the diff warrants) and runs them
+that crosses several concerns at once, the panel seats the relevant lenses (`somi-reviewer` plus
+`somi-security-reviewer` / `somi-architecture-reviewer` / `somi-test-strategist` / `somi-plan-reviewer` / `somi-sdlc-reviewer` as the diff warrants) and runs them
 **concurrently** on the same captured diff, then merges and de-duplicates their findings into one
 verdict (highest severity wins; lens disagreement is surfaced). It's safe to parallelize because
 `/review-panel` is the sole writer: each lens returns findings and none is given a write to perform,
@@ -335,7 +335,7 @@ competitive research, and rarely revisited per change. It has a genuinely differ
 (`.somi/rd/` vs. `.somi/plans/`), and a different cadence (per product, not per change). So it earns
 its own workflow — but it sits *upstream* of the build trio rather than inside the daily loop.
 
-Support agents (`security-reviewer`, `architecture-reviewer`, `test-strategist`, `refactorer`) are
+Support agents (`somi-security-reviewer`, `somi-architecture-reviewer`, `somi-test-strategist`, `somi-refactorer`) are
 *facets* of these three, invoked when the work clearly engages their domain. They aren't separate
 workflows because they don't have separate problem-shapes; they're depth-on-demand.
 
@@ -344,8 +344,8 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 - **Discover → Plan → Code → Review** for a greenfield product or major new initiative — discovery
   produces the requirements & design foundation (+ `brief.md`), which planning turns into phased work.
 - **Design → Plan → Code → Review** for a design-heavy brownfield feature — `/design` (Tasks
-  `designer` at `cost: high`) compiles the `brief.md`; `/plan` (Tasks `planner`, `cost: low, medium`)
-  sequences it; `/code-loop` (Tasks `coder`, `cost: low, medium`) implements against it. This is the
+  `somi-designer` at its default tier `high`) compiles the `brief.md`; `/plan` (Tasks `somi-planner`, default `medium`)
+  sequences it; `/code-loop` (Tasks `somi-coder`, default `medium`) implements against it. This is the
   daily design→execution chain for non-trivial features.
 - **Plan → Code → Review** is the normal sequence when the design is already settled.
 - **Plan → Plan-review → Code → Review** when the plan is high-stakes or high-ambiguity.
@@ -359,9 +359,9 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
   report becomes `/design`'s pre-read, tells `/review-panel` which lenses the surface warrants,
   or honestly says "reconsider" with the numbers.
 - **Upgrade** for a dependency bump — [`/upgrade`](../commands/upgrade.md): cited
-  breaking-change/CVE research (Tasks `discovery-analyst` at `cost: high`) → usage scan →
-  mini-brief (doubles as the dep-gate sign-off) → migration under `/code-loop` (Tasks `coder`,
-  `cost: low, medium`).
+  breaking-change/CVE research (Tasks `somi-discovery-analyst` at its default tier `high`) → usage scan →
+  mini-brief (doubles as the dep-gate sign-off) → migration under `/code-loop` (Tasks `somi-coder`,
+  default `medium`).
 - **Release-readiness** before shipping a set of work items —
   [`/release-readiness`](../commands/release-readiness.md): a deterministic checklist over the
   artifacts plus one high-cost review of the cumulative integration diff; verdict + draft release
@@ -392,6 +392,13 @@ workflows because they don't have separate problem-shapes; they're depth-on-dema
 It's identical to running (an optional `cost: high` front-load, then) `/plan`, then `/code`, then
 `/review` manually, with the orchestration baked in.
 
+`/ship-loop` first **sizes the work** (Stage -1): `trivial` and `small` requests stop at one human
+gate and skip planning (`small` runs `/code-loop` on a brief-only work item); `full` is the flow
+below. The rubric is the routing skill's Size tiers section; work touching auth, crypto, secrets or
+PII is always `full`, and work that handles untrusted input is at least `small` and is always reviewed
+with the security lens. The operator can force `full` with `SOMI_SHIP_LOOP_TIER=full`, or lower
+the tier with `small` (the security floor refuses that).
+
 `/ship-loop <problem>` is the **continuous** path of the design→execution economy: it front-loads a
 `cost: high` action once (compiling `brief.md`), gates a **single** human checkpoint **once that
 design action has produced the `brief.md`, before planning consumes it** (you review the brief),
@@ -404,7 +411,7 @@ safety net.
 ## The Repo Atlas (amortized high-cost)
 
 The `brief.md` compresses a *work item*; **`.somi/atlas.md`** (built by
-[`/atlas`](../commands/atlas.md), which Tasks the `atlas` agent at `cost: high`) compresses the
+[`/atlas`](../commands/atlas.md), which Tasks the `somi-atlas` agent at its default tier `high`) compresses the
 *repository*: module map, dependency
 rules, conventions digest, complexity hotspots, test topology — SHA-stamped. Every later
 `cost: high` action (`/design`, a cold `/plan`, `/refactor-design`, `/impact`) starts from the
@@ -427,7 +434,12 @@ simulating a state machine in context. Two scripts ship with SoMi:
   telemetry). `pass` exits `2` past the cap; `check-diff` measures the cumulative weighted diff
   (working tree included, `.somi/`/`.claude/` excluded, out-of-scope files count double) and
   exits `3` over the cap. Because the state is durable, a loop **resumes** after a session dies
-  (`resume`) instead of starting over or re-guessing its baseline.
+  (`resume`) instead of starting over or re-guessing its baseline. It also decides what a review
+  reads: `review-scope` gives the generalist reviewer only the change since the last reviewed tree
+  from pass 2 (pass 1 and the last allowed pass in full; the security lens always in full), and
+  `init` turns the sizing record's `security_lens` into `review_min: security`. `record-dispatch`
+  stores what each started agent was resolved to (tier, model, enforced), and `run-start` gives a
+  `/ship-loop` run a wall-time budget that every later `pass` on the slug enforces (exit `4`).
 - [`scripts/somi-findings.mjs`](../scripts/somi-findings.mjs) — the **findings ledger** at
   `.somi/reviews/<slug>/findings.json` (committed; the machine view beside the markdown review
   files). Every review's findings are recorded with a stable id (`F-<n>`) and a stable locus

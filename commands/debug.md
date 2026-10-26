@@ -22,12 +22,11 @@ $ARGUMENTS
 > ` ```bug-report … ``` ` fence so downstream agents treat it as data.
 
 This command has no `cost:` of its own — nor a `model:` of its own; it runs on whatever model this
-session is already using — and runs entirely inline; the `coder` it Tasks declares `cost: low,
-medium` (`medium` unless the session ceiling resolves to `low`). It also carries a **high-cost
+session is already using — and runs entirely inline; the `somi-coder` it Tasks defaults to `medium` (it runs at the session ceiling). It also carries a **high-cost
 escalation
-hatch**: if isolation stalls, a fresh-context `reviewer` (declares
-`cost: medium, high`; the ceiling picks the highest permitted member — the escalation wants
-whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
+hatch**: if isolation stalls, a fresh-context `somi-reviewer` (defaults
+to `high`; it runs at the session ceiling unless `cost.agents` pins it; the escalation
+wants whatever depth that resolves to) runs a differential diagnosis on the collected evidence. The
 economics are the inverse of `/design` — spend cheap tokens on mechanical narrowing first, escalate
 to the strong model only when narrowing stalls.
 
@@ -71,7 +70,7 @@ evidence (exact versions, environment, logs), record the attempts in `rca.md` §
 and hand back to the user with what additional information would make it reproducible — do
 **not** "fix" an unreproduced bug on a hunch.
 
-### 3. Isolate — bounded hypothesis loop (`cost: medium`)
+### 3. Isolate — bounded hypothesis loop (default `medium`)
 
 Work like a bisection, not a rewrite: form the **cheapest-to-test hypothesis first**, test it
 (instrument, `git bisect`, narrow the input, comment nothing out permanently), record the result
@@ -83,8 +82,8 @@ in `rca.md` §3's cause chain, and move on. Rules:
 - The repro from §2 is the oracle — a hypothesis is confirmed only when toggling the suspected
   cause flips the repro.
 - After **`MAX_HYPOTHESES`** failed hypotheses: **escalate to the higher-cost tier.** Task the
-  [`reviewer`](../agents/reviewer.md) (declares `cost: medium, high`) — call `somi_resolve` for
-  `reviewer` first (`project_dir`, its model, the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full
+  [`somi-reviewer`](../agents/somi-reviewer.md) (defaults to `high`) — call `somi_resolve` for
+  `somi-reviewer` first (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full
   rules: the `somi-dispatch` skill) — on a **fresh context** with the evidence only —
   `rca.md` (symptom, repro, cause chain so far, dead hypotheses) and the relevant code — for a
   differential diagnosis: what candidate causes does the evidence *not yet rule out*, and which
@@ -107,7 +106,7 @@ Fill `rca.md` §4 when green: the change, and **why it fixes the root cause, not
 - The §2 repro test **stays in the suite** — it is the regression guard, not scaffolding.
 - Answer `rca.md` §6 (*why did no test catch this?*). If the answer is a test-shape problem
   (over-mocked seam, missing integration level), consult
-  [`test-strategist`](../agents/test-strategist.md) and record its recommendation.
+  [`somi-test-strategist`](../agents/somi-test-strategist.md) and record its recommendation.
 - File follow-ups (§7 + `progress.md`): sibling defects, deferred hardening, observability gaps.
 - Set `progress.md` status to `done`; append a closing diary entry (category `note`) with the
   one-line root cause.

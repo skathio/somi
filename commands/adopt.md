@@ -14,19 +14,18 @@ This is a composite of existing pieces, run in order, with the user confirming a
 
 > **No `cost:` of its own, and no `model:` either — it runs on whatever model this session is
 > already using.** Stage 1 Tasks
-> the `atlas` agent ([`agents/atlas.md`](../agents/atlas.md)), which declares `cost: high` on its
+> the `somi-atlas` agent ([`agents/somi-atlas.md`](../agents/somi-atlas.md)), which defaults to `high` on its
 > own account and resolves against the session ceiling independently of this command. Stages 2 and
 > 4 read and write directly, inline, at whatever tier is already running this command. Stage 3 may
-> also Task [`test-strategist`](../agents/test-strategist.md) for the gap report's test-thin-ice
-> depth — it resolves on its own account exactly as Stage 1's `atlas` does, not at this command's
+> also Task [`somi-test-strategist`](../agents/somi-test-strategist.md) for the gap report's test-thin-ice
+> depth — it resolves on its own account exactly as Stage 1's `somi-atlas` does, not at this command's
 > tier.
 
-## Stage 1 — Build the Repo Atlas (`cost: high`, the expensive step)
+## Stage 1 — Build the Repo Atlas (default `high`, the expensive step)
 
-Before this `Task`, call `somi_resolve` for `atlas` (with `project_dir`), pass its model, and put
-the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
-or `somi:somi-dispatch` on Claude Code). Task the `atlas` agent
-([`agents/atlas.md`](../agents/atlas.md)) to build or refresh
+Before this `Task`, call `somi_resolve` for `somi-atlas` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
+or `somi:somi-dispatch` on Claude Code). Task the `somi-atlas` agent
+([`agents/somi-atlas.md`](../agents/somi-atlas.md)) to build or refresh
 `.somi/atlas.md` (module map, dependency rules, conventions digest, hotspots, test topology,
 SHA-stamped). It runs its own staleness check and skips the rebuild — saying so — when a fresh
 atlas already exists.
@@ -55,8 +54,8 @@ From the atlas plus targeted checks, produce a short **gap report** (in-chat, pl
 `.somi/reviews/_ad-hoc/<YYYY-MM-DD>-adoption-gaps.md`):
 
 - **Test thin ice** — the atlas §6 areas where a regression wouldn't be caught; the 2–3 places
-  characterization tests would pay off first (this is [`test-strategist`](../agents/test-strategist.md)
-  territory — before Tasking it, call `somi_resolve` for `test-strategist`; full rules: the
+  characterization tests would pay off first (this is [`somi-test-strategist`](../agents/somi-test-strategist.md)
+  territory — before Tasking it, call `somi_resolve` for `somi-test-strategist`; full rules: the
   `somi-dispatch` skill — if the picture needs depth).
 - **Hotspots** — atlas §5, ranked; for each, whether it blocks likely upcoming work.
 - **Candidate first refactors** — untangles that would make the next changes easy

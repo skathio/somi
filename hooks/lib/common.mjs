@@ -180,6 +180,27 @@ export function field(payload, fieldPath) {
   return typeof cur === 'string' ? cur : JSON.stringify(cur);
 }
 
+// Every path a file-writing tool call targets, across hosts -> {paths, known}. Claude Code sends
+// `tool_input.file_path`; Copilot CLI's create tool arrives as `Write` with `tool_input.path`, and its
+// apply_patch arrives as `Edit` with `tool_input` set to the raw patch text, whose targets are only in
+// its `*** Add|Update|Delete File:` and `*** Move to:` lines (both shapes captured live, Copilot CLI
+// 1.0.103). `known` is false when no target could be read: a guard must then fail closed, since reading
+// only `file_path` once let every Copilot write through unchecked.
+const PATCH_TARGET_RE = /^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+?)\s*$/gm;
+export function writeTargets(payload) {
+  const input = payload && typeof payload === 'object' ? payload.tool_input : undefined;
+  if (typeof input === 'string') {
+    const paths = [...input.matchAll(PATCH_TARGET_RE)].map((m) => m[1]);
+    return { paths, known: paths.length > 0 };
+  }
+  if (input && typeof input === 'object') {
+    for (const key of ['file_path', 'path']) {
+      if (typeof input[key] === 'string' && input[key] !== '') return { paths: [input[key]], known: true };
+    }
+  }
+  return { paths: [], known: false };
+}
+
 // Path to the audit log. Project-local by default; configurable via
 // SOMI_AUDIT_LOG. Same unexpanded-variable guard as projectRoot(), applied a
 // second time to the SOMI_AUDIT_LOG candidate itself (a host could pass an
@@ -246,10 +267,37 @@ export function config(fieldPath) {
 // Append a structured line to the audit log. Frozen contract:
 // "timestamp\tkind\ttool\tdetail\n", byte-exact — any deviation here is a
 // regression, not a style choice.
+// Creates `dir` (and missing parents) without fs.mkdirSync's recursive mode, which spins forever on some
+// paths (for example under /proc): find the nearest existing ancestor within a bounded walk, then make each
+// missing level one step at a time, so an impossible path fails fast with the OS error instead of hanging.
+function ensureDir(dir) {
+  const missing = [];
+  let d = dir;
+  for (let i = 0; i < 64; i++) {
+    try {
+      if (fs.statSync(d).isDirectory()) break;
+      throw Object.assign(new Error(`${d} is not a directory`), { code: 'ENOTDIR' });
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+    }
+    missing.unshift(d);
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+  for (const m of missing) {
+    try {
+      fs.mkdirSync(m);
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+    }
+  }
+}
+
 export function audit(payload, kind, detail) {
   const tool = field(payload, '.tool_name');
   const log = auditLogPath();
-  fs.mkdirSync(path.dirname(log), { recursive: true });
+  ensureDir(path.dirname(log));
   const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'); // date -u +%Y-%m-%dT%H:%M:%SZ
   fs.appendFileSync(log, `${timestamp}\t${kind}\t${tool || 'unknown'}\t${detail}\n`);
 }
@@ -270,6 +318,21 @@ export function denyPretool(payload, reason) {
     },
   }));
   audit(payload, 'DENY', reason);
+  throw new HookExit(0);
+}
+
+// Ask the user about a PreToolUse tool call instead of deciding it: the harness shows `reason` and
+// lets the user allow or deny. Same shape and flow as denyPretool, with permissionDecision 'ask' and an
+// ASK audit line (a failed audit write never changes the answer). Throws HookExit(0).
+export function askPretool(payload, reason) {
+  console.log(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'ask',
+      permissionDecisionReason: reason,
+    },
+  }));
+  try { audit(payload, 'ASK', reason); } catch { /* the question has been asked; auditing is best effort */ }
   throw new HookExit(0);
 }
 

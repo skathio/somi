@@ -141,9 +141,9 @@ For breaking changes in a MAJOR release, include a migration note in `CHANGELOG.
 - **Renamed `/audit` to `/security-review`** for consistency with the other review commands.
   - **Migration**: replace any team docs, shortcuts, or aliases referencing `/audit` with
     `/security-review`. The old command will not be restored.
-- **Removed `agents/audit.md`** (replaced by `agents/security-reviewer.md` in 0.5.0).
+- **Removed `agents/audit.md`** (replaced by `agents/somi-security-reviewer.md` in 0.5.0).
   - **Migration**: run `/plugin update somi` to pick up the new agent. Custom prompts referencing
-    `audit` should reference `security-reviewer`.
+    `audit` should reference `somi-security-reviewer`.
 ```
 
 ## Pinning a version downstream

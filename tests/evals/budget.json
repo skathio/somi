@@ -1,0 +1,11 @@
+{
+  "perDrawUsd": 8,
+  "perDrawMin": 40,
+  "perRunUsd": 144,
+  "perRunHours": 4,
+  "runDraws": 18,
+  "runConcurrent": 3,
+  "phase1Usd": 208,
+  "replacementSmokeUsd": 56,
+  "inFlightCeilingUsd": 168
+}

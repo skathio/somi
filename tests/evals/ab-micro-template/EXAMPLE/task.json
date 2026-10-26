@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Create clamp.mjs at the workspace root: an ES module with one named function export, clamp(value, low, high). Use Node.js built-ins only and no dependencies. Tests, if you write any, go under test/.",
+    "value, low and high must each be a finite number, otherwise the function throws a TypeError whose code property is 'E_TYPE'.",
+    "low must not be greater than high, otherwise the function throws a RangeError whose code property is 'E_BOUNDS'. The type check comes first: when an argument is not a finite number the code is 'E_TYPE' even if low is greater than high.",
+    "The result is low when value is less than low, high when value is greater than high, and value otherwise. low and high themselves are allowed values.",
+    "A result that equals zero is returned as +0, never as -0.",
+    "The function is pure: no I/O, no shared state, and the arguments are not mutated."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-EX-5b7e2d91c4a80f36",
+  "source": [
+    "clamp.mjs"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "package.json"
+  ],
+  "brief": "Implement clamp.mjs exactly as the numbered statements specify, then stop. Do not change any other file except tests under test/."
+}

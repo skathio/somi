@@ -17,7 +17,7 @@ branch, scoped to the single in-progress work item if exactly one exists).
 > [`/refactor-design`](./refactor-design.md)) before it hands off to execution. There is no separate
 > `/plan-review` or `/design-review` command — this is the single deepest review surface.
 
-> **Fresh-context review (bias avoidance).** The `reviewer` (and any consultant) is **always** Tasked
+> **Fresh-context review (bias avoidance).** The `somi-reviewer` (and any consultant) is **always** Tasked
 > on a **cold context** — given the artifacts to review (diff, plan, or design/brief) and the spec,
 > **not** the producing agent's reasoning or conversation. A reviewer that inherits the author's
 > chain of thought rationalizes the author's choices instead of testing them. The subagent boundary
@@ -61,10 +61,9 @@ one that silently drops a still-open finding is worse.
 For **plan reviews**, read the plan in full — don't skim. The point of plan review is to catch
 errors that are cheaper to fix here than after code is written.
 
-### 3. Brief the `reviewer` agent
+### 3. Brief the `somi-reviewer` agent
 
-Before this `Task`, call `somi_resolve` for `reviewer` (with `project_dir`), pass its model, and put
-the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
+Before this `Task`, call `somi_resolve` for `somi-reviewer` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`,
 or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 
 - The target (diff, file, or plan-artifact set).
@@ -74,7 +73,7 @@ or `somi:somi-dispatch` on Claude Code). Via the Task tool, pass:
 - An instruction to **return** (not write) the full review body and any proposed diary entry;
   the command owns all writes.
 
-The `reviewer` agent is read-only **by contract, not by platform restriction** — it holds Write/Edit
+The `somi-reviewer` agent is read-only **by contract, not by platform restriction** — it holds Write/Edit
 but is forbidden from using them, so the command owns every write. If the target crosses the triggers
 below, **also invoke** the relevant consultant via a separate Task call — call `somi_resolve` for it
 first, like any other (full rules: the `somi-dispatch` skill) — and merge its findings
@@ -82,14 +81,15 @@ into the review under a dedicated section:
 
 | Trigger | Consultant agent | When |
 |---|---|---|
-| Auth / crypto / input validation / file upload / deserialization / template rendering / SSRF surface | `security-reviewer` | Both code and plan |
-| New module / service / public contract / dependency-direction change / public interface | `architecture-reviewer` | Both code and plan |
-| Mock-heavy diff, new flaky tests, e2e-only coverage of risky code, untestable seams | `test-strategist` | Code review |
+| Auth / crypto / input validation / file upload / deserialization / template rendering / SSRF surface | `somi-security-reviewer` | Both code and plan |
+| New module / service / public contract / dependency-direction change / public interface | `somi-architecture-reviewer` | Both code and plan |
+| Mock-heavy diff, new flaky tests, e2e-only coverage of risky code, untestable seams | `somi-test-strategist` | Code review |
 
-Skipping a triggered consultant is itself a **finding** in the meta-review. If a triggered
-consultant's own declared `cost:` has no member at or below the session ceiling, that is not a
-skip to absorb quietly — stop and surface the refusal to the user rather than reporting a clean
-verdict the consultant never actually rendered.
+Skipping a triggered consultant is itself a **finding** in the meta-review. A triggered
+consultant runs at the session ceiling unless `cost.agents` pins it, so it may run below its
+default tier. That is not a skip to absorb quietly: say so in the meta-review (the dispatch
+skill prints a degraded line), and for `somi-security-reviewer` name `cost.agents` as the way to keep
+the strong pass.
 
 ### 4. Aggregate findings
 
@@ -164,7 +164,7 @@ The command (not the agent) writes these:
 - **Iteration sizes** — is each ~1 PR? If not, split.
 - **Risk realism** — specific failure modes with specific mitigations, or generic platitudes?
 - **Security blind spots** — does `spec.md` §8 acknowledge auth/crypto/PII surfaces? Does it
-  gate `security-reviewer` invocation in the right phase?
+  gate `somi-security-reviewer` invocation in the right phase?
 - **Test strategy** — risk-driven or coverage-worship?
 - **Rollout & rollback** — flag plan, deployment, rollback steps?
 - **Definition of Done** — measurable, not vibes-based?
@@ -185,5 +185,5 @@ The command (not the agent) writes these:
 
 ## Quality bar
 
-See [`agents/reviewer.md`](../agents/reviewer.md). Findings must include where, what,
+See [`agents/somi-reviewer.md`](../agents/somi-reviewer.md). Findings must include where, what,
 why-it-matters, and a concrete suggested fix. Vague platitudes are not findings.

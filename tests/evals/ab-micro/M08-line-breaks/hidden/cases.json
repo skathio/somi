@@ -1,0 +1,2738 @@
+{
+ "canary": "SOMI-CANARY-M08-6d2e9b40a7c1f385",
+ "module": "breaks.mjs",
+ "export": "breakLines",
+ "timeoutMs": 10000,
+ "families": [
+  {
+   "name": "functional",
+   "cases": [
+    {
+     "id": "h01",
+     "ac": 6,
+     "args": [
+      [
+       "aaa",
+       "bbb",
+       "cc",
+       "ddddd"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "aaa",
+       "bbb cc",
+       "ddddd"
+      ]
+     }
+    },
+    {
+     "id": "h02",
+     "ac": 6,
+     "args": [
+      [
+       "aaa",
+       "bb",
+       "cc",
+       "ddddd"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "aaa",
+       "bb cc",
+       "ddddd"
+      ]
+     }
+    },
+    {
+     "id": "h03",
+     "ac": 6,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e",
+       "f"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "a b c",
+       "d e f"
+      ]
+     }
+    },
+    {
+     "id": "h04",
+     "ac": 6,
+     "args": [
+      [
+       "aaa",
+       "bbb",
+       "ccc"
+      ],
+      8
+     ],
+     "want": {
+      "value": [
+       "aaa bbb",
+       "ccc"
+      ]
+     }
+    },
+    {
+     "id": "h05",
+     "ac": 6,
+     "args": [
+      [
+       "one",
+       "two",
+       "three",
+       "four",
+       "five"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "one two",
+       "three",
+       "four five"
+      ]
+     }
+    },
+    {
+     "id": "h06",
+     "ac": 7,
+     "args": [
+      [
+       "aa",
+       "bb",
+       "cc",
+       "dd"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "aa bb",
+       "cc dd"
+      ]
+     }
+    },
+    {
+     "id": "h07",
+     "ac": 7,
+     "args": [
+      [
+       "a",
+       "b",
+       "c",
+       "d"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "a b",
+       "c d"
+      ]
+     }
+    },
+    {
+     "id": "h08",
+     "ac": 7,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "a",
+       "b c"
+      ]
+     }
+    },
+    {
+     "id": "h09",
+     "ac": 7,
+     "args": [
+      [
+       "aa",
+       "b",
+       "aa",
+       "b"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "aa b",
+       "aa b"
+      ]
+     }
+    },
+    {
+     "id": "h10",
+     "ac": 5,
+     "args": [
+      [
+       "aaaa",
+       "bb",
+       "c"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "aaaa",
+       "bb c"
+      ]
+     }
+    },
+    {
+     "id": "h11",
+     "ac": 5,
+     "args": [
+      [
+       "aaaa",
+       "bb",
+       "cc",
+       "d"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "aaaa",
+       "bb cc",
+       "d"
+      ]
+     }
+    },
+    {
+     "id": "h12",
+     "ac": 5,
+     "args": [
+      [
+       "abc",
+       "de",
+       "f"
+      ],
+      7
+     ],
+     "want": {
+      "value": [
+       "abc de",
+       "f"
+      ]
+     }
+    },
+    {
+     "id": "h13",
+     "ac": 5,
+     "args": [
+      [
+       "abcd",
+       "efgh",
+       "i"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "abcd efgh",
+       "i"
+      ]
+     }
+    },
+    {
+     "id": "h14",
+     "ac": 5,
+     "args": [
+      [
+       "abcd",
+       "efgh",
+       "ij"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "abcd efgh",
+       "ij"
+      ]
+     }
+    },
+    {
+     "id": "h15",
+     "ac": 5,
+     "args": [
+      [
+       "ab",
+       "cd",
+       "ef",
+       "g"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "ab cd",
+       "ef g"
+      ]
+     }
+    },
+    {
+     "id": "h16",
+     "ac": 5,
+     "args": [
+      [
+       "ab",
+       "cd",
+       "ef",
+       "gh",
+       "i"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "ab cd",
+       "ef gh",
+       "i"
+      ]
+     }
+    },
+    {
+     "id": "h17",
+     "ac": 3,
+     "args": [
+      [
+       "😀😀",
+       "ab",
+       "cd"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "😀😀",
+       "ab cd"
+      ]
+     }
+    },
+    {
+     "id": "h18",
+     "ac": 3,
+     "args": [
+      [
+       "😀",
+       "😀",
+       "😀",
+       "😀"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "😀 😀",
+       "😀 😀"
+      ]
+     }
+    },
+    {
+     "id": "h19",
+     "ac": 3,
+     "args": [
+      [
+       "é",
+       "éé",
+       "日本",
+       "x"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "é éé",
+       "日本 x"
+      ]
+     }
+    },
+    {
+     "id": "h20",
+     "ac": 3,
+     "args": [
+      [],
+      10
+     ],
+     "want": {
+      "value": []
+     }
+    },
+    {
+     "id": "h21",
+     "ac": 3,
+     "args": [
+      [
+       "solo"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "solo"
+      ]
+     }
+    },
+    {
+     "id": "r02",
+     "ac": 6,
+     "args": [
+      [
+       "mhi",
+       "é",
+       "lfc",
+       "nho",
+       "é",
+       "fgp",
+       "e",
+       "adc",
+       "n",
+       "enf",
+       "l",
+       "ézz"
+      ],
+      11
+     ],
+     "want": {
+      "value": [
+       "mhi é lfc",
+       "nho é fgp e",
+       "adc n enf",
+       "l ézz"
+      ]
+     }
+    },
+    {
+     "id": "r03",
+     "ac": 6,
+     "args": [
+      [
+       "cn",
+       "adh",
+       "c",
+       "o",
+       "a",
+       "dki",
+       "al",
+       "b",
+       "inl",
+       "ézz",
+       "d",
+       "l"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "cn adh c o",
+       "a dki al",
+       "b inl ézz",
+       "d l"
+      ]
+     }
+    },
+    {
+     "id": "r04",
+     "ac": 6,
+     "args": [
+      [
+       "😀😀",
+       "aca",
+       "acf",
+       "g",
+       "f",
+       "c",
+       "l",
+       "f"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "😀😀",
+       "aca",
+       "acf",
+       "g f",
+       "c",
+       "l f"
+      ]
+     }
+    },
+    {
+     "id": "r05",
+     "ac": 6,
+     "args": [
+      [
+       "n",
+       "lek",
+       "mf",
+       "k",
+       "bn",
+       "d",
+       "ed"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "n",
+       "lek",
+       "mf k",
+       "bn",
+       "d ed"
+      ]
+     }
+    },
+    {
+     "id": "r06",
+     "ac": 6,
+     "args": [
+      [
+       "obhcfd",
+       "i",
+       "😀😀",
+       "denbke",
+       "bl",
+       "l",
+       "a",
+       "iijga",
+       "ofc",
+       "é",
+       "o",
+       "bno"
+      ],
+      13
+     ],
+     "want": {
+      "value": [
+       "obhcfd i 😀😀",
+       "denbke bl l a",
+       "iijga ofc é",
+       "o bno"
+      ]
+     }
+    },
+    {
+     "id": "r08",
+     "ac": 6,
+     "args": [
+      [
+       "é",
+       "k",
+       "alf",
+       "d",
+       "hg",
+       "a",
+       "nm",
+       "bfm",
+       "gh",
+       "o",
+       "j",
+       "ijl"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "é k alf d",
+       "hg a nm",
+       "bfm gh o",
+       "j ijl"
+      ]
+     }
+    },
+    {
+     "id": "r09",
+     "ac": 6,
+     "args": [
+      [
+       "😀😀",
+       "kcja",
+       "l",
+       "idee",
+       "c",
+       "😀😀",
+       "j",
+       "ah",
+       "eoppe",
+       "nbffmm",
+       "dhdlfj",
+       "ézzz",
+       "o",
+       "dlf"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "😀😀 kcja",
+       "l idee c",
+       "😀😀 j",
+       "ah eoppe",
+       "nbffmm",
+       "dhdlfj",
+       "ézzz o",
+       "dlf"
+      ]
+     }
+    },
+    {
+     "id": "r10",
+     "ac": 6,
+     "args": [
+      [
+       "pmi",
+       "m",
+       "e",
+       "imh",
+       "j",
+       "lil",
+       "cdo",
+       "g",
+       "m",
+       "olp",
+       "n",
+       "g",
+       "b",
+       "pm"
+      ],
+      11
+     ],
+     "want": {
+      "value": [
+       "pmi m e imh",
+       "j lil cdo g",
+       "m olp n g",
+       "b pm"
+      ]
+     }
+    },
+    {
+     "id": "r11",
+     "ac": 6,
+     "args": [
+      [
+       "nalhm",
+       "hbcp",
+       "😀",
+       "g",
+       "h",
+       "afpkh",
+       "dlbib",
+       "gineko",
+       "jfogda",
+       "kbib"
+      ],
+      17
+     ],
+     "want": {
+      "value": [
+       "nalhm hbcp 😀 g",
+       "h afpkh dlbib",
+       "gineko jfogda",
+       "kbib"
+      ]
+     }
+    },
+    {
+     "id": "r12",
+     "ac": 6,
+     "args": [
+      [
+       "lil",
+       "gokc",
+       "fgo",
+       "nbgckc",
+       "é",
+       "nkl",
+       "kjdkeb",
+       "g",
+       "mn"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "lil gokc",
+       "fgo",
+       "nbgckc",
+       "é nkl",
+       "kjdkeb g",
+       "mn"
+      ]
+     }
+    },
+    {
+     "id": "r14",
+     "ac": 6,
+     "args": [
+      [
+       "pjd",
+       "bmlg",
+       "hm",
+       "ji",
+       "lkdjn",
+       "f",
+       "b",
+       "e",
+       "olbhb",
+       "g",
+       "é",
+       "n",
+       "c",
+       "ngjf"
+      ],
+      8
+     ],
+     "want": {
+      "value": [
+       "pjd bmlg",
+       "hm ji",
+       "lkdjn",
+       "f b e",
+       "olbhb g",
+       "é n c",
+       "ngjf"
+      ]
+     }
+    },
+    {
+     "id": "r15",
+     "ac": 6,
+     "args": [
+      [
+       "ikmjle",
+       "gfmhf",
+       "ppldj",
+       "😀😀",
+       "efbj",
+       "n",
+       "bfnjnb",
+       "jl",
+       "ana"
+      ],
+      12
+     ],
+     "want": {
+      "value": [
+       "ikmjle",
+       "gfmhf ppldj",
+       "😀😀 efbj n",
+       "bfnjnb jl",
+       "ana"
+      ]
+     }
+    },
+    {
+     "id": "r16",
+     "ac": 6,
+     "args": [
+      [
+       "c",
+       "pbkabg",
+       "kngopod",
+       "😀",
+       "g",
+       "kpikbklg",
+       "n",
+       "ngb",
+       "mhoagnhf",
+       "ncacmcn",
+       "é",
+       "aaeadgjk",
+       "ipkfog"
+      ],
+      22
+     ],
+     "want": {
+      "value": [
+       "c pbkabg kngopod 😀",
+       "g kpikbklg n ngb",
+       "mhoagnhf ncacmcn é",
+       "aaeadgjk ipkfog"
+      ]
+     }
+    },
+    {
+     "id": "r17",
+     "ac": 6,
+     "args": [
+      [
+       "fb",
+       "😀",
+       "p",
+       "ec",
+       "aola",
+       "eolhaiol",
+       "nhpl",
+       "n",
+       "lnjlhhpn",
+       "fjcocip",
+       "fgijfmh",
+       "ck"
+      ],
+      15
+     ],
+     "want": {
+      "value": [
+       "fb 😀 p ec aola",
+       "eolhaiol nhpl",
+       "n lnjlhhpn",
+       "fjcocip fgijfmh",
+       "ck"
+      ]
+     }
+    },
+    {
+     "id": "r18",
+     "ac": 6,
+     "args": [
+      [
+       "o",
+       "a",
+       "n",
+       "k",
+       "pco",
+       "aklb",
+       "pch",
+       "oegl",
+       "md",
+       "cmg",
+       "ni",
+       "😀😀",
+       "ihm"
+      ],
+      7
+     ],
+     "want": {
+      "value": [
+       "o a n",
+       "k pco",
+       "aklb",
+       "pch",
+       "oegl md",
+       "cmg ni",
+       "😀😀",
+       "ihm"
+      ]
+     }
+    },
+    {
+     "id": "r20",
+     "ac": 6,
+     "args": [
+      [
+       "g",
+       "p",
+       "😀",
+       "l",
+       "gb",
+       "h",
+       "j",
+       "afl"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "g p",
+       "😀 l",
+       "gb",
+       "h j",
+       "afl"
+      ]
+     }
+    },
+    {
+     "id": "r21",
+     "ac": 6,
+     "args": [
+      [
+       "dld",
+       "jp",
+       "p",
+       "d",
+       "odclgjab",
+       "klnb"
+      ],
+      8
+     ],
+     "want": {
+      "value": [
+       "dld jp",
+       "p d",
+       "odclgjab",
+       "klnb"
+      ]
+     }
+    },
+    {
+     "id": "r22",
+     "ac": 6,
+     "args": [
+      [
+       "oacdbbg",
+       "ézz",
+       "n",
+       "dam",
+       "el",
+       "kfclommk",
+       "éz",
+       "hcnbb",
+       "enm",
+       "flemdef",
+       "okg",
+       "lmcc"
+      ],
+      14
+     ],
+     "want": {
+      "value": [
+       "oacdbbg ézz",
+       "n dam el",
+       "kfclommk éz",
+       "hcnbb enm",
+       "flemdef okg",
+       "lmcc"
+      ]
+     }
+    },
+    {
+     "id": "r23",
+     "ac": 6,
+     "args": [
+      [
+       "lim",
+       "om",
+       "akae",
+       "mg",
+       "leoc",
+       "mohn",
+       "d",
+       "éz",
+       "niadfi",
+       "b",
+       "lagcf",
+       "ojl"
+      ],
+      7
+     ],
+     "want": {
+      "value": [
+       "lim om",
+       "akae mg",
+       "leoc",
+       "mohn",
+       "d éz",
+       "niadfi",
+       "b lagcf",
+       "ojl"
+      ]
+     }
+    },
+    {
+     "id": "r24",
+     "ac": 6,
+     "args": [
+      [
+       "bkd",
+       "jnh",
+       "a",
+       "gc",
+       "ape",
+       "inj",
+       "gkhe",
+       "h"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "bkd jnh",
+       "a gc ape",
+       "inj gkhe",
+       "h"
+      ]
+     }
+    },
+    {
+     "id": "r26",
+     "ac": 6,
+     "args": [
+      [
+       "knmkl",
+       "mnadij",
+       "c",
+       "looo",
+       "cgj",
+       "j",
+       "lok",
+       "ilbc",
+       "cleb",
+       "ejcb",
+       "jn",
+       "kb"
+      ],
+      8
+     ],
+     "want": {
+      "value": [
+       "knmkl",
+       "mnadij",
+       "c looo",
+       "cgj j",
+       "lok ilbc",
+       "cleb",
+       "ejcb jn",
+       "kb"
+      ]
+     }
+    },
+    {
+     "id": "r27",
+     "ac": 6,
+     "args": [
+      [
+       "ld",
+       "fg",
+       "e",
+       "la",
+       "gl",
+       "c",
+       "f",
+       "nhp",
+       "e",
+       "d",
+       "jhh"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "ld",
+       "fg e",
+       "la",
+       "gl",
+       "c f",
+       "nhp",
+       "e d",
+       "jhh"
+      ]
+     }
+    },
+    {
+     "id": "r28",
+     "ac": 6,
+     "args": [
+      [
+       "m",
+       "f",
+       "d",
+       "mgo",
+       "😀😀",
+       "gb",
+       "i",
+       "eo",
+       "hj",
+       "hb",
+       "p",
+       "koo"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "m f d mgo",
+       "😀😀 gb i",
+       "eo hj hb",
+       "p koo"
+      ]
+     }
+    },
+    {
+     "id": "r29",
+     "ac": 6,
+     "args": [
+      [
+       "iagk",
+       "jegp",
+       "oecboejn",
+       "i",
+       "fghgjf",
+       "fc",
+       "mmo",
+       "o",
+       "iengfd",
+       "fjleo",
+       "mmok",
+       "ézz",
+       "kmpe",
+       "gicleefc"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "iagk jegp",
+       "oecboejn",
+       "i fghgjf",
+       "fc mmo o",
+       "iengfd",
+       "fjleo mmok",
+       "ézz kmpe",
+       "gicleefc"
+      ]
+     }
+    },
+    {
+     "id": "r30",
+     "ac": 6,
+     "args": [
+      [
+       "😀😀",
+       "bkbgcdhd",
+       "ph",
+       "ézz",
+       "dagdfeam",
+       "l",
+       "fmph",
+       "npi",
+       "alda",
+       "😀😀",
+       "lidmpbo",
+       "pdpale",
+       "aefjngm",
+       "ho"
+      ],
+      19
+     ],
+     "want": {
+      "value": [
+       "😀😀 bkbgcdhd ph",
+       "ézz dagdfeam l",
+       "fmph npi alda 😀😀",
+       "lidmpbo pdpale",
+       "aefjngm ho"
+      ]
+     }
+    },
+    {
+     "id": "r32",
+     "ac": 6,
+     "args": [
+      [
+       "pnj",
+       "fcekb",
+       "😀",
+       "nckg",
+       "jeana",
+       "kkmkhj",
+       "c",
+       "gj",
+       "mo",
+       "eadnmj",
+       "no",
+       "ed"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "pnj fcekb",
+       "😀 nckg",
+       "jeana",
+       "kkmkhj",
+       "c gj mo",
+       "eadnmj no",
+       "ed"
+      ]
+     }
+    },
+    {
+     "id": "r33",
+     "ac": 6,
+     "args": [
+      [
+       "fhailo",
+       "jf",
+       "dibi",
+       "ncgpdi",
+       "b",
+       "ip",
+       "hh",
+       "mml",
+       "ck",
+       "kongmo",
+       "malgbnm"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "fhailo",
+       "jf dibi",
+       "ncgpdi b",
+       "ip hh mml",
+       "ck kongmo",
+       "malgbnm"
+      ]
+     }
+    },
+    {
+     "id": "r34",
+     "ac": 6,
+     "args": [
+      [
+       "l",
+       "oak",
+       "aeie",
+       "pln",
+       "fja",
+       "cc",
+       "k",
+       "k",
+       "nci",
+       "cplk",
+       "c"
+      ],
+      7
+     ],
+     "want": {
+      "value": [
+       "l oak",
+       "aeie",
+       "pln fja",
+       "cc k",
+       "k nci",
+       "cplk c"
+      ]
+     }
+    },
+    {
+     "id": "r35",
+     "ac": 6,
+     "args": [
+      [
+       "dnne",
+       "ik",
+       "bnje",
+       "é",
+       "oeld",
+       "eop",
+       "dk",
+       "gaeik",
+       "b",
+       "enkmd",
+       "ig",
+       "cabmlp",
+       "hb",
+       "kcpn"
+      ],
+      8
+     ],
+     "want": {
+      "value": [
+       "dnne ik",
+       "bnje é",
+       "oeld",
+       "eop dk",
+       "gaeik b",
+       "enkmd ig",
+       "cabmlp",
+       "hb kcpn"
+      ]
+     }
+    },
+    {
+     "id": "r36",
+     "ac": 6,
+     "args": [
+      [
+       "n",
+       "kb",
+       "cljhcaj",
+       "ojakoi",
+       "p",
+       "gaa",
+       "bichfmjm",
+       "l",
+       "jgkmegck",
+       "hepd"
+      ],
+      22
+     ],
+     "want": {
+      "value": [
+       "n kb cljhcaj ojakoi",
+       "p gaa bichfmjm l",
+       "jgkmegck hepd"
+      ]
+     }
+    },
+    {
+     "id": "r38",
+     "ac": 6,
+     "args": [
+      [
+       "c",
+       "d",
+       "iff",
+       "ofj",
+       "éz",
+       "h",
+       "mijg",
+       "pp",
+       "m",
+       "n",
+       "mlcn",
+       "ammd",
+       "imjc",
+       "bbo"
+      ],
+      12
+     ],
+     "want": {
+      "value": [
+       "c d iff ofj",
+       "éz h mijg",
+       "pp m n mlcn",
+       "ammd imjc",
+       "bbo"
+      ]
+     }
+    },
+    {
+     "id": "r39",
+     "ac": 6,
+     "args": [
+      [
+       "lbnhmah",
+       "ho",
+       "jlmad",
+       "phhcgcgh",
+       "dedhoedp",
+       "b",
+       "jenhebai",
+       "nldda",
+       "opbkllhl",
+       "ejam",
+       "😀",
+       "hl"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "lbnhmah",
+       "ho jlmad",
+       "phhcgcgh",
+       "dedhoedp b",
+       "jenhebai",
+       "nldda",
+       "opbkllhl",
+       "ejam 😀 hl"
+      ]
+     }
+    },
+    {
+     "id": "r40",
+     "ac": 6,
+     "args": [
+      [
+       "lcfgp",
+       "éz",
+       "odkcik",
+       "😀",
+       "d",
+       "hh",
+       "hnegip",
+       "é",
+       "ézz",
+       "é",
+       "mcicm",
+       "nfeccn",
+       "n",
+       "pmh"
+      ],
+      16
+     ],
+     "want": {
+      "value": [
+       "lcfgp éz odkcik",
+       "😀 d hh hnegip",
+       "é ézz é mcicm",
+       "nfeccn n pmh"
+      ]
+     }
+    },
+    {
+     "id": "r41",
+     "ac": 6,
+     "args": [
+      [
+       "ffdijn",
+       "ocefn",
+       "éz",
+       "lb",
+       "b",
+       "kgmg",
+       "aali",
+       "gjchbc",
+       "lnhn",
+       "😀😀",
+       "ngkphd"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "ffdijn",
+       "ocefn",
+       "éz lb b",
+       "kgmg aali",
+       "gjchbc",
+       "lnhn 😀😀",
+       "ngkphd"
+      ]
+     }
+    },
+    {
+     "id": "r42",
+     "ac": 6,
+     "args": [
+      [
+       "oh",
+       "heok",
+       "hidpp",
+       "gbkha",
+       "ndod",
+       "h",
+       "ghfj",
+       "bodaem",
+       "fofc",
+       "é",
+       "idkofi",
+       "hhoam",
+       "eickl"
+      ],
+      17
+     ],
+     "want": {
+      "value": [
+       "oh heok hidpp",
+       "gbkha ndod h",
+       "ghfj bodaem fofc",
+       "é idkofi hhoam",
+       "eickl"
+      ]
+     }
+    },
+    {
+     "id": "r44",
+     "ac": 6,
+     "args": [
+      [
+       "ipknkp",
+       "jbneck",
+       "lgfhogg",
+       "anhlh",
+       "mjlcop",
+       "😀",
+       "é",
+       "clb",
+       "kpclcbd",
+       "ecpl",
+       "ipiagdmf",
+       "iepaabfe",
+       "bcdpend",
+       "o"
+      ],
+      15
+     ],
+     "want": {
+      "value": [
+       "ipknkp jbneck",
+       "lgfhogg anhlh",
+       "mjlcop 😀 é",
+       "clb kpclcbd",
+       "ecpl ipiagdmf",
+       "iepaabfe",
+       "bcdpend o"
+      ]
+     }
+    },
+    {
+     "id": "r45",
+     "ac": 6,
+     "args": [
+      [
+       "ézz",
+       "pk",
+       "é",
+       "k",
+       "inj",
+       "😀",
+       "p",
+       "f",
+       "odhl",
+       "j",
+       "o",
+       "j",
+       "o",
+       "efnm"
+      ],
+      12
+     ],
+     "want": {
+      "value": [
+       "ézz pk é k",
+       "inj 😀 p f",
+       "odhl j o j",
+       "o efnm"
+      ]
+     }
+    },
+    {
+     "id": "r46",
+     "ac": 6,
+     "args": [
+      [
+       "nle",
+       "phh",
+       "jl",
+       "md",
+       "j",
+       "chg",
+       "lj",
+       "lih",
+       "ej",
+       "jci",
+       "pee",
+       "fk",
+       "ézz",
+       "mia"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "nle",
+       "phh",
+       "jl md",
+       "j chg",
+       "lj lih",
+       "ej jci",
+       "pee fk",
+       "ézz",
+       "mia"
+      ]
+     }
+    },
+    {
+     "id": "r47",
+     "ac": 6,
+     "args": [
+      [
+       "😀",
+       "i",
+       "go",
+       "oa",
+       "pmmk",
+       "😀",
+       "ligfjh"
+      ],
+      7
+     ],
+     "want": {
+      "value": [
+       "😀 i",
+       "go oa",
+       "pmmk 😀",
+       "ligfjh"
+      ]
+     }
+    },
+    {
+     "id": "r48",
+     "ac": 6,
+     "args": [
+      [
+       "l",
+       "ffb",
+       "ed",
+       "lb",
+       "gnhpjb",
+       "innpogpa",
+       "ckmofa",
+       "lmnphch",
+       "ncigb",
+       "bjjoecon",
+       "😀",
+       "nii"
+      ],
+      13
+     ],
+     "want": {
+      "value": [
+       "l ffb ed",
+       "lb gnhpjb",
+       "innpogpa",
+       "ckmofa",
+       "lmnphch ncigb",
+       "bjjoecon 😀",
+       "nii"
+      ]
+     }
+    },
+    {
+     "id": "r50",
+     "ac": 6,
+     "args": [
+      [
+       "kfn",
+       "jpmdlde",
+       "é",
+       "idfn",
+       "gmkjo",
+       "hp",
+       "gdlb",
+       "ab",
+       "dcok",
+       "bgfgmlc",
+       "gga",
+       "😀😀",
+       "gahoj",
+       "gfpecea"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "kfn",
+       "jpmdlde",
+       "é idfn",
+       "gmkjo",
+       "hp gdlb",
+       "ab dcok",
+       "bgfgmlc",
+       "gga 😀😀",
+       "gahoj",
+       "gfpecea"
+      ]
+     }
+    },
+    {
+     "id": "r51",
+     "ac": 6,
+     "args": [
+      [
+       "cek",
+       "ape",
+       "f",
+       "ij",
+       "dfh",
+       "doh",
+       "ézzz",
+       "go",
+       "k",
+       "ézzz",
+       "gj",
+       "éz"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "cek ape",
+       "f ij dfh",
+       "doh ézzz",
+       "go k ézzz",
+       "gj éz"
+      ]
+     }
+    },
+    {
+     "id": "r52",
+     "ac": 6,
+     "args": [
+      [
+       "cpep",
+       "abab",
+       "oed",
+       "hafe",
+       "dbp"
+      ],
+      10
+     ],
+     "want": {
+      "value": [
+       "cpep abab",
+       "oed hafe",
+       "dbp"
+      ]
+     }
+    },
+    {
+     "id": "r53",
+     "ac": 6,
+     "args": [
+      [
+       "ff",
+       "nnm",
+       "o",
+       "g",
+       "e",
+       "pli",
+       "lif",
+       "j",
+       "a",
+       "a",
+       "nc",
+       "gkk"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "ff",
+       "nnm o",
+       "g e",
+       "pli",
+       "lif",
+       "j a",
+       "a nc",
+       "gkk"
+      ]
+     }
+    },
+    {
+     "id": "r54",
+     "ac": 6,
+     "args": [
+      [
+       "cooi",
+       "fj",
+       "é"
+      ],
+      19
+     ],
+     "want": {
+      "value": [
+       "cooi fj é"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "boundary",
+   "cases": [
+    {
+     "id": "h22",
+     "ac": 4,
+     "args": [
+      [
+       "abcdefgh"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "abcdefgh"
+      ]
+     }
+    },
+    {
+     "id": "h23",
+     "ac": 4,
+     "args": [
+      [
+       "abcdefgh",
+       "ab"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "abcdefgh",
+       "ab"
+      ]
+     }
+    },
+    {
+     "id": "h24",
+     "ac": 4,
+     "args": [
+      [
+       "ab",
+       "abcdefgh",
+       "ab"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "ab",
+       "abcdefgh",
+       "ab"
+      ]
+     }
+    },
+    {
+     "id": "h25",
+     "ac": 4,
+     "args": [
+      [
+       "ab",
+       "cd",
+       "abcdefg"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "ab",
+       "cd",
+       "abcdefg"
+      ]
+     }
+    },
+    {
+     "id": "h26",
+     "ac": 4,
+     "args": [
+      [
+       "abcdef",
+       "gh",
+       "ij"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "abcdef",
+       "gh ij"
+      ]
+     }
+    },
+    {
+     "id": "h27",
+     "ac": 5,
+     "args": [
+      [
+       "abcd",
+       "efgh"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "abcd",
+       "efgh"
+      ]
+     }
+    },
+    {
+     "id": "h28",
+     "ac": 5,
+     "args": [
+      [
+       "abcd",
+       "efg",
+       "hijk"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "abcd",
+       "efg",
+       "hijk"
+      ]
+     }
+    },
+    {
+     "id": "h29",
+     "ac": 5,
+     "args": [
+      [
+       "abcdefg",
+       "hi"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "abcdefg",
+       "hi"
+      ]
+     }
+    },
+    {
+     "id": "h30",
+     "ac": 5,
+     "args": [
+      [
+       "a",
+       "bcdefg"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "a",
+       "bcdefg"
+      ]
+     }
+    },
+    {
+     "id": "h31",
+     "ac": 5,
+     "args": [
+      [
+       "abcdefg",
+       "h"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "abcdefg",
+       "h"
+      ]
+     }
+    },
+    {
+     "id": "h32",
+     "ac": 4,
+     "args": [
+      [
+       "ab",
+       "cd"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "ab cd"
+      ]
+     }
+    },
+    {
+     "id": "h33",
+     "ac": 4,
+     "args": [
+      [
+       "ab",
+       "cd"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "ab",
+       "cd"
+      ]
+     }
+    },
+    {
+     "id": "h34",
+     "ac": 4,
+     "args": [
+      [
+       "a",
+       "b",
+       "c"
+      ],
+      1
+     ],
+     "want": {
+      "value": [
+       "a",
+       "b",
+       "c"
+      ]
+     }
+    },
+    {
+     "id": "h35",
+     "ac": 5,
+     "args": [
+      [
+       "aaa",
+       "b"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "aaa",
+       "b"
+      ]
+     }
+    },
+    {
+     "id": "h36",
+     "ac": 5,
+     "args": [
+      [
+       "😀😀",
+       "a"
+      ],
+      3
+     ],
+     "want": {
+      "value": [
+       "😀😀",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "h37",
+     "ac": 5,
+     "args": [
+      [
+       "😀😀",
+       "a"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "😀😀",
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "h38",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      1
+     ],
+     "want": {
+      "value": [
+       "a"
+      ]
+     }
+    },
+    {
+     "id": "h39",
+     "ac": 2,
+     "args": [
+      [],
+      1
+     ],
+     "want": {
+      "value": []
+     }
+    },
+    {
+     "id": "r01",
+     "ac": 6,
+     "args": [
+      [
+       "abc",
+       "😀",
+       "é",
+       "o",
+       "f",
+       "😀",
+       "m",
+       "dd"
+      ],
+      8
+     ],
+     "want": {
+      "value": [
+       "abc 😀 é",
+       "o f 😀",
+       "m dd"
+      ]
+     }
+    },
+    {
+     "id": "r07",
+     "ac": 6,
+     "args": [
+      [
+       "kla",
+       "b",
+       "gpk",
+       "😀😀",
+       "kbhnl",
+       "i",
+       "lhcem",
+       "gjgki",
+       "e",
+       "hm"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "kla b",
+       "gpk 😀😀",
+       "kbhnl i",
+       "lhcem",
+       "gjgki e",
+       "hm"
+      ]
+     }
+    },
+    {
+     "id": "r13",
+     "ac": 6,
+     "args": [
+      [
+       "gaokdkhf",
+       "hmf",
+       "f",
+       "alpbki",
+       "mlp",
+       "ézzz",
+       "lafabf",
+       "hngadn",
+       "jpmfnkfb",
+       "g",
+       "cgffb"
+      ],
+      13
+     ],
+     "want": {
+      "value": [
+       "gaokdkhf hmf",
+       "f alpbki",
+       "mlp ézzz",
+       "lafabf hngadn",
+       "jpmfnkfb g",
+       "cgffb"
+      ]
+     }
+    },
+    {
+     "id": "r19",
+     "ac": 6,
+     "args": [
+      [
+       "mnpkh",
+       "ca",
+       "😀😀",
+       "mkfeal",
+       "k",
+       "m",
+       "bdcbb",
+       "l",
+       "n",
+       "daklb",
+       "d",
+       "gpo"
+      ],
+      9
+     ],
+     "want": {
+      "value": [
+       "mnpkh",
+       "ca 😀😀",
+       "mkfeal k",
+       "m bdcbb l",
+       "n daklb",
+       "d gpo"
+      ]
+     }
+    },
+    {
+     "id": "r25",
+     "ac": 6,
+     "args": [
+      [
+       "😀😀",
+       "ed",
+       "j",
+       "p",
+       "deb",
+       "h",
+       "i",
+       "j",
+       "hlh",
+       "gh",
+       "g"
+      ],
+      4
+     ],
+     "want": {
+      "value": [
+       "😀😀",
+       "ed",
+       "j p",
+       "deb",
+       "h i",
+       "j",
+       "hlh",
+       "gh g"
+      ]
+     }
+    },
+    {
+     "id": "r31",
+     "ac": 6,
+     "args": [
+      [
+       "mkmajn",
+       "gjbfia",
+       "cdpj",
+       "gd",
+       "e",
+       "bh",
+       "ppc",
+       "h",
+       "fgcckg",
+       "ofopjc"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "mkmajn",
+       "gjbfia",
+       "cdpj",
+       "gd e",
+       "bh",
+       "ppc h",
+       "fgcckg",
+       "ofopjc"
+      ]
+     }
+    },
+    {
+     "id": "r37",
+     "ac": 6,
+     "args": [
+      [
+       "bf",
+       "i",
+       "clfo",
+       "i",
+       "😀😀"
+      ],
+      11
+     ],
+     "want": {
+      "value": [
+       "bf i clfo",
+       "i 😀😀"
+      ]
+     }
+    },
+    {
+     "id": "r43",
+     "ac": 6,
+     "args": [
+      [
+       "l",
+       "kj",
+       "jp",
+       "ieg",
+       "aia",
+       "kf",
+       "pp",
+       "ap",
+       "g",
+       "j",
+       "😀😀",
+       "ogh",
+       "n"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "l kj",
+       "jp",
+       "ieg",
+       "aia",
+       "kf pp",
+       "ap",
+       "g j",
+       "😀😀",
+       "ogh n"
+      ]
+     }
+    },
+    {
+     "id": "r49",
+     "ac": 6,
+     "args": [
+      [
+       "ggp",
+       "😀",
+       "bep",
+       "g",
+       "kmd",
+       "dmk",
+       "k",
+       "clb",
+       "jd",
+       "n",
+       "j",
+       "pme",
+       "bkh"
+      ],
+      6
+     ],
+     "want": {
+      "value": [
+       "ggp 😀",
+       "bep g",
+       "kmd",
+       "dmk k",
+       "clb",
+       "jd n",
+       "j pme",
+       "bkh"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "safety",
+   "cases": [
+    {
+     "id": "h40",
+     "ac": 2,
+     "args": [
+      "abc",
+      5
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h41",
+     "ac": 2,
+     "args": [
+      null,
+      5
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h42",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       3
+      ],
+      5
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h43",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       3
+      ],
+      "x"
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h44",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      "5"
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h45",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      2.5
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h46",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      {
+       "$num": "NaN"
+      }
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h47",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      {
+       "$num": "Infinity"
+      }
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h48",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      {
+       "$undef": 1
+      }
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h49",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      0
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WIDTH"
+      }
+     }
+    },
+    {
+     "id": "h50",
+     "ac": 2,
+     "args": [
+      [
+       "a"
+      ],
+      -3
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WIDTH"
+      }
+     }
+    },
+    {
+     "id": "h51",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       ""
+      ],
+      0
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WIDTH"
+      }
+     }
+    },
+    {
+     "id": "h52",
+     "ac": 2,
+     "args": [
+      [
+       "a b"
+      ],
+      5
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WORD"
+      }
+     }
+    },
+    {
+     "id": "h53",
+     "ac": 2,
+     "args": [
+      [
+       "a",
+       ""
+      ],
+      5
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WORD"
+      }
+     }
+    },
+    {
+     "id": "h54",
+     "ac": 2,
+     "args": [
+      [
+       ""
+      ],
+      5
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WORD"
+      }
+     }
+    },
+    {
+     "id": "h55",
+     "ac": 2,
+     "args": [
+      [
+       "a b",
+       3
+      ],
+      5
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h56",
+     "ac": 2,
+     "args": [
+      [
+       "a\tb",
+       "c"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "a\tb c"
+      ]
+     }
+    },
+    {
+     "id": "h57",
+     "ac": 2,
+     "args": [
+      [
+       "a b"
+      ],
+      5
+     ],
+     "want": {
+      "value": [
+       "a b"
+      ]
+     }
+    },
+    {
+     "id": "h58",
+     "ac": 2,
+     "args": [
+      [
+       "a b"
+      ],
+      0
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WIDTH"
+      }
+     }
+    },
+    {
+     "id": "h59",
+     "ac": 2,
+     "args": [
+      [
+       ""
+      ],
+      "x"
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h60",
+     "ac": 2,
+     "args": [
+      [
+       "x",
+       "a b"
+      ],
+      1.5
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h61",
+     "ac": 2,
+     "args": [
+      [
+       "",
+       "q"
+      ],
+      {
+       "$num": "NaN"
+      }
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    },
+    {
+     "id": "h62",
+     "ac": 2,
+     "args": [
+      [
+       "a b",
+       "c"
+      ],
+      -1
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WIDTH"
+      }
+     }
+    },
+    {
+     "id": "h63",
+     "ac": 2,
+     "args": [
+      [],
+      0
+     ],
+     "want": {
+      "throws": {
+       "name": "RangeError",
+       "code": "E_WIDTH"
+      }
+     }
+    },
+    {
+     "id": "h64",
+     "ac": 2,
+     "args": [
+      [],
+      1.5
+     ],
+     "want": {
+      "throws": {
+       "name": "TypeError",
+       "code": "E_TYPE"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -150,11 +150,16 @@ check "pristine convergence.mjs (mutation reverted -- a fresh copy, not the muta
 rm -rf "$F300_MUT_DIR"
 trap - EXIT
 
+# Leak checks diff the set of live somi-eval-src-* worktrees, not a repo-wide count, which flaked (#39).
+eval_src_worktrees() { git worktree list --porcelain | sed -n 's/^worktree //p' | grep '/somi-eval-src-' | while IFS= read -r p; do [ -d "$p" ] && echo "$p"; done | sort; }
+new_eval_src_worktrees() { comm -13 <(printf '%s\n' "$1") <(eval_src_worktrees) | sed '/^$/d'; }
+wt_ctl_before=$(eval_src_worktrees); wt_ctl_dir=$(mktemp -d "${TMPDIR:-/tmp}/somi-eval-src-XXXXXX"); git worktree add --detach --quiet "$wt_ctl_dir" HEAD
+check "positive control: a leaked somi-eval-src-* worktree is detected" "$(new_eval_src_worktrees "$wt_ctl_before")" "$wt_ctl_dir"
+git worktree remove --force "$wt_ctl_dir"; rm -rf "$wt_ctl_dir"
 # --dry-run leaves no worktree behind (resolveSource's own cleanup, exercised through this CLI).
-wt_before=$(git worktree list | wc -l | tr -d ' ')
+wt_before=$(eval_src_worktrees)
 node "$CVD" --dry-run --source HEAD >/dev/null
-wt_after=$(git worktree list | wc -l | tr -d ' ')
-check "--dry-run cleans up its resolved worktree (no leak)" "$wt_after" "$wt_before"
+check "--dry-run cleans up its resolved worktree (no leak)" "$(new_eval_src_worktrees "$wt_before")" ""
 
 # --- --dry-run: zero model calls, proven by execution (the same technique as eval-runner.sh), not by reading ---
 # A stub `claude` on PATH proves NO route reaches the model -- not just that reading the dry-run
@@ -177,14 +182,13 @@ rm -rf "$stub_bin"
 # eval-runner.sh), never by mocking preflight() itself. A worktree created despite this would
 # mean the CLI paid for a checkout it could never use.
 NODE_BIN=$(command -v node)
-wt_before2=$(git worktree list | wc -l | tr -d ' ')
+wt_before2=$(eval_src_worktrees)
 preflight_msg=$(env -i "PATH=$(dirname "$NODE_BIN")" HOME=/nonexistent "$NODE_BIN" "$CVD" --source HEAD --runs 1 2>&1)
-wt_after2=$(git worktree list | wc -l | tr -d ' ')
 case "$preflight_msg" in
   *"not ready to draw"*) ok "live mode preflights before spending any quota (message names the reason)" ;;
   *) bad "live mode preflights before spending any quota (got: ${preflight_msg:0:120})" ;;
 esac
-check "the preflight failure above never reached resolveSource -- no worktree was created" "$wt_after2" "$wt_before2"
+check "the preflight failure above never reached resolveSource -- no worktree was created" "$(new_eval_src_worktrees "$wt_before2")" ""
 
 # --- --merge / --certify: fold shards already on disk, no live draw -----------------------------
 MERGE_SHA="deadbeefcafe1234567890"
