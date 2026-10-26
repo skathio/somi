@@ -104,7 +104,8 @@ while true:
   #     planner returns DECISIONS-NEEDED — that pause never counts as a pass, and the
   #     re-invocation after it resolves fresh too, same as any other start). Call somi_resolve
   #     for somi-planner first; full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch
-  #     on Claude Code).
+  #     on Claude Code). Record every start:
+  #       node scripts/somi-loop.mjs record-dispatch --slug <slug> --agent <agent> [--host <host>]
   Task somi-planner (= /plan <problem>  or  /plan revision <slug> with prior findings as brief)
 
   # 3c. Plan review — call somi_resolve for somi-reviewer first; full rules: the somi-dispatch skill
@@ -160,6 +161,7 @@ while true:
 
 - Loop status: `done` | `max-passes-exceeded` | `divergence` | `user-stop`.
 - Passes used (out of `MAX_PASSES`).
+- What ran: `finish`'s `dispatches` (agent, tier, model, enforced); name every `enforced: false` start.
 - Final verdict + count by severity.
 - Top 3 open findings (if any).
 - Pointer to the plan files (`.somi/plans/<slug>/`) and review files

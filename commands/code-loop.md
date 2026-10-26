@@ -114,7 +114,9 @@ while true:
 
   # 3b. Code — call somi_resolve for somi-coder first (project_dir, model, cost line in
   #     the briefing); full rules: the somi-dispatch skill (somi_skill, or somi:somi-dispatch on
-  #     Claude Code)
+  #     Claude Code). Every agent this loop starts is also recorded (the script re-resolves it;
+  #     it records what SoMi decided, not your claim):
+  #       node scripts/somi-loop.mjs record-dispatch --slug <slug> --iteration <N>.<M> --agent <agent> [--host <host>]
   Task somi-coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
 
   # 3c. Diff & scope gate (deterministic — cumulative vs the recorded baseline, working tree
@@ -196,6 +198,8 @@ while true:
   `circuit-breaker` | `user-stop`.
 - Passes used (out of `MAX_PASSES`) — from `somi-loop.mjs stats` (also the run's telemetry:
   per-pass verdicts, Blocker/Major counts, diff sizes).
+- What ran: `finish`'s `dispatches`, one line per agent start (agent, tier, model, enforced). Name
+  every `enforced: false` start; the host chose that model, not SoMi.
 - Final verdict + count by severity.
 - Cumulative diff size and any out-of-scope files touched.
 - Pointer to all review files under `.somi/reviews/<slug>/` from this loop.

@@ -133,6 +133,12 @@ work finds none (cost and time inconclusive, instruction text +2.3%; see the mea
   so the caller's index is untouched. `code_loop.review_scope: full` (or
   `SOMI_CODE_LOOP_REVIEW_SCOPE=full`) restores full re-review. The default `delta` is provisional
   until the 4.0.0 measurement shows no recall loss.
+- **Loops record what each agent was dispatched with** (issue #40). `somi-loop record-dispatch
+  --agent <name> [--host <host>]` re-resolves the agent through the same resolver as `somi_resolve`
+  and appends `{pass, agent, host, tier, degraded, model, enforced, ceiling, reason}` to the loop
+  state; `finish` lists them, and `/code-loop` and `/plan-loop` record every start and name each
+  `enforced: false` one in their summary. The entry is SoMi's decision, never the caller's claim;
+  which model a host ran when nothing was enforced stays invisible to a plugin.
 - **A usage and speed measurement system** (`docs/USAGE-BENCHMARK.md`, `benchmarks/usage-speed/`).
   L0 counts the bytes of instruction text injected for each standard scenario; L1 times hooks,
   scripts and an MCP round trip locally; L2 runs paired live draws with and without SoMi. A

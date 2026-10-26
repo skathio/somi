@@ -32,7 +32,7 @@
 //                             out-of-scope lines count double)
 //   64 usage / environment error
 //
-// Subcommands: init | resume | pass | check-diff | review-scope | record-pass | finish | stats
+// Subcommands: init | resume | pass | check-diff | review-scope | record-dispatch | record-pass | finish | stats
 // (see scripts/somi-loop.sh for the full per-subcommand doc — unchanged here).
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
@@ -40,9 +40,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { verifyBriefOnly } from './lib/tier-record.mjs';
 import { REVIEW_SCOPES, reviewMinFor, reviewScope, snapshotTree } from './lib/loop-review.mjs';
 import { computeDiff } from './lib/loop-diff.mjs';
+import { dispatchEntry } from './lib/loop-dispatch.mjs';
 
 const PROG = 'somi-loop';
 
@@ -232,6 +234,8 @@ function main() {
   let BLOCKERS = '0';
   let MAJORS = '0';
   let STATUS = '';
+  let AGENT = '';
+  let HOST;
   let FORCE = false;
   let ARG_MAX_PASSES = '';
   let ARG_DIFF_CAP = '';
@@ -251,12 +255,14 @@ function main() {
       case '--blockers': BLOCKERS = rest[1]; rest = rest.slice(2); break;
       case '--majors': MAJORS = rest[1]; rest = rest.slice(2); break;
       case '--status': STATUS = rest[1]; rest = rest.slice(2); break;
+      case '--agent': AGENT = rest[1]; rest = rest.slice(2); break;
+      case '--host': HOST = rest[1]; rest = rest.slice(2); break;
       case '--force': FORCE = true; rest = rest.slice(1); break;
       default: die(`unknown argument: ${a}`);
     }
   }
 
-  if (!CMD) die('usage: somi-loop.mjs <init|resume|pass|check-diff|review-scope|record-pass|finish|stats> --slug <slug> …');
+  if (!CMD) die('usage: somi-loop.mjs <init|resume|pass|check-diff|review-scope|record-dispatch|record-pass|finish|stats> --slug <slug> …');
   if (!SLUG) die('--slug is required');
 
   function stateFile() {
@@ -396,6 +402,19 @@ function main() {
       break;
     }
 
+    case 'record-dispatch': {
+      requireState();
+      if (!AGENT) die('record-dispatch requires --agent');
+      const state = loadState();
+      const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+      const d = dispatchEntry({ root, installRoot, agent: AGENT, host: HOST, pass: state.pass });
+      if (!d.ok) fail(d.code, `${PROG}: ${d.message}`);
+      (state.dispatches ??= []).push(d.entry);
+      saveState(state);
+      console.log(JSON.stringify(d.entry));
+      break;
+    }
+
     case 'record-pass': {
       requireState();
       if (!VERDICT) die('record-pass requires --verdict');
@@ -428,6 +447,7 @@ function main() {
         pass: state.pass,
         history: state.history.length,
         cap_overrides: state.cap_overrides || [],
+        ...(state.dispatches ? { dispatches: state.dispatches } : {}),
       }));
       break;
     }

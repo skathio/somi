@@ -132,6 +132,18 @@ out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
 check "review scope: the last allowed pass is reviewed in full" "$(jq -e '.scope == "full" and .why == "last-pass"' <<<"$out" >/dev/null; echo $?)"
 git checkout -q -- src/a.txt; rm -f src/new-untracked.txt
 
+# --- somi-loop: the dispatch record is the resolver's answer, never the caller's claim ---
+out="$(node "$LOOP" record-dispatch --slug scope --iteration 1.1 --agent somi-coder)"
+check "record-dispatch: claude-code entry carries tier, model and enforced from the resolver" \
+  "$(jq -e '.agent == "somi-coder" and .host == "claude-code" and .pass == 3 and (.tier | type) == "string" and .enforced == true and (.model | type) == "string"' <<<"$out" >/dev/null; echo $?)"
+out="$(node "$LOOP" record-dispatch --slug scope --iteration 1.1 --agent somi-reviewer --host copilot)"
+check "record-dispatch: an unmapped host is recorded as not enforced, with the reason" \
+  "$(jq -e '.host == "copilot" and .model == null and .enforced == false and (.reason | test("no model mapping"))' <<<"$out" >/dev/null; echo $?)"
+expect_exit "record-dispatch: an unknown agent is refused with the resolver's code" 65 node "$LOOP" record-dispatch --slug scope --iteration 1.1 --agent reviewer
+expect_exit "record-dispatch: --agent is required" 64 node "$LOOP" record-dispatch --slug scope --iteration 1.1
+out="$(node "$LOOP" finish --slug scope --iteration 1.1 --status done)"
+check "finish: the summary lists every recorded dispatch" "$(jq -e '(.dispatches | length) == 2 and .dispatches[1].enforced == false' <<<"$out" >/dev/null; echo $?)"
+
 # --- somi-loop: pass counting ---------------------------------------------------
 node "$LOOP" pass --slug demo --iteration 1.1 >/dev/null
 expect_exit "pass: exceeding max_passes exits 2" 2 \
