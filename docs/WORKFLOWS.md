@@ -434,7 +434,12 @@ simulating a state machine in context. Two scripts ship with SoMi:
   telemetry). `pass` exits `2` past the cap; `check-diff` measures the cumulative weighted diff
   (working tree included, `.somi/`/`.claude/` excluded, out-of-scope files count double) and
   exits `3` over the cap. Because the state is durable, a loop **resumes** after a session dies
-  (`resume`) instead of starting over or re-guessing its baseline.
+  (`resume`) instead of starting over or re-guessing its baseline. It also decides what a review
+  reads: `review-scope` gives the generalist reviewer only the change since the last reviewed tree
+  from pass 2 (pass 1 and the last allowed pass in full; the security lens always in full), and
+  `init` turns the sizing record's `security_lens` into `review_min: security`. `record-dispatch`
+  stores what each started agent was resolved to (tier, model, enforced), and `run-start` gives a
+  `/ship-loop` run a wall-time budget that every later `pass` on the slug enforces (exit `4`).
 - [`scripts/somi-findings.mjs`](../scripts/somi-findings.mjs) — the **findings ledger** at
   `.somi/reviews/<slug>/findings.json` (committed; the machine view beside the markdown review
   files). Every review's findings are recorded with a stable id (`F-<n>`) and a stable locus

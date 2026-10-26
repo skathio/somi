@@ -30,10 +30,19 @@
 //   2  max-passes-exceeded   (`pass` would exceed the cap)
 //   3  diff-cap-exceeded     (`check-diff`: weighted lines over the cap;
 //                             out-of-scope lines count double)
-//   64 usage / environment error
+//   4  time-budget-exceeded  (`pass`: the /ship-loop run started by `run-start` on this slug is out of time)
+//   64 usage / environment error (65: record-dispatch's resolver refused the agent)
 //
-// Subcommands: run-start | init | resume | pass | check-diff | review-scope | record-dispatch | record-pass | finish | stats
-// (see scripts/somi-loop.sh for the full per-subcommand doc — unchanged here).
+// Subcommands (each prints one JSON object):
+//   run-start      record a /ship-loop run's start and optional --max-minutes budget (kept on resume)
+//   init           new loop state: baseline SHA, resolved caps, review_min from the sizing record
+//   resume | stats the stored state
+//   pass           next pass, or exit 2 (cap) / 4 (time budget); repeats review_min
+//   check-diff     weighted cumulative diff against the baseline, or exit 3
+//   review-scope   what the generalist reviewer reads this pass: delta (from/to trees, files) or full
+//   record-dispatch  append the resolver's answer for --agent [--host] to the state
+//   record-pass    append the verdict and counts, with the reviewed tree
+//   finish         terminal status, cap overrides, dispatches
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
 
