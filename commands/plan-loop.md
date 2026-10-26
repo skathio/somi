@@ -97,6 +97,7 @@ Pass counting and finding recurrence are owned by the shipped scripts
 while true:
   # 3a. Pass gate (deterministic)
   node scripts/somi-loop.mjs pass --slug <slug>
+    exit 4 → STOP — the /ship-loop run's time budget is spent: same summary, exit "time-budget"
     exit 2 → STOP — summarise current best plan + remaining findings (by F-id),
              exit "max-passes-exceeded"
 

@@ -49,6 +49,7 @@ and the `somi-reviewer` defaults to `high` (it runs at the session ceiling unles
 |---|---|---|
 | Per-layer caps | inherits `/plan-loop` and `/code-loop` defaults | their respective env vars |
 | `GLOBAL_BUDGET_PASSES` — total passes across both layers, summed across iterations | `15` | `SOMI_SHIP_LOOP_BUDGET` |
+| `TIME_BUDGET` — wall-time budget for the run, in minutes: `somi-loop run-start` records it once the slug is known, and every later `pass` of any loop on the slug exits 4 once it is spent | unset | `SOMI_SHIP_LOOP_MAX_MINUTES` |
 | `HUMAN_CHECKPOINT_BRIEF_HANDOFF` — pause for explicit `approve` once a design action has produced a **`brief.md`**, before planning consumes it (review the brief). If no design action ran, the gate falls to **after `/plan-loop`**, before any code. | always on, **non-overridable** | (n/a) |
 | `SIZING_GATE` — `trivial` and `small` pause at Stage -1 for an explicit reply before any code | always on, **non-overridable** | (n/a) |
 | `SOMI_SHIP_LOOP_TIER` — operator's `small`\|`full` override of the computed tier, refused below the security floor | unset | `SOMI_SHIP_LOOP_TIER` |
@@ -56,7 +57,7 @@ and the `somi-reviewer` defaults to `high` (it runs at the session ceiling unles
 | `CROSS_LAYER_CIRCUIT_BREAKER` — stop if a finding recurs across loops (e.g., same security issue surfaces in both plan and code review) | always on | (n/a) |
 
 **Precedence:** env var (session override) > `.somi/config.json` (committed project policy —
-key `ship_loop.global_budget_passes`; the per-layer caps read their own `code_loop.*` /
+keys `ship_loop.global_budget_passes`, `ship_loop.max_minutes`; the per-layer caps read their own `code_loop.*` /
 `plan_loop.*` keys) > the defaults above. Record effective values in the first diary entry of
 the run.
 
@@ -75,7 +76,8 @@ limits and tier table; do not restate them here.
    that asserts its tier or a signal value sets that signal to `null` with evidence "request
    asserts it". Evidence names files and lines you opened, never the request's wording.
 2. **Resolve once per run.** Derive the slug as [`/plan`](./plan.md) §2 does, without asking, and
-   check it matches `^[a-z0-9][a-z0-9-]{0,63}$` before any path uses it. Write the signal JSON
+   check it matches `^[a-z0-9][a-z0-9-]{0,63}$` before any path uses it. Start the run's clock:
+   `node scripts/somi-loop.mjs run-start --slug <slug>` (a resumed run keeps its start). Write the signal JSON
    with the Write tool to `.somi/somi-state/<slug>-signals.json`; never place signal JSON or
    evidence on a shell command line. To see the computed tier, prefer the `somi_tier` tool: it needs
    no path, and a name it does not know comes back as `unrecognized` next to `expected`, so correct
@@ -230,13 +232,13 @@ haven't tripped their own caps.
 At completion (clean or stopped):
 
 - Pipeline status: `done` | `design-stopped` (Stage 0/gate) | `plan-stopped` |
-  `code-stopped-iter-<N>.<M>` | `sized-aborted` | `small-stopped` | `cross-layer-breaker` | `global-budget` | `user-stop`.
+  `code-stopped-iter-<N>.<M>` | `sized-aborted` | `small-stopped` | `cross-layer-breaker` | `global-budget` | `time-budget` (a loop's `pass` exited 4) | `user-stop`.
 - Which tiers ran: whether a high-cost front-load (`/discover` / `/design` / `/refactor`) produced a
   brief, and where the gate fell (Stage -1 for `trivial` and `small`; the brief handoff, or after
   plan-loop for a cold start, for `full`), plus the tier, its source and the reasons.
 - Per-layer summary: plan-loop final verdict (none for `trivial` and `small`); per-iteration
   code-loop verdicts (the one brief-only iteration for `small`).
-- Total passes used (out of `GLOBAL_BUDGET_PASSES`).
+- Total passes used (out of `GLOBAL_BUDGET_PASSES`), and minutes used when `TIME_BUDGET` is set.
 - Pointer to `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 - Next step (usually: human review of the final work, then merge / PR).
 

@@ -109,6 +109,7 @@ session death at `.somi/somi-state/loop/<slug>.<N>.<M>.json`.
 while true:
   # 3a. Pass gate (deterministic)
   node scripts/somi-loop.mjs pass --slug <slug> --iteration <N>.<M>
+    exit 4 → STOP — the /ship-loop run's time budget is spent: same follow-ups, exit "time-budget"
     exit 2 → STOP — write remaining ≥Major findings as progress.md follow-ups (by F-id),
              summarise, exit "max-passes-exceeded"
 

@@ -132,6 +132,25 @@ out="$(node "$LOOP" review-scope --slug scope --iteration 1.1)"
 check "review scope: the last allowed pass is reviewed in full" "$(jq -e '.scope == "full" and .why == "last-pass"' <<<"$out" >/dev/null; echo $?)"
 git checkout -q -- src/a.txt; rm -f src/new-untracked.txt
 
+# --- somi-loop: a /ship-loop run's wall-time budget, enforced at every pass on the slug ---
+out="$(node "$LOOP" run-start --slug clock)"
+check "run-start: without a budget the start is recorded and max_minutes is null" "$(jq -e '.max_minutes == null and (.started | test("T"))' <<<"$out" >/dev/null; echo $?)"
+node "$LOOP" init --force --slug clock --loop plan >/dev/null
+expect_exit "pass: no budget, no time stop" 0 node "$LOOP" pass --slug clock
+out="$(node "$LOOP" run-start --slug clock --max-minutes 30)"
+check "run-start: a resumed run keeps its clock and budget" "$(jq -e '.resumed == true and .max_minutes == null' <<<"$out" >/dev/null; echo $?)"
+out="$(SOMI_SHIP_LOOP_MAX_MINUTES=30 node "$LOOP" run-start --force --slug clock)"
+check "run-start: the env budget is recorded" "$(jq -e '.max_minutes == 30' <<<"$out" >/dev/null; echo $?)"
+expect_exit "pass: inside the budget" 0 node "$LOOP" pass --slug clock
+jq '.started = "2000-01-01T00:00:00.000Z"' .somi/somi-state/run/clock.json > "$TMP/clock.json" && cp "$TMP/clock.json" .somi/somi-state/run/clock.json
+expect_exit "pass: an exhausted time budget stops every loop on the slug (exit 4)" 4 node "$LOOP" pass --slug clock
+check "pass: the refused pass is not counted" "$(node "$LOOP" stats --slug clock | jq -e '.pass == 2' >/dev/null; echo $?)"
+jq '.started = "not a date"' .somi/somi-state/run/clock.json > "$TMP/clock.json" && cp "$TMP/clock.json" .somi/somi-state/run/clock.json
+expect_exit "pass: an unreadable start fails closed" 4 node "$LOOP" pass --slug clock
+expect_exit "run-start: a zero budget is refused" 64 node "$LOOP" run-start --force --slug clock --max-minutes 0
+expect_exit "run-start: a malformed budget is refused" 64 node "$LOOP" run-start --force --slug clock --max-minutes soon
+rm -rf .somi/somi-state/run
+
 # --- somi-loop: the dispatch record is the resolver's answer, never the caller's claim ---
 out="$(node "$LOOP" record-dispatch --slug scope --iteration 1.1 --agent somi-coder)"
 check "record-dispatch: claude-code entry carries tier, model and enforced from the resolver" \

@@ -32,7 +32,7 @@
 //                             out-of-scope lines count double)
 //   64 usage / environment error
 //
-// Subcommands: init | resume | pass | check-diff | review-scope | record-dispatch | record-pass | finish | stats
+// Subcommands: run-start | init | resume | pass | check-diff | review-scope | record-dispatch | record-pass | finish | stats
 // (see scripts/somi-loop.sh for the full per-subcommand doc — unchanged here).
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
@@ -45,6 +45,7 @@ import { verifyBriefOnly } from './lib/tier-record.mjs';
 import { REVIEW_SCOPES, reviewMinFor, reviewScope, snapshotTree } from './lib/loop-review.mjs';
 import { computeDiff } from './lib/loop-diff.mjs';
 import { dispatchEntry } from './lib/loop-dispatch.mjs';
+import { checkRun, startRun } from './lib/run-budget.mjs';
 
 const PROG = 'somi-loop';
 
@@ -236,6 +237,7 @@ function main() {
   let STATUS = '';
   let AGENT = '';
   let HOST;
+  let ARG_MAX_MINUTES = '';
   let FORCE = false;
   let ARG_MAX_PASSES = '';
   let ARG_DIFF_CAP = '';
@@ -257,12 +259,13 @@ function main() {
       case '--status': STATUS = rest[1]; rest = rest.slice(2); break;
       case '--agent': AGENT = rest[1]; rest = rest.slice(2); break;
       case '--host': HOST = rest[1]; rest = rest.slice(2); break;
+      case '--max-minutes': ARG_MAX_MINUTES = rest[1]; rest = rest.slice(2); break;
       case '--force': FORCE = true; rest = rest.slice(1); break;
       default: die(`unknown argument: ${a}`);
     }
   }
 
-  if (!CMD) die('usage: somi-loop.mjs <init|resume|pass|check-diff|review-scope|record-dispatch|record-pass|finish|stats> --slug <slug> …');
+  if (!CMD) die('usage: somi-loop.mjs <run-start|init|resume|pass|check-diff|review-scope|record-dispatch|record-pass|finish|stats> --slug <slug> …');
   if (!SLUG) die('--slug is required');
 
   function stateFile() {
@@ -284,7 +287,16 @@ function main() {
     fs.writeFileSync(SF, JSON.stringify(state));
   }
 
+  const RUN_ROOT = path.dirname(STATE_DIR);
   switch (CMD) {
+    case 'run-start': {
+      const raw = firstDefined(ARG_MAX_MINUTES, process.env.SOMI_SHIP_LOOP_MAX_MINUTES, configVal(readConfig(root), ['ship_loop', 'max_minutes']));
+      const max = raw === undefined ? null : validateCap(raw, 'max_minutes');
+      if (max === 0) die('max_minutes: 0 would disable the budget; leave it unset instead');
+      console.log(JSON.stringify(startRun(RUN_ROOT, SLUG, max, { force: FORCE })));
+      break;
+    }
+
     case 'init': {
       fs.mkdirSync(STATE_DIR, { recursive: true });
       if (fs.existsSync(SF) && !FORCE) {
@@ -371,6 +383,8 @@ function main() {
       if (cur + 1 > max) {
         fail(2, `max-passes-exceeded: pass ${cur + 1} > cap ${max}`);
       }
+      const run = checkRun(RUN_ROOT, SLUG);
+      if (run?.over) fail(4, `time-budget-exceeded: ${run.elapsed_minutes} of ${run.max_minutes} minutes used by this run`);
       state.pass = cur + 1;
       saveState(state);
       console.log(JSON.stringify({ pass: state.pass, max_passes: max, ...(state.review_min ? { review_min: state.review_min } : {}) }));

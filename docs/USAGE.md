@@ -557,7 +557,7 @@ optional; omit anything you don't want to change:
 {
   "code_loop":     { "max_passes": 3, "severity_floor": "Major", "diff_cap_lines": 400, "review_mode": "single", "review_scope": "delta" },
   "plan_loop":     { "max_passes": 3, "severity_floor": "Major" },
-  "ship_loop":     { "global_budget_passes": 15 },
+  "ship_loop":     { "global_budget_passes": 15, "max_minutes": 120 },
   "design_loop":   { "max_passes": 2 },
   "discover_loop": { "max_passes": 2 },
   "parallel":      { "max_parallel": 3 },
@@ -570,6 +570,8 @@ optional; omit anything you don't want to change:
 
 - The loop keys map 1:1 to the env vars in each command's gate table
   (`code_loop.max_passes` ↔ `SOMI_CODE_LOOP_MAX_PASSES`, etc.).
+- The values shown are the defaults, except `ship_loop.max_minutes`, which has none (120 is an
+  example): unset, a `/ship-loop` run has no time budget.
 - `dep_install.allow` is a list of **package-name prefixes** the `gate-dep-install` hook permits
   without the session-wide `SOMI_ALLOW_DEP_INSTALL=1` — scoped policy (e.g. type stubs) instead
   of an all-or-nothing switch. Conservative by construction: compound commands never qualify,

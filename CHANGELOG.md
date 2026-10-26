@@ -139,6 +139,12 @@ work finds none (cost and time inconclusive, instruction text +2.3%; see the mea
   state; `finish` lists them, and `/code-loop` and `/plan-loop` record every start and name each
   `enforced: false` one in their summary. The entry is SoMi's decision, never the caller's claim;
   which model a host ran when nothing was enforced stays invisible to a plugin.
+- **`/ship-loop` can stop on time, not only on passes** (issue #40). `ship_loop.max_minutes` (or
+  `SOMI_SHIP_LOOP_MAX_MINUTES`) sets a wall-time budget; `somi-loop run-start` records the run's start
+  once the slug is known (a resumed run keeps it), and every later `pass` of any plan or code loop on
+  that slug exits 4 (`time-budget`) once the budget is spent, so the stop needs no orchestrator to
+  watch the clock. Unset by default. A spend budget in money is not possible: a plugin cannot see
+  what a session has cost.
 - **A usage and speed measurement system** (`docs/USAGE-BENCHMARK.md`, `benchmarks/usage-speed/`).
   L0 counts the bytes of instruction text injected for each standard scenario; L1 times hooks,
   scripts and an MCP round trip locally; L2 runs paired live draws with and without SoMi. A
