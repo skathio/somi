@@ -11,9 +11,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 **Major — behaviour changes to cost resolution and to agent identity and dispatch, plus new commands
 and tooling.** 3.1.x is merged in (the frontmatter gate and the `enforced` flag are unchanged; the
 `somi_agent` tool stays but is no longer a dispatch path). Nothing below
-claims a cost or speed saving: the measurement system in this release exists so later changes can be
-judged against a recorded baseline, and its comparison of this release with the start of the 4.0.0
-work finds none (cost and time inconclusive, instruction text +2.3%; see the measurement entry below).
+claims a cost or speed saving the sealed rule did not call: the issue #40 changes measured
+inconclusive on cost and time (ratios 0.88 and 0.79 on S1 to S3, intervals crossing 1), with the
+quality guard clear; what moved is sizing (T1-proration no longer flips to `full`: 0 of 8 against 3 of 8)
+and finished work on a security-sensitive task (S5: 6 of 8 draws fully green against 3 of 8). See the
+measurement entry below.
 
 ### Changed — behaviour
 
@@ -131,8 +133,8 @@ work finds none (cost and time inconclusive, instruction text +2.3%; see the mea
   the last allowed pass are reviewed in full, and the security lens and the panel always read the
   whole iteration. `record-pass` stores each reviewed tree, built through a throwaway copy of the index
   so the caller's index is untouched. `code_loop.review_scope: full` (or
-  `SOMI_CODE_LOOP_REVIEW_SCOPE=full`) restores full re-review. The default `delta` is provisional
-  until the 4.0.0 measurement shows no recall loss.
+  `SOMI_CODE_LOOP_REVIEW_SCOPE=full`) restores full re-review. Measured on 4.0.0: delta review ran in 2 S1 draws and both passed
+  every hidden test, so `delta` stays the default on that small sample.
 - **Loops record what each agent was dispatched with** (issue #40). `somi-loop record-dispatch
   --agent <name> [--host <host>]` re-resolves the agent through the same resolver as `somi_resolve`
   and appends `{pass, agent, host, tier, degraded, model, enforced, ceiling, reason}` to the loop
@@ -156,7 +158,12 @@ work finds none (cost and time inconclusive, instruction text +2.3%; see the mea
   (`baseline-8c44e2d-rerecord.json`, `baseline-1c32277.json`, report
   `reports/1c32277-vs-8c44e2d.md`): L2 cost overhead ×1.01 [0.80, 1.38] and time ×1.09 [0.88, 1.32],
   both inconclusive; L0 ×1.023, worse; L1 inconclusive; quality guard clear. The live driver now also
-  resumes `/ship-loop`'s Stage -1 gate when the model lays it out as a list. Limits: live L2 resolves only changes of roughly
+  resumes `/ship-loop`'s Stage -1 gate when the model lays it out as a list, and counts tokens and turns
+  per CLI call (they were over- and under-counted on draws that wait on background agents; both 4.0.0
+  baselines were re-derived from their transcripts). The issue #40 changes have their own report
+  (`reports/f4e7cc1-vs-1c32277.md`, `baseline-f4e7cc1.json` is the new reference) and two opt-in
+  scenarios, S5 (security-sensitive) and S6 (a migration), plus a T1 sizing probe. Not measured:
+  `/code-parallel` (no parallel-eligible fixture yet), human effort, escaped defects. Limits: live L2 resolves only changes of roughly
   50% or more; one scenario (T1) is reported as a distribution, not a ratio; it cannot certify
   quality equality. The drivers and tests live under `tests/` and `benchmarks/` and are not shipped.
 

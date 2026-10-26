@@ -15,10 +15,11 @@ by hand; nothing here runs in `npm test` or ships in the package.
 | L2 | Live paired draws (SoMi arm and a bare arm) for cost, time, turns and tokens, on the low tier. | paid | `tests/scripts/manual/usage-bench.mjs` |
 | Compare | Two baseline files in, a verdict per metric out, under the sealed rule. | free | `tests/scripts/manual/usage-compare.mjs` |
 
-The committed reference is [`baseline-1c32277.json`](../benchmarks/usage-speed/baseline-1c32277.json) (the 4.0.0
-release candidate, [report](../benchmarks/usage-speed/reports/1c32277-vs-8c44e2d.md)). The first one,
+The committed reference is [`baseline-f4e7cc1.json`](../benchmarks/usage-speed/baseline-f4e7cc1.json), the 4.0.0
+release candidate (reports: [the release](../benchmarks/usage-speed/reports/1c32277-vs-8c44e2d.md),
+[the issue #40 changes](../benchmarks/usage-speed/reports/f4e7cc1-vs-1c32277.md)). The first one,
 [`baseline-8c44e2d.json`](../benchmarks/usage-speed/baseline-8c44e2d.json), was recorded on a model its alias no longer
-resolves to, so it is kept as history only. Both are recorded
+resolves to, so it is kept as history only. All are recorded
 under rule version 1 ([`rule.json`](../benchmarks/usage-speed/rule.json)). The calibration run that fixed what
 L2 can resolve is [`pilot/report.md`](../benchmarks/usage-speed/pilot/report.md).
 
