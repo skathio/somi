@@ -54,10 +54,11 @@ yourself about to do the work, stop and dispatch instead. You follow
    ```
    ````
 
-   A resume replaces `flow:` with the `RESUME` block from
-   [`somi-checkpoint`](../skills/somi-checkpoint/SKILL.md): `flow`, `resume_at` and `context` copied
-   verbatim from the `CHECKPOINT`, `answers` from the user; `args:` stays, the original request
-   unchanged.
+   A resume briefing is the same briefing with its `flow:` line replaced by the `RESUME` block from
+   [`somi-checkpoint`](../skills/somi-checkpoint/SKILL.md) (`flow`, `resume_at` and `context` copied
+   verbatim from the `CHECKPOINT`, `answers` from the user). Every other line stays: `host:`,
+   `project_dir:`, a fresh cost line from a fresh `somi_resolve`, and `args:` with the original
+   request unchanged. A runner refuses a briefing without `host:`.
 7. **Relay the result** per `somi-checkpoint`'s caller's side: a `CHECKPOINT`'s questions go to the
    user faithfully (the host's question tool, or plain text), options and detail unedited; `DONE`
    and `STOPPED` are relayed with their next step; a `REROUTE` from `somi-general` goes back to

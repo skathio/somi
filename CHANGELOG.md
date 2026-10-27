@@ -14,10 +14,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 ### Fixed
 
 - **The `somi` front door did the work itself about half the time.** It ran each command's
-  procedure in its own context and recursed into sub-commands, so one `/ship-loop` pulled about
-  139 KB of procedure text into the session before any work started (`/design` about 60 KB). Once
+  procedure in its own context and recursed into sub-commands, so over one `/ship-loop` run its
+  own context held about 115 KB of prompt and procedure text, against about 25 KB now (measured with
+  the L0 tool; `@somi /plan` 53 KB → 25 KB). Once
   that context was full or compacted, it often stopped starting agents and did the planning,
-  coding or reviewing itself. It is now a dispatcher of about 90 lines that carries no procedure
+  coding or reviewing itself. It is now a dispatcher of about 85 lines that carries no procedure
   text: it strips its `/somi` marker, picks one flow (a known command, or the `somi-routing` table
   for free text), announces it, and starts **one** agent. It never edits, runs commands or follows a
   procedure. A drift test keeps its list of known commands equal to `commands/`.
@@ -55,13 +56,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   check now read the flow and role skills. The size ledger entry for the planner moved with its
   text to `skills/role-planner/SKILL.md` (402 → 354 lines); `somi-discovery-analyst` left the ledger.
 
-### Not verified
+### Verified live, and what it fixed
 
-On a live Copilot CLI host: that a specialist two levels down can load its role skill (built-in
-tools reach every depth; MCP tools such as `somi_skill` may not, per copilot-cli#3293), and that a
-runner's subagents receive the repo's instruction files. A specialist that cannot load its role
-skill stops rather than running without it. On Claude Code the chain was checked by the test suite
-only, not by a live run.
+Live runs on Copilot CLI 1.0.103 (`copilot --agent somi:somi -p ...` in a throwaway repo, full debug
+logs):
+
+- A one-line bug fix: `somi` loaded only the routing and dispatch skills and started `somi-flow`;
+  the runner loaded `flow-code` and started `somi-coder`, which loaded `role-coder` two levels
+  down and made the edit. The front door did no work. 1.74 AI credits for a one-line fix: each level
+  loads its own prompt and skills.
+- `/plan` across two turns: the runner stopped at the slug gate and at the planner's scope
+  decision, `somi` asked each time and stopped, and `--resume` with an answer continued the flow.
+  No decision was recorded as user-verified without an answer.
+- Fixed along the way: in `-p` mode `somi` answered checkpoints itself (Copilot tells it no user can
+  reply), `RESUME` dropped the request, and a resumed runner resolved agents for the wrong host. A
+  checkpoint now ends the dispatcher's turn even in a non-interactive session; `RESUME` keeps every
+  briefing line but `flow:`; the runner passes the briefing's `host:` to every resolve.
+
+Not verified: that a runner's subagents receive the repo's instruction files on Copilot, and a live
+run on Claude Code (the suite only). On Copilot the agent's id is `somi:somi`; `--agent somi` is
+refused.
+
+### Measured
+
+L0 (exact injected bytes, `benchmarks/usage-speed/reports/`): the `somi` front door's own context
+for `@somi /plan` falls from 53 KB to 25 KB (-53%), and over a `/ship-loop` run from 115 KB to 25 KB
+(-78%). The cost is on Claude Code's typed commands: each now injects 2 to 6% more bytes (the wrapper,
+the extra skill and agent headers, the routing rows).
 
 ## [4.0.1] — 2026-10-27 — fix: one global config for every project, merged with each repo's; config reads follow junctions and symlinks
 

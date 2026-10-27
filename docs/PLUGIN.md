@@ -277,7 +277,8 @@ loads the workflow's `flow-<name>` skill and starts its specialists one level fu
 whole chain stays two levels below the session, within Copilot CLI's nesting. A subagent cannot ask
 you anything, so each question a workflow needs comes back through `somi` as a checkpoint: answer
 it and the runner resumes. On Claude Code the direct commands run the same flow skills themselves,
-so `somi` mainly matters here, on Copilot.
+so `somi` mainly matters here, on Copilot. From the command line the agent's id is the plugin-namespaced one:
+`copilot --agent somi:somi` (a bare `--agent somi` is refused with "No such agent").
 
 ### Agent dispatch
 

@@ -379,7 +379,7 @@ everything else. It announces the choice in one line, resolves and starts the ag
   `somi-flow` or `somi-general`.
 - **Will**: keep its context free of procedure text: everything a workflow does lives in the flow
   skill the runner loads. This is the fix for a front door that used to run every procedure in its
-  own context (about 139 KB of procedure text for one `/ship-loop`) and, once that context was
+  own context (about 115 KB over one `/ship-loop` run, against about 25 KB now) and, once that context was
   full or compacted, did the work itself about half the time. It has no `tools:` restriction (no
   SoMi agent declares one), so staying a dispatcher is an instruction, kept short so it stays in view.
 
