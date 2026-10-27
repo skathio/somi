@@ -29,6 +29,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { loadConfig } from './lib/config-files.mjs';
 
 const PROG = 'somi-check';
 
@@ -84,11 +85,11 @@ const LOCKFILES = [
   'poetry.lock', 'uv.lock', 'composer.lock', 'go.sum',
 ];
 
+// The effective config (global, with the project's .somi/config.json over it); an unreadable or
+// invalid file reads as unconfigured, so the documented defaults apply.
 function readConfig(root) {
-  const cfgPath = path.join(root, '.somi', 'config.json');
-  if (!fs.existsSync(cfgPath)) return {};
   try {
-    return JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    return loadConfig(root).config;
   } catch {
     return {};
   }

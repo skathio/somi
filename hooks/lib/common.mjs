@@ -25,6 +25,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadConfig } from '../../scripts/lib/config-files.mjs';
 
 // Thrown by denyPretool() (and available to any hook that needs an early,
 // non-local exit) to unwind to the hook's own top-level handler — mirrors
@@ -213,8 +214,10 @@ export function auditLogPath() {
   return log;
 }
 
-// somi::config equivalent — reads a value from the project's committed
-// config at .somi/config.json. `fieldPath` is a minimal jq-path string:
+// somi::config equivalent — reads a value from the effective config: the global
+// file with the project's .somi/config.json merged over it, read through
+// scripts/lib/config-files.mjs (links followed, regular file, 64 KiB at most), the
+// same loader every other reader uses. `fieldPath` is a minimal jq-path string:
 // dotted keys, optionally ending in "[]?" to request every element of an
 // array (mirrors gate-dep-install.sh's `.dep_install.allow[]?` /
 // `mapfile -t` idiom). These are the ONLY two shapes any `somi::config` call
@@ -224,7 +227,7 @@ export function auditLogPath() {
 // shape in this comment.
 //
 // Precedence contract (callers enforce it, same as the bash original): env
-// var > .somi/config.json > default.
+// var > project .somi/config.json > global config > default.
 export function config(fieldPath) {
   const arrayMode = fieldPath.endsWith('[]?');
   const keys = (arrayMode ? fieldPath.slice(0, -3) : fieldPath)
@@ -232,13 +235,9 @@ export function config(fieldPath) {
     .split('.')
     .filter(Boolean);
 
-  const base = projectRoot();
-  const cfgPath = path.join(base, '.somi', 'config.json');
-  if (!fs.existsSync(cfgPath)) return arrayMode ? [] : '';
-
   let data;
   try {
-    data = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    data = loadConfig(projectRoot()).config;
   } catch {
     return arrayMode ? [] : ''; // matches jq's `2>/dev/null || true` on invalid JSON
   }

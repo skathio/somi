@@ -1,5 +1,5 @@
 ---
-description: Show and change SoMi's cost settings (the ceiling, each agent's tier, and the model each tier means on a host) in .somi/config.json, with a question for every change. Lowering a tier or remapping a model needs your explicit confirmation.
+description: Show and change SoMi's cost settings (the ceiling, each agent's tier, and the model each tier means on a host) in your global config and the project's .somi/config.json, with a question for every change. Lowering a tier or remapping a model needs your explicit confirmation.
 argument-hint: "[what to change, e.g. ceiling or security-reviewer]"
 allowed-tools: AskUserQuestion, Read, Bash
 ---
@@ -8,8 +8,9 @@ allowed-tools: AskUserQuestion, Read, Bash
 
 You are running the **cost-settings workflow** of somi. This command has no `cost:` of its own — nor
 a `model:` of its own; it runs inline on whatever model this session is already using, and Tasks no
-agent. It reads and writes only the `cost.ceiling` and `cost.agents` settings of the project's
-`.somi/config.json`, and only through the `somi_config` tool, which validates every change.
+agent. It shows the effective cost settings (your global config with the project's `.somi/config.json`
+merged over it) and writes only the project file's `cost.*` settings, only through the `somi_config`
+tool, which validates every change.
 
 The user's hint: **$ARGUMENTS**
 
@@ -22,7 +23,10 @@ The user's hint: **$ARGUMENTS**
 
 - `cost.ceiling` is the tier every agent runs at unless that agent has its own entry.
 - `cost.agents.<name>` pins one agent to a tier. A pin wins over the ceiling, even above it.
-- The file is read on every dispatch, so a change applies to the **next** dispatch.
+- Two files: the **global config** every project reads, and the project's `.somi/config.json`, whose
+  values win key by key. The tool changes only the project file; the global one is the user's, with
+  `node scripts/somi-config.mjs set <key> <value> --global` (or by editing it).
+- The files are read on every dispatch, so a change applies to the **next** dispatch.
 - A `SOMI_COST_CEILING` environment variable, or a ceiling an earlier `--ceiling` flag persisted,
   can
   outrank the file's value. The tool reports when that is the case; relay it.
@@ -42,9 +46,10 @@ The user's hint: **$ARGUMENTS**
    mark
    (`^ above ceiling`) on a row whose override is above the ceiling, and `unknown` on a name SoMi
    does
-   not ship. Print every entry of `warnings` **word for word**, never summarised or softened. If the
-   file does not exist (`exists: false`), say that every agent then follows the ceiling and offer
-   `init`.
+   not ship, and for every pin and the ceiling the file it came from (`from`: global or project).
+   Print every entry of `warnings` **word for word**, never summarised or softened. If neither file
+   exists (`exists` and `global.exists` both false), say that every agent then follows the ceiling
+   and offer `init`.
 3. **Ask what to do** with the `AskUserQuestion` tool, one question at a time:
    - change the global ceiling;
    - pin or unpin one agent;
@@ -119,7 +124,9 @@ supplied; if the tool says there is none, give the same CLI command.
 
 - **Only `cost.ceiling`, `cost.agents.<name>` and `cost.mapping.<host>.<tier>`.** Nothing else in
   the file is touched, and the tool refuses any other key.
-- **Never write the file or the persisted ceiling directly**, and never use `Bash` to change either.
+- **Never write a config file or the persisted ceiling directly**, and never use `Bash` to change
+  them. The global config is never yours to change: a user who wants a setting everywhere runs the
+  `--global` command themselves.
   The `Bash` tool here is only for the read-only `show` fallback.
 - **Never pass a hint, a file's text or a guess as a key or value.** The user's answers choose them.
 - **Never say a change is saved** until the tool has returned success.

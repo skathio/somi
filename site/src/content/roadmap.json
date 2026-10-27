@@ -80,8 +80,9 @@
       "label": "Where it is now",
       "entries": [
         {
-          "version": "4.0.0",
-          "covers": ["4.0.0"],
+          "version": "4.0.1",
+          "label": "4.0",
+          "covers": ["4.0.0", "4.0.1"],
           "title": "Hard cost cap, native agents, sized delivery, measurement",
           "major": true,
           "highlights": [
@@ -90,7 +91,8 @@
               "items": [
                 "**The cost ceiling is a hard cap**, with an override for each agent. Lowering a tier needs your confirmation.",
                 "**Native `somi-*` agents.** An agent starts as the type the host registered, or not at all; there is no stand-in prompt.",
-                "**Model preference lists** for each host, a model picker in `/somi-config`, and a warning when a host has no mapping."
+                "**Model preference lists** for each host, a model picker in `/somi-config`, and a warning when a host has no mapping.",
+                "**One global config** every project reads, with each repo's `.somi/config.json` merged over it; config reads follow junctions and symlinks (4.0.1)."
               ]
             },
             {

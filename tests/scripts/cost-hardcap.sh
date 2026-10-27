@@ -27,7 +27,7 @@ verdict() {
 
 mutant() { # $1 = name, $2 = sed expression deleting one check; builds $TMP/$1 from the real lib
   mkdir -p "$TMP/$1"
-  cp "$LIB_SRC/cost-ceiling.mjs" "$LIB_SRC/cost-model.mjs" "$LIB_SRC/cost-config.mjs" "$TMP/$1/"
+  cp "$LIB_SRC/cost-ceiling.mjs" "$LIB_SRC/cost-model.mjs" "$LIB_SRC/cost-config.mjs" "$LIB_SRC/config-files.mjs" "$TMP/$1/"
   sed -i "$2" "$TMP/$1/cost-config.mjs"
   cmp -s "$LIB_SRC/cost-config.mjs" "$TMP/$1/cost-config.mjs" && { bad "mutant $1 did not change the file"; return 1; }
   return 0
@@ -88,7 +88,7 @@ eq() { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (want '$3', got '$2')"; fi
 
 # Red proofs: each mutant breaks exactly one rule in a COPY of the lib; the real case must then fail.
 mutant_sel() { # $1 = name, $2 = replacement for the selection expression
-  mkdir -p "$TMP/$1"; cp "$LIB_SRC/cost-ceiling.mjs" "$LIB_SRC/cost-model.mjs" "$LIB_SRC/cost-config.mjs" "$TMP/$1/"
+  mkdir -p "$TMP/$1"; cp "$LIB_SRC/cost-ceiling.mjs" "$LIB_SRC/cost-model.mjs" "$LIB_SRC/cost-config.mjs" "$LIB_SRC/config-files.mjs" "$TMP/$1/"
   sed -i "s/const selected = override === undefined ? ceiling : override;/const selected = $2;/" "$TMP/$1/cost-ceiling.mjs"
   cmp -s "$LIB_SRC/cost-ceiling.mjs" "$TMP/$1/cost-ceiling.mjs" && bad "mutant $1 did not change the file"
 }
@@ -174,15 +174,15 @@ P="$(proj)"; big 60000 > "$P/.somi/config.json"; rc=0
 cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
 eq "a config.json under the cap (60000 bytes) is still read" "$rc" "0"
 # Red proof: raise the cap in a copy and the oversize file is accepted.
-mkdir -p "$TMP/nocap"; cp "$LIB_SRC"/cost-*.mjs "$TMP/nocap/"
-sed -i 's/64 \* 1024/64 * 1024 * 1024/' "$TMP/nocap/cost-ceiling.mjs"
+mkdir -p "$TMP/nocap"; cp "$LIB_SRC"/cost-*.mjs "$LIB_SRC/config-files.mjs" "$TMP/nocap/"
+sed -i 's/64 \* 1024/64 * 1024 * 1024/' "$TMP/nocap/config-files.mjs"
 P="$(proj)"; big 70000 > "$P/.somi/config.json"
 eq "red proof (size cap): without the cap the 70000-byte file is read" \
   "$(node --input-type=module -e "
     const C = await import('$TMP/nocap/cost-ceiling.mjs');
     try { C.readCostConfig('$P'); console.log('ok'); } catch (e) { console.log('reject'); }")" "ok"
 
-# ---- the read is fd-based: boundary sizes, symlinks refused, non-regular files refused ----------
+# ---- the read is fd-based: boundary sizes, links followed, non-regular files refused ------------
 exact() { local pre='{"cost":{"ceiling":"low"},"pad":"' suf='"}'; printf '%s' "$pre"; head -c "$(( $1 - ${#pre} - ${#suf} ))" /dev/zero | tr '\0' 'x'; printf '%s' "$suf"; }
 P="$(proj)"; exact 65536 > "$P/.somi/config.json"; rc=0
 cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
@@ -191,13 +191,21 @@ P="$(proj)"; exact 65537 > "$P/.somi/config.json"; rc=0
 cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
 eq "a config.json of 65537 bytes is rejected with 67" "$rc" "67"
 
+# Config reads follow links (a junction or symlinked .somi, a linked config file); what a link could
+# abuse -- a device or FIFO that never ends, an endless read -- is refused on the open descriptor.
 P="$(proj)"; ln -s /dev/zero "$P/.somi/config.json"; rc=0
 timeout 10 env CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-coder >"$TMP/sym.out" 2>"$TMP/sym.err" || rc=$?
 eq "a config.json symlink to /dev/zero is rejected quickly with 67 (no timeout)" "$rc" "67"
-eq "... and the message says it refuses a symlink" "$(grep -c 'symlink' "$TMP/sym.err")" "1"
+eq "... and the message says it is not a regular file" "$(grep -c 'not a regular file' "$TMP/sym.err")" "1"
+P="$(proj)"; rm -f "$P/.somi/config.json"; mkfifo "$P/.somi/config.json"; rc=0
+timeout 10 env CLAUDE_PROJECT_DIR="$P" env -u SOMI_COST_CEILING node "$CLI" resolve --agent somi-coder >/dev/null 2>"$TMP/fifo.err" || rc=$?
+eq "a config.json that is a FIFO is rejected quickly with 67 (the open does not block)" "$rc" "67"
 P="$(proj '{"cost":{"ceiling":"low"}}')"; mv "$P/.somi/config.json" "$P/real.json"; ln -s ../real.json "$P/.somi/config.json"; rc=0
-cli "$P" --agent somi-coder >/dev/null 2>&1 || rc=$?
-eq "a symlink to an ordinary valid config is refused too" "$rc" "67"
+out="$(cli "$P" --agent somi-coder 2>/dev/null)" || rc=$?
+eq "a symlink to an ordinary valid config is read" "$rc|$(printf '%s' "$out" | grep -o '"tier":"[a-z]*"')" '0|"tier":"low"'
+P="$(mktemp -d -p "$TMP")"; SHARED="$(mktemp -d -p "$TMP")"; printf '{"cost":{"ceiling":"low"}}' > "$SHARED/config.json"; ln -s "$SHARED" "$P/.somi"; rc=0
+out="$(cli "$P" --agent somi-coder 2>/dev/null)" || rc=$?
+eq "a .somi that is a link to another directory (a junction on Windows) is read through" "$rc|$(printf '%s' "$out" | grep -o '"tier":"[a-z]*"')" '0|"tier":"low"'
 P="$(proj)"; mkdir "$P/.somi/config.json"; rc=0
 cli "$P" --agent somi-coder >"$TMP/dir.out" 2>"$TMP/dir.err" || rc=$?
 eq "a config.json that is a directory is rejected with 67" "$rc" "67"
@@ -207,14 +215,15 @@ verdict_file() { # $1 = lib dir, $2 = project root -> ok | reject: msg
     const C = await import('$1/cost-ceiling.mjs');
     try { C.readCostConfig('$2'); console.log('ok'); } catch (e) { console.log('reject: ' + e.message); }"
 }
-mkdir -p "$TMP/nofollow" "$TMP/nofile"
-cp "$LIB_SRC"/cost-*.mjs "$TMP/nofollow/"; cp "$LIB_SRC"/cost-*.mjs "$TMP/nofile/"
-sed -i 's/(fs.constants.O_NOFOLLOW ?? 0)/0/' "$TMP/nofollow/cost-ceiling.mjs"
-sed -i 's/!fs.fstatSync(fd).isFile()/false/' "$TMP/nofile/cost-ceiling.mjs"
-cmp -s "$LIB_SRC/cost-ceiling.mjs" "$TMP/nofollow/cost-ceiling.mjs" && bad "mutant nofollow did not change the file"
-cmp -s "$LIB_SRC/cost-ceiling.mjs" "$TMP/nofile/cost-ceiling.mjs" && bad "mutant nofile did not change the file"
-P="$(proj '{"cost":{"ceiling":"low"}}')"; mv "$P/.somi/config.json" "$P/real.json"; ln -s ../real.json "$P/.somi/config.json"
-eq "red proof (O_NOFOLLOW): without it the symlinked config is followed and accepted" "$(verdict_file "$TMP/nofollow" "$P")" "ok"
+mkdir -p "$TMP/nofile" "$TMP/blocking"
+cp "$LIB_SRC"/cost-*.mjs "$LIB_SRC/config-files.mjs" "$TMP/nofile/"; cp "$LIB_SRC"/cost-*.mjs "$LIB_SRC/config-files.mjs" "$TMP/blocking/"
+sed -i 's/!fs.fstatSync(fd).isFile()/false/' "$TMP/nofile/config-files.mjs"
+sed -i 's/fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0)/fs.constants.O_RDONLY/' "$TMP/blocking/config-files.mjs"
+cmp -s "$LIB_SRC/config-files.mjs" "$TMP/nofile/config-files.mjs" && bad "mutant nofile did not change the file"
+cmp -s "$LIB_SRC/config-files.mjs" "$TMP/blocking/config-files.mjs" && bad "mutant blocking did not change the file"
+P="$(proj)"; rm -f "$P/.somi/config.json"; mkfifo "$P/.somi/config.json"; rc=0
+timeout 5 node --input-type=module -e "const C = await import('$TMP/blocking/cost-ceiling.mjs'); try { C.readCostConfig('$P'); } catch {}" >/dev/null 2>&1 || rc=$?
+eq "red proof (O_NONBLOCK): without it a FIFO config hangs the read (timeout)" "$rc" "124"
 P="$(proj)"; mkdir "$P/.somi/config.json"
 case "$(verdict_file "$LIB_SRC" "$P")" in *"not a regular file"*) ok "a directory config is rejected by the regular-file check" ;; *) bad "a directory config is rejected by the regular-file check" ;; esac
 case "$(verdict_file "$TMP/nofile" "$P")" in *"not a regular file"*) bad "red proof (isFile): the regular-file message persists without the check" ;; *) ok "red proof (isFile): without the check the regular-file rejection is gone" ;; esac
@@ -239,7 +248,7 @@ pj() { # $1 = config body or '', $2 = state body or ''
   echo "$r"
 }
 mut_prec() { # $1 = name, $2 = sed expression
-  mkdir -p "$TMP/$1"; cp "$LIB_SRC"/cost-*.mjs "$TMP/$1/"; sed -i "$2" "$TMP/$1/cost-ceiling.mjs"
+  mkdir -p "$TMP/$1"; cp "$LIB_SRC"/cost-*.mjs "$LIB_SRC/config-files.mjs" "$TMP/$1/"; sed -i "$2" "$TMP/$1/cost-ceiling.mjs"
   cmp -s "$LIB_SRC/cost-ceiling.mjs" "$TMP/$1/cost-ceiling.mjs" && bad "mutant $1 did not change the file"
 }
 mut_prec config-ignored   's/^    if (isConfigured) {$/    if (false) {/'

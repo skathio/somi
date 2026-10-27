@@ -197,7 +197,7 @@ const TOOLS = [
   {
     name: 'somi_config',
     description:
-      'Show or change the cost settings in the project\'s .somi/config.json by running ' +
+      'Show the cost settings (the user\'s global config with the project\'s .somi/config.json merged over it) or change the project file, by running ' +
       '`node scripts/somi-config.mjs`, and return its one JSON line unchanged. Actions: show ' +
       '(every agent\'s effective tier and warnings), get, set, unset, init (create the default file ' +
       'when absent). cost.ceiling and cost.agents.<name> take low|medium|high; ' +

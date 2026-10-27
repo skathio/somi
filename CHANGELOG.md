@@ -6,6 +6,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+## [4.0.1] — 2026-10-27 — fix: one global config for every project, merged with each repo's; config reads follow junctions and symlinks
+
+### Fixed
+
+- **One config for every project and session.** SoMi read only the project's `.somi/config.json`, so
+  the same settings had to be copied into every repository, and 4.0.0's SessionStart hook wrote a
+  fully pinned copy into each one. There is now a **global config** (`~/.config/somi/config.json`,
+  `$XDG_CONFIG_HOME/somi/config.json`, `%APPDATA%\somi\config.json` on Windows, or the path in
+  `SOMI_GLOBAL_CONFIG`; empty means none), and a project's `.somi/config.json` is merged over it:
+  objects merge key by key, any other value replaces. A repo that overrides `cost.agents.somi-coder`
+  and `cost.mapping.<host>.medium` changes exactly those two. Every reader uses the one loader
+  (`scripts/lib/config-files.mjs`): the resolver, `somi_config` / `somi-config`, the loops' caps,
+  `somi-check`, and the hooks' dependency and lockfile policy.
+  - `somi-config set|unset|init --global` changes the global file (for the user to run: the
+    `somi_config` MCP tool shows the merged config but writes only the project file). `show` reports
+    both files and, for every pinned value, the file it came from (`from`).
+  - The SessionStart hook writes no project default while a global config exists, and its
+    security-reviewer notice reads the merged config. A project set over a global config starts
+    from an empty file, not the full default.
+  - The cost-lowering hook judges a project change merged over the global config, and asks before
+    any file-tool write to the global config.
+- **Config reads follow links.** A junction or symlinked `.somi`, or a linked config file, was
+  refused (`somi_config show` failed with "a link"; a linked `config.json` failed every dispatch with
+  exit 67). Reads now follow links and keep the checks that matter: a regular file once opened (a
+  FIFO or device is refused without blocking), at most 64 KiB, no file text in any message; a link to
+  a missing file is an error, not "no config". Writes are unchanged: `set`, `unset`, `init` and the
+  SessionStart hook never write through a link, and SoMi's own state files (the persisted ceiling,
+  the sizing record) still refuse one.
+
+### Migration
+
+- To use the global config in a repository that has a `.somi/config.json` written by 4.0.0's
+  SessionStart hook, delete that file or reduce it to what the project really overrides: a full copy
+  of the defaults masks every global value.
+
 ### Added
 
 - **An overview page at <https://skathio.github.io/somi/>** (`site/`): the roadmap, the workflow, the

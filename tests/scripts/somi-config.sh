@@ -41,7 +41,7 @@ check "... a no-op, file untouched, reported created:false" "$(cat "$P/.somi/con
 # --- show -----------------------------------------------------------------------------------------
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null
 check "show: exit 0" "$(cfg "$CLI" "$P" show)" "0"
-check "show on a fresh default config: ceiling medium from config" "$(jf 'o.ceiling')" '{"value":"medium","source":"config"}'
+check "show on a fresh default config: ceiling medium from config" "$(jf 'o.ceiling')" '{"value":"medium","source":"config","from":"project"}'
 check "show: every shipped agent is listed with default, tier, source" "$(jf 'o.agents.length === Object.keys(JSON.parse(require("fs").readFileSync("'"$EXPECT"'","utf8")).cost.agents).length && o.agents.every((a) => a.tier === a.default && a.source === "override")')" "true"
 check "show: no warnings for a fresh default config" "$(jf 'o.warnings')" "[]"
 check "show output is one ASCII line" "$(wc -l < "$TMP/out" | tr -d ' ')|$(ascii_only "$TMP/out")" "1|yes"
@@ -126,7 +126,7 @@ check "show carries the same warning" "$(cfg "$CLI" "$P" show)|$(jf 'o.warnings.
 check "set security-reviewer back to high clears it" "$(cfg "$CLI" "$P" set cost.agents.somi-security-reviewer high)|$(jf 'o.warnings')" "0|[]"
 check "set an agent not in the default table: accepted, unknown warning" "$(cfg "$CLI" "$P" set cost.agents.my-agent high)|$(jf 'o.warnings.length')" "0|1"
 cfg "$CLI" "$P" show > /dev/null
-check "show flags the extra name unknown:true with no default" "$(jf 'JSON.stringify(o.agents.find((a) => a.name === "my-agent"))')" '{"name":"my-agent","tier":"high","source":"override","default":null,"unknown":true}'
+check "show flags the extra name unknown:true with no default" "$(jf 'JSON.stringify(o.agents.find((a) => a.name === "my-agent"))')" '{"name":"my-agent","tier":"high","source":"override","from":"project","default":null,"unknown":true}'
 
 # --- 64: arguments ---------------------------------------------------------------------------------
 P="$(proj)"; cfg "$CLI" "$P" init > /dev/null; cp "$P/.somi/config.json" "$TMP/before"
@@ -156,15 +156,20 @@ P="$(proj)"; mkdir "$P/.somi"; head -c 70000 /dev/zero | tr '\0' ' ' > "$P/.somi
 check "an oversize config exits 67, untouched" "$(cfg "$CLI" "$P" set cost.ceiling low)|$(cmp -s "$P/.somi/config.json" "$TMP/big.before" && echo same)" "67|same"
 check "error text does not echo file text" "$(P="$(proj)"; mkdir "$P/.somi"; printf '{"cost":{"cieling":"SECRET-VALUE"}}' > "$P/.somi/config.json"; cfg "$CLI" "$P" show > /dev/null; grep -c SECRET-VALUE "$TMP/err" | tr -d ' ')" "0"
 
-# --- no-follow ---------------------------------------------------------------------------------------
+# --- links: writes never follow one, reads (show, get) do -----------------------------------------
 echo KEEP > "$TMP/victim.txt"; OUTSIDE="$(mktemp -d -p "$TMP")"
 P="$(proj)"; ln -s "$OUTSIDE" "$P/.somi"
-for op in "set cost.ceiling low" init show; do
+for op in "set cost.ceiling low" "unset cost.agents.somi-coder" init; do
   # shellcheck disable=SC2086
   check "a symlinked .somi: $op exits 67" "$(cfg "$CLI" "$P" $op)" "67"
 done
 check "... nothing was written outside" "$(ls -A "$OUTSIDE" | wc -l | tr -d ' ')" "0"
+check "a symlinked .somi: show reads through it (a junction on Windows)" "$(cfg "$CLI" "$P" show)|$(jf 'o.exists')" "0|false"
+SHARED="$(mktemp -d -p "$TMP")"; printf '{"cost":{"ceiling":"low"}}' > "$SHARED/config.json"; P="$(proj)"; ln -s "$SHARED" "$P/.somi"
+check "... and reads the config behind it" "$(cfg "$CLI" "$P" show)|$(jf 'o.ceiling.value')" "0|low"
+check "... get too" "$(cfg "$CLI" "$P" get cost.ceiling)|$(jf 'o.value')" "0|low"
 P="$(proj)"; mkdir "$P/.somi"; printf '{"cost":{"ceiling":"high"}}' > "$TMP/real.json"; ln -s "$TMP/real.json" "$P/.somi/config.json"
+check "a symlinked config.json: show reads through it" "$(cfg "$CLI" "$P" show)|$(jf 'o.ceiling.value')" "0|high"
 check "a symlinked config.json: set exits 67" "$(cfg "$CLI" "$P" set cost.ceiling low)" "67"
 check "... the link target is untouched" "$(cat "$TMP/real.json")" '{"cost":{"ceiling":"high"}}'
 check "init over a symlinked config.json is a no-op (it exists)" "$(cfg "$CLI" "$P" init)|$(jf 'o.created')" "0|false"
