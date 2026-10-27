@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Guards tests/scripts/lib/run-suites.mjs, the parallel runner validate.sh starts its test scripts with: a failing
 # script fails the run and is named; output is printed whole and in the order given, whatever the finish order;
-# --jobs N really runs N at once and --jobs 1 runs one at a time (proved by start/end markers, not by timing); and
+# --jobs N really runs N at once and --jobs 1 runs one at a time, --alone runs a script with nothing beside it (proved by start/end markers, not by timing); and
 # bad arguments are a usage error.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -37,6 +37,12 @@ check "SOMI_TEST_JOBS sets the default" "$(tr '\n' ' ' < marks)" "start b end b 
 for n in x y z; do mk "$n" 'for _ in $(seq 100); do [ "$(grep -c "^start" marks)" -ge 3 ] && break; sleep 0.1; done' 0; done
 : > marks; node "$RUN" --jobs 3 x.sh y.sh z.sh >/dev/null
 check "--jobs 3 runs three at once: all three start before any ends" "$(head -3 marks | grep -c '^start ')" "3"
+
+# --alone: the alone script runs first and by itself; the pool starts only after it ends.
+: > marks; out="$(node "$RUN" --jobs 3 --alone a.sh -- b.sh c.sh)"
+check "--alone runs first, with nothing overlapping it" "$(head -2 marks | tr '\n' ' ')" "start a end a "
+check "--alone prints its block first" "$(grep -oE '^==> [abc]\.sh$' <<<"$out" | head -1)" "==> a.sh"
+node "$RUN" --alone >/dev/null 2>&1; check "--alone without a script is a usage error" "$?" "64"
 
 node "$RUN" --jobs 0 a.sh >/dev/null 2>&1; check "--jobs 0 is a usage error" "$?" "64"
 node "$RUN" --jobs x a.sh >/dev/null 2>&1; check "a non-numeric --jobs is a usage error" "$?" "64"

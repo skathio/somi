@@ -2,17 +2,20 @@
 // run-suites.mjs -- runs independent test scripts concurrently and prints each one's output whole, in the
 // order given, so a parallel run reads exactly like a serial one.
 //
-// Usage: node tests/scripts/lib/run-suites.mjs [--jobs N] [--] <script.sh> ...
+// Usage: node tests/scripts/lib/run-suites.mjs [--jobs N] [--alone <script.sh>]... [--] <script.sh> ...
 //
 // Each script runs as `bash <script>` from the current directory with the inherited environment. --jobs
 // defaults to SOMI_TEST_JOBS, else half the machine's cores (at least 2); 1 is a serial run. Exit 0 when
 // every script exits 0, else 1, after every script has finished and printed, followed by a summary that
 // names each failure and the slowest scripts. Exit 64 on a usage error. Ctrl-C stops every running script.
+//
+// --alone runs a script by itself, before the pool, with nothing else running: for a script whose checks carry
+// wall-clock limits that CPU contention can break (a hidden-suite family killed at its timeout reads as failed cases).
 
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 
-const USAGE = 'usage: run-suites.mjs [--jobs N] [--] <script.sh> ...';
+const USAGE = 'usage: run-suites.mjs [--jobs N] [--alone <script.sh>]... [--] <script.sh> ...';
 
 // Half the cores, at least two: most scripts start node processes of their own, and a fully loaded machine makes the
 // eval gates' hidden-suite runs hit their 60 s kill, which reads as failed cases.
@@ -22,16 +25,18 @@ export function defaultJobs(cores = os.availableParallelism()) {
 
 export function parseArgs(argv, env = process.env) {
   const scripts = [];
+  const alone = [];
   let jobs = env.SOMI_TEST_JOBS ?? String(defaultJobs());
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--') { scripts.push(...argv.slice(i + 1)); break; }
     if (argv[i] === '--jobs') { jobs = argv[++i]; continue; }
+    if (argv[i] === '--alone') { if (!argv[i + 1]) return { error: '--alone needs a script' }; alone.push(argv[++i]); continue; }
     if (argv[i].startsWith('-')) return { error: `unknown option ${argv[i]}` };
     scripts.push(argv[i]);
   }
   if (!/^[1-9][0-9]{0,2}$/.test(String(jobs))) return { error: `--jobs (or SOMI_TEST_JOBS) must be a whole number from 1 to 999, got ${JSON.stringify(jobs)}` };
-  if (scripts.length === 0) return { error: 'no scripts given' };
-  return { jobs: Number(jobs), scripts };
+  if (scripts.length + alone.length === 0) return { error: 'no scripts given' };
+  return { jobs: Number(jobs), scripts, alone };
 }
 
 // Every child still running, so Ctrl-C can stop them all.
@@ -52,7 +57,9 @@ function runOne(script) {
 }
 
 
-export async function runSuites({ jobs, scripts }, write = (s) => process.stdout.write(s)) {
+export async function runSuites({ jobs, scripts: pooled, alone = [] }, write = (s) => process.stdout.write(s)) {
+  // The alone scripts come first in the list and run with a pool of one, so nothing overlaps them.
+  const scripts = [...alone, ...pooled];
   const results = new Array(scripts.length);
   const waiters = new Array(scripts.length);
   let next = 0;
@@ -63,9 +70,13 @@ export async function runSuites({ jobs, scripts }, write = (s) => process.stdout
       waiters[i]?.();
     }
   };
+  const worker1 = async () => { const i = next++; results[i] = await runOne(scripts[i]); waiters[i]?.(); };
   const finished = (i) => (results[i] ? Promise.resolve() : new Promise((r) => { waiters[i] = r; }));
   const started = Date.now();
-  const pool = Promise.all(Array.from({ length: Math.min(jobs, scripts.length) }, worker));
+  const pool = (async () => {
+    while (next < alone.length) await worker1();
+    await Promise.all(Array.from({ length: Math.min(jobs, scripts.length - next) }, worker));
+  })();
   // Print in input order: each block waits for its own script, never for a later one.
   for (let i = 0; i < scripts.length; i++) {
     await finished(i);
