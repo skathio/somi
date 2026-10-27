@@ -6,6 +6,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **An overview page at <https://skathio.github.io/somi/>** (`site/`): the roadmap, the workflow, the
+  cost system with a live resolver demo, the guardrails, the loop core and the measured results, for
+  presenting SoMi. React and Tailwind, built with Vite; its own package and lockfile, not part of the
+  npm package. Counts, the release list, the hook registrations, the agent tier table and Claude
+  Code's tier→model map are read from the repo at build time; the hand-written content is tested
+  against them, so a command, hook or agent added without the page following fails `ci`'s new `site`
+  job. The page carries the SoMi icon (favicon, logo, link-preview image) and its red as the accent.
+- **`site.yml` deploys the page**, through hashira's `static-webapp-ci` and `pages-deploy`. Run it
+  by hand on `main` to deploy the page with no npm release; the release dispatch (`publish.yml`) also
+  calls it after `publish`, so each release that reaches npm updates the page.
+- **A release gate for the page:** `tests/scripts/lib/site-roadmap-gate.mjs` (run by
+  `scripts/validate.sh`, so also by `publish.yml`'s `version` job) refuses a CHANGELOG release that
+  `site/src/content/roadmap.json` does not cover.
+
 ## [4.0.0] — 2026-10-25 — feat!: a hard cost cap, `somi-` agent names with native dispatch, per-agent tiers in config, a sized `/ship-loop` and a usage measurement system
 
 **Major — behaviour changes to cost resolution and to agent identity and dispatch, plus new commands

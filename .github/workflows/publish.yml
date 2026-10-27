@@ -8,8 +8,9 @@
 # (commit-message-driven version inference, its own tag push, its own
 # Release-notes generation).
 #
-# Shape: one file, two jobs (iteration 6.2 retired the old hand-rolled `ci`
-# job — see "## CI gating, post-6.2" below for why).
+# Shape: one file, three jobs (iteration 6.2 retired the old hand-rolled `ci`
+# job — see "## CI gating, post-6.2" below for why). `site` deploys the overview
+# page; see "## The overview page" below.
 #   - version : Runs ONLY on a manual `workflow_dispatch` with a non-empty
 #               `bump` input — see "## Trigger model" below. Resolves the
 #               next version via hashira's `version-resolver` composite (D14
@@ -20,6 +21,20 @@
 #               dispatch + non-empty bump); gated by the `production`
 #               Environment (one approval). Calls npm-release@v2 with the
 #               resolver's output — never recomputes a version itself.
+#   - site    : needs publish; calls .github/workflows/site.yml, which builds,
+#               tests and deploys the overview page to GitHub Pages.
+#
+# ## The overview page
+#
+# The release dispatch also deploys the overview page (site/), so every release
+# that reaches npm updates the page from the same ref. The deploy itself lives in
+# .github/workflows/site.yml, which can also be run on its own (workflow_dispatch)
+# to deploy the page with no npm release; this file only calls it. Order is
+# deliberate: `site` waits for `publish`, so a release's page never goes out
+# ahead of its package, and the Pages artifact (kept one day) is built after the
+# production approval rather than waiting on it. validate.sh in `version` also
+# refuses a CHANGELOG release the roadmap does not cover, before anything is
+# published.
 #
 # ## CI gating, post-6.2 — why there is no in-file `ci` job anymore, and why
 # ## `version` re-validates anyway (pass-1 review correction)
@@ -305,3 +320,19 @@ jobs:
           # target defaults to https://registry.npmjs.org (official registry → OIDC).
           # No npm_token: OIDC trusted publishing handles auth; auth: oidc
           # never falls back to one even if it were set.
+
+  site:
+    name: site
+    needs: publish
+    # Same gate as `version`; also skipped whenever `publish` did not succeed.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
+    # The same workflow a page-only deploy runs by hand; see its header.
+    uses: ./.github/workflows/site.yml
+    # site.yml's jobs need these (hashira's static-webapp-ci matrix, then deploy-pages); a called
+    # workflow can only narrow what its caller grants.
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+      pull-requests: write
+      security-events: write

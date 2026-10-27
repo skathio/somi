@@ -1,0 +1,2 @@
+# Written by scripts/facts.mjs on every build, test and dev start.
+src/generated/

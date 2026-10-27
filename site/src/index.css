@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* The theme is a data attribute set before first paint (index.html) and by the toggle; `dark:` follows it. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Colour tokens. The accent is the icon's red (#cc1111, darkened for text contrast on light).
+   Components use these names (bg-canvas, text-muted, tier colours…); dark mode swaps the
+   values below rather than adding dark: variants everywhere. */
+@theme {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+
+  --color-canvas: #f7f6f2;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0eee8;
+  --color-ink: #1b1d22;
+  --color-muted: #5b606b;
+  --color-line: #dedbd2;
+  --color-accent: #b80f0f;
+  --color-accent-soft: #fbe3e3;
+  --color-gate: #9a4508;
+  --color-gate-soft: #fdecd6;
+  --color-low: #2a6e34;
+  --color-low-soft: #e0f0e2;
+  --color-medium: #1d4ed8;
+  --color-medium-soft: #dfe8fd;
+  --color-high: #6b3fb5;
+  --color-high-soft: #ebe2f8;
+  --color-code: #efece4;
+}
+
+[data-theme="dark"] {
+  --color-canvas: #101216;
+  --color-surface: #171a20;
+  --color-surface-2: #1d2128;
+  --color-ink: #e8e9ec;
+  --color-muted: #a0a6b1;
+  --color-line: #2b3039;
+  --color-accent: #ff4d4d;
+  --color-accent-soft: #3b1214;
+  --color-gate: #f5a524;
+  --color-gate-soft: #3a2a10;
+  --color-low: #7fd38b;
+  --color-low-soft: #1a3020;
+  --color-medium: #8fb0ff;
+  --color-medium-soft: #18223d;
+  --color-high: #b99af0;
+  --color-high-soft: #2a2140;
+  --color-code: #1f232b;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 4rem;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+  }
+  /* Inline code inside prose; code blocks reset this. */
+  :not(pre) > code {
+    @apply rounded bg-code px-1.5 py-0.5 font-mono text-[0.88em];
+  }
+}
+
+/* Present mode: one section per screen. */
+.present main > section {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+}
+.present main > section > div {
+  width: 100%;
+}
+
+@media print {
+  header, .hint { display: none; }
+  section { break-inside: avoid; }
+}

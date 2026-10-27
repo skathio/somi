@@ -76,6 +76,13 @@ Then move the `CHANGELOG.md` `[Unreleased]` entry under a dated `## [X.Y.Z] — 
 (add migration notes for a MAJOR — see the template below). `npm test` validates that every
 manifest is still valid JSON after the bump.
 
+Update the overview page in the same change: add the release to
+[`site/src/content/roadmap.json`](../site/src/content/roadmap.json) (a new entry, or the release
+added to an existing entry's `covers`; the last entry is shown as the current release), and
+`site/src/content/measured.ts` when the release recorded a new usage baseline. `npm test` refuses a
+CHANGELOG release the roadmap does not cover. Counts, the release list and the tier table update
+themselves; see [`site/README.md`](../site/README.md).
+
 ## Release process
 
 Releases are **explicit and dispatch-driven** (adopting hashira's v2 contract: the
@@ -111,8 +118,19 @@ hand; the one thing you **do** update by hand is the set of version files above 
    - creates the matching **GitHub Release** using GitHub's server-side `--generate-notes`
      (summarized from merged-PR titles/labels — expect different-looking notes than the old
      commit-message-driven generator produced, not necessarily worse, just a different source).
-5. Leaving `bump` empty on a `workflow_dispatch` (or omitting it) runs only the `ci` gate — useful
+5. After `publish` succeeds, the `site` job runs [`site.yml`](../.github/workflows/site.yml), which
+   builds and tests the overview page from the same ref (hashira's `static-webapp-ci`) and deploys
+   it to <https://skathio.github.io/somi/> (hashira's `pages-deploy`). A failure there leaves the
+   npm release in place; fix the page and run `site.yml` on its own (below).
+6. Leaving `bump` empty on a `workflow_dispatch` (or omitting it) runs only the `ci` gate — useful
    for a manual CI-only re-run that isn't cutting a release.
+
+**Deploying the page without a release.** Run [`site.yml`](../.github/workflows/site.yml) by hand on
+`main` (Actions → site → Run workflow, or `gh workflow run site.yml --ref main`). It builds, tests and
+deploys the page from `main` and touches nothing on npm. The `github-pages` Environment only accepts
+deployments from `main`, so what goes out is merged, reviewed content. Don't date a CHANGELOG
+release heading on `main` before that release is published if you plan a page-only deploy in between:
+the page would show it as released.
 
 > The `publish` workflow does **not** bump `VERSION` / `package.json` back into the repo — it stamps
 > the resolved version only into the isolated tarball it publishes. Keeping the in-repo version files

@@ -577,6 +577,19 @@ if ! node scripts/check-links.mjs; then
   exit 1
 fi
 
+echo "==> Validating the overview page's roadmap covers every release..."
+# site/src/content/roadmap.json must account for every CHANGELOG release, so a release cannot be
+# dispatched (publish.yml's version job runs this script) with the page still describing the one
+# before. site/ is not in the npm package, hence the skip.
+if [ -d site ]; then
+  if ! node tests/scripts/lib/site-roadmap-gate.mjs; then
+    exit 1
+  fi
+else
+  echo "  (skipped: site/ not packaged)"
+fi
+bash tests/scripts/site-roadmap-gate.sh
+
 echo "==> Validating no session-artefact references in shipped code and prose..."
 # Comments in hooks/ and scripts/, and every line of agents/, commands/, skills/, must not point at
 # the gitignored .somi/ planning folder (finding ids, decision tags, iteration/phase numbers) --
