@@ -84,6 +84,14 @@ for `@somi /plan` falls from 53 KB to 25 KB (-53%), and over a `/ship-loop` run 
 (-78%). The cost is on Claude Code's typed commands: each now injects 2 to 6% more bytes (the wrapper,
 the extra skill and agent headers, the routing rows).
 
+L2 (48 live draws on Claude Code, low tier, against 4.0.0 `f4e7cc1`; `reports/03c1f76-vs-f4e7cc1.md`):
+inconclusive on every metric. The point estimates lean worse (SoMi-arm overhead +31% time, +32% cost,
+tokens +22%, turns +7%, mostly S3), with every interval including no change; the quality guard is clear.
+Two of eight `/ship-loop` draws on S2 scored 0/31: sizing put T1 at `full` in 3 of 8 draws (4.0.0: 0 of 8,
+an estimate of about 110 lines against the 100-line limit), and a `full` run stops at the planner's
+decisions when no one answers. One of those draws also showed the main thread handing `/plan-loop` to a
+`somi-flow` subagent; the command wrappers now say a sub-workflow runs inline in the main conversation.
+
 ## [4.0.1] — 2026-10-27 — fix: one global config for every project, merged with each repo's; config reads follow junctions and symlinks
 
 ### Fixed
