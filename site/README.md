@@ -50,6 +50,24 @@ runs two ways:
 Only `main` can deploy (the `github-pages` Environment's branch policy). Pull requests run the same
 build and tests in `ci.yml`'s `site` job, without deploying.
 
+## Brand
+
+[`brand/somi-icon-800.png`](brand/somi-icon-800.png) is the master icon (the repository's GitHub
+icon; no vector version exists). Every size the page uses is a straight downscale of it, committed:
+
+| File | Size | Used for |
+|---|---|---|
+| `public/favicon-32.png` | 32 | browser tab |
+| `public/icon-192.png` | 192 | high-DPI and Android tab icon |
+| `public/apple-touch-icon.png` | 180 | iOS home screen (on the page's dark canvas: iOS fills transparency with black) |
+| `public/icon-512.png` | 512 | link previews (`og:image`) |
+| `src/assets/somi-icon.png` | 480 | the header and hero logo (shown at up to 240 px, so sharp at 2×) |
+
+The accent colour is the icon's red (`#cc1111`), darkened to `#b80f0f` on the light theme for text
+contrast. When the icon changes, replace the master and regenerate the sizes with any image tool
+(Lanczos downscale, PNG); `check-dist` fails a build without a favicon or with a preview image the
+build did not emit.
+
 ## Rules the build enforces
 
 - **Nothing from another origin.** No CDN scripts, stylesheets, fonts or images

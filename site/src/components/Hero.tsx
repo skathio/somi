@@ -1,3 +1,4 @@
+import icon from '../assets/somi-icon.png';
 import { FACTS, monthsSpanned } from '../lib/facts';
 
 export function Hero() {
@@ -14,16 +15,27 @@ export function Hero() {
   return (
     <section id="top" aria-label="Introduction" className="border-b border-line px-4 pb-16 pt-16 sm:pb-20 sm:pt-24">
       <div className="mx-auto max-w-6xl">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent">
-          Multi-agent engineering workflow · {FACTS.version}
-        </p>
-        <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
-          So<span className="text-accent">Mi</span>: plan, code, review, with guardrails and a cost cap.
-        </h1>
-        <p className="mt-5 max-w-3xl text-lg text-muted sm:text-xl">
-          A plugin for Claude Code and GitHub Copilot. Engineering work is split between specialist agents with a clear
-          handoff at each step. Deterministic hooks block dangerous actions. Every agent runs at a cost tier you control.
-        </p>
+        <div className="flex flex-col-reverse gap-6 md:flex-row md:items-center md:justify-between md:gap-10">
+          <div className="min-w-0">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent">
+              Multi-agent engineering workflow · {FACTS.version}
+            </p>
+            <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
+              So<span className="text-accent">Mi</span>: plan, code, review, with guardrails and a cost cap.
+            </h1>
+            <p className="mt-5 max-w-3xl text-lg text-muted sm:text-xl">
+              A plugin for Claude Code and GitHub Copilot. Engineering work is split between specialist agents with a clear
+              handoff at each step. Deterministic hooks block dangerous actions. Every agent runs at a cost tier you control.
+            </p>
+          </div>
+          <img
+            src={icon}
+            alt="The SoMi icon"
+            width={240}
+            height={240}
+            className="h-24 w-24 shrink-0 drop-shadow-[0_0_24px_rgba(200,22,26,0.35)] sm:h-32 sm:w-32 md:h-52 md:w-52 lg:h-60 lg:w-60"
+          />
+        </div>
         <dl className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {stats.map((s) => (
             <div key={s.label} className="rounded-xl border border-line bg-surface p-4 shadow-sm">

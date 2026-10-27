@@ -14,7 +14,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   npm package. Counts, the release list, the hook registrations, the agent tier table and Claude
   Code's tier→model map are read from the repo at build time; the hand-written content is tested
   against them, so a command, hook or agent added without the page following fails `ci`'s new `site`
-  job.
+  job. The page carries the SoMi icon (favicon, logo, link-preview image) and its red as the accent.
 - **`site.yml` deploys the page**, through hashira's `static-webapp-ci` and `pages-deploy`. Run it
   by hand on `main` to deploy the page with no npm release; the release dispatch (`publish.yml`) also
   calls it after `publish`, so each release that reaches npm updates the page.
