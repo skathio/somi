@@ -15,9 +15,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   Code's tier→model map are read from the repo at build time; the hand-written content is tested
   against them, so a command, hook or agent added without the page following fails `ci`'s new `site`
   job.
-- **The release dispatch deploys the page.** `publish.yml` gains `site` (hashira's
-  `static-webapp-ci`) and `pages` (hashira's `pages-deploy`) after `publish`, so the page goes out
-  with each release that reaches npm.
+- **`site.yml` deploys the page**, through hashira's `static-webapp-ci` and `pages-deploy`. Run it
+  by hand on `main` to deploy the page with no npm release; the release dispatch (`publish.yml`) also
+  calls it after `publish`, so each release that reaches npm updates the page.
 - **A release gate for the page:** `tests/scripts/lib/site-roadmap-gate.mjs` (run by
   `scripts/validate.sh`, so also by `publish.yml`'s `version` job) refuses a CHANGELOG release that
   `site/src/content/roadmap.json` does not cover.

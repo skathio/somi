@@ -38,8 +38,17 @@ cannot be dispatched with the roadmap behind. Update
 [`src/content/measured.ts`](src/content/measured.ts) when the release recorded a new usage baseline,
 stating only what the sealed rule called.
 
-The release dispatch (`.github/workflows/publish.yml`) builds, tests and deploys the page after the
-npm publish. Pull requests run the same build and tests in `ci.yml`'s `site` job.
+## Deploying
+
+[`.github/workflows/site.yml`](../.github/workflows/site.yml) builds, tests and deploys the page. It
+runs two ways:
+
+- **On its own, with no npm release:** Actions → site → Run workflow on `main`, or
+  `gh workflow run site.yml --ref main`. Use it for a page-only change between releases.
+- **With every release:** the release dispatch (`publish.yml`) calls it after the npm publish.
+
+Only `main` can deploy (the `github-pages` Environment's branch policy). Pull requests run the same
+build and tests in `ci.yml`'s `site` job, without deploying.
 
 ## Rules the build enforces
 

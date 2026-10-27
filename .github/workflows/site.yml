@@ -1,0 +1,70 @@
+# Site workflow — builds, tests and deploys the overview page (site/) to GitHub Pages.
+#
+# Two ways in, one definition:
+#   - workflow_dispatch : deploy the page on its own, with no npm release (a content fix, a layout
+#                         change, a measurement update between releases). Run it on `main`.
+#   - workflow_call     : publish.yml calls this after `publish`, so every release also deploys the
+#                         page from the released ref.
+#
+# Jobs:
+#   - build  : hashira's static-webapp-ci reusable workflow — installs site/ from its lockfile, runs
+#              the site's tests (which check the page's content against the repo: every CHANGELOG
+#              release on the roadmap, every command, hook and agent shown), builds it, runs the scan
+#              suite, and uploads the Pages artifact.
+#   - deploy : hashira's pages-deploy, into the `github-pages` Environment.
+#
+# Who can deploy: the `github-pages` Environment's deployment-branch policy allows `main`, so a manual
+# run from any other branch is refused at `deploy`; what goes out is therefore reviewed, merged
+# content. A run started from publish.yml additionally sits behind `production`'s approval.
+# No `push` trigger on purpose: a release-prep commit dates a CHANGELOG release before it is
+# published, and the page would announce it early. Deploys are always an explicit act.
+name: site
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+# Deny-all baseline; each job grants the minimum it needs.
+permissions: {}
+
+jobs:
+  build:
+    name: build
+    uses: skathio/hashira/.github/workflows/static-webapp-ci.yml@v2 # rolling major tag — same ref as publish.yml's hashira pins
+    # Grants mirror static-webapp-ci's documented matrix (hashira docs/flows/static-webapp.md §6);
+    # a reusable workflow can only narrow these. pull-requests/security-events go unused here (no PR
+    # to comment on; CodeQL is in the default skip list) but its jobs declare them.
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+      pull-requests: write
+      security-events: write
+    with:
+      library_ref: 'v2' # MUST match the uses: pin above (dual-pin invariant, D9)
+      node_version: '24'
+      # Literal strings only (static-webapp-ci evaluates them in the job holding id-token: write).
+      # site/ is its own package; the root `npm ci` the workflow runs first installs nothing.
+      # --ignore-scripts: no dependency lifecycle script runs, and none is needed.
+      build_command: 'npm --prefix site ci --ignore-scripts && npm --prefix site run build'
+      output_dir: 'site/dist'
+      test_command: 'npm --prefix site ci --ignore-scripts && npm --prefix site test'
+      coverage_path: 'site/coverage/lcov.info'
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    # One Pages deployment at a time; a second run queues rather than cancels.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      pages: write     # deploy-pages
+      id-token: write  # deploy-pages authenticates via OIDC
+    steps:
+      - id: deploy
+        uses: skathio/hashira/.github/actions/pages-deploy@v2 # rolling major tag — same ref as publish.yml's hashira pins
