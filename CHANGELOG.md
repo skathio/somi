@@ -30,7 +30,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 - **Config reads follow links.** A junction or symlinked `.somi`, or a linked config file, was
   refused (`somi_config show` failed with "a link"; a linked `config.json` failed every dispatch with
   exit 67). Reads now follow links and keep the checks that matter: a regular file once opened (a
-  FIFO or device is refused without blocking), at most 64 KiB, no file text in any message; a link to
+  FIFO or device is refused without blocking), at most 64 KiB and 64 levels deep, no file text in any
+  message; a link to
   a missing file is an error, not "no config". Writes are unchanged: `set`, `unset`, `init` and the
   SessionStart hook never write through a link, and SoMi's own state files (the persisted ceiling,
   the sizing record) still refuse one.

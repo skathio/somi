@@ -23,6 +23,9 @@ import path from 'node:path';
 
 export const MAX_CONFIG_BYTES = 64 * 1024;
 export const GLOBAL_CONFIG_ENV = 'SOMI_GLOBAL_CONFIG';
+// Real configs are a few levels deep. A bound keeps the recursive merge and copy below from running out
+// of stack on a hostile file, the same on every Node version (their stack sizes differ).
+export const MAX_CONFIG_DEPTH = 64;
 
 const READ_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0);
 
@@ -75,6 +78,17 @@ export function readConfigText(file) {
   }
 }
 
+// Iterative, so measuring a hostile depth cannot itself overflow the stack.
+function depthExceeds(root, max) {
+  const stack = [[root, 1]];
+  while (stack.length) {
+    const [v, d] = stack.pop();
+    if (d > max) return true;
+    if (v !== null && typeof v === 'object') for (const c of Object.values(v)) if (c !== null && typeof c === 'object') stack.push([c, d + 1]);
+  }
+  return false;
+}
+
 /**
  * Parses config text into a JSON object. The parser's own message quotes the text, so only its error
  * name and position are reported. Which keys are legal is the validators' decision (cost-config.mjs);
@@ -89,6 +103,7 @@ export function parseConfigText(text, file) {
     throw new ConfigFileError(`${file} is not valid JSON (${JSON.stringify(e.name)}${pos ? ` at position ${pos}` : ''})`);
   }
   if (!isObj(cfg)) throw new ConfigFileError(`${file} is not a JSON object`);
+  if (depthExceeds(cfg, MAX_CONFIG_DEPTH)) throw new ConfigFileError(`${file} is nested deeper than ${MAX_CONFIG_DEPTH} levels`);
   return cfg;
 }
 

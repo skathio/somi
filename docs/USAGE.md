@@ -629,7 +629,8 @@ replaces the global list for that tier; it does not extend it.
   came from (`from: "global"` or `"project"`).
 
 **Links.** Reads follow links: a junction or symlinked `.somi`, a config file linked from a dotfiles
-or shared directory. A file must still be a regular file of at most 64 KiB once opened (a FIFO or
+or shared directory. A file must still be a regular file of at most 64 KiB and 64 levels of nesting
+once opened (a FIFO or
 device is refused without blocking), and a link to a missing file is an error rather than "no
 config". Writes to the project file never follow a link: `set`, `unset` and `init` refuse a linked
 `.somi` or `config.json`. A `--global` write follows a link to the real file, so a dotfiles link

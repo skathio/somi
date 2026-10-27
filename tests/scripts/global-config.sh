@@ -67,6 +67,10 @@ printf '\x1b[31mSECRET {nope' > "$TMP/bad.json"
 msg="$(G="$TMP/bad.json" node_lib "try { L.loadConfig('$(proj)'); } catch (e) { console.log(e.message); }")"
 case "$msg" in *SECRET*|*$'\x1b'*) bad "a parse error leaks file text: $msg" ;; *"not valid JSON"*) ok "a parse error names the file and leaks no text" ;; *) bad "unexpected parse error: $msg" ;; esac
 
+node -e "const n=20000; require('fs').writeFileSync('$TMP/deep.json', '{\"deep\":'+'['.repeat(n)+']'.repeat(n)+'}')"
+out="$(SOMI_GLOBAL_CONFIG="$TMP/deep.json" node --stack-size=200 --input-type=module -e "import * as L from '$LIB'; try { L.loadConfig('$(proj)'); console.log('read'); } catch (e) { console.log(e instanceof L.ConfigFileError && /nested deeper/.test(e.message) ? 'refused' : 'crash'); }" 2>&1)"
+check "a config nested 20000 deep is refused cleanly, even on a small stack (CI's Node)" "$out" "refused"
+
 echo "== global config: the resolver =="
 resolve() { # $1 = global file, $2 = project, $3.. = resolve args -> stdout JSON
   local g="$1" p="$2"; shift 2
