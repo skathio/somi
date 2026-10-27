@@ -59,13 +59,16 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   sets `cost.ceiling`, which is read live. A
   failure maps one-to-one onto the CLI's exit-code family (64 usage / 65 unknown agent /
   66 malformed `cost:` / 67 project environment failure), reported in the tool result text.
-- **`somi_config`** — the tool behind the [`/somi-config`](../commands/somi-config.md) command: shows or changes the cost settings in the project's `.somi/config.json` by
+- **`somi_config`** — the tool behind the [`/somi-config`](../commands/somi-config.md) command: shows the cost settings (the user's [global config](./USAGE.md#the-global-config) with the
+  project's `.somi/config.json` merged over it) or changes the project file, by
   running `scripts/somi-config.mjs` (never a shell) and returning its JSON line and exit codes
   unchanged: `show` (every agent's effective tier, plus fixed warnings such as `somi-security-reviewer`
   below `high`), `get`, `set`, `unset`, and `init` (creates the default file only when absent). Only
   `cost.ceiling` and `cost.agents.<name>` can be changed, to `low`/`medium`/`high`; anything else is
-  exit 64. A broken existing config (unreadable, oversize, a symlink, invalid JSON, invalid cost
-  block) is exit 67 and nothing is written. Changes are **live**: the config is read on every
+  exit 64. A broken existing config (unreadable, oversize, not a regular file, invalid JSON, invalid
+  cost block) is exit 67 and nothing is written; `show` and `get` read through a junction or link,
+  while `set`, `unset` and `init` refuse a linked `.somi` or `config.json` (67). The tool never writes
+  the global config: that is `node scripts/somi-config.mjs ... --global`, for the user to run. Changes are **live**: the config is read on every
   dispatch, so the next resolve sees them. It resolves the project root exactly as `somi_resolve`
   does (`project_dir` narrows a host-supplied root), but `set`, `unset` and `init` need a host-supplied
   root and are refused (exit 67) when only a model-supplied `project_dir` exists; run the CLI yourself

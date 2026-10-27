@@ -129,14 +129,14 @@ check "an unexpanded \${...} root falls back to the working directory (no litera
 # --- red proofs: each safety check removed from a copy must be caught -----------------------------
 mutant() { # $1 = name, $2 = sed expression -> $TMP/$1/hooks/session-start/ensure-default-config.mjs (a copy inside a plugin-shaped tree)
   local d="$TMP/$1"; mkdir -p "$d/hooks/session-start" "$d/hooks/lib" "$d/scripts/lib"
-  cp "$ROOT_REPO/hooks/lib/common.mjs" "$d/hooks/lib/"; cp "$ROOT_REPO"/scripts/lib/cost-*.mjs "$d/scripts/lib/"
+  cp "$ROOT_REPO/hooks/lib/common.mjs" "$d/hooks/lib/"; cp "$ROOT_REPO"/scripts/lib/cost-*.mjs "$ROOT_REPO/scripts/lib/config-files.mjs" "$d/scripts/lib/"
   sed "$2" "$HOOK_SRC" > "$d/hooks/session-start/ensure-default-config.mjs"
   cmp -s "$HOOK_SRC" "$d/hooks/session-start/ensure-default-config.mjs" && bad "mutant $1 did not change the hook"
 }
 mutant no-excl "s/ | fs.constants.O_EXCL//"
 mutant no-nofollow "s/ | (fs.constants.O_NOFOLLOW ?? 0)//"
 mutant no-somi-check "s/if (dir \&\& !dir.isDirectory()) return;//"
-mutant overwrite "s/if (existing) {/if (false) {/; s/ | fs.constants.O_EXCL/ | fs.constants.O_TRUNC/"
+mutant overwrite "s/if (existing || hasGlobal) {/if (false) {/; s/ | fs.constants.O_EXCL/ | fs.constants.O_TRUNC/"
 M="$TMP/no-somi-check/hooks/session-start/ensure-default-config.mjs"
 P="$(proj)"; OUTSIDE="$(mktemp -d -p "$TMP")"; ln -s "$OUTSIDE" "$P/.somi"; runhook "$M" "$P" > /dev/null
 check "red proof: without the .somi check a symlinked .somi is written through" "$([ -e "$OUTSIDE/config.json" ] && echo written || echo clean)" "written"
@@ -146,10 +146,10 @@ check "red proof: without the exists-check and O_EXCL an existing file is overwr
 M="$TMP/no-excl/hooks/session-start/ensure-default-config.mjs"
 P="$(proj)"; mkdir "$P/.somi"; printf 'OLD-CONTENT-LONGER-THAN-NOTHING' > "$P/.somi/config.json"
 # the exists-check still stops it, so remove that too: only O_EXCL is the last line of defence against a race
-sed -i 's/if (existing) {/if (false) {/' "$M"; runhook "$M" "$P" > /dev/null
+sed -i 's/if (existing || hasGlobal) {/if (false) {/' "$M"; runhook "$M" "$P" > /dev/null
 check "red proof: without O_EXCL (and the early check) an existing file is rewritten" "$(cmp -s "$P/.somi/config.json" "$EXPECT" && echo overwritten || echo kept)" "overwritten"
 M="$TMP/no-nofollow/hooks/session-start/ensure-default-config.mjs"
-sed -i 's/if (existing) {/if (false) {/; s/ | fs.constants.O_EXCL//' "$M"
+sed -i 's/if (existing || hasGlobal) {/if (false) {/; s/ | fs.constants.O_EXCL//' "$M"
 P="$(proj)"; mkdir "$P/.somi"; echo KEEP2 > "$TMP/victim2.txt"; ln -s "$TMP/victim2.txt" "$P/.somi/config.json"; runhook "$M" "$P" > /dev/null
 check "red proof: without O_NOFOLLOW (and O_EXCL, early check) a symlink at config.json is written through" "$([ "$(cat "$TMP/victim2.txt")" = KEEP2 ] && echo kept || echo written)" "written"
 

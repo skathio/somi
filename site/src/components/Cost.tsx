@@ -20,7 +20,7 @@ export function Cost() {
             {[
               "**An agent's `cost.agents` entry wins**, even above the ceiling.",
               `**Otherwise the agent runs at the ceiling**, which is a hard cap and defaults to \`${FACTS.defaultCeiling}\`. Without an entry, an agent follows the ceiling up as well as down.`,
-              `**The ceiling is read live on every dispatch**, in this order: flag, environment variable, \`.somi/config.json\`, a previously set ceiling, then \`${FACTS.defaultCeiling}\`.`,
+              `**The ceiling is read live on every dispatch**, in this order: flag, environment variable, the config (\`.somi/config.json\` over your global config), a previously set ceiling, then \`${FACTS.defaultCeiling}\`.`,
               `**A tier maps to a model for each host.** Claude Code ships with \`${models.low}\` / \`${models.medium}\` / \`${models.high}\`. For other hosts you give an ordered preference list of up to ${FACTS.maxModelCandidates} ids.`,
             ].map((t, i) => (
               <li key={i} className="flex gap-3">
@@ -35,7 +35,7 @@ export function Cost() {
         <Card title="What protects it">
           <Bullets
             items={[
-              `**A default config is written at session start:** ceiling \`${FACTS.defaultCeiling}\`, and every agent pinned to the tier it was built for.`,
+              `**One config for every project:** a global file sets everything, and a repo's \`.somi/config.json\` overrides only what it names. With neither, session start writes the default: ceiling \`${FACTS.defaultCeiling}\`, every agent pinned to the tier it was built for.`,
               "**Lowering needs you.** A PreToolUse hook holds any change that lowers an agent's effective tier, the ceiling, or the security reviewer below `high`. Remapping a tier to another model is held too.",
               '**No false claims.** A briefing says `dispatched at cost:` only when a model was enforced; otherwise it says `requested cost: … (not enforced)`.',
               '**Agents declare no `model:`**, so a launch that skips the resolver cannot run on the top tier unnoticed.',

@@ -1,15 +1,20 @@
 #!/usr/bin/env node
-// somi-config.mjs — show and change the cost settings in a project's .somi/config.json.
+// somi-config.mjs — show and change the cost settings in SoMi's config: the global file every project
+// and session reads, and a project's .somi/config.json merged over it (scripts/lib/config-files.mjs).
 //
-//   show                          one JSON line: where the file is, the ceiling, and every agent's
-//                                 effective tier (the resolver's own rule: the agent's cost.agents entry,
-//                                 else the ceiling), plus fixed warnings
+//   show                          one JSON line: both files, the ceiling, and every agent's effective
+//                                 tier (the resolver's own rule: the agent's cost.agents entry, else the
+//                                 ceiling) in the merged config, each with the file it came from, plus
+//                                 fixed warnings
 //   get cost.ceiling | cost.agents.<name>
 //   set cost.ceiling <low|medium|high> | set cost.agents.<name> <low|medium|high>
 //   set cost.mapping.<host>.<tier> <model-id[,model-id...]>   (a preference list, first offered wins)
 //   unset cost.agents.<name> | unset cost.mapping.<host>
 //   init                          create the default file when absent (the exact text the SessionStart
-//                                 hook writes); a no-op if anything exists at the path
+//                                 hook writes); a no-op if anything exists at the path, and for the
+//                                 project file also when a global config exists (it holds the defaults)
+//   [--global]                    (set, unset, init) change the global file instead of the project's.
+//                                 For the user to run: the somi_config MCP tool never passes it
 //   [--project-dir DIR]           default: CLAUDE_PROJECT_DIR, else the current directory
 //   [--host NAME]                 (show) the host this session runs on; adds a warning when that host has
 //                                 no model mapping while any agent resolves to high (#36)
@@ -34,12 +39,15 @@
 // env call, else the built-in default (`effective_ceiling`), and warn when the variable or a
 // persisted value is why it differs from the config.
 //
-// Safety: the committed config is untrusted. It is read with the same bounded (64 KiB), no-follow,
-// regular-file reader the resolver uses, and the whole `cost` block is validated by the shared
-// validator before and after an edit. A write goes to a fresh temp file in the same .somi directory
-// (O_EXCL, no-follow) and is renamed over config.json, so a reader never sees half a file and nothing
-// is written through a link. A symlinked .somi or config.json is refused. Output is pure ASCII and no
-// message echoes text from the file (values are quoted and bounded).
+// Safety: the committed config is untrusted. show and get read it as the resolver does (bounded to
+// 64 KiB, regular files only, links followed so a junction or symlinked .somi works), and the whole
+// `cost` block is validated by the shared validator before and after an edit. A project write goes to
+// a fresh temp file in the same .somi directory (O_EXCL, no-follow) and is renamed over config.json, so
+// a reader never sees half a file and nothing is written through a link: a symlinked .somi or
+// config.json is refused for set, unset and init. The global file is the user's own: a write to it
+// follows a link to the real file (a dotfiles setup keeps its link) and creates missing parent
+// directories. A lowering is judged on the merged config, before and after. Output is pure ASCII and
+// no message echoes text from a file (values are quoted and bounded).
 //
 // Exit codes (callers branch on these — do not repurpose):
 //   0   ok
@@ -51,6 +59,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readTextFile, loadState, decideDispatch, DEFAULT_CEILING, MAX_CONFIG_BYTES } from './lib/cost-ceiling.mjs';
+import { ConfigFileError, globalConfigPath, loadConfig, mergeConfig, readConfigText } from './lib/config-files.mjs';
 import { quote } from './lib/cost-config.mjs';
 import { VALID_COSTS, HOST_MODELS } from './lib/cost-model.mjs';
 import { AGENT_DEFAULT_TIERS, serializeDefaultConfig } from './lib/cost-defaults.mjs';
@@ -58,7 +67,7 @@ import { EditError, applyEdit, parseKey, validateCostBlock, missingMappingTiers 
 import { lowers, REASONS } from './lib/cost-lowering.mjs';
 
 const PROG = 'somi-config';
-const USAGE = `usage: ${PROG}.mjs show [--host NAME] | get <key> | set <key> <value> | unset <key> | init  [--project-dir DIR] [--refuse-lowering]  (keys: cost.ceiling, cost.agents.<name>, cost.mapping.<host>.<tier> = model-id[,model-id...]; unset cost.agents.<name> or cost.mapping.<host>)`;
+const USAGE = `usage: ${PROG}.mjs show [--host NAME] | get <key> | set <key> <value> | unset <key> | init  [--project-dir DIR] [--global] [--refuse-lowering]  (keys: cost.ceiling, cost.agents.<name>, cost.mapping.<host>.<tier> = model-id[,model-id...]; unset cost.agents.<name> or cost.mapping.<host>)`;
 const HOST_RE = /^[a-z][a-z0-9-]{0,31}$/;
 const EXIT_USAGE = 64;
 const EXIT_PROJECT = 67;
@@ -66,6 +75,7 @@ const EXIT_PROJECT = 67;
 const SEC_WARNING = 'somi-security-reviewer runs below high; pin it with: set cost.agents.somi-security-reviewer high';
 const ENV_WARNING = 'SOMI_COST_CEILING is set in this environment and outranks cost.ceiling in the config';
 const STATE_WARNING = 'a ceiling set earlier by a flag or SOMI_COST_CEILING is in force because cost.ceiling is not set in the config';
+const GLOBAL_ONLY_WARNING = 'that value is set in your global config, not this project, so nothing changed here; change it with --global (run the CLI yourself)';
 const UNKNOWN_WARNING = 'that agent name is not a shipped agent; the entry is accepted but may never be used';
 const unmappedWarning = (host, n) => `${host} has no model mapping, so ${n} high-tier agent(s) run on whatever model the host picks; set cost.mapping.${host} with low, medium and high (docs/USAGE.md, "Pinning models per tier on Copilot")`;
 const MAPPING_MESSAGE = 'this change remaps a tier to a different model and needs the user: ask them to run node scripts/somi-config.mjs themselves or edit .somi/config.json';
@@ -89,9 +99,11 @@ function parseArgs(argv) {
   const pos = [];
   let dir;
   let refuse = false;
+  let global = false;
   let host;
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--refuse-lowering') refuse = true;
+    else if (rest[i] === '--global') global = true;
     else if (rest[i] === '--host') {
       if (host !== undefined) usage('--host given twice');
       host = rest[++i];
@@ -109,7 +121,8 @@ function parseArgs(argv) {
   if (pos.length !== want[cmd]) usage(`${cmd} takes ${want[cmd]} argument(s)`);
   if (refuse && cmd !== 'set' && cmd !== 'unset') usage('--refuse-lowering applies to set and unset only');
   if (host !== undefined && cmd !== 'show') usage('--host applies to show only');
-  return { cmd, pos, dir, refuse, host };
+  if (global && !['set', 'unset', 'init'].includes(cmd)) usage('--global applies to set, unset and init');
+  return { cmd, pos, dir, refuse, host, global };
 }
 
 function projectRoot(dir) {
@@ -126,7 +139,8 @@ function projectRoot(dir) {
 
 const lstatOrNull = (p) => { try { return fs.lstatSync(p); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } };
 
-// -> {somi, file, dirExists, fileExists}; refuses a .somi that is not a real directory.
+// -> {somi, file, dirExists, fileExists}; refuses a .somi that is not a real directory. Writes only:
+// show and get read through links.
 function locate(root) {
   const somi = path.join(root, '.somi');
   const file = path.join(somi, 'config.json');
@@ -171,12 +185,33 @@ function roundTripHazard(text) {
   return null;
 }
 
+// The global file to write: its real path when it exists (a link is followed to it), and the stat of
+// the directory it sits in, which writeAtomic re-checks. Parent directories are created when missing.
+function locateGlobal() {
+  const g = globalConfigPath();
+  if (g === null) usage('there is no global config file: SOMI_GLOBAL_CONFIG is set to an empty value');
+  let file = g;
+  try { file = fs.realpathSync(g); } catch (e) { if (e.code !== 'ENOENT') project('the global config cannot be resolved'); }
+  const somi = path.dirname(file);
+  const fileExists = fs.existsSync(file);
+  return { somi, file, dirExists: fs.existsSync(somi), fileExists, global: true, shown: g };
+}
+
+// The merged config and both files, for reading; any problem with either file is 67.
+function loadAll(root) {
+  try { return loadConfig(root); } catch (e) {
+    if (e instanceof ConfigFileError) return project(e.message);
+    throw e;
+  }
+}
+
 // -> the parsed config object ({} when absent), with its whole cost block validated. With
-// `forWrite`, also refuses a file a rewrite could not reproduce faithfully.
+// `forWrite`, also refuses a file a rewrite could not reproduce faithfully. A project file is read
+// without following a link (it is about to be replaced); the global file through one.
 function load(root, loc, forWrite = false) {
   if (!loc.fileExists) return {};
   let text; let cfg;
-  try { text = readTextFile(loc.file); } catch (e) { project(String(e.message).replace(/^cost-ceiling: /, '')); }
+  try { text = loc.global ? readConfigText(loc.file) : readTextFile(loc.file); } catch (e) { project(String(e.message).replace(/^cost-ceiling: /, '')); }
   try { cfg = JSON.parse(text); } catch { project('config.json is not valid JSON'); }
   if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) project('config.json is not a JSON object');
   if (cfg.ceiling !== undefined) project('"ceiling" at the top level of config.json belongs under "cost.ceiling"');
@@ -227,14 +262,19 @@ function warningsFor(cost, force, extra = []) {
   return w;
 }
 
-function show(root, loc, cfg, host) {
+// Which file a merged cost value came from: the project file when it sets it, else the global one.
+const fromFile = (files, get) => (get(files.project.config) !== undefined ? 'project' : 'global');
+
+function show(root, files, host) {
+  const cfg = files.config;
   const cost = cfg.cost ?? {};
   const force = ceilingInForce(root, cost);
   const names = Object.keys(AGENT_DEFAULT_TIERS).sort();
   const extras = Object.keys(cost.agents ?? {}).filter((n) => !(n in AGENT_DEFAULT_TIERS)).sort();
   const agent = (name, unknown) => {
     const e = effective(name, cost, force.value);
-    return { name, tier: e.tier, source: e.source, default: unknown ? null : AGENT_DEFAULT_TIERS[name], ...(unknown ? { unknown: true } : {}) };
+    const from = e.source === 'override' ? { from: fromFile(files, (c) => c.cost?.agents?.[name]) } : {};
+    return { name, tier: e.tier, source: e.source, ...from, default: unknown ? null : AGENT_DEFAULT_TIERS[name], ...(unknown ? { unknown: true } : {}) };
   };
   const agents = [...names.map((n) => agent(n, false)), ...extras.map((n) => agent(n, true))];
   const extra = [];
@@ -243,8 +283,9 @@ function show(root, loc, cfg, host) {
   if (host !== undefined && !mapped && highs > 0) extra.push(unmappedWarning(host, highs));
   return {
     path: path.join('.somi', 'config.json'),
-    exists: loc.fileExists,
-    ceiling: cost.ceiling === undefined ? { value: DEFAULT_CEILING, source: 'default' } : { value: cost.ceiling, source: 'config' },
+    exists: files.project.present,
+    global: { path: files.global.path, exists: files.global.present },
+    ceiling: cost.ceiling === undefined ? { value: DEFAULT_CEILING, source: 'default' } : { value: cost.ceiling, source: 'config', from: fromFile(files, (c) => c.cost?.ceiling) },
     effective_ceiling: force,
     agents,
     warnings: warningsFor(cost, force, extra),
@@ -255,6 +296,11 @@ function show(root, loc, cfg, host) {
 const edit = (fn) => { try { return fn(); } catch (e) { if (e instanceof EditError) return usage(e.message); throw e; } };
 
 function ensureSomi(loc) {
+  if (loc.global) {
+    try { fs.mkdirSync(loc.somi, { recursive: true, mode: 0o700 }); loc.dirStat = fs.statSync(loc.somi); } catch { project('the global config directory could not be created'); }
+    if (!loc.dirStat.isDirectory()) project('the global config directory is not a directory');
+    return;
+  }
   if (!loc.dirExists) {
     try { fs.mkdirSync(loc.somi, { mode: 0o700 }); } catch (e) {
       if (e.code !== 'EEXIST' || !lstatOrNull(loc.somi)?.isDirectory()) project('.somi could not be created');
@@ -278,8 +324,8 @@ function writeAtomic(loc, text, { noClobber = false, mode } = {}) {
     if (mode !== undefined) fs.fchmodSync(fd, mode);
     fs.fsyncSync(fd);
     fs.closeSync(fd); fd = undefined;
-    const now = lstatOrNull(loc.somi);
-    if (!now || !now.isDirectory() || now.dev !== loc.dirStat.dev || now.ino !== loc.dirStat.ino) project('.somi changed while writing; nothing was replaced');
+    const now = loc.global ? fs.statSync(loc.somi, { throwIfNoEntry: false }) : lstatOrNull(loc.somi);
+    if (!now || !now.isDirectory() || now.dev !== loc.dirStat.dev || now.ino !== loc.dirStat.ino) project(`${loc.global ? 'the global config directory' : '.somi'} changed while writing; nothing was replaced`);
     if (noClobber) fs.linkSync(tmp, loc.file); else fs.renameSync(tmp, loc.file);
     return true;
   } catch (e) {
@@ -293,60 +339,77 @@ function writeAtomic(loc, text, { noClobber = false, mode } = {}) {
 }
 
 function main() {
-  const { cmd, pos, dir, refuse, host } = parseArgs(process.argv.slice(2));
+  const { cmd, pos, dir, refuse, host, global } = parseArgs(process.argv.slice(2));
   const root = projectRoot(dir);
-  const loc = locate(root);
-  const rel = path.join('.somi', 'config.json');
+  const writes = cmd === 'set' || cmd === 'unset' || cmd === 'init';
+  // Only a write inspects the target's links; show and get read through them.
+  const loc = !writes ? null : (global ? locateGlobal() : locate(root));
+  const rel = global ? loc.shown : path.join('.somi', 'config.json');
 
   if (cmd === 'init') {
     if (loc.fileExists) return { path: rel, created: false };
+    const g = global ? null : globalConfigPath();
+    if (g !== null && fs.lstatSync(g, { throwIfNoEntry: false })) return { path: rel, created: false, reason: 'a global config exists and holds the defaults' };
     ensureSomi(loc);
     return { path: rel, created: writeAtomic(loc, serializeDefaultConfig(), { noClobber: true }) };
   }
 
+  const files = loadAll(root);
   const k = cmd === 'show' ? null : edit(() => parseKey(pos[0]));
   if (cmd === 'unset' && !(k.kind === 'agent' || (k.kind === 'mapping' && k.tier === undefined))) usage('only cost.agents.<name> and cost.mapping.<host> can be unset');
-  const cfg = load(root, loc, cmd === 'set' || cmd === 'unset');
-  if (cmd === 'show') return show(root, loc, cfg, host);
+  if (files.config.ceiling !== undefined) project('"ceiling" at the top level of config.json belongs under "cost.ceiling"');
+  checkCost(files.config.cost, project);
+  if (cmd === 'show') return show(root, files, host);
 
   if (cmd === 'get') {
-    const force = ceilingInForce(root, cfg.cost);
-    if (k.kind === 'ceiling') return { key: pos[0], value: cfg.cost?.ceiling ?? DEFAULT_CEILING, source: cfg.cost?.ceiling === undefined ? 'default' : 'config', effective_ceiling: force };
+    const merged = files.config.cost;
+    const force = ceilingInForce(root, merged);
+    if (k.kind === 'ceiling') return { key: pos[0], value: merged?.ceiling ?? DEFAULT_CEILING, source: merged?.ceiling === undefined ? 'default' : 'config', effective_ceiling: force };
     if (k.kind === 'mapping') {
-      const hostMap = cfg.cost?.mapping?.[k.host];
+      const hostMap = merged?.mapping?.[k.host];
       const value = hostMap === undefined ? null : (k.tier === undefined ? hostMap : (hostMap[k.tier] ?? null));
       return { key: pos[0], value, source: value === null ? 'none' : 'config' };
     }
-    const has = cfg.cost?.agents && Object.hasOwn(cfg.cost.agents, k.name);
-    return { key: pos[0], value: has ? cfg.cost.agents[k.name] : null, source: has ? 'override' : 'none' };
+    const has = merged?.agents && Object.hasOwn(merged.agents, k.name);
+    return { key: pos[0], value: has ? merged.agents[k.name] : null, source: has ? 'override' : 'none' };
   }
 
-  // set/unset. A set on an absent file starts from the default file, so the default pins exist.
+  // set/unset edit one file. A set on an absent file starts from the default file, so the default
+  // pins exist -- except a project file over a global config, which starts empty: the global file
+  // holds the defaults, and copies of them in the project would mask later global changes.
+  const cfg = load(root, loc, true);
   const absent = !loc.fileExists;
-  const beforeCfg = { cost: JSON.parse(JSON.stringify(cfg.cost ?? null)) };
-  const { next, changed } = edit(() => applyEdit(absent ? null : cfg, { action: cmd, key: pos[0], value: pos[1] }));
-  if (!changed) return { path: rel, key: pos[0], changed: false, warnings: warningsFor(cfg.cost, ceilingInForce(root, cfg.cost)) };
+  const start = absent && !global && files.global.present ? {} : (absent ? null : cfg);
+  // What the resolver sees, before and after: a project edit is judged merged over the global file;
+  // a global edit on its own, since it applies to projects whose files differ.
+  const view = (c) => (global ? c : mergeConfig(files.global.config, c ?? {}));
+  const beforeCfg = view(absent ? {} : cfg);
+  const { next, changed } = edit(() => applyEdit(start, { action: cmd, key: pos[0], value: pos[1] }));
+  if (!changed) {
+    // Nothing to unset in the project, but the same unset would change the global file: say where it lives.
+    const inGlobalOnly = !global && cmd === 'unset' && edit(() => applyEdit(files.global.config, { action: cmd, key: pos[0] })).changed;
+    return { path: rel, key: pos[0], changed: false, warnings: warningsFor(beforeCfg.cost, ceilingInForce(root, beforeCfg.cost), inGlobalOnly ? [GLOBAL_ONLY_WARNING] : []) };
+  }
   checkCost(next.cost, (m) => usage(m)); // the whole resulting block; a failure here is the caller's input
+  const after = view(next);
   if (refuse) {
-    const v = lowers(beforeCfg, next, root);
+    const v = lowers(beforeCfg, after, root);
     if (v.lowers) usage(v.reasons.every((r) => r === REASONS.mapping) ? MAPPING_MESSAGE : LOWERING_MESSAGE);
   }
   const value = cmd !== 'set' ? undefined : (k.kind === 'mapping' ? next.cost.mapping[k.host][k.tier] : pos[1]);
   const extra = k.kind === 'agent' && cmd === 'set' && !(k.name in AGENT_DEFAULT_TIERS) && k.name !== 'somi' ? [UNKNOWN_WARNING] : [];
-  if (changed) {
-    let text;
-    try {
-      text = `${JSON.stringify(next, null, 2)}\n`;
-      if (JSON.stringify(JSON.parse(text)) !== JSON.stringify(next)) project('config.json could not be rewritten faithfully; nothing was written');
-    } catch (e) {
-      if (e instanceof ExitSignal) throw e;
-      project('config.json is too deeply nested to rewrite');
-    }
-    if (Buffer.byteLength(text) > MAX_CONFIG_BYTES) project('the edited config.json would exceed the size limit; nothing was written');
-    ensureSomi(loc);
-    writeAtomic(loc, text, { mode: loc.fileExists ? (fs.lstatSync(loc.file).mode & 0o777) : undefined });
+  let text;
+  try {
+    text = `${JSON.stringify(next, null, 2)}\n`;
+    if (JSON.stringify(JSON.parse(text)) !== JSON.stringify(next)) project('config.json could not be rewritten faithfully; nothing was written');
+  } catch (e) {
+    if (e instanceof ExitSignal) throw e;
+    project('config.json is too deeply nested to rewrite');
   }
-  return { path: rel, key: pos[0], ...(cmd === 'set' ? { value } : {}), changed, effective_ceiling: ceilingInForce(root, next.cost), warnings: warningsFor(next.cost, ceilingInForce(root, next.cost), extra) };
+  if (Buffer.byteLength(text) > MAX_CONFIG_BYTES) project('the edited config.json would exceed the size limit; nothing was written');
+  ensureSomi(loc);
+  writeAtomic(loc, text, { mode: loc.fileExists ? (fs.statSync(loc.file).mode & 0o777) : undefined });
+  return { path: rel, key: pos[0], ...(cmd === 'set' ? { value } : {}), changed, effective_ceiling: ceilingInForce(root, after.cost), warnings: warningsFor(after.cost, ceilingInForce(root, after.cost), extra) };
 }
 
 try {

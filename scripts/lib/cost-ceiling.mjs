@@ -1,6 +1,9 @@
 // cost-ceiling.mjs — the session cost ceiling: the tier every dispatch runs at unless an agent has
 // its own override in .somi/config.json.
 //
+// "The config" below is the effective one: the global file with the project's .somi/config.json
+// merged over it (scripts/lib/config-files.mjs).
+//
 // The ceiling is re-resolved on every call, nothing is frozen once. Precedence, highest first:
 //   1. a value given THIS call: an argument the caller parsed itself (a CLI flag) or SOMI_COST_CEILING
 //   2. `cost.ceiling` in .somi/config.json, read live on every call
@@ -30,6 +33,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveModel, VALID_COSTS } from './cost-model.mjs';
 import { validateCostConfig, quote } from './cost-config.mjs';
+import { loadConfig, ConfigFileError, MAX_CONFIG_BYTES as CONFIG_LIMIT } from './config-files.mjs';
 
 export const CEILING_ENV = 'SOMI_COST_CEILING';
 export const DEFAULT_CEILING = 'medium';
@@ -45,13 +49,14 @@ function nowIso() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-// A committed config is untrusted input, read whole into memory and into the model's reach; a file
-// this large is not a config, so it is refused rather than parsed.
-export const MAX_CONFIG_BYTES = 64 * 1024;
+// A file this large is neither a config nor a state file, so it is refused rather than parsed.
+export const MAX_CONFIG_BYTES = CONFIG_LIMIT;
 
-// Opened with O_NOFOLLOW (a committed symlink -- say to /dev/zero -- is refused, never followed) and
-// O_NONBLOCK (a FIFO cannot hang the open), then checked on the open descriptor, not the path, so
-// there is no stat-then-read race. At most MAX_CONFIG_BYTES+1 bytes are ever read.
+// The reader for SoMi's own state files (the persisted ceiling): opened with O_NOFOLLOW (a planted
+// symlink -- say to /dev/zero -- is refused, never followed) and O_NONBLOCK (a FIFO cannot hang the
+// open), then checked on the open descriptor, not the path, so there is no stat-then-read race. At
+// most MAX_CONFIG_BYTES+1 bytes are ever read. Config files are read by config-files.mjs instead,
+// which follows links (a junction or symlinked .somi, a linked config) under the same other checks.
 const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
 
 export function readTextFile(file) {
@@ -85,22 +90,15 @@ function parseFailure(file, e) {
   return new Error(`cost-ceiling: ${file} is not valid JSON (${JSON.stringify(e.name)}${pos ? ` at position ${pos}` : ''})`);
 }
 
+// The effective config. A file that fails to PARSE is not "unconfigured" -- silently returning {}
+// would bootstrap DEFAULT_CEILING and PERSIST it, inverting a team's `low` policy until someone
+// notices, and outliving the typo once fixed. Dies loudly, naming the file.
 export function readConfig(root) {
-  const file = path.join(root, '.somi', 'config.json');
-  let raw;
   try {
-    raw = readTextFile(file);
+    return loadConfig(root).config;
   } catch (e) {
-    if (e.code === 'ENOENT') return {}; // no config committed: nothing configured, defaults apply
+    if (e instanceof ConfigFileError) throw new Error(`cost-ceiling: ${e.message}`);
     throw e;
-  }
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    // A committed config that fails to PARSE is not "unconfigured" -- silently returning {} here
-    // would bootstrap DEFAULT_CEILING and PERSIST it, inverting a team's `low` policy until
-    // someone notices, and outliving the typo once fixed. Dies loudly, naming the file.
-    throw parseFailure(file, e);
   }
 }
 
@@ -110,12 +108,21 @@ export function readConfig(root) {
 // Exported: this is also the one config reader scripts/somi-dispatch.mjs uses to pull `mapping`
 // (its `ceiling` sibling), so a project's cost config is never parsed by two independent readers
 // that could drift on what counts as malformed.
+// Each file's own cost block is validated first, so an error names the file it is in; then the merge.
 export function readCostConfig(root) {
-  const cfg = readConfig(root);
-  if (cfg.ceiling !== undefined) {
-    throw new Error('cost-ceiling: "ceiling" in .somi/config.json belongs under "cost.ceiling"');
+  let files;
+  try {
+    files = loadConfig(root);
+  } catch (e) {
+    if (e instanceof ConfigFileError) throw new Error(`cost-ceiling: ${e.message}`);
+    throw e;
   }
-  return validateCostConfig(cfg.cost);
+  for (const f of [files.global, files.project]) {
+    if (!f.present) continue;
+    if (f.config.ceiling !== undefined) throw new Error(`cost-ceiling: "ceiling" in ${f.path} belongs under "cost.ceiling"`);
+    try { validateCostConfig(f.config.cost); } catch (e) { throw new Error(`${e.message} (in ${f.path})`); }
+  }
+  return validateCostConfig(files.config.cost);
 }
 
 function validateCeiling(raw, label) {

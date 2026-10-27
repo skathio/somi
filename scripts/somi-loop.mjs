@@ -55,6 +55,7 @@ import { REVIEW_SCOPES, reviewMinFor, reviewScope, snapshotTree } from './lib/lo
 import { computeDiff } from './lib/loop-diff.mjs';
 import { dispatchEntry } from './lib/loop-dispatch.mjs';
 import { checkRun, startRun } from './lib/run-budget.mjs';
+import { loadConfig } from './lib/config-files.mjs';
 
 const PROG = 'somi-loop';
 
@@ -92,11 +93,11 @@ function projectRoot() {
   return b;
 }
 
+// The effective config (global, with the project's .somi/config.json over it); an unreadable or
+// invalid file reads as unconfigured, so the documented defaults apply.
 function readConfig(root) {
-  const cfgPath = path.join(root, '.somi', 'config.json');
-  if (!fs.existsSync(cfgPath)) return {};
   try {
-    return JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    return loadConfig(root).config;
   } catch {
     return {};
   }

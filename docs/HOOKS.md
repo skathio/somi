@@ -26,8 +26,8 @@ tracked follow-up, not a claim of full guard parity on Windows.
 
 | Event              | Matcher       | Script                                           | What it does                                                                                                                |
 |--------------------|---------------|--------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| `SessionStart`     | (any)         | `session-start/ensure-default-config.mjs`        | Creates `.somi/config.json` with default cost settings, only when nothing exists at that path. Never overwrites. |
-| `PreToolUse`       | `Write\|Edit\|MultiEdit\|mcp__.*somi_config` | `pre-tool/guard-cost-lowering.mjs` | Asks the user before a change to `.somi/config.json` (through the `somi_config` MCP tool or a file edit) that would lower an agent's effective cost tier. Silent for raises, no-ops and every other call. |
+| `SessionStart`     | (any)         | `session-start/ensure-default-config.mjs`        | Creates `.somi/config.json` with default cost settings, only when nothing exists at that path and there is no global config. Never overwrites. |
+| `PreToolUse`       | `Write\|Edit\|MultiEdit\|mcp__.*somi_config` | `pre-tool/guard-cost-lowering.mjs` | Asks the user before a change to `.somi/config.json` (through the `somi_config` MCP tool or a file edit) that would lower an agent's effective cost tier, judged over the global config, and before any file edit of the global config. Silent for raises, no-ops and every other call. |
 | `PreToolUse`       | `Bash`        | `pre-tool/block-dangerous-bash.mjs`              | Denies `rm -rf /`, `curl \| sh`, force-push to protected branches **or without a verifiable target branch**, destructive SQL (case-insensitive), and shell-level writes to secret paths (`> .env`, `tee`, `sed -i`, `cp`/`mv`). Also matches inside `bash -c "…"` quoting. |
 | `PreToolUse`       | `Bash`        | `pre-tool/gate-dep-install.mjs`                  | Denies `npm install <pkg>` / `pip install <pkg>` / `cargo add` / etc. without `SOMI_ALLOW_DEP_INSTALL=1` or a `.somi/config.json` `dep_install.allow` prefix match. Bare reinstall is allowed. |
 | `PreToolUse`       | `Write\|Edit` | `pre-tool/block-secret-writes.mjs`               | Denies writes to `.env`, `*.pem`, `id_rsa`, secret YAML/JSON.                                                              |
@@ -146,19 +146,21 @@ State file: `.somi/somi-state/last-context-signature` (project-local, gitignored
 
 ### `ensure-default-config.mjs`
 
-On `SessionStart`, if the project has **no** `.somi/config.json`, writes one holding the default
+On `SessionStart`, if the project has **no** `.somi/config.json` and there is **no global config**
+([`docs/USAGE.md`](./USAGE.md#the-global-config)), writes one holding the default
 cost settings: `cost.ceiling` set to the built-in default (`medium`) and every shipped agent pinned
 to its default tier (the table is `scripts/lib/cost-defaults.mjs`, kept equal to the
 set of `agents/*.md` by `tests/scripts/cost-defaults.sh`). Without it, every agent would follow the
 ceiling and the ones built for the strongest tier would run lower. It then prints one short notice
-through `additionalContext`.
+through `additionalContext`. With a global config it writes nothing: the global file holds the
+defaults, and a fully pinned project copy would mask every later change to it.
 
 What it will not do:
 
 - **Never overwrites or touches an existing file of any kind** at `.somi/config.json`: valid, invalid
   JSON, a symlink (even a dangling one), or a directory. Only "nothing there" (`lstat` ENOENT)
   triggers a write.
-- **Never follows a link.** If `.somi` is a symlink or a regular file, nothing is written. The file
+- **Never writes through a link.** If `.somi` is a symlink or a regular file, nothing is written. The file
   is opened with `O_CREAT|O_EXCL|O_NOFOLLOW`, so a race or a link planted at the path is never
   written through. `.somi` is created (mode `0700`) only when absent.
 - **Writes nothing but that one file**, and its content is a fixed constant, never derived from any
@@ -166,13 +168,14 @@ What it will not do:
 - **Never blocks a session.** Exit code is `0` on every path, including a read-only directory, and it
   prints no file content or error text.
 
-When a regular `.somi/config.json` already exists, the hook only reads it (no symlink followed, at
-most 64 KiB). If it parses to an object with no valid `cost.agents["somi-security-reviewer"]` tier, it
+When a config already exists (the project's, the global one, or both), the hook only reads the
+effective config, through the same loader as the resolver (links followed, regular files of at most
+64 KiB). If it has no valid `cost.agents["somi-security-reviewer"]` tier, it
 prints one fixed notice that `somi-security-reviewer` runs at the ceiling (below `high` by default) and
 that pinning it under `cost.agents` keeps the strong pass. If the entry exists but pins it to `low` or `medium`, it prints a different fixed notice
-saying its security reviews run at that lower tier. Nothing from the file reaches the
-notice, an unparsable, oversize or symlinked file stays silent (the resolver already reports
-those), and the file is never written.
+saying its security reviews run at that lower tier; with a global config both notices name it.
+Nothing from a file reaches the notice, an unparsable, oversize or non-regular file stays silent (the
+resolver already reports those), and no file is written.
 
 To change the settings afterwards, run `/somi-config` or edit the `cost` block of `.somi/config.json`.
 
@@ -197,7 +200,12 @@ answer. It covers:
 - any `Write`, `Edit` or `MultiEdit` of the persisted ceiling file `.somi/somi-state/ceiling.json` (every write
   there asks; it is the other way to lower the ceiling), and
 - `Write`, `Edit` and `MultiEdit` of the project's `.somi/config.json` (the path is resolved against the
-  project root, so `.somi/../.somi/config.json` and a symlinked `.somi` resolve to the same file).
+  project root, so `.somi/../.somi/config.json` and a symlinked `.somi` resolve to the same file), and
+- any `Write`, `Edit` or `MultiEdit` of the **global config**, whatever it changes: that file applies to
+  every project and session, and the `somi_config` tool never writes it.
+
+Both sides of a project change are judged as the resolver sees them: the global config with the
+project file merged over it. A project file that drops an agent below its global pin is a lowering.
 
 A change lowers when `somi-security-reviewer` would run below `high` (even if that was already so: an explicit
 `low` pin is always flagged, though an identical before and after is a no-op), when the ceiling drops, when

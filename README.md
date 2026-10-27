@@ -160,7 +160,8 @@ at the project root. Discovery foundations live under `.somi/rd/<slug>/` (resear
 FRD, SDD, TDD); plans live under `.somi/plans/<slug>/` (context, spec, decisions, progress, diary,
 phases — or a one-page `rca.md` for `/debug` items); reviews live under `.somi/reviews/<slug>/`
 (including the machine-readable findings ledger, `findings.json`); the repo-wide map lives at
-`.somi/atlas.md` (from `/atlas`); optional committed policy lives at `.somi/config.json` —
+`.somi/atlas.md` (from `/atlas`); optional committed policy lives at `.somi/config.json`, merged over
+your [global config](docs/USAGE.md#the-global-config) —
 separate directories, no clutter. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the full layout.
 
 ---

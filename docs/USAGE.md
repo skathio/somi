@@ -548,10 +548,11 @@ The spec never shows stale state. The diary remembers what changed.
 
 ## Project configuration (`.somi/config.json`)
 
-Loop caps and hook policies are configurable **per project** via an optional, committed
-`.somi/config.json` — reviewable team policy instead of per-session env-var folklore.
-**Precedence: env var (session override) > `.somi/config.json` > SoMi defaults.** All keys are
-optional; omit anything you don't want to change:
+Loop caps, hook policies and cost settings are configurable via an optional, committed
+`.somi/config.json` — reviewable team policy instead of per-session env-var folklore — and in a
+[global config](#the-global-config) that every project and session on your machine reads.
+**Precedence: env var (session override) > `.somi/config.json` > global config > SoMi defaults.**
+Both files take the same keys, all optional; omit anything you don't want to change:
 
 ```json
 {
@@ -586,6 +587,54 @@ optional; omit anything you don't want to change:
   [`scripts/lib/cost-model.mjs`](../scripts/lib/cost-model.mjs)'s
   shipped per-host model mapping; a host named there replaces that host's whole tier map. See "Cost
   tiers and model resolution" below for how the ceiling and the mapping override actually apply.
+
+### The global config
+
+One file holds your settings for every project and session:
+
+| Platform | Path |
+|---|---|
+| Linux, macOS | `$XDG_CONFIG_HOME/somi/config.json`, else `~/.config/somi/config.json` |
+| Windows | `%APPDATA%\somi\config.json` |
+| Any | `SOMI_GLOBAL_CONFIG=<path>` overrides the path; set it empty to use no global config |
+
+A project's `.somi/config.json` is **merged over it**, key by key: objects merge recursively, and any
+other value (a tier, a number, a list) replaces the global one. A project that only needs to differ
+in two places says only those two:
+
+```jsonc
+// global: ~/.config/somi/config.json
+{ "cost": { "ceiling": "medium",
+            "agents":  { "somi-coder": "medium", "somi-security-reviewer": "high" },
+            "mapping": { "copilot-cli": { "low": ["model-a"], "medium": ["model-b"], "high": ["model-c"] } } } }
+
+// project: .somi/config.json
+{ "cost": { "agents":  { "somi-coder": "high" },
+            "mapping": { "copilot-cli": { "medium": ["model-d"] } } } }
+```
+
+The effective config keeps the global ceiling, the security-reviewer pin and the `low` and `high`
+models, runs `somi-coder` at `high`, and uses `model-d` for `medium`. A model list in the project
+replaces the global list for that tier; it does not extend it.
+
+- **Create it** with `node scripts/somi-config.mjs init --global` (the default pins), or by hand.
+  Change it with `set` / `unset` plus `--global`. Those are for you to run: the `somi_config` MCP
+  tool shows the merged config but writes only the project file, and the cost-lowering hook asks
+  before any tool writes the global file.
+- **No project default while a global config exists.** The SessionStart hook writes a fully pinned
+  `.somi/config.json` only when neither file exists, because a full project copy would mask every
+  later change to the global file. A project file written by 4.0.0's hook is such a copy: delete it
+  (or reduce it to what the project really overrides) for the global config to take effect.
+- `/somi-config` and `somi-config show` report both files and, for every pinned value, which file it
+  came from (`from: "global"` or `"project"`).
+
+**Links.** Reads follow links: a junction or symlinked `.somi`, a config file linked from a dotfiles
+or shared directory. A file must still be a regular file of at most 64 KiB and 64 levels of nesting
+once opened (a FIFO or
+device is refused without blocking), and a link to a missing file is an error rather than "no
+config". Writes to the project file never follow a link: `set`, `unset` and `init` refuse a linked
+`.somi` or `config.json`. A `--global` write follows a link to the real file, so a dotfiles link
+survives.
 
 ## Cost tiers and model resolution
 

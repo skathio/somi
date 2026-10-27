@@ -13,6 +13,10 @@
 //   - Write / Edit / MultiEdit of <project>/.somi/config.json (the path is resolved against the project
 //     root, so `.somi/../.somi/config.json` and a symlinked .somi resolve to the same file): `after` = the
 //     written content, or the current text with the edits applied exactly as the Edit tool would.
+//   Both sides are judged as the resolver sees them: the global config with the project file merged
+//   over it (scripts/lib/config-files.mjs), so a project file that drops below a global pin is a lowering.
+//   - Any file-tool write to the global config asks, whatever it changes: that file applies to every
+//     project and session, and the somi_config tool never writes it (only the user, through the CLI).
 //
 // Fail closed to the user: for a config-file path, any inability to evaluate (unreadable or unparsable
 // content, an edit that does not apply, an exception) asks. Nothing from any file is ever echoed.
@@ -23,12 +27,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readPayload, field, askPretool, HookExit, projectRoot, writeTargets } from '../lib/common.mjs';
+import { globalConfigPath, mergeConfig, parseConfigText, readConfigFile, readConfigText } from '../../scripts/lib/config-files.mjs';
 
 const LIB = path.join(import.meta.dirname, '..', '..', 'scripts', 'lib');
 const UNEVALUABLE = 'SoMi: this change to .somi/config.json could not be evaluated, so it needs your confirmation.';
 const OUTSIDE = 'SoMi: this call names a project directory outside the project root, so it needs your confirmation.';
 const STATE_WRITE = 'SoMi: this writes the persisted cost ceiling (.somi/somi-state/ceiling.json), which can lower the ceiling, so it needs your confirmation.';
 const UNREADABLE_WRITE = 'SoMi: this writes the SoMi cost config or ceiling in a form the guard cannot evaluate, so it needs your confirmation.';
+const GLOBAL_WRITE = 'SoMi: this changes your global SoMi config, which every project and session uses, so it needs your confirmation.';
 const RESOLVE_LOWER = 'SoMi: this somi_resolve call sets a session ceiling lower than the current one, so it needs your confirmation.';
 const SECURITY_ONLY = 'SoMi: after this change security-reviewer would run below high (it is not pinned to high). Confirm only if you intend that.';
 const reasonFor = (reasons, REASONS) => (reasons.length === 1 && reasons[0] === REASONS.security
@@ -61,6 +67,12 @@ function isProjectPath(root, target, segs) {
 }
 const isConfigPath = (root, target) => isProjectPath(root, target, ['.somi', 'config.json']);
 const isStatePath = (root, target) => isProjectPath(root, target, ['.somi', 'somi-state', 'ceiling.json']);
+// The global config, by the same identity rules, its directory standing in for the root.
+const isGlobalPath = (root, target, globalFile) => globalFile !== null
+  && isProjectPath(path.dirname(globalFile), path.resolve(root, target), [path.basename(globalFile)]);
+const isObj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+// The global config as the resolver reads it ({} when there is none); unreadable throws, and the caller asks.
+const globalConfig = () => { const g = globalConfigPath(); return (g && readConfigFile(g)) ?? {}; };
 
 // The project directory a somi_config / somi_resolve call acts on: project_dir when it resolves to the root
 // or inside it, the root when none is given; anything else is something the hook cannot evaluate: ask.
@@ -80,21 +92,21 @@ function applyOneEdit(text, e) {
   return e.replace_all === true ? text.split(e.old_string).join(e.new_string) : text.replace(e.old_string, () => e.new_string);
 }
 
-function readCurrent(readTextFile, file) {
-  try { return readTextFile(file); } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
-}
+// The project config's text, links followed (as the resolver reads it), or null when absent.
+const readCurrent = (file) => readConfigText(file);
 
 // somi_resolve({ceiling}) persists a CLI-style ceiling; one below the ceiling in force needs the user.
 async function resolveCheck(payload, input, root) {
   if (input.ceiling === undefined) return;
   const dir = narrowedDir(payload, input, root);
   try {
-    const [{ readTextFile, loadState, DEFAULT_CEILING }, { VALID_COSTS }] = await Promise.all(
+    const [{ loadState, DEFAULT_CEILING }, { VALID_COSTS }] = await Promise.all(
       ['cost-ceiling', 'cost-model'].map((m) => import(pathToFileURL(path.join(LIB, `${m}.mjs`)).href)),
     );
     if (!VALID_COSTS.includes(input.ceiling)) return; // the tool rejects it itself
-    const text = readCurrent(readTextFile, path.join(dir, '.somi', 'config.json'));
-    const cfg = text === null ? {} : JSON.parse(text);
+    const file = path.join(dir, '.somi', 'config.json');
+    const text = readCurrent(file);
+    const cfg = mergeConfig(globalConfig(), text === null ? {} : parseConfigText(text, file));
     const state = loadState(dir);
     const effective = VALID_COSTS.includes(cfg?.cost?.ceiling) ? cfg.cost.ceiling
       : (state && ['cli', 'env'].includes(state.ceiling_origin) ? state.ceiling : DEFAULT_CEILING);
@@ -116,14 +128,16 @@ async function main() {
 
   const root = projectRoot();
   if (isResolve) return resolveCheck(payload, input, root);
+  const globalFile = globalConfigPath();
   // Copilot CLI's file tools (Write with `path`, Edit with a raw patch) carry no file_path and no
   // before/after the evaluation below can read: a write that reaches the config or the persisted
   // ceiling in that shape asks. One whose target cannot be read at all is the path guards' to refuse.
   if (isFileTool && !(typeof input.file_path === 'string' && input.file_path !== '')) {
     const { paths } = writeTargets(payload);
-    if (paths.some((p) => isConfigPath(root, p) || isStatePath(root, p))) askPretool(payload, UNREADABLE_WRITE);
+    if (paths.some((p) => isConfigPath(root, p) || isStatePath(root, p) || isGlobalPath(root, p, globalFile))) askPretool(payload, UNREADABLE_WRITE);
     return;
   }
+  if (isFileTool && isGlobalPath(root, input.file_path, globalFile)) askPretool(payload, GLOBAL_WRITE);
   // Any write to the persisted ceiling file asks: it is the other way to lower the ceiling.
   if (isFileTool && typeof input.file_path === 'string' && input.file_path !== '' && isStatePath(root, input.file_path)) askPretool(payload, STATE_WRITE);
   let projDir = root; // the directory whose config is evaluated (and whose persisted ceiling applies)
@@ -140,10 +154,11 @@ async function main() {
 
   // From here the call is about the project config: any failure asks.
   try {
-    const [{ readTextFile }, { applyEdit, EditError }, { lowers, REASONS }] = await Promise.all(
-      ['cost-ceiling', 'cost-config-edit', 'cost-lowering'].map((m) => import(pathToFileURL(path.join(LIB, `${m}.mjs`)).href)),
+    const [{ applyEdit, EditError }, { lowers, REASONS }] = await Promise.all(
+      ['cost-config-edit', 'cost-lowering'].map((m) => import(pathToFileURL(path.join(LIB, `${m}.mjs`)).href)),
     );
-    const currentText = readCurrent(readTextFile, file);
+    const base = globalConfig();
+    const currentText = readCurrent(file);
     let before = {};
     if (currentText !== null) { try { before = JSON.parse(currentText); } catch { before = {}; } }
     let after;
@@ -165,7 +180,7 @@ async function main() {
       }
       after = JSON.parse(text);
     }
-    const verdict = lowers(before, after, projDir);
+    const verdict = lowers(mergeConfig(base, isObj(before) ? before : {}), isObj(after) ? mergeConfig(base, after) : after, projDir);
     if (verdict.lowers) askPretool(payload, reasonFor(verdict.reasons, REASONS));
   } catch (e) {
     if (e instanceof HookExit) throw e;

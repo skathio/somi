@@ -7,6 +7,10 @@
 # stub so the hashira-ops CI coverage-report action has a file to parse (no unit test suite).
 set -euo pipefail
 
+# Hermetic: no suite may read the developer's own global SoMi config (scripts/lib/config-files.mjs).
+# An empty value means "no global config"; suites that test the global file set their own.
+export SOMI_GLOBAL_CONFIG=""
+
 # JSON validity via Node's own parser (no jq). Fails loudly on the first invalid file.
 json_valid() { node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$1"; }
 
@@ -72,6 +76,9 @@ bash tests/scripts/cost-model.sh
 
 echo "==> Cost ceiling tests..."
 bash tests/scripts/cost-ceiling.sh
+
+echo "==> Global config, merge and reads through links..."
+bash tests/scripts/global-config.sh
 
 echo "==> Dispatch resolver tests..."
 bash tests/scripts/somi-dispatch.sh
