@@ -1,0 +1,33 @@
+{
+  "name": "somi-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SoMi's overview page (GitHub Pages). Not part of the npm package.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "facts": "node scripts/facts.mjs",
+    "dev": "node scripts/facts.mjs && vite",
+    "build": "node scripts/facts.mjs && tsc --noEmit && vite build && node scripts/check-dist.mjs",
+    "preview": "vite preview",
+    "test": "node scripts/facts.mjs && vitest run --coverage"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "@vitest/coverage-v8": "^5.0.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^7.0.0",
+    "vite": "^8.0.0",
+    "vitest": "^5.0.0"
+  }
+}

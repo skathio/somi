@@ -8,8 +8,9 @@
 # (commit-message-driven version inference, its own tag push, its own
 # Release-notes generation).
 #
-# Shape: one file, two jobs (iteration 6.2 retired the old hand-rolled `ci`
-# job — see "## CI gating, post-6.2" below for why).
+# Shape: one file, four jobs (iteration 6.2 retired the old hand-rolled `ci`
+# job — see "## CI gating, post-6.2" below for why). `site` and `pages` deploy
+# the overview page; see "## The overview page" below.
 #   - version : Runs ONLY on a manual `workflow_dispatch` with a non-empty
 #               `bump` input — see "## Trigger model" below. Resolves the
 #               next version via hashira's `version-resolver` composite (D14
@@ -20,6 +21,23 @@
 #               dispatch + non-empty bump); gated by the `production`
 #               Environment (one approval). Calls npm-release@v2 with the
 #               resolver's output — never recomputes a version itself.
+#   - site    : needs publish; builds and tests site/ with hashira's
+#               static-webapp-ci reusable workflow and uploads the Pages artifact.
+#   - pages   : needs site; deploys that artifact with hashira's pages-deploy.
+#
+# ## The overview page
+#
+# The release dispatch also publishes the overview page (site/) to GitHub Pages,
+# so the page and the npm package move together. Order is deliberate: `site`
+# waits for `publish`, so the page only goes out with a release that reached the
+# registry, and the Pages artifact (kept one day) is built after the production
+# approval rather than waiting on it. The page's content is checked against the
+# released ref twice before that: validate.sh in `version` refuses a CHANGELOG
+# release the roadmap does not cover, and the site's own tests in `site` refuse
+# a command, hook or agent the page does not show. `pages` uses the
+# `github-pages` Environment (its deployment-branch policy allows `main`); it
+# needs no reviewer of its own because it can only run after `publish`, which is
+# behind `production`'s approval.
 #
 # ## CI gating, post-6.2 — why there is no in-file `ci` job anymore, and why
 # ## `version` re-validates anyway (pass-1 review correction)
@@ -305,3 +323,47 @@ jobs:
           # target defaults to https://registry.npmjs.org (official registry → OIDC).
           # No npm_token: OIDC trusted publishing handles auth; auth: oidc
           # never falls back to one even if it were set.
+
+  site:
+    name: site
+    needs: publish
+    # Same gate as `version`; also skipped whenever `publish` did not succeed.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
+    uses: skathio/hashira/.github/workflows/static-webapp-ci.yml@v2 # rolling major tag — same ref as every other hashira pin in this file
+    # Grants mirror static-webapp-ci's documented matrix (hashira docs/flows/static-webapp.md §6);
+    # a reusable workflow can only narrow these. pull-requests/security-events go unused on a
+    # dispatch (no PR to comment on; CodeQL is in the default skip list) but its jobs declare them.
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+      pull-requests: write
+      security-events: write
+    with:
+      library_ref: 'v2' # MUST match the uses: pin above (dual-pin invariant, D9)
+      node_version: '24'
+      # Literal strings only (static-webapp-ci evaluates them in the job holding id-token: write).
+      # site/ is its own package; the root `npm ci` the workflow runs first installs nothing.
+      build_command: 'npm --prefix site ci --ignore-scripts && npm --prefix site run build'
+      output_dir: 'site/dist'
+      test_command: 'npm --prefix site ci --ignore-scripts && npm --prefix site test'
+      coverage_path: 'site/coverage/lcov.info'
+
+  pages:
+    name: pages
+    needs: site
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    # One Pages deployment at a time; a second release dispatch queues rather than cancels.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      pages: write     # deploy-pages
+      id-token: write  # deploy-pages authenticates via OIDC
+    steps:
+      - id: deploy
+        uses: skathio/hashira/.github/actions/pages-deploy@v2 # rolling major tag — see version job's checkout comment

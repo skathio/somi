@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SoMi Overview</title>
+    <meta name="description" content="SoMi: a multi-agent engineering workflow for Claude Code and GitHub Copilot. Roadmap, workflows, the cost system and the guardrails.">
+    <script>
+      // Set the theme before first paint so a dark-mode viewer never sees a light flash.
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem('somi-theme'); } catch (e) { /* storage blocked */ }
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

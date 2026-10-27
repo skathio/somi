@@ -26,6 +26,7 @@ Start here if you're new. Skim the headings, then read what matches your situati
 | Measure a release's usage and speed against a recorded baseline | [USAGE-BENCHMARK.md](./USAGE-BENCHMARK.md) |
 | Distribute via Claude Code's plugin marketplace     | [PLUGIN.md](./PLUGIN.md)                 |
 | See how everything fits together                    | [architecture.md](./architecture.md)     |
+| Present SoMi, or update the overview page           | [the page](https://skathio.github.io/somi/), [site/README.md](../site/README.md) |
 
 ## Conventions in these docs
 
@@ -55,4 +56,5 @@ tests/            Hook fixtures + script end-to-end tests (run by validate.sh / 
 .copilot-extension/ Copilot extension manifest; marketplace manifest for copilot plugin install
 examples/         Worked examples + sample consumer
 docs/             You are here
+site/             The overview page (GitHub Pages), deployed with each release
 ```

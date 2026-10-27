@@ -1,0 +1,110 @@
+{
+  "intro": "The first release in May 2026 had three workflows and human gates. Today SoMi has {commands} commands, cost tiers enforced at dispatch, and loops whose limits are enforced by tested scripts.",
+  "eras": [
+    {
+      "label": "Where it started",
+      "entries": [
+        {
+          "version": "0.1.0",
+          "covers": ["0.1.0"],
+          "title": "Initial release",
+          "major": true,
+          "body": "`/plan`, `/code` and `/review`, plus `/ship` end to end. Every stage stops for your approval. The first guardrail hooks and the global ruleset (SOLID, clean code, OWASP)."
+        },
+        {
+          "version": "0.2.0",
+          "covers": ["0.2.0"],
+          "title": "Audit-driven overhaul",
+          "body": "Hooks now load on a clean marketplace install. Their output schema was fixed; reminders and lint feedback had been silently dropped."
+        },
+        {
+          "version": "0.3.0",
+          "covers": ["0.3.0"],
+          "title": "Discovery",
+          "body": "`/discover` turns a product idea into a researched, traceable requirements set (BRD, SRS, FRD, SDD, TDD) that planning consumes."
+        },
+        {
+          "version": "0.4.0",
+          "covers": ["0.4.0"],
+          "title": "Critical thinking and parallel review",
+          "body": "Agents challenge the premise of a request. `/review-panel` runs several review lenses at once. `/code-parallel` builds independent iterations in isolated worktrees."
+        }
+      ]
+    },
+    {
+      "label": "Becoming SoMi",
+      "entries": [
+        {
+          "version": "1.0.0",
+          "covers": ["1.0.0"],
+          "title": "Renamed to SoMi",
+          "major": true,
+          "body": "First stable release, published as `@skathio/somi`."
+        },
+        {
+          "version": "1.1.0",
+          "covers": ["1.1.0", "1.1.1"],
+          "title": "The execution brief",
+          "body": "An expensive model front-loads research and decisions into a dense `brief.md`. A cheaper model executes against it without researching again. 1.1.1 moved CI and publishing onto hashira."
+        },
+        {
+          "version": "1.2.0",
+          "covers": ["1.2.0"],
+          "title": "Trust core and deterministic loops",
+          "body": "Loop caps and the findings ledger move from model discipline into tested scripts, with durable state a loop can resume from. New lifecycle commands: `/debug`, `/pr`, `/adopt`, `/atlas`, `/impact`, `/upgrade`, `/release-readiness`, `/incident`."
+        },
+        {
+          "version": "2.0.0",
+          "covers": ["2.0.0", "2.0.1", "2.0.2"],
+          "title": "Portable runtime",
+          "major": true,
+          "body": "The whole runtime was ported from bash and jq to zero-dependency Node and runs natively on Windows. Each port was checked byte for byte against 152 golden fixtures."
+        },
+        {
+          "version": "2.1.0",
+          "label": "2.1–2.2",
+          "covers": ["2.1.0", "2.2.0", "2.2.1", "2.2.2"],
+          "title": "Reasoning craft and a front door",
+          "body": "Writing guidance became detectors every agent runs (drift, hedge, horoscope, deletion). The `somi` front-door agent routes a plain request to the right flow on Copilot."
+        },
+        {
+          "version": "3.0.0",
+          "covers": ["3.0.0", "3.0.1", "3.1.0", "3.1.1"],
+          "title": "Cost tiers",
+          "major": true,
+          "body": "Each agent gets a `low`, `medium` or `high` tier, resolved at dispatch. 3.1 made agents work on GitHub Copilot and stopped reporting a tier as applied when it wasn't."
+        }
+      ]
+    },
+    {
+      "label": "Where it is now",
+      "entries": [
+        {
+          "version": "4.0.0",
+          "covers": ["4.0.0"],
+          "title": "Hard cost cap, native agents, sized delivery, measurement",
+          "major": true,
+          "highlights": [
+            {
+              "title": "Control",
+              "items": [
+                "**The cost ceiling is a hard cap**, with an override for each agent. Lowering a tier needs your confirmation.",
+                "**Native `somi-*` agents.** An agent starts as the type the host registered, or not at all; there is no stand-in prompt.",
+                "**Model preference lists** for each host, a model picker in `/somi-config`, and a warning when a host has no mapping."
+              ]
+            },
+            {
+              "title": "Delivery",
+              "items": [
+                "**`/ship-loop` sizes the work first:** trivial, small or full. Small work skips the planning ceremony.",
+                "**A security lens from the sizing record:** work that handles untrusted input is always reviewed by the security reviewer.",
+                "**Repair passes re-review only what changed since the last review**, an optional wall-time budget, and a record of how each agent was dispatched."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "open": "These are known gaps, not commitments: `/code-parallel` is not yet measured (there is no parallel-eligible fixture), human effort and escaped defects are not measured, VS Code Copilot Chat is not a supported dispatch host, and a live check of a mapped model on Copilot CLI is still pending."
+}

@@ -138,3 +138,33 @@ jobs:
         run: |
           npm pkg set version="0.0.0-dryrun.${{ github.run_id }}"
           npm publish --dry-run --tag dryrun
+
+  # The overview page (site/), which publish.yml deploys to GitHub Pages with each release. It is its
+  # own package with its own lockfile, so the `ci` job above (the zero-dependency plugin package)
+  # never installs or tests it. Building and testing it on every PR makes a change that breaks the
+  # page red before merge rather than at release time — including a plugin change the page's content
+  # tests catch: a command, hook or agent added or removed without the page following.
+  # No `needs:`, for the same reason as publish-dry-run. `--ignore-scripts`: no dependency lifecycle
+  # script runs, and none is needed (the native binaries come from platform packages).
+  site:
+    name: site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '24'
+
+      - name: Install site dependencies (lockfile only, no lifecycle scripts)
+        run: npm --prefix site ci --ignore-scripts
+
+      - name: Test the page and its content against the repo
+        run: npm --prefix site test
+
+      - name: Build (type check, bundle, self-contained check)
+        run: npm --prefix site run build

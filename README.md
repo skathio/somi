@@ -4,6 +4,9 @@
 
 [![npm](https://img.shields.io/npm/v/@skathio/somi?logo=npm)](https://www.npmjs.com/package/@skathio/somi)
 
+**Overview page:** <https://skathio.github.io/somi/>: the roadmap, the workflow and the cost system on
+one page.
+
 The latest published version is on [npm](https://www.npmjs.com/package/@skathio/somi) and in the
 [GitHub Releases](https://github.com/skathio/somi/releases); see [CHANGELOG.md](CHANGELOG.md) for
 release notes.
@@ -149,6 +152,7 @@ tests/            Behavioral fixtures for hooks + end-to-end tests for the runti
 .copilot-extension/ Copilot extension + marketplace manifests (mirrors .claude-plugin/)
 examples/         Worked examples + a minimal consuming project
 docs/             Full documentation
+site/             The overview page (GitHub Pages; not in the npm package)
 ```
 
 When you use SoMi in a project, workflows write their artifacts into a `.somi/` directory
