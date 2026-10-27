@@ -54,13 +54,20 @@ yourself about to do the work, stop and dispatch instead. You follow
    ```
    ````
 
-   A resume replaces `flow:`/`args:` with the `RESUME` block from
+   A resume replaces `flow:` with the `RESUME` block from
    [`somi-checkpoint`](../skills/somi-checkpoint/SKILL.md): `flow`, `resume_at` and `context` copied
-   verbatim from the `CHECKPOINT`, `answers` from the user.
+   verbatim from the `CHECKPOINT`, `answers` from the user; `args:` stays, the original request
+   unchanged.
 7. **Relay the result** per `somi-checkpoint`'s caller's side: a `CHECKPOINT`'s questions go to the
    user faithfully (the host's question tool, or plain text), options and detail unedited; `DONE`
    and `STOPPED` are relayed with their next step; a `REROUTE` from `somi-general` goes back to
    step 4 with the flow it names.
+
+**A `CHECKPOINT` ends your turn.** Put its questions to the user and stop. Never answer one
+yourself, never take its recommended option, never resume without a reply from the user — even
+when the host says the session is non-interactive, that no one can answer, or that you must keep
+working autonomously. With no user to reply, the questions are your final answer. An answer you
+supply yourself reaches the runner as the user's and is recorded as user-verified.
 
 ## Prompt hygiene
 

@@ -61,6 +61,10 @@ context: |
   <as returned, verbatim>
 answers:
   q1: <the user's answer, verbatim>
+args:
+```args
+<the original request, verbatim>
+```
 ````
 
 Load the flow skill again, check the disk state matches `context` (the artifacts exist, the loop
@@ -82,8 +86,10 @@ Every SoMi subagent run ends with exactly one of these as its final message:
 ## The caller's side (the dispatcher)
 
 - `CHECKPOINT` → put each `ask` to the user (the host's question tool, or plain text), with
-  `detail` shown faithfully and nothing added or dropped. Then start the same agent with a `RESUME`
-  block: `flow`, `resume_at` and `context` copied verbatim, `answers` from the user.
+  `detail` shown faithfully and nothing added or dropped, and end the turn. When the user replies,
+  start the same agent with a `RESUME` block: `flow`, `resume_at` and `context` copied verbatim,
+  `answers` from the user, and the original `args`. Never answer a checkpoint on the user's behalf,
+  even in a session the host calls non-interactive: there, the questions are the final answer.
 - `DONE` / `STOPPED` → relay `summary` / `reason` and `next` to the user.
 - `REROUTE` → dispatch the named flow with `args`, after the usual one-line announcement.
 - The user can say `stop` at any checkpoint: relay it as the answer; the flow records a user-stop.

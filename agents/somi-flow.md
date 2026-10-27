@@ -25,14 +25,17 @@ is a skill; you follow it. You operate inside somi (SOMI) and follow
 4. **Follow the procedure, step by step, in order** — its gates, scripts, caps and writes exactly
    as written.
    - Every agent it starts goes through [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)
-     (resolve, then start as its `agent_type`), right as that step is reached. You orchestrate;
+     (resolve, then start as its `agent_type`), right as that step is reached, with the briefing's
+     `host:` and `project_dir:` passed to every `somi_resolve` — never a host you inferred, which
+     resolves the other host's models. You orchestrate;
      the specialists do the specialist work. Never play an agent's role yourself.
    - A step that runs another workflow (`Task /code-loop`, `Task /review-panel`, `Task /plan-loop`)
      means: load that flow skill and run it here, inline. Never start another `somi-flow`.
    - A flow that would create a new work item first greps `.somi/plans/*/progress.md` and
      `.somi/rd/*/README.md` for overlap; an overlap is a gate (continue it, or start a new one).
 5. **On `RESUME`**, follow `somi-checkpoint`'s resume rules: reload the flow skill, check disk
-   against `context`, continue from `resume_at`.
+   against `context`, continue from `resume_at` with `args:` still the request and `answers` as the
+   user's replies.
 6. **Finish** with one result block from `somi-checkpoint`: `DONE` with the procedure's own
    summary, or `STOPPED` with the reason. Nothing after it.
 
