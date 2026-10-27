@@ -19,6 +19,8 @@ export const AGENT_DEFAULT_TIERS = Object.freeze(Object.assign(Object.create(nul
   'somi-coder': 'medium',
   'somi-designer': 'high',
   'somi-discovery-analyst': 'high',
+  'somi-flow': 'medium',
+  'somi-general': 'medium',
   'somi-impact': 'medium',
   'somi-incident': 'medium',
   'somi-plan-reviewer': 'high',

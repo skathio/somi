@@ -7,23 +7,23 @@ description: The one canonical procedure for resolving and starting any SoMi age
 
 This is the single canonical procedure for turning "start agent X" into a real `Task` call —
 resolving its cost tier and model against the session ceiling first, every time, on every entry
-path. The `somi` front-door agent and every command that Tasks an agent directly load this skill
+path. The `somi` dispatcher, the `somi-flow` runner and every flow procedure that Tasks an agent load this skill
 instead of carrying their own copy of it — editing it once here keeps every entry path in sync,
 which is the whole reason this skill exists (the same precedent `skills/somi-routing` sets).
 
 ## When this applies
 
 Whenever your own procedure is about to start an agent via `Task` — whether that's the only agent
-a simple command Tasks, one of several a multi-agent command seats in turn, or an agent the front
-door reaches while running a command's procedure live. It does **not** apply to a `Task` line that
+a simple flow Tasks, one of several a multi-agent flow seats in turn, or the `somi-flow` /
+`somi-general` agent the dispatcher starts. It does **not** apply to a `Task` line that
 names another *command* (`Task /code-loop`, `Task /review-panel`, …) — a command is not an agent
-and there is nothing here to resolve for it; enter that command's own procedure instead and let its
-own agent-Tasks reach this skill in turn.
+and there is nothing here to resolve for it; load that command's `flow-<name>` skill and run it
+in place, and let its own agent-Tasks reach this skill in turn.
 
 **A re-invocation resolves fresh too, every time, the same as a first start.** The planner,
 designer, discovery-analyst, and refactor-designer are all re-invoked in authoring mode after a
-`DECISIONS-NEEDED` round-trip pauses for the user (`commands/plan.md`, `commands/design.md`,
-`commands/discover.md`, `commands/refactor-design.md`) — that pause is exactly when a user is
+`DECISIONS-NEEDED` round-trip pauses for the user (`flow-plan`, `flow-design`, `flow-discover`,
+`flow-refactor-design`) — that pause is exactly when a user is
 likely to raise the ceiling, so treating the re-invocation as "already resolved" from before the
 pause would silently miss it. There is no shape of "starting an agent" that skips this procedure.
 
@@ -251,9 +251,8 @@ dispatched agent's or command's own text says they do.
 
 ## Consumers
 
-Loaded by `agents/somi.md` (the front door, every time its live run of a command's procedure
-reaches a point that starts an agent) and by every `commands/*.md` file that Tasks an agent
-directly — one line at that point in the command's own procedure pointing here is enough; do not
-re-embed this procedure in a command file. `scripts/validate.sh` derives which commands Task an
-agent from the real agent names under `agents/` and fails the build if one of them doesn't
-reference this skill.
+Loaded by `agents/somi.md` (the dispatcher, before it starts `somi-flow` or `somi-general`), by
+`agents/somi-flow.md`, and by every `skills/flow-*/SKILL.md` procedure that Tasks an agent
+directly — one line at that point in the procedure pointing here is enough; do not re-embed this
+procedure in a flow skill. `scripts/validate.sh` derives which flow skills Task an agent from the
+real agent names under `agents/` and fails the build if one of them doesn't reference this skill.

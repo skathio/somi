@@ -11,7 +11,7 @@ ROOT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 AGENT_MD="$ROOT_REPO/agents/somi.md"
 SKILL_MD="$ROOT_REPO/skills/somi-dispatch/SKILL.md"
 CLI="$ROOT_REPO/scripts/somi-dispatch.mjs"
-COMMAND_MDS="$ROOT_REPO"/commands/*.md
+COMMAND_MDS="$ROOT_REPO/agents/somi-flow.md $ROOT_REPO/agents/somi-general.md $ROOT_REPO/skills/somi-checkpoint/SKILL.md "$(ls "$ROOT_REPO"/skills/flow-*/SKILL.md)
 
 pass=0; fail=0
 ok()  { pass=$((pass+1)); printf '  ok   %s\n' "$1"; }
@@ -133,9 +133,9 @@ else
   REAL_TOOLS="$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).filter((t) => t !== "somi_agent").sort().join(" "))' "$SCHEMA_JSON")"
   PROMPT_TOOLS="$(grep -ohE '`somi_[a-z_]+`' "$AGENT_MD" "$SKILL_MD" $COMMAND_MDS | tr -d '`' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
   if [ "$REAL_TOOLS" = "$PROMPT_TOOLS" ]; then
-    ok "agents/somi.md + skills/somi-dispatch/SKILL.md + commands/*.md together name exactly the server's real tools ($REAL_TOOLS)"
+    ok "agents/somi.md + skills/somi-dispatch/SKILL.md + the runner, general agent, checkpoint and flow skills together name exactly the server's real tools ($REAL_TOOLS)"
   else
-    bad "tool-name mismatch -- server: [$REAL_TOOLS] vs agents/somi.md + skills/somi-dispatch/SKILL.md + commands/*.md: [$PROMPT_TOOLS]"
+    bad "tool-name mismatch -- server: [$REAL_TOOLS] vs agents/somi.md + skills/somi-dispatch/SKILL.md + the runner, general agent, checkpoint and flow skills: [$PROMPT_TOOLS]"
   fi
   if node -e 'process.exit(Object.keys(JSON.parse(process.argv[1])).includes("somi_agent") ? 0 : 1)' "$SCHEMA_JSON"; then
     ok "somi_agent still exists as a reader, and the dispatch text above names it nowhere"
@@ -199,6 +199,26 @@ else
     fi
   done
 fi
+
+# --- the dispatcher's known-command list is exactly commands/*.md, and each has a flow skill ------
+# The dispatcher recognises explicit commands from its own inline list (it reads no install files),
+# so a command added without the list would degrade to classification silently.
+known_list() { # $1 = agents/somi.md path; prints the backticked names after "Known commands:"
+  awk '/Known commands:/{f=1} f{print} f&&/Never re-classify/{exit}' "$1" | grep -oE '`[a-z][a-z0-9-]*`' | tr -d '`' | sort -u
+}
+LISTED="$(known_list "$AGENT_MD")"
+REAL="$(for f in "$ROOT_REPO"/commands/*.md; do basename "$f" .md; done | sort -u)"
+if [ -n "$LISTED" ] && [ "$LISTED" = "$REAL" ]; then
+  ok "agents/somi.md's known-command list equals commands/*.md ($(echo "$REAL" | wc -l) commands)"
+else
+  bad "agents/somi.md's known-command list differs from commands/*.md: $(diff <(echo "$LISTED") <(echo "$REAL") | tr '\n' ' ')"
+fi
+for n in $REAL status; do
+  [ -f "$ROOT_REPO/skills/flow-$n/SKILL.md" ] || bad "no skills/flow-$n/SKILL.md for the '$n' flow"
+done
+ok "every known flow has its skills/flow-<name>/SKILL.md"
+cp "$AGENT_MD" "$TMP/somi.md"; sed -i 's/`upgrade`\./`upgrade`, `bogus`./' "$TMP/somi.md"
+if [ "$(known_list "$TMP/somi.md")" != "$REAL" ]; then ok "red proof: an extra name in the list is caught"; else bad "red proof: an extra name in the list was not caught"; fi
 
 echo "somi agent <-> somi-dispatch.mjs dispatch contract tests: $pass ok, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

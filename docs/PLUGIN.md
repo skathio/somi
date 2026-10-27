@@ -91,8 +91,9 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   65 and is never routed to another agent; a pre-4.0.0 bare name such as `coder` gets a "renamed"
   hint. Aliases live in one table, `scripts/lib/agent-registry.mjs`, which fails at start on a
   collision.
-- **`somi_command`** — returns a SoMi command's own procedure text (`commands/<name>.md`) from
-  the install root, so the front door can run a command live without knowing an install path.
+- **`somi_command`** — returns a SoMi command file (`commands/<name>.md`) from the install root.
+  Since 4.1.0 a command is a thin wrapper; its procedure is the `flow-<name>` skill, read with
+  `somi_skill`.
 - **`somi_skill`** — returns a SoMi skill's own text (`skills/<name>/SKILL.md`) from the install
   root, for the identical reason: a relative markdown link into `skills/` can't be followed from a
   consuming project either, so the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill —
@@ -268,13 +269,15 @@ have no effect.
 
 Copilot requires selecting one agent to drive the whole session. SoMi ships phase-specific experts
 (see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which phase you're in, and one
-generic front door, **`somi`**. Select `somi` when you're not sure —
-bare `@somi` renders a read-only status dashboard, it recognizes an explicit command and proxies it, and
-classifies free-form requests into the matching flow, then **runs that flow's own procedure live,
-in the same turn** — resolving and `Task`ing every agent the flow starts through the same cost
-resolver a direct command uses, the same way a command body dispatches on Claude Code. On Claude
-Code the direct commands already select the right agent and run their own procedure themselves, so
-`somi` mainly matters here, on Copilot.
+generic front door, **`somi`**. Select `somi` when you're not sure. It is a dispatcher, not a
+worker: bare `@somi` shows the status dashboard, an explicit command or a free-form request is
+matched to one workflow and handed to the **`somi-flow`** runner (through the same cost resolver a
+direct command uses), and anything that matches no workflow goes to **`somi-general`**. The runner
+loads the workflow's `flow-<name>` skill and starts its specialists one level further down, so the
+whole chain stays two levels below the session, within Copilot CLI's nesting. A subagent cannot ask
+you anything, so each question a workflow needs comes back through `somi` as a checkpoint: answer
+it and the runner resumes. On Claude Code the direct commands run the same flow skills themselves,
+so `somi` mainly matters here, on Copilot.
 
 ### Agent dispatch
 

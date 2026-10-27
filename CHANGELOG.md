@@ -6,6 +6,63 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
+
+**Minor — additive.** Commands, agent names, tiers and the MCP tools are unchanged; two agents and
+32 skills are new. No migration action required.
+
+### Fixed
+
+- **The `somi` front door did the work itself about half the time.** It ran each command's
+  procedure in its own context and recursed into sub-commands, so one `/ship-loop` pulled about
+  139 KB of procedure text into the session before any work started (`/design` about 60 KB). Once
+  that context was full or compacted, it often stopped starting agents and did the planning,
+  coding or reviewing itself. It is now a dispatcher of about 90 lines that carries no procedure
+  text: it strips its `/somi` marker, picks one flow (a known command, or the `somi-routing` table
+  for free text), announces it, and starts **one** agent. It never edits, runs commands or follows a
+  procedure. A drift test keeps its list of known commands equal to `commands/`.
+
+### Added
+
+- **`somi-flow`** (agent, default `medium`): runs one named workflow end to end from its flow skill,
+  starting the specialists through `somi-dispatch`. A composite workflow (`/ship-loop` running
+  `/plan-loop` and `/code-loop`) runs its sub-flows inside the same runner, so the chain stays two
+  levels below the session: within Copilot CLI's nesting, and Claude Code's default.
+- **`somi-general`** (agent, default `medium`): the fallback for requests that match no workflow
+  (questions, explanations, research, housekeeping). It edits no tracked files and returns
+  `REROUTE <flow>` when a request turns out to be a workflow. `somi-routing` gains the matching
+  "none of the above" row, plus a `status` row.
+- **`somi-checkpoint`** (skill): neither host lets a subagent ask the user anything, so a gate inside
+  a runner (a slug confirmation, `DECISIONS-NEEDED`, `/ship-loop`'s brief-handoff gate, `/pr`'s
+  confirmation) saves its state, returns a `CHECKPOINT` block and stops; `somi` asks you and starts
+  the runner again with a `RESUME` block. It also defines the `DONE`, `STOPPED` and `REROUTE` blocks.
+- **`flow-status`** (skill): the dashboard, moved out of the front door.
+
+### Changed
+
+- **Every workflow's procedure is now a skill,** `skills/flow-<name>/SKILL.md` (25 of them, moved
+  verbatim with links rebased). `commands/<name>.md` is a thin wrapper that loads it, so a typed
+  command and the runner follow one procedure. Flow skills are `user-invocable: false` with a
+  one-line description, to keep the skill listing small. `somi_command` still serves the command
+  file, which is now the wrapper; read a procedure with `somi_skill`.
+- **The five largest agents are light.** `somi-planner`, `somi-discovery-analyst`, `somi-coder`,
+  `somi-reviewer` and `somi-designer` keep their role, tier note, `low` trims and write contract
+  (37 to 61 lines, from 192 to 394); their procedures moved to `role-planner`,
+  `role-discovery-analyst`, `role-coder`, `role-reviewer` and `role-designer`, which the agent loads
+  first. An agent that cannot load its role skill stops and says so.
+- Gates follow the move: the dispatch-reference and dispatch-line gates, the `/ship-loop` checkpoint
+  gate, the review-panel seat derivation, the size-tier text guards and the coder's Decision Ladder
+  check now read the flow and role skills. The size ledger entry for the planner moved with its
+  text to `skills/role-planner/SKILL.md` (402 → 354 lines); `somi-discovery-analyst` left the ledger.
+
+### Not verified
+
+On a live Copilot CLI host: that a specialist two levels down can load its role skill (built-in
+tools reach every depth; MCP tools such as `somi_skill` may not, per copilot-cli#3293), and that a
+runner's subagents receive the repo's instruction files. A specialist that cannot load its role
+skill stops rather than running without it. On Claude Code the chain was checked by the test suite
+only, not by a live run.
+
 ## [4.0.1] — 2026-10-27 — fix: one global config for every project, merged with each repo's; config reads follow junctions and symlinks
 
 ### Fixed

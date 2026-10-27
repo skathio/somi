@@ -2105,8 +2105,8 @@ BREACH_STATUSES=()
 while IFS= read -r s; do
   [[ "$s" =~ ^[A-Za-z0-9_-]+$ ]] && BREACH_STATUSES+=("$s")
 done < <(cj "for (const s of M.CAP_BREACH_STATUSES) process.stdout.write(s + '\n');")
-DOC_STATUSES="$(grep -A1 'Loop status:' "$ROOT/commands/code-loop.md" | grep -o '`[a-z-]*`' | tr -d '`' | grep -v '^done$' | sort)"
-check "the module's CAP_BREACH_STATUSES matches commands/code-loop.md's documented enum exactly (set-equality, not a count)" \
+DOC_STATUSES="$(grep -A1 'Loop status:' "$ROOT/skills/flow-code-loop/SKILL.md" | grep -o '`[a-z-]*`' | tr -d '`' | grep -v '^done$' | sort)"
+check "the module's CAP_BREACH_STATUSES matches skills/flow-code-loop/SKILL.md's documented enum exactly (set-equality, not a count)" \
   "$(printf '%s\n' ${BREACH_STATUSES[@]+"${BREACH_STATUSES[@]}"} | sort)" "${DOC_STATUSES:-<doc-derivation-empty>}"
 for s in "${BREACH_STATUSES[@]}"; do
   check "capBreached({status:'$s'}) is true (documented breach terminal)" \

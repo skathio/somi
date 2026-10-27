@@ -245,7 +245,7 @@ echo "==> Validating command <-> somi-dispatch skill reference..."
 # tests/scripts/dispatch-reference-gate.sh proves this gate RED (a `cp -a` copy with one command's
 # reference removed) and GREEN, the same two-sided proof retirement-gate.sh and dispatch-guard.sh
 # already give their own gates.
-if ! node tests/scripts/lib/dispatch-reference-gate.mjs commands agents; then
+if ! node tests/scripts/lib/dispatch-reference-gate.mjs skills agents; then
   exit 1
 fi
 bash tests/scripts/dispatch-reference-gate.sh
@@ -283,7 +283,7 @@ echo "==> Validating /ship-loop's non-overridable checkpoint..."
 # the two anchors the checkpoint fires at -- the brief handoff, and (on a cold start with no design
 # action) after /plan-loop. tests/scripts/checkpoint-gate.sh proves this gate both ways, against
 # the real file and against a `cp`'d copy with the wording deliberately weakened.
-if ! node tests/scripts/lib/checkpoint-gate.mjs commands/ship-loop.md; then
+if ! node tests/scripts/lib/checkpoint-gate.mjs skills/flow-ship-loop/SKILL.md; then
   exit 1
 fi
 bash tests/scripts/checkpoint-gate.sh
@@ -310,7 +310,7 @@ for f in \
 done
 # The execution brief is the load-bearing design→execution handoff — it must be referenced by
 # the agents/commands that produce and consume it, not orphaned.
-if ! grep -rIlq 'BRIEF\.md\.tmpl' agents commands; then
+if ! grep -rIlq 'BRIEF\.md\.tmpl' agents commands skills; then
   echo "templates/BRIEF.md.tmpl is not referenced by any agent or command" >&2
   exit 1
 fi
@@ -441,7 +441,7 @@ echo "==> Validating review-agent write-discipline contracts..."
 # agent added without one falsifies all five at once and silently holes that rationale. The
 # two-part sweep below finds false statements; only this finds a MISSING one.
 contract_failed=0
-# DERIVED, not hardcoded: the seated lenses are read out of commands/review-panel.md's own table —
+# DERIVED, not hardcoded: the seated lenses are read out of skills/flow-review-panel/SKILL.md's own table —
 # the document whose concurrency rationale depends on the claim. A hardcoded list cannot detect the
 # threat this check exists for (a FIFTH review agent seated without a contract); it would only
 # catch removal from the four already known.
@@ -452,14 +452,14 @@ contract_failed=0
 # future table in this file leading with a backticked non-agent cell now produces a LOUD, named
 # MISSING AGENT error rather than a silent miss. Loud-and-wrong is diagnosable; silent-and-missing
 # is the defect class this check exists to remove.
-seated="$(grep -oE '^\| *`[a-z][a-z0-9-]*`' commands/review-panel.md | tr -d '|` ' | sort -u)"
+seated="$(grep -oE '^\| *`[a-z][a-z0-9-]*`' skills/flow-review-panel/SKILL.md | tr -d '|` ' | sort -u)"
 if [ -z "$seated" ]; then
-  echo "WRITE CONTRACT CHECK: found no seated lenses in commands/review-panel.md — table shape changed?" >&2
+  echo "WRITE CONTRACT CHECK: found no seated lenses in skills/flow-review-panel/SKILL.md — table shape changed?" >&2
   contract_failed=1
 fi
 for a in $seated; do
   if [ ! -f "agents/$a.md" ]; then
-    echo "MISSING AGENT: commands/review-panel.md seats '$a' but agents/$a.md does not exist" >&2
+    echo "MISSING AGENT: skills/flow-review-panel/SKILL.md seats '$a' but agents/$a.md does not exist" >&2
     contract_failed=1
   elif ! grep -q '^## Write discipline' "agents/$a.md"; then
     echo "MISSING WRITE CONTRACT: agents/$a.md has no '## Write discipline' section" >&2
@@ -469,7 +469,7 @@ done
 if [ "$contract_failed" -ne 0 ]; then
   exit 1
 fi
-# pr is never seated in commands/review-panel.md (it is not a review lens), so the derived sweep
+# pr is never seated in skills/flow-review-panel/SKILL.md (it is not a review lens), so the derived sweep
 # above cannot cover it -- but its own contract is load-bearing (agents/somi-pr.md's Write discipline
 # section is the only thing gating an ungated `gh pr create`), so assert it directly.
 if ! grep -q '^## Write discipline' agents/somi-pr.md; then
@@ -621,13 +621,13 @@ if ! grep -q '^## The trivial threshold' skills/somi-routing/SKILL.md; then
   echo "FAIL: skills/somi-routing/SKILL.md lacks the 'The trivial threshold' section" >&2
   exit 1
 fi
-if ! grep -q 'somi-routing/SKILL.md#the-trivial-threshold' commands/code.md; then
-  echo "FAIL: commands/code.md does not reference the trivial threshold" >&2
+if ! grep -q 'somi-routing/SKILL.md#the-trivial-threshold' skills/flow-code/SKILL.md; then
+  echo "FAIL: skills/flow-code/SKILL.md does not reference the trivial threshold" >&2
   exit 1
 fi
 
 # Coder: Decision Ladder step sits between "Map the change" and "Implement"; no-plan path cites the threshold.
-{ awk '/^[0-9]+\. \*\*Map the change/{m=NR} /^[0-9]+\. \*\*Climb the Decision Ladder/{l=NR} /^[0-9]+\. \*\*Implement the smallest/{i=NR} END{exit !(m && l>m && i>l)}' agents/somi-coder.md && grep -q 'somi-routing/SKILL.md#the-trivial-threshold' agents/somi-coder.md; } || { echo "FAIL: agents/somi-coder.md needs the Decision Ladder between Map and Implement, and the trivial-threshold reference" >&2; exit 1; }
+{ awk '/^[0-9]+\. \*\*Map the change/{m=NR} /^[0-9]+\. \*\*Climb the Decision Ladder/{l=NR} /^[0-9]+\. \*\*Implement the smallest/{i=NR} END{exit !(m && l>m && i>l)}' skills/role-coder/SKILL.md && grep -q 'somi-routing/SKILL.md#the-trivial-threshold' skills/role-coder/SKILL.md; } || { echo "FAIL: skills/role-coder/SKILL.md needs the Decision Ladder between Map and Implement, and the trivial-threshold reference" >&2; exit 1; }
 echo "==> Creating coverage stub..."
 mkdir -p coverage
 printf 'TN:\nend_of_record\n' > coverage/lcov.info

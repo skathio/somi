@@ -1,8 +1,8 @@
 # Agents
 
-SoMi ships phase-specific subagents graded across **cost tiers**, plus one Copilot-only front
-door (`somi`) documented separately in
-["The front-door agent"](#the-front-door-agent) below. The **`cost: high`** tier front-loads the
+SoMi ships phase-specific subagents graded across **cost tiers**, plus the front door — the `somi`
+dispatcher, the `somi-flow` runner and the `somi-general` fallback — documented separately in
+["The front-door agents"](#the-front-door-agents) below. The **`cost: high`** tier front-loads the
 expensive reasoning — research, design, decisions, complexity mapping, and fresh-eyes review — and
 compiles it into a dense `brief.md`. The **`cost: medium`** tier executes against that brief without
 re-researching. See [Cost tiering](#cost-tiering) below.
@@ -25,14 +25,19 @@ re-researching. See [Cost tiering](#cost-tiering) below.
 | [`somi-impact`](../agents/somi-impact.md)                              | `medium`       | Blast-radius mapping before committing to `/design` or `/plan`; lens selection for a diff |
 | [`somi-pr`](../agents/somi-pr.md)                                       | `medium`       | Compose a PR title + description from a work item's artifacts         |
 | [`somi-incident`](../agents/somi-incident.md)                          | `medium`       | Mitigate + mandatory debt capture once an incident is framed          |
-| [`somi`](../agents/somi.md)                                   | none           | GitHub Copilot session persona — not phase-specific; classifies the request and dispatches to whichever of the others fits (see "The front-door agent" below) |
+| [`somi-flow`](../agents/somi-flow.md)                          | `medium`       | Started by the `somi` dispatcher: runs one named workflow from its `flow-<name>` skill, starting the specialists |
+| [`somi-general`](../agents/somi-general.md)                    | `medium`       | Started by the `somi` dispatcher for a request that matches no workflow; hands back a `REROUTE` if it turns out to be one |
+| [`somi`](../agents/somi.md)                                   | none           | The front door (made for GitHub Copilot): a dispatcher that routes each message to `somi-flow` or `somi-general` and never does the work (see "The front-door agents" below) |
 
 ## How agents get invoked
 
-Three paths:
+Every workflow's procedure is one skill, `skills/flow-<name>/SKILL.md`, with two entry points:
+the command (`commands/<name>.md`, a thin wrapper that runs the procedure in the main conversation
+on Claude Code) and the `somi-flow` runner (which runs the same procedure as a subagent when the
+`somi` dispatcher starts it). Either way the procedure starts the specialists below. Three paths:
 
-1. **User invokes a command** (`/plan`, `/code`, `/review`) → command calls the corresponding
-   core agent.
+1. **User invokes a command** (`/plan`, `/code`, `/review`), or asks the `somi` dispatcher, which
+   hands the workflow to `somi-flow` → the procedure calls the corresponding core agent.
 2. **A core agent escalates** during its work — e.g., coder hits auth code and asks whether to
    consult `somi-security-reviewer`.
 3. **User invokes a specialised command** (`/security-review`, `/architecture-review`,
@@ -43,12 +48,13 @@ SoMi prefers **explicit handoff** over silent specialisation. When a core agent 
 support agent should be consulted, it surfaces the recommendation; the human (or the
 orchestrating command) decides.
 
-Whichever path starts the agent — a command Tasking it directly, or the `somi` front door running
-that command's procedure live — the same [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md)
-procedure is what resolves its cost tier and model against the session ceiling. This is a
-prompt-level instruction, not code that runs the resolution deterministically; what
-`scripts/validate.sh` mechanically checks is narrower — that every command whose text starts a real
-agent references the skill somewhere in its own text, failing the build otherwise.
+Whichever path starts the agent — a flow procedure run from its command, the same procedure run by
+`somi-flow`, or the dispatcher starting `somi-flow` / `somi-general` — the same
+[`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md) procedure is what resolves its cost tier
+and model against the session ceiling. This is a prompt-level instruction, not code that runs the
+resolution deterministically; what `scripts/validate.sh` mechanically checks is narrower — that
+every flow skill whose text starts a real agent references the skill somewhere in its own text,
+failing the build otherwise.
 
 ## The discovery agent
 
@@ -338,51 +344,73 @@ incident does not close without all three.
 
 Invoke via `/incident`, never directly — Stage 1 must run first.
 
-## The front-door agent
+## The front-door agents
+
+Three agents carry a request from the user to the specialists. None of them does specialist work.
+
+```
+user ─▶ somi (dispatcher, the session agent) ── one start per request ──▶ somi-flow   ─▶ specialists
+                ▲                                                    └─▶ somi-general
+                └── CHECKPOINT → asks the user → RESUME ◀──────────────────┘
+```
+
+Depth stays at two below the session: a composite workflow (`/ship-loop` running `/plan-loop` and
+`/code-loop`) loads its sub-flows' skills and runs them inside the same `somi-flow`, never a second
+runner. That keeps every specialist reachable on both hosts: Claude Code nests subagents three deep
+by default, and Copilot CLI nests one level below a subagent. A subagent cannot ask the user on
+either host, so every user gate inside a workflow crosses back as a `CHECKPOINT` block
+([`skills/somi-checkpoint`](../skills/somi-checkpoint/SKILL.md)): the runner saves its state to
+`.somi/`, returns the questions and stops; the dispatcher asks the user and starts the runner again
+with a `RESUME` block carrying the answers.
 
 ### somi
 
-A Copilot-only dispatcher, not a phase-specific agent. Selecting it as the session persona
-removes the "which of the others do I need?" choice: per incoming message it first strips its own
-`/somi`/`@somi` invocation marker, then runs an invocation-mode gate — nothing left renders the
-read-only status dashboard, an explicit command is proxied directly, and anything else is classified against
-[`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md). It then **runs the matched
-command's own procedure live, in the same turn** — the role a command body plays on Claude Code —
-rather than handing the whole command to one Tasked agent. Every agent that procedure starts is
-resolved individually, right as it starts, per
-[`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) — the same procedure a direct
-command follows at its own agent-Tasking point: the bundled `somi_resolve` MCP tool (falling back to
-[`scripts/somi-dispatch.mjs`](../scripts/somi-dispatch.mjs) only where SoMi's own install path is
-already known — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) picks that agent's cost
-tier against the session ceiling, and it is Tasked with the resolved model
-(or, absent a host mapping, a model this agent picks itself for the tier and discloses as its own
-choice) and its tier stated in the briefing — the same dispatch a direct command performs on Claude
-Code, just triggered from inside this persona, and repeated for every agent a multi-agent command
-seats rather than collapsed into a single Task.
+The dispatcher, and the agent a GitHub Copilot user selects for the session (Copilot runs one agent
+per session; on Claude Code the direct commands already reach each workflow). Per message it strips
+its own `/somi`/`@somi` marker, relays a pending checkpoint's answer, and otherwise picks one target:
+nothing left → the `status` dashboard flow; a known command → that flow; free text → the
+[`somi-routing`](../skills/somi-routing/SKILL.md) table, with `somi-general` as the row for
+everything else. It announces the choice in one line, resolves and starts the agent through
+[`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md), and relays the result.
 
-- **Cost**: none of its own — this was always decorative: the host binds the model when the
-  user selects this agent in Copilot's UI, so nothing here could ever act on a declared value. It
-  is still, in effect, a thin dispatcher, not a reasoning engine: it decides *which* command starts,
-  runs that command's own procedure itself, and resolves *at what tier* each agent that procedure
-  starts runs.
-- **Won't**: second-guess an explicit command; guess a model or tier when the resolver fails; suppress a dispatched persona's
-  own checkpoints (a `gh pr create` confirmation, `/incident`'s framing exchange, `/plan`'s decision
-  round-trip).
-- **Will**: announce which flow it's entering and why before dispatching it; announce a `low`
-  session ceiling and its source before any work runs; nudge Claude Code users toward the direct
-  commands, where this agent adds no value (the direct commands already pick the right agent and
-  Task it themselves there).
+- **Cost**: none of its own — the host binds the model when the user selects the agent.
+- **Won't**: do the work itself (edit, run commands, read the project to answer, follow a
+  procedure, play a specialist); re-classify an explicit command; start any agent other than
+  `somi-flow` or `somi-general`.
+- **Will**: keep its context free of procedure text: everything a workflow does lives in the flow
+  skill the runner loads. This is the fix for a front door that used to run every procedure in its
+  own context (about 139 KB of procedure text for one `/ship-loop`) and, once that context was
+  full or compacted, did the work itself about half the time. It has no `tools:` restriction (no
+  SoMi agent declares one), so staying a dispatcher is an instruction, kept short so it stays in view.
 
-Invoke by selecting `somi` as your Copilot agent. Not needed on Claude Code.
+**There is no `/somi` command.** Copilot prefixes every message to this agent with `/somi`/`@somi`,
+so a same-named command was indistinguishable from that marker and swallowed every request (fixed in
+2.2.1 by removing the command). See the maintainer notes in [`agents/somi.md`](../agents/somi.md).
 
-**There is no separate `/somi` command.** An earlier version shipped both a `somi` agent and a
-standalone `/somi` slash command with the same name — on Copilot, this agent's own
-`/somi`/`@somi` invocation marker was indistinguishable from an explicit invocation of that
-command, so every message got permanently short-circuited into a recommend-only router and never
-reached the real command the user typed (e.g. `/somi ship-loop feature` never ran `/ship-loop`).
-The fix was structural: the command is gone, and this agent absorbs both the status dashboard and
-the router directly. See the maintainer note in [`agents/somi.md`](../agents/somi.md) and
-[`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension) for how a Copilot session uses it.
+### somi-flow
+
+The workflow runner. Its briefing names one flow (`plan`, `code-loop`, `ship-loop`, `status`, …) and
+the request; it loads [`flow-<name>`](./SKILLS.md#workflow-procedures) and follows it step by step,
+starting every specialist through `somi-dispatch`, and ends with a `DONE`, `STOPPED` or
+`CHECKPOINT` block.
+
+- **Default tier**: `medium` — it orchestrates; the judgment-heavy work runs in the specialists it
+  starts, at their own tiers.
+- **Won't**: ask the user directly; skip a step, gate or cap; play a specialist's role; start
+  another `somi-flow`.
+- **Will**: resume from a `RESUME` block by reloading the flow skill and checking disk state
+  against the checkpoint's context, never from memory.
+
+### somi-general
+
+The fallback for requests that match no workflow: questions about the code or the project,
+explanations, research, git or shell housekeeping, help with SoMi itself.
+
+- **Default tier**: `medium`.
+- **Won't**: edit tracked project files or start agents. A request that turns out to be a code
+  change, a bug, a review, a design or another workflow comes back as `REROUTE <flow>`, so it gets
+  that workflow's review, caps and paper trail.
+- **Will**: return a `CHECKPOINT` before anything outward-facing or hard to reverse.
 
 ## Cost tiering
 
@@ -449,10 +477,11 @@ See [EXTENDING.md](./EXTENDING.md). The short version:
 
 ## Escalation matrix (which command/agent calls which)
 
-Agents themselves cannot Task other agents. Escalations are surfaced as **recommendations** to
-the calling command, which decides whether to Task the next agent. `/review` is the structural
+A specialist does not Task other specialists: escalations are surfaced as **recommendations** to
+the calling procedure, which decides whether to Task the next agent. (The hosts allow nesting, and
+`somi-flow` uses one level of it; specialists stay leaves so the depth stays at two.) `/review` is the structural
 entrypoint that auto-invokes consultants (security-reviewer, architecture-reviewer,
-test-strategist) based on the trigger table in [`commands/review.md`](../commands/review.md) — so
+test-strategist) based on the trigger table in [`flow-review`](../skills/flow-review/SKILL.md) — so
 plain prose escalations from inside an agent are no longer the only path.
 
 ```
@@ -494,7 +523,7 @@ plain prose escalations from inside an agent are no longer the only path.
 /impact      → impact           (read-only blast-radius tracing, atlas-first)
 /adopt       → atlas (Stage 1) + test-strategist (optional, gap-report depth)
 # Note: `somi` names a selectable Copilot agent persona (agents/somi.md) only — there is no
-# `/somi` command, so it has no row of its own here. See "The front-door agent" section above.
+# `/somi` command, so it has no row of its own here. See "The front-door agents" section above.
 /pr          → pr               (composes the PR from artifacts, returns text; gh only after
                                  confirmation, run by the command)
 
@@ -529,4 +558,4 @@ so the stable briefing prefix stays cache-warm). Only then are decisions recorde
 `Verified with user: yes` — an agent never marks a decision user-verified in the same pass that
 generated it. The same mechanics apply to `somi-designer` and `somi-discovery-analyst`.
 
-See [`agents/somi-planner.md`](../agents/somi-planner.md) for the full protocol, the block shapes, and examples.
+See [`role-planner`](../skills/role-planner/SKILL.md) for the full protocol, the block shapes, and examples.
