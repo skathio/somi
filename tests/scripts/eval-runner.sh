@@ -116,10 +116,11 @@ check "a path source records sha null" \
 
 # --- --source resolution and worktree cleanup --------------------------------------------------
 head_sha=$(git rev-parse HEAD)
-# Counted before and after, not absolutely: `git worktree list` is global state, and a concurrent
-# eval run (which legitimately holds one for its whole duration) made this assertion fail on a
-# clean tree. The invariant is "this test leaks none", not "none exist anywhere".
-wt_before=$(git worktree list | grep -c somi-eval-src || true)
+# `git worktree list` is global state: a concurrent eval run, or another script in the parallel suite,
+# can add or remove its own worktree during this test. So "this test leaks none" is checked as sets:
+# a leak is a worktree present afterwards that was not there before.
+wt_list() { git worktree list --porcelain | grep '^worktree .*somi-eval-src' | sort; }
+wt_before=$(wt_list)
 res=$( j "
   const s = M.resolveSource('HEAD');
   const fs = await import('node:fs');
@@ -129,7 +130,7 @@ res=$( j "
   process.stdout.write(s.sha + '|' + had + '|' + gone);
 ")
 check "--source HEAD checks out a worktree and cleans it up" "$res" "$head_sha|true|true"
-check "this test leaks no worktree" "$(( $(git worktree list | grep -c somi-eval-src || true) - wt_before ))" "0"
+check "this test leaks no worktree" "$(comm -13 <(printf '%s\n' "$wt_before" | grep . || true) <(wt_list) | grep -c . || true)" "0"
 
 check "an unresolvable --source fails loudly" \
   "$( j "try { M.resolveSource('no-such-ref-xyz'); process.stdout.write('NO THROW'); } catch (e) { process.stdout.write('threw'); }" )" \
