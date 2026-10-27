@@ -123,7 +123,7 @@ git archive --format=tar <candidate-sha> -- . ':(exclude)tests' ':(exclude)bench
 
 The driver refuses a `--budget-total` below the worst case of the draws still to run (the sum of the per-draw
 caps), and `--force-budget` is not an acceptable way around that. Run the plan in one-repeat chunks per
-scenario instead, so each chunk's worst case fits its budget. A scenario pair (SoMi arm cap $6 plus bare arm cap $2 by default) needs `--budget-total 8` or more:
+scenario instead, so each chunk's worst case fits its budget. A scenario pair (SoMi arm cap $6 plus bare arm cap $2 by default) needs `--budget-total 8` or more. The 4.0.0 recordings (`1c32277`, `f4e7cc1`) ran with lower caps, `--budget-total 3 --budget-somi 2 --budget-bare 1`, and no draw came near them (the dearest SoMi draw cost $0.98); a lower cap is a smaller worst case, not a weaker guard, as long as a capped draw still records as over budget rather than as scored:
 
 ```bash
 for seed in 1 2 3 4 5 6 7 8; do
@@ -303,8 +303,10 @@ sequence of windows, not a single sitting:
 - `--out` directories hold full transcripts of the draws; keep them outside the repository and do not commit
   them. Only the assembled baseline file is committed.
 
-For scale (from the committed files, not a quote): the 48 L2 rows of the baseline record $23.25 of cost, $17.85
-on the SoMi arm and $5.40 on the bare arm; halted attempts add to the account spend but not to the rows, and
+For scale (from the committed files, not a quote): the first baseline (`8c44e2d`, recorded on a model its alias no
+longer resolves to) records $23.25 for its 48 L2 rows, $17.85 on the SoMi arm and $5.40 on the bare arm. The 4.0.0
+recordings on the current alias record far less for the same 48-row plan: $5.14 (`8c44e2d` re-recorded), $3.87
+(`1c32277`) and $1.94 (`f4e7cc1`), over 2 to 3 hours of draw time; halted attempts add to the account spend but not to the rows, and
 the calibration run spent more than its rows show for the same reason
 ([`pilot/report.md`](../benchmarks/usage-speed/pilot/report.md), "Spend"). Cost varies with the model's price
 and the release's behaviour, so state the budget fresh each time.

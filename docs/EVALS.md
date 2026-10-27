@@ -19,6 +19,13 @@ npm test              # structural. hermetic. always runs.
 npm run eval:behavioral   # invokes a model. needs network + a credential. never in CI's default path.
 ```
 
+`npm test` runs its inline checks first, then every test script together through
+`tests/scripts/lib/run-suites.mjs`: half as many at a time as the machine has cores (at least two), each script's output
+printed whole and in order, followed by the wall time and the slowest scripts. `SOMI_TEST_JOBS=1 npm test`
+runs them one at a time; any other whole number caps the concurrency. A new test script is queued in
+`scripts/validate.sh` with `suite tests/scripts/<name>.sh`, and must not share fixed paths with another
+script: each one already works in its own `mktemp -d` directory.
+
 `tests/scripts/evals-packaging.sh` enforces the separation at the **invocation** level, not by
 grepping for mentions — `validate.sh` must name `tests/evals/` to syntax-check it, so a "no
 mention" rule would be self-contradicting. What is forbidden is *executing* the runner from

@@ -11,6 +11,11 @@ set -euo pipefail
 # An empty value means "no global config"; suites that test the global file set their own.
 export SOMI_GLOBAL_CONFIG=""
 
+# Test scripts are queued with suite() as the checks below reach them, then run together by
+# tests/scripts/lib/run-suites.mjs (SOMI_TEST_JOBS at a time, default half the cores; 1 runs them serially).
+SUITES=()
+suite() { SUITES+=("$1"); }
+
 # JSON validity via Node's own parser (no jq). Fails loudly on the first invalid file.
 json_valid() { node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$1"; }
 
@@ -42,60 +47,60 @@ for f in tests/hooks/cases/*.json; do
   echo "  node JSON.parse: $f"
   json_valid "$f"
 done
-bash tests/hooks/run.sh
+suite tests/hooks/run.sh
 
-echo "==> Loop-state & findings-ledger tests..."
-bash tests/scripts/run.sh
+echo "==> Loop-state & findings-ledger tests... (queued)"
+suite tests/scripts/run.sh
 
-echo "==> Link-checker tests..."
-bash tests/scripts/check-links.sh
+echo "==> Link-checker tests... (queued)"
+suite tests/scripts/check-links.sh
 
-echo "==> Session-artefact gate tests..."
+echo "==> Session-artefact gate tests... (queued)"
 # Guards scripts/check-session-artefacts.mjs: fails on a tagged comment, passes a clean one, and
 # honours its explicit exclusions.
-bash tests/scripts/check-session-artefacts.sh
+suite tests/scripts/check-session-artefacts.sh
 
-echo "==> Frontmatter gate tests..."
+echo "==> Frontmatter gate tests... (queued)"
 # Guards scripts/check-frontmatter.mjs: the plain-scalar forms YAML rejects fail, quoted ones pass.
-bash tests/scripts/check-frontmatter.sh
+suite tests/scripts/check-frontmatter.sh
 
-echo "==> File-size budget gate tests..."
+echo "==> File-size budget gate tests... (queued)"
 # Guards scripts/check-size-budget.mjs: an un-ledgered oversized file fails, a ledgered file may
 # shrink but not grow, a stale entry warns, a malformed ledger fails loudly.
-bash tests/scripts/check-size-budget.sh
+suite tests/scripts/check-size-budget.sh
 
-echo "==> Digest-generator tests..."
+echo "==> Digest-generator tests... (queued)"
 # Guards scripts/generate-digest.mjs: per-target prefix transform, drift detection in EITHER
 # copy alone, clean errors on malformed input, and splice anchoring. Wiring `--check` itself
 # into this script is the separate "Validating digest parity" step below — this is the
 # unit guard for the generator, not the drift gate.
-bash tests/scripts/generate-digest.sh
+suite tests/scripts/generate-digest.sh
 
-echo "==> Cost model resolver tests..."
-bash tests/scripts/cost-model.sh
+echo "==> Cost model resolver tests... (queued)"
+suite tests/scripts/cost-model.sh
 
-echo "==> Cost ceiling tests..."
-bash tests/scripts/cost-ceiling.sh
+echo "==> Cost ceiling tests... (queued)"
+suite tests/scripts/cost-ceiling.sh
 
-echo "==> Global config, merge and reads through links..."
-bash tests/scripts/global-config.sh
+echo "==> Global config, merge and reads through links... (queued)"
+suite tests/scripts/global-config.sh
 
-echo "==> Dispatch resolver tests..."
-bash tests/scripts/somi-dispatch.sh
-bash tests/scripts/size-tier.sh
+echo "==> Dispatch resolver tests... (queued)"
+suite tests/scripts/somi-dispatch.sh
+suite tests/scripts/size-tier.sh
 
-echo "==> Front-door agent <-> dispatch resolver contract tests..."
+echo "==> Front-door agent <-> dispatch resolver contract tests... (queued)"
 # agents/somi.md is a prompt and can't be exercised without a model, but what its Step 4 tells the
 # model to RUN can be checked deterministically: the resolve --agent/--host invocation shape it
 # instructs, and the exit codes it maps, must both be real and current against the actual CLI.
-bash tests/scripts/somi-agent-dispatch-contract.sh
+suite tests/scripts/somi-agent-dispatch-contract.sh
 
-echo "==> Bundled MCP server tests (somi_resolve / somi_command)..."
+echo "==> Bundled MCP server tests (somi_resolve / somi_command)... (queued)"
 # scripts/somi-mcp.mjs is the MCP-native equivalent of the CLI above, launched from
 # ${CLAUDE_PLUGIN_ROOT}/${PLUGIN_ROOT} so a prompt never needs an install path. Both wrap the
 # identical scripts/lib/dispatch-resolver.mjs, so this drives the real JSON-RPC stdio protocol
 # rather than re-testing the resolver's arithmetic a third time.
-bash tests/scripts/somi-mcp.sh
+suite tests/scripts/somi-mcp.sh
 
 echo "==> Validating the dispatch guard (no caller ignoring per-agent overrides)..."
 # scripts/lib/cost-ceiling.mjs's modelForDispatch() is the ONLY sanctioned way to turn a dispatch
@@ -124,7 +129,7 @@ fi
 if [ "$dispatch_guard_failed" -ne 0 ]; then
   exit 1
 fi
-bash tests/scripts/dispatch-guard.sh
+suite tests/scripts/dispatch-guard.sh
 
 echo "==> Diary compaction rule present in the template..."
 # The rule must stay triggered and concrete: a numeric trigger, a verbatim move to diary-archive.md,
@@ -136,39 +141,39 @@ for pat in 'more than 40' 'diary-archive\.md' 'verbatim' 'Never move a `decision
 done
 echo "  ok: $DIARY_TMPL"
 
-echo "==> Eval fixture guards..."
+echo "==> Eval fixture guards... (queued)"
 # Guards tests/evals/fixtures/. Two defects are guarded here: a plan tree shipped
 # under `.somi/` that .gitignore silently dropped from the package, and pass criteria
 # written into fixture source as comments the candidate reads — which would have flatlined two
 # load-bearing rubric dimensions at pass in BOTH arms of the trim comparison, reporting no
 # regression on exactly what the corpus exists to protect.
-if [ -d tests/evals ]; then bash tests/scripts/evals-fixtures.sh; else echo "  (skipped: tests/evals not packaged)"; fi
+if [ -d tests/evals ]; then suite tests/scripts/evals-fixtures.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
-echo "==> Eval runner unit tests..."
+echo "==> Eval runner unit tests... (queued)"
 # Guards tests/evals/run.mjs: the N-of-M grading bands, the trim-comparison rule, the result
 # schema, and --source worktree cleanup. Hermetic -- every case is --dry-run or a direct call.
 # This runs the runner's UNIT tests; it never invokes the runner against a model. The structural
 # assertion that npm test cannot execute the runner lives inside eval-runner.sh itself.
-if [ -d tests/evals ]; then bash tests/scripts/eval-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
+if [ -d tests/evals ]; then suite tests/scripts/eval-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
-echo "==> Convergence gate CLI unit tests..."
+echo "==> Convergence gate CLI unit tests... (queued)"
 # Guards tests/evals/convergence.mjs's CLI section: argument parsing, --dry-run's shape/zero-model-call
 # contract, --merge/--certify's shard-fold report, and the sha boundary check. Mirrors
 # eval-runner.sh's own pattern -- unit-tests the gate logic, never a live run. The module's
 # non-CLI logic is already covered by eval-runner.sh; this file is scoped to the CLI section
 # alone, so the two stay disjoint rather than duplicating each other.
-if [ -d tests/evals ]; then bash tests/scripts/convergence-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
+if [ -d tests/evals ]; then suite tests/scripts/convergence-runner.sh; else echo "  (skipped: tests/evals not packaged)"; fi
 
-echo "==> Eval packaging & hermeticity..."
+echo "==> Eval packaging & hermeticity... (queued)"
 # The hermeticity invariant lives here, and this step owns it alone: `npm test` never
 # invokes a model, reaches the network, or reads a credential -- and the eval corpus never ships
 # to consumers. Asserted at the INVOCATION level, because validate.sh must NAME tests/evals to
 # syntax-check it, so a "no mention" rule would be self-contradicting.
-bash tests/scripts/evals-packaging.sh
+suite tests/scripts/evals-packaging.sh
 
-echo "==> Eval gate rule tests..."
+echo "==> Eval gate rule tests... (queued)"
 # One glob (D-P3): later iterations add tests/scripts/eval-gate-*.sh files, never a validate.sh block.
-if [ -d tests/evals ]; then for t in tests/scripts/eval-gate-*.sh; do bash "$t"; done; else echo "  (skipped: tests/evals not packaged)"; fi
+if [ -d tests/evals ]; then for t in tests/scripts/eval-gate-*.sh; do suite "$t"; done; else echo "  (skipped: tests/evals not packaged)"; fi
 
 echo "==> Digest-marker / hook-fixture coupling..."
 # A `rules/` trim that removes or rewords a digest bullet must update
@@ -231,10 +236,10 @@ done
 if [ "$cost_failed" -ne 0 ]; then
   exit 1
 fi
-bash tests/scripts/cost-defaults.sh
+suite tests/scripts/cost-defaults.sh
 
-echo "==> Agent names: stem == frontmatter name, somi- prefix, no stale ids..."
-bash tests/scripts/agent-names.sh
+echo "==> Agent names: stem == frontmatter name, somi- prefix, no stale ids... (queued)"
+suite tests/scripts/agent-names.sh
 
 echo "==> Validating command <-> somi-dispatch skill reference..."
 # Every command that Tasks an agent directly resolves it through the same dispatch procedure the
@@ -248,10 +253,10 @@ echo "==> Validating command <-> somi-dispatch skill reference..."
 if ! node tests/scripts/lib/dispatch-reference-gate.mjs skills agents; then
   exit 1
 fi
-bash tests/scripts/dispatch-reference-gate.sh
+suite tests/scripts/dispatch-reference-gate.sh
 
-echo "==> Dispatch line: one canonical phrase, native agent_type dispatch, requested-low disclosure..."
-bash tests/scripts/dispatch-line-gate.sh
+echo "==> Dispatch line: one canonical phrase, native agent_type dispatch, requested-low disclosure... (queued)"
+suite tests/scripts/dispatch-line-gate.sh
 
 echo "==> Validating the stale-vocabulary retirement gate..."
 # scripts/validate.sh only ever asserted frontmatter VALUES above, never prose -- so a
@@ -274,7 +279,7 @@ case "$retirement_gate" in
     exit 1
     ;;
 esac
-bash tests/scripts/retirement-gate.sh
+suite tests/scripts/retirement-gate.sh
 
 echo "==> Validating /ship-loop's non-overridable checkpoint..."
 # /ship-loop's single mandatory human checkpoint moved from a cost-tier boundary (which
@@ -286,7 +291,7 @@ echo "==> Validating /ship-loop's non-overridable checkpoint..."
 if ! node tests/scripts/lib/checkpoint-gate.mjs skills/flow-ship-loop/SKILL.md; then
   exit 1
 fi
-bash tests/scripts/checkpoint-gate.sh
+suite tests/scripts/checkpoint-gate.sh
 
 echo "==> Validating new cost-tier artifacts..."
 for f in \
@@ -595,7 +600,7 @@ if [ -d site ]; then
 else
   echo "  (skipped: site/ not packaged)"
 fi
-bash tests/scripts/site-roadmap-gate.sh
+suite tests/scripts/site-roadmap-gate.sh
 
 echo "==> Validating no session-artefact references in shipped code and prose..."
 # Comments in hooks/ and scripts/, and every line of agents/, commands/, skills/, must not point at
@@ -628,6 +633,10 @@ fi
 
 # Coder: Decision Ladder step sits between "Map the change" and "Implement"; no-plan path cites the threshold.
 { awk '/^[0-9]+\. \*\*Map the change/{m=NR} /^[0-9]+\. \*\*Climb the Decision Ladder/{l=NR} /^[0-9]+\. \*\*Implement the smallest/{i=NR} END{exit !(m && l>m && i>l)}' skills/role-coder/SKILL.md && grep -q 'somi-routing/SKILL.md#the-trivial-threshold' skills/role-coder/SKILL.md; } || { echo "FAIL: skills/role-coder/SKILL.md needs the Decision Ladder between Map and Implement, and the trivial-threshold reference" >&2; exit 1; }
+echo "==> Test suites (${#SUITES[@]} queued, run in parallel)..."
+suite tests/scripts/run-suites.sh
+node tests/scripts/lib/run-suites.mjs -- "${SUITES[@]}" || exit 1
+
 echo "==> Creating coverage stub..."
 mkdir -p coverage
 printf 'TN:\nend_of_record\n' > coverage/lcov.info

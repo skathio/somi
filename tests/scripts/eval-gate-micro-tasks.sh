@@ -78,7 +78,28 @@ for (const l of res) console.log((l[0] ? 'ok' : 'FAIL') + '\t' + l[1] + (l[0] ? 
 EOS
 )
 suite() { LIB="$1" ROOT="$ROOT" TMPD="$2" node --input-type=module -e "$CODE" 2>&1; }
-mkdir -p "$TMP/base"; out=$(suite "$ROOT/tests/evals/lib" "$TMP/base") || true
+
+# The base run and each mutation run below are independent full runs of the suite (every real task admitted again),
+# so they run concurrently: each writes its own output file, and the verdicts are read afterwards in the same order.
+mkdir -p "$TMP/base"; suite "$ROOT/tests/evals/lib" "$TMP/base" > "$TMP/base.out" &
+nm=0; labels=()
+mutant() { # from, to, label
+  local d="$TMP/m$((++nm))"; mkdir -p "$d"; cp tests/evals/lib/*.mjs "$d/"; labels+=("$3")
+  if ! M_FILE="$d/mutant-spread.mjs" M_FROM="$1" M_TO="$2" node -e "const f=process.env.M_FILE,fs=require('fs'),s=fs.readFileSync(f,'utf8');if(!s.includes(process.env.M_FROM))process.exit(3);fs.writeFileSync(f,s.replace(process.env.M_FROM,()=>process.env.M_TO))"; then echo NOT-FOUND > "$d.out"; return; fi
+  while [ "$(jobs -rp | wc -l)" -ge 4 ]; do wait -n; done   # four at a time: each admits every task, CPU-bound
+  mkdir -p "$d/t"; suite "$d" "$d/t" > "$d.out" &
+}
+# Mutation: each rule is broken on a scratch copy of the library (with its admit sibling); the suite must then fail.
+mutant "MIN_MUTANTS: 6" "MIN_MUTANTS: 1" "minimum mutant count"
+mutant "if (!exact(r, 5, 100)) return 'out of range';" "if (false) return 'out of range';" "fractions under 5% are refused"
+mutant "return r.failed * 100 <= r.total * 90 ? '60-90%' : 'out of range';" "return '60-90%';" "fractions over 90% are refused"
+mutant "if (r.failed === 0) return 'equivalent';" "" "an equivalent mutant is reported"
+mutant "if (!exact(r, 20, 100)) return '5-20%';" "if (!exact(r, 21, 100)) return '5-20%';" "20% belongs to the second band"
+mutant "r.failed * 100 <= r.total * 60" "r.failed * 100 < r.total * 60" "60% belongs to the third band"
+mutant "for (const b of BANDS.filter((x) => x.required))" "for (const b of [])" "every required band needs a mutant"
+mutant "if (admission === null || typeof admission !== 'object' || admission.ok !== true) return" "if (false) return" "a refused admission is a failed spread"
+wait
+out="$(cat "$TMP/base.out")"
 
 pass=0; fail=0
 while IFS=$'\t' read -r status name; do
@@ -90,23 +111,12 @@ while IFS=$'\t' read -r status name; do
   esac
 done <<< "$out"
 
-# Mutation: each rule is broken on a scratch copy of the library (with its admit sibling); the suite must then fail.
-nm=0
-mutant() { # from, to, label
-  local d="$TMP/m$((++nm))"; mkdir -p "$d"; cp tests/evals/lib/*.mjs "$d/"
-  if ! M_FILE="$d/mutant-spread.mjs" M_FROM="$1" M_TO="$2" node -e "const f=process.env.M_FILE,fs=require('fs'),s=fs.readFileSync(f,'utf8');if(!s.includes(process.env.M_FROM))process.exit(3);fs.writeFileSync(f,s.replace(process.env.M_FROM,()=>process.env.M_TO))"; then fail=$((fail+1)); printf '  FAIL mutation target not found: %s\n' "$3"; return; fi
-  mkdir -p "$d/t"; local res; res=$(suite "$d" "$d/t")
-  if [ -z "$res" ] || printf '%s\n' "$res" | grep -qv '^\(ok\|#\)'; then pass=$((pass+1)); printf '  ok   mutation caught: %s\n' "$3"; else fail=$((fail+1)); printf '  FAIL mutation survived: %s\n' "$3"; fi
-}
-mutant "MIN_MUTANTS: 6" "MIN_MUTANTS: 1" "minimum mutant count"
-mutant "if (!exact(r, 5, 100)) return 'out of range';" "if (false) return 'out of range';" "fractions under 5% are refused"
-mutant "return r.failed * 100 <= r.total * 90 ? '60-90%' : 'out of range';" "return '60-90%';" "fractions over 90% are refused"
-mutant "if (r.failed === 0) return 'equivalent';" "" "an equivalent mutant is reported"
-mutant "if (!exact(r, 20, 100)) return '5-20%';" "if (!exact(r, 21, 100)) return '5-20%';" "20% belongs to the second band"
-mutant "r.failed * 100 <= r.total * 60" "r.failed * 100 < r.total * 60" "60% belongs to the third band"
-mutant "for (const b of BANDS.filter((x) => x.required))" "for (const b of [])" "every required band needs a mutant"
-mutant "if (admission === null || typeof admission !== 'object' || admission.ok !== true) return" "if (false) return" "a refused admission is a failed spread"
-
+for i in "${!labels[@]}"; do
+  res="$(cat "$TMP/m$((i + 1)).out")"; label="${labels[$i]}"
+  if [ "$res" = NOT-FOUND ]; then fail=$((fail+1)); printf '  FAIL mutation target not found: %s\n' "$label"
+  elif [ -z "$res" ] || printf '%s\n' "$res" | grep -qv '^\(ok\|#\)'; then pass=$((pass+1)); printf '  ok   mutation caught: %s\n' "$label"
+  else fail=$((fail+1)); printf '  FAIL mutation survived: %s\n' "$label"; fi
+done
 ran=$((pass + fail))
 [ "$ran" -ge 25 ] || { fail=$((fail+1)); echo "  FAIL ran $ran checks, fewer than the 25 written"; }
 echo
