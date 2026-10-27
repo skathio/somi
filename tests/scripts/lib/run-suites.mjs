@@ -2,7 +2,8 @@
 // run-suites.mjs -- runs independent test scripts concurrently and prints each one's output whole, in the
 // order given, so a parallel run reads exactly like a serial one.
 //
-// Usage: node tests/scripts/lib/run-suites.mjs [--jobs N] [--alone <script.sh>]... [--] <script.sh> ...
+// Usage: node tests/scripts/lib/run-suites.mjs [--jobs N] [--alone <script.sh>]... [--plan FILE [--shard NAME]]
+//                                               [--] <script.sh> ...
 //
 // Each script runs as `bash <script>` from the current directory with the inherited environment. --jobs
 // defaults to SOMI_TEST_JOBS, else half the machine's cores (at least 2); 1 is a serial run. Exit 0 when
@@ -11,11 +12,17 @@
 //
 // --alone runs a script by itself, before the pool, with nothing else running: for a script whose checks carry
 // wall-clock limits that CPU contention can break (a hidden-suite family killed at its timeout reads as failed cases).
+//
+// --plan reads tests/scripts/suite-plan.json: its `alone` list, and its `shards`, named groups of slow scripts that
+// CI runs on separate runners. --shard (default SOMI_SUITE_SHARD, else `all`) picks what runs: `all`, one named
+// shard, or `light`, every given script no shard names. So the shards and `light` together run each script once.
+// A script the plan names but the caller did not give is an error, so a rename cannot drop a script silently.
 
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
 
-const USAGE = 'usage: run-suites.mjs [--jobs N] [--alone <script.sh>]... [--] <script.sh> ...';
+const USAGE = 'usage: run-suites.mjs [--jobs N] [--alone <script.sh>]... [--plan FILE [--shard NAME]] [--] <script.sh> ...';
 
 // Half the cores, at least two: most scripts start node processes of their own, and a fully loaded machine makes the
 // eval gates' hidden-suite runs hit their 60 s kill, which reads as failed cases.
@@ -27,16 +34,44 @@ export function parseArgs(argv, env = process.env) {
   const scripts = [];
   const alone = [];
   let jobs = env.SOMI_TEST_JOBS ?? String(defaultJobs());
+  let plan = null;
+  let shard = null; // --shard; SOMI_SUITE_SHARD applies only when a plan is given
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--') { scripts.push(...argv.slice(i + 1)); break; }
     if (argv[i] === '--jobs') { jobs = argv[++i]; continue; }
+    if (argv[i] === '--plan') { if (!argv[i + 1]) return { error: '--plan needs a file' }; plan = argv[++i]; continue; }
+    if (argv[i] === '--shard') { if (!argv[i + 1]) return { error: '--shard needs a name' }; shard = argv[++i]; continue; }
     if (argv[i] === '--alone') { if (!argv[i + 1]) return { error: '--alone needs a script' }; alone.push(argv[++i]); continue; }
     if (argv[i].startsWith('-')) return { error: `unknown option ${argv[i]}` };
     scripts.push(argv[i]);
   }
   if (!/^[1-9][0-9]{0,2}$/.test(String(jobs))) return { error: `--jobs (or SOMI_TEST_JOBS) must be a whole number from 1 to 999, got ${JSON.stringify(jobs)}` };
   if (scripts.length + alone.length === 0) return { error: 'no scripts given' };
-  return { jobs: Number(jobs), scripts, alone };
+  if (plan === null) return shard === null ? { jobs: Number(jobs), scripts, alone } : { error: '--shard needs --plan' };
+  shard ??= env.SOMI_SUITE_SHARD || 'all';
+  let parsed;
+  try { parsed = JSON.parse(fs.readFileSync(plan, 'utf8')); } catch (e) { return { error: `cannot read the plan ${plan}: ${e.message}` }; }
+  const chosen = selectShard([...alone, ...scripts], parsed, shard);
+  return chosen.error ? chosen : { jobs: Number(jobs), ...chosen };
+}
+
+// Applies a suite plan to the given scripts. Returns { alone, scripts } for the shard, or { error }.
+export function selectShard(given, plan, shard) {
+  const shards = plan?.shards ?? {};
+  const planAlone = plan?.alone ?? [];
+  if (!Array.isArray(planAlone) || typeof shards !== 'object' || Array.isArray(shards)) return { error: 'the plan needs an `alone` list and a `shards` object' };
+  if (Object.hasOwn(shards, 'all') || Object.hasOwn(shards, 'light')) return { error: '`all` and `light` are reserved shard names' };
+  const owner = new Map();
+  for (const [name, list] of Object.entries(shards)) {
+    if (!Array.isArray(list) || list.length === 0) return { error: `shard ${name} must list at least one script` };
+    for (const s of list) { if (owner.has(s)) return { error: `${s} is in two shards, ${owner.get(s)} and ${name}` }; owner.set(s, name); }
+  }
+  const named = [...new Set([...planAlone, ...owner.keys()])];
+  const missing = named.filter((s) => !given.includes(s));
+  if (missing.length) return { error: `the plan names scripts that were not given: ${missing.join(', ')}` };
+  if (shard !== 'all' && shard !== 'light' && !Object.hasOwn(shards, shard)) return { error: `unknown shard ${shard} (expected all, light or ${Object.keys(shards).join(', ')})` };
+  const pick = shard === 'all' ? given : shard === 'light' ? given.filter((s) => !owner.has(s)) : given.filter((s) => owner.get(s) === shard);
+  return { alone: pick.filter((s) => planAlone.includes(s)), scripts: pick.filter((s) => !planAlone.includes(s)) };
 }
 
 // Every child still running, so Ctrl-C can stop them all.

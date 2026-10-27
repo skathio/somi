@@ -20,10 +20,24 @@ to `high` for the fresh-eyes judgment this loop wants, run on a cold context so 
 the
 coder's reasoning).
 
-> **Cache-prefix discipline.** Keep the stable inputs — `rules/CLAUDE.md`, the work-item `brief.md`,
-> `spec.md`, and the active `phases/<NN>-*.md` — in the **same order at the front** of each pass's
-> coder brief, and append the volatile per-pass content (prior findings) **last**. A byte-stable
-> prefix lets the 5-minute prompt cache hit across passes, a direct token saving in a multi-pass loop.
+> **Scripts.** Every `node scripts/...` below is under SoMi's install root,
+> `${CLAUDE_PLUGIN_ROOT}` (Claude Code fills in the real path when it loads this skill). Where that still
+> reads as a variable, use the `install_root` line of the run card, or the root you already know; never
+> search the disk for it.
+>
+> **The run card, and cache-prefix discipline.** After `init` (§2), print the iteration's run card once:
+> `node scripts/somi-card.mjs --slug <slug> --iteration <N>.<M> --host <host>`. Paste it **unchanged as
+> the first block of every agent briefing** in this loop, coder and reviewer alike, then the stable
+> inputs in the same order every pass, and the volatile per-pass content (prior findings, the review
+> scope) **last**. The card holds facts only (where the scripts and plan files are, the files in scope,
+> the baseline, the test command), never the coder's reasoning, so a reviewer briefed with it is still
+> unbiased. A byte-stable prefix lets the prompt cache hit across passes, and an agent given the facts
+> does not spend turns re-deriving them.
+>
+> **You orchestrate; you do not do the iteration's work.** Do not read or edit the code the iteration
+> changes, run its tests, or review the diff yourself: the coder and the reviewer do, from fresh
+> contexts. You run the loop's scripts, start the agents, and persist what they return. Every file you
+> read stays in your context and is paid for again on every later step.
 
 ## Gates (hard, configurable via env)
 
@@ -96,6 +110,8 @@ session death at `.somi/somi-state/loop/<slug>.<N>.<M>.json`.
   (flag > env > `.somi/config.json` > defaults), and prints the effective values.
 - Set `RUN_ID` = the `started` timestamp from the state; pass it to every findings-ledger call
   in this loop.
+- Print the run card: `node scripts/somi-card.mjs --slug <slug> --iteration <N>.<M> --host <host>`.
+  Keep its output verbatim for every briefing below (a resumed loop prints it again; same bytes).
 - Append a diary entry (category `note`): title `code-loop started for phase <N>.<M>`, body =
   effective gate values + the iteration file list (+ "resumed from pass P" if resuming).
 
@@ -118,7 +134,7 @@ while true:
   #     Claude Code). Every agent this loop starts is also recorded (the script re-resolves it;
   #     it records what SoMi decided, not your claim):
   #       node scripts/somi-loop.mjs record-dispatch --slug <slug> --iteration <N>.<M> --agent <agent> [--host <host>]
-  Task somi-coder ( = /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
+  Task somi-coder ( = run card, then /code <slug> phase <N>, iteration <M>, brief = current_findings or initial spec )
 
   # 3c. Diff & scope gate (deterministic — cumulative vs the recorded baseline, working tree
   #     included, .somi/.claude excluded; out-of-scope lines count DOUBLE)
@@ -138,12 +154,12 @@ while true:
     Task /review-panel ( = <slug> phase <N>, iteration <M> )   # a command — resolves its own lenses
   elif REVIEW_MODE == "security":                               # also whenever pass printed review_min: security
     # call somi_resolve for both first; Task both in ONE message so they run in parallel
-    Task somi-reviewer          ( = /review <slug>, scope = the review-scope result )
-    Task somi-security-reviewer ( = security lens on this iteration's WHOLE diff, every pass )
+    Task somi-reviewer          ( = run card, then /review <slug>, scope = the review-scope result )
+    Task somi-security-reviewer ( = run card, then the security lens on this iteration's WHOLE diff, every pass )
     # merge: one findings list, de-duplicated by locus, severity = the highest either lens gave
   else:
     # call somi_resolve for somi-reviewer first; full rules: the somi-dispatch skill
-    Task somi-reviewer ( = /review <slug>, scope = the review-scope result )
+    Task somi-reviewer ( = run card, then /review <slug>, scope = the review-scope result )
 
   # 3e. Record the pass + findings. The ledger computes recurrence on a STABLE locus
   #     (file + symbol + normalized title — never the raw line number, which drifts between

@@ -6,6 +6,10 @@ user-invocable: false
 
 # /review — Reviewing workflow
 
+> **Scripts.** Every `node scripts/...` below runs from SoMi's install root, `${CLAUDE_PLUGIN_ROOT}`
+> (Claude Code fills in the real path when it loads this skill). Where that still reads as a variable, use
+> the root you already know; never search the disk for it.
+
 You are running the **reviewing workflow** of somi.
 
 The user's review target: **$ARGUMENTS** (empty = the current working-tree diff vs. the default

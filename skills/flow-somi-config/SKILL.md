@@ -6,6 +6,10 @@ user-invocable: false
 
 # /somi-config — Show and change cost settings
 
+> **Scripts.** Every `node scripts/...` below runs from SoMi's install root, `${CLAUDE_PLUGIN_ROOT}`
+> (Claude Code fills in the real path when it loads this skill). Where that still reads as a variable, use
+> the root you already know; never search the disk for it.
+
 You are running the **cost-settings workflow** of somi. This command has no `cost:` of its own — nor
 a `model:` of its own; it runs inline on whatever model this session is already using, and Tasks no
 agent. It shows the effective cost settings (your global config with the project's `.somi/config.json`

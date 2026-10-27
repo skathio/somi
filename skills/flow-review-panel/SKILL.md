@@ -6,6 +6,10 @@ user-invocable: false
 
 # /review-panel — Parallel multi-lens review
 
+> **Scripts.** Every `node scripts/...` below runs from SoMi's install root, `${CLAUDE_PLUGIN_ROOT}`
+> (Claude Code fills in the real path when it loads this skill). Where that still reads as a variable, use
+> the root you already know; never search the disk for it.
+
 You are running the **review panel** of somi: several independent review lenses on the **same change
 at the same time**, merged into one verdict. Each lens is read-only **by contract** — it holds
 Write/Edit and is forbidden from using them.

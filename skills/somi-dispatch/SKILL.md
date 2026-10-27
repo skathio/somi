@@ -209,7 +209,8 @@ pass its `model`, start it as its `agent_type`, and put the cost line in the bri
 3. **Pass §2's `model`** — the mapped value, or your own no-mapped-model pick when it applies.
 4. **Hand it the scope your own procedure defines** (the iteration, the slug, the target file —
    whatever your own instruction says to pass) — never a paraphrase of the whole command standing
-   in for the agent's own prompt.
+   in for the agent's own prompt. When the procedure printed a run card (`somi-card.mjs`), it goes
+   first in the briefing, byte for byte, before the cost line and the scope.
 5. **If the host rejects a model you picked yourself** (§2's no-mapped-model case), retry the same
    dispatch once without a model argument and say you're doing so. A **mapped** model is never
    dropped this way: if the host rejects it, try the next `model_candidates` entry, and when none is

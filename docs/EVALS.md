@@ -24,10 +24,13 @@ npm run eval:behavioral   # invokes a model. needs network + a credential. never
 printed whole and in order, followed by the wall time and the slowest scripts. `SOMI_TEST_JOBS=1 npm test`
 runs them one at a time; any other whole number caps the concurrency. A new test script is queued in
 `scripts/validate.sh` with `suite tests/scripts/<name>.sh`, and must not share fixed paths with another
-script: each one already works in its own `mktemp -d` directory. A script whose checks carry wall-clock limits
-that CPU contention can break goes in `ALONE_SUITES` in `scripts/validate.sh`, and runs by itself before the
-others (today `eval-gate-micro-tasks.sh`: one task's hidden-suite family takes 3 s of its 10 s limit on an idle
-machine, and failed when the machine was loaded).
+script: each one already works in its own `mktemp -d` directory. Scheduling lives in
+`tests/scripts/suite-plan.json`. A script whose checks carry wall-clock limits that CPU contention can break is
+listed under `alone` and runs by itself (today `eval-gate-micro-tasks.sh`: one task's hidden-suite family takes
+3 s of its 10 s limit on an idle machine, and failed when the machine was loaded). The slow scripts are grouped
+under `shards`; CI runs each shard on its own runner (`SOMI_SUITE_SHARD=heavy-1` and so on) and everything else
+as `SOMI_SUITE_SHARD=light`. A plan that names a script `validate.sh` does not queue fails the run, so the
+shards cannot silently drop one.
 
 `tests/scripts/evals-packaging.sh` enforces the separation at the **invocation** level, not by
 grepping for mentions — `validate.sh` must name `tests/evals/` to syntax-check it, so a "no

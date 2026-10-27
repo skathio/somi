@@ -1,0 +1,20 @@
+{
+  "comment": "How validate.sh's test scripts are scheduled (tests/scripts/lib/run-suites.mjs --plan). 'alone' scripts run by themselves, with nothing else on the machine: their checks carry wall-clock limits that CPU contention breaks. 'shards' split the slow scripts across CI runners; the 'light' shard is every queued script no shard names, so the shards together always cover every script once. A name here that validate.sh does not queue fails the run.",
+  "alone": [
+    "tests/scripts/eval-gate-micro-tasks.sh"
+  ],
+  "shards": {
+    "heavy-1": [
+      "tests/scripts/eval-gate-micro-tasks.sh"
+    ],
+    "heavy-2": [
+      "tests/scripts/eval-gate-ab-driver.sh",
+      "tests/scripts/eval-gate-ab-tasks.sh"
+    ],
+    "heavy-3": [
+      "tests/scripts/eval-gate-review-recall.sh",
+      "tests/scripts/eval-gate-bench-compare.sh",
+      "tests/scripts/eval-gate-micro-lint.sh"
+    ]
+  }
+}

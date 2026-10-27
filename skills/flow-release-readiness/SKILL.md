@@ -6,6 +6,10 @@ user-invocable: false
 
 # /release-readiness — The pre-release gate
 
+> **Scripts.** Every `node scripts/...` below runs from SoMi's install root, `${CLAUDE_PLUGIN_ROOT}`
+> (Claude Code fills in the real path when it loads this skill). Where that still reads as a variable, use
+> the root you already know; never search the disk for it.
+
 You are running the **release-readiness check**: is this set of work actually ready to ship?
 Most of this is **deterministic aggregation over artifacts that already exist** — the model
 spend goes to exactly one place: a fresh-eyes review of the *integration surface*, which

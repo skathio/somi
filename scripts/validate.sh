@@ -12,13 +12,11 @@ set -euo pipefail
 export SOMI_GLOBAL_CONFIG=""
 
 # Test scripts are queued with suite() as the checks below reach them, then run together by
-# tests/scripts/lib/run-suites.mjs (SOMI_TEST_JOBS at a time, default half the cores; 1 runs them serially).
-# A script in ALONE_SUITES runs by itself, before the others: its checks carry wall-clock limits that CPU contention
-# breaks (eval-gate-micro-tasks.sh admits tasks whose hidden-suite families are killed at 10 s; one family takes 3 s
-# on an idle machine and failed under a loaded one).
-ALONE_SUITES=" tests/scripts/eval-gate-micro-tasks.sh "
-SUITES=(); SUITE_ARGS=()
-suite() { case "$ALONE_SUITES" in *" $1 "*) SUITE_ARGS+=(--alone "$1") ;; *) SUITES+=("$1") ;; esac; }
+# tests/scripts/lib/run-suites.mjs (SOMI_TEST_JOBS at a time, default half the cores; 1 runs them serially) under
+# tests/scripts/suite-plan.json: its alone scripts run by themselves, and SOMI_SUITE_SHARD (all, light, heavy-1..3)
+# picks the part of the queue to run, so CI can spread the slow scripts over several runners. Default: all.
+SUITES=()
+suite() { SUITES+=("$1"); }
 
 # JSON validity via Node's own parser (no jq). Fails loudly on the first invalid file.
 json_valid() { node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$1"; }
@@ -55,6 +53,7 @@ suite tests/hooks/run.sh
 
 echo "==> Loop-state & findings-ledger tests... (queued)"
 suite tests/scripts/run.sh
+suite tests/scripts/run-card.sh
 
 echo "==> Link-checker tests... (queued)"
 suite tests/scripts/check-links.sh
@@ -637,9 +636,9 @@ fi
 
 # Coder: Decision Ladder step sits between "Map the change" and "Implement"; no-plan path cites the threshold.
 { awk '/^[0-9]+\. \*\*Map the change/{m=NR} /^[0-9]+\. \*\*Climb the Decision Ladder/{l=NR} /^[0-9]+\. \*\*Implement the smallest/{i=NR} END{exit !(m && l>m && i>l)}' skills/role-coder/SKILL.md && grep -q 'somi-routing/SKILL.md#the-trivial-threshold' skills/role-coder/SKILL.md; } || { echo "FAIL: skills/role-coder/SKILL.md needs the Decision Ladder between Map and Implement, and the trivial-threshold reference" >&2; exit 1; }
-echo "==> Test suites ($(( ${#SUITES[@]} + ${#SUITE_ARGS[@]} / 2 )) queued, run in parallel)..."
+echo "==> Test suites (${#SUITES[@]} queued, shard ${SOMI_SUITE_SHARD:-all})..."
 suite tests/scripts/run-suites.sh
-node tests/scripts/lib/run-suites.mjs "${SUITE_ARGS[@]}" -- "${SUITES[@]}" || exit 1
+node tests/scripts/lib/run-suites.mjs --plan tests/scripts/suite-plan.json -- "${SUITES[@]}" || exit 1
 
 echo "==> Creating coverage stub..."
 mkdir -p coverage
