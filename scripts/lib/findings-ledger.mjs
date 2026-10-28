@@ -1,6 +1,7 @@
-// findings-ledger.mjs -- the findings ledger: identity, the ledger file and the `record` handler. Nothing here
+// findings-ledger.mjs -- the findings ledger: identity, the ledger file and every handler (record, resolve,
+// reopen, open, get). Each returns `{lines, code, message}`. Nothing here
 // reads the process environment, stdin or argv, and nothing prints: the caller (somi-findings.mjs today, a tool
-// later) hands in the project root and an already-parsed array, and gets back the lines to print, an exit code
+// later) hands in the project root and already-parsed arguments, and gets back the lines to print, an exit code
 // and the stderr text. The stdin read and the JSON parse stay at the CLI, the trust boundary of the shell path.
 //
 // Ledger: .somi/reviews/<slug>/findings.json under the root. Locus matching: same file + same symbol
@@ -64,7 +65,7 @@ export function normalizeTitle(title) {
   return squeezed.split(/\s+/).slice(0, 8).join(' ');
 }
 
-export function ensureLedger(ledgerDir, ledgerPath) {
+function ensureLedger(ledgerDir, ledgerPath) {
   fs.mkdirSync(ledgerDir, { recursive: true });
   if (!fs.existsSync(ledgerPath)) {
     // Byte-for-byte the bash seed: `printf '{"next_id": 1, "findings": []}\n' > "$LEDGER"` —
@@ -75,11 +76,11 @@ export function ensureLedger(ledgerDir, ledgerPath) {
   }
 }
 
-export function loadLedger(ledgerPath) {
+function loadLedger(ledgerPath) {
   return JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
 }
 
-export function saveLedger(ledgerPath, ledger) {
+function saveLedger(ledgerPath, ledger) {
   // Mirror bash's `tmp="$(mktemp)"; jq ... "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"`:
   // pretty 2-space + trailing newline (jq's default pretty-print, verified byte-identical
   // against JSON.stringify(ledger, null, 2) + '\n'), written to a temp file in
@@ -143,6 +144,62 @@ export function recordFindings({ root, slug, review, run, pass, input, now = now
     }
   }
 
-  saveLedger(file, ledger);
+  // An empty batch changes nothing: leave the file as it is, seed literal included.
+  if (input.length > 0) saveLedger(file, ledger);
   return { lines, code: breaker ? 5 : 0, message: '' };
+}
+
+const STATUSES = ['fixed', 'accepted', 'wontfix'];
+const refuse = (msg) => ({ lines: [], code: 64, message: `${PROG}: ${msg}` });
+const ok = (lines = []) => ({ lines, code: 0, message: '' });
+
+// Seeds the ledger on first touch and returns its path. Every lifecycle handler does this before it validates its
+// arguments, so a refused call still leaves the seed behind, as the bash original did.
+function touchLedger(root, slug) {
+  const { dir, file } = ledgerPaths(root, slug);
+  ensureLedger(dir, file);
+  return file;
+}
+
+// An unknown id is not an error: nothing is changed and nothing is printed.
+export function resolveFinding({ root, slug, id, status, by }) {
+  const file = touchLedger(root, slug);
+  if (!id || !status) return refuse('resolve requires --id and --status');
+  if (!STATUSES.includes(status)) return refuse('--status must be fixed|accepted|wontfix');
+  const ledger = loadLedger(file);
+  const found = ledger.findings.find((x) => x.id === id);
+  if (!found) return ok();
+  found.status = status;
+  found.resolved_by = by;
+  saveLedger(file, ledger);
+  return ok([JSON.stringify({ id: found.id, status: found.status, resolved_by: found.resolved_by })]);
+}
+
+export function reopenFinding({ root, slug, id, by }) {
+  const file = touchLedger(root, slug);
+  if (!id) return refuse('reopen requires --id');
+  const ledger = loadLedger(file);
+  const found = ledger.findings.find((x) => x.id === id);
+  if (!found) return ok();
+  found.status = 'open';
+  found.resolved_by = null;
+  found.reopened_by = by;
+  saveLedger(file, ledger);
+  return ok([JSON.stringify({ id: found.id, status: found.status })]);
+}
+
+// The open findings only, trimmed to the fields a reader needs, as one pretty-printed JSON array.
+export function openFindings({ root, slug }) {
+  const ledger = loadLedger(touchLedger(root, slug));
+  const open = ledger.findings
+    .filter((x) => x.status === 'open')
+    .map((x) => ({ id: x.id, locus: x.locus, title: x.title, severity: x.severity, confidence: x.confidence, introduced_by: x.introduced_by }));
+  return ok([JSON.stringify(open, null, 2)]);
+}
+
+export function getFinding({ root, slug, id }) {
+  const file = touchLedger(root, slug);
+  if (!id) return refuse('get requires --id');
+  const found = loadLedger(file).findings.find((x) => x.id === id);
+  return ok(found ? [JSON.stringify(found, null, 2)] : []);
 }
