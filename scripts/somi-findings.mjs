@@ -1,6 +1,7 @@
 // somi-findings.mjs — the findings ledger: identity and lifecycle for review findings.
 //
-// Zero-dependency: stdlib only (node:fs, node:path). No jq, no bash. Behavior-preserving
+// Zero-dependency: stdlib only. The ledger IO and `record` live in lib/findings-ledger.mjs; stdin is
+// read and parsed here, at the trust boundary. No jq, no bash. Behavior-preserving
 // — exit codes and stdout JSON shapes are frozen and reproduced exactly; see the bash
 // original's header comment for the full rationale (finding identity/lifecycle, the
 // consecutive-vs-cross-run recurrence distinction, why line numbers are excluded from
@@ -30,9 +31,7 @@
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
 
 import fs from 'node:fs';
-import path from 'node:path';
-
-const PROG = 'somi-findings';
+import { PROG, ensureLedger, ledgerPaths, loadLedger, recordFindings, saveLedger } from './lib/findings-ledger.mjs';
 
 // Thrown to unwind to the top-level handler, which sets process.exitCode and lets Node
 // exit naturally — avoids process.exit()'s risk of truncating buffered stdout/stderr
@@ -53,78 +52,6 @@ function projectRoot() {
   let b = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   if (b.includes('${')) b = process.cwd();
   return b;
-}
-
-function nowDateUtc() {
-  // `date -u +%Y-%m-%d` — bare date, no time component (findings' seen[].date).
-  return new Date().toISOString().slice(0, 10);
-}
-
-// Mirrors jq's `//` alternative operator at the JSON-value level: substitutes the
-// fallback only when the left side is `null`/missing or `false` — NOT for other
-// falsy values like `""` or `0`, which jq treats as present. Used wherever the bash
-// script keeps a raw JSON value (locus/severity/confidence on a newly created finding).
-function orElse(v, fallback) {
-  return v === null || v === undefined || v === false ? fallback : v;
-}
-
-// Mirrors `jq -r '<expr> // empty'` captured into a bash variable: same null/false
-// substitution as orElse, then stringified (bash captures everything as text) — used
-// wherever the bash script tests `[[ -n "$var" ]]` or concatenates into the locus key.
-function rawStr(v) {
-  const x = orElse(v, '');
-  return x === '' ? '' : String(x);
-}
-
-// normalize_title() — bash pipeline: `tr '[:upper:]' '[:lower:]'` (byte-wise, ASCII-only —
-// it only maps the 26 ASCII uppercase bytes; any multi-byte UTF-8 sequence passes through
-// untouched) -> `tr -cs 'a-z0-9' ' '` (every maximal run of non-alphanumerics — including a
-// leading or trailing run — collapses to ONE space; this is what then eats those untouched
-// UTF-8 bytes) -> awk takes fields 1-8 (awk's default field-splitting ignores leading/
-// trailing whitespace and splits on whitespace runs). By the time the tr step is done,
-// the only characters left in the string are lowercase alphanumerics and single-space
-// separators (with at most one leading and one trailing space) — so the awk step's only
-// remaining job is to drop that leading/trailing space and truncate to 8 fields, which
-// is exactly what trim + split + slice does below — PROVIDED the lowercasing step is also
-// byte-wise ASCII-only. JS's `String.prototype.toLowerCase()` is Unicode-aware (e.g. U+0130
-// İ -> "i" + combining dot above), which can *introduce* a fresh ASCII letter that bash's
-// byte-wise `tr` would never produce (bash leaves İ's UTF-8 bytes alone; the following
-// `tr -cs 'a-z0-9' ' '` step then discards all of them as non-alphanumeric). So the
-// lowercasing below only maps `A`-`Z`, mirroring `tr '[:upper:]' '[:lower:]'` exactly.
-// Verified against six normalize_title edge-case goldens (empty,
-// single-word, >8-word, leading/trailing whitespace, multi-space, punctuation) plus
-// adversarial Unicode probes (café, İstanbul).
-function normalizeTitle(title) {
-  const lowered = title.replace(/[A-Z]/g, (c) => c.toLowerCase());
-  const squeezed = lowered.replace(/[^a-z0-9]+/g, ' ').trim();
-  if (squeezed === '') return '';
-  return squeezed.split(/\s+/).slice(0, 8).join(' ');
-}
-
-function ensureLedger(ledgerDir, ledgerPath) {
-  fs.mkdirSync(ledgerDir, { recursive: true });
-  if (!fs.existsSync(ledgerPath)) {
-    // Byte-for-byte the bash seed: `printf '{"next_id": 1, "findings": []}\n' > "$LEDGER"` —
-    // a literal, NOT jq output (note the space after each colon but no other jq-pretty
-    // formatting). Immediately superseded by the jq-pretty form on the first record/resolve/
-    // reopen that touches this ledger; only matters at rest if `open`/`get` is called first.
-    fs.writeFileSync(ledgerPath, '{"next_id": 1, "findings": []}\n');
-  }
-}
-
-function loadLedger(ledgerPath) {
-  return JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
-}
-
-function saveLedger(ledgerPath, ledger) {
-  // Mirror bash's `tmp="$(mktemp)"; jq ... "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"`:
-  // pretty 2-space + trailing newline (jq's default pretty-print, verified byte-identical
-  // against JSON.stringify(ledger, null, 2) + '\n'), written to a temp file in
-  // the SAME directory as the target and renamed into place so the write is atomic and the
-  // rename never crosses a filesystem boundary.
-  const tmpPath = `${ledgerPath}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(ledger, null, 2) + '\n');
-  fs.renameSync(tmpPath, ledgerPath);
 }
 
 function main() {
@@ -158,13 +85,10 @@ function main() {
   if (!SLUG) die('--slug is required');
 
   const root = projectRoot();
-  const LEDGER_DIR = path.join(root, '.somi', 'reviews', SLUG);
-  const LEDGER = path.join(LEDGER_DIR, 'findings.json');
+  const { dir: LEDGER_DIR, file: LEDGER } = ledgerPaths(root, SLUG);
 
   switch (CMD) {
     case 'record': {
-      ensureLedger(LEDGER_DIR, LEDGER);
-
       let stdinText;
       try {
         stdinText = fs.readFileSync(0, 'utf8');
@@ -183,61 +107,10 @@ function main() {
       }
       if (!Array.isArray(input)) die('stdin must be a JSON array of findings');
 
-      const ledger = loadLedger(LEDGER);
-      const now = nowDateUtc();
-      let breaker = false;
-
-      for (let i = 0; i < input.length; i++) {
-        const f = input[i] ?? {};
-        const file = rawStr(f.file);
-        // ASCII-only lowercase — same reasoning as normalizeTitle above: bash uses byte-wise
-        // `tr '[:upper:]' '[:lower:]'` here too, so Unicode-aware toLowerCase would diverge.
-        const symbol = rawStr(f.symbol).replace(/[A-Z]/g, (c) => c.toLowerCase());
-        const title = rawStr(f.title);
-        if (!file || !title) die(`finding ${i} needs at least {file, title}`);
-        const key = `${file}|${symbol}|${normalizeTitle(title)}`;
-
-        // Known open locus: recurrence classification BEFORE the sighting is appended.
-        const existing = ledger.findings.find((x) => x.key === key && x.status === 'open');
-
-        if (existing) {
-          const recurringConsecutive = existing.seen.some((s) => s.run === RUN && s.pass === PASS - 1);
-          const recurringCross = existing.seen.some((s) => s.run !== RUN);
-          existing.seen.push({ review: REVIEW, run: RUN, pass: PASS, date: now });
-          saveLedger(LEDGER, ledger);
-          if (recurringConsecutive) breaker = true;
-          console.log(JSON.stringify({
-            id: existing.id,
-            state: 'known',
-            recurring_consecutive: recurringConsecutive,
-            recurring_cross_run: recurringCross,
-          }));
-        } else {
-          const newId = `F-${ledger.next_id}`;
-          ledger.next_id += 1;
-          ledger.findings.push({
-            id: newId,
-            key,
-            locus: { file: f.file, symbol: orElse(f.symbol, '') },
-            title: f.title,
-            severity: orElse(f.severity, 'Minor'),
-            confidence: orElse(f.confidence, 'Medium'),
-            status: 'open',
-            introduced_by: REVIEW,
-            resolved_by: null,
-            seen: [{ review: REVIEW, run: RUN, pass: PASS, date: now }],
-          });
-          saveLedger(LEDGER, ledger);
-          console.log(JSON.stringify({
-            id: newId,
-            state: 'new',
-            recurring_consecutive: false,
-            recurring_cross_run: false,
-          }));
-        }
-      }
-
-      if (breaker) process.exitCode = 5;
+      const result = recordFindings({ root, slug: SLUG, review: REVIEW, run: RUN, pass: PASS, input });
+      for (const line of result.lines) console.log(line);
+      if (result.message) process.stderr.write(`${result.message}\n`);
+      process.exitCode = result.code;
       break;
     }
 
