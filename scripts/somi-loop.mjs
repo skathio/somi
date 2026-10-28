@@ -46,20 +46,17 @@
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { verifyBriefOnly } from './lib/tier-record.mjs';
-import { REVIEW_SCOPES, reviewMinFor, reviewScope, snapshotTree } from './lib/loop-review.mjs';
+import { REVIEW_SCOPES, reviewScope, snapshotTree } from './lib/loop-review.mjs';
 import { computeDiff } from './lib/loop-diff.mjs';
 import { dispatchEntry } from './lib/loop-dispatch.mjs';
-import { checkRun, startRun } from './lib/run-budget.mjs';
-import { loadConfig } from './lib/config-files.mjs';
-import { LoopExit, usageError } from './lib/loop-exit.mjs';
-import { applyCapOverride, configVal, firstDefined, resolveInitCap, reresolveCap, validateCap } from './lib/loop-caps.mjs';
-
-const PROG = 'somi-loop';
+import { LoopExit, PROG, usageError } from './lib/loop-exit.mjs';
+import { applyCapOverride, configVal, firstDefined, reresolveCap, validateCap } from './lib/loop-caps.mjs';
+import { startRun } from './lib/run-budget.mjs';
+import { finish, init, pass, readConfig, resume } from './lib/loop-engine.mjs';
+import { loadState, nowIso, requireState, saveState, stateFile } from './lib/loop-state.mjs';
 
 // Unwinding with a LoopExit reaches the top-level handler, which writes its message to stderr and sets
 // process.exitCode, letting Node exit naturally — avoids process.exit()'s risk of truncating buffered
@@ -86,19 +83,11 @@ function projectRoot() {
   return b;
 }
 
-// The effective config (global, with the project's .somi/config.json over it); an unreadable or
-// invalid file reads as unconfigured, so the documented defaults apply.
-function readConfig(root) {
-  try {
-    return loadConfig(root).config;
-  } catch {
-    return {};
-  }
-}
-
-function nowIso() {
-  // `date -u +%Y-%m-%dT%H:%M:%SZ` — no milliseconds.
-  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+// A handler's result: its one JSON object on stdout, its message on stderr, its code as the exit code.
+function deliver(result) {
+  if (result.out !== undefined) console.log(JSON.stringify(result.out));
+  if (result.message) process.stderr.write(`${result.message}\n`);
+  process.exitCode = result.code;
 }
 
 function main() {
@@ -153,24 +142,11 @@ function main() {
   if (!CMD) die('usage: somi-loop.mjs <run-start|init|resume|pass|check-diff|review-scope|record-dispatch|record-pass|finish|stats> --slug <slug> …');
   if (!SLUG) die('--slug is required');
 
-  function stateFile() {
-    let name = SLUG;
-    if (ITERATION) name = `${SLUG}.${ITERATION}`;
-    return path.join(STATE_DIR, `${name}.json`);
-  }
-  const SF = stateFile();
+  const SF = stateFile(STATE_DIR, SLUG, ITERATION);
+  const ARGS = { slug: SLUG, loop: LOOP, iteration: ITERATION, files: FILES, force: FORCE, status: STATUS, maxPasses: ARG_MAX_PASSES, diffCap: ARG_DIFF_CAP, severity: ARG_SEVERITY, maxMinutes: ARG_MAX_MINUTES };
+  const LIFECYCLE = { init, resume, pass, finish };
 
-  function requireState() {
-    if (!fs.existsSync(SF)) die(`no loop state at ${SF} — run init first`);
-  }
-
-  function loadState() {
-    return JSON.parse(fs.readFileSync(SF, 'utf8'));
-  }
-
-  function saveState(state) {
-    fs.writeFileSync(SF, JSON.stringify(state));
-  }
+  if (CMD in LIFECYCLE) return deliver(LIFECYCLE[CMD]({ root, env: process.env, stateDir: STATE_DIR }, ARGS));
 
   const RUN_ROOT = path.dirname(STATE_DIR);
   switch (CMD) {
@@ -182,107 +158,13 @@ function main() {
       break;
     }
 
-    case 'init': {
-      fs.mkdirSync(STATE_DIR, { recursive: true });
-      if (fs.existsSync(SF) && !FORCE) {
-        let status;
-        try {
-          status = JSON.parse(fs.readFileSync(SF, 'utf8')).status;
-        } catch {
-          status = undefined;
-        }
-        if (status === 'running') {
-          die(`loop state already running at ${SF} — use 'resume' to continue it, or 'init --force' to discard`);
-        }
-      }
-
-      // A brief-only work item (a plan directory with no phases/) exists only for the sized, human-
-      // approved small tier of /ship-loop: refuse it without the tier record's approval stamp.
-      const planDir = path.join(root, '.somi', 'plans', SLUG);
-      if (LOOP === 'code' && fs.existsSync(planDir) && !fs.existsSync(path.join(planDir, 'phases'))) {
-        const v = verifyBriefOnly(root, SLUG);
-        if (!v.ok) die(`brief-only work item refused: ${v.reason}; use /plan or /ship-loop`);
-      }
-
-      // Cap resolution: CLI > env > config > default (per loop type), through the
-      // same CAP_ENV / CAP_CONFIG_SECTION / CAP_DEFAULT tables reresolveCap() uses,
-      // and validated the same way -- a malformed value dies here rather than
-      // silently resolving to a fail-open NaN/null.
-      const config = readConfig(root);
-      let maxPasses;
-      let diffCap;
-      let sevFloor;
-      if (LOOP === 'plan') {
-        maxPasses = resolveInitCap(process.env, config, 'plan', 'max_passes', ARG_MAX_PASSES);
-        sevFloor = firstDefined(ARG_SEVERITY, process.env.SOMI_PLAN_LOOP_SEVERITY_FLOOR, configVal(config, ['plan_loop', 'severity_floor']));
-        diffCap = 0; // plan loops have no diff cap
-      } else {
-        maxPasses = resolveInitCap(process.env, config, 'code', 'max_passes', ARG_MAX_PASSES);
-        sevFloor = firstDefined(ARG_SEVERITY, process.env.SOMI_CODE_LOOP_SEVERITY_FLOOR, configVal(config, ['code_loop', 'severity_floor']));
-        diffCap = resolveInitCap(process.env, config, 'code', 'diff_cap_lines', ARG_DIFF_CAP);
-      }
-      sevFloor = firstDefined(sevFloor, 'Major');
-
-      let baseline;
-      try {
-        baseline = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-      } catch {
-        die('cannot resolve HEAD');
-      }
-
-      const filesJson = FILES.split(' ').filter((s) => s.length > 0);
-
-      const state = {
-        slug: SLUG,
-        loop: LOOP,
-        iteration: ITERATION,
-        baseline_sha: baseline,
-        started: nowIso(),
-        status: 'running',
-        caps: { max_passes: maxPasses, diff_cap_lines: diffCap, severity_floor: sevFloor },
-        iteration_files: filesJson,
-        pass: 0,
-        history: [],
-      };
-      if (LOOP === 'code') state.review_min = reviewMinFor(root, SLUG) ?? undefined; // undefined: not serialised
-      saveState(state);
-      console.log(JSON.stringify({ baseline_sha: state.baseline_sha, caps: state.caps, state_file: SF, ...(state.review_min ? { review_min: state.review_min } : {}) }));
-      break;
-    }
-
-    case 'resume': {
-      requireState();
-      console.log(JSON.stringify(loadState()));
-      break;
-    }
-
-    case 'pass': {
-      requireState();
-      const state = loadState();
-      const { resolved: max, override } = reresolveCap(process.env, state, 'max_passes', ARG_MAX_PASSES, nowIso());
-      if (override) {
-        applyCapOverride(state, override);
-        saveState(state); // persist the raise even if the gate below still fails
-      }
-      const cur = state.pass;
-      if (cur + 1 > max) {
-        fail(2, `max-passes-exceeded: pass ${cur + 1} > cap ${max}`);
-      }
-      const run = checkRun(RUN_ROOT, SLUG);
-      if (run?.over) fail(4, `time-budget-exceeded: ${run.elapsed_minutes} of ${run.max_minutes} minutes used by this run`);
-      state.pass = cur + 1;
-      saveState(state);
-      console.log(JSON.stringify({ pass: state.pass, max_passes: max, ...(state.review_min ? { review_min: state.review_min } : {}) }));
-      break;
-    }
-
     case 'check-diff': {
-      requireState();
-      const state = loadState();
+      requireState(SF);
+      const state = loadState(SF);
       const { resolved: cap, override } = reresolveCap(process.env, state, 'diff_cap_lines', ARG_DIFF_CAP, nowIso());
       if (override) {
         applyCapOverride(state, override);
-        saveState(state); // persist the raise even if the gate below still fails
+        saveState(SF, state); // persist the raise even if the gate below still fails
       }
       const { total, weighted, outOfScope } = computeDiff(root, state.baseline_sha, state.iteration_files);
       console.log(JSON.stringify({ diff_lines: total, weighted_lines: weighted, cap, out_of_scope: outOfScope }));
@@ -293,8 +175,8 @@ function main() {
     }
 
     case 'review-scope': {
-      requireState();
-      const state = loadState();
+      requireState(SF);
+      const state = loadState(SF);
       const setting = firstDefined(process.env.SOMI_CODE_LOOP_REVIEW_SCOPE, configVal(readConfig(root), ['code_loop', 'review_scope']), 'delta');
       if (!REVIEW_SCOPES.includes(setting)) die(`review scope must be one of ${REVIEW_SCOPES.join('|')}, got ${JSON.stringify(setting)}`);
       console.log(JSON.stringify({ ...reviewScope(root, state, setting), ...(state.review_min ? { review_min: state.review_min } : {}) }));
@@ -302,22 +184,22 @@ function main() {
     }
 
     case 'record-dispatch': {
-      requireState();
+      requireState(SF);
       if (!AGENT) die('record-dispatch requires --agent');
-      const state = loadState();
+      const state = loadState(SF);
       const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
       const d = dispatchEntry({ root, installRoot, agent: AGENT, host: HOST, pass: state.pass });
       if (!d.ok) fail(d.code, `${PROG}: ${d.message}`);
       (state.dispatches ??= []).push(d.entry);
-      saveState(state);
+      saveState(SF, state);
       console.log(JSON.stringify(d.entry));
       break;
     }
 
     case 'record-pass': {
-      requireState();
+      requireState(SF);
       if (!VERDICT) die('record-pass requires --verdict');
-      const state = loadState();
+      const state = loadState(SF);
       const { total } = computeDiff(root, state.baseline_sha, state.iteration_files);
       const entry = {
         pass: state.pass,
@@ -329,31 +211,14 @@ function main() {
         at: nowIso(),
       };
       state.history.push(entry);
-      saveState(state);
+      saveState(SF, state);
       console.log(JSON.stringify(state.history[state.history.length - 1]));
       break;
     }
 
-    case 'finish': {
-      requireState();
-      if (!STATUS) die('finish requires --status');
-      const state = loadState();
-      state.status = STATUS;
-      state.finished = nowIso();
-      saveState(state);
-      console.log(JSON.stringify({
-        status: state.status,
-        pass: state.pass,
-        history: state.history.length,
-        cap_overrides: state.cap_overrides || [],
-        ...(state.dispatches ? { dispatches: state.dispatches } : {}),
-      }));
-      break;
-    }
-
     case 'stats': {
-      requireState();
-      console.log(JSON.stringify(loadState(), null, 2));
+      requireState(SF);
+      console.log(JSON.stringify(loadState(SF), null, 2));
       break;
     }
 

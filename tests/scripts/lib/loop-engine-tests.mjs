@@ -2,10 +2,14 @@
 // In-process tests of the loop engine libraries: scripts/lib/loop-caps.mjs and scripts/lib/loop-exit.mjs.
 // Invoked from tests/scripts/loop-engine.sh.
 
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyCapOverride, configVal, firstDefined, resolveInitCap, reresolveCap, validateCap } from '../../../scripts/lib/loop-caps.mjs';
+import { finish, init, pass as passPass, resume } from '../../../scripts/lib/loop-engine.mjs';
+import { stateFile } from '../../../scripts/lib/loop-state.mjs';
 import { LoopExit, ok, refuse, usageError } from '../../../scripts/lib/loop-exit.mjs';
 
 const LIB = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'scripts', 'lib');
@@ -28,7 +32,7 @@ check('the env it is handed is what counts', resolveInitCap({ SOMI_CODE_LOOP_MAX
 check('reresolveCap({}) ignores process.env: no override, the stored cap stands', reresolveCap({}, { loop: 'code', pass: 1, caps: { max_passes: 2 } }, 'max_passes', '', 'T'), { resolved: 2, override: null });
 delete process.env.SOMI_CODE_LOOP_MAX_PASSES;
 delete process.env.SOMI_CODE_LOOP_DIFF_CAP;
-const sources = ['loop-caps.mjs', 'loop-exit.mjs'].map((f) => [f, readFileSync(path.join(LIB, f), 'utf8')]);
+const sources = ['loop-caps.mjs', 'loop-exit.mjs', 'loop-state.mjs', 'loop-engine.mjs'].map((f) => [f, readFileSync(path.join(LIB, f), 'utf8')]);
 for (const [f, src] of sources) {
   const code = src.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
   check(`${f} has no process.env outside comments`, /process\.env/.test(code), false);
@@ -73,6 +77,37 @@ check('usageError is a LoopExit 64 with the program prefix', [e instanceof LoopE
 check('ok carries the output and no message', ok({ a: 1 }), { out: { a: 1 }, code: 0, message: '' });
 check('refuse carries no stdout by default', refuse(2, 'max-passes-exceeded'), { out: undefined, code: 2, message: 'max-passes-exceeded' });
 check('refuse can carry stdout printed before the failure', refuse(3, 'over', { cap: 1 }), { out: { cap: 1 }, code: 3, message: 'over' });
+
+console.log('== loop lifecycle: handlers return results, the environment is a parameter ==');
+const root = mkdtempSync(path.join(tmpdir(), 'loop-engine-'));
+const git = (...a) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' }).trim();
+git('init', '-q'); git('commit', '-q', '--allow-empty', '-m', 'base');
+const stateDir = path.join(root, '.somi', 'somi-state', 'loop');
+const ctxFor = (env = {}) => ({ root, env, stateDir, now: () => '2026-01-01T00:00:00Z' });
+const base = { slug: 's', loop: 'code', iteration: '', files: 'a.js b.js', force: false, status: '', maxPasses: '', diffCap: '', severity: '', maxMinutes: '' };
+const envBefore = JSON.stringify(process.env);
+const started = init(ctxFor({ SOMI_CODE_LOOP_MAX_PASSES: '2' }), base);
+check('init succeeds with the golden output keys and the env-given cap', [started.code, started.message, Object.keys(started.out), started.out.caps], [0, '', ['baseline_sha', 'caps', 'state_file'], { max_passes: 2, diff_cap_lines: 400, severity_floor: 'Major' }]);
+const sf = stateFile(stateDir, 's', '');
+check('the state file holds the golden state shape, in order', Object.keys(JSON.parse(readFileSync(sf, 'utf8'))), ['slug', 'loop', 'iteration', 'baseline_sha', 'started', 'status', 'caps', 'iteration_files', 'pass', 'history']);
+const again = init(ctxFor(), base);
+check('init over a running state is refused (64) with no stdout', [again.code, again.out, again.message], [64, undefined, `somi-loop: loop state already running at ${sf} — use 'resume' to continue it, or 'init --force' to discard`]);
+check('init --force discards a running state', init(ctxFor({ SOMI_CODE_LOOP_MAX_PASSES: '2' }), { ...base, force: true }).code, 0);
+check('pass 1 and 2 of a cap-2 loop succeed', [passPass(ctxFor({ SOMI_CODE_LOOP_MAX_PASSES: '2' }), base).out, passPass(ctxFor({ SOMI_CODE_LOOP_MAX_PASSES: '2' }), base).out], [{ pass: 1, max_passes: 2 }, { pass: 2, max_passes: 2 }]);
+const third = passPass(ctxFor(), base);
+check('pass 3 of a cap-2 loop comes back as code 2 with no stdout', [third.code, third.out, third.message], [2, undefined, 'max-passes-exceeded: pass 3 > cap 2']);
+mkdirSync(path.join(root, '.somi', 'somi-state', 'run'), { recursive: true });
+writeFileSync(path.join(root, '.somi', 'somi-state', 'run', 's.json'), JSON.stringify({ started: '2000-01-01T00:00:00Z', max_minutes: 5 }));
+const late = passPass(ctxFor({ SOMI_CODE_LOOP_MAX_PASSES: '9' }), base);
+check('pass over the run budget comes back as code 4 with no stdout', [late.code, late.out, late.message.startsWith('time-budget-exceeded: ')], [4, undefined, true]);
+const planLoop = init(ctxFor(), { ...base, slug: 'p', loop: 'plan' });
+check('a plan loop has no diff cap and no review_min', [planLoop.out.caps.diff_cap_lines, 'review_min' in planLoop.out], [0, false]);
+const done = finish(ctxFor(), { ...base, status: 'approved' });
+check('finish records the status, the cap raise from the env var, and the injected clock', [done.out, JSON.parse(readFileSync(sf, 'utf8')).finished], [{ status: 'approved', pass: 2, history: 0, cap_overrides: [{ field: 'max_passes', from: 2, to: 9, source: 'env', after_pass: 2, at: '2026-01-01T00:00:00Z' }] }, '2026-01-01T00:00:00Z']);
+check('finish without --status is a usage error (64)', finish(ctxFor(), base).code, 64);
+check('resume reads a missing state as 64', resume(ctxFor(), { ...base, slug: 'none' }).code, 64);
+check('none of the lifecycle calls touched process.env', JSON.stringify(process.env), envBefore);
+rmSync(root, { recursive: true, force: true });
 
 console.log(`loop engine tests: ${pass} ok, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
