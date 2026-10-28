@@ -11,7 +11,7 @@
 // remedy needs a path that re-reads the override on the SAME subcommand (`pass`,
 // `check-diff`), without `init --force` (which discards `pass`/`history`).
 //
-// `pass` and `check-diff` call reresolveCap() below before their gate check.
+// `pass` and `check-diff` (lib/loop-engine.mjs) call reresolveCap() before their gate check.
 // Precedence matches what's documented: CLI flag > env var > .somi/config.json >
 // default -- an explicit CLI flag or env var THIS invocation is the only thing that
 // can move the cap; absent one, the cap already in force for the loop stands (a
