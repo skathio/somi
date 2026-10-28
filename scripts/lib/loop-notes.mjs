@@ -4,16 +4,17 @@
 // closed pattern before any path is built, links and special files are refused, free text is one printable line, and
 // a file or row not in template shape stays byte-identical and comes back in `unwritten`. Writes are temp file +
 // rename; time is the `now` parameter. Every writer returns { wrote: [paths relative to root], unwritten: [{ file,
-// reason, line }] }; a bad argument throws a usage error (64).
+// reason, line }] } (a write-failed item also carries the errno `code`; a replayed diary entry adds `skipped:
+// 'replay'`); a bad argument throws a usage error (64).
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { usageError } from './loop-exit.mjs';
 import { SLUG_RE } from './run-card.mjs';
-import { archiveHead, archiveShape, CATEGORIES, compactDiary, formatEntry, insertEntry } from './loop-notes-compact.mjs';
+import { archiveHead, archiveShape, CATEGORIES, compactDiary, formatEntry, insertEntry, isReplay, isSummaryTitle } from './loop-notes-compact.mjs';
 
-export const ITERATION_RE = /^\d+\.\d+$/;
+export const ITERATION_RE = /^\d+\.\d+[a-z]?$/;
 export const STATUSES = ['not-started', 'in-progress', 'done', 'blocked', 'superseded'];
 const MAX_TEXT = 300;
 const MAX_FILE = 4 * 1024 * 1024;
@@ -30,9 +31,12 @@ function oneLine(v, what) {
 // A table cell additionally cannot carry a pipe, so it cannot add a column.
 const cell = (v, what) => oneLine(v, what).replace(/\|/g, '');
 
+// `now` must start with a real instant, YYYY-MM-DDTHH:MM, in 2000..2099 (a Date round-trip rejects 02-30 and 99:99).
 function stampOf(now) {
-  if (typeof now !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(now)) throw usageError('now must be an ISO timestamp');
-  return { date: now.slice(0, 10), stamp: `${now.slice(0, 10)} ${now.slice(11, 16)}` };
+  const minute = typeof now === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(now) ? now.slice(0, 16) : null;
+  const at = minute && new Date(`${minute}:00Z`);
+  if (!at || Number.isNaN(at.getTime()) || at.toISOString().slice(0, 16) !== minute || at.getUTCFullYear() < 2000 || at.getUTCFullYear() > 2099) throw usageError('now must be an ISO timestamp in 2000..2099');
+  return { date: minute.slice(0, 10), stamp: minute.replace('T', ' ') };
 }
 
 // -> { dir, rel } | { refused }. Every component below the (realpath-resolved) root must be a real directory.
@@ -55,7 +59,7 @@ function readPlanFile(file) {
   try {
     const l = fs.lstatSync(file);
     if (l.isSymbolicLink() || !l.isFile()) return { reason: l.isSymbolicLink() ? 'symlink' : 'not-a-regular-file' };
-    const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOCTTY ?? 0));
     try {
       const st = fs.fstatSync(fd);
       if (!st.isFile() || st.size > MAX_FILE) return { reason: st.isFile() ? 'too-large' : 'not-a-regular-file' };
@@ -65,24 +69,29 @@ function readPlanFile(file) {
 }
 
 // Temp file in the same directory, then rename: a crash leaves the old file or the new one, never half of either.
+// A failed write (EACCES, ENOSPC, rename) removes its temp file and returns the errno code; null on success. It never throws.
 function writeAtomic(file, text, mode = 0o644) {
   const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${randomBytes(6).toString('hex')}.tmp`);
   try {
     fs.writeFileSync(tmp, text, { flag: 'wx', mode });
     fs.renameSync(tmp, file);
+    return null;
   } catch (e) {
-    fs.rmSync(tmp, { force: true });
-    throw e;
+    try { fs.rmSync(tmp, { force: true }); } catch { /* the temp name is random; a leftover cannot be read as a plan file */ }
+    return /^[A-Z0-9_]{1,32}$/.test(e?.code) ? e.code : 'UNKNOWN';
   }
 }
 
 const refusal = (file, reason, line) => ({ wrote: [], unwritten: [{ file, reason, line }] });
+const writeFailed = (file, code, line) => ({ file, reason: 'write-failed', code, line });
+const SKIPPED = 'compaction skipped; diary.md is over 40 entries';
 
 export function appendDiary(plan, entry) {
   const { stamp } = stampOf(entry.now);
   if (!CATEGORIES.includes(entry.category)) throw usageError(`category must be one of ${CATEGORIES.join('|')}`);
   const title = oneLine(entry.title, 'title');
-  if (title === '') throw usageError('title must not be empty');
+  if (!/[\p{L}\p{N}]/u.test(title)) throw usageError('title must contain a letter or a digit');
+  if (isSummaryTitle(title)) throw usageError('a title starting "Compacted:" is reserved for the compaction summary');
   const text = formatEntry({ stamp, title, category: entry.category, phase: oneLine(entry.phase ?? 'work-item-wide', 'phase') || 'work-item-wide', body: oneLine(entry.body ?? '', 'body') });
   const line = text.replace(/\n*---\n*$/, '');
   const p = planDir(plan);
@@ -91,6 +100,7 @@ export function appendDiary(plan, entry) {
   const cur = readPlanFile(file);
   const next = cur.text === undefined ? null : insertEntry(cur.text, text);
   if (next === null) return refusal('diary.md', cur.reason ?? 'not-template-shape', line);
+  if (isReplay(cur.text, text)) return { wrote: [], unwritten: [], skipped: 'replay' }; // a replayed step: this exact entry is already newest
   const wrote = []; const unwritten = [];
   let diary = next;
   const compacted = compactDiary(next, stamp);
@@ -99,12 +109,16 @@ export function appendDiary(plan, entry) {
     const arch = readPlanFile(archiveFile);
     if (arch.reason === 'missing' || (arch.text !== undefined && archiveShape(arch.text))) {
       // The archive first: a crash between the two writes duplicates entries, it never loses any.
-      writeAtomic(archiveFile, (arch.text ?? archiveHead(plan.slug)).replace(/\n*$/, '\n\n') + compacted.archived, arch.mode);
-      wrote.push(`${p.rel}/diary-archive.md`);
-      diary = compacted.diary;
-    } else unwritten.push({ file: 'diary-archive.md', reason: arch.reason ?? 'not-template-shape', line: 'compaction skipped; diary.md is over 40 entries' });
+      const code = writeAtomic(archiveFile, (arch.text ?? archiveHead(plan.slug)).replace(/\n*$/, '\n\n') + compacted.archived, arch.mode);
+      if (code) unwritten.push(writeFailed('diary-archive.md', code, SKIPPED));
+      else {
+        wrote.push(`${p.rel}/diary-archive.md`);
+        diary = compacted.diary;
+      }
+    } else unwritten.push({ file: 'diary-archive.md', reason: arch.reason === 'too-large' ? 'archive-too-large' : arch.reason ?? 'not-template-shape', line: SKIPPED });
   }
-  writeAtomic(file, diary, cur.mode);
+  const failed = writeAtomic(file, diary, cur.mode);
+  if (failed) return { wrote, unwritten: [...unwritten, writeFailed('diary.md', failed, line)] };
   wrote.push(`${p.rel}/diary.md`);
   return { wrote, unwritten };
 }
@@ -117,7 +131,8 @@ function editProgress(plan, edit, line) {
   const cur = readPlanFile(file);
   const out = cur.text === undefined ? cur : archiveShape(cur.text) ? edit(cur.text) : { reason: 'not-template-shape' };
   if (out.text === undefined) return refusal('progress.md', out.reason, line);
-  writeAtomic(file, out.text, cur.mode);
+  const failed = writeAtomic(file, out.text, cur.mode);
+  if (failed) return { wrote: [], unwritten: [writeFailed('progress.md', failed, line)] };
   return { wrote: [`${p.rel}/progress.md`], unwritten: [] };
 }
 
