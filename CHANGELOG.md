@@ -56,6 +56,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   check now read the flow and role skills. The size ledger entry for the planner moved with its
   text to `skills/role-planner/SKILL.md` (402 → 354 lines); `somi-discovery-analyst` left the ledger.
 
+- **What a code loop's agents share: a run card.** `scripts/somi-card.mjs` prints, from the loop state, the
+  few facts every coder and reviewer start needs (SoMi's script path, the project, the plan files, the files in
+  scope, the baseline, the test command, which files only the orchestrator writes): under 2 KiB, byte-stable,
+  no history, so the reviewer stays independent. `/code-loop` pastes it first in every briefing. Its
+  orchestrator no longer reads or edits the iteration's code, runs its tests or reviews it, and flows that call
+  SoMi's scripts name `${CLAUDE_PLUGIN_ROOT}`, which Claude Code fills in when it loads the skill.
+- **The test suite runs in parallel, and CI splits it over four runners** (`tests/scripts/suite-plan.json`):
+  `npm test` runs its scripts half the cores at a time (`SOMI_TEST_JOBS`), runs
+  `eval-gate-micro-tasks.sh` by itself (a hidden-suite family uses 3 s of its 10 s limit and failed under
+  load), and CI runs three shards of slow scripts beside the rest (`SOMI_SUITE_SHARD`); a plan that names a
+  script `validate.sh` does not queue fails the run. CI went from 31 to under 10 minutes.
+
 ### Verified live, and what it fixed
 
 Live runs on Copilot CLI 1.0.103 (`copilot --agent somi:somi -p ...` in a throwaway repo, full debug
@@ -91,6 +103,14 @@ Two of eight `/ship-loop` draws on S2 scored 0/31: sizing put T1 at `full` in 3 
 an estimate of about 110 lines against the 100-line limit), and a `full` run stops at the planner's
 decisions when no one answers. One of those draws also showed the main thread handing `/plan-loop` to a
 `somi-flow` subagent; the command wrappers now say a sub-workflow runs inline in the main conversation.
+
+The run card, the orchestrator limits and the script path, measured together against that 4.1.0 baseline
+(`reports/6cced12-vs-03c1f76.md`): **no measurable cost saving.** The primary metric, cost overhead, reads 0.87
+(0.70 to 1.41, inconclusive) and the SoMi arm's own cost 0.99. The transcripts show the orchestrator limits
+working (on S3 the main thread's cost fell a quarter and the coder's rose about as much: the coding moved to
+the coder) and the card saving nothing on these scenarios, whose loops rarely start a second coder or reviewer.
+The orchestrator limits and the script path stay for what they fix (the orchestrator coding, a search
+of the disk for SoMi); the card stays as the shared-context mechanism, with no measured benefit yet. L0 rises 1.3%.
 
 ## [4.0.1] — 2026-10-27 — fix: one global config for every project, merged with each repo's; config reads follow junctions and symlinks
 
