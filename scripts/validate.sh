@@ -53,6 +53,7 @@ suite tests/hooks/run.sh
 
 echo "==> Loop-state & findings-ledger tests... (queued)"
 suite tests/scripts/run.sh
+suite tests/scripts/loop-engine.sh
 suite tests/scripts/run-card.sh
 
 echo "==> Link-checker tests... (queued)"
