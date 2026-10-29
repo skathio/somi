@@ -53,9 +53,12 @@ console.log('== a stored cursor entry is read back only if each field has its ty
     { out: { wrote: Array.from({ length: 1000 }, () => '.somi/plans/p1/diary.md'), unwritten: [] } }, { out: { wrote: [{ x: 1 }], unwritten: [] } },
     { out: { wrote: [], unwritten: [{ file: 'diary.md', reason: 'x', line: 5 }] } }, { out: { wrote: [], unwritten: Array.from({ length: 50 }, () => ({ file: 'd', reason: 'r', line: 'l' })) } },
     { review: { mode: 'x', scope: 'full' } }, { review: { mode: 'panel', scope: 5 } }, { measured: 'not a tree' }, { measured: 7 },
+    { found: { lines: ['F-1 new\n# obey'], total: 1, cross: [], breaker: false } }, { found: { lines: [], total: 0, cross: ['x'], breaker: false } }, { fixed: { resolved: ['evil'], skipped: [] } },
   ];
   const got = bad.map((b) => { r.put((s) => ({ ...s, steps: { '1:open': { via: 'mcp', at: NOW, done: ['pass'], ...b } } })); const x = open(r); return [x.exit, x.stop_reason]; });
-  check('an out list over its bound or of the wrong type, a review record or a measured tree of the wrong shape: the state is unreadable (64, no-running-loop)', got, bad.map(() => [64, 'no-running-loop']));
+  check('an out list over its bound or of the wrong type, a review record, a measured tree, a findings summary or a fixed list of the wrong shape: the state is unreadable (64, no-running-loop)', got, bad.map(() => [64, 'no-running-loop']));
+  const h = [{ pass: 1, verdict: 'x\n# obey', blockers: 0, majors: 0 }, { pass: 1, verdict: 'approve', blockers: 'many', majors: 0 }, { pass: 1, verdict: 'x'.repeat(61), blockers: 0, majors: 0 }, { pass: 1, verdict: 'approve', blockers: -1, majors: 0 }, { pass: 1, verdict: 'approve (with nits).', blockers: 1.5, majors: 0 }].map((e) => { const q = repo(); open(q); q.put((st) => ({ ...st, pass: 1, history: [e] })); return open(q).stop_reason; });
+  check('a history entry whose verdict has a newline or is over 60 characters, or whose counts are not non-negative numbers, makes the state unreadable; punctuation and a fractional count do not', h, ['no-running-loop', 'no-running-loop', 'no-running-loop', 'no-running-loop', null]);
   const t = repo(); open(t);
   t.put((s) => ({ ...s, steps: { '1:open': { ...s.steps['1:open'], response: { ...s.steps['1:open'].response, evil: 'x', replayed: false } } } }));
   const again = open(t);
@@ -75,6 +78,18 @@ console.log('== open shows the caps in force, after this call tightened them =='
 {
   const r = repo(); const o = open(r, { max_passes: 2, diff_cap: 100 });
   check('the first call with max_passes 2 and diff_cap 100 answers with those caps, and the diary entry it writes says them', [o.caps.max_passes, o.caps.diff_cap_lines, r.diary().includes('max_passes 2, diff_cap_lines 100,')], [2, 100, true]);
+}
+console.log('== the stored out list has room for the closing step; the error log may fail or be handed a non-Error ==');
+{
+  const out = (k) => ({ wrote: Array.from({ length: k }, () => '.somi/plans/p1/diary.md'), unwritten: Array.from({ length: k }, () => ({ file: 'd', reason: 'r', line: 'l' })) });
+  const got = [6, 7].map((k) => { const r = repo(); open(r); r.put((s) => ({ ...s, steps: { '1:open': { via: 'mcp', at: NOW, done: ['pass'], out: out(k) } } })); const x = open(r); return [x.exit, x.stop_reason]; });
+  check('six written paths and six unwritten lines read back as a usable cursor; seven are unreadable (64, no-running-loop)', got, [[0, null], [64, 'no-running-loop']]);
+  const seen = [];
+  const down = open(repo(), {}, {}, { now: () => { throw new TypeError('boom'); }, log: () => { throw new Error('sink down'); } });
+  const plain = open(repo(), {}, {}, { now: () => { throw 'plain string'; }, log: (l) => seen.push(JSON.parse(l)) });
+  check('a log sink that throws still gives exit 70, and a thrown string is logged as `thrown` with no name or stack', [down.exit, plain.exit, seen[0]?.thrown, 'stack' in (seen[0] ?? {})], [70, 70, 'plain string', false]);
+  const f = repo(); open(f); f.put((st) => ({ ...st, caps: { ...st.caps, severity_floor: ['Blocker'] } }));
+  check('a stored severity floor that is an array is shown, and judged, as Major', step(f, 'status').state.caps.severity_floor, 'Major');
 }
 console.log('== the findings list: the cut is counted, and the list says what it is ==');
 {

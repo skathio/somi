@@ -1,6 +1,6 @@
 // loop-step.mjs -- the composite steps of a loop: one call performs every deterministic transition between two agent
 // starts, through the same library functions the primitive CLI subcommands use. This file holds `open`, `after-code`
-// and `status`; runStep(ctx, args) -> a response object (never a thrown refusal). ctx is the engine's ({root, env,
+// and `status`, with the shared kit; `after-review` is in loop-step-review.mjs; runStep(ctx, args) -> a response object (never a thrown refusal). ctx is the engine's ({root, env,
 // stateDir, installRoot, now?}) plus `via` ('mcp' | 'cli', recorded in the cursor), `log` (where an unexpected error's
 // name and stack go, one JSON line; console.error when absent) and, for tests only, `failAfter` (a sub-step name: the
 // step throws right after completing it, as a killed process would).
@@ -24,7 +24,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LoopExit, PROG, usageError } from './loop-exit.mjs';
 import { applyCapOverride, configVal, firstDefined, reresolveCap, resolveInitCap, tightenCap } from './loop-caps.mjs';
-import { init, readConfig } from './loop-engine.mjs';
+import { entryOk, init, readConfig } from './loop-engine.mjs';
 import { loadState, nowIso, saveState, stateFile } from './loop-state.mjs';
 import { computeDiff } from './loop-diff.mjs';
 import { dispatchEntry } from './loop-dispatch.mjs';
@@ -32,16 +32,18 @@ import { OBJECT_ID, REVIEW_SCOPES, reviewScope as scopeOf, snapshotTree } from '
 import { checkRun } from './run-budget.mjs';
 import { buildCard, HOSTS, ITERATION_RE, MAX_BYTES, SLUG_RE } from './run-card.mjs';
 import { appendDiary, CONTROL, findIterationRow, plainDir, readPlanFile } from './loop-notes.mjs';
-import { ledgerPaths } from './findings-ledger.mjs';
+import { atOrAbove, ledgerPaths } from './findings-ledger.mjs';
+import { afterReview, checkReview, FIELDS as REVIEW_FIELDS } from './loop-step-review.mjs';
 
 export const BUDGET = 2500;
 const FIELDS = {
   open: ['slug', 'loop', 'iteration', 'files', 'host', 'max_passes', 'diff_cap'],
   'after-code': ['slug', 'loop', 'iteration', 'agent', 'host', 'diff_cap', 'review_mode', 'review_scope'],
   status: ['slug', 'loop', 'iteration'],
+  ...REVIEW_FIELDS,
 };
 const NOT_FOR_PLAN = ['files', 'diff_cap', 'review_mode', 'review_scope'];
-const LATER = ['after-review', 'close'];
+const LATER = ['close']; // named by the contract, not built yet
 const MODES = ['single', 'security', 'panel']; // weakest first: an argument may only move right
 const NEXT_REVIEW = { single: 'task-reviewer', security: 'task-reviewers', panel: 'task-panel' };
 const CARD_MAX = 1800; // bytes of the response the run card may take (as JSON), so the fields around it always fit in BUDGET
@@ -53,7 +55,8 @@ const NO_ROW = (it) => ({ // why findIterationRow found no usable row
   'not-template-shape': 'the Iteration progress table of progress.md is not in the template shape',
   'row-not-template-shape': `the row of iteration ${it} in progress.md is not in the template shape`,
 });
-const STORED = ['ok', 'step', 'pass', 'next', 'stop_reason', 'exit', 'wrote', 'unwritten', 'loop', 'caps', 'review_min', 'brief', 'truncated']; // every field of a stored (open, plan after-code) response
+const STORED = ['ok', 'step', 'pass', 'next', 'stop_reason', 'exit', 'wrote', 'unwritten', 'loop', 'caps', 'review_min', 'brief', 'truncated', 'verdict', 'findings', 'findings_total', 'recurring_cross_run', 'resolved', 'skipped', 'close_args', 'open_findings', 'open_findings_note']; // every field of a stored (open, plan after-code, after-review) response
+const AGENT_RE = /^[A-Za-z0-9][A-Za-z0-9:_-]{0,63}$/;
 const STARTABLE = ['not-started', 'in-progress', 'blocked']; // the Status cells under which a new loop may start; done and superseded are over
 
 class Killed extends Error {} // the tests' simulated kill: the one error runStep lets through
@@ -83,11 +86,12 @@ function validate(step, args) {
     for (const k of NOT_FOR_PLAN) if (a[k] !== undefined) throw bad(k, 'is not an argument of a plan loop');
     if (a.iteration !== undefined) throw bad('iteration', 'a plan loop takes no iteration');
   } else if (typeof a.iteration !== 'string' || !ITERATION_RE.test(a.iteration)) throw bad('iteration', 'must look like 1.2 or 1.2b');
-  if (step === 'after-code' && (typeof a.agent !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9:_-]{0,63}$/.test(a.agent))) throw bad('agent', 'is required: the agent that just ran');
+  if (step === 'after-code' && (typeof a.agent !== 'string' || !AGENT_RE.test(a.agent))) throw bad('agent', 'is required: the agent that just ran');
   if (a.review_mode !== undefined && !MODES.includes(a.review_mode)) throw bad('review_mode', `must be one of ${MODES.join('|')}`);
   if (a.review_scope !== undefined && !REVIEW_SCOPES.includes(a.review_scope)) throw bad('review_scope', `must be one of ${REVIEW_SCOPES.join('|')}`);
   if (a.host !== undefined && !HOSTS.includes(a.host)) throw bad('host', `must be one of ${HOSTS.join('|')}`);
   for (const k of ['max_passes', 'diff_cap']) if (a[k] !== undefined) a[k] = intArg(a[k], k);
+  if (step === 'after-review') checkReview(a, { bad, intArg });
   if (a.files !== undefined) {
     const list = typeof a.files === 'string' ? a.files.split(/\s+/).filter(Boolean) : a.files;
     if (!Array.isArray(list) || list.length > 200 || list.some((f) => typeof f !== 'string' || !/^[^\s\p{Cc}]{1,200}$/u.test(f) || /^[-~/]|\\|(^|\/)\.\.(\/|$)/.test(f))) throw bad('files', 'expected up to 200 relative paths without whitespace, control characters, a backslash, a .. segment or a leading - or ~');
@@ -128,7 +132,7 @@ function cardOf(a, ctx, state) {
 
 // The caps as the response shows them (an allow-list: nothing else stored reaches it) and the severity floor in force.
 function capsView(state) {
-  const floor = Object.hasOwn(RANK, state.caps.severity_floor) ? state.caps.severity_floor : 'Major'; // a stored floor outside the four names is shown, and judged, as Major
+  const floor = typeof state.caps.severity_floor === 'string' && Object.hasOwn(RANK, state.caps.severity_floor) ? state.caps.severity_floor : 'Major'; // a stored floor that is not one of the four names (an array of one included) is shown, and judged, as Major
   return { floor, caps: { ...Object.fromEntries(['max_passes', 'diff_cap_lines'].filter((k) => k in state.caps).map((k) => [k, state.caps[k]])), severity_floor: floor } };
 }
 
@@ -159,16 +163,16 @@ const finalize = (sf, state, entry, resp) => { entry.response = within(resp); sa
 
 // Open findings at or above the floor as `F-id: title`, read with the notes writers' confinement; no ledger yet is no
 // findings (a read never seeds one), a ledger that is linked, special, oversized or malformed is flagged, never followed.
-function floorLines(root, slug, floor) {
+function floorLines(root, slug, floor, run) { // `run`: only findings sighted in that loop run
   const { file } = ledgerPaths(root, slug);
   const dir = plainDir(root, path.relative(root, path.dirname(file)).split(path.sep));
   const led = dir.dir ? readPlanFile(file) : dir;
   if (led.reason === 'missing') return [];
   try {
     if (!led.text) throw new Error(led.reason);
-    const limit = RANK[floor]; // no cut here: fitLines fits what the budget holds and counts the rest
-    return JSON.parse(led.text).findings.filter((f) => f?.status === 'open' && /^F-\d+$/.test(f.id) && (RANK[f.severity] ?? 99) <= limit)
-      .sort((x, y) => RANK[x.severity] - RANK[y.severity] || Number(x.id.slice(2)) - Number(y.id.slice(2)))
+    // no cut here: fitLines fits what the budget holds and counts the rest
+    return JSON.parse(led.text).findings.filter((f) => f?.status === 'open' && /^F-\d+$/.test(f.id) && atOrAbove(f.severity, floor) && (!run || f.seen.some((s) => s?.run === run)))
+      .sort((x, y) => (RANK[x.severity] ?? 4) - (RANK[y.severity] ?? 4) || Number(x.id.slice(2)) - Number(y.id.slice(2)))
       .map((f) => `${f.id}: ${clean(f.title, 100).replace(/`/g, '').replace(/^[#>\s-]+/, '')}`);
   } catch { return ['(the findings ledger is unreadable)']; }
 }
@@ -206,17 +210,20 @@ function undeclared(root, a) {
 // A running state is usable only if everything open reads has its type and bound; anything else reads as unreadable.
 const intCap = (v) => Number.isInteger(v) && v >= 0;
 const plain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-const SUB_STEPS = ['pass', 'diary', 'dispatch']; // every sub-step any step records: a cursor naming another is unreadable
+const SUB_STEPS = ['pass', 'diary', 'dispatch', 'record', 'findings', 'resolve']; // every sub-step any step records, in one place: a cursor naming another is unreadable
 const short = (v, n) => typeof v === 'string' && v.length <= n;
-const outSound = (o) => plain(o) && Array.isArray(o.wrote) && o.wrote.length <= 4 && o.wrote.every((w) => short(w, 200)) // a diary step writes at most two files
-  && Array.isArray(o.unwritten) && o.unwritten.length <= 4 && o.unwritten.every((u) => plain(u) && short(u.file, 100) && short(u.reason, 100) && short(u.line, 300) && (u.code === undefined || short(u.code, 32)));
+const outSound = (o) => plain(o) && Array.isArray(o.wrote) && o.wrote.length <= 6 && o.wrote.every((w) => short(w, 200)) // room for the closing step: a diary and its archive, the progress.md row and its Last activity line
+  && Array.isArray(o.unwritten) && o.unwritten.length <= 6 && o.unwritten.every((u) => plain(u) && short(u.file, 100) && short(u.reason, 100) && short(u.line, 300) && (u.code === undefined || short(u.code, 32)));
+const foundSound = (f) => plain(f) && Array.isArray(f.lines) && f.lines.length <= 12 && f.lines.every((l) => /^F-\d{1,9} (new|known)( recurring)?( cross-run)?$/.test(l)) && Number.isInteger(f.total) && Array.isArray(f.cross) && f.cross.length <= 10 && f.cross.every((c) => /^F-\d{1,9}$/.test(c)) && typeof f.breaker === 'boolean';
+const fixedSound = (f) => plain(f) && ['resolved', 'skipped'].every((k) => Array.isArray(f[k]) && f[k].length <= 100 && f[k].every((x) => /^F-\d{1,9}( Blocker| Major| Minor| Nit| Unrated)?$/.test(x)));
 const sound = (e) => plain(e) && Array.isArray(e.done) && e.done.every((d) => SUB_STEPS.includes(d)) && typeof e.at === 'string'
   && (e.review === undefined || (plain(e.review) && MODES.includes(e.review.mode) && REVIEW_SCOPES.includes(e.review.scope)))
+  && (e.sig === undefined || (typeof e.sig === 'string' && /^[0-9a-f]{16}$/.test(e.sig))) && (e.file === undefined || short(e.file, 100)) && (e.found === undefined || foundSound(e.found)) && (e.fixed === undefined || fixedSound(e.fixed))
   && (e.measured === undefined || (typeof e.measured === 'string' && OBJECT_ID.test(e.measured)))
   && (e.response === undefined || (plain(e.response) && size(e.response) <= BUDGET)) && (e.out === undefined || outSound(e.out));
 function usable(s) {
   return s?.status === 'running' && ['code', 'plan'].includes(s.loop) && Number.isInteger(s.pass) && s.pass >= 0 && plain(s.caps)
-    && typeof s.baseline_sha === 'string' && OBJECT_ID.test(s.baseline_sha) && Array.isArray(s.history) && s.history.every((h) => plain(h) && (h.tree === undefined || (typeof h.tree === 'string' && OBJECT_ID.test(h.tree)))) // these two reach git
+    && typeof s.baseline_sha === 'string' && OBJECT_ID.test(s.baseline_sha) && Array.isArray(s.history) && s.history.every((h) => plain(h) && entryOk(h) && (h.tree === undefined || (typeof h.tree === 'string' && OBJECT_ID.test(h.tree)))) // these two reach git
     && intCap(s.caps.max_passes) && (s.loop === 'plan' ? s.caps.diff_cap_lines === undefined || intCap(s.caps.diff_cap_lines) : intCap(s.caps.diff_cap_lines) && Array.isArray(s.iteration_files) && s.iteration_files.every((f) => typeof f === 'string'))
     && (s.review_min === undefined || s.review_min === 'security') && (s.dispatches === undefined || Array.isArray(s.dispatches)) && (s.steps === undefined || (plain(s.steps) && Object.values(s.steps).every(sound)));
 }
@@ -234,7 +241,7 @@ function open(ctx, a) {
   const now = ctx.now ?? nowIso;
   const sf = stateFile(ctx.stateDir, a.slug, a.iteration);
   let state = stateAt(sf);
-  if (state === null) return base('open', { ok: false, next: 'ask-user', stop_reason: 'no-running-loop', exit: 64, error: 'the loop state is finished, stopped or unreadable; the user restarts it through the CLI init' }); // open never re-initialises an existing state: that is the user's to restart, never the model's
+  if (state === null) return base('open', { ok: false, next: 'ask-user', stop_reason: 'no-running-loop', exit: 64, error: 'the loop state is finished or cannot be read; the user decides whether to restart it through the CLI (a restart discards a state that is still running)' }); // open never re-initialises an existing state: that is the user's to restart, never the model's
   if (!state) {
     if (a.loop === 'code' && !a.files?.length) throw bad('files', 'required to start a code loop');
     const why = undeclared(ctx.root, a); if (why) return base('open', { ok: false, next: 'ask-user', stop_reason: 'not-declared', exit: 64, error: `${why}; the user starts a new loop through the CLI` });
@@ -313,7 +320,7 @@ function afterCode(ctx, a) {
   const diffCap = code ? capsFor(ctx, state, 'diff_cap_lines', a.diff_cap, now()) : { cap: 0, overrides: [] };
   const again = code ? null : replayOf(state, key, diffCap.overrides); if (again) return again;
   const review = code ? reviewSettings(ctx, state, a) : null;
-  const prior = state.steps?.[key]?.review; // what an earlier call of this pass asked for: a repeat may not ask for more
+  const prior = state.steps?.[key]?.review; // what an earlier call of this pass asked for
   if (prior) { review.mode = MODES[Math.max(...[prior.mode, review.mode].map((m) => MODES.indexOf(m)))]; if (prior.scope === 'full') review.scope = 'full'; } // a repeat may strengthen the lens or widen the scope, and never weakens what the pass already asked for
   let d;
   if (!state.steps?.[key]?.done.includes('dispatch')) {
@@ -356,7 +363,8 @@ function status(ctx, a) {
   }), floorLines(ctx.root, a.slug, 'Nit'));
 }
 
-const STEPS = { open, 'after-code': afterCode, status };
+const KIT = { stateAt, noLoop, bad, cut, begin, advance, finalize, base, floorLines, fitLines, capsView, replayOf };
+const STEPS = { open, 'after-code': afterCode, 'after-review': (ctx, a) => afterReview(ctx, a, KIT), status };
 
 export function runStep(ctx, args) {
   const step = args?.step;
@@ -367,7 +375,7 @@ export function runStep(ctx, args) {
     if (e instanceof Killed) throw e;
     const name = typeof step === 'string' ? step.slice(0, 20) : null;
     if (!(e instanceof LoopExit)) {
-      (ctx.log ?? console.error)(JSON.stringify({ somi_loop_step: name, error: e?.name, stack: e?.stack })); // the operator sees it; the response carries none of it
+      try { (ctx.log ?? console.error)(JSON.stringify({ somi_loop_step: name, ...(e instanceof Error ? { error: e.name, stack: e.stack } : { thrown: String(e).slice(0, 200) }) })); } catch { /* a failing sink must not turn exit 70 into a crash */ } // the operator sees it; the response carries none of it
       return base(name, { ok: false, exit: 70, error: 'internal error: the step did not complete; retry it, and report it if it repeats' });
     }
     return base(name, { ok: false, exit: e.code, error: clean(e.message.replace(`${PROG}: `, ''), 300) });

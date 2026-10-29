@@ -186,11 +186,11 @@ export const recordDispatch = guarded(({ root, installRoot, stateDir }, args) =>
   return ok(d.entry);
 });
 
-export const recordPass = guarded(({ root, stateDir, now = nowIso }, args) => {
-  const sf = stateFile(stateDir, args.slug, args.iteration);
-  requireState(sf);
-  if (!args.verdict) throw usageError('record-pass requires --verdict');
-  const state = loadState(sf);
+// The history entry of the pass in progress: the verdict and counts as given, the cumulative diff and the tree reviewed
+// (the next pass's delta starts there). Shared by `record-pass` and the composite steps, which store it under their cursor.
+// A pass entry the step reads back: a short verdict without control characters, counts that are numbers (null: unrecorded).
+export const entryOk = (h) => typeof h.verdict === 'string' && h.verdict.length <= 60 && !/\p{Cc}/u.test(h.verdict) && [h.blockers, h.majors].every((n) => n == null || (Number.isFinite(n) && n >= 0));
+export function passEntry(root, state, args, at) {
   const { total } = computeDiff(root, state.baseline_sha, state.iteration_files);
   const entry = {
     pass: state.pass,
@@ -198,9 +198,19 @@ export const recordPass = guarded(({ root, stateDir, now = nowIso }, args) => {
     blockers: Number(args.blockers),
     majors: Number(args.majors),
     diff_lines: total,
-    tree: snapshotTree(root) ?? undefined, // the reviewed tree: the next pass's delta starts here
-    at: now(),
+    tree: snapshotTree(root) ?? undefined,
+    at,
   };
+  if (!entryOk(entry)) throw usageError('verdict must be at most 60 characters without control characters, and --blockers and --majors non-negative numbers');
+  return entry;
+}
+
+export const recordPass = guarded(({ root, stateDir, now = nowIso }, args) => {
+  const sf = stateFile(stateDir, args.slug, args.iteration);
+  requireState(sf);
+  if (!args.verdict) throw usageError('record-pass requires --verdict');
+  const state = loadState(sf);
+  const entry = passEntry(root, state, args, now());
   state.history.push(entry);
   saveState(sf, state);
   return ok(entry);

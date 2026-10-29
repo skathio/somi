@@ -44,6 +44,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   small binary no longer counts as one line; a file over 1 MiB that git prints as binary counts by size only. The
   delta review is told to run `git --no-replace-objects diff --text`. Known limit: a hand-edited `.git/index` can make
   the gate under-count; it does not defend against forged git internals (the review and the coder's sandbox do).
+- **The loop step tool gains `after-review`.** One call records the reviewers' dispatches, the pass, its findings
+  (exit 5 and `circuit-breaker` when the same finding recurs on consecutive passes) and the findings the coder fixed,
+  writes the per-pass diary line, and says whether to `open` again or `close`. A code loop's pass is refused (64, nothing
+  written) unless the working tree is the one the last `after-code` measured; a repeat with other arguments is refused;
+  a replay adds no second sighting to the findings ledger. The verdict must agree with the findings it lists (the
+  Blocker and Major counts equal the listed findings, every finding names a severity, an approve lists none at or
+  above the floor), the reviewers must be review agents and include what the pass's review mode requires, and `fixed`
+  resolves only findings that were open before the call (others come back as `skipped`, and a status a person set is
+  never changed). An approve is refused while an earlier finding at or above the floor is open and neither listed nor
+  fixed, and a finding listed again at a stronger severity is raised. The step reads a loop state with a malformed
+  history entry as unreadable. A failing error-log sink no longer turns exit 70 into a crash, and a stored severity floor that is an array is
+  read as Major.
+- **`somi-findings record` raises severity and normalises it; `record-pass` validates.** A finding seen again at a
+  stronger severity is raised (the sighting notes it), never lowered; `blocker` is stored as `Blocker`, and any other
+  severity is stored as given and shown as `Unrated`, which counts as at the floor. `record-pass` refuses (64) a verdict
+  with a control character or over 60 characters and counts that are not non-negative numbers. In `after-review`,
+  an unknown `fixed` id is refused, and the approve check looks only at findings sighted in this loop's run.
 
 ## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
 

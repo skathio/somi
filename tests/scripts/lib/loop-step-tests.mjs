@@ -66,7 +66,7 @@ console.log('== validation: refused with 64 naming the field, before any path or
     ['verdict', { step: 'open', verdict: 'approve' }], ['agent', { step: 'open', agent: 'somi-coder' }], ['review_mode', { step: 'open', review_mode: 'panel' }],
     ['diff_cap', { step: 'open', loop: 'plan', slug: 'pl', iteration: undefined, diff_cap: 5 }], ['loop', { step: 'open', loop: 'x' }],
     ['max_passes', { step: 'open', max_passes: '1,0' }], ['max_passes', { step: 'open', max_passes: -1 }], ['diff_cap', { step: 'open', diff_cap: 1.5 }], ['files', { step: 'open', files: ['a\n.js'] }],
-    ['review_scope', { step: 'open', review_scope: 'x' }], ['host', { step: 'open', host: 'vim' }], ['step', { step: 'nope' }], ['step', { step: 'close' }], ['step', { step: 'after-review' }],
+    ['review_scope', { step: 'open', review_scope: 'x' }], ['host', { step: 'open', host: 'vim' }], ['step', { step: 'nope' }], ['step', { step: 'close' }], ['reviewers', { step: 'after-review' }],
     ['agent', { step: 'after-code' }], ['agent', { step: 'after-code', agent: '../evil' }], ['review_scope', { step: 'after-code', agent: 'somi-coder', review_scope: 'x' }], ['review_mode', { step: 'after-code', agent: 'somi-coder', review_mode: 'loud' }],
     ['review_mode', { step: 'after-code', loop: 'plan', slug: 'pl', iteration: undefined, agent: 'somi-planner', review_mode: 'panel' }], ['diff_cap', { step: 'after-code', loop: 'plan', slug: 'pl', iteration: undefined, agent: 'somi-planner', diff_cap: 5 }],
     ['iteration', { step: 'after-code', agent: 'somi-coder', iteration: '1.1/../x' }], ['slug', { step: 'status', slug: 'a/b' }], ['iteration', { step: 'status', iteration: '1.1.1' }], ['files', { step: 'status', files: 'a.js' }], ['agent', { step: 'status', agent: 'somi-coder' }],

@@ -11,6 +11,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 
 export const PROG = 'somi-findings';
 
@@ -65,6 +66,12 @@ export function normalizeTitle(title) {
   return squeezed.split(/\s+/).slice(0, 8).join(' ');
 }
 
+// The locus a finding is matched on. ASCII-only lowercase of the symbol, same reasoning as normalizeTitle: bash uses
+// byte-wise `tr '[:upper:]' '[:lower:]'`.
+export function locusKey(f) {
+  return `${rawStr(f.file)}|${rawStr(f.symbol).replace(/[A-Z]/g, (c) => c.toLowerCase())}|${normalizeTitle(rawStr(f.title))}`;
+}
+
 function ensureLedger(ledgerDir, ledgerPath) {
   fs.mkdirSync(ledgerDir, { recursive: true });
   if (!fs.existsSync(ledgerPath)) {
@@ -72,7 +79,7 @@ function ensureLedger(ledgerDir, ledgerPath) {
     // a literal, NOT jq output (note the space after each colon but no other jq-pretty
     // formatting). Immediately superseded by the jq-pretty form on the first record/resolve/
     // reopen that touches this ledger; only matters at rest if `open`/`get` is called first.
-    fs.writeFileSync(ledgerPath, '{"next_id": 1, "findings": []}\n');
+    try { fs.writeFileSync(ledgerPath, '{"next_id": 1, "findings": []}\n', { flag: 'wx' }); } catch (e) { if (e.code !== 'EEXIST') throw e; } // exclusive: nothing is created through a link at the name; a first touch that lost a race is fine
   }
 }
 
@@ -86,9 +93,15 @@ function saveLedger(ledgerPath, ledger) {
   // against JSON.stringify(ledger, null, 2) + '\n'), written to a temp file in
   // the SAME directory as the target and renamed into place so the write is atomic and the
   // rename never crosses a filesystem boundary.
-  const tmpPath = `${ledgerPath}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(ledger, null, 2) + '\n');
-  fs.renameSync(tmpPath, ledgerPath);
+  // The temp name is random and created exclusively ('wx'), so a link planted at a guessable name is never followed.
+  const tmpPath = `${ledgerPath}.${randomBytes(6).toString('hex')}.tmp`;
+  try {
+    fs.writeFileSync(tmpPath, JSON.stringify(ledger, null, 2) + '\n', { flag: 'wx' });
+    fs.renameSync(tmpPath, ledgerPath);
+  } catch (e) {
+    fs.rmSync(tmpPath, { force: true });
+    throw e;
+  }
 }
 
 // A finding is recordable when it names a file and a title.
@@ -99,8 +112,10 @@ function firstUnrecordable(input) {
 // Upserts each finding of `input` (an already-parsed array) into the ledger: a new locus becomes F-<n>, a known
 // OPEN locus gets a sighting appended. `lines` is one JSON line per finding; `code` is 5 if ANY finding recurred
 // in consecutive passes (judged after all are processed). Every element is validated before the ledger is
-// touched: a malformed one returns 64 and writes nothing, not even the empty ledger.
-export function recordFindings({ root, slug, review, run, pass, input, now = nowDateUtc }) {
+// touched: a malformed one returns 64 and writes nothing, not even the empty ledger. `dedupe` (a step that may be
+// replayed) skips a sighting the same review, run and pass already holds on a known locus; so two findings of one
+// locus in one batch leave a single sighting.
+export function recordFindings({ root, slug, review, run, pass, input, now = nowDateUtc, dedupe = false }) {
   const bad = firstUnrecordable(input);
   if (bad !== -1) return { lines: [], code: 64, message: `${PROG}: finding ${bad} needs at least {file, title}` };
 
@@ -112,9 +127,7 @@ export function recordFindings({ root, slug, review, run, pass, input, now = now
   let breaker = false;
 
   for (const f of input.map((x) => x ?? {})) {
-    // ASCII-only lowercase, same reasoning as normalizeTitle: bash uses byte-wise `tr '[:upper:]' '[:lower:]'`.
-    const symbol = rawStr(f.symbol).replace(/[A-Z]/g, (c) => c.toLowerCase());
-    const key = `${rawStr(f.file)}|${symbol}|${normalizeTitle(rawStr(f.title))}`;
+    const key = locusKey(f);
     const sighting = { review, run, pass, date };
 
     // Known open locus: recurrence is classified BEFORE the sighting is appended.
@@ -122,7 +135,9 @@ export function recordFindings({ root, slug, review, run, pass, input, now = now
     if (existing) {
       const recurringConsecutive = existing.seen.some((s) => s.run === run && s.pass === pass - 1);
       const recurringCross = existing.seen.some((s) => s.run !== run);
-      existing.seen.push(sighting);
+      const raised = canonSeverity(f.severity); // a re-sighting at a stronger severity raises it (and says so on the sighting), never lowers it
+      if (SEVERITIES.includes(raised) && SEVERITIES.indexOf(raised) < SEVERITIES.indexOf(existing.severity)) existing.severity = sighting.severity = raised;
+      if (!(dedupe && existing.seen.some((s) => s.review === review && s.run === run && s.pass === pass))) existing.seen.push(sighting); // dedupe: a replayed call adds no second sighting
       if (recurringConsecutive) breaker = true;
       lines.push(JSON.stringify({ id: existing.id, state: 'known', recurring_consecutive: recurringConsecutive, recurring_cross_run: recurringCross }));
     } else {
@@ -133,7 +148,7 @@ export function recordFindings({ root, slug, review, run, pass, input, now = now
         key,
         locus: { file: f.file, symbol: orElse(f.symbol, '') },
         title: f.title,
-        severity: orElse(f.severity, 'Minor'),
+        severity: canonSeverity(orElse(f.severity, 'Minor')),
         confidence: orElse(f.confidence, 'Medium'),
         status: 'open',
         introduced_by: review,
@@ -149,6 +164,11 @@ export function recordFindings({ root, slug, review, run, pass, input, now = now
   return { lines, code: breaker ? 5 : 0, message: '' };
 }
 
+export const SEVERITIES = ['Blocker', 'Major', 'Minor', 'Nit']; // strongest first
+// A stored severity is read as one of the four names, else Unrated; an Unrated one counts as at the floor (it fails closed).
+export const readSeverity = (s) => (SEVERITIES.includes(s) ? s : 'Unrated');
+export const atOrAbove = (severity, floor) => !SEVERITIES.includes(severity) || SEVERITIES.indexOf(severity) <= SEVERITIES.indexOf(floor);
+const canonSeverity = (v) => SEVERITIES.find((n) => typeof v === 'string' && n.toLowerCase() === v.toLowerCase()) ?? v; // blocker -> Blocker
 const STATUSES = ['fixed', 'accepted', 'wontfix'];
 const refuse = (msg) => ({ lines: [], code: 64, message: `${PROG}: ${msg}` });
 const ok = (lines = []) => ({ lines, code: 0, message: '' });
