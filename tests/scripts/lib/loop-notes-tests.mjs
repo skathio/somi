@@ -2,7 +2,7 @@
 // Tests of the diary and progress writers (loop-notes.mjs, loop-notes-compact.mjs). The risk is the write path, so the
 // threat cases list every file under the temp tree, links included, before and after. Run by tests/scripts/loop-engine.sh.
 
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
+import fs, { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -20,6 +20,8 @@ const check = (name, got, want) => {
 const exitOf = (fn) => { try { fn(); } catch (e) { return [e instanceof LoopExit, e.code]; } return 'no throw'; };
 
 const base = mkdtempSync(path.join(tmpdir(), 'loop-notes-'));
+// On every exit, a failed check or a throw included: modes are restored first, or a chmod'd directory would outlive the run.
+process.on('exit', () => { spawnSync('chmod', ['-R', 'u+rwx', base]); rmSync(base, { recursive: true, force: true }); });
 const NOW = '2026-10-29T09:30:00Z';
 const PRE = '# Diary — p1\n\n> Spec: x\n\nPreamble.\n\n---\n\n';
 const entry = (n, cat = 'note') => `## 2026-01-${String((n % 28) + 1).padStart(2, '0')} 10:00 — ${n === 27 ? 'Compacted: earlier' : `entry ${n}`}\n\n${cat === null ? 'no category line\n' : `**Category**: \`${cat}\`\n**Phase**: 1\n`}\nbody ${n}\n\n---\n\n`;
@@ -151,6 +153,14 @@ const running = (count, extra = '') => `## 2026-01-04 10:00 — Compacted: 2025-
   const diary = read(path.join(dir, 'diary.md'));
   check('an oversized count does not breed a second summary: later compactions keep merging into one of ours', [diary.includes(huge), summaries(diary).filter(([t]) => !t.endsWith('2025-12-31')).length], [true, 1]);
 }
+{
+  // Movable entries with no date in their heading do not enter the summary's span (a '?' would break the next merge).
+  const undated = diaryOf(41).replace(/## 2026-01-(\d\d) 10:00 — entry (1[5-9]|2[0-9])\n/g, '## undated — entry $2\n');
+  const { plan, dir } = fresh({ diary: undated });
+  appendDiary(plan, note({ title: 'N' }));
+  const first = summaries(read(path.join(dir, 'diary.md')));
+  check('moved entries with undated headings leave a summary with a real date span', first.length === 1 && /^Compacted: \d{4}-\d\d-\d\d \.\. \d{4}-\d\d-\d\d$/.test(first[0][0]), true);
+}
 console.log('== size caps: an oversized diary or archive is reported, never read ==');
 {
   const cap = 4 * 1024 * 1024 + 1;
@@ -244,6 +254,17 @@ console.log('== confinement: closed set of paths, nothing outside, links refused
   const d = fresh({ diary: '# Diary\n\nno entries here\n' });
   check('a diary with no entry headings is left byte-identical and the entry text comes back', unchanged(base, () => appendDiary(d.plan, note()).unwritten.map((u) => [u.reason, u.line.startsWith('## 2026-10-29 09:30 — Writers done')])), [[['not-template-shape', true]], true]);
 }
+console.log('== atomic write: a failed archive write must not drop the entries it was to hold ==');
+{
+  const { plan, dir } = fresh({ diary: diaryOf(41) });
+  const before = read(path.join(dir, 'diary.md'));
+  const realRename = fs.renameSync;
+  fs.renameSync = (from, to) => { if (path.basename(to) === 'diary-archive.md') throw Object.assign(new Error('no space'), { code: 'ENOSPC' }); return realRename(from, to); };
+  let r;
+  try { r = appendDiary(plan, note({ title: 'N' })); } finally { fs.renameSync = realRename; }
+  const diary = read(path.join(dir, 'diary.md'));
+  check('the archive write fails: the diary is written uncompacted (every entry kept), one write-failed item for the archive, no temp or archive file', [headings(diary), diary.includes(before.slice(PRE.length)), r.wrote, r.unwritten.map((u) => [u.file, u.reason, u.code]), readdirSync(dir).sort()], [42, true, ['.somi/plans/p1/diary.md'], [['diary-archive.md', 'write-failed', 'ENOSPC']], ['diary.md', 'progress.md']]);
+}
 console.log('== atomic write: a failed write is reported, leaves the old file and no temp ==');
 if (typeof process.getuid === 'function' && process.getuid() !== 0) {
   const { plan, dir } = fresh();
@@ -262,6 +283,5 @@ if (typeof process.getuid === 'function' && process.getuid() !== 0) {
   check('a compacting append in an unwritable directory reports both the archive and the diary as write-failed, throws nothing, leaves no temp file', [bthrew, br?.wrote, br?.unwritten.map((u) => [u.file, u.reason, u.code]), snap(big.dir)], [false, [], [['diary-archive.md', 'write-failed', 'EACCES'], ['diary.md', 'write-failed', 'EACCES']], bigBefore]);
 } else console.log('  skip (running as root: a mode bit does not stop the write)');
 
-rmSync(base, { recursive: true, force: true });
 console.log(`loop notes tests: ${pass} ok, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

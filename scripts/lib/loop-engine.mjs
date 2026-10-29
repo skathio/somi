@@ -117,7 +117,7 @@ export const pass = guarded(({ env, stateDir, now = nowIso }, args) => {
   }
   const cur = state.pass;
   if (cur + 1 > max) throw new LoopExit(2, `max-passes-exceeded: pass ${cur + 1} > cap ${max}`);
-  const run = checkRun(path.dirname(stateDir), args.slug);
+  const run = checkRun(path.dirname(stateDir), args.slug, Date.parse(now()));
   if (run?.over) throw new LoopExit(4, `time-budget-exceeded: ${run.elapsed_minutes} of ${run.max_minutes} minutes used by this run`);
   state.pass = cur + 1;
   saveState(sf, state);

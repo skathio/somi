@@ -11,7 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-export const ITERATION_RE = /^[0-9]{1,3}\.[0-9]{1,3}$/;
+// The one iteration id pattern (loop steps, the notes writers and the card): N.M, or a split such as 2.1b.
+export const ITERATION_RE = /^\d+\.\d+[a-z]?$/;
 export const HOSTS = ['claude-code', 'copilot'];
 export const MAX_FILES = 20;
 export const MAX_BYTES = 2048;

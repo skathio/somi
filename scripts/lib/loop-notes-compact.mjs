@@ -46,7 +46,8 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const RUNNING = new RegExp(`^${escapeRe(summaryEntry('<stamp>', '<from>', '<to>', '<count>').trimEnd())}\\s*$`
   .replace('<stamp>', '\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d').replace('<from>', '(\\d{4}-\\d\\d-\\d\\d)')
   .replace('<to>', '(\\d{4}-\\d\\d-\\d\\d)').replace('<count>', '(\\d{1,6})'));
-const dateOf = (chunk) => /^## (\d{4}-\d{2}-\d{2})/.exec(chunk)?.[1] ?? '?';
+// An undated heading has no place in the summary's span.
+const dateOf = (chunk) => /^## (\d{4}-\d{2}-\d{2})/.exec(chunk)?.[1];
 
 // More than MAX_ENTRIES entries: every movable entry older than the newest KEEP_NEWEST leaves, and one `Compacted:`
 // entry takes the place of the newest of them -- or, when an earlier Compacted entry of our own shape exists, replaces
@@ -62,7 +63,8 @@ export function compactDiary(text, stamp) {
   if (moved.length === 0) return null;
   const prior = chunks.findIndex((c) => RUNNING.test(c));
   const before = prior < 0 ? null : RUNNING.exec(chunks[prior]);
-  const dates = moved.map(dateOf).concat(before ? [before[1], before[2]] : []).sort();
+  const dates = moved.map(dateOf).filter(Boolean).concat(before ? [before[1], before[2]] : []).sort();
+  if (dates.length === 0) dates.push(stamp.slice(0, 10)); // every moved heading undated: the summary's own day
   const summary = summaryEntry(stamp, dates[0], dates[dates.length - 1], moved.length + (before ? Number(before[3]) : 0));
   const at = before ? prior : moves.indexOf(true);
   const kept = chunks.flatMap((c, i) => (i === at ? [summary] : moves[i] ? [] : [withNewline(c)]));

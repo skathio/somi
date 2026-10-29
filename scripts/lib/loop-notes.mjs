@@ -11,10 +11,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { usageError } from './loop-exit.mjs';
-import { SLUG_RE } from './run-card.mjs';
+import { ITERATION_RE, SLUG_RE } from './run-card.mjs';
 import { archiveHead, archiveShape, CATEGORIES, compactDiary, formatEntry, insertEntry, isReplay, isSummaryTitle } from './loop-notes-compact.mjs';
 
-export const ITERATION_RE = /^\d+\.\d+[a-z]?$/;
+export { ITERATION_RE };
 export const STATUSES = ['not-started', 'in-progress', 'done', 'blocked', 'superseded'];
 const MAX_TEXT = 300;
 const MAX_FILE = 4 * 1024 * 1024;
