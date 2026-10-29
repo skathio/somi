@@ -3,7 +3,7 @@
 // loop-engine.mjs (the lifecycle, measuring and recording handlers).
 // Invoked from tests/scripts/loop-engine.sh.
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -12,6 +12,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { applyCapOverride, configVal, firstDefined, resolveInitCap, reresolveCap, validateCap } from '../../../scripts/lib/loop-caps.mjs';
 import { checkDiff, finish, init, pass as passPass, recordDispatch, recordPass, resume, reviewScope, runStart } from '../../../scripts/lib/loop-engine.mjs';
 import { stateFile } from '../../../scripts/lib/loop-state.mjs';
+import { measuredTree, treeNumstat } from '../../../scripts/lib/loop-review.mjs';
+import { computeDiff } from '../../../scripts/lib/loop-diff.mjs';
 import { LoopExit, ok, refuse, usageError } from '../../../scripts/lib/loop-exit.mjs';
 
 const LIB = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'scripts', 'lib');
@@ -167,6 +169,61 @@ check('none of the measure and record calls touched process.env', JSON.stringify
 }
 rmSync(root, { recursive: true, force: true });
 rmSync(globalDir, { recursive: true, force: true });
+
+console.log('== the snapshot tree is built from what is on disk, whatever the repository config says ==');
+{ // each case: a committed baseline, one change, and what the measurement says about it
+  const made = [];
+  const repo = () => { const r = mkdtempSync(path.join(tmpdir(), 'loop-snap-')); made.push(r); const g = (...a) => execFileSync('git', ['-C', r, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' }).trim(); g('init', '-q'); return { r, g }; };
+  const put = (r, f, text, time) => { mkdirSync(path.dirname(path.join(r, f)), { recursive: true }); writeFileSync(path.join(r, f), text); if (time) utimesSync(path.join(r, f), time, time); };
+  const measure = (r, g) => treeNumstat(r, g('rev-parse', 'HEAD'), measuredTree(r));
+  const refused = (r) => { const [a, code, msg] = exitOf(() => measuredTree(r)); return [a, code, msg.startsWith('somi-loop: cannot measure the diff: ')]; };
+  const racy = repo(); put(racy.r, 'f', 'aaaa\n', 1700000000); racy.g('add', '.'); racy.g('commit', '-q', '-m', 'f');
+  utimesSync(path.join(racy.r, '.git', 'index'), 1700000000, 1700000000); put(racy.r, 'f', 'bbbb\n', 1700000000); // same size, same second as the index: git calls the entry racy
+  check('a same-size edit made in the second the index was written is counted (the throwaway index keeps the real index\'s times)', measure(racy.r, racy.g), [{ added: 1, deleted: 1, file: 'f' }]);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100); // git compares ctime to the second
+  utimesSync(path.join(racy.r, '.git', 'index'), 1800000000, 1800000000); racy.g('config', 'core.trustctime', 'false'); racy.g('config', 'core.checkStat', 'minimal'); racy.g('config', 'core.ignoreStat', 'true'); put(racy.r, 'f', 'cccc\n', 1700000000); // the old mtime put back by hand
+  check('a repository config that loosens the stat check does not hide a same-size edit that kept its old mtime', measure(racy.r, racy.g), [{ added: 1, deleted: 1, file: 'f' }]);
+  const hook = path.join(racy.r, 'hook.sh'); put(racy.r, 'hook.sh', `#!/bin/sh\ntouch ${path.join(racy.r, 'RAN')}\nprintf '\\0'\n`); chmodSync(hook, 0o755); racy.g('config', 'core.fsmonitor', hook);
+  check('a core.fsmonitor hook in the repository config does not run during the measurement', [measure(racy.r, racy.g).length, existsSync(path.join(racy.r, 'RAN'))], [2, false]);
+  const rep = repo(); rep.g('commit', '-q', '--allow-empty', '-m', '0'); put(rep.r, 'f', 'x\n'.repeat(4000)); rep.g('add', '.'); rep.g('commit', '-q', '-m', 'f'); put(rep.r, 'one', 'x\n');
+  rep.g('replace', rep.g('rev-parse', 'HEAD:f'), rep.g('hash-object', '-w', 'one'));
+  check('a git replace ref is refused with 64, so a substituted blob is never counted in place of the real one', refused(rep.r), [true, 64, true]);
+  check('and the diff itself ignores the replacement: the 4000 lines of the real blob, not the 1 of the substitute', treeNumstat(rep.r, rep.g('rev-parse', 'HEAD~1'), rep.g('rev-parse', 'HEAD'))[0].added, 4000);
+  const sp = repo(); put(sp.r, 'src/a', 'a\n'); put(sp.r, 'other/b', 'b\n'); sp.g('add', '.'); sp.g('commit', '-q', '-m', 'f'); sp.g('sparse-checkout', 'set', '--cone', 'src'); put(sp.r, 'src/a', 'a\nb\n');
+  check('a sparse checkout measures: files left out of the working tree are not an edit', [existsSync(path.join(sp.r, 'other')), measure(sp.r, sp.g)], [false, [{ added: 1, deleted: 0, file: 'src/a' }]]);
+  sp.g('sparse-checkout', 'disable'); sp.g('update-index', '--skip-worktree', 'src/a'); // a hidden flag on a file that is on disk
+  check('a skip-worktree file that is on disk refuses: its edit would be hidden', refused(sp.r), [true, 64, true]);
+  const wt = repo(); wt.g('commit', '-q', '--allow-empty', '-m', 'f'); wt.g('config', 'extensions.worktreeConfig', 'true'); put(wt.r, '.gitattributes', '*.js filter=x\n'); put(wt.r, 'f.js', 'x\n');
+  wt.g('config', '--worktree', 'filter.x.clean', `touch ${path.join(wt.r, 'RAN')}; cat`);
+  check('a clean filter in the worktree config is refused and does not run', [...refused(wt.r), existsSync(path.join(wt.r, 'RAN'))], [true, 64, true, false]);
+  const ign = repo(); put(ign.r, 'a', 'a\n'); ign.g('add', '.'); ign.g('commit', '-q', '-m', 'f'); put(ign.r, '.gitignore', '.somi\n'); put(ign.r, '.somi/n', 'x\n'.repeat(50)); put(ign.r, 'z', 'x\n');
+  check('a .gitignore that ignores .somi does not stop the measurement, and .somi stays out of it', measure(ign.r, ign.g).map((x) => x.file).sort(), ['.gitignore', 'z']);
+  const bin = repo(); bin.g('commit', '-q', '--allow-empty', '-m', 'f'); put(bin.r, 'b.bin', Buffer.alloc(4999));
+  check('a binary with no newline counts one line per 50 bytes (100), not one', measure(bin.r, bin.g), [{ added: 100, deleted: 0, file: 'b.bin' }]);
+  const wtr = repo(); put(wtr.r, 'f', 'a\n'); wtr.g('add', '.'); wtr.g('commit', '-q', '-m', 'f'); put(wtr.r, 'f', 'a\nb\nc\n');
+  const empty = mkdtempSync(path.join(tmpdir(), 'loop-snap-')); made.push(empty); wtr.g('config', 'core.worktree', empty);
+  check('a core.worktree that points elsewhere does not hide the real tree', measure(wtr.r, wtr.g), [{ added: 2, deleted: 0, file: 'f' }]);
+  const decoy = repo(); const head = wtr.g('rev-parse', 'HEAD'); process.env.GIT_DIR = path.join(decoy.r, '.git'); process.env.GIT_INDEX_FILE = path.join(decoy.r, 'nope'); process.env.GIT_OBJECT_DIRECTORY = empty; process.env.GIT_LITERAL_PATHSPECS = '1';
+  const viaEnv = treeNumstat(wtr.r, head, measuredTree(wtr.r)); delete process.env.GIT_DIR; delete process.env.GIT_INDEX_FILE; delete process.env.GIT_OBJECT_DIRECTORY; delete process.env.GIT_LITERAL_PATHSPECS;
+  check('a GIT_DIR, GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY and GIT_LITERAL_PATHSPECS in the caller\'s environment do not redirect the measurement', viaEnv, [{ added: 2, deleted: 0, file: 'f' }]);
+  const sm = repo(); sm.g('commit', '-q', '--allow-empty', '-m', 'f'); put(sm.r, 'n/a', 'x\n'.repeat(50)); execFileSync('git', ['-C', path.join(sm.r, 'n'), 'init', '-q']); execFileSync('git', ['-C', path.join(sm.r, 'n'), '-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '.']); execFileSync('git', ['-C', path.join(sm.r, 'n'), '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'n']);
+  put(sm.r, '.gitmodules', '[submodule "n"]\n\tpath = n\n\turl = ./n\n\tignore = all\n');
+  check('a nested repository hidden by .gitmodules ignore = all is refused like any other', exitOf(() => measure(sm.r, sm.g)).slice(0, 2), [true, 64]);
+  const hk = repo(); hk.g('commit', '-q', '--allow-empty', '-m', 'f'); put(hk.r, 'f', 'x\n'); put(hk.r, '.git/hooks/post-index-change', `#!/bin/sh\ntouch ${path.join(hk.r, 'RAN')}\n`); chmodSync(path.join(hk.r, '.git/hooks/post-index-change'), 0o755);
+  check('a post-index-change hook does not run during the measurement', [measure(hk.r, hk.g).length, existsSync(path.join(hk.r, 'RAN'))], [1, false]);
+  const sq = repo(); put(sq.r, 'src/a', 'a\n'); put(sq.r, 'other/b', 'b\n'); sq.g('add', '.'); sq.g('commit', '-q', '-m', 'f'); sq.g('sparse-checkout', 'set', '--cone', 'src'); put(sq.r, 'other/new', 'n\nn\n');
+  check('an untracked file outside the sparse checkout is counted, not refused', measure(sq.r, sq.g), [{ added: 2, deleted: 0, file: 'other/new' }]);
+  const sub = repo(); put(sub.r, 'pkg/a', 'a\nb\n'); put(sub.r, 'big', 'x\n'.repeat(2000)); sub.g('add', '.'); sub.g('commit', '-q', '-m', 'f'); put(sub.r, 'pkg/a', 'a\nB\n'); put(sub.r, 'big', 'y\n'.repeat(2000));
+  const subRoot = path.join(sub.r, 'pkg'); const subDiff = computeDiff(subRoot, sub.g('rev-parse', 'HEAD'), ['a']);
+  check('a project directory below the repository top level counts its own subtree: a one-line edit is 2 lines, none out of scope', [subDiff.total, subDiff.weighted, subDiff.outOfScope], [2, 2, []]);
+  const lk = repo(); put(lk.r, 'f', 'a\n'); lk.g('add', '.'); lk.g('commit', '-q', '-m', 'f'); const lkDir = path.join(lk.r, '..', path.basename(lk.r) + '-wt'); made.push(lkDir); lk.g('worktree', 'add', '-q', lkDir, '-b', 'x'); put(lkDir, 'f', 'a\nb\n');
+  check('a linked worktree measures its own files', measure(lkDir, lk.g), [{ added: 1, deleted: 0, file: 'f' }]);
+  const ic = repo(); put(ic.r, 'foo.txt', 'a\n'); ic.g('add', '.'); ic.g('commit', '-q', '-m', 'f'); ic.g('config', 'core.ignoreCase', 'true'); put(ic.r, 'Foo.txt', 'x\n'.repeat(3000));
+  check('core.ignoreCase true in the repository config does not hide a new file whose name differs from a tracked one only by case', measure(ic.r, ic.g), [{ added: 3000, deleted: 0, file: 'Foo.txt' }]);
+  symlinkSync('.git', path.join(ic.r, '.GIT'));
+  check('and a .GIT symlink to .git does not either: git refuses the path, so the measurement refuses rather than count less', refused(ic.r), [true, 64, true]);
+  for (const r of made) rmSync(r, { recursive: true, force: true });
+}
 
 console.log(`loop engine tests: ${pass} ok, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

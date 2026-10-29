@@ -216,7 +216,7 @@ console.log('== after-code ==');
   recordPass(r.ctx(), { ...prim, verdict: 'needs-changes', blockers: '0', majors: '1' });
   open(r); r.file('a.js', '1\n2\n');
   const d = after(r);
-  check('from pass 2 the scope is the delta since the reviewed tree and the brief names it; review_scope full makes it whole', [d.scope.scope, d.scope.since_pass, d.scope.files, d.review_brief.includes(`git diff ${d.scope.from} ${d.scope.to}`)], ['delta', 1, ['a.js'], true]);
+  check('from pass 2 the scope is the delta since the reviewed tree and the brief names it; review_scope full makes it whole', [d.scope.scope, d.scope.since_pass, d.scope.files, d.review_brief.includes(`git --no-replace-objects diff --text ${d.scope.from} ${d.scope.to}`)], ['delta', 1, ['a.js'], true]);
   const f = repo(); open(f); recordPass(f.ctx(), { ...prim, verdict: 'needs-changes', blockers: '0', majors: '1' }); open(f);
   check('review_scope full on pass 2 is the whole iteration, why: setting', [after(f, { review_scope: 'full' }).scope], [{ scope: 'full', why: 'setting' }]);
 }
@@ -422,6 +422,77 @@ console.log('== open hardening: declaration table, state shape, floor, ledger co
     led(() => {}), led(({ dir }) => rmSync(dir, { recursive: true })), led(asLink), led(({ dir }) => { renameSync(dir, `${dir}x`); symlinkSync(`${dir}x`, dir); }), led(fifo),
     led(({ file }) => writeFileSync(file, ' '.repeat((1 << 22) + 1))), led(({ file }) => writeFileSync(file, '{ nope')), led(({ file }) => writeFileSync(file, '{"findings": 5}')),
   ], [[2, true, false, true], [2, false, false, true], [2, false, true, true], [2, false, true, true], [2, false, true, true], [2, false, true, true], [2, false, true, true], [2, false, true, true]]);
+}
+
+console.log('== the diff gate counts every changed file, or refuses ==');
+{
+  const sh = (r, ...a) => execFileSync('git', ['-C', r.root, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' });
+  const measure = (r) => { const c = checkDiff(r.ctx(), prim); const a = after(r); return [c, a]; };
+  const shape = ([c, a]) => [c.code, c.out?.diff_lines, a.exit, a.diff?.diff_lines];
+
+  const names = repo(); open(names);
+  names.file('é.js', 'x\n'.repeat(5000)); names.file('tab\tname.js', 'x\n'.repeat(5000)); names.file('say "hi".js', 'x\n');
+  const [nc, na] = measure(names);
+  check('untracked files with a non-ASCII, a tab and a quote in the name are counted, doubled and named, by the engine and by the step', [shape([nc, na]), nc.out?.out_of_scope.sort(), na.diff?.out_of_scope.length, na.stop_reason], [[3, 10001, 3, 10001], ['say "hi".js', 'tab\tname.js', 'é.js'], 3, 'scope-expansion']);
+
+  const mv = repo(); mkdirSync(path.join(mv.root, 'src')); const body = Array.from({ length: 400 }, (_, i) => `line ${i}`).join('\n') + '\n';
+  mv.file('src/x.js', body); sh(mv, 'add', '-A'); sh(mv, 'commit', '-q', '-m', 's'); open(mv, { files: 'src/' });
+  sh(mv, 'mv', 'src/x.js', 'outside.js'); mv.file('outside.js', body.split('\n').slice(0, 300).join('\n') + '\n' + 'new\n'.repeat(100));
+  const [mc, ma] = measure(mv);
+  check('a staged rename of an in-scope file into an out-of-scope path counts the new path as out of scope, doubled and named', [mc.out?.out_of_scope, mc.out?.diff_lines, mc.out?.weighted_lines, ma.diff?.out_of_scope], [['outside.js'], 800, 1200, ['outside.js']]);
+
+  const pure = repo(); pure.file('src.js', body); sh(pure, 'add', '-A'); sh(pure, 'commit', '-q', '-m', 's'); open(pure, { files: 'src.js dst.js' });
+  sh(pure, 'mv', 'src.js', 'dst.js');
+  check('a pure rename counts as the whole file deleted and added (400 + 400), in scope on both sides: renames are not detected', [measure(pure)[0].out?.diff_lines, measure(pure)[0].out?.weighted_lines], [800, 800]);
+
+  const many = repo(); open(many, { files: 'a.js d/' }); mkdirSync(path.join(many.root, 'd'));
+  for (let i = 0; i < 6000; i++) many.file(`d/e${String(i).padStart(5, '0')}${'x'.repeat(190)}`, '');
+  many.file('zz.js', 'x\n'.repeat(5000));
+  const [yc, ya] = measure(many);
+  check('a listing over 1 MB (6000 long names) is counted whole: the 5000 lines are there and out of scope', [shape([yc, ya]), yc.out?.out_of_scope], [[3, 5000, 3, 5000], ['zz.js']]);
+
+  const refused = (r) => { const [c, a] = measure(r); return [c.code, c.out, c.message?.includes('cannot measure the diff'), a.exit, a.ok, a.error?.includes('cannot measure the diff')]; };
+  const nest = repo(); open(nest); mkdirSync(path.join(nest.root, 'nest')); execFileSync('git', ['-C', path.join(nest.root, 'nest'), 'init', '-q']); nest.file('nest/big.js', 'x\n'.repeat(5000));
+  check('an empty nested git repository refuses with 64 in the engine and the step: never a zero diff', refused(nest), [64, undefined, true, 64, false, true]);
+  const gitlink = (name) => { const r = repo(); open(r); const d = path.join(r.root, name); mkdirSync(d); execFileSync('git', ['-C', d, 'init', '-q']); writeFileSync(path.join(d, 'f'), 'x'); sh({ root: d }, 'add', '-A'); sh({ root: d }, 'commit', '-q', '-m', 'n'); return r; };
+  check('a nested git repository that has a commit (recorded as a gitlink) refuses too', refused(gitlink('nest')), [64, undefined, true, 64, false, true]);
+  if (process.getuid?.() === 0) console.log('  skip an unreadable untracked file (running as root)');
+  else {
+    const locked = repo(); open(locked); locked.file('big.js', 'x\n'.repeat(5000)); chmodSync(path.join(locked.root, 'big.js'), 0o000); const lm = measure(locked)[0].message;
+    check('an unreadable untracked file refuses with 64 in the engine and the step: never a zero diff; the message has git\'s first line (naming the file) and the .gitignore hint', [...refused(locked), lm.includes('big.js'), lm.includes('Permission denied'), lm.includes('.gitignore')], [64, undefined, true, 64, false, true, true, true, true]);
+  }
+
+  const committed = (r, f, text) => { r.file(f, text); sh(r, 'add', '-A'); sh(r, 'commit', '-q', '-m', f); };
+  const hid = repo(); committed(hid, '.gitattributes', '*.dat -diff\n'); open(hid); hid.file('x.dat', 'x\n'.repeat(5000));
+  check('an untracked file hidden from diff by a -diff attribute is counted from its content (5000 lines), by the engine and by the step', shape(measure(hid)), [3, 5000, 3, 5000]);
+  const all = repo(); committed(all, '.gitattributes', '* -diff\n'); open(all, { files: 'a.js b.js' }); all.file('a.js', 'x\n'.repeat(3000));
+  check('under `* -diff` a tracked edit counts the old and the new lines (1 + 3000), by the engine and by the step', shape(measure(all)), [3, 3001, 3, 3001]);
+  const nul = repo(); open(nul); nul.file('n.js', 'a\n'.repeat(99) + '\0');
+  check('a source file with a NUL byte is counted by its lines (100), not as zero', shape(measure(nul)), [0, 100, 0, 100]);
+  const bin = repo(); open(bin); const blob = Buffer.from(Array.from({ length: 5000 }, (_, i) => (i * 7) % 256)); writeFileSync(path.join(bin.root, 'b.bin'), blob);
+  const newlines = Math.max(blob.filter((b) => b === 10).length + 1, blob.length / 50);
+  check('a real small binary counts a bounded number of lines: its newlines plus the last unterminated one, but at least one per 50 bytes', shape(measure(bin)), [0, newlines, 0, newlines]);
+  const big = repo(); open(big); big.file('big.dat', '\0' + 'x\n'.repeat(599999));
+  check('a file over the read bound is counted by its size (a NUL-marked 1,199,999 bytes at 50 a line = 24000), not read and not zero', shape(measure(big)), [3, 24000, 3, 24000]);
+  const hiddenIndex = (flag) => { const r = repo(); open(r); sh(r, 'update-index', flag, 'a.js'); r.file('a.js', 'x\n'.repeat(900)); return refused(r).concat(measure(r)[0].message.includes('"a.js"')); };
+  check('an assume-unchanged and a skip-worktree file each refuse with 64 naming it, in the engine and the step: the edit is not counted as zero', [hiddenIndex('--assume-unchanged'), hiddenIndex('--skip-worktree')], Array(2).fill([64, undefined, true, 64, false, true, true]));
+  const filt = repo(); open(filt); const marker = path.join(filt.root, 'RAN');
+  sh(filt, 'config', '--local', 'filter.x.clean', `touch ${marker}; cat`); filt.file('.gitattributes', '*.js filter=x\n'); filt.file('f.js', 'x\n');
+  check('a clean filter in the repository config refuses with 64 naming it, and its command never runs', [...refused(filt), measure(filt)[0].message.includes('filter.x.clean'), existsSync(marker)], [64, undefined, true, 64, false, true, true, false]);
+  const gl = measure(gitlink('ne\tst'))[0].message;
+  check('the nested-repository refusal names its path, control characters stripped, and says how to leave it out', [gl.includes('"nest"'), gl.includes('\t'), gl.includes('.gitignore')], [true, false, true]);
+  const gone = repo(); open(gone); recordPass(gone.ctx(), { ...prim, verdict: 'needs-changes', blockers: '0', majors: '1' }); open(gone);
+  sh(gone, 'rm', '-q', 'b.js'); sh(gone, 'mv', 'a.js', 'c.js');
+  check('the delta lists a deleted file and both sides of a rename', after(gone).scope.files.sort(), ['a.js', 'b.js', 'c.js']);
+
+  const evil = repo(); open(evil); const planted = path.join(evil.root, 'PWNED');
+  const poison = (mutate) => { const sfEvil = stateFile(evil.ctx().stateDir, 'p1', '1.1'); writeFileSync(sfEvil, JSON.stringify(mutate(evil.state()))); };
+  poison((st) => ({ ...st, baseline_sha: `--output=${planted}` }));
+  const eb = after(evil); const ec = checkDiff(evil.ctx(), prim);
+  check('a baseline_sha that is not an object id is unreadable state for the step and a refusal for the engine, and git never sees it (no file written)', [eb.exit, eb.error.startsWith('no running loop state'), ec.code, ec.out, existsSync(planted)], [64, true, 64, undefined, false]);
+  poison((st) => ({ ...st, baseline_sha: '0'.repeat(40), history: [{ pass: 1, verdict: 'x', tree: `--output=${planted}` }], pass: 2 }));
+  const et = after(evil); const es = reviewScope(evil.ctx(), { ...prim, slug: 'p1' });
+  check('a history tree that is not an object id is unreadable state for the step and a refusal for the review scope, and writes nothing', [et.exit, et.error.startsWith('no running loop state'), es.code, es.out, existsSync(planted)], [64, true, 64, undefined, false]);
 }
 
 console.log(`loop step tests: ${pass} ok, ${fail} failed`);

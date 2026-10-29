@@ -6,6 +6,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The code loop's diff gate no longer misses changes.** `check-diff` and the loop step skipped untracked files
+  whose names git quotes (non-ASCII, a tab, a quote), dropped the whole count when the changed-file listing passed
+  1 MB, and counted a file as zero lines when git prints it as binary: a NUL byte, or a `.gitattributes` `-diff` or
+  `binary` line the coder adds. Files are now read NUL-separated with no size limit that silently drops them, and a
+  file git calls binary is counted from its old and new contents. The delta review is told to use
+  `git diff --text`, so it sees those lines too.
+
+### Changed
+
+- **Renames count as a delete plus an add.** A rename into an out-of-scope path now counts as out of scope, in
+  full, in the diff gate and in the delta review's file list.
+- **The diff gate refuses (exit 64) instead of counting a smaller diff** for a nested git repository, a file git
+  cannot read, a changed submodule, an assume-unchanged file or a skip-worktree file that is on disk, a git replace
+  ref, a listing over 256 MB, or a `clean`, `smudge` or `process` filter in the repository's own, worktree or
+  command-line git config. The message names the cause; for a nested repository or an unreadable file it also says to
+  leave the path out with `.gitignore`. Filters in the user's own git config are not checked. A sparse checkout and a
+  `.gitignore` that lists `.somi` are measured, not refused (an untracked file outside the sparse cone counts). The
+  gate runs no `core.fsmonitor` program or git hook, and no `core.worktree`, `GIT_DIR` or other repository-selecting
+  setting can point it at another tree or (`core.ignoreCase`) hide a file whose name differs only by case; a project
+  directory below the repository top level is measured on its own subtree; a `.gitmodules` `ignore = all` no longer
+  hides a nested repository.
+- **Binary files count toward the cap**: a file git prints as binary counts at least one line per 50 bytes, so a
+  small binary no longer counts as one line; a file over 1 MiB that git prints as binary counts by size only. The
+  delta review is told to run `git --no-replace-objects diff --text`. Known limit: a hand-edited `.git/index` can make
+  the gate under-count; it does not defend against forged git internals (the review and the coder's sandbox do).
+
 ## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
 
 **Minor — additive.** Commands, agent names, tiers and the MCP tools are unchanged; two agents and
