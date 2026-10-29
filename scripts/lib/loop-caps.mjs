@@ -123,3 +123,18 @@ export function applyCapOverride(state, override) {
   if (!Array.isArray(state.cap_overrides)) state.cap_overrides = [];
   state.cap_overrides.push(override);
 }
+
+// Cap arguments that arrive from a tool may only tighten the cap in force: above it is refused with 64, equal is no
+// change, below returns the override entry (source `tool`) for the caller to apply. A diff cap of 0 is the gate off,
+// so any positive value tightens it and 0 against a live cap is an attempt to raise it. `argVal` was shape-checked
+// by the caller; undefined means no argument.
+export function tightenCap(state, field, argVal, at, label = field) {
+  if (argVal === undefined) return null;
+  const stored = state.caps[field];
+  const limit = (v) => (field === 'diff_cap_lines' && v === 0 ? Infinity : v);
+  if (limit(argVal) > limit(stored)) {
+    throw usageError(`${label}: ${argVal} is above the cap in force (${stored}); arguments only tighten, raise it with the CLI flag or env var`);
+  }
+  if (argVal === stored) return null;
+  return { field, from: stored, to: argVal, source: 'tool', after_pass: state.pass, at };
+}

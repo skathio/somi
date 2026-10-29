@@ -74,6 +74,7 @@ export const init = guarded(({ env, root, stateDir, now = nowIso }, args) => {
     configVal(config, [plan ? 'plan_loop' : 'code_loop', 'severity_floor']),
     'Major',
   );
+  if (!['Blocker', 'Major', 'Minor', 'Nit'].includes(sevFloor)) throw usageError(`severity_floor: ${sevFloor} must be one of Blocker|Major|Minor|Nit`);
   const diffCap = plan ? 0 : resolveInitCap(env, config, 'code', 'diff_cap_lines', args.diffCap); // plan loops have no diff cap
 
   let baseline;
