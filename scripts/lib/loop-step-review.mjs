@@ -1,7 +1,7 @@
 // loop-step-review.mjs -- the composite step that ends a pass: `after-review` records the reviewers' dispatches, the pass
 // (verdict and counts), the findings (the circuit breaker) and the ones the coder fixed, writes the per-pass diary line and
 // says what comes next, through the same functions the primitive subcommands call. The shared kit (cursor, response and
-// findings helpers) is loop-step-kit.mjs, which neither step file is imported by. Sub-steps, in order: dispatch, record,
+// findings helpers) is loop-step-kit.mjs; it imports neither step file. Sub-steps, in order: dispatch, record,
 // findings, resolve, diary; each is marked with its effect, and a repeat resumes at the first one not marked.
 
 import { createHash } from 'node:crypto';
@@ -110,7 +110,7 @@ export function afterReview(ctx, a) {
   const h = state.history[state.pass - 1];
   adv('diary', () => {
     const r = appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title: `${state.loop}-loop pass ${h.pass} reviewed: ${h.verdict}`, body: `${h.blockers} Blocker, ${h.majors} Major; cumulative diff ${h.diff_lines} lines${entry.fixed.resolved.length ? `; fixed: ${entry.fixed.resolved.join(', ')}` : ''}`, now: entry.at });
-    out.wrote.push(...r.wrote); out.unwritten.push(...r.unwritten.map((u) => ({ ...u, line: k.cut(u.line, 120) })));
+    k.keep(out, r);
   });
   const f = entry.found;
   const open = k.floorLines(ctx.root, a.slug, floor);

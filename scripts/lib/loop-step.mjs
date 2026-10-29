@@ -31,19 +31,20 @@ import { dispatchEntry } from './loop-dispatch.mjs';
 import { REVIEW_SCOPES, reviewScope as scopeOf, snapshotTree } from './loop-review.mjs';
 import { checkRun } from './run-budget.mjs';
 import { buildCard, HOSTS, ITERATION_RE, MAX_BYTES, SLUG_RE } from './run-card.mjs';
-import { appendDiary, findIterationRow, plainDir, readPlanFile } from './loop-notes.mjs';
+import { appendDiary, findIterationRow, markIteration, plainDir, readPlanFile } from './loop-notes.mjs';
 export { BUDGET } from './loop-step-kit.mjs';
-import { ARG, base, bad, begin, advance, capsView, clean, cut, finalize, fitLines, floorLines, Killed, MODES, noLoop, replayOf, size, stateAt, SUB_STEPS } from './loop-step-kit.mjs';
+import { ARG, base, bad, begin, advance, capsView, clean, cut, finalize, fitLines, floorLines, Killed, keep, MODES, noLoop, replayOf, size, stateAt, SUB_STEPS } from './loop-step-kit.mjs';
 import { afterReview, checkReview, FIELDS as REVIEW_FIELDS } from './loop-step-review.mjs';
+import { checkClose, close, FIELDS as CLOSE_FIELDS } from './loop-step-close.mjs';
 
 const FIELDS = {
   open: ['slug', 'loop', 'iteration', 'files', 'host', 'max_passes', 'diff_cap'],
   'after-code': ['slug', 'loop', 'iteration', 'agent', 'host', 'diff_cap', 'review_mode', 'review_scope'],
   status: ['slug', 'loop', 'iteration'],
   ...REVIEW_FIELDS,
+  ...CLOSE_FIELDS,
 };
 const NOT_FOR_PLAN = ['files', 'diff_cap', 'review_mode', 'review_scope'];
-const LATER = ['close']; // named by the contract, not built yet
 const NEXT_REVIEW = { single: 'task-reviewer', security: 'task-reviewers', panel: 'task-panel' };
 const CARD_MAX = 1800; // bytes of the response the run card may take (as JSON), so the fields around it always fit in BUDGET
 const NO_ROW = (it) => ({ // why findIterationRow found no usable row
@@ -63,7 +64,7 @@ function intArg(v, field) {
 
 // Whitelist the arguments of `step`, refuse any other with 64 naming it, and check every value's shape. Pure.
 function validate(step, args) {
-  if (!Object.hasOwn(FIELDS, step)) throw bad('step', LATER.includes(step) ? `${step} is not available in this build` : 'must be one of open|after-code|after-review|close|status');
+  if (!Object.hasOwn(FIELDS, step)) throw bad('step', 'must be one of open|after-code|after-review|close|status');
   for (const [k, v] of Object.entries(args)) {
     if (k !== 'step' && v != null && !FIELDS[step].includes(k)) throw bad(k, `is not an argument of step ${step}`);
   }
@@ -81,6 +82,7 @@ function validate(step, args) {
   if (a.host !== undefined && !HOSTS.includes(a.host)) throw bad('host', `must be one of ${HOSTS.join('|')}`);
   for (const k of ['max_passes', 'diff_cap']) if (a[k] !== undefined) a[k] = intArg(a[k], k);
   if (step === 'after-review') checkReview(a, { bad, intArg });
+  if (step === 'close') checkClose(a, { bad });
   if (a.files !== undefined) {
     const list = typeof a.files === 'string' ? a.files.split(/\s+/).filter(Boolean) : a.files;
     if (!Array.isArray(list) || list.length > 200 || list.some((f) => typeof f !== 'string' || !/^[^\s\p{Cc}]{1,200}$/u.test(f) || /^[-~/]|\\|(^|\/)\.\.(\/|$)/.test(f))) throw bad('files', 'expected up to 200 relative paths without whitespace, control characters, a backslash, a .. segment or a leading - or ~');
@@ -97,7 +99,6 @@ function capsFor(ctx, state, field, arg, at) {
   return { cap: tool ? tool.to : env.resolved, overrides: [env.override, tool].filter(Boolean) };
 }
 
-
 // The run card as brief text. A file list that would push it over CARD_MAX is shortened until it fits (the state and the
 // diff gate keep every file) and the cut is said; it is refused only when it does not fit with no files.
 function cardOf(a, ctx, state) {
@@ -110,9 +111,6 @@ function cardOf(a, ctx, state) {
     if (k === 0) throw usageError(`the run card is over the response limit with no files listed (${CARD_MAX} bytes)`);
   }
 }
-
-
-
 
 // A gate stop: never stored, `next` is close, and for the gates a cap can move, the primitive that re-runs it raised.
 function stop(step, state, code, reason, a, extra = {}) {
@@ -131,11 +129,10 @@ function undeclared(root, a) {
   const p = readPlanFile(path.join(d.dir, 'progress.md'));
   if (!p.text) return `progress.md is ${p.reason ?? 'empty'}`;
   const found = findIterationRow(p.text, a.iteration);
-  if (!found.cells) return NO_ROW(a.iteration)[found.reason];
+  if (!found.cells) return `${NO_ROW(a.iteration)[found.reason]}${found.why ? `: ${found.why}` : ''}`;
   const status = found.cells[2].trim();
   return STARTABLE.includes(status) ? null : `iteration ${a.iteration} is marked ${clean(status, 20)} in progress.md`;
 }
-
 
 function open(ctx, a) {
   const now = ctx.now ?? nowIso;
@@ -181,12 +178,13 @@ function open(ctx, a) {
   const finished = (k) => Boolean(state.steps?.[`${T - 1}:${k}`]?.response); // the pass before ended through the steps only if its after-code and after-review both finished; otherwise (the CLI recorded it, or a session died) this open resumes
   const kind = T === 1 ? 'started' : finished('after-code') && finished('after-review') ? null : `resumed from pass ${T - 1}`;
   if (kind) {
+    const title = `${state.loop}-loop ${kind === 'started' ? `started${state.iteration ? ` for iteration ${state.iteration}` : ''}` : kind}`;
     advance(ctx, sf, state, entry, 'diary', () => {
       const c = caps;
       const gates = state.loop === 'code' ? `max_passes ${c.max_passes}, diff_cap_lines ${c.diff_cap_lines}, severity_floor ${c.severity_floor}; files: ${state.iteration_files.join(' ')}` : `max_passes ${c.max_passes}, severity_floor ${c.severity_floor}`;
-      const r = appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title: `${state.loop}-loop ${kind === 'started' ? `started${state.iteration ? ` for iteration ${state.iteration}` : ''}` : kind}`, body: gates, now: entry.at });
-      out.wrote.push(...r.wrote); out.unwritten.push(...r.unwritten.map((u) => ({ ...u, line: cut(u.line, 120) }))); // the line is a pointer to the entry, not the entry: the response has a budget
+      keep(out, appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title, body: gates, now: entry.at })); // the unwritten line is a pointer to the entry, not the entry: the response has a budget
     });
+    if (state.loop === 'code') advance(ctx, sf, state, entry, 'row', () => keep(out, markIteration({ root: ctx.root, slug: a.slug }, state.iteration, { status: 'in-progress', activity: title, now: entry.at }))); // the row says the loop is running; close makes the one move to done
   }
   const resp = fitLines((kept) => base('open', {
     pass: T, loop: state.loop, next: state.loop === 'code' ? 'task-coder' : 'task-planner', caps, ...(state.review_min ? { review_min: state.review_min } : {}),
@@ -263,7 +261,7 @@ function status(ctx, a) {
   }), floorLines(ctx.root, a.slug, 'Nit'));
 }
 
-const STEPS = { open, 'after-code': afterCode, 'after-review': afterReview, status };
+const STEPS = { open, 'after-code': afterCode, 'after-review': afterReview, close, status };
 
 export function runStep(ctx, args) {
   const step = args?.step;

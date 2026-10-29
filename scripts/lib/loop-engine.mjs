@@ -74,7 +74,7 @@ export const init = guarded(({ env, root, stateDir, now = nowIso }, args) => {
     configVal(config, [plan ? 'plan_loop' : 'code_loop', 'severity_floor']),
     'Major',
   );
-  if (!SEVERITIES.includes(sevFloor)) throw usageError(`severity_floor: ${sevFloor} must be one of Blocker|Major|Minor|Nit`);
+  if (!SEVERITIES.includes(sevFloor)) throw usageError(`severity_floor: ${sevFloor} must be one of ${SEVERITIES.join('|')}`);
   const diffCap = plan ? 0 : resolveInitCap(env, config, 'code', 'diff_cap_lines', args.diffCap); // plan loops have no diff cap
 
   let baseline;
@@ -126,21 +126,33 @@ export const pass = guarded(({ env, stateDir, now = nowIso }, args) => {
   return ok({ pass: state.pass, max_passes: max, ...withReviewMin(state) });
 });
 
+// The reasons a stopped loop is closed with (`stopped-<reason>`): the code loop's documented stops, plus the time budget `open` reports.
+export const STOP_REASONS = ['max-passes-exceeded', 'diff-cap-exceeded', 'scope-expansion', 'circuit-breaker', 'user-stop', 'time-budget'];
+export const documentedStatus = (s) => s === 'done' || (typeof s === 'string' && s.startsWith('stopped-') && STOP_REASONS.includes(s.slice(8)));
+
+// Ends a running loop: the status and the time it ended, and the summary `finish` prints. Shared by `finish` and the `close` step.
+// A loop that is already over is refused, so a second finish cannot rewrite how the first ended.
+export function endLoop(state, status, at) {
+  if (state.status !== 'running') throw usageError(`the loop is not running (status ${JSON.stringify(String(state.status).slice(0, 40))}); it cannot be finished again`);
+  state.status = status;
+  state.finished = at;
+  return {
+    status,
+    pass: state.pass,
+    history: state.history.length,
+    cap_overrides: state.cap_overrides || [],
+    ...(state.dispatches ? { dispatches: state.dispatches } : {}),
+  };
+}
+
 export const finish = guarded(({ stateDir, now = nowIso }, args) => {
   const sf = stateFile(stateDir, args.slug, args.iteration);
   requireState(sf);
   if (!args.status) throw usageError('finish requires --status');
   const state = loadState(sf);
-  state.status = args.status;
-  state.finished = now();
+  const summary = endLoop(state, args.status, now());
   saveState(sf, state);
-  return ok({
-    status: state.status,
-    pass: state.pass,
-    history: state.history.length,
-    cap_overrides: state.cap_overrides || [],
-    ...(state.dispatches ? { dispatches: state.dispatches } : {}),
-  });
+  return ok(summary);
 });
 
 export const runStart = guarded(({ env, root, stateDir }, args) => {
@@ -187,10 +199,10 @@ export const recordDispatch = guarded(({ root, installRoot, stateDir }, args) =>
   return ok(d.entry);
 });
 
-// The history entry of the pass in progress: the verdict and counts as given, the cumulative diff and the tree reviewed
-// (the next pass's delta starts there). Shared by `record-pass` and the composite steps, which store it under their cursor.
 // A pass entry the step reads back: a short verdict without control characters, counts that are numbers (null: unrecorded).
 export const entryOk = (h) => typeof h.verdict === 'string' && h.verdict.length <= 60 && !/\p{Cc}/u.test(h.verdict) && [h.blockers, h.majors].every((n) => n == null || (Number.isFinite(n) && n >= 0));
+// The history entry of the pass in progress: the verdict and counts as given, the cumulative diff and the tree reviewed
+// (the next pass's delta starts there). Shared by `record-pass` and the composite steps, which store it under their cursor.
 export function passEntry(root, state, args, at) {
   const { total } = computeDiff(root, state.baseline_sha, state.iteration_files);
   const entry = {

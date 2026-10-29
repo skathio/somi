@@ -66,7 +66,7 @@ console.log('== validation: refused with 64 naming the field, before any path or
     ['verdict', { step: 'open', verdict: 'approve' }], ['agent', { step: 'open', agent: 'somi-coder' }], ['review_mode', { step: 'open', review_mode: 'panel' }],
     ['diff_cap', { step: 'open', loop: 'plan', slug: 'pl', iteration: undefined, diff_cap: 5 }], ['loop', { step: 'open', loop: 'x' }],
     ['max_passes', { step: 'open', max_passes: '1,0' }], ['max_passes', { step: 'open', max_passes: -1 }], ['diff_cap', { step: 'open', diff_cap: 1.5 }], ['files', { step: 'open', files: ['a\n.js'] }],
-    ['review_scope', { step: 'open', review_scope: 'x' }], ['host', { step: 'open', host: 'vim' }], ['step', { step: 'nope' }], ['step', { step: 'close' }], ['reviewers', { step: 'after-review' }],
+    ['review_scope', { step: 'open', review_scope: 'x' }], ['host', { step: 'open', host: 'vim' }], ['step', { step: 'nope' }], ['status', { step: 'close' }], ['reviewers', { step: 'after-review' }],
     ['agent', { step: 'after-code' }], ['agent', { step: 'after-code', agent: '../evil' }], ['review_scope', { step: 'after-code', agent: 'somi-coder', review_scope: 'x' }], ['review_mode', { step: 'after-code', agent: 'somi-coder', review_mode: 'loud' }],
     ['review_mode', { step: 'after-code', loop: 'plan', slug: 'pl', iteration: undefined, agent: 'somi-planner', review_mode: 'panel' }], ['diff_cap', { step: 'after-code', loop: 'plan', slug: 'pl', iteration: undefined, agent: 'somi-planner', diff_cap: 5 }],
     ['iteration', { step: 'after-code', agent: 'somi-coder', iteration: '1.1/../x' }], ['slug', { step: 'status', slug: 'a/b' }], ['iteration', { step: 'status', iteration: '1.1.1' }], ['files', { step: 'status', files: 'a.js' }], ['agent', { step: 'status', agent: 'somi-coder' }],
@@ -85,8 +85,8 @@ console.log('== open ==');
   const o = open(r);
   const s = r.state();
   check('open on a fresh slug starts the loop at pass 1 and asks for the coder; the brief is the card verbatim', [o.ok, o.exit, o.pass, o.next, o.stop_reason, o.replayed, o.brief.startsWith('```somi-card\n'), o.brief.includes('files in scope: a.js')], [true, 0, 1, 'task-coder', null, false, true, true]);
-  check('the state holds pass 1, no history, and the cursor with its via, stored time and sub-steps', [s.pass, s.history, s.steps['1:open'].via, s.steps['1:open'].at, s.steps['1:open'].done], [1, [], 'mcp', NOW, ['pass', 'diary']]);
-  check('the diary gained exactly one started entry, built from stored state, and the response lists the write', [entries(r), r.diary().includes('— code-loop started for iteration 1.1\n'), r.diary().includes('max_passes 3, diff_cap_lines 400, severity_floor Major; files: a.js'), o.wrote], [2, true, true, ['.somi/plans/p1/diary.md']]);
+  check('the state holds pass 1, no history, and the cursor with its via, stored time and sub-steps', [s.pass, s.history, s.steps['1:open'].via, s.steps['1:open'].at, s.steps['1:open'].done], [1, [], 'mcp', NOW, ['pass', 'diary', 'row']]);
+  check('the diary gained exactly one started entry, built from stored state, and the response lists the write', [entries(r), r.diary().includes('— code-loop started for iteration 1.1\n'), r.diary().includes('max_passes 3, diff_cap_lines 400, severity_floor Major; files: a.js'), o.wrote], [2, true, true, ['.somi/plans/p1/diary.md', '.somi/plans/p1/progress.md']]);
   const again = open(r);
   check('open twice returns the same pass with replayed: true, history unchanged, still one diary entry', [again.pass, again.replayed, again.brief, r.state().history, entries(r)], [1, true, o.brief, [], 2]);
   const lost = r.state(); delete lost.steps['1:open'].response; lost.steps['1:open'].done = ['pass'];
@@ -151,11 +151,11 @@ console.log('== writers: their unwritten lines surface and never crash a step ==
 {
   const r = repo(); rmSync(path.join(r.root, '.somi', 'plans', 'p1', 'diary.md'));
   const o = open(r);
-  check('a diary that is missing leaves the step complete with the entry text in unwritten', [o.ok, o.pass, o.wrote, o.unwritten.map((u) => [u.file, u.reason, u.line.includes('code-loop started')])], [true, 1, [], [['diary.md', 'missing', true]]]);
+  check('a diary that is missing leaves the step complete with the entry text in unwritten', [o.ok, o.pass, o.wrote, o.unwritten.map((u) => [u.file, u.reason, u.line.includes('code-loop started')])], [true, 1, ['.somi/plans/p1/progress.md'], [['diary.md', 'missing', true]]]);
   if (typeof process.getuid === 'function' && process.getuid() !== 0) {
     const w = repo(); chmodSync(path.join(w.root, '.somi', 'plans', 'p1'), 0o555);
     const x = open(w); chmodSync(path.join(w.root, '.somi', 'plans', 'p1'), 0o755);
-    check('an unwritable plan directory: write-failed in unwritten, the step still returns', [x.ok, x.unwritten.map((u) => [u.file, u.reason])], [true, [['diary.md', 'write-failed']]]);
+    check('an unwritable plan directory: write-failed in unwritten, the step still returns', [x.ok, x.unwritten.map((u) => [u.file, u.reason])], [true, [['diary.md', 'write-failed'], ['progress.md', 'write-failed']]]);
   }
 }
 console.log('== after-code ==');
@@ -345,11 +345,11 @@ console.log('== open hardening: declaration table, state shape, floor, ledger co
     ['progress.md is a link', (r) => { renameSync(P(r, 'p1', 'progress.md'), P(r, 'p1', 'real.md')); symlinkSync('real.md', P(r, 'p1', 'progress.md')); }, {}, 'progress.md is symlink'],
     ['progress.md is a directory', (r) => { rmSync(P(r, 'p1', 'progress.md')); mkdirSync(P(r, 'p1', 'progress.md')); }, {}, 'progress.md is not-a-regular-file'],
     ['progress.md over 4 MiB', (r) => r.file('.somi/plans/p1/progress.md', `${tbl(row('not-started'))}${' '.repeat((1 << 22) + 1)}`), {}, 'progress.md is too-large'],
-    ['row outside any table', (r) => r.file('.somi/plans/p1/progress.md', `# Progress — p1\n\n## Notes\n\n${row('not-started')}\n`), {}, 'the Iteration progress table of progress.md is not in the template shape'],
+    ['row outside any table', (r) => r.file('.somi/plans/p1/progress.md', `# Progress — p1\n\n## Notes\n\n${row('not-started')}\n`), {}, 'the Iteration progress table of progress.md is not in the template shape: the "## Iteration progress" heading appears 0 times, not once'],
     ['row under another heading', (r) => r.file('.somi/plans/p1/progress.md', `${tbl('| 2.2 | two | not-started | — | — |')}\n## Other\n\n${row('not-started')}\n`), {}, 'iteration 1.1 has no row in the Iteration progress table of progress.md'],
     ['row with four cells', (r) => r.file('.somi/plans/p1/progress.md', tbl('| 1.1 | one | not-started | — |')), {}, 'the row of iteration 1.1 in progress.md is not in the template shape'],
     ['duplicate rows', (r) => r.file('.somi/plans/p1/progress.md', tbl(row('not-started'), row('not-started'))), {}, 'iteration 1.1 has more than one row in the Iteration progress table of progress.md'],
-    ['table without the template header', (r) => r.file('.somi/plans/p1/progress.md', `# Progress — p1\n\n## Iteration progress\n\n${row('not-started')}\n`), {}, 'the Iteration progress table of progress.md is not in the template shape'],
+    ['table without the template header', (r) => r.file('.somi/plans/p1/progress.md', `# Progress — p1\n\n## Iteration progress\n\n${row('not-started')}\n`), {}, 'the Iteration progress table of progress.md is not in the template shape: the table header or its separator row is not the template\'s'],
     ['empty progress.md', (r) => r.file('.somi/plans/p1/progress.md', ''), {}, 'progress.md is empty'],
     ['row marked done', (r) => r.file('.somi/plans/p1/progress.md', tbl(row('done'))), {}, 'iteration 1.1 is marked done in progress.md'],
     ['row marked superseded', (r) => r.file('.somi/plans/p1/progress.md', tbl(row('superseded'))), {}, 'iteration 1.1 is marked superseded in progress.md'],

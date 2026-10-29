@@ -19,7 +19,7 @@ export const STATUSES = ['not-started', 'in-progress', 'done', 'blocked', 'super
 const MAX_TEXT = 300;
 const MAX_FILE = 4 * 1024 * 1024;
 // Removed by Unicode property, so invisible code points (tags, variation selectors, fillers, bidi, zero-width) cannot pass.
-// Exported: the one definition, loop-step.mjs cleans what it echoes with it too (\u{2800}, the blank braille cell, is not default-ignorable).
+// Exported: the one definition, the step kit (loop-step-kit.mjs) cleans what it echoes with it too (\u{2800}, the blank braille cell, is not default-ignorable).
 export const CONTROL = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Default_Ignorable_Code_Point}\p{Variation_Selector}\u{2800}]/gu;
 const BREAKS = /[\r\n\t\v\f\u{85}\u{2028}\u{2029}]+/gu;
 
@@ -41,7 +41,7 @@ function stampOf(now) {
 }
 
 // -> { dir } | { reason: 'missing' | 'unreadable' | 'not a plain directory' }. Every component of `parts` below `root` must
-// be a real directory (a link is refused). Exported: loop-step.mjs walks the findings ledger's directory with it too.
+// be a real directory (a link is refused). Exported: the step kit and the review step walk the findings ledger's directory with it too.
 export function plainDir(root, parts) {
   let dir = root;
   for (const part of parts) {
@@ -150,17 +150,20 @@ const HEADER = ['Iteration', null, 'Status', 'Reviewed', 'Last activity'];
 // first, no CR), the `## Iteration progress` heading is there exactly once, its section (which ends at the next heading
 // of any level) holds no code fence or `<!--`, the template header and its separator open it, and the row exists once
 // with five cells.
-// -> { lines, index, cells } | { reason: 'not-template-shape' | 'row-not-template-shape' | 'missing' | 'ambiguous' }.
+// -> { lines, index, cells } | { reason: 'not-template-shape' | 'row-not-template-shape' | 'missing' | 'ambiguous', why? } where `why`
+// names the condition that failed (for a person; nothing branches on it).
 export function findIterationRow(text, iteration) {
   const lines = text.split('\n');
   const at = lines.flatMap((l, i) => (l === '## Iteration progress' ? [i] : []));
-  if (!archiveShape(text) || at.length !== 1) return { reason: 'not-template-shape' };
+  const shape = (why) => ({ reason: 'not-template-shape', why });
+  if (!archiveShape(text)) return shape('the file does not start with a "# " title, or holds a carriage return');
+  if (at.length !== 1) return shape(`the "## Iteration progress" heading appears ${at.length} times, not once`);
   const start = at[0];
   const stop = lines.findIndex((l, i) => i > start && /^#{1,6}\s/.test(l));
-  if (lines.slice(start + 1, stop < 0 ? undefined : stop).some((l) => /^\s*(```|~~~)|<!--/.test(l))) return { reason: 'not-template-shape' };
+  if (lines.slice(start + 1, stop < 0 ? undefined : stop).some((l) => /^\s*(```|~~~)|<!--/.test(l))) return shape('the section holds a code fence or <!--');
   const rows = lines.flatMap((l, i) => (i > start && (stop < 0 || i < stop) && l.startsWith('|') ? [i] : []));
   const head = rows.length >= 2 ? splitRow(lines[rows[0]]) : null;
-  if (!head || head.length !== 5 || HEADER.some((h, i) => h && head[i].trim() !== h) || !/^\|[-| :]+\|$/.test(lines[rows[1]])) return { reason: 'not-template-shape' };
+  if (!head || head.length !== 5 || HEADER.some((h, i) => h && head[i].trim() !== h) || !/^\|[-| :]+\|$/.test(lines[rows[1]])) return shape('the table header or its separator row is not the template\'s');
   const hits = rows.slice(2).filter((i) => splitRow(lines[i])?.[0].trim() === iteration);
   if (hits.length !== 1) return { reason: hits.length === 0 ? 'missing' : 'ambiguous' };
   const cells = splitRow(lines[hits[0]]);

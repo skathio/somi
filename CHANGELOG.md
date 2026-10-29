@@ -61,6 +61,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   severity is stored as given and shown as `Unrated`, which counts as at the floor. `record-pass` refuses (64) a verdict
   with a control character or over 60 characters and counts that are not non-negative numbers. In `after-review`,
   an unknown `fixed` id is refused, and the approve check looks only at findings sighted in this loop's run.
+- **The loop step tool gains `close`.** One call ends the loop with `done` or `stopped-<reason>` (`max-passes-exceeded`,
+  `diff-cap-exceeded`, `scope-expansion`, `circuit-breaker`, `user-stop`, `time-budget`), writes the closing diary entry
+  (a note for `done`, a blocker for a stop, with the cap overrides folded in), marks the iteration's row `done` on a
+  clean code loop and sets Last activity, and answers with the verdict, the cumulative diff, the dispatches (each host-
+  chosen model named), the cap overrides and every open finding at or above the floor as `F-id: title`, including ones
+  an earlier run of the iteration left. A code loop's `done` is refused unless the last pass's `after-review` ended the
+  loop clean; a plan loop's `done` returns the `awaiting-approval` Status line in `unwritten`, since the tool does
+  not edit that field. A row it cannot mark comes back in `unwritten` and the loop still ends. `open` now marks a code
+  loop's row `in-progress` when it starts or resumes it, so `close` makes the single move to `done`.
+- **`finish` refuses a loop that is already over (64)** instead of rewriting how it ended. The statuses it accepts are
+  unchanged. A loop state from an older build whose history holds a verdict over 60 characters or with a control
+  character is unreadable to the step tool (the CLI used to accept it): finish it with `finish`, or edit the entry.
+  A progress.md that the iteration reader refuses is now refused with the condition that failed. A findings-ledger
+  save removes the temp files of killed saves that are over an hour old.
 
 ## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
 

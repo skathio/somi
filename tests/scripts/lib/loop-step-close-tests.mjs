@@ -1,17 +1,20 @@
 #!/usr/bin/env node
-// Tests of the composite step that ends a pass, `after-review` (scripts/lib/loop-step-review.mjs): parity with the
-// primitives, the circuit breaker, kill and replay after each sub-step, the diff-gate tie, validation and confinement.
+// Tests of the composite steps that end a pass and a loop, `after-review` and `close` (scripts/lib/loop-step-review.mjs,
+// loop-step-close.mjs): parity with the primitives, the circuit breaker, kill and replay after each sub-step, the diff-gate
+// tie, validation and confinement, the closing notes, and the engine's endLoop.
 // Run by tests/scripts/loop-engine.sh.
 
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, lutimesSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { BUDGET, runStep } from '../../../scripts/lib/loop-step.mjs';
-import { checkDiff, init, pass as passPrim, recordDispatch, recordPass, reviewScope } from '../../../scripts/lib/loop-engine.mjs';
+import { checkDiff, documentedStatus, finish, init, pass as passPrim, recordDispatch, recordPass, reviewScope, STOP_REASONS } from '../../../scripts/lib/loop-engine.mjs';
+import { CAP_BREACH_STATUSES } from '../../evals/lib/convergence.mjs';
+import { ARG, MODES, SUB_STEPS } from '../../../scripts/lib/loop-step-kit.mjs';
 import { recordFindings, resolveFinding } from '../../../scripts/lib/findings-ledger.mjs';
 import { stateFile } from '../../../scripts/lib/loop-state.mjs';
 
@@ -24,7 +27,7 @@ const tmp = mkdtempSync(path.join(tmpdir(), 'loop-step-review-'));
 process.on('exit', () => rmSync(tmp, { recursive: true, force: true }));
 
 const NOW = '2026-10-29T09:30:00Z';
-const ROWS = '# Progress — p1\n\n## Iteration progress\n\n| Iteration | Title | Status | Reviewed | Last activity |\n|---|---|---|---|---|\n| 1.1 | one | not-started | — | — |\n';
+const ROWS = '# Progress — p1\n\n## Iteration progress\n\n| Iteration | Title | Status | Reviewed | Last activity |\n|---|---|---|---|---|\n| 1.1 | one | not-started | — | — |\n\n**Last activity**: 2026-10-28 — seeded\n';
 const DIARY = '# Diary — p1\n\n---\n\n## 2026-10-28 10:00 — Plan\n\n**Category**: `note`\n**Phase**: 1\n\nbody\n\n---\n\n';
 const prim = { slug: 'p1', loop: 'code', iteration: '1.1', files: 'a.js', force: false, status: '', maxPasses: '', diffCap: '', severity: '', maxMinutes: '', verdict: '', blockers: '0', majors: '0', agent: '' };
 const F = (n, severity = 'Major') => ({ file: `f${n}.js`, symbol: 's', title: `finding ${n} here`, severity, confidence: 'High' });
@@ -42,6 +45,8 @@ function repo() {
 const step = (r, name, args = {}, env, o) => runStep(r.ctx(env, o), { step: name, slug: 'p1', iteration: '1.1', ...args });
 const open = (r, args = {}, env, o) => step(r, 'open', { files: 'a.js', ...args }, env, o);
 const after = (r, args = {}) => step(r, 'after-code', { agent: 'somi-coder', ...args });
+const close = (r, args = {}, env, o) => step(r, 'close', { status: 'done', ...args }, env, o);
+const progress = (r) => readFileSync(path.join(r.root, '.somi', 'plans', 'p1', 'progress.md'), 'utf8');
 const review = (r, args = {}, env, o) => step(r, 'after-review', { reviewers: ['somi-reviewer'], verdict: 'approve', blockers: 0, majors: 0, review: 'r1.md', ...args }, env, o);
 // A repo at an after-code that passed, with a.js changed by `lines` lines.
 const gated = (lines = 3, env) => { const r = repo(); open(r, {}, env); r.file('a.js', '1\n'.repeat(lines)); after(r); return r; };
@@ -51,7 +56,7 @@ const entries = (r) => r.diary().split('\n').filter((l) => l.startsWith('## ')).
 const dies = (fn) => { try { fn(); } catch (e) { return e.message; } return 'no throw'; };
 // What criterion 2 compares: the state's history, dispatches and caps with times and tree ids dropped, and the ledger with dates dropped.
 const norm = (r) => { const s = r.state(); const l = (() => { try { return r.ledger(); } catch { return null; } })();
-  return { pass: s.pass, caps: s.caps, co: s.cap_overrides, d: s.dispatches, h: s.history.map(({ at, tree: t, ...h }) => h), l: l && { ...l, findings: l.findings.map((f) => ({ ...f, seen: f.seen.map(({ date, ...x }) => x) })) } }; };
+  return { st: s.status, pass: s.pass, caps: s.caps, co: s.cap_overrides, d: s.dispatches, h: s.history.map(({ at, tree: t, ...h }) => h), l: l && { ...l, findings: l.findings.map((f) => ({ ...f, seen: f.seen.map(({ date, ...x }) => x) })) } }; };
 const DATE = () => '2026-10-29';
 
 console.log('== parity with the primitives (criterion 2) ==');
@@ -59,16 +64,18 @@ console.log('== parity with the primitives (criterion 2) ==');
   const a = repo(); const b = repo(); const bf = (over) => ({ ...prim, ...over });
   const run = (args) => ({ root: b.root, slug: 'p1', run: b.state().started, now: DATE, ...args });
   open(a); a.file('a.js', '1\n2\n3\n'); after(a);
-  const clean = review(a);
+  const clean = review(a); const closed = close(a);
   init(b.ctx(), prim); passPrim(b.ctx(), prim); b.file('a.js', '1\n2\n3\n'); recordDispatch(b.ctx(), bf({ agent: 'somi-coder' })); checkDiff(b.ctx(), prim); reviewScope(b.ctx(), prim);
-  recordDispatch(b.ctx(), bf({ agent: 'somi-reviewer' })); recordPass(b.ctx(), bf({ verdict: 'approve' }));
+  recordDispatch(b.ctx(), bf({ agent: 'somi-reviewer' })); recordPass(b.ctx(), bf({ verdict: 'approve' })); const fin = finish(b.ctx(), bf({ status: 'done' }));
   check('one clean pass through the steps leaves the history, dispatches, caps and cap_overrides of the same pass through the primitives; the step says close with done', [norm(a), clean.next, clean.close_args], [norm(b), 'close', { status: 'done' }]);
+  const line = (x) => `${x.agent} ${x.tier} ${x.model}${x.enforced === true ? '' : ' (not enforced)'}`;
+  check('close ends the loop as finish does: the same state, and its dispatches as the lines finish lists them', [closed.ok, closed.status, closed.dispatches, closed.cap_overrides], [true, 'done', fin.out.dispatches.map(line), undefined]);
   const c = repo(); const d = repo();
   open(c); c.file('a.js', '1\n2\n'); after(c); const first = review(c, { verdict: 'request-changes', majors: 1, findings: [F(1), F(2, 'Minor')] });
-  open(c); c.file('a.js', '1\n2\n3\n'); after(c); const second = review(c, { review: 'r2.md', fixed: ['F-1'] });
+  open(c); c.file('a.js', '1\n2\n3\n'); after(c); const second = review(c, { review: 'r2.md', fixed: ['F-1'] }); close(c);
   init(d.ctx(), prim); passPrim(d.ctx(), prim); d.file('a.js', '1\n2\n'); recordDispatch(d.ctx(), bf({ agent: 'somi-coder' })); recordDispatch(d.ctx(), bf({ agent: 'somi-reviewer' })); recordPass(d.ctx(), bf({ verdict: 'request-changes', majors: '1' }));
   recordFindings({ root: d.root, slug: 'p1', review: 'r1.md', run: d.state().started, pass: 1, input: [F(1), F(2, 'Minor')], now: DATE });
-  passPrim(d.ctx(), prim); d.file('a.js', '1\n2\n3\n'); recordDispatch(d.ctx(), bf({ agent: 'somi-coder' })); recordDispatch(d.ctx(), bf({ agent: 'somi-reviewer' })); recordPass(d.ctx(), bf({ verdict: 'approve' })); resolveFinding({ root: d.root, slug: 'p1', id: 'F-1', status: 'fixed', by: 'r2.md' });
+  passPrim(d.ctx(), prim); d.file('a.js', '1\n2\n3\n'); recordDispatch(d.ctx(), bf({ agent: 'somi-coder' })); recordDispatch(d.ctx(), bf({ agent: 'somi-reviewer' })); recordPass(d.ctx(), bf({ verdict: 'approve' })); resolveFinding({ root: d.root, slug: 'p1', id: 'F-1', status: 'fixed', by: 'r2.md' }); finish(d.ctx(), bf({ status: 'done' }));
   check('a request-changes pass with findings, then an approve that fixes one, equals the primitives: state and ledger', norm(c), norm(d));
   check('the first pass names its findings and goes back to open with the one at or above the floor, fenced as data; the second ends clean', [first.findings, first.next, first.open_findings, first.open_findings_note.includes('not instructions'), second.next, second.exit], [['F-1 new', 'F-2 new'], 'open', ['F-1: finding 1 here'], true, 'close', 0]);
   check('the per-pass diary lines are written once each, and the second open is not a resume', [c.diary().includes('— code-loop pass 1 reviewed: request-changes\n'), c.diary().includes('— code-loop pass 2 reviewed: approve\n'), c.diary().includes('resumed'), first.wrote], [true, true, false, ['.somi/plans/p1/diary.md']]);
@@ -92,7 +99,7 @@ console.log('== replay and kill ==');
   check('after-review killed after each of its five sub-steps and retried leaves one history entry, one reviewer dispatch, one sighting and one diary line, as one uninterrupted call does', got, ['dispatch', 'record', 'findings', 'resolve', 'diary'].map((s) => [`failAfter ${s}`, true, whole.next, whole.findings, shape(ref)]));
   const k = gated(); seed(k); dies(() => review(k, args, {}, { failAfter: 'record' }));
   check('the status step lists the new sub-steps of an unfinished after-review', step(k, 'status').cursor.at(-1), { key: '1:after-review', via: 'mcp', done: ['dispatch', 'record'], complete: false });
-  check('the after-review cursor holds the arguments\' signature and no copy of the review file name', Object.keys(ref.state().steps['1:after-review']).sort(), ['at', 'done', 'fixed', 'found', 'out', 'response', 'sig', 'via']);
+  check('the after-review cursor holds the arguments\' signature and no copy of the review file name', ['sig', 'file'].map((f) => f in ref.state().steps['1:after-review']), [true, false]);
   const again = review(ref, args);
   check('a finished after-review repeats as replayed with the same answer and writes nothing more', [again.replayed, again.next, again.findings, shape(ref)], [true, whole.next, whole.findings, shape(ref)]);
   const diff = review(ref, { ...args, review: 'r9.md' });
@@ -209,5 +216,87 @@ console.log('== the pass\'s own checks: reviewer lens, fixed ids, the saved ledg
   const c = gated(); recordPass(c.ctx(), { ...prim, verdict: 'approve' });
   check('a pass the CLI already recorded is refused with a message that says so', review(c).error?.includes('outside the step tool'), true);
 }
-console.log(`loop step review tests: ${pass} ok, ${fail} failed`);
+console.log('== close: the loop ends, the row moves once, the answer carries what the flow reports ==');
+{
+  const approved = (env, args) => { const r = repo(); open(r, args, env); r.file('a.js', '1\n2\n3\n'); after(r); review(r); return r; };
+  const r = repo(); open(r, { max_passes: 2 });
+  const inProgress = /\| 1\.1 \| one \| in-progress \|/.test(progress(r)); r.file('a.js', '1\n2\n3\n'); after(r); review(r);
+  const x = close(r);
+  check('open marks a not-started row in-progress (one recorded sub-step); close with done ends the loop and answers with the verdict, the diff, the caps and the pointer to the reviews', [inProgress, x.ok, x.exit, x.status, x.next, x.stop_reason, x.pass, x.verdict, x.diff, x.caps.max_passes, x.reviews, r.state().status, r.state().finished], [true, true, 0, 'done', 'summarise', null, 1, 'approve', { lines: 2, weighted: 2, out_of_scope: [] }, 2, '.somi/reviews/p1/', 'done', NOW]);
+  check('close with done marks the row once (Status, Reviewed, Last activity), sets the Last activity line and writes a note-category diary entry that folds in the cap overrides', [/\| done +\| approve \| 2026-10-29 — code-loop done at pass 1; verdict approve \|/.test(progress(r)), progress(r).includes('**Last activity**: 2026-10-29 — code-loop done at pass 1; verdict approve for iteration 1.1\n'), /code-loop done at pass 1; verdict approve\n\n\*\*Category\*\*: `note`/.test(r.diary()), r.diary().includes('cap overrides: max_passes 3 -> 2 (tool, after pass 0)'), x.cap_overrides, x.wrote],
+    [true, true, true, true, ['max_passes 3 -> 2 (tool, after pass 0)'], ['.somi/plans/p1/diary.md', '.somi/plans/p1/progress.md']]);
+  check('close lists every dispatch as agent, tier and model, naming each start the host chose', [x.dispatches.length, x.dispatches.map((d) => d.split(' ')[0])], [2, ['somi-coder', 'somi-reviewer']]);
+  const again = close(r); const t = tree(r.root);
+  check('a repeat of a finished close is replayed with the same answer and writes nothing; the status step shows its four sub-steps', [again.replayed, again.status, again.dispatches, tree(r.root), step(r, 'status').cursor.at(-1)], [true, 'done', x.dispatches, t, { key: '1:close', via: 'mcp', done: ['finish', 'diary', 'row', 'activity'], complete: true }]);
+  const ne = approved(); ne.put((s) => { s.dispatches[0].enforced = false; return s; });
+  check('a dispatch the host chose the model for is named not enforced', close(ne).dispatches.some((d) => d.endsWith('(not enforced)')), true);
+  const tl = approved(); tl.put((st) => { st.dispatches.push({ ...st.dispatches[0] }, { ...st.dispatches[0] }); return st; });
+  const tx = close(tl).dispatches; check('equal dispatch lines are counted, not repeated', [tx.length, tx[0].endsWith(' x3')], [2, true]);
+  const bk = repo(); bk.file('.somi/plans/p1/progress.md', ROWS.replace('not-started', 'blocked')); open(bk);
+  check('open moves a blocked row to in-progress', /\| 1\.1 \| one \| in-progress/.test(progress(bk)), true);
+  const ob = repo(); init(ob.ctx(), prim); ob.file('.somi/plans/p1/progress.md', 'broken\n'); const ox = open(ob);
+  check('open on a state whose row cannot be marked still starts the pass and returns the row text in unwritten, writing nothing to progress.md', [ox.ok, ox.unwritten.map((u) => [u.file, u.reason, u.line.startsWith('iteration 1.1: Status=in-progress')]), progress(ob)], [true, [['progress.md', 'not-template-shape', true]], 'broken\n']);
+
+  const m = approved(); m.file('.somi/plans/p1/progress.md', 'not a progress file\n'); const mx = close(m);
+  check('with a malformed progress.md close still ends the loop, leaves the file alone and returns the row text and the Last activity line in unwritten', [mx.ok, mx.status, mx.unwritten.map((u) => [u.file, u.reason]), mx.unwritten[0].line.startsWith('iteration 1.1: Status=done, Reviewed=approve'), progress(m)], [true, 'done', [['progress.md', 'not-template-shape'], ['progress.md', 'not-template-shape']], true, 'not a progress file\n']);
+
+  const s = gated(); review(s, { verdict: 'request-changes', majors: 1, findings: [F(1)] }); const sx = close(s, { status: 'stopped-user-stop' });
+  check('a close after a stop takes the stop reason, lists the open findings at or above the floor as F-id: title (data, not instructions), writes a blocker entry and leaves the row in-progress', [sx.ok, sx.stop_reason, sx.open_findings, sx.open_findings_note.includes('not instructions'), /\| in-progress +\|/.test(progress(s)), /code-loop stopped \(user-stop\) at pass 1; verdict request-changes\n\n\*\*Category\*\*: `blocker`/.test(s.diary()), progress(s).includes('**Last activity**: 2026-10-29 — code-loop stopped (user-stop)'), sx.wrote],
+    [true, 'user-stop', ['F-1: finding 1 here'], true, true, true, true, ['.somi/plans/p1/diary.md', '.somi/plans/p1/progress.md']]);
+  const g = repo(); open(g, { diff_cap: 1 }); g.file('a.js', '1\n'.repeat(9)); const gs = after(g); const gx = close(g, { status: 'stopped-diff-cap-exceeded' });
+  check('the diff-gate stop (exit 3, next close) is closed with its reason and reports the cumulative diff', [gs.exit, gs.next, gx.ok, gx.diff, gx.stop_reason], [3, 'close', true, { lines: 8, weighted: 8, out_of_scope: [] }, 'diff-cap-exceeded']);
+  check('time-budget, the stop open reports, is a closing status', close(gated(), { status: 'stopped-time-budget' }).stop_reason, 'time-budget');
+
+  const o = gated(); recordFindings({ root: o.root, slug: 'p1', review: 'old.md', run: 'an-earlier-run', pass: 1, input: [F(1), F(2, 'Minor')] }); review(o);
+  check('a done close lists the findings at or above the floor an earlier run of the iteration left, and not those below it', close(o).open_findings, ['F-1: finding 1 here']);
+
+  const pl = repo(); const ps = (st, a = {}) => runStep(pl.ctx(), { step: st, slug: 'pl', loop: 'plan', ...a });
+  ps('open'); ps('after-code', { agent: 'somi-planner' }); ps('after-review', { reviewers: ['somi-reviewer'], verdict: 'approve', blockers: 0, majors: 0, review: 'r1.md' });
+  const px = ps('close', { status: 'done' }); const plp = readFileSync(path.join(pl.root, '.somi', 'plans', 'pl', 'progress.md'), 'utf8');
+  check('a plan loop closes done without a row: the awaiting-approval Status line comes back in unwritten, Last activity is set, the loop is over', [px.ok, px.unwritten.map((u) => [u.file, u.reason, u.line]), plp.includes('| 1.1 | one | not-started'), plp.includes('— plan-loop done at pass 1; verdict approve'), JSON.parse(readFileSync(stateFile(pl.ctx().stateDir, 'pl', ''), 'utf8')).status], [true, [['progress.md', 'status-not-set-by-tool', 'set the Status line to awaiting-approval']], true, true, 'done']);
+
+  const big = approved(); big.put((st) => ({ ...st, dispatches: Array.from({ length: 40 }, (_, i) => ({ pass: 1, agent: `agent-${i}`, tier: 'medium', model: 'model-x', enforced: i % 2 === 0 })), cap_overrides: Array.from({ length: 30 }, (_, i) => ({ field: 'max_passes', from: 30 - i, to: 29 - i, source: 'tool', after_pass: 1, at: NOW })) }));
+  recordFindings({ root: big.root, slug: 'p1', review: 'old.md', run: 'an-earlier-run', pass: 1, input: Array.from({ length: 300 }, (_, i) => F(i + 1)) }); const bx = close(big);
+  check('40 dispatches, 30 cap overrides and 300 open findings: the answer fits the budget, every list counts what it cuts', [bx.ok, bytes(bx) <= BUDGET, bx.truncated, [bx.dispatches, bx.cap_overrides, bx.open_findings].map((l) => l.at(-1).startsWith('(+'))], [true, true, undefined, [true, true, true]]);
+}
+console.log('== close: what it refuses, and what a kill or a failed measurement leaves ==');
+{
+  const reviewed = (args) => { const r = gated(); if (args) review(r, args); else review(r); return r; };
+  const two = reviewed({ verdict: 'request-changes', majors: 1, findings: [F(1)] }); open(two); two.file('a.js', '1\n2\n'); after(two); review(two, { verdict: 'request-changes', majors: 1, findings: [F(1)] });
+  const refused = [['no after-review yet', gated(), {}], ['request-changes with a Major open', reviewed({ verdict: 'request-changes', majors: 1, findings: [F(1)] }), {}], ['the circuit breaker', two, {}], ['status finished', reviewed(), { status: 'finished' }], ['an undocumented reason', reviewed(), { status: 'stopped-whatever' }], ['an empty reason', reviewed(), { status: 'stopped-' }],
+    ['no status', reviewed(), { status: undefined }], ['status as a list', reviewed(), { status: ['done'] }], ['a plan loop asked to close a code loop\'s slug', reviewed(), { loop: 'plan', iteration: undefined }]];
+  const got = refused.map(([, r, a]) => { const t = tree(r.root); const x = close(r, a); return [x.exit, x.error?.startsWith(a.loop ? 'no running loop' : 'status:'), isDeepStrictEqual(tree(r.root), t), r.state().status, '1:close' in r.state().steps]; });
+  check('a done close without an ending after-review, an undocumented or missing status and a wrong loop are each refused 64 naming the field or the missing state, with the loop still running and nothing written', got, refused.map(() => [64, true, true, 'running', false]));
+  check('the breaker pass is closed with its own reason', close(two, { status: 'stopped-circuit-breaker' }).stop_reason, 'circuit-breaker');
+  const fin = reviewed(); finish(fin.ctx(), { ...prim, status: 'done' }); const ft = tree(fin.root); const fx = close(fin);
+  check('a loop that was finished outside the step is refused 64 as already finished, and nothing is written', [fx.exit, fx.error?.includes('already finished'), tree(fin.root)], [64, true, ft]);
+  const dn = reviewed(); close(dn); const dt = tree(dn.root); const other = close(dn, { status: 'stopped-user-stop' });
+  check('a finished close repeated with another status is refused 64, not answered with the stored one', [other.exit, other.error?.startsWith('status:'), tree(dn.root)], [64, true, dt]);
+
+  const whole = reviewed(); const wx = close(whole);
+  const shape = (r) => [r.state().status, r.state().finished, entries(r), (progress(r).match(/\| done /g) ?? []).length, progress(r).match(/\*\*Last activity\*\*.*/)[0]];
+  const kills = ['finish', 'diary', 'row', 'activity'].map((sub) => { const r = reviewed(); const k = dies(() => close(r, {}, {}, { failAfter: sub })); const x = close(r); return [k, x.ok, x.replayed, x.wrote, x.status, shape(r)]; });
+  check('close killed after each of its four sub-steps and retried ends the loop once: one diary entry, one done row, one Last activity line, the same answer as an uninterrupted call', kills, ['finish', 'diary', 'row', 'activity'].map((s) => [`failAfter ${s}`, true, false, wx.wrote, 'done', shape(whole)]));
+
+  const gf = reviewed(); const sha = gf.state().baseline_sha; gf.put((s) => ({ ...s, baseline_sha: 'f'.repeat(40) })); const before = readFileSync(gf.sf, 'utf8'); const gx = close(gf);
+  check('when the cumulative diff cannot be measured the loop is left running and untouched (no closing entry), and the same close succeeds once it can', [gx.ok, readFileSync(gf.sf, 'utf8') === before, entries(gf), (gf.put((s) => ({ ...s, baseline_sha: sha })), close(gf).ok), gf.state().status], [false, true, 3, true, 'done']);
+
+  const tamper = (fn) => { const r = reviewed(); r.put((s) => { fn(s.steps['1:open']); return s; }); return step(r, 'status').exit; };
+  check('a stored cursor with a diff or a status of the wrong shape makes the state unreadable', [tamper((e) => { e.diff = { lines: 'x', weighted: 1, out_of_scope: [] }; }), tamper((e) => { e.status = 'stopped-x'; }), tamper((e) => { e.diff = { lines: 1, weighted: 1, out_of_scope: [] }; e.status = 'done'; })], [64, 64, 0]);
+}
+console.log('== endLoop, the statuses close accepts, the shared constants, the ledger temp sweep ==');
+{
+  const e = repo(); init(e.ctx(), prim); finish(e.ctx(), { ...prim, status: 'approved' }); const once = readFileSync(e.sf, 'utf8'); const twice = finish(e.ctx(), { ...prim, status: 'stopped-user-stop' });
+  check('finish keeps accepting the statuses the CLI always took, and a loop that is over cannot be finished again: 64, and the state is unchanged', [twice.code, twice.message.includes('cannot be finished again'), readFileSync(e.sf, 'utf8') === once], [64, true, true]);
+  check('the documented closing statuses are done and stopped- with a reason the code loop documents, time-budget included, and cover every cap-breach status the eval reads', [['done', 'stopped-user-stop', 'stopped-time-budget', 'stopped-circuit-breaker'].map(documentedStatus), ['approved', 'stopped-done', 'stopped-', 'stopped-x', 'stopped-__proto__', '', null, ['done']].map(documentedStatus), [...CAP_BREACH_STATUSES].every((r) => STOP_REASONS.includes(r))], [Array(4).fill(true), Array(8).fill(false), true]);
+  check('the exported sub-step, mode and argument tables cannot be changed by a caller', [MODES, ARG, SUB_STEPS].map(Object.isFrozen), [true, true, true]);
+
+  const r = repo(); const dir = path.join(r.root, '.somi', 'reviews', 'p1'); mkdirSync(dir, { recursive: true });
+  const old = new Date(Date.now() - 2 * 3600 * 1000); const plant = (name, text = 'x') => { writeFileSync(path.join(dir, name), text); utimesSync(path.join(dir, name), old, old); };
+  plant('findings.json.0123456789ab.tmp'); plant('findings.json.0123456789ac.tmp'); plant('findings.json.short.tmp'); plant('notes.txt'); writeFileSync(path.join(dir, 'findings.json.0123456789ad.tmp'), 'fresh');
+  const away = path.join(tmp, 'sweep-target.txt'); writeFileSync(away, 'untouched'); symlinkSync(away, path.join(dir, 'findings.json.0123456789ae.tmp')); lutimesSync(path.join(dir, 'findings.json.0123456789ae.tmp'), old, old);
+  recordFindings({ root: r.root, slug: 'p1', review: 'r', run: 'x', pass: 1, input: [F(1)] });
+  check('a save sweeps the temp files of killed writes that are old regular files, and leaves a young one, a link, other names and the link target alone', [readdirSync(dir).sort(), readFileSync(away, 'utf8')], [['findings.json', 'findings.json.0123456789ad.tmp', 'findings.json.0123456789ae.tmp', 'findings.json.short.tmp', 'notes.txt'], 'untouched']);
+}
+console.log(`loop step review and close tests: ${pass} ok, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

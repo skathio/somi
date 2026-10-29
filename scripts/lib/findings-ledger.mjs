@@ -87,6 +87,18 @@ function loadLedger(ledgerPath) {
   return JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
 }
 
+// A killed write leaves its random temp file behind. Once a save has landed, a regular file of that shape untouched for an
+// hour (no live writer holds one that long) is removed; a link, a younger file and any other name are left alone.
+const STALE_TMP_MS = 60 * 60 * 1000;
+function sweepTmp(dir) {
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      const st = /^findings\.json\.[0-9a-f]{12}\.tmp$/.test(f) ? fs.lstatSync(path.join(dir, f)) : null;
+      if (st?.isFile() && Date.now() - st.mtimeMs > STALE_TMP_MS) fs.rmSync(path.join(dir, f), { force: true });
+    }
+  } catch { /* housekeeping only: the save has already landed */ }
+}
+
 function saveLedger(ledgerPath, ledger) {
   // Mirror bash's `tmp="$(mktemp)"; jq ... "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"`:
   // pretty 2-space + trailing newline (jq's default pretty-print, verified byte-identical
@@ -98,6 +110,7 @@ function saveLedger(ledgerPath, ledger) {
   try {
     fs.writeFileSync(tmpPath, JSON.stringify(ledger, null, 2) + '\n', { flag: 'wx' });
     fs.renameSync(tmpPath, ledgerPath);
+    sweepTmp(path.dirname(ledgerPath));
   } catch (e) {
     fs.rmSync(tmpPath, { force: true });
     throw e;
