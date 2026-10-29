@@ -19,7 +19,8 @@ export const STATUSES = ['not-started', 'in-progress', 'done', 'blocked', 'super
 const MAX_TEXT = 300;
 const MAX_FILE = 4 * 1024 * 1024;
 // Removed by Unicode property, so invisible code points (tags, variation selectors, fillers, bidi, zero-width) cannot pass.
-const CONTROL = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Default_Ignorable_Code_Point}\p{Variation_Selector}]/gu;
+// Exported: the one definition, loop-step.mjs cleans what it echoes with it too (\u{2800}, the blank braille cell, is not default-ignorable).
+export const CONTROL = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Default_Ignorable_Code_Point}\p{Variation_Selector}\u{2800}]/gu;
 const BREAKS = /[\r\n\t\v\f\u{85}\u{2028}\u{2029}]+/gu;
 
 // One printable line, at most 300 characters, that cannot open a heading. Throws on a non-string.
@@ -139,8 +140,30 @@ function editProgress(plan, edit, line) {
 const splitRow = (l) => (l.startsWith('|') && l.endsWith('|') ? l.slice(1, -1).split('|') : null);
 const HEADER = ['Iteration', null, 'Status', 'Reviewed', 'Last activity'];
 
+// The one reader of the `| N.M |` row, for markIteration and for `open`: the template header and its separator must
+// open the `## Iteration progress` section (which ends at the next `## `), and the row must exist once with five cells.
+// -> { lines, index, cells } | { reason: 'not-template-shape' | 'row-not-template-shape' | 'missing' | 'ambiguous' }.
+export function findIterationRow(text, iteration) {
+  const lines = text.split('\n');
+  const start = lines.indexOf('## Iteration progress');
+  if (start < 0) return { reason: 'not-template-shape' };
+  const stop = lines.findIndex((l, i) => i > start && l.startsWith('## '));
+  const rows = lines.flatMap((l, i) => (i > start && (stop < 0 || i < stop) && l.startsWith('|') ? [i] : []));
+  const head = rows.length >= 2 ? splitRow(lines[rows[0]]) : null;
+  if (!head || head.length !== 5 || HEADER.some((h, i) => h && head[i].trim() !== h) || !/^\|[-| :]+\|$/.test(lines[rows[1]])) return { reason: 'not-template-shape' };
+  const hits = rows.slice(2).filter((i) => splitRow(lines[i])?.[0].trim() === iteration);
+  if (hits.length !== 1) return { reason: hits.length === 0 ? 'missing' : 'ambiguous' };
+  const cells = splitRow(lines[hits[0]]);
+  return cells.length === 5 ? { lines, index: hits[0], cells } : { reason: 'row-not-template-shape' };
+}
+
+// The moves of a Status cell (a rewrite of the same status is always allowed). Nothing leaves done or superseded, and
+// superseded is set by a human editing the plan, never by this writer.
+const MOVES = { 'not-started': ['in-progress'], 'in-progress': ['done', 'blocked'], blocked: ['in-progress'] };
+
 // Change Status (col 3), Reviewed (col 4) and Last activity (col 5) of the `| N.M |` row, keeping Title and the
-// column widths. The row must exist once, with exactly the five columns of the template's table.
+// column widths. The row must exist once, with exactly the five columns of the template's table, and a Status change
+// must be one of MOVES (else `transition-refused`, nothing written).
 export function markIteration(plan, iteration, { status, reviewed, activity, now }) {
   if (typeof iteration !== 'string' || !ITERATION_RE.test(iteration)) throw usageError('iteration must look like 1.2');
   const { date } = stampOf(now);
@@ -148,19 +171,13 @@ export function markIteration(plan, iteration, { status, reviewed, activity, now
   const patch = { 2: status, 3: reviewed === undefined ? undefined : cell(reviewed, 'reviewed'), 4: activity === undefined ? date : `${date} — ${cell(activity, 'activity')}` };
   const line = `iteration ${iteration}: Status=${patch[2] ?? '(unchanged)'}, Reviewed=${patch[3] ?? '(unchanged)'}, Last activity=${patch[4]}`;
   return editProgress(plan, (text) => {
-    const lines = text.split('\n');
-    const start = lines.indexOf('## Iteration progress');
-    if (start < 0) return { reason: 'not-template-shape' };
-    const stop = lines.findIndex((l, i) => i > start && l.startsWith('## '));
-    const rows = lines.flatMap((l, i) => (i > start && (stop < 0 || i < stop) && l.startsWith('|') ? [i] : []));
-    const head = rows.length >= 2 ? splitRow(lines[rows[0]]) : null;
-    if (!head || head.length !== 5 || HEADER.some((h, i) => h && head[i].trim() !== h) || !/^\|[-| :]+\|$/.test(lines[rows[1]])) return { reason: 'not-template-shape' };
-    const hits = rows.slice(2).filter((i) => splitRow(lines[i])?.[0].trim() === iteration);
-    if (hits.length !== 1) return { reason: hits.length === 0 ? 'row-missing' : 'row-ambiguous' };
-    const cells = splitRow(lines[hits[0]]);
-    if (cells.length !== 5) return { reason: 'row-not-template-shape' };
+    const found = findIterationRow(text, iteration);
+    if (!found.lines) return { reason: { missing: 'row-missing', ambiguous: 'row-ambiguous' }[found.reason] ?? found.reason };
+    const { lines, index, cells } = found;
+    const was = cells[2].trim();
+    if (status !== undefined && status !== was && !MOVES[was]?.includes(status)) return { reason: 'transition-refused' };
     for (const i of [2, 3, 4]) if (patch[i] !== undefined) cells[i] = ` ${patch[i]} `.padEnd(cells[i].length);
-    lines[hits[0]] = `|${cells.join('|')}|`;
+    lines[index] = `|${cells.join('|')}|`;
     return { text: lines.join('\n') };
   }, line);
 }

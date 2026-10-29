@@ -26,7 +26,7 @@ const NOW = '2026-10-29T09:30:00Z';
 const PRE = '# Diary — p1\n\n> Spec: x\n\nPreamble.\n\n---\n\n';
 const entry = (n, cat = 'note') => `## 2026-01-${String((n % 28) + 1).padStart(2, '0')} 10:00 — ${n === 27 ? 'Compacted: earlier' : `entry ${n}`}\n\n${cat === null ? 'no category line\n' : `**Category**: \`${cat}\`\n**Phase**: 1\n`}\nbody ${n}\n\n---\n\n`;
 const diaryOf = (n, special = {}) => PRE + Array.from({ length: n }, (_, i) => entry(i + 1, special[i + 1])).join('');
-const PROGRESS = '# Progress — p1\n\n## Status\n\n`in-progress`\n\n**Started**: 2026-10-28\n**Last activity**: 2026-10-28 — start\n\n## Iteration progress\n\n| Iteration | Title   | Status      | Reviewed | Last activity |\n|-----------|---------|-------------|----------|---------------|\n| 1.1       | First   | done        | approve  | 2026-10-28    |\n| 2.1       | Writers | not-started | —        | —             |\n\n## Follow-ups\n\n- [ ] a | b\n';
+const PROGRESS = '# Progress — p1\n\n## Status\n\n`in-progress`\n\n**Started**: 2026-10-28\n**Last activity**: 2026-10-28 — start\n\n## Iteration progress\n\n| Iteration | Title   | Status      | Reviewed | Last activity |\n|-----------|---------|-------------|----------|---------------|\n| 1.1       | First   | done        | approve  | 2026-10-28    |\n| 2.1       | Writers | in-progress | —        | —             |\n\n## Follow-ups\n\n- [ ] a | b\n';
 // A fresh root with .somi/plans/p1/{diary.md,progress.md}.
 function fresh({ diary = diaryOf(2), progress = PROGRESS } = {}) {
   const root = path.join(base, `case${n++}`); const dir = path.join(root, '.somi', 'plans', 'p1');
@@ -180,15 +180,15 @@ console.log('== progress writers: the row and the line, nothing else ==');
   const { plan, dir } = fresh();
   const f = path.join(dir, 'progress.md');
   markIteration(plan, '2.1', { status: 'done', reviewed: 'approve', activity: 'writers', now: NOW });
-  check('only the 2.1 row changes: title kept, columns padded as before', read(f), PROGRESS.replace('| 2.1       | Writers | not-started | —        | —             |', '| 2.1       | Writers | done        | approve  | 2026-10-29 — writers |'));
+  check('only the 2.1 row changes: title kept, columns padded as before', read(f), PROGRESS.replace('| 2.1       | Writers | in-progress | —        | —             |', '| 2.1       | Writers | done        | approve  | 2026-10-29 — writers |'));
   setLastActivity(plan, { activity: 'iteration 2.1 done', now: NOW });
-  check('setLastActivity changes only the Last activity line', read(f), PROGRESS.replace('| 2.1       | Writers | not-started | —        | —             |', '| 2.1       | Writers | done        | approve  | 2026-10-29 — writers |').replace('**Last activity**: 2026-10-28 — start', '**Last activity**: 2026-10-29 — iteration 2.1 done'));
+  check('setLastActivity changes only the Last activity line', read(f), PROGRESS.replace('| 2.1       | Writers | in-progress | —        | —             |', '| 2.1       | Writers | done        | approve  | 2026-10-29 — writers |').replace('**Last activity**: 2026-10-28 — start', '**Last activity**: 2026-10-29 — iteration 2.1 done'));
   check('a status outside the closed list, an empty patch and a bad iteration are refused with 64', [exitOf(() => markIteration(plan, '2.1', { status: 'finished', now: NOW })), exitOf(() => markIteration(plan, '2.1', { status: 'done', now: undefined })), exitOf(() => markIteration(plan, '2', { status: 'done', now: NOW }))], [[true, 64], [true, 64], [true, 64]]);
 }
 {
   const bad = {
     'a missing row': [PROGRESS.replace(/\| 2\.1 .*\n/, ''), 'row-missing'],
-    'a row with an extra column': [PROGRESS.replace('| not-started | —        | —             |', '| not-started | — | — | extra |'), 'row-not-template-shape'],
+    'a row with an extra column': [PROGRESS.replace('| in-progress | —        | —             |', '| in-progress | — | — | extra |'), 'row-not-template-shape'],
     'a duplicated row': [PROGRESS.replace('| 1.1       | First', '| 2.1       | Dup     | done        | x        | y             |\n| 1.1       | First'), 'row-ambiguous'],
     'a table without the template header': [PROGRESS.replace('| Reviewed |', '| Verdict  |'), 'not-template-shape'],
   };

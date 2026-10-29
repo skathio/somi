@@ -3,7 +3,7 @@
 // loop-engine.mjs (the lifecycle, measuring and recording handlers).
 // Invoked from tests/scripts/loop-engine.sh.
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -158,6 +158,13 @@ check('record-dispatch refuses an unknown agent with the resolver\'s code (65) a
 check('record-dispatch without --agent is a usage error (64)', recordDispatch(mCtx(), m).code, 64);
 check('run-start records the budget, keeps it on a repeat, and refuses a zero budget (64)', [runStart(mCtx(), { ...m, maxMinutes: '30' }).out.max_minutes, runStart(mCtx(), { ...m, maxMinutes: '45' }).out.resumed, runStart(mCtx(), { ...m, slug: 'z', maxMinutes: '0' }).code], [30, true, 64]);
 check('none of the measure and record calls touched process.env', JSON.stringify(process.env), envBefore);
+{ // init creates the state directory only just before it saves, so a refused init leaves nothing behind
+  const bare = mkdtempSync(path.join(tmpdir(), 'loop-bare-'));
+  const bctx = { root: bare, env: { SOMI_GLOBAL_CONFIG: '' }, stateDir: path.join(bare, '.somi', 'somi-state', 'loop'), now: () => '2026-01-01T00:00:00Z' };
+  const refused = [init(bctx, { ...base, slug: 'x', severity: 'nope' }).code, init(bctx, { ...base, slug: 'x' }).code]; // a bad floor, then no HEAD to baseline on
+  check('a refused init (bad severity floor, unresolvable HEAD) exits 64 and creates no state directory', [refused, existsSync(path.join(bare, '.somi'))], [[64, 64], false]);
+  rmSync(bare, { recursive: true, force: true });
+}
 rmSync(root, { recursive: true, force: true });
 rmSync(globalDir, { recursive: true, force: true });
 

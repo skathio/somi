@@ -43,7 +43,6 @@ const withReviewMin = (state) => (state.review_min ? { review_min: state.review_
 export const init = guarded(({ env, root, stateDir, now = nowIso }, args) => {
   const { slug, loop, iteration, force } = args;
   const sf = stateFile(stateDir, slug, iteration);
-  fs.mkdirSync(stateDir, { recursive: true });
   if (fs.existsSync(sf) && !force) {
     let status;
     try {
@@ -97,6 +96,7 @@ export const init = guarded(({ env, root, stateDir, now = nowIso }, args) => {
     history: [],
   };
   if (loop === 'code') state.review_min = reviewMinFor(root, slug) ?? undefined; // undefined: not serialised
+  fs.mkdirSync(stateDir, { recursive: true }); // only now: a refused init leaves no directory behind
   saveState(sf, state);
   return ok({ baseline_sha: state.baseline_sha, caps: state.caps, state_file: sf, ...withReviewMin(state) });
 });
