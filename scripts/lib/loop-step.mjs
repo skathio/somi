@@ -1,6 +1,6 @@
 // loop-step.mjs -- the composite steps of a loop: one call performs every deterministic transition between two agent
 // starts, through the same library functions the primitive CLI subcommands use. This file holds `open`, `after-code`
-// and `status`; `after-review` is in loop-step-review.mjs, the shared kit in loop-step-kit.mjs; runStep(ctx, args) -> a response object (never a thrown refusal). ctx is the engine's ({root, env,
+// and `status`; `after-review` is in loop-step-review.mjs, `close` in loop-step-close.mjs, the shared kit in loop-step-kit.mjs; runStep(ctx, args) -> a response object (never a thrown refusal). ctx is the engine's ({root, env,
 // stateDir, installRoot, now?}) plus `via` ('mcp' | 'cli', recorded in the cursor), `log` (where an unexpected error's
 // name and stack go, one JSON line; console.error when absent) and, for tests only, `failAfter` (a sub-step name: the
 // step throws right after completing it, as a killed process would).
@@ -33,17 +33,17 @@ import { checkRun } from './run-budget.mjs';
 import { buildCard, HOSTS, ITERATION_RE, MAX_BYTES, SLUG_RE } from './run-card.mjs';
 import { appendDiary, findIterationRow, markIteration, plainDir, readPlanFile } from './loop-notes.mjs';
 export { BUDGET } from './loop-step-kit.mjs';
-import { ARG, base, bad, begin, advance, capsView, clean, cut, finalize, fitLines, floorLines, Killed, keep, MODES, noLoop, replayOf, size, stateAt, SUB_STEPS } from './loop-step-kit.mjs';
+import { ARG, base, bad, begin, advance, capsView, clean, cut, finalize, fitLines, floorLines, freezeFields, Killed, keep, MODES, noLoop, replayOf, size, stateAt, SUB_STEPS } from './loop-step-kit.mjs';
 import { afterReview, checkReview, FIELDS as REVIEW_FIELDS } from './loop-step-review.mjs';
 import { checkClose, close, FIELDS as CLOSE_FIELDS } from './loop-step-close.mjs';
 
-const FIELDS = {
+export const FIELDS = freezeFields({
   open: ['slug', 'loop', 'iteration', 'files', 'host', 'max_passes', 'diff_cap'],
   'after-code': ['slug', 'loop', 'iteration', 'agent', 'host', 'diff_cap', 'review_mode', 'review_scope'],
   status: ['slug', 'loop', 'iteration'],
   ...REVIEW_FIELDS,
   ...CLOSE_FIELDS,
-};
+});
 const NOT_FOR_PLAN = ['files', 'diff_cap', 'review_mode', 'review_scope'];
 const NEXT_REVIEW = { single: 'task-reviewer', security: 'task-reviewers', panel: 'task-panel' };
 const CARD_MAX = 1800; // bytes of the response the run card may take (as JSON), so the fields around it always fit in BUDGET
@@ -112,11 +112,11 @@ function cardOf(a, ctx, state) {
   }
 }
 
-// A gate stop: never stored, `next` is close, and for the gates a cap can move, the primitive that re-runs it raised.
+// A gate stop: never stored, `next` is close with the status to close with, and for the gates a cap can move, the primitive that re-runs it raised.
 function stop(step, state, code, reason, a, extra = {}) {
   const at = a.iteration ? ` --iteration ${a.iteration}` : '';
   const cli = { 2: `node scripts/somi-loop.mjs pass --slug ${a.slug}${at} --max-passes <N>`, 3: `node scripts/somi-loop.mjs check-diff --slug ${a.slug}${at} --diff-cap <N>` }[code];
-  return base(step, { ok: false, pass: state.pass, next: 'close', stop_reason: reason, exit: code, ...extra, ...(cli ? { cli } : {}) });
+  return base(step, { ok: false, pass: state.pass, next: 'close', close_args: { status: `stopped-${reason}` }, stop_reason: reason, exit: code, ...extra, ...(cli ? { cli } : {}) });
 }
 
 // A new state needs a plan directory that is real, and its declaration: a code loop, a startable row for the iteration
@@ -132,6 +132,13 @@ function undeclared(root, a) {
   if (!found.cells) return `${NO_ROW(a.iteration)[found.reason]}${found.why ? `: ${found.why}` : ''}`;
   const status = found.cells[2].trim();
   return STARTABLE.includes(status) ? null : `iteration ${a.iteration} is marked ${clean(status, 20)} in progress.md`;
+}
+
+// The Status cell of the iteration's row, or null when the row cannot be read as `undeclared` reads it.
+function rowStatus(root, slug, iteration) {
+  const d = plainDir(root, ['.somi', 'plans', slug]);
+  const p = d.dir ? readPlanFile(path.join(d.dir, 'progress.md')) : {};
+  return (p.text && findIterationRow(p.text, iteration).cells?.[2].trim()) || null;
 }
 
 function open(ctx, a) {
@@ -184,7 +191,7 @@ function open(ctx, a) {
       const gates = state.loop === 'code' ? `max_passes ${c.max_passes}, diff_cap_lines ${c.diff_cap_lines}, severity_floor ${c.severity_floor}; files: ${state.iteration_files.join(' ')}` : `max_passes ${c.max_passes}, severity_floor ${c.severity_floor}`;
       keep(out, appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title, body: gates, now: entry.at })); // the unwritten line is a pointer to the entry, not the entry: the response has a budget
     });
-    if (state.loop === 'code') advance(ctx, sf, state, entry, 'row', () => keep(out, markIteration({ root: ctx.root, slug: a.slug }, state.iteration, { status: 'in-progress', activity: title, now: entry.at }))); // the row says the loop is running; close makes the one move to done
+    if (state.loop === 'code') advance(ctx, sf, state, entry, 'row', () => { if (!(kind !== 'started' && rowStatus(ctx.root, a.slug, state.iteration) === 'blocked')) keep(out, markIteration({ root: ctx.root, slug: a.slug }, state.iteration, { status: 'in-progress', activity: title, now: entry.at })); }); // the row says the loop is running; close makes the one move to done. A row a person marked blocked stays so on a resume
   }
   const resp = fitLines((kept) => base('open', {
     pass: T, loop: state.loop, next: state.loop === 'code' ? 'task-coder' : 'task-planner', caps, ...(state.review_min ? { review_min: state.review_min } : {}),

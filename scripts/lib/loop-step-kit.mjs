@@ -1,6 +1,6 @@
 // loop-step-kit.mjs -- what the composite steps share: the response budget and its shaping (base, finalize, fitLines), the
 // per-step cursor (begin, advance: one sub-step and its mark saved together), the replay of a finished step, the usable-state
-// check (stateAt) and the findings read by the response. loop-step.mjs and loop-step-review.mjs import it; it imports neither.
+// check (stateAt) and the findings read by the response. loop-step.mjs, loop-step-review.mjs and loop-step-close.mjs import it; it imports none of them.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,9 +15,10 @@ export const BUDGET = 2500;
 
 export const MODES = Object.freeze(['single', 'security', 'panel']); // weakest first: an argument may only move right
 export const ARG = Object.freeze({ max_passes: 'max_passes', diff_cap_lines: 'diff_cap' }); // the argument that sets each cap
-const STORED = ['ok', 'step', 'pass', 'next', 'stop_reason', 'exit', 'wrote', 'unwritten', 'loop', 'caps', 'review_min', 'brief', 'truncated', 'verdict', 'findings', 'findings_total', 'recurring_cross_run', 'resolved', 'skipped', 'close_args', 'open_findings', 'open_findings_note', 'status', 'blockers', 'majors', 'diff', 'dispatches', 'cap_overrides', 'reviews']; // every field of a stored (open, plan after-code, after-review, close) response
+const STORED = ['ok', 'step', 'pass', 'next', 'stop_reason', 'exit', 'wrote', 'unwritten', 'loop', 'caps', 'review_min', 'brief', 'truncated', 'verdict', 'verdict_pass', 'findings', 'findings_total', 'recurring_cross_run', 'resolved', 'skipped', 'close_args', 'open_findings', 'open_findings_note', 'status', 'blockers', 'majors', 'diff', 'dispatches', 'cap_overrides', 'reviews']; // every field of a stored (open, plan after-code, after-review, close) response
 
 export class Killed extends Error {} // the tests' simulated kill: the one error runStep lets through
+export const freezeFields = (t) => Object.freeze(Object.fromEntries(Object.entries(t).map(([step, list]) => [step, Object.freeze(list)]))); // a step's argument table: no caller can widen what a step accepts
 export const bad = (field, why) => usageError(`${field}: ${why}`);
 export const clean = (s, n) => String(s).replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').replace(CONTROL, '').replace(/\s+/g, ' ').trim().slice(0, n);
 export const size = (r) => Buffer.byteLength(JSON.stringify(r));
@@ -105,11 +106,12 @@ const outSound = (o) => plain(o) && Array.isArray(o.wrote) && o.wrote.length <= 
 const foundSound = (f) => plain(f) && Array.isArray(f.lines) && f.lines.length <= 12 && f.lines.every((l) => /^F-\d{1,9} (new|known)( recurring)?( cross-run)?$/.test(l)) && Number.isInteger(f.total) && Array.isArray(f.cross) && f.cross.length <= 10 && f.cross.every((c) => /^F-\d{1,9}$/.test(c)) && typeof f.breaker === 'boolean';
 const fixedSound = (f) => plain(f) && ['resolved', 'skipped'].every((k) => Array.isArray(f[k]) && f[k].length <= 100 && f[k].every((x) => /^F-\d{1,9}( Blocker| Major| Minor| Nit| Unrated)?$/.test(x)));
 const diffSound = (d) => plain(d) && [d.lines, d.weighted].every((n) => Number.isInteger(n) && n >= 0) && Array.isArray(d.out_of_scope) && d.out_of_scope.length <= 6 && d.out_of_scope.every((f) => short(f, 62));
+const openSound = (o) => plain(o) && Array.isArray(o.ids) && o.ids.length <= 12 && o.ids.every((i) => /^F-\d{1,9}$/.test(i)) && Number.isInteger(o.total) && o.total >= o.ids.length;
 const sound = (e) => plain(e) && Array.isArray(e.done) && e.done.every((d) => SUB_STEPS.includes(d)) && typeof e.at === 'string'
   && (e.review === undefined || (plain(e.review) && MODES.includes(e.review.mode) && REVIEW_SCOPES.includes(e.review.scope)))
   && (e.sig === undefined || (typeof e.sig === 'string' && /^[0-9a-f]{16}$/.test(e.sig))) && (e.found === undefined || foundSound(e.found)) && (e.fixed === undefined || fixedSound(e.fixed))
   && (e.status === undefined || documentedStatus(e.status)) && (e.diff === undefined || diffSound(e.diff))
-  && (e.measured === undefined || (typeof e.measured === 'string' && OBJECT_ID.test(e.measured)))
+  && (e.open === undefined || openSound(e.open)) && (e.measured === undefined || (typeof e.measured === 'string' && OBJECT_ID.test(e.measured)))
   && (e.response === undefined || (plain(e.response) && size(e.response) <= BUDGET)) && (e.out === undefined || outSound(e.out));
 function usable(s) {
   return s?.status === 'running' && ['code', 'plan'].includes(s.loop) && Number.isInteger(s.pass) && s.pass >= 0 && plain(s.caps)

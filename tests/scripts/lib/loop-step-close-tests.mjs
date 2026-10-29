@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
-import { BUDGET, runStep } from '../../../scripts/lib/loop-step.mjs';
+import { BUDGET, FIELDS, runStep } from '../../../scripts/lib/loop-step.mjs';
 import { checkDiff, documentedStatus, finish, init, pass as passPrim, recordDispatch, recordPass, reviewScope, STOP_REASONS } from '../../../scripts/lib/loop-engine.mjs';
 import { CAP_BREACH_STATUSES } from '../../evals/lib/convergence.mjs';
 import { ARG, MODES, SUB_STEPS } from '../../../scripts/lib/loop-step-kit.mjs';
@@ -258,6 +258,7 @@ console.log('== close: the loop ends, the row moves once, the answer carries wha
   const big = approved(); big.put((st) => ({ ...st, dispatches: Array.from({ length: 40 }, (_, i) => ({ pass: 1, agent: `agent-${i}`, tier: 'medium', model: 'model-x', enforced: i % 2 === 0 })), cap_overrides: Array.from({ length: 30 }, (_, i) => ({ field: 'max_passes', from: 30 - i, to: 29 - i, source: 'tool', after_pass: 1, at: NOW })) }));
   recordFindings({ root: big.root, slug: 'p1', review: 'old.md', run: 'an-earlier-run', pass: 1, input: Array.from({ length: 300 }, (_, i) => F(i + 1)) }); const bx = close(big);
   check('40 dispatches, 30 cap overrides and 300 open findings: the answer fits the budget, every list counts what it cuts', [bx.ok, bytes(bx) <= BUDGET, bx.truncated, [bx.dispatches, bx.cap_overrides, bx.open_findings].map((l) => l.at(-1).startsWith('(+'))], [true, true, undefined, [true, true, true]]);
+  check('the fold of dispatches and cap overrides does not point at the loop state, which is not kept in the repository', [bx.dispatches, bx.cap_overrides].map((l) => l.at(-1).includes('loop state')), [false, false]);
 }
 console.log('== close: what it refuses, and what a kill or a failed measurement leaves ==');
 {
@@ -283,6 +284,42 @@ console.log('== close: what it refuses, and what a kill or a failed measurement 
 
   const tamper = (fn) => { const r = reviewed(); r.put((s) => { fn(s.steps['1:open']); return s; }); return step(r, 'status').exit; };
   check('a stored cursor with a diff or a status of the wrong shape makes the state unreadable', [tamper((e) => { e.diff = { lines: 'x', weighted: 1, out_of_scope: [] }; }), tamper((e) => { e.status = 'stopped-x'; }), tamper((e) => { e.diff = { lines: 1, weighted: 1, out_of_scope: [] }; e.status = 'done'; })], [64, 64, 0]);
+}
+console.log('== close: stopped loops, plan loops, gate stops, and the resume path of open ==');
+{
+  const rc = { verdict: 'request-changes', majors: 1, findings: [F(1)] };
+  const lp = gated(); review(lp, rc); open(lp); const lx = close(lp, { status: 'stopped-user-stop' });
+  check('a loop stopped in a pass that has no review yet names the last recorded verdict as that pass\'s: in the diary, the Last activity line and the answer', [lx.verdict, lx.verdict_pass, lx.pass, lp.diary().includes('code-loop stopped (user-stop) at pass 2; last verdict request-changes (pass 1)\n'), progress(lp).includes('— code-loop stopped (user-stop) at pass 2; last verdict request-changes (pass 1) for iteration 1.1')], ['request-changes', 1, 2, true, true]);
+
+  const st = gated(); review(st, rc); const stx = close(st, { status: 'stopped-user-stop' });
+  const dn = gated(); recordFindings({ root: dn.root, slug: 'p1', review: 'old.md', run: 'an-earlier-run', pass: 1, input: [F(1)] }); review(dn); const dnx = close(dn);
+  check('the closing diary entry lists the open findings at or above the floor by id', [st.diary().includes('open at or above Major: F-1'), dn.diary().includes('open at or above Major: F-1')], [true, true]);
+  check('the note on the open findings is specific to the close: a stop says to record each as a follow-up by id, a done close says they were left by earlier runs and asks for nothing', [stx.open_findings_note.includes('record each in progress.md as a follow-up, by its id'), dnx.open_findings_note.includes('left open by earlier runs'), dnx.open_findings_note.includes('follow-up')], [true, true, false]);
+  const ks = gated(); review(ks, rc); const kerr = dies(() => close(ks, { status: 'stopped-user-stop' }, {}, { failAfter: 'finish' }));
+  recordFindings({ root: ks.root, slug: 'p1', review: 'r9.md', run: ks.state().started, pass: 1, input: [F(2)] }); close(ks, { status: 'stopped-user-stop' });
+  check('a closing diary entry written on a retry lists the findings read when the loop was ended, not those recorded since', [kerr, /open at or above Major: F-1(?!,)/.test(ks.diary()), entries(ks)], ['failAfter finish', true, 4]);
+
+  const sa = gated(); review(sa, rc); const sax = close(sa, { status: 'stopped-user-stop' });
+  const sb = gated(); review(sb, rc); finish(sb.ctx(), { ...prim, status: 'stopped-user-stop' });
+  check('a stopped close leaves the state that finish --status stopped-user-stop leaves', [sax.ok, norm(sa), sa.state().finished], [true, norm(sb), sb.state().finished]);
+
+  const rs = repo(); init(rs.ctx(), prim); passPrim(rs.ctx(), prim); recordPass(rs.ctx(), { ...prim, verdict: 'request-changes', majors: '1' }); const rx = open(rs);
+  check('open on a pass the primitives recorded is a resume: the row moves to in-progress and the diary entry says resumed', [rx.ok, /\| 1\.1 \| one \| in-progress/.test(progress(rs)), rs.diary().includes('resumed from pass 1')], [true, true, true]);
+  const rk = repo(); init(rk.ctx(), prim); passPrim(rk.ctx(), prim); recordPass(rk.ctx(), { ...prim, verdict: 'request-changes', majors: '1' }); const rkerr = dies(() => open(rk, {}, {}, { failAfter: 'diary' })); const rkx = open(rk);
+  check('a resume killed after its diary entry moves the row on the retry and writes the entry once', [rkerr, rkx.ok, /\| 1\.1 \| one \| in-progress/.test(progress(rk)), entries(rk)], ['failAfter diary', true, true, 2]);
+  const rb = repo(); rb.file('.somi/plans/p1/progress.md', ROWS.replace('not-started', 'blocked')); init(rb.ctx(), prim); passPrim(rb.ctx(), prim); recordPass(rb.ctx(), { ...prim, verdict: 'request-changes', majors: '1' }); const rbx = open(rb);
+  check('a resumed open leaves a row a person marked blocked as it is, and still starts the pass and writes the entry', [rbx.ok, rbx.pass, /\| 1\.1 \| one \| blocked/.test(progress(rb)), rb.diary().includes('resumed from pass 1')], [true, 2, true, true]);
+
+  const pg = repo(); const pp = (name, a = {}) => runStep(pg.ctx(), { step: name, slug: 'pl', loop: 'plan', ...a });
+  pp('open'); pp('after-code', { agent: 'somi-planner' }); const t0 = tree(pg.root); const early = pp('close', { status: 'done' });
+  pp('after-review', { reviewers: ['somi-reviewer'], verdict: 'request-changes', blockers: 0, majors: 1, review: 'r1.md', findings: [F(1)] }); const t1 = tree(pg.root); const mid = pp('close', { status: 'done' });
+  check('a plan loop is gated like a code loop: done is refused 64 before any after-review and after one that did not end the loop, the loop stays running and nothing is written', [early.exit, mid.exit, early.error?.startsWith('status:'), isDeepStrictEqual(tree(pg.root), t1), t0 === t1, JSON.parse(readFileSync(stateFile(pg.ctx().stateDir, 'pl', ''), 'utf8')).status], [64, 64, true, true, false, 'running']);
+
+  const g1 = repo(); open(g1, { max_passes: 1 }); g1.file('a.js', '1\n2\n'); after(g1); review(g1, rc); const e2 = open(g1);
+  const g3 = repo(); open(g3, { diff_cap: 1 }); g3.file('a.js', '1\n'.repeat(9)); const e3 = after(g3);
+  const g4 = repo(); mkdirSync(path.join(g4.root, '.somi', 'somi-state', 'run'), { recursive: true }); writeFileSync(path.join(g4.root, '.somi', 'somi-state', 'run', 'p1.json'), JSON.stringify({ started: '2020-01-01T00:00:00.000Z', max_minutes: 1 })); const e4 = open(g4);
+  check('a gate stop (max passes, diff cap, time budget) carries the status to close with, and close accepts it', [e2, e3, e4].map((x) => [x.exit, x.close_args?.status === `stopped-${x.stop_reason}`, documentedStatus(x.close_args?.status)]), [[2, true, true], [3, true, true], [4, true, true]]);
+  check('the exported step tables and the stop reasons cannot be changed by a caller', [STOP_REASONS, FIELDS, ...Object.values(FIELDS)].every(Object.isFrozen), true);
 }
 console.log('== endLoop, the statuses close accepts, the shared constants, the ledger temp sweep ==');
 {

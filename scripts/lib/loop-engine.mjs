@@ -127,7 +127,7 @@ export const pass = guarded(({ env, stateDir, now = nowIso }, args) => {
 });
 
 // The reasons a stopped loop is closed with (`stopped-<reason>`): the code loop's documented stops, plus the time budget `open` reports.
-export const STOP_REASONS = ['max-passes-exceeded', 'diff-cap-exceeded', 'scope-expansion', 'circuit-breaker', 'user-stop', 'time-budget'];
+export const STOP_REASONS = Object.freeze(['max-passes-exceeded', 'diff-cap-exceeded', 'scope-expansion', 'circuit-breaker', 'user-stop', 'time-budget']);
 export const documentedStatus = (s) => s === 'done' || (typeof s === 'string' && s.startsWith('stopped-') && STOP_REASONS.includes(s.slice(8)));
 
 // Ends a running loop: the status and the time it ended, and the summary `finish` prints. Shared by `finish` and the `close` step.

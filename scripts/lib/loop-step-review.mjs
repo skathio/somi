@@ -14,7 +14,7 @@ import { appendDiary, plainDir, readPlanFile } from './loop-notes.mjs';
 import * as k from './loop-step-kit.mjs';
 import { atOrAbove, ledgerPaths, locusKey, readSeverity, recordFindings, resolveFinding, SEVERITIES } from './findings-ledger.mjs';
 
-export const FIELDS = { 'after-review': ['slug', 'loop', 'iteration', 'host', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed'] };
+export const FIELDS = k.freezeFields({ 'after-review': ['slug', 'loop', 'iteration', 'host', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed'] });
 const VERDICTS = ['approve', 'approve-with-comments', 'request-changes', 'reject'];
 const REVIEWERS = ['somi-reviewer', 'somi-security-reviewer', 'somi-architecture-reviewer', 'somi-test-strategist', 'somi-plan-reviewer', 'somi-sdlc-reviewer']; // review agents only: never the coder
 const text = (v, n) => typeof v === 'string' && v.length > 0 && v.length <= n && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(v);

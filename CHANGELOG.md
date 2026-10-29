@@ -66,10 +66,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   (a note for `done`, a blocker for a stop, with the cap overrides folded in), marks the iteration's row `done` on a
   clean code loop and sets Last activity, and answers with the verdict, the cumulative diff, the dispatches (each host-
   chosen model named), the cap overrides and every open finding at or above the floor as `F-id: title`, including ones
-  an earlier run of the iteration left. A code loop's `done` is refused unless the last pass's `after-review` ended the
+  an earlier run of the iteration left. A `done` is refused, for a plan loop too, unless the last pass's `after-review` ended the
   loop clean; a plan loop's `done` returns the `awaiting-approval` Status line in `unwritten`, since the tool does
   not edit that field. A row it cannot mark comes back in `unwritten` and the loop still ends. `open` now marks a code
   loop's row `in-progress` when it starts or resumes it, so `close` makes the single move to `done`.
+- **`somi-loop.mjs step <open|after-code|after-review|close|status>` runs the composite steps from the command line.**
+  Arguments are `--flag value` (`--findings` and `--fixed` as JSON text, `--reviewers` comma-separated); the response
+  is one JSON line on stdout and its `exit` is the exit code (0, 2, 3, 4, 5, 64, 65, 70), with nothing on stderr for a
+  step's own refusals. An internal error (70) answers with the fixed text; its detail goes to
+  `.somi/somi-state/loop/step-errors.log` (capped at 64 KB, never written through a link), not to the stderr a model
+  reads. A loop started by `init` can continue through the steps and the other way round. Every gate stop (max passes,
+  diff cap, time budget) now carries `close_args`, as the circuit breaker does.
+- **`close` is exact about a stopped loop.** A loop stopped before its pass was reviewed names the last recorded
+  verdict as that pass's (`verdict_pass`) instead of the in-progress pass's; the closing diary entry lists the open
+  findings at or above the floor by id, and the note on them says whether to record them as follow-ups (a stop) or
+  that earlier runs left them (a done). A resumed `open` leaves a row a person marked `blocked` as it is. The stop
+  reasons and each step's argument table are frozen.
 - **`finish` refuses a loop that is already over (64)** instead of rewriting how it ended. The statuses it accepts are
   unchanged. A loop state from an older build whose history holds a verdict over 60 characters or with a control
   character is unreadable to the step tool (the CLI used to accept it): finish it with `finish`, or edit the entry.
