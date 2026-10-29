@@ -16,6 +16,7 @@ import { loadConfig } from './config-files.mjs';
 import { LoopExit, PROG, ok, refuse, usageError } from './loop-exit.mjs';
 import { applyCapOverride, configVal, firstDefined, resolveInitCap, reresolveCap, validateCap } from './loop-caps.mjs';
 import { loadState, nowIso, requireState, saveState, stateFile } from './loop-state.mjs';
+import { SEVERITIES } from './findings-ledger.mjs';
 
 // The effective config; an unreadable or invalid file reads as unconfigured, so the defaults apply.
 export function readConfig(root, env) {
@@ -73,7 +74,7 @@ export const init = guarded(({ env, root, stateDir, now = nowIso }, args) => {
     configVal(config, [plan ? 'plan_loop' : 'code_loop', 'severity_floor']),
     'Major',
   );
-  if (!['Blocker', 'Major', 'Minor', 'Nit'].includes(sevFloor)) throw usageError(`severity_floor: ${sevFloor} must be one of Blocker|Major|Minor|Nit`);
+  if (!SEVERITIES.includes(sevFloor)) throw usageError(`severity_floor: ${sevFloor} must be one of Blocker|Major|Minor|Nit`);
   const diffCap = plan ? 0 : resolveInitCap(env, config, 'code', 'diff_cap_lines', args.diffCap); // plan loops have no diff cap
 
   let baseline;

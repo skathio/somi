@@ -1,7 +1,7 @@
 // loop-step-review.mjs -- the composite step that ends a pass: `after-review` records the reviewers' dispatches, the pass
 // (verdict and counts), the findings (the circuit breaker) and the ones the coder fixed, writes the per-pass diary line and
-// says what comes next, through the same functions the primitive subcommands call. loop-step.mjs hands in the shared kit
-// (cursor, response and findings helpers), so this file never imports it back. Sub-steps, in order: dispatch, record,
+// says what comes next, through the same functions the primitive subcommands call. The shared kit (cursor, response and
+// findings helpers) is loop-step-kit.mjs, which neither step file is imported by. Sub-steps, in order: dispatch, record,
 // findings, resolve, diary; each is marked with its effect, and a repeat resumes at the first one not marked.
 
 import { createHash } from 'node:crypto';
@@ -11,6 +11,7 @@ import { snapshotTree } from './loop-review.mjs';
 import { passEntry } from './loop-engine.mjs';
 import { nowIso, stateFile } from './loop-state.mjs';
 import { appendDiary, plainDir, readPlanFile } from './loop-notes.mjs';
+import * as k from './loop-step-kit.mjs';
 import { atOrAbove, ledgerPaths, locusKey, readSeverity, recordFindings, resolveFinding, SEVERITIES } from './findings-ledger.mjs';
 
 export const FIELDS = { 'after-review': ['slug', 'loop', 'iteration', 'host', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed'] };
@@ -57,7 +58,7 @@ function lacking(state, mode, have) {
 const canon = (v) => (Array.isArray(v) ? v.map(canon) : v !== null && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
 const sigOf = (a) => createHash('sha256').update(JSON.stringify(canon({ ...a, reviewers: [...a.reviewers].sort(), fixed: [...a.fixed].sort(), findings: a.findings.map((f) => JSON.stringify(canon(f))).sort() }))).digest('hex').slice(0, 16); // the arguments that made this pass's call: a repeat must carry the same
 
-export function afterReview(ctx, a, k) {
+export function afterReview(ctx, a) {
   const sf = stateFile(ctx.stateDir, a.slug, a.iteration);
   const state = k.stateAt(sf);
   if (!state) throw k.noLoop(a);
@@ -88,7 +89,7 @@ export function afterReview(ctx, a, k) {
     if (no) throw new LoopExit(no.code, `${PROG}: ${no.message}`);
   }
   const entry = k.begin(ctx, state, key);
-  entry.sig = sig; entry.file = a.review;
+  entry.sig = sig;
   const adv = (name, work) => k.advance(ctx, sf, state, entry, name, work);
   adv('dispatch', () => (state.dispatches ??= []).push(...ds.map((d) => d.entry)));
   adv('record', () => state.history.push(passEntry(ctx.root, state, a, entry.at)));

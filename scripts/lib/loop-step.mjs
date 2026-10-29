@@ -1,6 +1,6 @@
 // loop-step.mjs -- the composite steps of a loop: one call performs every deterministic transition between two agent
 // starts, through the same library functions the primitive CLI subcommands use. This file holds `open`, `after-code`
-// and `status`, with the shared kit; `after-review` is in loop-step-review.mjs; runStep(ctx, args) -> a response object (never a thrown refusal). ctx is the engine's ({root, env,
+// and `status`; `after-review` is in loop-step-review.mjs, the shared kit in loop-step-kit.mjs; runStep(ctx, args) -> a response object (never a thrown refusal). ctx is the engine's ({root, env,
 // stateDir, installRoot, now?}) plus `via` ('mcp' | 'cli', recorded in the cursor), `log` (where an unexpected error's
 // name and stack go, one JSON line; console.error when absent) and, for tests only, `failAfter` (a sub-step name: the
 // step throws right after completing it, as a killed process would).
@@ -24,18 +24,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LoopExit, PROG, usageError } from './loop-exit.mjs';
 import { applyCapOverride, configVal, firstDefined, reresolveCap, resolveInitCap, tightenCap } from './loop-caps.mjs';
-import { entryOk, init, readConfig } from './loop-engine.mjs';
+import { init, readConfig } from './loop-engine.mjs';
 import { loadState, nowIso, saveState, stateFile } from './loop-state.mjs';
 import { computeDiff } from './loop-diff.mjs';
 import { dispatchEntry } from './loop-dispatch.mjs';
-import { OBJECT_ID, REVIEW_SCOPES, reviewScope as scopeOf, snapshotTree } from './loop-review.mjs';
+import { REVIEW_SCOPES, reviewScope as scopeOf, snapshotTree } from './loop-review.mjs';
 import { checkRun } from './run-budget.mjs';
 import { buildCard, HOSTS, ITERATION_RE, MAX_BYTES, SLUG_RE } from './run-card.mjs';
-import { appendDiary, CONTROL, findIterationRow, plainDir, readPlanFile } from './loop-notes.mjs';
-import { atOrAbove, ledgerPaths } from './findings-ledger.mjs';
+import { appendDiary, findIterationRow, plainDir, readPlanFile } from './loop-notes.mjs';
+export { BUDGET } from './loop-step-kit.mjs';
+import { ARG, base, bad, begin, advance, capsView, clean, cut, finalize, fitLines, floorLines, Killed, MODES, noLoop, replayOf, size, stateAt, SUB_STEPS } from './loop-step-kit.mjs';
 import { afterReview, checkReview, FIELDS as REVIEW_FIELDS } from './loop-step-review.mjs';
 
-export const BUDGET = 2500;
 const FIELDS = {
   open: ['slug', 'loop', 'iteration', 'files', 'host', 'max_passes', 'diff_cap'],
   'after-code': ['slug', 'loop', 'iteration', 'agent', 'host', 'diff_cap', 'review_mode', 'review_scope'],
@@ -44,27 +44,16 @@ const FIELDS = {
 };
 const NOT_FOR_PLAN = ['files', 'diff_cap', 'review_mode', 'review_scope'];
 const LATER = ['close']; // named by the contract, not built yet
-const MODES = ['single', 'security', 'panel']; // weakest first: an argument may only move right
 const NEXT_REVIEW = { single: 'task-reviewer', security: 'task-reviewers', panel: 'task-panel' };
 const CARD_MAX = 1800; // bytes of the response the run card may take (as JSON), so the fields around it always fit in BUDGET
-const ARG = { max_passes: 'max_passes', diff_cap_lines: 'diff_cap' }; // the argument that sets each cap
-const RANK = { Blocker: 0, Major: 1, Minor: 2, Nit: 3 };
 const NO_ROW = (it) => ({ // why findIterationRow found no usable row
   missing: `iteration ${it} has no row in the Iteration progress table of progress.md`,
   ambiguous: `iteration ${it} has more than one row in the Iteration progress table of progress.md`,
   'not-template-shape': 'the Iteration progress table of progress.md is not in the template shape',
   'row-not-template-shape': `the row of iteration ${it} in progress.md is not in the template shape`,
 });
-const STORED = ['ok', 'step', 'pass', 'next', 'stop_reason', 'exit', 'wrote', 'unwritten', 'loop', 'caps', 'review_min', 'brief', 'truncated', 'verdict', 'findings', 'findings_total', 'recurring_cross_run', 'resolved', 'skipped', 'close_args', 'open_findings', 'open_findings_note']; // every field of a stored (open, plan after-code, after-review) response
 const AGENT_RE = /^[A-Za-z0-9][A-Za-z0-9:_-]{0,63}$/;
 const STARTABLE = ['not-started', 'in-progress', 'blocked']; // the Status cells under which a new loop may start; done and superseded are over
-
-class Killed extends Error {} // the tests' simulated kill: the one error runStep lets through
-const bad = (field, why) => usageError(`${field}: ${why}`);
-const clean = (s, n) => String(s).replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').replace(CONTROL, '').replace(/\s+/g, ' ').trim().slice(0, n);
-const size = (r) => Buffer.byteLength(JSON.stringify(r));
-const cut = (s, n) => { let t = clean(s, n).replace(/`/g, ''); while (size(t) - 2 > n) t = t.slice(0, -1); return t; }; // n counts bytes of JSON, not characters; no backtick, so a name cannot close the fence it sits in
-const base = (step, over) => ({ ok: true, step, pass: null, next: null, stop_reason: null, exit: 0, wrote: [], unwritten: [], replayed: false, ...over });
 
 function intArg(v, field) {
   if (Number.isInteger(v) && v >= 0 && v <= 999999) return v;
@@ -108,14 +97,6 @@ function capsFor(ctx, state, field, arg, at) {
   return { cap: tool ? tool.to : env.resolved, overrides: [env.override, tool].filter(Boolean) };
 }
 
-// A finished step answers from its stored response. A tool cap argument that would still tighten a cap is refused with
-// 64, not dropped: the caller asked for a change this repeat cannot make, and says so on its next step.
-function replayOf(state, key, overrides) {
-  const done = state.steps?.[key]?.response;
-  const late = done && overrides.find((o) => o.source === 'tool');
-  if (late) throw bad(ARG[late.field], `${late.to} is below the cap in force (${late.from}) but this step already finished; pass it with the next step`);
-  return done ? { ...Object.fromEntries(Object.entries(done).filter(([k]) => STORED.includes(k))), replayed: true } : null; // an allow-list: a field this build never stores is not passed on
-}
 
 // The run card as brief text. A file list that would push it over CARD_MAX is shortened until it fits (the state and the
 // diff gate keep every file) and the cut is said; it is refused only when it does not fit with no files.
@@ -130,60 +111,8 @@ function cardOf(a, ctx, state) {
   }
 }
 
-// The caps as the response shows them (an allow-list: nothing else stored reaches it) and the severity floor in force.
-function capsView(state) {
-  const floor = typeof state.caps.severity_floor === 'string' && Object.hasOwn(RANK, state.caps.severity_floor) ? state.caps.severity_floor : 'Major'; // a stored floor that is not one of the four names (an array of one included) is shown, and judged, as Major
-  return { floor, caps: { ...Object.fromEntries(['max_passes', 'diff_cap_lines'].filter((k) => k in state.caps).map((k) => [k, state.caps[k]])), severity_floor: floor } };
-}
 
-// The step's cursor, created on first use with the time stored once; `advance` runs one sub-step and saves it with its mark.
-function begin(ctx, state, key) {
-  state.steps ??= {};
-  return (state.steps[key] ??= { via: ctx.via === 'mcp' ? 'mcp' : 'cli', at: (ctx.now ?? nowIso)(), done: [] });
-}
-function advance(ctx, sf, state, entry, name, work) {
-  if (entry.done.includes(name)) return;
-  work();
-  entry.done.push(name);
-  saveState(sf, state);
-  if (ctx.failAfter === name) throw new Killed(`failAfter ${name}`);
-}
-// The response within BUDGET: the lists lose their tail first (the totals say so), then the review brief; past that only the outcome stays.
-const SHED = [
-  (x) => { const o = x.diff?.out_of_scope; if (!o?.length) return false; x.diff.out_of_scope_total ??= o.length; o.pop(); return true; },
-  (x) => x.scope?.files?.length > 0 && (x.scope.files.pop(), true),
-  (x) => 'review_brief' in x && delete x.review_brief,
-];
-function within(resp) {
-  const x = structuredClone(resp);
-  while (size(x) > BUDGET) if (!SHED.some((f) => f(x))) return base(x.step, { ok: x.ok, pass: x.pass, next: x.next, stop_reason: x.stop_reason, exit: x.exit, truncated: true });
-  return x;
-}
-const finalize = (sf, state, entry, resp) => { entry.response = within(resp); saveState(sf, state); return entry.response; }; // an over-budget response is never stored
 
-// Open findings at or above the floor as `F-id: title`, read with the notes writers' confinement; no ledger yet is no
-// findings (a read never seeds one), a ledger that is linked, special, oversized or malformed is flagged, never followed.
-function floorLines(root, slug, floor, run) { // `run`: only findings sighted in that loop run
-  const { file } = ledgerPaths(root, slug);
-  const dir = plainDir(root, path.relative(root, path.dirname(file)).split(path.sep));
-  const led = dir.dir ? readPlanFile(file) : dir;
-  if (led.reason === 'missing') return [];
-  try {
-    if (!led.text) throw new Error(led.reason);
-    // no cut here: fitLines fits what the budget holds and counts the rest
-    return JSON.parse(led.text).findings.filter((f) => f?.status === 'open' && /^F-\d+$/.test(f.id) && atOrAbove(f.severity, floor) && (!run || f.seen.some((s) => s?.run === run)))
-      .sort((x, y) => (RANK[x.severity] ?? 4) - (RANK[y.severity] ?? 4) || Number(x.id.slice(2)) - Number(y.id.slice(2)))
-      .map((f) => `${f.id}: ${clean(f.title, 100).replace(/`/g, '').replace(/^[#>\s-]+/, '')}`);
-  } catch { return ['(the findings ledger is unreadable)']; }
-}
-
-// build(kept) -> response for the longest prefix of `lines` that fits the budget; what is cut is counted, not hidden.
-function fitLines(build, lines) {
-  const make = (k) => build([...lines.slice(0, k), ...(k < lines.length ? [`(+${lines.length - k} more: see the findings ledger)`] : [])]);
-  let k = 0;
-  while (k < lines.length && size(make(k + 1)) <= BUDGET) k++;
-  return make(k);
-}
 
 // A gate stop: never stored, `next` is close, and for the gates a cap can move, the primitive that re-runs it raised.
 function stop(step, state, code, reason, a, extra = {}) {
@@ -207,35 +136,6 @@ function undeclared(root, a) {
   return STARTABLE.includes(status) ? null : `iteration ${a.iteration} is marked ${clean(status, 20)} in progress.md`;
 }
 
-// A running state is usable only if everything open reads has its type and bound; anything else reads as unreadable.
-const intCap = (v) => Number.isInteger(v) && v >= 0;
-const plain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-const SUB_STEPS = ['pass', 'diary', 'dispatch', 'record', 'findings', 'resolve']; // every sub-step any step records, in one place: a cursor naming another is unreadable
-const short = (v, n) => typeof v === 'string' && v.length <= n;
-const outSound = (o) => plain(o) && Array.isArray(o.wrote) && o.wrote.length <= 6 && o.wrote.every((w) => short(w, 200)) // room for the closing step: a diary and its archive, the progress.md row and its Last activity line
-  && Array.isArray(o.unwritten) && o.unwritten.length <= 6 && o.unwritten.every((u) => plain(u) && short(u.file, 100) && short(u.reason, 100) && short(u.line, 300) && (u.code === undefined || short(u.code, 32)));
-const foundSound = (f) => plain(f) && Array.isArray(f.lines) && f.lines.length <= 12 && f.lines.every((l) => /^F-\d{1,9} (new|known)( recurring)?( cross-run)?$/.test(l)) && Number.isInteger(f.total) && Array.isArray(f.cross) && f.cross.length <= 10 && f.cross.every((c) => /^F-\d{1,9}$/.test(c)) && typeof f.breaker === 'boolean';
-const fixedSound = (f) => plain(f) && ['resolved', 'skipped'].every((k) => Array.isArray(f[k]) && f[k].length <= 100 && f[k].every((x) => /^F-\d{1,9}( Blocker| Major| Minor| Nit| Unrated)?$/.test(x)));
-const sound = (e) => plain(e) && Array.isArray(e.done) && e.done.every((d) => SUB_STEPS.includes(d)) && typeof e.at === 'string'
-  && (e.review === undefined || (plain(e.review) && MODES.includes(e.review.mode) && REVIEW_SCOPES.includes(e.review.scope)))
-  && (e.sig === undefined || (typeof e.sig === 'string' && /^[0-9a-f]{16}$/.test(e.sig))) && (e.file === undefined || short(e.file, 100)) && (e.found === undefined || foundSound(e.found)) && (e.fixed === undefined || fixedSound(e.fixed))
-  && (e.measured === undefined || (typeof e.measured === 'string' && OBJECT_ID.test(e.measured)))
-  && (e.response === undefined || (plain(e.response) && size(e.response) <= BUDGET)) && (e.out === undefined || outSound(e.out));
-function usable(s) {
-  return s?.status === 'running' && ['code', 'plan'].includes(s.loop) && Number.isInteger(s.pass) && s.pass >= 0 && plain(s.caps)
-    && typeof s.baseline_sha === 'string' && OBJECT_ID.test(s.baseline_sha) && Array.isArray(s.history) && s.history.every((h) => plain(h) && entryOk(h) && (h.tree === undefined || (typeof h.tree === 'string' && OBJECT_ID.test(h.tree)))) // these two reach git
-    && intCap(s.caps.max_passes) && (s.loop === 'plan' ? s.caps.diff_cap_lines === undefined || intCap(s.caps.diff_cap_lines) : intCap(s.caps.diff_cap_lines) && Array.isArray(s.iteration_files) && s.iteration_files.every((f) => typeof f === 'string'))
-    && (s.review_min === undefined || s.review_min === 'security') && (s.dispatches === undefined || Array.isArray(s.dispatches)) && (s.steps === undefined || (plain(s.steps) && Object.values(s.steps).every(sound)));
-}
-
-// -> the usable state at `sf`; undefined when nothing is there; null for anything else at the path (a dangling link,
-// unreadable, a broken shape, a loop that is over). `finished` admits a loop that is over, for the read-only step.
-function stateAt(sf, finished = false) {
-  let st; try { st = fs.lstatSync(sf); } catch (e) { return e.code === 'ENOENT' ? undefined : null; }
-  let state = null; try { state = st.isFile() ? loadState(sf) : null; } catch { state = null; }
-  return usable(finished && plain(state) ? { ...state, status: 'running' } : state) ? state : null;
-}
-const noLoop = (a) => usageError(`no running loop state for ${a.slug}${a.iteration ? ` ${a.iteration}` : ''}: call open first`);
 
 function open(ctx, a) {
   const now = ctx.now ?? nowIso;
@@ -363,8 +263,7 @@ function status(ctx, a) {
   }), floorLines(ctx.root, a.slug, 'Nit'));
 }
 
-const KIT = { stateAt, noLoop, bad, cut, begin, advance, finalize, base, floorLines, fitLines, capsView, replayOf };
-const STEPS = { open, 'after-code': afterCode, 'after-review': (ctx, a) => afterReview(ctx, a, KIT), status };
+const STEPS = { open, 'after-code': afterCode, 'after-review': afterReview, status };
 
 export function runStep(ctx, args) {
   const step = args?.step;

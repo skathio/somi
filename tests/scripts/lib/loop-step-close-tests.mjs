@@ -92,6 +92,7 @@ console.log('== replay and kill ==');
   check('after-review killed after each of its five sub-steps and retried leaves one history entry, one reviewer dispatch, one sighting and one diary line, as one uninterrupted call does', got, ['dispatch', 'record', 'findings', 'resolve', 'diary'].map((s) => [`failAfter ${s}`, true, whole.next, whole.findings, shape(ref)]));
   const k = gated(); seed(k); dies(() => review(k, args, {}, { failAfter: 'record' }));
   check('the status step lists the new sub-steps of an unfinished after-review', step(k, 'status').cursor.at(-1), { key: '1:after-review', via: 'mcp', done: ['dispatch', 'record'], complete: false });
+  check('the after-review cursor holds the arguments\' signature and no copy of the review file name', Object.keys(ref.state().steps['1:after-review']).sort(), ['at', 'done', 'fixed', 'found', 'out', 'response', 'sig', 'via']);
   const again = review(ref, args);
   check('a finished after-review repeats as replayed with the same answer and writes nothing more', [again.replayed, again.next, again.findings, shape(ref)], [true, whole.next, whole.findings, shape(ref)]);
   const diff = review(ref, { ...args, review: 'r9.md' });
