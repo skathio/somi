@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import { runStep } from '../../../scripts/lib/loop-step.mjs';
+import { LOG_MAX, stepLog } from '../../../scripts/lib/loop-step-kit.mjs';
 
 const CLI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'scripts', 'somi-loop.mjs');
 let pass = 0; let fail = 0;
@@ -39,8 +41,8 @@ const slug = ['--slug', 'p1', '--iteration', '1.1'];
 const prim = (r, cmd, ...more) => run(r, [cmd, ...slug, ...more]);
 const step = (r, name, ...more) => run(r, ['step', name, ...slug, ...more]);
 const tree = (root) => Object.fromEntries(readdirSync(root, { recursive: true }).filter((f) => !f.startsWith('.git')).sort().map((f) => [f, lstatSync(path.join(root, f)).isFile() ? createHash('sha256').update(readFileSync(path.join(root, f))).digest('hex') : 'dir']));
-// What the comparison keeps of a loop state: times and tree ids dropped, the step cursor ignored.
-const norm = (r) => { const s = r.state(); return { st: s.status, pass: s.pass, caps: s.caps, d: (s.dispatches ?? []).map(({ at, ...d }) => d), h: s.history.map(({ at, tree: t, ...h }) => h) }; };
+// What the comparison keeps of a loop state: times and tree ids dropped, the step cursor ignored; `finished` only as set.
+const norm = (r) => { const s = r.state(); return { st: s.status, fin: typeof s.finished, loop: s.loop, files: s.iteration_files, rm: s.review_min, co: s.cap_overrides, pass: s.pass, caps: s.caps, d: (s.dispatches ?? []).map(({ at, ...d }) => d), h: s.history.map(({ at, tree: t, ...h }) => h) }; };
 const EDIT = '1\n2\n3\n';
 const REVIEW = ['--reviewers', 'somi-reviewer', '--verdict', 'approve', '--blockers', '0', '--majors', '0', '--review', 'r1.md'];
 
@@ -74,27 +76,63 @@ console.log('== the gates exit with their codes and print the response alone =='
   check('the circuit breaker is exit 5', shape(x5), [5, 5, 'circuit-breaker', 'close', 'stopped-circuit-breaker', '', 1]);
 }
 
-console.log('== an internal error: exit 70, the fixed text, a log file and an empty stderr ==');
+console.log('== an internal error: exit 70, the fixed text and an empty stderr ==');
 {
-  const r = repo(); prim(r, 'init', '--files', 'a.js'); chmodSync(r.sf, 0o444); // a state file the step cannot save: not a usage error, an error the step did not foresee
-  const log = path.join(r.root, '.somi', 'somi-state', 'loop', 'step-errors.log');
-  const x = step(r, 'open', '--files', 'a.js');
-  const lines = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [];
-  check('exit 70 prints only the fixed response (no error name, path or stack) and nothing on stderr', [x.code, x.json?.exit, x.json?.error, x.err, /EACCES|stack|\.mjs|\/tmp/.test(x.out)], [70, 70, 'internal error: the step did not complete; retry it, and report it if it repeats', '', false]);
-  check('the error is one JSON line in step-errors.log, naming the step and the error', [lines.length, JSON.parse(lines[0] ?? '{}').somi_loop_step, typeof JSON.parse(lines[0] ?? '{}').error], [1, 'open', 'string']);
-  rmSync(log); const away = path.join(tmp, 'log-target.txt'); writeFileSync(away, 'untouched'); symlinkSync(away, log);
-  const y = step(r, 'open', '--files', 'a.js');
-  check('a log path that is a link is not followed: the target is untouched and the answer is the same', [readFileSync(away, 'utf8'), y.code, y.err, y.json?.error], ['untouched', 70, '', x.json.error]);
-  rmSync(log); writeFileSync(log, 'x'.repeat(65536)); step(r, 'open', '--files', 'a.js');
-  check('a log at its size limit does not grow', lstatSync(log).size, 65536);
-  chmodSync(r.sf, 0o644);
+  // A state directory the step cannot create a file in, as root too: /proc/self (Linux).
+  const FIXED = 'internal error: the step did not complete; retry it, and report it if it repeats';
+  const r = repo();
+  if (existsSync('/proc/self')) {
+    const y = run(r, ['step', 'open', ...slug, '--files', 'a.js'], { SOMI_LOOP_STATE_DIR: '/proc/self' });
+    check('a state file that cannot be saved is exit 70 with only the fixed response (no error name, path or stack) and nothing on stderr', [y.code, y.json?.exit, y.json?.error, y.err, /EACCES|ENOENT|stack|\.mjs|\/proc/.test(y.out)], [70, 70, FIXED, '', false]);
+  }
+  if (process.getuid?.() !== 0) { // chmod does not bind root: the log writes are covered below without it
+    const q = repo(); prim(q, 'init', '--files', 'a.js'); chmodSync(q.sf, 0o444);
+    const log = path.join(q.root, '.somi', 'somi-state', 'loop', 'step-errors.log'); const z = step(q, 'open', '--files', 'a.js');
+    const lines = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [];
+    check('the error is one JSON line in step-errors.log, naming the step and the error', [z.code, z.err, lines.length, JSON.parse(lines[0] ?? '{}').somi_loop_step, typeof JSON.parse(lines[0] ?? '{}').error], [70, '', 1, 'open', 'string']);
+    chmodSync(q.sf, 0o644);
+  }
 }
 
-console.log('== usage errors: 64 on stderr, nothing on stdout, nothing written ==');
+console.log('== the error log: confined, capped, rotated ==');
+{
+  const home = () => { const root = path.join(tmp, `l${n++}`); mkdirSync(root); return { root, dir: path.join(root, '.somi', 'somi-state', 'loop') }; };
+  const read = (f) => readFileSync(f, 'utf8');
+  const h = home(); const w = stepLog(h.root, h.dir, false); w('{"a":1}'); w('{"b":2}');
+  check('the log lives under the default state directory, one line per error', read(path.join(h.dir, 'step-errors.log')), '{"a":1}\n{"b":2}\n');
+
+  const f = home(); mkdirSync(f.dir, { recursive: true }); execFileSync('mkfifo', [path.join(f.dir, 'step-errors.log')]);
+  const hung = spawnSync(process.execPath, ['--input-type=module', '-e', `import { stepLog } from ${JSON.stringify(path.join(path.dirname(CLI), 'lib', 'loop-step-kit.mjs'))}; stepLog(${JSON.stringify(f.root)}, ${JSON.stringify(f.dir)}, false)('{"a":1}');`], { timeout: 5000, encoding: 'utf8' });
+  check('a FIFO at the log path is left alone and does not hang the step', [hung.status, hung.signal, lstatSync(path.join(f.dir, 'step-errors.log')).isFIFO()], [0, null, true]);
+
+  const l = home(); mkdirSync(l.dir, { recursive: true }); const away = path.join(tmp, `away${n}.txt`); writeFileSync(away, 'untouched'); symlinkSync(away, path.join(l.dir, 'step-errors.log'));
+  stepLog(l.root, l.dir, false)('{"a":1}');
+  check('a link at the log path is not followed', read(away), 'untouched');
+
+  const p = home(); mkdirSync(path.join(p.root, '.somi'), { recursive: true }); const elsewhere = path.join(tmp, `elsewhere${n}`); mkdirSync(path.join(elsewhere, 'loop'), { recursive: true }); symlinkSync(elsewhere, path.join(p.root, '.somi', 'somi-state'));
+  stepLog(p.root, p.dir, false)('{"a":1}');
+  check('a link in the default state directory\'s path is not walked through: nothing is written behind it', readdirSync(path.join(elsewhere, 'loop')), []);
+
+  const x = home(); const wx = stepLog(x.root, x.dir, true); const log = path.join(x.dir, 'step-errors.log');
+  wx('{"old":1}'); writeFileSync(log, `${'x'.repeat(LOG_MAX - 20)}\n`); const target = path.join(tmp, `gen${n}.txt`); writeFileSync(target, 'untouched'); symlinkSync(target, `${log}.1`);
+  wx(`{"new":"${'y'.repeat(40)}"}`);
+  check('a line that would pass the cap moves the log to .1 (replacing a link there without following it) and starts a new log, which stays within the cap', [read(log).startsWith('{"new"'), read(`${log}.1`).startsWith('xxxx'), lstatSync(`${log}.1`).isSymbolicLink(), read(target), lstatSync(log).size <= LOG_MAX], [true, true, false, 'untouched', true]);
+
+  const seen = []; const big = { get now() { const e = new Error('x'); e.name = 'N'.repeat(1000); e.stack = 'S'.repeat(100000); throw e; }, log: (line) => seen.push(line) };
+  runStep(big, { step: 'open', slug: 'p1', iteration: '1.1', files: 'a.js' });
+  const rec = JSON.parse(seen[0] ?? '{}');
+  check('the stack and the error name are cut before the line is made, so the line is whole JSON within the cap', [seen.length, rec.stack?.length, rec.error?.length, Buffer.byteLength(seen[0] ?? '') < LOG_MAX / 8], [1, 4000, 100, true]);
+}
+
+console.log('== usage errors: the same JSON refusal on stdout, 64, stderr empty, nothing written ==');
 {
   const r = repo(); const before = tree(r.root);
   const bad = [['an unknown flag', ['step', 'open', '--nope', '1']], ['a flag without a value', ['step', 'open', '--slug']], ['a repeated flag', ['step', 'open', '--slug', 'p1', '--slug', 'p1']], ['findings that are not JSON', ['step', 'after-review', '--slug', 'p1', '--findings', '[x']], ['a value in place of a flag', ['step', 'open', 'p1']]];
-  check('each is refused 64 with a message on stderr and an empty stdout', bad.map(([, argv]) => { const x = run(r, argv); return [x.code, x.out, x.err.startsWith('somi-loop: ')]; }), bad.map(() => [64, '', true]));
+  check('each is refused 64 with the refusal on stdout (ok false, the step, the reason), one line, and an empty stderr', bad.map(([, argv]) => { const x = run(r, argv); return [x.code, x.json?.ok, x.json?.exit, x.json?.step, typeof x.json?.error, x.err, x.out.trim().split('\n').length]; }), bad.map(([, argv]) => [64, false, 64, argv[1], 'string', '', 1]));
+  const esc = run(r, ['step', 'open', `--\u001b[31m${'z'.repeat(500)}`, '1']);
+  check('the flag in the message is cut and cleaned: no control character, at most 40 characters of it', [esc.json?.error.includes('\u001b'), esc.json?.error.length < 120], [false, true]);
+  const gen = run(r, ['pass', '--slug', 'p1', `--\u001b[31m${'z'.repeat(500)}`]);
+  check('the same holds for the primitives\' usage error', [gen.code, gen.err.includes('\u001b'), gen.err.length < 120], [64, false, true]);
   check('an unknown step and a missing argument are refused inside the step: 64 and the field in the response', [step(r, 'nope').json?.exit, run(r, ['step', 'open', '--slug', 'p1', '--iteration', '1.1']).json?.error?.startsWith('files:')], [64, true]);
   check('nothing was written by any refusal', tree(r.root), before);
   check('the header comment lists exit 70 and the step subcommand', ['70 internal error', 'step <open|after-code|after-review|close|status>'].map((t) => readFileSync(CLI, 'utf8').includes(t)), [true, true]);

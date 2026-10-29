@@ -72,15 +72,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   loop's row `in-progress` when it starts or resumes it, so `close` makes the single move to `done`.
 - **`somi-loop.mjs step <open|after-code|after-review|close|status>` runs the composite steps from the command line.**
   Arguments are `--flag value` (`--findings` and `--fixed` as JSON text, `--reviewers` comma-separated); the response
-  is one JSON line on stdout and its `exit` is the exit code (0, 2, 3, 4, 5, 64, 65, 70), with nothing on stderr for a
-  step's own refusals. An internal error (70) answers with the fixed text; its detail goes to
-  `.somi/somi-state/loop/step-errors.log` (capped at 64 KB, never written through a link), not to the stderr a model
-  reads. A loop started by `init` can continue through the steps and the other way round. Every gate stop (max passes,
+  is one JSON line on stdout and its `exit` is the exit code (0, 2, 3, 4, 5, 64, 65, 70), with nothing on stderr: a
+  bad flag is refused 64 in the same JSON shape as any other refusal, and the flag is echoed cut and cleaned (as is
+  the flag or subcommand name in the primitives' usage errors). An internal error (70) answers with the fixed text;
+  its detail goes to `.somi/somi-state/loop/step-errors.log`, not to the stderr a model reads. The log is written
+  only through real
+  directories (the default state directory is walked from the project root without following a link), is never
+  opened through a link or as a FIFO, and when a line would pass 64 KB it moves to `step-errors.log.1` (one
+  generation, replacing what was there) and starts again; the error name and stack are cut before the line is made.
+  A loop started by `init` can continue through the steps and the other way round. Every gate stop (max passes,
   diff cap, time budget) now carries `close_args`, as the circuit breaker does.
+- **A finding passed to `after-review` may carry only `file`, `symbol`, `title`, `severity` and `confidence`.** Any
+  other key is refused 64, so a model cannot hand the step a deep structure that ends in an internal error. A
+  `close` resumed from a cursor finished by an earlier build reads the open findings from the ledger instead of failing.
 - **`close` is exact about a stopped loop.** A loop stopped before its pass was reviewed names the last recorded
   verdict as that pass's (`verdict_pass`) instead of the in-progress pass's; the closing diary entry lists the open
   findings at or above the floor by id, and the note on them says whether to record them as follow-ups (a stop) or
-  that earlier runs left them (a done). A resumed `open` leaves a row a person marked `blocked` as it is. The stop
+  that they are still open at close (a done). A resumed `open` leaves a row a person marked `blocked` as it is
+  and says so in `unwritten`; a history entry without a pass number is named by its verdict alone. The stop
   reasons and each step's argument table are frozen.
 - **`finish` refuses a loop that is already over (64)** instead of rewriting how it ended. The statuses it accepts are
   unchanged. A loop state from an older build whose history holds a verdict over 60 characters or with a control

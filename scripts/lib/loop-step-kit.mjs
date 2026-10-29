@@ -128,3 +128,29 @@ export function stateAt(sf, finished = false) {
   return usable(finished && plain(state) ? { ...state, status: 'running' } : state) ? state : null;
 }
 export const noLoop = (a) => usageError(`no running loop state for ${a.slug}${a.iteration ? ` ${a.iteration}` : ''}: call open first`);
+
+// The sink for an internal error's one JSON line (runStep's `log`): <state dir>/step-errors.log, never the stderr a model reads.
+// Written only through real directories (the default state directory is walked from the project root without following a
+// link; one the operator named is trusted), never through a link or into a special file, and capped: a line that would pass
+// LOG_MAX moves the log to step-errors.log.1 (replacing whatever was there, a link included, which is not followed) first. A failure is swallowed by runStep.
+export const LOG_MAX = 65536;
+export function stepLog(root, stateDir, explicit) {
+  const file = path.join(stateDir, 'step-errors.log');
+  return (line) => {
+    const text = `${line}\n`; const bytes = Buffer.byteLength(text);
+    if (bytes > LOG_MAX) return;
+    if (explicit) fs.mkdirSync(stateDir, { recursive: true });
+    else {
+      let dir = root;
+      for (const part of ['.somi', 'somi-state', 'loop']) {
+        dir = path.join(dir, part);
+        try { if (!fs.lstatSync(dir).isDirectory()) return; } catch (e) { if (e.code !== 'ENOENT') return; fs.mkdirSync(dir); }
+      }
+    }
+    let st = null; try { st = fs.lstatSync(file); } catch (e) { if (e.code !== 'ENOENT') return; }
+    if (st && !st.isFile()) return; // a link, a FIFO or a directory is never opened
+    if (st && st.size + bytes > LOG_MAX) fs.renameSync(file, `${file}.1`);
+    const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOCTTY ?? 0), 0o600);
+    try { if (fs.fstatSync(fd).isFile()) fs.writeSync(fd, text); } finally { fs.closeSync(fd); }
+  };
+}

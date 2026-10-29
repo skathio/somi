@@ -191,7 +191,10 @@ function open(ctx, a) {
       const gates = state.loop === 'code' ? `max_passes ${c.max_passes}, diff_cap_lines ${c.diff_cap_lines}, severity_floor ${c.severity_floor}; files: ${state.iteration_files.join(' ')}` : `max_passes ${c.max_passes}, severity_floor ${c.severity_floor}`;
       keep(out, appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title, body: gates, now: entry.at })); // the unwritten line is a pointer to the entry, not the entry: the response has a budget
     });
-    if (state.loop === 'code') advance(ctx, sf, state, entry, 'row', () => { if (!(kind !== 'started' && rowStatus(ctx.root, a.slug, state.iteration) === 'blocked')) keep(out, markIteration({ root: ctx.root, slug: a.slug }, state.iteration, { status: 'in-progress', activity: title, now: entry.at })); }); // the row says the loop is running; close makes the one move to done. A row a person marked blocked stays so on a resume
+    if (state.loop === 'code') advance(ctx, sf, state, entry, 'row', () => {
+      if (kind !== 'started' && rowStatus(ctx.root, a.slug, state.iteration) === 'blocked') out.unwritten.push({ file: 'progress.md', reason: 'row-left-blocked', line: `iteration ${state.iteration} is marked blocked; left as it is` });
+      else keep(out, markIteration({ root: ctx.root, slug: a.slug }, state.iteration, { status: 'in-progress', activity: title, now: entry.at }));
+    }); // the row says the loop is running; close makes the one move to done. A row a person marked blocked stays so on a resume
   }
   const resp = fitLines((kept) => base('open', {
     pass: T, loop: state.loop, next: state.loop === 'code' ? 'task-coder' : 'task-planner', caps, ...(state.review_min ? { review_min: state.review_min } : {}),
@@ -279,7 +282,7 @@ export function runStep(ctx, args) {
     if (e instanceof Killed) throw e;
     const name = typeof step === 'string' ? step.slice(0, 20) : null;
     if (!(e instanceof LoopExit)) {
-      try { (ctx.log ?? console.error)(JSON.stringify({ somi_loop_step: name, ...(e instanceof Error ? { error: e.name, stack: e.stack } : { thrown: String(e).slice(0, 200) }) })); } catch { /* a failing sink must not turn exit 70 into a crash */ } // the operator sees it; the response carries none of it
+      try { (ctx.log ?? console.error)(JSON.stringify({ somi_loop_step: name, ...(e instanceof Error ? { error: String(e.name).slice(0, 100), stack: String(e.stack).slice(0, 4000) } : { thrown: String(e).slice(0, 200) }) })); } catch { /* a failing sink must not turn exit 70 into a crash */ } // the operator sees it; the response carries none of it
       return base(name, { ok: false, exit: 70, error: 'internal error: the step did not complete; retry it, and report it if it repeats' });
     }
     return base(name, { ok: false, exit: e.code, error: clean(e.message.replace(`${PROG}: `, ''), 300) });

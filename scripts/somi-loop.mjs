@@ -9,17 +9,17 @@
 // Subcommands (each prints one JSON object): run-start, init, resume, stats, pass, check-diff, review-scope,
 // record-dispatch, record-pass, finish, and `step <open|after-code|after-review|close|status>`: the composite steps of
 // lib/loop-step.mjs, arguments as `--flag value` (--findings and --fixed as JSON text, --reviewers comma-separated), the
-// response on stdout as one JSON line, its `exit` as the exit code, nothing on stderr: the response carries the refusal,
-// and an internal error (70) goes to <state dir>/step-errors.log, never to the stderr a model reads.
+// response on stdout as one JSON line, its `exit` as the exit code, nothing on stderr: the response carries every refusal
+// (a bad flag included, exit 64), and an internal error (70) goes to <state dir>/step-errors.log, never to the stderr a model reads.
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { LoopExit, usageError } from './lib/loop-exit.mjs';
+import { LoopExit, PROG, usageError } from './lib/loop-exit.mjs';
 import { runStep } from './lib/loop-step.mjs';
+import { base, clean, cut, stepLog } from './lib/loop-step-kit.mjs';
 import { checkDiff, finish, init, pass, recordDispatch, recordPass, resume, reviewScope, runStart } from './lib/loop-engine.mjs';
 
 // Unwinding with a LoopExit reaches the top-level handler, which writes its message to stderr and sets
@@ -57,29 +57,18 @@ const COMMANDS = {
   'record-dispatch': { handler: recordDispatch }, 'record-pass': { handler: recordPass }, finish: { handler: finish },
 };
 const STEP_FLAGS = ['slug', 'loop', 'iteration', 'files', 'host', 'max-passes', 'diff-cap', 'agent', 'review-mode', 'review-scope', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed', 'status'];
-const LOG_MAX = 65536; // shortcut: the log stops growing here and is never rotated; rotate (or truncate) when a person reads it
-
-// The step's arguments from `--flag value` pairs, as runStep takes them. A flag it does not know, a repeated one or one without a value is a usage error.
+// The step's arguments from `--flag value` pairs, as runStep takes them. A flag it does not know, a repeated one or one without a value is a usage error (echoed cut and cleaned).
 function stepArgs(argv) {
   const args = { step: argv[0] };
   for (let i = 1; i < argv.length; i += 2) {
     const key = argv[i].replace(/^--/, '');
-    if (!argv[i].startsWith('--') || !STEP_FLAGS.includes(key) || argv[i + 1] === undefined) die(`unknown argument or missing value: ${argv[i]}`);
-    if (Object.hasOwn(args, key.replaceAll('-', '_'))) die(`repeated argument: ${argv[i]}`);
+    if (!argv[i].startsWith('--') || !STEP_FLAGS.includes(key) || argv[i + 1] === undefined) die(`unknown argument or missing value: ${cut(argv[i], 40)}`);
+    if (Object.hasOwn(args, key.replaceAll('-', '_'))) die(`repeated argument: ${cut(argv[i], 40)}`);
     args[key.replaceAll('-', '_')] = argv[i + 1];
   }
   for (const k of ['findings', 'fixed']) if (args[k] !== undefined) { try { args[k] = JSON.parse(args[k]); } catch { die(`--${k} expects JSON text`); } }
   if (args.reviewers !== undefined) args.reviewers = args.reviewers.split(',');
   return args;
-}
-
-// Where an internal error's one JSON line goes: appended to `file`, not through a link, not past LOG_MAX. A failure here is swallowed by runStep.
-function logTo(file) {
-  return (line) => {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW, 0o600);
-    try { if (fs.fstatSync(fd).isFile() && fs.fstatSync(fd).size < LOG_MAX) fs.writeSync(fd, `${line.slice(0, 8192)}\n`); } finally { fs.closeSync(fd); }
-  };
 }
 
 const FLAGS = {
@@ -90,9 +79,16 @@ const FLAGS = {
 
 function step(argv) {
   const root = projectRoot();
+  const explicit = Boolean(process.env.SOMI_LOOP_STATE_DIR);
   const stateDir = process.env.SOMI_LOOP_STATE_DIR || path.join(root, '.somi', 'somi-state', 'loop');
   const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const resp = runStep({ root, env: process.env, stateDir, installRoot, via: 'cli', log: logTo(path.join(stateDir, 'step-errors.log')) }, stepArgs(argv));
+  let resp;
+  try {
+    resp = runStep({ root, env: process.env, stateDir, installRoot, via: 'cli', log: stepLog(root, stateDir, explicit) }, stepArgs(argv));
+  } catch (e) { // a flag the parser refuses answers like any other refusal of a step: the response on stdout
+    if (!(e instanceof LoopExit)) throw e;
+    resp = base(clean(argv[0] ?? '', 20) || null, { ok: false, exit: e.code, error: clean(e.message.replace(`${PROG}: `, ''), 300) });
+  }
   deliver({ out: resp, code: resp.exit }, undefined);
 }
 
@@ -104,14 +100,14 @@ function main() {
   const args = { slug: '', loop: 'code', iteration: '', files: '', verdict: '', blockers: '0', majors: '0', status: '', agent: '', host: undefined, maxMinutes: '', force: false, maxPasses: '', diffCap: '', severity: '' };
   for (let rest = process.argv.slice(3); rest.length > 0;) {
     if (rest[0] === '--force') { args.force = true; rest = rest.slice(1); continue; }
-    if (!Object.hasOwn(FLAGS, rest[0])) die(`unknown argument: ${rest[0]}`);
+    if (!Object.hasOwn(FLAGS, rest[0])) die(`unknown argument: ${cut(rest[0], 40)}`);
     args[FLAGS[rest[0]]] = rest[1];
     rest = rest.slice(2);
   }
 
   if (!cmd) die('usage: somi-loop.mjs <run-start|init|resume|pass|check-diff|review-scope|record-dispatch|record-pass|finish|stats> --slug <slug> …, or step <name> …');
   if (!args.slug) die('--slug is required');
-  if (!Object.hasOwn(COMMANDS, cmd)) die(`unknown subcommand: ${cmd}`);
+  if (!Object.hasOwn(COMMANDS, cmd)) die(`unknown subcommand: ${cut(cmd, 40)}`);
 
   const root = projectRoot();
   const stateDir = process.env.SOMI_LOOP_STATE_DIR || path.join(root, '.somi', 'somi-state', 'loop');

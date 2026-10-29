@@ -294,7 +294,7 @@ console.log('== close: stopped loops, plan loops, gate stops, and the resume pat
   const st = gated(); review(st, rc); const stx = close(st, { status: 'stopped-user-stop' });
   const dn = gated(); recordFindings({ root: dn.root, slug: 'p1', review: 'old.md', run: 'an-earlier-run', pass: 1, input: [F(1)] }); review(dn); const dnx = close(dn);
   check('the closing diary entry lists the open findings at or above the floor by id', [st.diary().includes('open at or above Major: F-1'), dn.diary().includes('open at or above Major: F-1')], [true, true]);
-  check('the note on the open findings is specific to the close: a stop says to record each as a follow-up by id, a done close says they were left by earlier runs and asks for nothing', [stx.open_findings_note.includes('record each in progress.md as a follow-up, by its id'), dnx.open_findings_note.includes('left open by earlier runs'), dnx.open_findings_note.includes('follow-up')], [true, true, false]);
+  check('the note on the open findings is specific to the close: a stop says to record each as a follow-up by id, a done close only says they are still open at close and asks for nothing', [stx.open_findings_note.includes('record each in progress.md as a follow-up, by its id'), dnx.open_findings_note.includes('still open at close'), dnx.open_findings_note.includes('follow-up') || dnx.open_findings_note.includes('earlier runs')], [true, true, false]);
   const ks = gated(); review(ks, rc); const kerr = dies(() => close(ks, { status: 'stopped-user-stop' }, {}, { failAfter: 'finish' }));
   recordFindings({ root: ks.root, slug: 'p1', review: 'r9.md', run: ks.state().started, pass: 1, input: [F(2)] }); close(ks, { status: 'stopped-user-stop' });
   check('a closing diary entry written on a retry lists the findings read when the loop was ended, not those recorded since', [kerr, /open at or above Major: F-1(?!,)/.test(ks.diary()), entries(ks)], ['failAfter finish', true, 4]);
@@ -308,7 +308,7 @@ console.log('== close: stopped loops, plan loops, gate stops, and the resume pat
   const rk = repo(); init(rk.ctx(), prim); passPrim(rk.ctx(), prim); recordPass(rk.ctx(), { ...prim, verdict: 'request-changes', majors: '1' }); const rkerr = dies(() => open(rk, {}, {}, { failAfter: 'diary' })); const rkx = open(rk);
   check('a resume killed after its diary entry moves the row on the retry and writes the entry once', [rkerr, rkx.ok, /\| 1\.1 \| one \| in-progress/.test(progress(rk)), entries(rk)], ['failAfter diary', true, true, 2]);
   const rb = repo(); rb.file('.somi/plans/p1/progress.md', ROWS.replace('not-started', 'blocked')); init(rb.ctx(), prim); passPrim(rb.ctx(), prim); recordPass(rb.ctx(), { ...prim, verdict: 'request-changes', majors: '1' }); const rbx = open(rb);
-  check('a resumed open leaves a row a person marked blocked as it is, and still starts the pass and writes the entry', [rbx.ok, rbx.pass, /\| 1\.1 \| one \| blocked/.test(progress(rb)), rb.diary().includes('resumed from pass 1')], [true, 2, true, true]);
+  check('a resumed open leaves a row a person marked blocked as it is, says so in unwritten, and still starts the pass and writes the entry', [rbx.ok, rbx.pass, /\| 1\.1 \| one \| blocked/.test(progress(rb)), rb.diary().includes('resumed from pass 1'), rbx.unwritten.map((u) => [u.file, u.reason])], [true, 2, true, true, [['progress.md', 'row-left-blocked']]]);
 
   const pg = repo(); const pp = (name, a = {}) => runStep(pg.ctx(), { step: name, slug: 'pl', loop: 'plan', ...a });
   pp('open'); pp('after-code', { agent: 'somi-planner' }); const t0 = tree(pg.root); const early = pp('close', { status: 'done' });
@@ -320,6 +320,18 @@ console.log('== close: stopped loops, plan loops, gate stops, and the resume pat
   const g4 = repo(); mkdirSync(path.join(g4.root, '.somi', 'somi-state', 'run'), { recursive: true }); writeFileSync(path.join(g4.root, '.somi', 'somi-state', 'run', 'p1.json'), JSON.stringify({ started: '2020-01-01T00:00:00.000Z', max_minutes: 1 })); const e4 = open(g4);
   check('a gate stop (max passes, diff cap, time budget) carries the status to close with, and close accepts it', [e2, e3, e4].map((x) => [x.exit, x.close_args?.status === `stopped-${x.stop_reason}`, documentedStatus(x.close_args?.status)]), [[2, true, true], [3, true, true], [4, true, true]]);
   check('the exported step tables and the stop reasons cannot be changed by a caller', [STOP_REASONS, FIELDS, ...Object.values(FIELDS)].every(Object.isFrozen), true);
+}
+console.log('== close and the step tool: cursors from an earlier build, labels, finding keys ==');
+{
+  const ok = gated(); review(ok, { verdict: 'request-changes', majors: 1, findings: [F(1)] }); dies(() => close(ok, { status: 'stopped-user-stop' }, {}, { failAfter: 'finish' }));
+  ok.put((s) => { delete s.steps['1:close'].open; return s; }); const okx = close(ok, { status: 'stopped-user-stop' });
+  check('a close resumed from a cursor that was finished without its open-findings record reads the ledger now instead of failing', [okx.ok, okx.exit, okx.open_findings, ok.diary().includes('open at or above Major: F-1')], [true, 0, ['F-1: finding 1 here'], true]);
+
+  const wa = gated(); const wt = tree(wa.root); const wb = review(wa, { findings: [{ ...F(1, 'Minor'), extra: { a: { b: 1 } } }], verdict: 'approve' });
+  check('a finding with a key outside file, symbol, title, severity and confidence is refused 64 naming findings, and nothing is written', [wb.exit, wb.error?.startsWith('findings:'), isDeepStrictEqual(tree(wa.root), wt)], [64, true, true]);
+
+  const np = gated(); review(np, { verdict: 'request-changes', majors: 1, findings: [F(1)] }); open(np); np.put((s) => { delete s.history[0].pass; return s; }); const npx = close(np, { status: 'stopped-user-stop' });
+  check('a history entry without a pass number is named by its verdict alone, never "(pass null)"', [npx.ok, np.diary().includes('null'), np.diary().includes('last verdict request-changes\n'), npx.verdict_pass], [true, false, true, null]);
 }
 console.log('== endLoop, the statuses close accepts, the shared constants, the ledger temp sweep ==');
 {

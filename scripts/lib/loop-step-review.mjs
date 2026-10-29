@@ -17,6 +17,7 @@ import { atOrAbove, ledgerPaths, locusKey, readSeverity, recordFindings, resolve
 export const FIELDS = k.freezeFields({ 'after-review': ['slug', 'loop', 'iteration', 'host', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed'] });
 const VERDICTS = ['approve', 'approve-with-comments', 'request-changes', 'reject'];
 const REVIEWERS = ['somi-reviewer', 'somi-security-reviewer', 'somi-architecture-reviewer', 'somi-test-strategist', 'somi-plan-reviewer', 'somi-sdlc-reviewer']; // review agents only: never the coder
+const FINDING_KEYS = ['file', 'symbol', 'title', 'severity', 'confidence'];
 const text = (v, n) => typeof v === 'string' && v.length > 0 && v.length <= n && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(v);
 
 // The shape of this step's own arguments (slug, loop, iteration and host are checked by the caller). Throws 64 naming the field.
@@ -26,9 +27,9 @@ export function checkReview(a, { bad, intArg }) {
   if (typeof a.review !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(a.review)) throw bad('review', 'must be the review file name, without a path');
   a.blockers = intArg(a.blockers, 'blockers'); a.majors = intArg(a.majors, 'majors');
   a.findings ??= []; a.fixed ??= [];
-  const f = (x) => x !== null && typeof x === 'object' && text(x.file, 200) && text(x.title, 300) && (x.symbol === undefined || text(x.symbol, 100))
+  const f = (x) => x !== null && typeof x === 'object' && Object.keys(x).every((key) => FINDING_KEYS.includes(key)) && text(x.file, 200) && text(x.title, 300) && (x.symbol === undefined || text(x.symbol, 100))
     && SEVERITIES.includes(x.severity) && (x.confidence === undefined || ['High', 'Medium', 'Low'].includes(x.confidence));
-  if (!Array.isArray(a.findings) || a.findings.length > 100 || !a.findings.every(f)) throw bad('findings', 'expected up to 100 of {file, title, severity, symbol?, confidence?}');
+  if (!Array.isArray(a.findings) || a.findings.length > 100 || !a.findings.every(f)) throw bad('findings', 'expected up to 100 of {file, title, severity, symbol?, confidence?}, with no other key');
   for (const [field, level] of [['blockers', 'Blocker'], ['majors', 'Major']]) if (a[field] !== a.findings.filter((x) => x.severity === level).length) throw bad(field, `must equal the number of ${level} findings listed in this call`);
   if (!Array.isArray(a.fixed) || a.fixed.length > 100 || !a.fixed.every((id) => typeof id === 'string' && /^F-\d{1,6}$/.test(id))) throw bad('fixed', 'expected up to 100 ids like F-12');
   a.fixed = [...new Set(a.fixed)];
