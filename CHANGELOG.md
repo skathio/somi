@@ -17,6 +17,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ### Changed
 
+- **The loop's progress.md reader is stricter and the step tool's stored state is bounded.** `open` and the iteration
+  writer read the `## Iteration progress` section through one reader: the file must start with a `# ` title and have
+  no carriage return, the heading must appear once, and the section (which ends at a heading of any level) may hold no
+  code fence or `<!--`; a Status cell named like an `Object` member (`constructor`) is a refused move, not a crash. A
+  cursor entry in a loop state is read back only if its `out`, `review` and measured-tree fields have their types and
+  bounds, a replayed response carries only the fields a step stores, and a passed `after-code` records the tree it
+  gated and drops it when a later call stops at the diff gate. A repeated `after-code` may strengthen the review
+  lens or widen its scope (it never weakens it) instead of being refused. `open` shows the caps after a tightening
+  argument, `status` counts the findings it cuts and marks them as data, and an unexpected error is logged and
+  returned as exit 70 (65 stays the unknown agent).
+
 - **Renames count as a delete plus an add.** A rename into an out-of-scope path now counts as out of scope, in
   full, in the diff gate and in the delta review's file list.
 - **The diff gate refuses (exit 64) instead of counting a smaller diff** for a nested git repository, a file git

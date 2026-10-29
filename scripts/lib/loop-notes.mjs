@@ -40,23 +40,29 @@ function stampOf(now) {
   return { date: minute.slice(0, 10), stamp: minute.replace('T', ' ') };
 }
 
-// -> { dir, rel } | { refused }. Every component below the (realpath-resolved) root must be a real directory.
+// -> { dir } | { reason: 'missing' | 'unreadable' | 'not a plain directory' }. Every component of `parts` below `root` must
+// be a real directory (a link is refused). Exported: loop-step.mjs walks the findings ledger's directory with it too.
+export function plainDir(root, parts) {
+  let dir = root;
+  for (const part of parts) {
+    try { if (!fs.lstatSync(dir = path.join(dir, part)).isDirectory()) return { reason: 'not a plain directory' }; } catch (e) { return { reason: e.code === 'ENOENT' ? 'missing' : 'unreadable' }; }
+  }
+  return { dir };
+}
+
+// -> { dir, rel } | { refused }. The plan directory, below the (realpath-resolved) root, through plainDir.
 function planDir({ root, slug }) {
   if (typeof slug !== 'string' || !SLUG_RE.test(slug)) throw usageError('slug must match ^[a-z0-9][a-z0-9-]{0,63}$');
   if (typeof root !== 'string' || !path.isAbsolute(root)) throw usageError('root must be an absolute path');
-  let dir;
-  try { dir = fs.realpathSync(root); } catch { throw usageError('root is not readable'); }
-  for (const part of ['.somi', 'plans', slug]) {
-    dir = path.join(dir, part);
-    let st;
-    try { st = fs.lstatSync(dir); } catch { return { refused: 'plan-dir-missing' }; }
-    if (st.isSymbolicLink() || !st.isDirectory()) return { refused: 'plan-dir-not-a-plain-directory' };
-  }
-  return { dir, rel: `.somi/plans/${slug}` };
+  let real;
+  try { real = fs.realpathSync(root); } catch { throw usageError('root is not readable'); }
+  const walked = plainDir(real, ['.somi', 'plans', slug]);
+  if (walked.reason) return { refused: walked.reason === 'not a plain directory' ? 'plan-dir-not-a-plain-directory' : 'plan-dir-missing' };
+  return { dir: walked.dir, rel: `.somi/plans/${slug}` };
 }
 
 // -> { text, mode } | { reason }. A symlink, a non-file (refused before open: a FIFO would block it) and an oversized file are refused.
-function readPlanFile(file) {
+export function readPlanFile(file) {
   try {
     const l = fs.lstatSync(file);
     if (l.isSymbolicLink() || !l.isFile()) return { reason: l.isSymbolicLink() ? 'symlink' : 'not-a-regular-file' };
@@ -140,14 +146,18 @@ function editProgress(plan, edit, line) {
 const splitRow = (l) => (l.startsWith('|') && l.endsWith('|') ? l.slice(1, -1).split('|') : null);
 const HEADER = ['Iteration', null, 'Status', 'Reviewed', 'Last activity'];
 
-// The one reader of the `| N.M |` row, for markIteration and for `open`: the template header and its separator must
-// open the `## Iteration progress` section (which ends at the next `## `), and the row must exist once with five cells.
+// The one reader of the `| N.M |` row, for markIteration and for `open`: the file is in template shape (a `# ` title
+// first, no CR), the `## Iteration progress` heading is there exactly once, its section (which ends at the next heading
+// of any level) holds no code fence or `<!--`, the template header and its separator open it, and the row exists once
+// with five cells.
 // -> { lines, index, cells } | { reason: 'not-template-shape' | 'row-not-template-shape' | 'missing' | 'ambiguous' }.
 export function findIterationRow(text, iteration) {
   const lines = text.split('\n');
-  const start = lines.indexOf('## Iteration progress');
-  if (start < 0) return { reason: 'not-template-shape' };
-  const stop = lines.findIndex((l, i) => i > start && l.startsWith('## '));
+  const at = lines.flatMap((l, i) => (l === '## Iteration progress' ? [i] : []));
+  if (!archiveShape(text) || at.length !== 1) return { reason: 'not-template-shape' };
+  const start = at[0];
+  const stop = lines.findIndex((l, i) => i > start && /^#{1,6}\s/.test(l));
+  if (lines.slice(start + 1, stop < 0 ? undefined : stop).some((l) => /^\s*(```|~~~)|<!--/.test(l))) return { reason: 'not-template-shape' };
   const rows = lines.flatMap((l, i) => (i > start && (stop < 0 || i < stop) && l.startsWith('|') ? [i] : []));
   const head = rows.length >= 2 ? splitRow(lines[rows[0]]) : null;
   if (!head || head.length !== 5 || HEADER.some((h, i) => h && head[i].trim() !== h) || !/^\|[-| :]+\|$/.test(lines[rows[1]])) return { reason: 'not-template-shape' };
@@ -175,7 +185,7 @@ export function markIteration(plan, iteration, { status, reviewed, activity, now
     if (!found.lines) return { reason: { missing: 'row-missing', ambiguous: 'row-ambiguous' }[found.reason] ?? found.reason };
     const { lines, index, cells } = found;
     const was = cells[2].trim();
-    if (status !== undefined && status !== was && !MOVES[was]?.includes(status)) return { reason: 'transition-refused' };
+    if (status !== undefined && status !== was && !(Object.hasOwn(MOVES, was) && MOVES[was].includes(status))) return { reason: 'transition-refused' };
     for (const i of [2, 3, 4]) if (patch[i] !== undefined) cells[i] = ` ${patch[i]} `.padEnd(cells[i].length);
     lines[index] = `|${cells.join('|')}|`;
     return { text: lines.join('\n') };

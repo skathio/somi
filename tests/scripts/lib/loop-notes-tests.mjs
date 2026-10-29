@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
-import { appendDiary, markIteration, setLastActivity } from '../../../scripts/lib/loop-notes.mjs';
+import { appendDiary, findIterationRow, markIteration, setLastActivity } from '../../../scripts/lib/loop-notes.mjs';
 import { LoopExit } from '../../../scripts/lib/loop-exit.mjs';
 
 const LIB = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'scripts', 'lib');
@@ -202,6 +202,18 @@ console.log('== progress writers: the row and the line, nothing else ==');
   const before = snap(noLine.root);
   const r = setLastActivity(noLine.plan, { activity: 'x', now: NOW });
   check('a progress file without the Last activity line is left alone and the line comes back', [snap(noLine.root), r.unwritten], [before, [{ file: 'progress.md', reason: 'row-missing', line: '**Last activity**: 2026-10-29 — x' }]]);
+}
+{
+  const reasonOf = (progress, status = 'in-progress') => { const { plan, root } = fresh({ progress }); const b = snap(root); try { const r = markIteration(plan, '2.1', { status, now: NOW }); return [r.unwritten[0]?.reason ?? 'ok', r.wrote.length ? 'wrote' : isDeepStrictEqual(snap(root), b)]; } catch (e) { return [e.name]; } };
+  const row = PROGRESS.match(/\| 2\.1 .*\n/)[0];
+  check('a Status cell named like an Object.prototype member is transition-refused, not a TypeError, and nothing is written', ['constructor', '__proto__', 'toString', 'hasOwnProperty'].map((st) => reasonOf(PROGRESS.replace('| in-progress |', `| ${st} |`))), Array(4).fill(['transition-refused', true]));
+  check('a move out of done, back to not-started and to superseded are each transition-refused by the writer, nothing written', [reasonOf(PROGRESS.replace('| in-progress |', '| done        |')), reasonOf(PROGRESS, 'not-started'), reasonOf(PROGRESS, 'superseded')], Array(3).fill(['transition-refused', true]));
+  const shapes = { 'a second heading, as a fenced example would add': `${PROGRESS}\n\`\`\`\n## Iteration progress\n\`\`\`\n`, 'a fence in the section': PROGRESS.replace('\n## Follow-ups', '\n```\n```\n\n## Follow-ups'), 'a comment in the section': PROGRESS.replace('\n## Follow-ups', '\n<!-- x -->\n\n## Follow-ups'), 'front matter': `---\ntitle: x\n---\n${PROGRESS}`, 'a stray CR': PROGRESS.replace('Started', 'Sta\rrted') };
+  check('findIterationRow refuses a repeated heading, a fence or <!-- in the section, front matter and a stray CR as not-template-shape', Object.values(shapes).map((t) => findIterationRow(t, '2.1').reason), Array(5).fill('not-template-shape'));
+  check('the section ends at a heading of any level: a row under a ### heading is missing, not found', reasonOf(PROGRESS.replace(row, '').replace('\n## Follow-ups', `\n### Later\n\n${row}\n## Follow-ups`)), ['row-missing', true]);
+  const inv = fresh(); const iv = 'x\u2800y';
+  appendDiary(inv.plan, note({ title: `a${iv}`, body: `c${iv}` })); markIteration(inv.plan, '2.1', { status: 'done', reviewed: iv, activity: iv, now: NOW });
+  check('the blank braille cell U+2800 is removed from a diary title and body and from the cells of a row', [read(path.join(inv.dir, 'diary.md')).includes('— axy\n'), read(path.join(inv.dir, 'diary.md')).includes('\ncxy\n'), read(path.join(inv.dir, 'progress.md')).includes('| xy '), /\u2800/.test(read(path.join(inv.dir, 'diary.md')) + read(path.join(inv.dir, 'progress.md')))], [true, true, true, false]);
 }
 console.log('== free text cannot forge a heading, a row or a control sequence ==');
 {

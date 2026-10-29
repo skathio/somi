@@ -25,7 +25,7 @@ const tmp = mkdtempSync(path.join(tmpdir(), 'loop-step-'));
 process.on('exit', () => rmSync(tmp, { recursive: true, force: true }));
 
 const NOW = '2026-10-29T09:30:00Z';
-const ROWS = '## Iteration progress\n\n| Iteration | Title | Status | Reviewed | Last activity |\n|---|---|---|---|---|\n| 1.1 | one | not-started | — | — |\n| 2.2 | two | not-started | — | — |\n';
+const ROWS = '# Progress — p1\n\n## Iteration progress\n\n| Iteration | Title | Status | Reviewed | Last activity |\n|---|---|---|---|---|\n| 1.1 | one | not-started | — | — |\n| 2.2 | two | not-started | — | — |\n';
 const DIARY = '# Diary — p1\n\n> Spec: x\n\n---\n\n## 2026-10-28 10:00 — Plan\n\n**Category**: `note`\n**Phase**: 1\n\nbody\n\n---\n\n';
 let n = 0;
 // A repo with a.js and b.js committed and two plan directories (p1 for code loops, pl for plan loops).
@@ -167,8 +167,8 @@ console.log('== after-code ==');
   const p = checkDiff(b.ctx(), prim).out; const sc = reviewScope(b.ctx(), prim).out;
   check('open then after-code gives the same pass, diff_lines, weighted_lines, out_of_scope and scope as pass, check-diff, review-scope on a copy', [s.pass, s.diff, s.scope], [1, { diff_lines: p.diff_lines, weighted_lines: p.weighted_lines, cap: 400, out_of_scope: p.out_of_scope }, sc]);
   check('it asks for the single reviewer, repeats the full scope in a brief, and records the dispatch of the agent that ran', [s.next, s.review_mode, s.review_brief.startsWith("Review this iteration's whole diff"), a.state().dispatches.map((d) => [d.agent, d.pass])], ['task-reviewer', 'single', true, [['somi-coder', 1]]]);
-  const rp = [after(a, { review_mode: 'panel' }), after(a, { review_scope: 'full' })].map((x) => [x.exit, x.error.split(':')[0]]);
-  check('a repeated after-code asking for a stronger review_mode or review_scope than the pass already asked for is refused 64 naming the field; the same call again is measured afresh, not replayed; one dispatch', [rp, after(a).replayed, a.state().dispatches.length], [[[64, 'review_mode'], [64, 'review_scope']], false, 1]);
+  const rp = [after(a, { review_mode: 'panel' }), after(a, { review_scope: 'full' })].map((x) => [x.exit, x.next]);
+  check('a repeated after-code that asks for a stronger review_mode or review_scope than the first call is honoured, never refused (weak then panel is task-panel); the same call again is measured afresh, not replayed; one dispatch', [rp, after(a).replayed, a.state().dispatches.length], [[[0, 'task-panel'], [0, 'task-panel']], false, 1]);
   check('an after-code that is not preceded by an open (no state, or a pass already recorded) is refused 64', [after(repo()).exit, (() => { recordPass(a.ctx(), { ...prim, verdict: 'needs-changes', blockers: '0', majors: '1' }); return after(a, { agent: 'somi-planner' }).exit; })()], [64, 64]);
 }
 {
@@ -336,7 +336,7 @@ console.log('== open hardening: declaration table, state shape, floor, ledger co
 {
   const P = (r, ...s) => path.join(r.root, '.somi', 'plans', ...s);
   const CLI = '; the user starts a new loop through the CLI';
-  const tbl = (...rows) => `## Iteration progress\n\n| Iteration | Title | Status | Reviewed | Last activity |\n|---|---|---|---|---|\n${rows.join('\n')}\n`;
+  const tbl = (...rows) => `# Progress — p1\n\n## Iteration progress\n\n| Iteration | Title | Status | Reviewed | Last activity |\n|---|---|---|---|---|\n${rows.join('\n')}\n`;
   const row = (st) => `| 1.1 | one | ${st} | — | — |`;
   const cases = [ // [name, setup, args, the refusal text]
     ['plan dir missing', (r) => rmSync(P(r, 'p1'), { recursive: true }), {}, '.somi/plans/p1 is missing'],
@@ -345,11 +345,11 @@ console.log('== open hardening: declaration table, state shape, floor, ledger co
     ['progress.md is a link', (r) => { renameSync(P(r, 'p1', 'progress.md'), P(r, 'p1', 'real.md')); symlinkSync('real.md', P(r, 'p1', 'progress.md')); }, {}, 'progress.md is symlink'],
     ['progress.md is a directory', (r) => { rmSync(P(r, 'p1', 'progress.md')); mkdirSync(P(r, 'p1', 'progress.md')); }, {}, 'progress.md is not-a-regular-file'],
     ['progress.md over 4 MiB', (r) => r.file('.somi/plans/p1/progress.md', `${tbl(row('not-started'))}${' '.repeat((1 << 22) + 1)}`), {}, 'progress.md is too-large'],
-    ['row outside any table', (r) => r.file('.somi/plans/p1/progress.md', `## Notes\n\n${row('not-started')}\n`), {}, 'the Iteration progress table of progress.md is not in the template shape'],
+    ['row outside any table', (r) => r.file('.somi/plans/p1/progress.md', `# Progress — p1\n\n## Notes\n\n${row('not-started')}\n`), {}, 'the Iteration progress table of progress.md is not in the template shape'],
     ['row under another heading', (r) => r.file('.somi/plans/p1/progress.md', `${tbl('| 2.2 | two | not-started | — | — |')}\n## Other\n\n${row('not-started')}\n`), {}, 'iteration 1.1 has no row in the Iteration progress table of progress.md'],
     ['row with four cells', (r) => r.file('.somi/plans/p1/progress.md', tbl('| 1.1 | one | not-started | — |')), {}, 'the row of iteration 1.1 in progress.md is not in the template shape'],
     ['duplicate rows', (r) => r.file('.somi/plans/p1/progress.md', tbl(row('not-started'), row('not-started'))), {}, 'iteration 1.1 has more than one row in the Iteration progress table of progress.md'],
-    ['table without the template header', (r) => r.file('.somi/plans/p1/progress.md', `## Iteration progress\n\n${row('not-started')}\n`), {}, 'the Iteration progress table of progress.md is not in the template shape'],
+    ['table without the template header', (r) => r.file('.somi/plans/p1/progress.md', `# Progress — p1\n\n## Iteration progress\n\n${row('not-started')}\n`), {}, 'the Iteration progress table of progress.md is not in the template shape'],
     ['empty progress.md', (r) => r.file('.somi/plans/p1/progress.md', ''), {}, 'progress.md is empty'],
     ['row marked done', (r) => r.file('.somi/plans/p1/progress.md', tbl(row('done'))), {}, 'iteration 1.1 is marked done in progress.md'],
     ['row marked superseded', (r) => r.file('.somi/plans/p1/progress.md', tbl(row('superseded'))), {}, 'iteration 1.1 is marked superseded in progress.md'],
@@ -397,8 +397,8 @@ console.log('== open hardening: declaration table, state shape, floor, ledger co
   const listed = open(shaped);
   check('only max_passes, diff_cap_lines and severity_floor are read from caps (an extra key never reaches the response), review_min security is kept', [Object.keys(listed.caps), listed.review_min, bytes(listed) <= BUDGET], [['max_passes', 'diff_cap_lines', 'severity_floor'], 'security', true]);
   const boom = repo(); const boomBefore = tree(boom.root);
-  const hit = (() => { try { return open(boom, {}, {}, { now: () => { throw new TypeError('boom at /secret/path'); } }); } catch { return { exit: 'threw' }; } })();
-  check('an unexpected error (not a LoopExit) comes back as ok:false, exit 65 and a fixed message that carries nothing of the error', [hit.ok, hit.exit, hit.error, tree(boom.root)], [false, 65, 'internal error: the step did not complete; retry it, and report it if it repeats', boomBefore]);
+  const hit = (() => { try { return open(boom, {}, {}, { now: () => { throw new TypeError('boom at /secret/path'); }, log: () => {} }); } catch { return { exit: 'threw' }; } })();
+  check('an unexpected error (not a LoopExit) comes back as ok:false, exit 70 and a fixed message that carries nothing of the error', [hit.ok, hit.exit, hit.error, tree(boom.root)], [false, 70, 'internal error: the step did not complete; retry it, and report it if it repeats', boomBefore]);
 
   const fr = repo(); open(fr);
   recordFindings({ root: fr.root, slug: 'p1', review: 'r1.md', run: 'x', pass: 1, input: [{ file: 'a.js', symbol: 's', title: 'real finding', severity: 'Major', confidence: 'High' }] });
