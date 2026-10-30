@@ -58,6 +58,7 @@ export const INSTALL_TEXT_TOOLS = [
   },
 ];
 
+const NAME_MAX = 64; // the slug bound; the echo of a refused name is cut as well
 const fail = (code, message) => ({ ok: false, code, message });
 
 // The agent's instructions without its frontmatter, for reading. Dispatch never uses this: an agent
@@ -82,8 +83,8 @@ const SOURCES = {
  */
 export function installText(kind, args, { installRoot }) {
   const name = args?.name;
-  if (typeof name !== 'string' || !AGENT_NAME_RE.test(name)) {
-    return fail(EXIT_USAGE, `invalid name ${JSON.stringify(name)} (expected ${AGENT_NAME_RE})`);
+  if (typeof name !== 'string' || name.length > NAME_MAX || !AGENT_NAME_RE.test(name)) {
+    return fail(EXIT_USAGE, `invalid name ${JSON.stringify(name)?.slice(0, 60)} (expected ${AGENT_NAME_RE}, at most ${NAME_MAX} characters)`);
   }
   const { relPath, shape } = SOURCES[kind];
   const filePath = path.join(installRoot, ...relPath(name));

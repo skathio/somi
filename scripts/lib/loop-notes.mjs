@@ -5,7 +5,8 @@
 // a file or row not in template shape stays byte-identical and comes back in `unwritten`. Writes are temp file +
 // rename; time is the `now` parameter. Every writer returns { wrote: [paths relative to root], unwritten: [{ file,
 // reason, line }] } (a write-failed item also carries the errno `code`; a replayed diary entry adds `skipped:
-// 'replay'`); a bad argument throws a usage error (64).
+// 'replay'`); a bad argument throws a usage error (64). Markdown safety rests on the callers: every title and body is built from
+// enums, numbers and ids, never from a model's text (oneLine strips breaks and control characters, not markup).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,6 +18,10 @@ import { archiveHead, archiveShape, CATEGORIES, compactDiary, formatEntry, inser
 export { ITERATION_RE };
 export const STATUSES = ['not-started', 'in-progress', 'done', 'blocked', 'superseded'];
 const MAX_TEXT = 300;
+// Every entry the writer makes ends with this line, so a reader can tell it from a person's. The writer authors neither
+// decision-change nor plan-change: those are never compacted away, and only a person decides them.
+const PROVENANCE = 'Written by the loop step engine; every field comes from stored loop state.';
+const WRITABLE = CATEGORIES.filter((c) => c !== 'decision-change' && c !== 'plan-change');
 const MAX_FILE = 4 * 1024 * 1024;
 // Removed by Unicode property, so invisible code points (tags, variation selectors, fillers, bidi, zero-width) cannot pass.
 // Exported: the one definition, the step kit (loop-step-kit.mjs) cleans what it echoes with it too (\u{2800}, the blank braille cell, is not default-ignorable).
@@ -89,24 +94,25 @@ function writeAtomic(file, text, mode = 0o644) {
   }
 }
 
-const refusal = (file, reason, line) => ({ wrote: [], unwritten: [{ file, reason, line }] });
-const writeFailed = (file, code, line) => ({ file, reason: 'write-failed', code, line });
+// `kind` names the record the line summarises (diary-entry, iteration-row, last-activity), so the caller knows what to write where.
+const refusal = (file, reason, line, kind) => ({ wrote: [], unwritten: [{ file, reason, line, kind }] });
+const writeFailed = (file, code, line, kind) => ({ file, reason: 'write-failed', code, line, kind });
 const SKIPPED = 'compaction skipped; diary.md is over 40 entries';
 
 export function appendDiary(plan, entry) {
   const { stamp } = stampOf(entry.now);
-  if (!CATEGORIES.includes(entry.category)) throw usageError(`category must be one of ${CATEGORIES.join('|')}`);
+  if (!WRITABLE.includes(entry.category)) throw usageError(`category must be one of ${WRITABLE.join('|')}`);
   const title = oneLine(entry.title, 'title');
   if (!/[\p{L}\p{N}]/u.test(title)) throw usageError('title must contain a letter or a digit');
   if (isSummaryTitle(title)) throw usageError('a title starting "Compacted:" is reserved for the compaction summary');
-  const text = formatEntry({ stamp, title, category: entry.category, phase: oneLine(entry.phase ?? 'work-item-wide', 'phase') || 'work-item-wide', body: oneLine(entry.body ?? '', 'body') });
+  const text = formatEntry({ stamp, title, category: entry.category, phase: oneLine(entry.phase ?? 'work-item-wide', 'phase') || 'work-item-wide', body: [oneLine(entry.body ?? '', 'body'), PROVENANCE].filter(Boolean).join('\n\n') });
   const line = text.replace(/\n*---\n*$/, '');
   const p = planDir(plan);
-  if (p.refused) return refusal('diary.md', p.refused, line);
+  if (p.refused) return refusal('diary.md', p.refused, line, 'diary-entry');
   const file = path.join(p.dir, 'diary.md');
   const cur = readPlanFile(file);
   const next = cur.text === undefined ? null : insertEntry(cur.text, text);
-  if (next === null) return refusal('diary.md', cur.reason ?? 'not-template-shape', line);
+  if (next === null) return refusal('diary.md', cur.reason ?? 'not-template-shape', line, 'diary-entry');
   if (isReplay(cur.text, text)) return { wrote: [], unwritten: [], skipped: 'replay' }; // a replayed step: this exact entry is already newest
   const wrote = []; const unwritten = [];
   let diary = next;
@@ -125,21 +131,21 @@ export function appendDiary(plan, entry) {
     } else unwritten.push({ file: 'diary-archive.md', reason: arch.reason === 'too-large' ? 'archive-too-large' : arch.reason ?? 'not-template-shape', line: SKIPPED });
   }
   const failed = writeAtomic(file, diary, cur.mode);
-  if (failed) return { wrote, unwritten: [...unwritten, writeFailed('diary.md', failed, line)] };
+  if (failed) return { wrote, unwritten: [...unwritten, writeFailed('diary.md', failed, line, 'diary-entry')] };
   wrote.push(`${p.rel}/diary.md`);
   return { wrote, unwritten };
 }
 
 // Edit progress.md through `edit(text)` -> { text } (the new file) or { reason } (not in template shape: no write).
-function editProgress(plan, edit, line) {
+function editProgress(plan, edit, line, kind) {
   const p = planDir(plan);
-  if (p.refused) return refusal('progress.md', p.refused, line);
+  if (p.refused) return refusal('progress.md', p.refused, line, kind);
   const file = path.join(p.dir, 'progress.md');
   const cur = readPlanFile(file);
   const out = cur.text === undefined ? cur : archiveShape(cur.text) ? edit(cur.text) : { reason: 'not-template-shape' };
-  if (out.text === undefined) return refusal('progress.md', out.reason, line);
+  if (out.text === undefined) return refusal('progress.md', out.reason, line, kind);
   const failed = writeAtomic(file, out.text, cur.mode);
-  if (failed) return { wrote: [], unwritten: [writeFailed('progress.md', failed, line)] };
+  if (failed) return { wrote: [], unwritten: [writeFailed('progress.md', failed, line, kind)] };
   return { wrote: [`${p.rel}/progress.md`], unwritten: [] };
 }
 
@@ -192,7 +198,7 @@ export function markIteration(plan, iteration, { status, reviewed, activity, now
     for (const i of [2, 3, 4]) if (patch[i] !== undefined) cells[i] = ` ${patch[i]} `.padEnd(cells[i].length);
     lines[index] = `|${cells.join('|')}|`;
     return { text: lines.join('\n') };
-  }, line);
+  }, line, 'iteration-row');
 }
 
 export function setLastActivity(plan, { activity, now }) {
@@ -204,5 +210,5 @@ export function setLastActivity(plan, { activity, now }) {
     if (hits.length !== 1) return { reason: hits.length === 0 ? 'row-missing' : 'row-ambiguous' };
     lines[hits[0]] = value;
     return { text: lines.join('\n') };
-  }, value);
+  }, value, 'last-activity');
 }

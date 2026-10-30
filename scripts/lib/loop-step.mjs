@@ -188,11 +188,11 @@ function open(ctx, a) {
     const title = `${state.loop}-loop ${kind === 'started' ? `started${state.iteration ? ` for iteration ${state.iteration}` : ''}` : kind}`;
     advance(ctx, sf, state, entry, 'diary', () => {
       const c = caps;
-      const gates = state.loop === 'code' ? `max_passes ${c.max_passes}, diff_cap_lines ${c.diff_cap_lines}, severity_floor ${c.severity_floor}; files: ${state.iteration_files.join(' ')}` : `max_passes ${c.max_passes}, severity_floor ${c.severity_floor}`;
+      const gates = state.loop === 'code' ? `max_passes ${c.max_passes}, diff_cap_lines ${c.diff_cap_lines}, severity_floor ${c.severity_floor}; files in scope: ${state.iteration_files.length}` : `max_passes ${c.max_passes}, severity_floor ${c.severity_floor}`;
       keep(out, appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title, body: gates, now: entry.at })); // the unwritten line is a pointer to the entry, not the entry: the response has a budget
     });
     if (state.loop === 'code') advance(ctx, sf, state, entry, 'row', () => {
-      if (kind !== 'started' && rowStatus(ctx.root, a.slug, state.iteration) === 'blocked') out.unwritten.push({ file: 'progress.md', reason: 'row-left-blocked', line: `iteration ${state.iteration} is marked blocked; left as it is` });
+      if (kind !== 'started' && rowStatus(ctx.root, a.slug, state.iteration) === 'blocked') out.unwritten.push({ file: 'progress.md', reason: 'row-left-blocked', kind: 'iteration-row', line: `iteration ${state.iteration} is marked blocked; left as it is` });
       else keep(out, markIteration({ root: ctx.root, slug: a.slug }, state.iteration, { status: 'in-progress', activity: title, now: entry.at }));
     }); // the row says the loop is running; close makes the one move to done. A row a person marked blocked stays so on a resume
   }

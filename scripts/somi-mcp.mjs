@@ -13,6 +13,10 @@
 // install directory can't be followed from a consuming project, so its text is served over the
 // same stdio channel instead.
 //
+// The tool logic lives in scripts/lib/, one module per tool family: loop-step-tool.mjs (`somi_loop`),
+// install-text.mjs (`somi_command`, `somi_skill`, `somi_agent`) and agent-info.mjs (`somi_agent_info`).
+// This file keeps the JSON-RPC framing, the roots/list round trip and the tool table.
+//
 // Hand-rolled, on purpose (zero dependencies — no MCP SDK): newline-delimited JSON-RPC 2.0 over
 // stdio, one JSON object per line either direction, matching the MCP stdio transport's own framing
 // rule. Nothing but JSON-RPC ever reaches stdout; every diagnostic goes to stderr, so a stray
@@ -32,6 +36,7 @@ import { resolveDispatch, validateDispatchArgs } from './lib/dispatch-resolver.m
 import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
 import { AGENT_INFO_TOOL, agentInfo } from './lib/agent-info.mjs';
 import { INSTALL_TEXT_TOOLS, installText } from './lib/install-text.mjs';
+import { LOOP_TOOL, callLoopStep } from './lib/loop-step-tool.mjs';
 import { SIGNAL_IDS } from './lib/size-tier.mjs';
 
 const PROG = 'somi-dispatch'; // shared identity with the CLI: this is the SAME resolver speaking.
@@ -198,6 +203,7 @@ const TOOLS = [
       required: ['signals'],
     },
   },
+  LOOP_TOOL,
 ];
 
 // --- tool implementations --------------------------------------------------------------------
@@ -256,6 +262,12 @@ function callInstallText(kind, args) {
   return outcome.ok ? textResult(outcome.text) : textResult(`somi-${kind}: ${outcome.message} (exit ${outcome.code})`, true);
 }
 
+// Loop steps; the logic lives in lib/loop-step-tool.mjs, this only supplies the root lookup, the env and the install root.
+async function callSomiLoop(args) {
+  const out = await callLoopStep(args, { resolveRoot: (projectDirArg) => resolveProjectRoot({ projectDirArg, listRoots: () => listClientRoots() }), env: process.env, installRoot: installRoot() });
+  return textResult(out.text, out.isError);
+}
+
 // Runs the sizing CLI itself, so the result and the exit codes are the CLI's, byte for byte.
 function callSomiTier(args) {
   if (args.signals === null || typeof args.signals !== 'object' || Array.isArray(args.signals)) {
@@ -280,16 +292,13 @@ async function callSomiConfig(args) {
   if (!text(args.key) || !text(args.value) || [args.key, args.value].some((v) => v !== undefined && (v === '' || v.startsWith('-') || /[\u0000-\u001f\u007f]/.test(v)))) {
     return textResult('somi-config: key and value must be non-empty strings without control characters that do not start with a dash (exit 64)', true);
   }
-  // Writes need a root the HOST supplied: a model-supplied project_dir alone could point a write anywhere.
-  // The probe (no project_dir) succeeds, or fails as ambiguous, only when the host offered a root.
-  if (args.action !== 'show' && args.action !== 'get') {
-    const probe = await resolveProjectRoot({ projectDirArg: undefined, listRoots: () => listClientRoots() });
-    if (!probe.ok && !probe.message.startsWith('ambiguous')) {
-      return textResult('somi-config: no host project root; run the CLI yourself (node scripts/somi-config.mjs) to change the config (exit 67)', true);
-    }
-  }
   const rootOutcome = await resolveProjectRoot({ projectDirArg: args.project_dir, listRoots: () => listClientRoots() });
-  if (!rootOutcome.ok) return textResult(`somi-config: ${rootOutcome.message} (exit ${rootOutcome.code})`, true);
+  // Writes need a root the HOST supplied: a model-supplied project_dir alone could point a write anywhere.
+  const writes = args.action !== 'show' && args.action !== 'get';
+  if (!rootOutcome.ok && (rootOutcome.hosted !== false || !writes)) return textResult(`somi-config: ${rootOutcome.message} (exit ${rootOutcome.code})`, true);
+  if (writes && rootOutcome.hosted !== true) {
+    return textResult('somi-config: no host project root; run the CLI yourself (node scripts/somi-config.mjs) to change the config (exit 67)', true);
+  }
   const argv = [path.join(installRoot(), 'scripts', 'somi-config.mjs'), args.action];
   if (args.key !== undefined) argv.push(args.key);
   if (args.value !== undefined) argv.push(args.value);
@@ -320,6 +329,7 @@ async function callTool(name, args) {
     case 'somi_agent': return callInstallText('agent', args || {});
     case 'somi_tier': return callSomiTier(args || {});
     case 'somi_config': return await callSomiConfig(args || {});
+    case 'somi_loop': return await callSomiLoop(args || {});
     default: return null;
   }
 }

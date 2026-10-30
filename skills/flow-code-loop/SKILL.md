@@ -119,6 +119,9 @@ session death at `.somi/somi-state/loop/<slug>.<N>.<M>.json`.
 > before (baseline SHA, pass counter, cumulative `git diff --shortstat`, finding recurrence by
 > file + symbol + title) — identical gates, judgment-enforced — and say so in the summary.
 
+The bundled `somi_loop` MCP tool runs these same steps (open, after-code, after-review, close, status) as one call
+per transition; this procedure still uses the CLI.
+
 ### 3. Loop
 
 ```text

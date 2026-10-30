@@ -42,6 +42,8 @@ state "$(node -e 'console.log(JSON.stringify(Array.from({length:25},(_, i)=>"src
 has "more than 20 files are cut, with the rest counted" "(and 5 more in the phase file)" "$(run --slug rate-limit --iteration 1.1 --host claude-code)"
 state '["src/a\u001b[31m.mjs","src/b‮.mjs"]'
 check "control and bidi characters are removed from paths" "$(run --slug rate-limit --iteration 1.1 --host claude-code | grep '^files in scope' | LC_ALL=C grep -c $'[\x01-\x1f]\|\xe2\x80\xae')" "0"
+state '["src/a```b.mjs","```"]'
+check "a backtick in a file name cannot close the card's fence: the only fence lines are its own two" "$(run --slug rate-limit --iteration 1.1 --host claude-code | grep -c '```')" "2"
 rm "$P/package.json"
 has "no package.json test script: the card says so" "tests: not declared" "$(run --slug rate-limit --iteration 1.1 --host claude-code)"
 

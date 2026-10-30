@@ -60,10 +60,11 @@ console.log('== appendDiary: the entry and its place ==');
   const before = read(path.join(dir, 'diary.md'));
   const r = appendDiary(plan, note());
   const after = read(path.join(dir, 'diary.md'));
-  const want = `## 2026-10-29 09:30 — Writers done\n\n**Category**: \`note\`\n**Phase**: 2\n\ntwo writers\n\n---\n\n`;
+  const want = `## 2026-10-29 09:30 — Writers done\n\n**Category**: \`note\`\n**Phase**: 2\n\ntwo writers\n\nWritten by the loop step engine; every field comes from stored loop state.\n\n---\n\n`;
   check('the entry lands newest first, right after the preamble, in template shape', after, PRE + want + before.slice(PRE.length));
   check('it reports the one path it wrote and nothing unwritten', r, { wrote: ['.somi/plans/p1/diary.md'], unwritten: [] });
   check('a category outside the closed list, an empty title and a title with no letter or digit are refused with 64', [exitOf(() => appendDiary(plan, note({ category: 'chat' }))), exitOf(() => appendDiary(plan, note({ title: '###' }))), exitOf(() => appendDiary(plan, note({ title: `!! ${INVISIBLE} --` })))], [[true, 64], [true, 64], [true, 64]]);
+  check('the writer authors neither decision-change nor plan-change (64, nothing written), and an entry with no body still ends with the provenance line', [exitOf(() => appendDiary(plan, note({ category: 'decision-change' }))), exitOf(() => appendDiary(plan, note({ category: 'plan-change' }))), read(path.join(dir, 'diary.md')).includes('decision-change'), appendDiary(plan, note({ title: 'No body', body: '' })).wrote.length, /\*\*Phase\*\*: 2\n\nWritten by the loop step engine; [^\n]*\n\n---\n\n## 2026-10-29 09:30 — Writers done/.test(read(path.join(dir, 'diary.md')))], [[true, 64], [true, 64], false, 1, true]);
   check('a title that reads as the compaction summary is refused with 64; one that merely contains the word is not', [exitOf(() => appendDiary(plan, note({ title: 'Compacted: 2026-01-01 .. 2026-01-02' }))), exitOf(() => appendDiary(plan, note({ title: '  ### compacted : x' }))), exitOf(() => appendDiary(plan, note({ title: 'Re: Compacted: x' })))], [[true, 64], [true, 64], 'no throw']);
 }
 console.log('== appendDiary: a replayed entry is written once ==');
@@ -201,7 +202,7 @@ console.log('== progress writers: the row and the line, nothing else ==');
   const noLine = fresh({ progress: PROGRESS.replace(/\*\*Last activity\*\*.*\n/, '') });
   const before = snap(noLine.root);
   const r = setLastActivity(noLine.plan, { activity: 'x', now: NOW });
-  check('a progress file without the Last activity line is left alone and the line comes back', [snap(noLine.root), r.unwritten], [before, [{ file: 'progress.md', reason: 'row-missing', line: '**Last activity**: 2026-10-29 — x' }]]);
+  check('a progress file without the Last activity line is left alone and the line comes back', [snap(noLine.root), r.unwritten], [before, [{ file: 'progress.md', reason: 'row-missing', line: '**Last activity**: 2026-10-29 — x', kind: 'last-activity' }]]);
 }
 {
   const reasonOf = (progress, status = 'in-progress') => { const { plan, root } = fresh({ progress }); const b = snap(root); try { const r = markIteration(plan, '2.1', { status, now: NOW }); return [r.unwritten[0]?.reason ?? 'ok', r.wrote.length ? 'wrote' : isDeepStrictEqual(snap(root), b)]; } catch (e) { return [e.name]; } };

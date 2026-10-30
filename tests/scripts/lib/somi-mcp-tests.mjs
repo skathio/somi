@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { McpClient } from './somi-mcp-client.mjs';
+import { installText } from '../../../scripts/lib/install-text.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const SERVER = path.join(ROOT, 'scripts', 'somi-mcp.mjs');
@@ -70,7 +71,7 @@ async function run() {
 
     const list = await client.request('tools/list', {});
     const names = (list.tools || []).map((t) => t.name).sort();
-    check('tools/list carries exactly somi_resolve, somi_agent_info, somi_command, somi_skill, somi_agent, somi_tier and somi_config', names, ['somi_agent', 'somi_agent_info', 'somi_command', 'somi_config', 'somi_resolve', 'somi_skill', 'somi_tier']);
+    check('tools/list carries exactly somi_resolve, somi_agent_info, somi_command, somi_skill, somi_agent, somi_tier, somi_config and somi_loop', names, ['somi_agent', 'somi_agent_info', 'somi_command', 'somi_config', 'somi_loop', 'somi_resolve', 'somi_skill', 'somi_tier']);
 
     const ping = await client.request('ping', {});
     check('ping returns an empty result', ping, {});
@@ -421,6 +422,25 @@ async function run() {
     check('m2: an object-valued somi_command name is a clean isError, not a crash', r2.isError, true);
     check('m2: it is reported as the usual 64, not surfaced as an internal error', /\(exit 64\)/.test(toolText(r2)), true);
   });
+
+  // --- install-text names: the unknown-name text, object-shaped names, a bounded name, and a read error that is not "missing" ---
+  await withClient({}, async (client) => {
+    await client.initialize();
+    const texts = [];
+    for (const [tool, name] of [['somi_command', 'no-such-command'], ['somi_skill', 'no-such-skill']]) texts.push(toolText(await toolCall(client, tool, { name })));
+    check('an unknown command and an unknown skill are 65 and say which kind and name', texts.map((t) => [/\(exit 65\)$/.test(t), t.includes(`unknown ${t.includes('somi-command') ? 'command' : 'skill'} "no-such-`)]), [[true, true], [true, true]]);
+    const objects = [];
+    for (const tool of ['somi_skill', 'somi_agent']) objects.push(await toolCall(client, tool, { name: { toString: null } }));
+    check('an object-shaped skill or agent name is a clean 64, not an internal error', objects.map((r) => [r.isError, /\(exit 64\)$/.test(toolText(r))]), [[true, true], [true, true]]);
+    const long = toolText(await toolCall(client, 'somi_skill', { name: 'a'.repeat(5000) }));
+    check('a name over 64 characters is a 64 whose text does not repeat it', [/\(exit 64\)$/.test(long), long.length < 200], [true, true]);
+    check('a name of exactly 64 characters passes the bound (and is unknown, 65)', /\(exit 65\)$/.test(toolText(await toolCall(client, 'somi_skill', { name: 'a'.repeat(64) }))), true);
+  });
+  {
+    const install = fresh(); mkdirSync(path.join(install, 'commands', 'x.md'), { recursive: true });
+    let code = null; try { installText('command', { name: 'x' }, { installRoot: install }); } catch (e) { code = e.code; }
+    check('a read error that is not "missing" (a directory at commands/x.md) is rethrown, never reported as an unknown command', code, 'EISDIR');
+  }
 
   // --- M2: the SAME bad input produces the SAME code through the CLI and the MCP tool ----------
   {

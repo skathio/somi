@@ -49,7 +49,7 @@ export function buildCard({ slug, iteration, host, projectDir, somiRoot, state }
   if (!HOSTS.includes(host)) return { ok: false, error: `host must be one of ${HOSTS.join(', ')}` };
   if (!state || state.slug !== slug || state.iteration !== iteration) return { ok: false, error: 'no loop state for this slug and iteration: run somi-loop init first' };
   const planDir = path.join(projectDir, '.somi', 'plans', slug);
-  const files = Array.isArray(state.iteration_files) ? state.iteration_files.map(printable) : [];
+  const files = Array.isArray(state.iteration_files) ? state.iteration_files.map((f) => printable(f).replace(/`/g, "'")) : [];
   const shown = files.slice(0, MAX_FILES).join(' ') + (files.length > MAX_FILES ? ` (and ${files.length - MAX_FILES} more in the phase file)` : '');
   const read = ['spec.md', phaseFile(planDir, iteration), fs.existsSync(path.join(planDir, 'brief.md')) ? 'brief.md' : null].filter(Boolean);
   const tests = testCommand(projectDir);

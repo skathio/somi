@@ -86,7 +86,7 @@ console.log('== open ==');
   const s = r.state();
   check('open on a fresh slug starts the loop at pass 1 and asks for the coder; the brief is the card verbatim', [o.ok, o.exit, o.pass, o.next, o.stop_reason, o.replayed, o.brief.startsWith('```somi-card\n'), o.brief.includes('files in scope: a.js')], [true, 0, 1, 'task-coder', null, false, true, true]);
   check('the state holds pass 1, no history, and the cursor with its via, stored time and sub-steps', [s.pass, s.history, s.steps['1:open'].via, s.steps['1:open'].at, s.steps['1:open'].done], [1, [], 'mcp', NOW, ['pass', 'diary', 'row']]);
-  check('the diary gained exactly one started entry, built from stored state, and the response lists the write', [entries(r), r.diary().includes('— code-loop started for iteration 1.1\n'), r.diary().includes('max_passes 3, diff_cap_lines 400, severity_floor Major; files: a.js'), o.wrote], [2, true, true, ['.somi/plans/p1/diary.md', '.somi/plans/p1/progress.md']]);
+  check('the diary gained exactly one started entry, built from stored state, and the response lists the write', [entries(r), r.diary().includes('— code-loop started for iteration 1.1\n'), r.diary().includes('max_passes 3, diff_cap_lines 400, severity_floor Major; files in scope: 1'), o.wrote], [2, true, true, ['.somi/plans/p1/diary.md', '.somi/plans/p1/progress.md']]);
   const again = open(r);
   check('open twice returns the same pass with replayed: true, history unchanged, still one diary entry', [again.pass, again.replayed, again.brief, r.state().history, entries(r)], [1, true, o.brief, [], 2]);
   const lost = r.state(); delete lost.steps['1:open'].response; lost.steps['1:open'].done = ['pass'];

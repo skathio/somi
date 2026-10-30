@@ -99,9 +99,16 @@ async function hostRoot({ listRoots }) {
  * @param {string} [opts.projectDirArg] - the tool call's own `project_dir` argument, if given.
  * @param {() => Promise<string[]|undefined>} [opts.listRoots] - calls the client's `roots/list`
  *   and returns the raw URI strings, or `undefined` when the client never declared `roots`.
- * @returns {Promise<{ok: true, root: string, source: string} | {ok: false, code: number, message: string}>}
+ * @returns {Promise<{ok: true, root: string, source: string, hosted: boolean} | {ok: false, code: number, message: string, hosted?: boolean}>}
+ *   `hosted`: whether the HOST supplied a root at all (true even when it was ambiguous or refused project_dir); undefined
+ *   when the answer failed before the lookup (a malformed project_dir), so a caller asks the host only once.
  */
-export async function resolveProjectRoot({ projectDirArg, listRoots }) {
+export async function resolveProjectRoot(opts) {
+  const seen = { hosted: undefined };
+  return { ...(await resolveWith(opts, seen)), hosted: seen.hosted };
+}
+
+async function resolveWith({ projectDirArg, listRoots }, seen) {
   // Validated FIRST regardless of whether a host root exists -- a malformed value is 64 either
   // way, and the bounding check below needs a real, fs-verified directory to compare against.
   let projectDir; // undefined (not given), or the validated absolute path
@@ -120,6 +127,7 @@ export async function resolveProjectRoot({ projectDirArg, listRoots }) {
   }
 
   const host = await hostRoot({ listRoots });
+  seen.hosted = host !== undefined;
 
   if (!host) {
     // Host supplies nothing: project_dir alone decides.

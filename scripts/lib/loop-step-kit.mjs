@@ -12,6 +12,7 @@ import { CONTROL, plainDir, readPlanFile } from './loop-notes.mjs';
 import { atOrAbove, ledgerPaths, SEVERITIES } from './findings-ledger.mjs';
 
 export const BUDGET = 2500;
+export const GATE_STOPS = Object.freeze([2, 3, 4, 5]); // the exits that are an outcome (max passes, diff cap, time budget, circuit breaker); any other nonzero exit is a refusal
 
 export const MODES = Object.freeze(['single', 'security', 'panel']); // weakest first: an argument may only move right
 export const ARG = Object.freeze({ max_passes: 'max_passes', diff_cap_lines: 'diff_cap' }); // the argument that sets each cap
@@ -102,7 +103,7 @@ const plain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 export const SUB_STEPS = Object.freeze(['pass', 'dispatch', 'record', 'findings', 'resolve', 'finish', 'diary', 'row', 'activity']); // every sub-step any step records, in the order the steps run them: a cursor naming another is unreadable
 const short = (v, n) => typeof v === 'string' && v.length <= n;
 const outSound = (o) => plain(o) && Array.isArray(o.wrote) && o.wrote.length <= 6 && o.wrote.every((w) => short(w, 200)) // room for the closing step: a diary and its archive, the progress.md row and its Last activity line
-  && Array.isArray(o.unwritten) && o.unwritten.length <= 6 && o.unwritten.every((u) => plain(u) && short(u.file, 100) && short(u.reason, 100) && short(u.line, 300) && (u.code === undefined || short(u.code, 32)));
+  && Array.isArray(o.unwritten) && o.unwritten.length <= 6 && o.unwritten.every((u) => plain(u) && short(u.file, 100) && short(u.reason, 100) && short(u.line, 300) && (u.kind === undefined || short(u.kind, 20)) && (u.code === undefined || short(u.code, 32)));
 const foundSound = (f) => plain(f) && Array.isArray(f.lines) && f.lines.length <= 12 && f.lines.every((l) => /^F-\d{1,9} (new|known)( recurring)?( cross-run)?$/.test(l)) && Number.isInteger(f.total) && Array.isArray(f.cross) && f.cross.length <= 10 && f.cross.every((c) => /^F-\d{1,9}$/.test(c)) && typeof f.breaker === 'boolean';
 const fixedSound = (f) => plain(f) && ['resolved', 'skipped'].every((k) => Array.isArray(f[k]) && f[k].length <= 100 && f[k].every((x) => /^F-\d{1,9}( Blocker| Major| Minor| Nit| Unrated)?$/.test(x)));
 const diffSound = (d) => plain(d) && [d.lines, d.weighted].every((n) => Number.isInteger(n) && n >= 0) && Array.isArray(d.out_of_scope) && d.out_of_scope.length <= 6 && d.out_of_scope.every((f) => short(f, 62));

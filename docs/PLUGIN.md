@@ -80,6 +80,32 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   server also gets no project root of its own, so every write is refused (67) and you run the CLI.
   The CLI is also usable directly:
   `node scripts/somi-config.mjs <show|get|set|unset|init> [key] [value] [--project-dir DIR]`.
+- **`somi_loop`** — one bounded-loop transition per call: `step` is `open`, `after-code`, `after-review`, `close` or
+  `status` (read only), with the loop's state, findings ledger, diary and progress row kept by the same code as
+  `node scripts/somi-loop.mjs step <name>`. Every outcome is the engine's JSON response, with `next`, `wrote`,
+  `unwritten`, `exit` and `stop_reason`. A fired gate (2 max passes, 3 diff cap, 4 time budget, 5 circuit breaker) is a
+  normal result; any other nonzero `exit` is a refusal and the result is marked `isError` (64 arguments, 65 and 66 the
+  agent, 67 no host project root, or an unreadable config to fix). Writes need a host-supplied root and are refused (67, run the
+  CLI) without one; only `status` reads a `project_dir` alone, `project_dir` can only select inside a host root, and
+  two host roots without one are ambiguous. A write step refuses a `.somi/somi-state/loop` that is a link. Cap
+  arguments only lower a cap, and the server's own environment never sets one: the tool ignores
+  `SOMI_CODE_LOOP_MAX_PASSES`, `SOMI_PLAN_LOOP_MAX_PASSES` and `SOMI_CODE_LOOP_DIFF_CAP` (to raise a cap run the CLI with
+  its flag or env var). It does read the operator settings
+  from the server's launch environment and applies them as the CLI does (`SOMI_CODE_LOOP_REVIEW`,
+  `SOMI_CODE_LOOP_REVIEW_SCOPE`, `SOMI_CODE_LOOP_SEVERITY_FLOOR`, `SOMI_PLAN_LOOP_SEVERITY_FLOOR`; they can loosen a
+  loop as well as tighten it, e.g. `single` over a configured `security`, or a higher severity floor), and the ones that
+  locate the global config (`SOMI_GLOBAL_CONFIG`, `XDG_CONFIG_HOME`, `APPDATA`). Only a tool argument is held to
+  tightening. It writes `diary.md` entries (each
+  ends with a fixed provenance line; never a decision-change or plan-change entry, and no file name from a call) and, in
+  `progress.md`, the iteration's row and the Last activity line. A record the tool could not write, a failed disk write
+  included, comes back in `unwritten` as part of a normal result, each item naming its `file`, its `kind` (diary-entry,
+  iteration-row, last-activity, status-line) and a one-line summary: record it in that file yourself from the summary
+  (the `line` is a cut summary, not text to paste). A repeated call replays the stored result and does not retry the
+  write. `after-code` returns `changed`: true when the tree moved since `open`, false when
+  nothing outside `.somi/` and `.claude/` changed (the reviewer re-checks the open findings), absent when it was not
+  measured (a pass the CLI started); the dispatch record is self-attested, the first call wins. Where the host runs
+  SoMi's hooks, the PostToolUse audit log records each call as `mcp__<server>__somi_loop` with the first 240 bytes of
+  its arguments.
 - **`somi_agent_info`** — read-only agent registry and dispatch lookup. With no `agent`, the
   catalog: every canonical agent (`somi-coder`, …, and the `somi` front door), the aliases hosts
   actually register for it (today `somi:<name>` on Claude Code and Copilot CLI, the one alias each),
