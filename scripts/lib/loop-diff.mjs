@@ -8,7 +8,8 @@ import { measuredTree, treeNumstat } from './loop-review.mjs';
 // files; .somi and .claude excluded), the same tree the review scope diffs, so the cap and the reviewer see one
 // file set. A brand-new file is in the snapshot though git has never been told about it, and names are read
 // NUL-separated, so no file is skipped for how it is spelled. When the tree cannot be measured this throws a
-// refusal (exit 64) instead of returning a smaller diff.
+// refusal (exit 64) instead of returning a smaller diff. `iterationFiles` entries and the reported file names are
+// relative to `root` (the project directory), not to the repository's top level.
 export function computeDiff(root, baseline, iterationFiles) {
   const rows = treeNumstat(root, baseline, measuredTree(root));
   let total = 0;

@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readRecord } from './tier-record.mjs';
-import { usageError } from './loop-exit.mjs';
+import { LoopExit, usageError } from './loop-exit.mjs';
 import { CONTROL } from './loop-notes.mjs';
 
 // The sizing record decides the review lens: a work item that may handle untrusted input or touch auth, crypto,
@@ -21,9 +21,10 @@ const PATHSPEC = ['.', `${EXCLUDE}.somi`, `${EXCLUDE}.claude`];
 const MAX_LISTING = 256 * 1024 * 1024; // bytes of git output read in one go; a bigger listing is refused, never truncated
 export const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const MAX_BLOB = 1024 * 1024; // a blob over this is counted by size (50 bytes a line) instead of read
-const cannot = (what) => usageError(`cannot measure the diff: ${what}; nothing was counted, so this refuses`);
-// Every git call here reads the repository whose top level is the first directory at or above `root` that has a .git
-// entry (git's own discovery, which does not trust core.worktree): the repository selectors in the caller's
+const cannot = (what) => Object.assign(usageError(`cannot measure the diff: ${what}; nothing was counted, so this refuses`), { what });
+// Every git call here reads the repository whose top level is the first directory at or above `root` (resolved through
+// symlinks) that has a .git entry (git's own discovery, which does not trust core.worktree), provided that entry is a
+// git directory or a `gitdir: <path>` file pointing at one; anything else is refused, not skipped. The repository selectors in the caller's
 // environment are dropped and the git directory and work tree are pinned (a core.worktree in the repository's own
 // config would otherwise point every call at another directory), while `-C root` and the `.`-relative pathspecs keep
 // the measurement to root's own subtree. core.ignoreCase is always false, so no config line can make git treat
@@ -33,17 +34,35 @@ const cannot = (what) => usageError(`cannot measure the diff: ${what}; nothing w
 const SELECTORS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_NAMESPACE', 'GIT_COMMON_DIR', 'GIT_CEILING_DIRECTORIES', 'GIT_ICASE_PATHSPECS', 'GIT_LITERAL_PATHSPECS', 'GIT_GLOB_PATHSPECS', 'GIT_NOGLOB_PATHSPECS'];
 const SAFE = ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${os.devNull}`, '-c', 'core.ignoreCase=false']; // shortcut: a null-device hooksPath is unverified on Windows, check it before supporting that
 const bare = () => { const env = { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }; for (const k of SELECTORS) delete env[k]; return env; };
+// A git directory, as far as one can tell without trusting it: a HEAD, and objects of its own or a commondir (a linked
+// worktree's directory has no objects). Forged internals inside it are an accepted residual.
+const isGitDir = (p) => present(path.join(p, 'HEAD')) && (present(path.join(p, 'objects')) || present(path.join(p, 'commondir')));
+const validGit = (d) => {
+  const g = path.join(d, '.git');
+  try {
+    const st = fs.statSync(g);
+    if (st.isDirectory()) return isGitDir(g);
+    if (!st.isFile() || st.size > 4096) return false;
+    const m = /^gitdir: (.+)\n?$/.exec(fs.readFileSync(g, 'utf8')); // one line; a relative path is relative to the gitfile's directory
+    return m !== null && isGitDir(path.resolve(d, m[1]));
+  } catch { return false; }
+};
 const topLevel = (root) => {
-  for (let d = path.resolve(root); ; d = path.dirname(d)) {
-    if (present(path.join(d, '.git'))) return d;
+  for (let d = root; ; d = path.dirname(d)) {
+    if (present(path.join(d, '.git'))) {
+      if (!validGit(d)) throw cannot(`"${shown(path.join(d, '.git'))}" is neither a git directory nor a "gitdir: <path>" file that points at one`);
+      return d;
+    }
     if (path.dirname(d) === d) throw cannot('no git repository (.git) at or above the project directory');
   }
 };
 const run = (root, args, opts = {}) => {
-  const top = topLevel(root);
+  let real; // a project reached through a symlink is measured under its real path, the one git's own cwd reports
+  try { real = fs.realpathSync(root); } catch { throw cannot('the project directory cannot be resolved'); }
+  const top = topLevel(real);
   const pinned = { ...bare(), GIT_WORK_TREE: top };
   const GIT_DIR = execFileSync('git', ['-C', top, ...SAFE, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8', env: pinned }).trim();
-  return execFileSync('git', ['-C', root, ...SAFE, ...args], { ...opts, env: { ...pinned, GIT_DIR, ...opts.env } });
+  return execFileSync('git', ['-C', real, ...SAFE, ...args], { ...opts, env: { ...pinned, GIT_DIR, ...opts.env } });
 };
 const present = (p) => { try { fs.lstatSync(p); return true; } catch (e) { return e.code !== 'ENOENT'; } };
 const shown = (v) => String(v).replace(CONTROL, '').slice(0, 80); // a path or a git message as text a person can read: no control characters, bounded
@@ -74,6 +93,29 @@ function refuseHidden(root) {
   if (filter) throw cannot(`the repository config defines ${shown(filter[1])}, and git add would run it`);
 }
 
+// Uncommitted edits inside a checked-out submodule (tracked changes or untracked files) are in no tree this builds: the
+// superproject records only the submodule's commit. Counting them would take a snapshot per submodule, so they refuse.
+// A moved commit is refused later, by treeNumstat. `status.showUntrackedFiles=all` on the command line reaches the
+// submodule's own status, so its config cannot hide an untracked file; --no-optional-locks keeps the index unwritten.
+function refuseDirtySubmodule(root) {
+  let rows;
+  try {
+    rows = run(root, ['-c', 'status.showUntrackedFiles=all', '--no-optional-locks', 'status', '--porcelain=v2', '-z', '--untracked-files=no', '--ignore-submodules=none', '--', ...PATHSPEC], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0');
+  } catch (e) {
+    if (e instanceof LoopExit) throw e;
+    throw cannot('git could not check the submodules for uncommitted edits');
+  }
+  const FIELDS = { 1: 8, 2: 9, u: 10 }; // fields before the path in a changed (1), renamed (2) and unmerged (u) record
+  for (let i = 0; i < rows.length; i++) {
+    const f = rows[i].split(' ');
+    if (!(f[0] in FIELDS)) continue;
+    if (f[0] === '2') i++; // a renamed record is followed by its original path
+    if (f[2]?.[0] === 'S' && (f[2][2] === 'M' || f[2][3] === 'U')) {
+      throw cannot(`the submodule "${shown(f.slice(FIELDS[f[0]]).join(' '))}" has uncommitted edits (tracked changes or untracked files), which cannot be counted: discard them, or do the work outside the submodule`);
+    }
+  }
+}
+
 // The working tree as a git tree object: tracked and untracked files, .somi/ and .claude/ excluded, the same
 // surface the diff cap measures. Built through a throwaway copy of the index so the caller's index is never
 // touched (a copy rather than an empty index, so unchanged files are not re-hashed). Throws a refusal when git
@@ -83,6 +125,7 @@ function refuseHidden(root) {
 // reviewer and the coder's sandbox do.
 export function measuredTree(root) {
   refuseHidden(root);
+  refuseDirtySubmodule(root);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-tree-'));
   const index = path.join(dir, 'index');
   try {
@@ -101,11 +144,28 @@ export function measuredTree(root) {
     run(root, [...pinned, 'add', '-A', '--sparse', '--', ...spec], { env, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
     return run(root, ['write-tree'], { env, encoding: 'utf8' }).trim();
   } catch (e) {
-    const why = shown(String(e.stderr ?? '').split('\n').find((l) => l.trim()) ?? '');
+    if (e instanceof LoopExit) throw e;
+    const text = String(e.stderr ?? '');
+    const invalid = /invalid path '(.*)'$/m.exec(text)?.[1]; // git reserves some names (a case variant of .git, say) and will not add them
+    if (invalid !== undefined) throw cannot(`git refuses the path "${shown(invalid)}" as invalid, so the tree cannot be built: rename or remove it`);
+    const why = shown(text.split('\n').find((l) => l.trim()) ?? '');
     throw cannot(`git could not index the working tree${why ? ` (${why})` : ''}; an unreadable file or a nested repository cannot be counted: remove it or add it to .gitignore`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// HEAD of the repository under `root`, read the way the measurement reads: through the pinned git. A refusal (exit 64)
+// when it cannot be read; the loop's baseline is this commit.
+export function headCommit(root) {
+  let id;
+  try {
+    id = run(root, ['rev-parse', '--verify', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch (e) {
+    throw usageError(`cannot resolve HEAD: ${e instanceof LoopExit ? e.what : 'git could not read it'}`);
+  }
+  if (!OBJECT_ID.test(id)) throw usageError('cannot resolve HEAD: git printed something that is not an object id');
+  return id;
 }
 
 // -> tree id, or null when the tree cannot be built (callers that only narrow a review treat null as "no snapshot").

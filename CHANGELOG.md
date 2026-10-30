@@ -31,7 +31,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 - **Renames count as a delete plus an add.** A rename into an out-of-scope path now counts as out of scope, in
   full, in the diff gate and in the delta review's file list.
 - **The diff gate refuses (exit 64) instead of counting a smaller diff** for a nested git repository, a file git
-  cannot read, a changed submodule, an assume-unchanged file or a skip-worktree file that is on disk, a git replace
+  cannot read, a submodule whose commit moved or that holds uncommitted edits (tracked changes or untracked files; they
+  cannot be counted, so discard them), an assume-unchanged file or a skip-worktree file that is on disk, a git replace
   ref, a listing over 256 MB, or a `clean`, `smudge` or `process` filter in the repository's own, worktree or
   command-line git config. The message names the cause; for a nested repository or an unreadable file it also says to
   leave the path out with `.gitignore`. Filters in the user's own git config are not checked. A sparse checkout and a
@@ -39,7 +40,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   gate runs no `core.fsmonitor` program or git hook, and no `core.worktree`, `GIT_DIR` or other repository-selecting
   setting can point it at another tree or (`core.ignoreCase`) hide a file whose name differs only by case; a project
   directory below the repository top level is measured on its own subtree; a `.gitmodules` `ignore = all` no longer
-  hides a nested repository.
+  hides a nested repository. The project directory is resolved through symlinks first, so a project reached through
+  one is measured; a `.git` found on the way up must be a git directory or a `gitdir: <path>` file that points at
+  one (anything else is refused, not walked past); `init` reads the baseline `HEAD` through the same pinned git and
+  refuses (64) when it cannot; a path git rejects as invalid (a case variant of `.git`) is named in the refusal.
+  `iteration_files` and the reported file names are relative to the project directory, not the repository top.
 - **Binary files count toward the cap**: a file git prints as binary counts at least one line per 50 bytes, so a
   small binary no longer counts as one line; a file over 1 MiB that git prints as binary counts by size only. The
   delta review is told to run `git --no-replace-objects diff --text`. Known limit: a hand-edited `.git/index` can make

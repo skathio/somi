@@ -3,7 +3,7 @@
 // loop-engine.mjs (the lifecycle, measuring and recording handlers).
 // Invoked from tests/scripts/loop-engine.sh.
 
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -222,6 +222,34 @@ console.log('== the snapshot tree is built from what is on disk, whatever the re
   check('core.ignoreCase true in the repository config does not hide a new file whose name differs from a tracked one only by case', measure(ic.r, ic.g), [{ added: 3000, deleted: 0, file: 'Foo.txt' }]);
   symlinkSync('.git', path.join(ic.r, '.GIT'));
   check('and a .GIT symlink to .git does not either: git refuses the path, so the measurement refuses rather than count less', refused(ic.r), [true, 64, true]);
+  const initAt = (r) => init({ root: r, env: { SOMI_GLOBAL_CONFIG: '' }, stateDir: path.join(r, '.somi', 'somi-state', 'loop'), now: () => 'T' }, { ...base, slug: 'i' });
+  const nameInvalid = exitOf(() => measuredTree(ic.r))[2];
+  check('git\'s invalid path is named in the refusal, bounded and without control characters', [nameInvalid.includes('"/.GIT"') || nameInvalid.includes('".GIT"'), nameInvalid.includes("'")], [true, false]);
+  const hl = repo(); put(hl.r, 'f', 'a\n'); hl.g('add', '.'); hl.g('commit', '-q', '-m', 'f'); const hlDir = path.join(hl.r, '..', path.basename(hl.r) + '-wt'); made.push(hlDir); hl.g('worktree', 'add', '-q', hlDir, '-b', 'x'); put(hlDir, 'f', 'a\nb\n'); linkSync(path.join(hlDir, '.git'), path.join(hlDir, '.GIT'));
+  check('a hard-linked gitfile .GIT in a linked worktree is refused (64), never counted as no change', refused(hlDir), [true, 64, true]);
+  const sg = (r, ...a) => execFileSync('git', ['-C', r, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'protocol.file.allow=always', ...a], { encoding: 'utf8' }).trim();
+  const up = repo(); put(up.r, 'n/a', 'x\n'); sg(path.join(up.r, 'n'), 'init', '-q'); sg(path.join(up.r, 'n'), 'add', '.'); sg(path.join(up.r, 'n'), 'commit', '-q', '-m', 'n');
+  const sup = repo(); sg(sup.r, 'submodule', 'add', '-q', path.join(up.r, 'n'), 'n'); sg(sup.r, 'commit', '-q', '-m', 's');
+  check('a clean checked-out submodule is measured: nothing changed', measure(sup.r, sup.g), []);
+  put(sup.r, 'n/a', 'x\ny\n');
+  check('a tracked edit inside a submodule is refused (64), not counted as zero', refused(sup.r), [true, 64, true]);
+  sup.g('submodule', 'foreach', 'git checkout -q -- a'); put(sup.r, 'n/new', 'z\n'); sg(path.join(sup.r, 'n'), 'config', 'status.showUntrackedFiles', 'no'); put(sup.r, '.gitmodules', `${readFileSync(path.join(sup.r, '.gitmodules'), 'utf8')}\tignore = all\n`);
+  const subMsg = exitOf(() => measuredTree(sup.r));
+  check('an untracked file inside a submodule is refused and named, though the submodule\'s config and .gitmodules say to ignore it', [subMsg[0], subMsg[1], subMsg[2].includes('submodule "n"')], [true, 64, true]);
+  const stBefore = readFileSync(path.join(sup.r, '.git', 'index')).toString('hex');
+  exitOf(() => measuredTree(sup.r));
+  check('the submodule check leaves the real index as it was', readFileSync(path.join(sup.r, '.git', 'index')).toString('hex'), stBefore);
+  for (const [what, plant] of [['an empty .git directory', (d) => mkdirSync(path.join(d, '.git'))], ['a gitfile that is not a gitdir line', (d) => writeFileSync(path.join(d, '.git'), 'hello\n')], ['a gitfile pointing at a directory that is no repository', (d) => writeFileSync(path.join(d, '.git'), `gitdir: ${tmpdir()}\n`)]]) {
+    const pl = repo(); pl.g('commit', '-q', '--allow-empty', '-m', 'f'); put(pl.r, 'pkg/f', 'x\n'); plant(path.join(pl.r, 'pkg'));
+    check(`${what} between the project and the top is refused (64), not walked past`, [refused(path.join(pl.r, 'pkg')), initAt(path.join(pl.r, 'pkg')).code], [[true, 64, true], 64]);
+  }
+  const home = repo(); put(home.r, 'pkg/f', 'a\n'); home.g('add', '.'); home.g('commit', '-q', '-m', 'f'); const link = path.join(path.dirname(home.r), path.basename(home.r) + '-link'); made.push(link); symlinkSync(path.join(home.r, 'pkg'), link); put(home.r, 'pkg/f', 'a\nb\n');
+  check('a project directory reached through a symlink to a subdirectory is measured like the real path', [treeNumstat(link, home.g('rev-parse', 'HEAD'), measuredTree(link)), computeDiff(link, home.g('rev-parse', 'HEAD'), ['f']).weighted], [[{ added: 1, deleted: 0, file: 'f' }], 1]);
+  const decoy2 = repo(); decoy2.g('commit', '-q', '--allow-empty', '-m', 'other'); process.env.GIT_DIR = path.join(decoy2.r, '.git'); process.env.GIT_WORK_TREE = decoy2.r;
+  const atInit = initAt(home.r).out?.baseline_sha; delete process.env.GIT_DIR; delete process.env.GIT_WORK_TREE;
+  check('the init baseline is the project\'s HEAD whatever GIT_DIR the caller\'s environment holds', atInit, home.g('rev-parse', 'HEAD'));
+  const noHead = repo(); const refusedInit = initAt(noHead.r);
+  check('init in a repository with no commit is a refusal (64) that names HEAD, with no state written', [refusedInit.code, refusedInit.message.startsWith('somi-loop: cannot resolve HEAD'), existsSync(path.join(noHead.r, '.somi'))], [64, true, false]);
   for (const r of made) rmSync(r, { recursive: true, force: true });
 }
 
