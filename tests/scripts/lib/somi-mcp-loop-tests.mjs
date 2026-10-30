@@ -11,7 +11,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { McpClient } from './somi-mcp-client.mjs';
-import { KINDS, NEXT } from '../../../scripts/lib/loop-exit.mjs';
+import { KINDS, NEXTS } from '../../../scripts/lib/loop-exit.mjs';
+import { resolveProjectRoot } from '../../../scripts/lib/mcp-project-root.mjs';
 import { LIMITS } from '../../../scripts/lib/loop-review.mjs';
 import { callLoopStep } from '../../../scripts/lib/loop-step-tool.mjs';
 
@@ -214,7 +215,12 @@ console.log('== a git that does not answer, and the words the results use ==');
   const [real, limit] = [process.env.PATH, LIMITS.gitTimeoutMs]; process.env.PATH = `${fake}:${real}`; LIMITS.gitTimeoutMs = 300;
   let ac; try { ac = await call({ step: 'after-code', agent: 'somi-coder' }); } finally { process.env.PATH = real; LIMITS.gitTimeoutMs = limit; }
   check('a git that does not answer within the limit is a refusal (64 saying so), never a diff gate pass; no review is asked for', [ac.err, ac.exit, ac.next, /git did not answer within 0\.3 seconds/.test(ac.error)], [true, 64, null, true]);
-  check('every next and every unwritten kind this file saw is one the engine owns', [[...seen.next].filter((x) => x !== null && !NEXT.includes(x)), [...seen.kind].filter((x) => x !== undefined && !KINDS.includes(x))], [[], []]);
+  check('every next and every unwritten kind this file saw is one the engine owns', [[...seen.next].filter((x) => x !== null && !NEXTS.includes(x)), [...seen.kind].filter((x) => x !== undefined && !KINDS.includes(x))], [[], []]);
+}
+{
+  const deep = path.join(tmp, 'y'.repeat(200), 'y'.repeat(200)); mkdirSync(deep, { recursive: true });
+  const refusals = [await resolveProjectRoot({ projectDirArg: `/${'x'.repeat(500)}` }), await resolveProjectRoot({ projectDirArg: 'x'.repeat(500) }), await resolveProjectRoot({ projectDirArg: deep, listRoots: async () => [`file://${repo()}`] })];
+  check('a long project_dir is echoed cut to 60 characters in each refusal text that shows it (missing, not absolute, outside the host root)', refusals.map((r) => [r.ok, r.code, r.message.length < 220, r.message.includes('x'.repeat(60)) || r.message.includes('y'.repeat(60))]), Array(3).fill([false, 64, true, false]));
 }
 console.log(`somi_loop tests: ${pass} ok, ${fail} failed`);
 process.exit(fail ? 1 : 0);

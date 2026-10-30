@@ -83,13 +83,14 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
 - **`somi_loop`** — one bounded-loop transition per call: `step` is `open`, `after-code`, `after-review`, `close` or
   `status` (read only), with the loop's state, findings ledger, diary and progress row kept by the same code as
   `node scripts/somi-loop.mjs step <name>`. Every outcome is the engine's JSON response, with `next`, `wrote`,
-  `unwritten`, `exit` and `stop_reason`. The `next` call is one of: `task-coder`, `task-planner`, `task-reviewer`,
+  `unwritten`, `exit` and `stop_reason`. Branch on `next` and `exit` only: `stop_reason` is text for a person, and its wording can change. The `next` call is one of: `task-coder`, `task-planner`, `task-reviewer`,
   `task-reviewers`, `task-panel`, `open`, `close`, `summarise`, `ask-user`. A fired gate (2 max passes, 3 diff cap, 4 time budget, 5 circuit breaker) is a
   normal result; any other nonzero `exit` is a refusal and the result is marked `isError` (64 arguments, 65 and 66 the
   agent, 67 no host project root, ambiguous roots or an unreadable config to fix, 70 an internal error). Every git call
-  the server makes is cut off after 60 seconds and refused as 64, never counted as a pass. Writes need a host-supplied root and are refused (67, run the
+  the server makes is cut off after 60 seconds, and a measurement that times out is refused (64), never counted as a pass; where the
+  tree only narrows a review (the delta scope), a tree that cannot be measured counts as unmeasured and the review is full. Writes need a host-supplied root and are refused (67, run the
   CLI) without one; only `status` reads a `project_dir` alone, `project_dir` can only select inside a host root, and
-  two host roots without one are ambiguous. A write step refuses a `.somi/somi-state/loop` that is a link. Cap
+  two host roots without one are ambiguous. A write step refuses a `.somi/somi-state/loop` that is a link, and a state file that is a link or has a second hard link. Cap
   arguments only lower a cap, and the server's own environment never sets one: the tool ignores
   `SOMI_CODE_LOOP_MAX_PASSES`, `SOMI_PLAN_LOOP_MAX_PASSES` and `SOMI_CODE_LOOP_DIFF_CAP` (to raise a cap run the CLI with
   its flag or env var). It does read the operator settings

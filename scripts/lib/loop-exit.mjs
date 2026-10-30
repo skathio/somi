@@ -15,9 +15,11 @@ export const EXIT_INTERNAL = 70;
 export const GATE_STOPS = Object.freeze([EXIT_MAX_PASSES, EXIT_DIFF_CAP, EXIT_TIME_BUDGET, EXIT_CIRCUIT_BREAKER]);
 
 // What a response's `next` may be (null when a step names none) and what an unwritten item's `kind` may be. A record kind is
-// something the caller writes into the file the item names; `notice` is only reported, never written. `reason` is text for a
-// person: nothing branches on it.
-export const NEXT = Object.freeze(['task-coder', 'task-planner', 'task-reviewer', 'task-reviewers', 'task-panel', 'open', 'close', 'summarise', 'ask-user']);
+// something the caller writes into the file the item names; `notice` is only reported, never written. `reason` and a
+// response's `stop_reason` are text for a person: a flow branches on `next` and `exit` only. Every `next` a step emits is a
+// member of NEXT, never a literal (a test scans the step files).
+export const NEXT = Object.freeze({ taskCoder: 'task-coder', taskPlanner: 'task-planner', taskReviewer: 'task-reviewer', taskReviewers: 'task-reviewers', taskPanel: 'task-panel', open: 'open', close: 'close', summarise: 'summarise', askUser: 'ask-user' });
+export const NEXTS = Object.freeze(Object.values(NEXT));
 export const KIND = Object.freeze({ diaryEntry: 'diary-entry', iterationRow: 'iteration-row', lastActivity: 'last-activity', statusLine: 'status-line', notice: 'notice' });
 export const KINDS = Object.freeze(Object.values(KIND));
 

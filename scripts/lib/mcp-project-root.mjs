@@ -53,6 +53,9 @@ function validateDir(dir) {
   return { ok: true, dir };
 }
 
+// A model's text echoed in an error: bounded, as install-text.mjs bounds a name.
+const echo = (v) => JSON.stringify(v)?.slice(0, 60);
+
 function realpathOrNull(dir) {
   try {
     return fs.realpathSync(dir);
@@ -116,10 +119,10 @@ async function resolveWith({ projectDirArg, listRoots }, seen) {
     const v = validateDir(projectDirArg);
     if (!v.ok) {
       const reason = {
-        empty: `project_dir requires a non-empty string, got ${JSON.stringify(projectDirArg)}`,
-        'not-absolute': `project_dir must be an absolute path, got ${JSON.stringify(projectDirArg)}`,
-        missing: `project_dir ${JSON.stringify(projectDirArg)} does not exist`,
-        'not-a-directory': `project_dir ${JSON.stringify(projectDirArg)} is not a directory`,
+        empty: `project_dir requires a non-empty string, got ${echo(projectDirArg)}`,
+        'not-absolute': `project_dir must be an absolute path, got ${echo(projectDirArg)}`,
+        missing: `project_dir ${echo(projectDirArg)} does not exist`,
+        'not-a-directory': `project_dir ${echo(projectDirArg)} is not a directory`,
       }[v.reason];
       return { ok: false, code: EXIT_USAGE, message: reason };
     }
@@ -183,7 +186,7 @@ async function resolveWith({ projectDirArg, listRoots }, seen) {
       ok: false,
       code: EXIT_USAGE,
       message:
-        `project_dir "${projectDir}" is outside the host-supplied root -- refusing (project_dir ` +
+        `project_dir ${echo(projectDir)} is outside the host-supplied root -- refusing (project_dir ` +
         `may only select a directory inside the host's own root, never override it)`,
     };
   }

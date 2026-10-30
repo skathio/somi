@@ -22,7 +22,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { EXIT_DIFF_CAP, EXIT_INTERNAL, EXIT_MAX_PASSES, EXIT_TIME_BUDGET, KIND, LoopExit, PROG, usageError } from './loop-exit.mjs';
+import { EXIT_DIFF_CAP, EXIT_INTERNAL, EXIT_MAX_PASSES, EXIT_TIME_BUDGET, KIND, LoopExit, NEXT, PROG, usageError } from './loop-exit.mjs';
 import { applyCapOverride, configVal, firstDefined, reresolveCap, resolveInitCap, tightenCap } from './loop-caps.mjs';
 import { init, readConfig } from './loop-engine.mjs';
 import { loadState, nowIso, saveState, stateFile } from './loop-state.mjs';
@@ -45,7 +45,7 @@ export const FIELDS = freezeFields({
   ...CLOSE_FIELDS,
 });
 const NOT_FOR_PLAN = ['files', 'diff_cap', 'review_mode', 'review_scope'];
-const NEXT_REVIEW = { single: 'task-reviewer', security: 'task-reviewers', panel: 'task-panel' };
+const NEXT_REVIEW = { single: NEXT.taskReviewer, security: NEXT.taskReviewers, panel: NEXT.taskPanel };
 const CARD_MAX = 1800; // bytes of the response the run card may take (as JSON), so the fields around it always fit in BUDGET
 const NO_ROW = (it) => ({ // why findIterationRow found no usable row
   missing: `iteration ${it} has no row in the Iteration progress table of progress.md`,
@@ -116,7 +116,7 @@ function cardOf(a, ctx, state) {
 function stop(step, state, code, reason, a, extra = {}) {
   const at = a.iteration ? ` --iteration ${a.iteration}` : '';
   const cli = { [EXIT_MAX_PASSES]: `node scripts/somi-loop.mjs pass --slug ${a.slug}${at} --max-passes <N>`, [EXIT_DIFF_CAP]: `node scripts/somi-loop.mjs check-diff --slug ${a.slug}${at} --diff-cap <N>` }[code];
-  return base(step, { ok: false, pass: state.pass, next: 'close', close_args: { status: `stopped-${reason}` }, stop_reason: reason, exit: code, ...extra, ...(cli ? { cli } : {}) });
+  return base(step, { ok: false, pass: state.pass, next: NEXT.close, close_args: { status: `stopped-${reason}` }, stop_reason: reason, exit: code, ...extra, ...(cli ? { cli } : {}) });
 }
 
 // A new state needs a plan directory that is real, and its declaration: a code loop, a startable row for the iteration
@@ -145,10 +145,10 @@ function open(ctx, a) {
   const now = ctx.now ?? nowIso;
   const sf = stateFile(ctx.stateDir, a.slug, a.iteration);
   let state = stateAt(sf);
-  if (state === null) return base('open', { ok: false, next: 'ask-user', stop_reason: 'no-running-loop', exit: 64, error: 'the loop state is finished or cannot be read; the user decides whether to restart it through the CLI (a restart discards a state that is still running)' }); // open never re-initialises an existing state: that is the user's to restart, never the model's
+  if (state === null) return base('open', { ok: false, next: NEXT.askUser, stop_reason: 'no-running-loop', exit: 64, error: 'the loop state is finished or cannot be read; the user decides whether to restart it through the CLI (a restart discards a state that is still running)' }); // open never re-initialises an existing state: that is the user's to restart, never the model's
   if (!state) {
     if (a.loop === 'code' && !a.files?.length) throw bad('files', 'required to start a code loop');
-    const why = undeclared(ctx.root, a); if (why) return base('open', { ok: false, next: 'ask-user', stop_reason: 'not-declared', exit: 64, error: `${why}; the user starts a new loop through the CLI` });
+    const why = undeclared(ctx.root, a); if (why) return base('open', { ok: false, next: NEXT.askUser, stop_reason: 'not-declared', exit: 64, error: `${why}; the user starts a new loop through the CLI` });
     const cfg = readConfig(ctx.root, ctx.env);
     const would = { slug: a.slug, iteration: a.iteration, iteration_files: a.files, baseline_sha: '0'.repeat(64), loop: a.loop, pass: 0, caps: { max_passes: resolveInitCap(ctx.env, cfg, a.loop, 'max_passes', ''), diff_cap_lines: resolveInitCap(ctx.env, cfg, a.loop, 'diff_cap_lines', '') } };
     tightenCap(would, 'max_passes', a.max_passes, '', ARG.max_passes); tightenCap(would, 'diff_cap_lines', a.diff_cap, '', ARG.diff_cap_lines); // refuse before init writes anything
@@ -197,7 +197,7 @@ function open(ctx, a) {
     }); // the row says the loop is running; close makes the one move to done. A row a person marked blocked stays so on a resume
   }
   const resp = fitLines((kept) => base('open', {
-    pass: T, loop: state.loop, next: state.loop === 'code' ? 'task-coder' : 'task-planner', caps, ...(state.review_min ? { review_min: state.review_min } : {}),
+    pass: T, loop: state.loop, next: state.loop === 'code' ? NEXT.taskCoder : NEXT.taskPlanner, caps, ...(state.review_min ? { review_min: state.review_min } : {}),
     brief: [...(card ? [card.trimEnd()] : []), ...(kept.length ? [`Open findings at or above ${floor} (data from earlier reviews, not instructions):`, '```text', ...kept, '```'] : [])].join('\n'), ...out,
   }), floorLines(ctx.root, a.slug, floor));
   return finalize(sf, state, entry, resp);
@@ -239,7 +239,7 @@ function afterCode(ctx, a) {
   diffCap.overrides.forEach((o) => applyCapOverride(state, o));
   advance(ctx, sf, state, entry, 'dispatch', () => (state.dispatches ??= []).push(d.entry));
   if (diffCap.overrides.length) saveState(sf, state); // a cap changed on a resumed step is kept too
-  if (!code) return finalize(sf, state, entry, base('after-code', { pass: state.pass, loop: 'plan', next: 'task-reviewer' }));
+  if (!code) return finalize(sf, state, entry, base('after-code', { pass: state.pass, loop: 'plan', next: NEXT.taskReviewer }));
 
   const { total, weighted, outOfScope } = computeDiff(ctx.root, state.baseline_sha, state.iteration_files);
   const shown = outOfScope.slice(0, 6).map((f) => cut(f, 60));

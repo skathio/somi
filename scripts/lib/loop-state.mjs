@@ -24,12 +24,15 @@ export function loadState(file) {
 }
 
 // Opened without following a link: a link standing at `file` is refused (ELOOP), never written through, and so is anything
-// that is not a regular file. The state is truncated only after that check.
+// that is not a regular file or has a second name (a hard link reaches a file outside the root). The state is truncated only
+// after those checks.
 export function saveState(file, state) {
   const { O_WRONLY, O_CREAT, O_NOFOLLOW = 0, O_NONBLOCK = 0 } = fs.constants;
   const fd = fs.openSync(file, O_WRONLY | O_CREAT | O_NOFOLLOW | O_NONBLOCK, 0o666);
   try {
-    if (!fs.fstatSync(fd).isFile()) throw new Error('the state file is not a regular file');
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) throw new Error('the state file is not a regular file');
+    if (st.nlink > 1) throw new Error('the state file has more than one link');
     fs.ftruncateSync(fd);
     fs.writeFileSync(fd, JSON.stringify(state));
   } finally { fs.closeSync(fd); }
