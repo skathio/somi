@@ -126,7 +126,7 @@ as operator.
 - `trivial` runs [`/code`](../flow-code/SKILL.md) on the request once approved.
 - `small` first writes the approved inline brief verbatim to `.somi/plans/<slug>/brief.md` and a
   `progress.md` from `templates/PROGRESS.md.tmpl` with the single iteration `1.1`, then runs `node scripts/somi-tier.mjs approve --slug <slug>` once, which stamps the approval and the
-  brief's hash into the tier record (`/code-loop` refuses the item without it), then runs `Task /code-loop "<slug> phase 1, iteration 1"` on the brief-only work item, with
+  brief's hash into the tier record (`/code-loop` refuses the item without it), then runs `Task /code-loop "<slug> phase 1, iteration 1, unattended"` on the brief-only work item, with
   review at the session's reviewer tier and no `/plan-loop`. The security lens comes from the tier
   record, not from reading the evidence: when it carries `security_lens: true`, `/code-loop`'s
   `init` prints `review_min: security` and every pass is reviewed by `somi-reviewer` and
@@ -200,7 +200,7 @@ reviewed the brief; they do not approve every iteration.
 
    ```text
    for each iteration (phase 1 iter 1, phase 1 iter 2, …):
-     Task /code-loop "<slug> phase <N>, iteration <M>"
+     Task /code-loop "<slug> phase <N>, iteration <M>, unattended"
      if status != "done":           # a cap fired (max-passes / diff-cap / circuit-breaker / scope)
        STOP — follow-ups already in progress.md; hand back to the user
      if GLOBAL_BUDGET_PASSES hit or CROSS_LAYER_CIRCUIT_BREAKER fires:

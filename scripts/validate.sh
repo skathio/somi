@@ -262,6 +262,9 @@ suite tests/scripts/dispatch-reference-gate.sh
 echo "==> Dispatch line: one canonical phrase, native agent_type dispatch, requested-low disclosure... (queued)"
 suite tests/scripts/dispatch-line-gate.sh
 
+echo "==> Code-loop flow shape: four tool calls a clean pass, no CLI step on the MCP path... (queued)"
+suite tests/scripts/loop-flow-gate.sh
+
 echo "==> Validating the stale-vocabulary retirement gate..."
 # scripts/validate.sh only ever asserted frontmatter VALUES above, never prose -- so a
 # half-converted ruleset (frontmatter switched to the new cost field, prose still naming the
