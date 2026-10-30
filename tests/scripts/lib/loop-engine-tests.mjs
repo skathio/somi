@@ -3,7 +3,7 @@
 // loop-engine.mjs (the lifecycle, measuring and recording handlers).
 // Invoked from tests/scripts/loop-engine.sh.
 
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -228,17 +228,6 @@ console.log('== the snapshot tree is built from what is on disk, whatever the re
   const hl = repo(); put(hl.r, 'f', 'a\n'); hl.g('add', '.'); hl.g('commit', '-q', '-m', 'f'); const hlDir = path.join(hl.r, '..', path.basename(hl.r) + '-wt'); made.push(hlDir); hl.g('worktree', 'add', '-q', hlDir, '-b', 'x'); put(hlDir, 'f', 'a\nb\n'); linkSync(path.join(hlDir, '.git'), path.join(hlDir, '.GIT'));
   check('a hard-linked gitfile .GIT in a linked worktree is refused (64), never counted as no change', refused(hlDir), [true, 64, true]);
   const sg = (r, ...a) => execFileSync('git', ['-C', r, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'protocol.file.allow=always', ...a], { encoding: 'utf8' }).trim();
-  const up = repo(); put(up.r, 'n/a', 'x\n'); sg(path.join(up.r, 'n'), 'init', '-q'); sg(path.join(up.r, 'n'), 'add', '.'); sg(path.join(up.r, 'n'), 'commit', '-q', '-m', 'n');
-  const sup = repo(); sg(sup.r, 'submodule', 'add', '-q', path.join(up.r, 'n'), 'n'); sg(sup.r, 'commit', '-q', '-m', 's');
-  check('a clean checked-out submodule is measured: nothing changed', measure(sup.r, sup.g), []);
-  put(sup.r, 'n/a', 'x\ny\n');
-  check('a tracked edit inside a submodule is refused (64), not counted as zero', refused(sup.r), [true, 64, true]);
-  sup.g('submodule', 'foreach', 'git checkout -q -- a'); put(sup.r, 'n/new', 'z\n'); sg(path.join(sup.r, 'n'), 'config', 'status.showUntrackedFiles', 'no'); put(sup.r, '.gitmodules', `${readFileSync(path.join(sup.r, '.gitmodules'), 'utf8')}\tignore = all\n`);
-  const subMsg = exitOf(() => measuredTree(sup.r));
-  check('an untracked file inside a submodule is refused and named, though the submodule\'s config and .gitmodules say to ignore it', [subMsg[0], subMsg[1], subMsg[2].includes('submodule "n"')], [true, 64, true]);
-  const stBefore = readFileSync(path.join(sup.r, '.git', 'index')).toString('hex');
-  exitOf(() => measuredTree(sup.r));
-  check('the submodule check leaves the real index as it was', readFileSync(path.join(sup.r, '.git', 'index')).toString('hex'), stBefore);
   for (const [what, plant] of [['an empty .git directory', (d) => mkdirSync(path.join(d, '.git'))], ['a gitfile that is not a gitdir line', (d) => writeFileSync(path.join(d, '.git'), 'hello\n')], ['a gitfile pointing at a directory that is no repository', (d) => writeFileSync(path.join(d, '.git'), `gitdir: ${tmpdir()}\n`)]]) {
     const pl = repo(); pl.g('commit', '-q', '--allow-empty', '-m', 'f'); put(pl.r, 'pkg/f', 'x\n'); plant(path.join(pl.r, 'pkg'));
     check(`${what} between the project and the top is refused (64) with the .git cause, not walked past`, [refused(path.join(pl.r, 'pkg')), exitOf(() => measuredTree(path.join(pl.r, 'pkg')))[2].includes('.git" is neither a git directory nor'), initAt(path.join(pl.r, 'pkg')).code], [[true, 64, true], true, 64]);
@@ -260,24 +249,23 @@ console.log('== the snapshot tree is built from what is on disk, whatever the re
   const fk = repo(); fk.g('commit', '-q', '--allow-empty', '-m', 'f'); put(fk.r, "x invalid path 'FAKE'", 'x\n'); chmodSync(path.join(fk.r, "x invalid path 'FAKE'"), 0);
   const fakeMsg = exitOf(() => measuredTree(fk.r))[2];
   check('a file name that contains git\'s invalid-path wording is not mistaken for it', [fakeMsg.startsWith('somi-loop: cannot measure the diff: '), fakeMsg.includes('refuses the path')], [true, false]);
-  const subs = (nested) => { // a superproject with a checked-out submodule n, and a submodule m inside n when `nested`
-    const m = repo(); put(m.r, 'a', 'm\n'); sg(m.r, 'add', '.'); sg(m.r, 'commit', '-q', '-m', 'm');
-    const n = repo(); put(n.r, 'a', 'n\n'); put(n.r, '.gitattributes', '* filter=x\n'); sg(n.r, 'add', '.'); if (nested) sg(n.r, 'submodule', 'add', '-q', m.r, 'm'); sg(n.r, 'commit', '-q', '-m', 'n');
-    const t = repo(); sg(t.r, 'submodule', 'add', '-q', n.r, 'n'); sg(t.r, 'submodule', 'update', '--init', '--recursive', '-q'); sg(t.r, 'commit', '-q', '-m', 't');
-    return { ...t, n: path.join(t.r, 'n'), m: path.join(t.r, 'n', 'm') };
-  };
-  const sm1 = subs(true);
-  check('nested checked-out submodules, all clean, are measured: nothing changed', measure(sm1.r, sm1.g), []);
-  const dirtyMsg = exitOf(() => { put(sm1.r, 'n/m/a', 'm\nedit\n'); measuredTree(sm1.r); });
-  check('an edit inside a nested submodule is refused and names the innermost one, with the ignore escape', [dirtyMsg[0], dirtyMsg[1], dirtyMsg[2].includes('submodule "n/m"'), dirtyMsg[2].includes('or ignore the files in the submodule')], [true, 64, true, true]);
-  sg(sm1.n, 'config', 'submodule.m.ignore', 'all');
-  check('a nested submodule\'s own ignore = all does not hide its edit', refused(sm1.r), [true, 64, true]);
-  sg(sm1.m, 'checkout', '-q', '--', 'a'); sg(sm1.m, 'update-index', '--assume-unchanged', 'a'); put(sm1.r, 'n/m/a', 'm\nedit\n');
-  check('an assume-unchanged entry inside a nested submodule is refused', exitOf(() => measuredTree(sm1.r))[2].includes('assume-unchanged'), true);
-  const sm2 = subs(false); sg(sm2.n, 'update-index', '--assume-unchanged', 'a'); put(sm2.r, 'n/a', 'n\nedit\n');
-  check('an assume-unchanged entry inside a submodule is refused, not counted as clean', exitOf(() => measuredTree(sm2.r))[2].includes('submodule "n"'), true);
-  const sm3 = subs(false); sg(sm3.n, 'config', 'filter.x.clean', `touch ${path.join(sm3.r, 'RAN')}; cat`); utimesSync(path.join(sm3.n, 'a'), 1700000000, 1700000000);
-  check('a clean filter in a submodule\'s own config is refused before any status runs, and does not run', [...refused(sm3.r), existsSync(path.join(sm3.r, 'RAN'))], [true, 64, true, false]);
+  const nest = (r, rel) => { sg(r, 'init', '-q', rel); put(r, `${rel}/a`, 'x\n'); sg(path.join(r, rel), 'add', '.'); sg(path.join(r, rel), 'commit', '-q', '-m', 'n'); }; // a repository at r/rel
+  const withSub = () => { const o = repo(); nest(o.r, '.'); const t = repo(); sg(t.r, 'submodule', 'add', '-q', o.r, 'n'); sg(t.r, 'commit', '-q', '-m', 't'); return t; }; // a committed submodule n
+  const refusedAs = (r, where) => { const [a, code, msg] = exitOf(() => measuredTree(r)); return [a, code, msg.includes(`does not support repositories with submodules (${where})`)]; };
+  const tmps = () => readdirSync(tmpdir()).filter((f) => f.startsWith('somi-tree-')).length;
+  const indexOf = (r) => readFileSync(path.join(r, '.git', 'index')).toString('hex');
+  const gl = repo(); gl.g('commit', '-q', '--allow-empty', '-m', 'f'); nest(gl.r, 'n'); sg(gl.r, 'add', 'n');
+  check('a gitlink in the index is refused (64) with one message naming it', refusedAs(gl.r, 'n'), [true, 64, true]);
+  const hd = withSub(); sg(hd.r, 'rm', '-q', '--cached', 'n'); rmSync(path.join(hd.r, 'n'), { recursive: true, force: true });
+  check('a gitlink only in HEAD (git rm --cached, directory gone) is refused', refusedAs(hd.r, 'n'), [true, 64, true]);
+  const ut = repo(); ut.g('commit', '-q', '--allow-empty', '-m', 'f'); nest(ut.r, 'd/e/inner');
+  check('an untracked directory that holds a .git is refused, named with its path', refusedAs(ut.r, 'd/e/inner/'), [true, 64, true]);
+  const co = withSub(); put(co.r, 'n/a', 'x\ny\n'); put(co.r, 'f', 'z\n'); const idx = indexOf(co.r); const before = tmps();
+  check('a checked-out submodule is refused whatever it holds, and the refusal writes nothing (index and temp directories as they were)', [refusedAs(co.r, 'n'), indexOf(co.r), tmps()], [[true, 64, true], idx, before]);
+  const ig = repo(); ig.g('commit', '-q', '--allow-empty', '-m', 'f'); nest(ig.r, 'vendor'); put(ig.r, '.gitignore', 'vendor/\n'); put(ig.r, 'f', 'a\n');
+  check('a nested repository that .gitignore lists is not a submodule: the rest is measured', measure(ig.r, ig.g).map((x) => x.file).sort(), ['.gitignore', 'f']);
+  const so = repo(); so.g('commit', '-q', '--allow-empty', '-m', 'f'); nest(so.r, '.somi/x'); put(so.r, 'f', 'a\n');
+  check('a repository under .somi is outside the measurement, not a submodule', measure(so.r, so.g), [{ added: 1, deleted: 0, file: 'f' }]);
   for (const r of made) rmSync(r, { recursive: true, force: true });
 }
 

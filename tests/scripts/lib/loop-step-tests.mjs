@@ -480,7 +480,7 @@ console.log('== the diff gate counts every changed file, or refuses ==');
   sh(filt, 'config', '--local', 'filter.x.clean', `touch ${marker}; cat`); filt.file('.gitattributes', '*.js filter=x\n'); filt.file('f.js', 'x\n');
   check('a clean filter in the repository config refuses with 64 naming it, and its command never runs', [...refused(filt), measure(filt)[0].message.includes('filter.x.clean'), existsSync(marker)], [64, undefined, true, 64, false, true, true, false]);
   const gl = measure(gitlink('ne\tst'))[0].message;
-  check('the nested-repository refusal names its path, control characters stripped, and says how to leave it out', [gl.includes('"nest"'), gl.includes('\t'), gl.includes('.gitignore')], [true, false, true]);
+  check('the submodule refusal names its path, control characters stripped', [gl.includes('submodules (nest/)'), gl.includes('\t')], [true, false]);
   const gone = repo(); open(gone); recordPass(gone.ctx(), { ...prim, verdict: 'needs-changes', blockers: '0', majors: '1' }); open(gone);
   sh(gone, 'rm', '-q', 'b.js'); sh(gone, 'mv', 'a.js', 'c.js');
   check('the delta lists a deleted file and both sides of a rename', after(gone).scope.files.sort(), ['a.js', 'b.js', 'c.js']);

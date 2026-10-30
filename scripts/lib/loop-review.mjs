@@ -76,8 +76,8 @@ const shownTail = (v) => { const t = String(v).replace(CONTROL, ''); return t.le
 // files it left out absent; the throwaway index inherits them), a git replace ref (it swaps a file's content), and a
 // clean, smudge or process filter in this repository's own config, its worktree config or the command line (git add
 // runs it). Filters in the user's or system config (git-lfs, say) are not checked: they are the user's own tools, a
-// residual left open. `label` prefixes the names in the messages when `root` is a submodule.
-function refuseHidden(root, label = '') {
+// residual left open.
+function refuseHidden(root) {
   let listing; let replaced; let filters = '';
   try {
     listing = run(root, ['ls-files', '-v', '-z'], { encoding: 'utf8', maxBuffer: MAX_LISTING }).split('\0');
@@ -87,81 +87,49 @@ function refuseHidden(root, label = '') {
     } catch (e) { if (e.status !== 1) throw e; } // exit 1: no such key
   } catch (e) {
     if (e instanceof LoopExit) throw e;
-    throw cannot(`git could not read the index flags, the replace refs or the config of ${label || 'the repository'}`);
+    throw cannot('git could not read the index flags, the replace refs or the repository config');
   }
-  if (replaced) throw cannot(`${label || 'the repository'} has git replace refs, which swap what a file contains (git replace -d removes them)`);
+  if (replaced) throw cannot('the repository has git replace refs, which swap what a file contains (git replace -d removes them)');
   const hidden = listing.find((t) => /^[hs] /.test(t) || (t.startsWith('S ') && present(path.join(root, t.slice(2)))));
-  if (hidden) throw cannot(`the index marks "${shown(label + hidden.slice(2))}" assume-unchanged or skip-worktree, which hides its edits (git update-index --no-assume-unchanged --no-skip-worktree)`);
+  if (hidden) throw cannot(`the index marks "${shown(hidden.slice(2))}" assume-unchanged or skip-worktree, which hides its edits (git update-index --no-assume-unchanged --no-skip-worktree)`);
   const toks = filters.split('\0'); // pairs of a scope and "key\nvalue"
   const filter = toks.filter((t, i) => i % 2).map((t, i) => [toks[2 * i], t.split('\n')[0]])
     .find(([scope, key]) => ['local', 'worktree', 'command'].includes(scope) && /^filter\..+\.(clean|smudge|process)$/i.test(key));
-  if (filter) throw cannot(`the config of ${label || 'the repository'} defines ${shown(filter[1])}, and git add would run it`);
+  if (filter) throw cannot(`the repository config defines ${shown(filter[1])}, and git add would run it`);
 }
 
-// Uncommitted edits inside a checked-out submodule (tracked changes or untracked files) are in no tree this builds: the
-// superproject records only the submodule's commit. Counting them would take a snapshot per submodule, so they refuse.
-// A moved commit is refused later, by treeNumstat. Each submodule, nested ones too, is held to the checks the top level
-// gets: refuseHidden first for all of them (so no clean filter runs, and no hidden flag passes), then a status of its
-// own with --ignore-submodules=none (a nested `ignore = all` cannot hide dirt), innermost first so the message names the
-// submodule that holds the edit. `status.showUntrackedFiles=all` on the command line beats the submodule's own config;
-// --no-optional-locks keeps the index unwritten. Accepted: the submodule's ignore files (.gitignore, info/exclude,
-// core.excludesFile) hide untracked files from its status, as they do at the top level.
-const dirtySub = (p) => cannot(`the submodule "${shown(p)}" has uncommitted edits (tracked changes or untracked files), which cannot be counted: discard them, do the work outside the submodule, or ignore the files in the submodule`);
-const rethrowOr = (e, what) => { if (e instanceof LoopExit) throw e; throw cannot(what); };
-const STATUS = ['-c', 'status.showUntrackedFiles=all', '--no-optional-locks', 'status', '--porcelain=v2', '-z', '--ignore-submodules=none'];
-
-// The checked-out submodules at or under `root` (absolute, symlinks resolved), nested ones included, innermost first.
-function submodules(root) {
-  let listing;
-  try {
-    listing = run(root, ['ls-files', '-s', '-z'], { encoding: 'utf8', maxBuffer: MAX_LISTING }).split('\0');
-  } catch (e) { rethrowOr(e, 'git could not list the submodules'); }
-  const real = fs.realpathSync(root);
-  const found = [];
-  for (const t of listing) {
-    const m = /^160000 [0-9a-f]+ 0\t([\s\S]+)$/.exec(t); // a gitlink at stage 0
-    const dir = m && path.join(real, m[1]);
-    let isDir = false;
-    try { isDir = dir !== null && fs.lstatSync(dir).isDirectory(); } catch { /* not checked out */ }
-    if (isDir && present(path.join(dir, '.git'))) found.push(...submodules(dir), dir);
-  }
-  return found;
-}
-
-function refuseDirtySubmodules(root) {
-  const top = fs.realpathSync(root);
-  const subs = submodules(root);
-  for (const dir of subs) refuseHidden(dir, `the submodule "${shown(path.relative(top, dir))}"`);
-  for (const dir of subs) {
-    let rows;
+// The gate does not support submodules: their files are in no tree it builds (the superproject records a commit), and
+// counting them would take a snapshot each. A repository with one is refused before anything is measured: a gitlink in
+// the index, a gitlink in HEAD (what `git rm --cached` leaves), or a checked-out submodule, which git lists as an
+// untracked directory with a trailing slash (a nested repository). .somi/ and .claude/ are outside the measurement.
+const EXCLUDED = /^\.(somi|claude)(\/|$)/;
+function refuseSubmodules(root) {
+  const list = (args) => {
     try {
-      rows = run(dir, [...STATUS, '--untracked-files=all'], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] });
-    } catch (e) { rethrowOr(e, 'git could not check the submodules for uncommitted edits'); }
-    if (rows !== '') throw dirtySub(path.relative(top, dir));
-  }
-  let rows; // the top level's own view of its first-level submodules: a changed commit or dirt it can see
-  try {
-    rows = run(root, [...STATUS, '--untracked-files=no', '--', ...PATHSPEC], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0');
-  } catch (e) { rethrowOr(e, 'git could not check the submodules for uncommitted edits'); }
-  const FIELDS = { 1: 8, 2: 9, u: 10 }; // fields before the path in a changed (1), renamed (2) and unmerged (u) record
-  for (let i = 0; i < rows.length; i++) {
-    const f = rows[i].split(' ');
-    if (!(f[0] in FIELDS)) continue;
-    if (f[0] === '2') i++; // a renamed record is followed by its original path
-    if (f[2]?.[0] === 'S' && (f[2][2] === 'M' || f[2][3] === 'U')) throw dirtySub(f.slice(FIELDS[f[0]]).join(' '));
-  }
+      return run(root, args, { encoding: 'utf8', maxBuffer: MAX_LISTING }).split('\0');
+    } catch (e) {
+      if (e instanceof LoopExit) throw e;
+      throw cannot('git could not look for submodules');
+    }
+  };
+  const gitlinks = (rows) => rows.filter((t) => t.startsWith('160000 ')).map((t) => t.slice(t.indexOf('\t') + 1));
+  let unborn = false; // a repository with no commit has no gitlink in HEAD
+  try { run(root, ['rev-parse', '--verify', '--quiet', 'HEAD'], { stdio: 'ignore' }); } catch (e) { if (e instanceof LoopExit) throw e; if (e.status !== 1) throw cannot('git could not read HEAD'); unborn = true; }
+  const found = [...gitlinks(list(['ls-files', '-s', '-z'])), ...(unborn ? [] : gitlinks(list(['ls-tree', '-r', '-z', 'HEAD']))), ...list(['ls-files', '-o', '--exclude-standard', '-z']).filter((t) => t.endsWith('/'))]
+    .find((p) => !EXCLUDED.test(p));
+  if (found !== undefined) throw cannot(`the loop's diff gate does not support repositories with submodules (${shown(found)})`);
 }
 
 // The working tree as a git tree object: tracked and untracked files, .somi/ and .claude/ excluded, the same
 // surface the diff cap measures. Built through a throwaway copy of the index so the caller's index is never
 // touched (a copy rather than an empty index, so unchanged files are not re-hashed). Throws a refusal when git
-// cannot index the whole tree (an unreadable file, an empty nested repository): a partial tree is a smaller diff.
+// cannot index the whole tree (an unreadable file, a path it reserves): a partial tree is a smaller diff.
 // Residual: the copied index is trusted, so a hand-edited `.git/index` (an entry's blob id swapped, its stat data
 // kept) can make an edited file count as unchanged. The gate does not defend against forged git internals; the
 // reviewer and the coder's sandbox do.
 export function measuredTree(root) {
+  refuseSubmodules(root);
   refuseHidden(root);
-  refuseDirtySubmodules(root);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-tree-'));
   const index = path.join(dir, 'index');
   try {
@@ -185,7 +153,7 @@ export function measuredTree(root) {
     const invalid = /^error: invalid path '(.*)'$/m.exec(text)?.[1]; // git reserves some names (a case variant of .git, say) and will not add them
     if (invalid !== undefined) throw cannot(`git refuses the path "${shown(invalid)}" as invalid, so the tree cannot be built: rename or remove it`);
     const why = shown(text.split('\n').find((l) => l.trim()) ?? '');
-    throw cannot(`git could not index the working tree${why ? ` (${why})` : ''}; an unreadable file or a nested repository cannot be counted: remove it or add it to .gitignore`);
+    throw cannot(`git could not index the working tree${why ? ` (${why})` : ''}; an unreadable file cannot be counted: remove it or add it to .gitignore`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -245,7 +213,7 @@ function blobLines(root, ids) {
 // The files that differ between two trees (or a commit and a tree) as [{added, deleted, file}].
 // NUL-separated, so a name with a tab, a quote or non-ASCII bytes is exact; renames off, so a rename into another
 // path is the whole file added there and removed here. Both ids must be hex object ids, and follow --end-of-options.
-// A path git records as a nested repository is refused: its lines are not measurable here. A file git prints as binary
+// A file git prints as binary
 // (a real binary, a NUL byte, or text a .gitattributes `-diff` or `binary` line hides) is counted from the object
 // store: the lines of its old blob as deleted and of its new blob as added. Exact for hidden text, an upper bound for
 // a real binary (a floor of one line per 50 bytes, so binaries count toward the cap), and not dodgeable by an attribute
@@ -262,8 +230,7 @@ export function treeNumstat(root, from, to) {
   const raw = list('--raw', '--no-abbrev');
   const blobs = new Map(); // path -> [old blob id, new blob id]
   for (let i = 0; i + 1 < raw.length; i += 2) { // pairs of "<modes, ids, status>" and path: a name that starts with ':' is not mistaken for a record
-    const [oldMode, newMode, oldId, newId] = raw[i].split(' ');
-    if (oldMode === ':160000' || newMode === '160000') throw cannot(`a nested repository is among the changes: "${shown(raw[i + 1])}" (add it to .gitignore or remove it)`);
+    const [, , oldId, newId] = raw[i].split(' ');
     blobs.set(raw[i + 1], [oldId, newId]);
   }
   const rows = list('--numstat').filter((t) => t !== '').map((t) => {
