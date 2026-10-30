@@ -241,7 +241,7 @@ console.log('== the snapshot tree is built from what is on disk, whatever the re
   check('the submodule check leaves the real index as it was', readFileSync(path.join(sup.r, '.git', 'index')).toString('hex'), stBefore);
   for (const [what, plant] of [['an empty .git directory', (d) => mkdirSync(path.join(d, '.git'))], ['a gitfile that is not a gitdir line', (d) => writeFileSync(path.join(d, '.git'), 'hello\n')], ['a gitfile pointing at a directory that is no repository', (d) => writeFileSync(path.join(d, '.git'), `gitdir: ${tmpdir()}\n`)]]) {
     const pl = repo(); pl.g('commit', '-q', '--allow-empty', '-m', 'f'); put(pl.r, 'pkg/f', 'x\n'); plant(path.join(pl.r, 'pkg'));
-    check(`${what} between the project and the top is refused (64), not walked past`, [refused(path.join(pl.r, 'pkg')), initAt(path.join(pl.r, 'pkg')).code], [[true, 64, true], 64]);
+    check(`${what} between the project and the top is refused (64) with the .git cause, not walked past`, [refused(path.join(pl.r, 'pkg')), exitOf(() => measuredTree(path.join(pl.r, 'pkg')))[2].includes('.git" is neither a git directory nor'), initAt(path.join(pl.r, 'pkg')).code], [[true, 64, true], true, 64]);
   }
   const home = repo(); put(home.r, 'pkg/f', 'a\n'); home.g('add', '.'); home.g('commit', '-q', '-m', 'f'); const link = path.join(path.dirname(home.r), path.basename(home.r) + '-link'); made.push(link); symlinkSync(path.join(home.r, 'pkg'), link); put(home.r, 'pkg/f', 'a\nb\n');
   check('a project directory reached through a symlink to a subdirectory is measured like the real path', [treeNumstat(link, home.g('rev-parse', 'HEAD'), measuredTree(link)), computeDiff(link, home.g('rev-parse', 'HEAD'), ['f']).weighted], [[{ added: 1, deleted: 0, file: 'f' }], 1]);
@@ -249,7 +249,35 @@ console.log('== the snapshot tree is built from what is on disk, whatever the re
   const atInit = initAt(home.r).out?.baseline_sha; delete process.env.GIT_DIR; delete process.env.GIT_WORK_TREE;
   check('the init baseline is the project\'s HEAD whatever GIT_DIR the caller\'s environment holds', atInit, home.g('rev-parse', 'HEAD'));
   const noHead = repo(); const refusedInit = initAt(noHead.r);
-  check('init in a repository with no commit is a refusal (64) that names HEAD, with no state written', [refusedInit.code, refusedInit.message.startsWith('somi-loop: cannot resolve HEAD'), existsSync(path.join(noHead.r, '.somi'))], [64, true, false]);
+  check('init in a repository with no commit is a refusal (64) that names HEAD, with no state written', [refusedInit.code, refusedInit.message.startsWith('somi-loop: cannot resolve HEAD') && refusedInit.message.includes('no commit'), existsSync(path.join(noHead.r, '.somi'))], [64, true, false]);
+  const deep = repo(); deep.g('commit', '-q', '--allow-empty', '-m', 'f'); const deepDir = path.join(deep.r, 'a'.repeat(40), 'b'.repeat(40), 'c'.repeat(40)); mkdirSync(path.join(deepDir, '.git'), { recursive: true });
+  check('a long path keeps its .git tail in the refusal', exitOf(() => measuredTree(deepDir))[2].includes('.git" is neither'), true);
+  const gitfile = readFileSync(path.join(lkDir, '.git'), 'utf8').trim().slice('gitdir: '.length);
+  writeFileSync(path.join(lkDir, '.git'), `gitdir: ${gitfile}\r\n\r\n`);
+  check('a gitfile ending in CRLF and a blank line, as git reads it, is accepted', measure(lkDir, lk.g), [{ added: 1, deleted: 0, file: 'f' }]);
+  const gf = repo(); gf.g('commit', '-q', '--allow-empty', '-m', 'f'); put(gf.r, 'pkg/f', 'x\n'); symlinkSync(path.join(lkDir, '.git'), path.join(gf.r, 'pkg', '.git'));
+  check('a gitfile reached through a symlink is refused, not read', refused(path.join(gf.r, 'pkg')), [true, 64, true]);
+  const fk = repo(); fk.g('commit', '-q', '--allow-empty', '-m', 'f'); put(fk.r, "x invalid path 'FAKE'", 'x\n'); chmodSync(path.join(fk.r, "x invalid path 'FAKE'"), 0);
+  const fakeMsg = exitOf(() => measuredTree(fk.r))[2];
+  check('a file name that contains git\'s invalid-path wording is not mistaken for it', [fakeMsg.startsWith('somi-loop: cannot measure the diff: '), fakeMsg.includes('refuses the path')], [true, false]);
+  const subs = (nested) => { // a superproject with a checked-out submodule n, and a submodule m inside n when `nested`
+    const m = repo(); put(m.r, 'a', 'm\n'); sg(m.r, 'add', '.'); sg(m.r, 'commit', '-q', '-m', 'm');
+    const n = repo(); put(n.r, 'a', 'n\n'); put(n.r, '.gitattributes', '* filter=x\n'); sg(n.r, 'add', '.'); if (nested) sg(n.r, 'submodule', 'add', '-q', m.r, 'm'); sg(n.r, 'commit', '-q', '-m', 'n');
+    const t = repo(); sg(t.r, 'submodule', 'add', '-q', n.r, 'n'); sg(t.r, 'submodule', 'update', '--init', '--recursive', '-q'); sg(t.r, 'commit', '-q', '-m', 't');
+    return { ...t, n: path.join(t.r, 'n'), m: path.join(t.r, 'n', 'm') };
+  };
+  const sm1 = subs(true);
+  check('nested checked-out submodules, all clean, are measured: nothing changed', measure(sm1.r, sm1.g), []);
+  const dirtyMsg = exitOf(() => { put(sm1.r, 'n/m/a', 'm\nedit\n'); measuredTree(sm1.r); });
+  check('an edit inside a nested submodule is refused and names the innermost one, with the ignore escape', [dirtyMsg[0], dirtyMsg[1], dirtyMsg[2].includes('submodule "n/m"'), dirtyMsg[2].includes('or ignore the files in the submodule')], [true, 64, true, true]);
+  sg(sm1.n, 'config', 'submodule.m.ignore', 'all');
+  check('a nested submodule\'s own ignore = all does not hide its edit', refused(sm1.r), [true, 64, true]);
+  sg(sm1.m, 'checkout', '-q', '--', 'a'); sg(sm1.m, 'update-index', '--assume-unchanged', 'a'); put(sm1.r, 'n/m/a', 'm\nedit\n');
+  check('an assume-unchanged entry inside a nested submodule is refused', exitOf(() => measuredTree(sm1.r))[2].includes('assume-unchanged'), true);
+  const sm2 = subs(false); sg(sm2.n, 'update-index', '--assume-unchanged', 'a'); put(sm2.r, 'n/a', 'n\nedit\n');
+  check('an assume-unchanged entry inside a submodule is refused, not counted as clean', exitOf(() => measuredTree(sm2.r))[2].includes('submodule "n"'), true);
+  const sm3 = subs(false); sg(sm3.n, 'config', 'filter.x.clean', `touch ${path.join(sm3.r, 'RAN')}; cat`); utimesSync(path.join(sm3.n, 'a'), 1700000000, 1700000000);
+  check('a clean filter in a submodule\'s own config is refused before any status runs, and does not run', [...refused(sm3.r), existsSync(path.join(sm3.r, 'RAN'))], [true, 64, true, false]);
   for (const r of made) rmSync(r, { recursive: true, force: true });
 }
 

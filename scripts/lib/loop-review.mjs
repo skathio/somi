@@ -43,14 +43,17 @@ const validGit = (d) => {
     const st = fs.statSync(g);
     if (st.isDirectory()) return isGitDir(g);
     if (!st.isFile() || st.size > 4096) return false;
-    const m = /^gitdir: (.+)\n?$/.exec(fs.readFileSync(g, 'utf8')); // one line; a relative path is relative to the gitfile's directory
+    const fd = fs.openSync(g, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK); // never follows a link to a pseudo-file, never blocks
+    let text;
+    try { const buf = Buffer.alloc(4097); const n = fs.readSync(fd, buf, 0, 4097, 0); if (n > 4096) return false; text = buf.toString('utf8', 0, n); } finally { fs.closeSync(fd); }
+    const m = /^gitdir: ([^\r\n]+)[\r\n]*$/.exec(text); // one line, ending in CRLF or blank lines as git reads it; a relative path is relative to the gitfile's directory
     return m !== null && isGitDir(path.resolve(d, m[1]));
   } catch { return false; }
 };
 const topLevel = (root) => {
   for (let d = root; ; d = path.dirname(d)) {
     if (present(path.join(d, '.git'))) {
-      if (!validGit(d)) throw cannot(`"${shown(path.join(d, '.git'))}" is neither a git directory nor a "gitdir: <path>" file that points at one`);
+      if (!validGit(d)) throw cannot(`"${shownTail(path.join(d, '.git'))}" is neither a git directory nor a "gitdir: <path>" file that points at one`);
       return d;
     }
     if (path.dirname(d) === d) throw cannot('no git repository (.git) at or above the project directory');
@@ -66,14 +69,15 @@ const run = (root, args, opts = {}) => {
 };
 const present = (p) => { try { fs.lstatSync(p); return true; } catch (e) { return e.code !== 'ENOENT'; } };
 const shown = (v) => String(v).replace(CONTROL, '').slice(0, 80); // a path or a git message as text a person can read: no control characters, bounded
+const shownTail = (v) => { const t = String(v).replace(CONTROL, ''); return t.length > 80 ? `…${t.slice(-79)}` : t; }; // the same, keeping the end (a path's last part names the problem)
 
 // Refuses what would make the snapshot smaller than the tree or run code outside the hooks: an index flag that
 // hides edits (assume-unchanged `h`; skip-worktree `S` on a file that is on disk, as a sparse checkout leaves the
 // files it left out absent; the throwaway index inherits them), a git replace ref (it swaps a file's content), and a
 // clean, smudge or process filter in this repository's own config, its worktree config or the command line (git add
 // runs it). Filters in the user's or system config (git-lfs, say) are not checked: they are the user's own tools, a
-// residual left open.
-function refuseHidden(root) {
+// residual left open. `label` prefixes the names in the messages when `root` is a submodule.
+function refuseHidden(root, label = '') {
   let listing; let replaced; let filters = '';
   try {
     listing = run(root, ['ls-files', '-v', '-z'], { encoding: 'utf8', maxBuffer: MAX_LISTING }).split('\0');
@@ -81,38 +85,70 @@ function refuseHidden(root) {
     try {
       filters = run(root, ['config', '--show-scope', '--includes', '--get-regexp', '-z', '^filter\\.'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
     } catch (e) { if (e.status !== 1) throw e; } // exit 1: no such key
-  } catch {
-    throw cannot('git could not read the index flags, the replace refs or the repository config');
+  } catch (e) {
+    if (e instanceof LoopExit) throw e;
+    throw cannot(`git could not read the index flags, the replace refs or the config of ${label || 'the repository'}`);
   }
-  if (replaced) throw cannot('the repository has git replace refs, which swap what a file contains (git replace -d removes them)');
+  if (replaced) throw cannot(`${label || 'the repository'} has git replace refs, which swap what a file contains (git replace -d removes them)`);
   const hidden = listing.find((t) => /^[hs] /.test(t) || (t.startsWith('S ') && present(path.join(root, t.slice(2)))));
-  if (hidden) throw cannot(`the index marks "${shown(hidden.slice(2))}" assume-unchanged or skip-worktree, which hides its edits (git update-index --no-assume-unchanged --no-skip-worktree)`);
+  if (hidden) throw cannot(`the index marks "${shown(label + hidden.slice(2))}" assume-unchanged or skip-worktree, which hides its edits (git update-index --no-assume-unchanged --no-skip-worktree)`);
   const toks = filters.split('\0'); // pairs of a scope and "key\nvalue"
   const filter = toks.filter((t, i) => i % 2).map((t, i) => [toks[2 * i], t.split('\n')[0]])
     .find(([scope, key]) => ['local', 'worktree', 'command'].includes(scope) && /^filter\..+\.(clean|smudge|process)$/i.test(key));
-  if (filter) throw cannot(`the repository config defines ${shown(filter[1])}, and git add would run it`);
+  if (filter) throw cannot(`the config of ${label || 'the repository'} defines ${shown(filter[1])}, and git add would run it`);
 }
 
 // Uncommitted edits inside a checked-out submodule (tracked changes or untracked files) are in no tree this builds: the
 // superproject records only the submodule's commit. Counting them would take a snapshot per submodule, so they refuse.
-// A moved commit is refused later, by treeNumstat. `status.showUntrackedFiles=all` on the command line reaches the
-// submodule's own status, so its config cannot hide an untracked file; --no-optional-locks keeps the index unwritten.
-function refuseDirtySubmodule(root) {
-  let rows;
+// A moved commit is refused later, by treeNumstat. Each submodule, nested ones too, is held to the checks the top level
+// gets: refuseHidden first for all of them (so no clean filter runs, and no hidden flag passes), then a status of its
+// own with --ignore-submodules=none (a nested `ignore = all` cannot hide dirt), innermost first so the message names the
+// submodule that holds the edit. `status.showUntrackedFiles=all` on the command line beats the submodule's own config;
+// --no-optional-locks keeps the index unwritten. Accepted: the submodule's ignore files (.gitignore, info/exclude,
+// core.excludesFile) hide untracked files from its status, as they do at the top level.
+const dirtySub = (p) => cannot(`the submodule "${shown(p)}" has uncommitted edits (tracked changes or untracked files), which cannot be counted: discard them, do the work outside the submodule, or ignore the files in the submodule`);
+const rethrowOr = (e, what) => { if (e instanceof LoopExit) throw e; throw cannot(what); };
+const STATUS = ['-c', 'status.showUntrackedFiles=all', '--no-optional-locks', 'status', '--porcelain=v2', '-z', '--ignore-submodules=none'];
+
+// The checked-out submodules at or under `root` (absolute, symlinks resolved), nested ones included, innermost first.
+function submodules(root) {
+  let listing;
   try {
-    rows = run(root, ['-c', 'status.showUntrackedFiles=all', '--no-optional-locks', 'status', '--porcelain=v2', '-z', '--untracked-files=no', '--ignore-submodules=none', '--', ...PATHSPEC], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0');
-  } catch (e) {
-    if (e instanceof LoopExit) throw e;
-    throw cannot('git could not check the submodules for uncommitted edits');
+    listing = run(root, ['ls-files', '-s', '-z'], { encoding: 'utf8', maxBuffer: MAX_LISTING }).split('\0');
+  } catch (e) { rethrowOr(e, 'git could not list the submodules'); }
+  const real = fs.realpathSync(root);
+  const found = [];
+  for (const t of listing) {
+    const m = /^160000 [0-9a-f]+ 0\t([\s\S]+)$/.exec(t); // a gitlink at stage 0
+    const dir = m && path.join(real, m[1]);
+    let isDir = false;
+    try { isDir = dir !== null && fs.lstatSync(dir).isDirectory(); } catch { /* not checked out */ }
+    if (isDir && present(path.join(dir, '.git'))) found.push(...submodules(dir), dir);
   }
+  return found;
+}
+
+function refuseDirtySubmodules(root) {
+  const top = fs.realpathSync(root);
+  const subs = submodules(root);
+  for (const dir of subs) refuseHidden(dir, `the submodule "${shown(path.relative(top, dir))}"`);
+  for (const dir of subs) {
+    let rows;
+    try {
+      rows = run(dir, [...STATUS, '--untracked-files=all'], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch (e) { rethrowOr(e, 'git could not check the submodules for uncommitted edits'); }
+    if (rows !== '') throw dirtySub(path.relative(top, dir));
+  }
+  let rows; // the top level's own view of its first-level submodules: a changed commit or dirt it can see
+  try {
+    rows = run(root, [...STATUS, '--untracked-files=no', '--', ...PATHSPEC], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0');
+  } catch (e) { rethrowOr(e, 'git could not check the submodules for uncommitted edits'); }
   const FIELDS = { 1: 8, 2: 9, u: 10 }; // fields before the path in a changed (1), renamed (2) and unmerged (u) record
   for (let i = 0; i < rows.length; i++) {
     const f = rows[i].split(' ');
     if (!(f[0] in FIELDS)) continue;
     if (f[0] === '2') i++; // a renamed record is followed by its original path
-    if (f[2]?.[0] === 'S' && (f[2][2] === 'M' || f[2][3] === 'U')) {
-      throw cannot(`the submodule "${shown(f.slice(FIELDS[f[0]]).join(' '))}" has uncommitted edits (tracked changes or untracked files), which cannot be counted: discard them, or do the work outside the submodule`);
-    }
+    if (f[2]?.[0] === 'S' && (f[2][2] === 'M' || f[2][3] === 'U')) throw dirtySub(f.slice(FIELDS[f[0]]).join(' '));
   }
 }
 
@@ -125,7 +161,7 @@ function refuseDirtySubmodule(root) {
 // reviewer and the coder's sandbox do.
 export function measuredTree(root) {
   refuseHidden(root);
-  refuseDirtySubmodule(root);
+  refuseDirtySubmodules(root);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-tree-'));
   const index = path.join(dir, 'index');
   try {
@@ -146,7 +182,7 @@ export function measuredTree(root) {
   } catch (e) {
     if (e instanceof LoopExit) throw e;
     const text = String(e.stderr ?? '');
-    const invalid = /invalid path '(.*)'$/m.exec(text)?.[1]; // git reserves some names (a case variant of .git, say) and will not add them
+    const invalid = /^error: invalid path '(.*)'$/m.exec(text)?.[1]; // git reserves some names (a case variant of .git, say) and will not add them
     if (invalid !== undefined) throw cannot(`git refuses the path "${shown(invalid)}" as invalid, so the tree cannot be built: rename or remove it`);
     const why = shown(text.split('\n').find((l) => l.trim()) ?? '');
     throw cannot(`git could not index the working tree${why ? ` (${why})` : ''}; an unreadable file or a nested repository cannot be counted: remove it or add it to .gitignore`);
@@ -162,7 +198,7 @@ export function headCommit(root) {
   try {
     id = run(root, ['rev-parse', '--verify', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch (e) {
-    throw usageError(`cannot resolve HEAD: ${e instanceof LoopExit ? e.what : 'git could not read it'}`);
+    throw usageError(`cannot resolve HEAD: ${e instanceof LoopExit ? e.what : 'the repository has no commit yet, or HEAD is unreadable (commit once, then init)'}`);
   }
   if (!OBJECT_ID.test(id)) throw usageError('cannot resolve HEAD: git printed something that is not an object id');
   return id;

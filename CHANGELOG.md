@@ -32,7 +32,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   full, in the diff gate and in the delta review's file list.
 - **The diff gate refuses (exit 64) instead of counting a smaller diff** for a nested git repository, a file git
   cannot read, a submodule whose commit moved or that holds uncommitted edits (tracked changes or untracked files; they
-  cannot be counted, so discard them), an assume-unchanged file or a skip-worktree file that is on disk, a git replace
+  cannot be counted, so discard them or ignore the files in the submodule), an assume-unchanged file or a skip-worktree file that is on disk, a git replace
   ref, a listing over 256 MB, or a `clean`, `smudge` or `process` filter in the repository's own, worktree or
   command-line git config. The message names the cause; for a nested repository or an unreadable file it also says to
   leave the path out with `.gitignore`. Filters in the user's own git config are not checked. A sparse checkout and a
@@ -43,7 +43,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   hides a nested repository. The project directory is resolved through symlinks first, so a project reached through
   one is measured; a `.git` found on the way up must be a git directory or a `gitdir: <path>` file that points at
   one (anything else is refused, not walked past); `init` reads the baseline `HEAD` through the same pinned git and
-  refuses (64) when it cannot; a path git rejects as invalid (a case variant of `.git`) is named in the refusal.
+  refuses (64) when it cannot (a repository with no commit says so); a path git rejects as invalid (a case variant of
+  `.git`) is named in the refusal. A gitfile may end in CRLF or blank lines, as git reads it, and is read without
+  following a symlink (a symlinked gitfile is refused). Every checked-out submodule the index lists, nested ones too, gets
+  the top-level checks before any status runs (an assume-unchanged or skip-worktree entry, a replace ref, a clean, smudge
+  or process filter in its own config) and a status of its own, so a nested `ignore = all` cannot hide an edit; the
+  message names the innermost submodule that holds an edit. Accepted: a submodule's ignore files (`.gitignore`,
+  `info/exclude`, `core.excludesFile`) hide untracked files from its status, as they do at the top level.
   `iteration_files` and the reported file names are relative to the project directory, not the repository top.
 - **Binary files count toward the cap**: a file git prints as binary counts at least one line per 50 bytes, so a
   small binary no longer counts as one line; a file over 1 MiB that git prints as binary counts by size only. The
