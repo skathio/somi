@@ -46,12 +46,12 @@ on Claude Code) and the `somi-flow` runner (which runs the same procedure as a s
 
 **What agents share: the run card.** Agents never share a conversation: each starts from a fresh
 context, so a reviewer cannot inherit the coder's reasoning. What a code-review loop does share is a run
-card, printed once by `scripts/somi-card.mjs` from the loop state and pasted unchanged as the first block
-of every briefing in that loop: where SoMi's scripts are, the project, the plan files to read, the files in
+card, returned by the loop's `open` step (`somi_loop`; `scripts/somi-card.mjs` prints the same card on the
+CLI path) and pasted unchanged as the first block of every briefing in that loop: where SoMi's scripts are, the project, the plan files to read, the files in
 scope, the baseline, the test command, and which files only the orchestrator writes. Facts, under 2 KB,
 byte-identical across passes, so agents stop re-deriving them and a repeated start can reuse the prompt
-cache. The orchestrator itself does not read or edit the code under change or run its tests; it runs the
-loop's scripts and persists what the agents return.
+cache. The orchestrator itself does not read or edit the code under change or run its tests; it makes the
+loop's tool calls and persists what the agents return.
 
 SoMi prefers **explicit handoff** over silent specialisation. When a core agent thinks a
 support agent should be consulted, it surfaces the recommendation; the human (or the

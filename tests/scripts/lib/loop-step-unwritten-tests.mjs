@@ -3,6 +3,7 @@
 // docs/PLUGIN.md), the unwritten items a stored response may carry (loop-step-kit.mjs stateAt), and saveState not writing
 // through a link or a hard link, and the step files emitting only members of NEXT. Run by tests/scripts/loop-engine.sh.
 
+import { execFileSync } from 'node:child_process';
 import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -39,13 +40,16 @@ check('a stored item with a kind of the set, or with none (stored before kinds e
 
 const outside = path.join(tmp, 'outside.json'); writeFileSync(outside, 'keep');
 const link = path.join(tmp, 'state.json'); symlinkSync(outside, link);
-const thrown = (fn) => { try { fn(); } catch (e) { return e.code ?? e.message; } return null; };
+const thrown = (fn) => { try { fn(); } catch (e) { return [e.code, e.message]; } return null; };
 const plainFile = path.join(tmp, 'plain.json'); writeFileSync(plainFile, 'x'.repeat(50));
-check('saveState refuses a link at the state file instead of writing through it (the file it pointed to is untouched) and rewrites a plain file whole', [thrown(() => saveState(link, { a: 1 })), readFileSync(outside, 'utf8'), thrown(() => saveState(plainFile, { a: 1 })), readFileSync(plainFile, 'utf8')], ['ELOOP', 'keep', null, '{"a":1}']);
+check('saveState refuses a link at the state file instead of writing through it (the file it pointed to is untouched) and rewrites a plain file whole', [thrown(() => saveState(link, { a: 1 })), readFileSync(outside, 'utf8'), thrown(() => saveState(plainFile, { a: 1 })), readFileSync(plainFile, 'utf8')], [[64, 'somi-loop: the state file is a link'], 'keep', null, '{"a":1}']);
 
 const hardState = path.join(tmp, 'hard.json'); const lonely = path.join(tmp, 'lonely.json'); writeFileSync(lonely, 'keep'); linkSync(lonely, hardState);
 const dir = path.join(tmp, 'sd'); mkdirSync(dir); const copy = path.join(dir, 's.json'); linkSync(lonely, copy);
-check('saveState refuses a state file that is a second name for another file, and the file outside the root is not changed', [thrown(() => saveState(hardState, { a: 1 })), thrown(() => saveState(copy, { a: 1 })), readFileSync(lonely, 'utf8')], ['the state file has more than one link', 'the state file has more than one link', 'keep']);
+check('saveState refuses a state file that is a second name for another file, and the file outside the root is not changed', [thrown(() => saveState(hardState, { a: 1 })), thrown(() => saveState(copy, { a: 1 })), readFileSync(lonely, 'utf8')], [[64, 'somi-loop: the state file has more than one link'], [64, 'somi-loop: the state file has more than one link'], 'keep']);
+const notFile = [64, 'somi-loop: the state file is not a regular file']; const fifo = path.join(tmp, 'fifo.json'); execFileSync('mkfifo', [fifo]);
+check('saveState refuses a device, a directory and a FIFO as the state file: 64 with the cause, not an internal error', [thrown(() => saveState('/dev/null', { a: 1 })), thrown(() => saveState(dir, { a: 1 })), thrown(() => saveState(fifo, { a: 1 }))], [notFile, notFile, notFile]);
+check('no step file compares a next value with a string literal', src.filter(([, t]) => /\.next\s*[!=]==?\s*['"`]/.test(t)).map(([f]) => f), []);
 
 console.log(`loop step words tests: ${pass} ok, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -90,7 +90,7 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   the server makes is cut off after 60 seconds, and a measurement that times out is refused (64), never counted as a pass; where the
   tree only narrows a review (the delta scope), a tree that cannot be measured counts as unmeasured and the review is full. Writes need a host-supplied root and are refused (67, run the
   CLI) without one; only `status` reads a `project_dir` alone, `project_dir` can only select inside a host root, and
-  two host roots without one are ambiguous. A write step refuses a `.somi/somi-state/loop` that is a link, and a state file that is a link or has a second hard link. Cap
+  two host roots without one are ambiguous. A write step refuses a `.somi/somi-state/loop` that is a link, and a state file that is a link, has a second hard link or is not a regular file (64, with the cause). Cap
   arguments only lower a cap, and the server's own environment never sets one: the tool ignores
   `SOMI_CODE_LOOP_MAX_PASSES`, `SOMI_PLAN_LOOP_MAX_PASSES` and `SOMI_CODE_LOOP_DIFF_CAP` (to raise a cap run the CLI with
   its flag or env var). It does read the operator settings

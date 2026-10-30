@@ -42,7 +42,7 @@ export function close(ctx, a) {
   if (!prior && state.status !== 'running') throw usageError(`the loop is already finished (${k.clean(state.status, 40)}); nothing to close`);
   const code = state.loop === 'code';
   const ended = state.steps?.[`${state.pass}:after-review`]?.response; // what the last pass's after-review said to do next
-  if (!prior && a.status === 'done' && !(ended?.next === 'close' && ended.close_args?.status === 'done')) throw k.bad('status', 'done needs the last pass\'s after-review to have ended the loop clean; close with the stop reason otherwise');
+  if (!prior && a.status === 'done' && !(ended?.next === NEXT.close && ended.close_args?.status === 'done')) throw k.bad('status', 'done needs the last pass\'s after-review to have ended the loop clean; close with the stop reason otherwise');
   const { floor, caps } = k.capsView(state);
   const open = k.floorLines(ctx.root, a.slug, floor); // read once: the diary and the answer list the same findings
   let diff;

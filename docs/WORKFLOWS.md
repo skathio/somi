@@ -453,6 +453,13 @@ simulating a state machine in context. Two scripts ship with SoMi:
   sessions, because the ledger is durable. `/review` starts by re-checking the open findings
   instead of starting blind, and `progress.md` follow-ups reference `F-<n>` ids.
 
+`/code-loop` reaches both through the bundled `somi_loop` MCP tool: one call per transition (`open`,
+`after-code`, `after-review`, `close`), so a clean pass is four tool calls plus the two agent
+starts. The tool runs the same code as the CLI, keeps the state and the ledger, and writes the
+diary entries and the iteration's progress row; anything it could not write comes back in
+`unwritten` for the orchestrator. It needs a project root from the host and only tightens a cap;
+without a root (or without MCP) the flow's Host fallback runs the CLI subcommands above one by one.
+
 The model keeps the judgment — what a finding *is*, what to do when a gate fires; the scripts own
 the counting. On hosts without a shell, the loops fall back to the old judgment-enforced
 tracking and say so in the summary.
