@@ -57,8 +57,8 @@ handoff, at whichever default tier the table gives them: `somi-security-reviewer
 
 > **Runtime**: a current Node (LTS) on `PATH` — no `bash`, no `jq` required. Both Claude Code and
 > GitHub Copilot already bundle Node, so most installs need nothing extra; the Node runtime itself
-> is Windows-native (no bash/jq to install). See [`docs/HOOKS.md`](docs/HOOKS.md) for one open
-> caveat on Windows path-separator coverage in the path-matching guards.
+> is Windows-native (no bash/jq to install). The path guards' Windows coverage is tested on Linux
+> only: see [`docs/HOOKS.md`](docs/HOOKS.md).
 
 ### Option 1 — Claude Code plugin (marketplace)
 

@@ -182,8 +182,8 @@ export function field(payload, fieldPath) {
 }
 
 // Every path a file-writing tool call targets, across hosts -> {paths, known}. Claude Code sends
-// `tool_input.file_path`; Copilot CLI's create tool arrives as `Write` with `tool_input.path`, and its
-// apply_patch arrives as `Edit` with `tool_input` set to the raw patch text, whose targets are only in
+// `tool_input.file_path` (`notebook_path` for NotebookEdit); Copilot CLI's create tool arrives as `Write` with
+// `tool_input.path`, and its apply_patch arrives as `Edit` with `tool_input` set to the raw patch text, whose targets are only in
 // its `*** Add|Update|Delete File:` and `*** Move to:` lines (both shapes captured live, Copilot CLI
 // 1.0.103). `known` is false when no target could be read: a guard must then fail closed, since reading
 // only `file_path` once let every Copilot write through unchecked.
@@ -195,9 +195,12 @@ export function writeTargets(payload) {
     return { paths, known: paths.length > 0 };
   }
   if (input && typeof input === 'object') {
-    for (const key of ['file_path', 'path']) {
-      if (typeof input[key] === 'string' && input[key] !== '') return { paths: [input[key]], known: true };
-    }
+    // Every key present is a target: a call that sets more than one is checked on all of them, and a key that
+    // holds something other than a string is a target the guard cannot read, so the call is unknown.
+    const keys = ['file_path', 'notebook_path', 'path'].filter((k) => input[k] !== undefined && input[k] !== null);
+    if (keys.some((k) => typeof input[k] !== 'string')) return { paths: [], known: false };
+    const paths = keys.map((k) => input[k]).filter((v) => v !== '');
+    return { paths, known: paths.length > 0 };
   }
   return { paths: [], known: false };
 }

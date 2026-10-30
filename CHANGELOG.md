@@ -17,6 +17,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ### Changed
 
+- **The coder agent cannot write the loop's state, and `init` refuses a repository the diff gate cannot measure.**
+  `guard-protected-paths` now refuses a Write or Edit to `.somi/somi-state/loop/*` and `.somi/somi-state/run/*`, as it
+  already does for the tier records; the loop's own scripts write them from node and are unaffected. A code loop's
+  `init` refuses a repository with submodules (exit 64, nothing written) instead of failing on the first measurement,
+  and the refusal for an untracked nested repository now says to add it to `.gitignore` if it is not a submodule.
+  The protected-path guard now reads `\` as `/` and resolves `..`, `.` and `//` before matching (so
+  `.somi/plans/../somi-state/loop/x` and `.git\config` no longer slip past any protected path), refuses a write at a
+  protected directory's own path (`.git`, the plugin install, the tier, loop and run state), matches `.git`, `.somi` and
+  `.claude` case-insensitively, and checks every path key a call carries
+  (`file_path`, `notebook_path`, `path`), refusing one that is not a string. With the secret-write guard it also
+  covers `MultiEdit` and `NotebookEdit`, in `hooks/hooks.json` and in the vendored `.claude/settings.json` matcher;
+  a registration test checks that both files list every file-writing tool.
+
 - **The loop's progress.md reader is stricter and the step tool's stored state is bounded.** `open` and the iteration
   writer read the `## Iteration progress` section through one reader: the file must start with a `# ` title and have
   no carriage return, the heading must appear once, and the section (which ends at a heading of any level) may hold no

@@ -5,8 +5,7 @@ underlying markdown files — agents, commands, skills, rules, hooks — so ther
 
 The hook scripts and state tooling underneath are zero-dependency Node (`.mjs`) — no `bash`, no
 `jq` to install on either host, and the runtime itself works the same on Windows, Linux, and
-macOS. (One open caveat on Windows path-separator coverage in the path-matching guards: see
-[`HOOKS.md`](./HOOKS.md).)
+macOS. (The path guards' Windows coverage is tested on Linux only: see [`HOOKS.md`](./HOOKS.md).)
 
 > **The two hosts are not feature-equivalent.** The shared markdown is portable, but there are two
 > **layers that don't fully carry to Copilot**: the deterministic **guardrail hooks** run on Copilot

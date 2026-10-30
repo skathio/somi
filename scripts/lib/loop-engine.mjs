@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { verifyBriefOnly } from './tier-record.mjs';
-import { REVIEW_SCOPES, headCommit, reviewMinFor, reviewScope as scopeOf, snapshotTree } from './loop-review.mjs';
+import { REVIEW_SCOPES, headCommit, refuseSubmodules, reviewMinFor, reviewScope as scopeOf, snapshotTree } from './loop-review.mjs';
 import { computeDiff } from './loop-diff.mjs';
 import { dispatchEntry } from './loop-dispatch.mjs';
 import { checkRun, startRun } from './run-budget.mjs';
@@ -76,6 +76,7 @@ export const init = guarded(({ env, root, stateDir, now = nowIso }, args) => {
   if (!SEVERITIES.includes(sevFloor)) throw usageError(`severity_floor: ${sevFloor} must be one of ${SEVERITIES.join('|')}`);
   const diffCap = plan ? 0 : resolveInitCap(env, config, 'code', 'diff_cap_lines', args.diffCap); // plan loops have no diff cap
 
+  if (!plan) refuseSubmodules(root); // a repository the diff gate cannot measure is refused before any coder pass
   const baseline = headCommit(root);
 
   const state = {

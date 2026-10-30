@@ -167,6 +167,18 @@ check('none of the measure and record calls touched process.env', JSON.stringify
   check('a refused init (bad severity floor, unresolvable HEAD) exits 64 and creates no state directory', [refused, existsSync(path.join(bare, '.somi'))], [[64, 64], false]);
   rmSync(bare, { recursive: true, force: true });
 }
+{ // a repository the diff gate refuses is refused at init, before any coder pass; a plan loop has no diff gate
+  const sub = mkdtempSync(path.join(tmpdir(), 'loop-initsub-'));
+  const sg = (...a) => execFileSync('git', ['-C', sub, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' });
+  sg('init', '-q'); sg('commit', '-q', '--allow-empty', '-m', 'base');
+  mkdirSync(path.join(sub, 'n')); execFileSync('git', ['-C', path.join(sub, 'n'), 'init', '-q']);
+  const sctx = { root: sub, env: { SOMI_GLOBAL_CONFIG: '' }, stateDir: path.join(sub, '.somi', 'somi-state', 'loop'), now: () => '2026-01-01T00:00:00Z' };
+  const code = init(sctx, { ...base, slug: 'x' });
+  check('init in a repository with a nested repository is refused (64), names it with the .gitignore remedy, and writes nothing',
+    [code.code, code.message.includes('does not support repositories with submodules (n/); if it is not a submodule, add it to .gitignore'), existsSync(path.join(sub, '.somi'))], [64, true, false]);
+  check('a plan loop is not refused for a nested repository', init(sctx, { ...base, slug: 'p', loop: 'plan' }).code, 0);
+  rmSync(sub, { recursive: true, force: true });
+}
 rmSync(root, { recursive: true, force: true });
 rmSync(globalDir, { recursive: true, force: true });
 
@@ -260,6 +272,7 @@ console.log('== the snapshot tree is built from what is on disk, whatever the re
   check('a gitlink only in HEAD (git rm --cached, directory gone) is refused', refusedAs(hd.r, 'n'), [true, 64, true]);
   const ut = repo(); ut.g('commit', '-q', '--allow-empty', '-m', 'f'); nest(ut.r, 'd/e/inner');
   check('an untracked directory that holds a .git is refused, named with its path', refusedAs(ut.r, 'd/e/inner/'), [true, 64, true]);
+  check('a gitlink refusal does not suggest .gitignore (only an untracked directory may be ignored)', [exitOf(() => measuredTree(gl.r))[2].includes('.gitignore'), exitOf(() => measuredTree(ut.r))[2].includes('add it to .gitignore')], [false, true]);
   const co = withSub(); put(co.r, 'n/a', 'x\ny\n'); put(co.r, 'f', 'z\n'); const idx = indexOf(co.r); const before = tmps();
   check('a checked-out submodule is refused whatever it holds, and the refusal writes nothing (index and temp directories as they were)', [refusedAs(co.r, 'n'), indexOf(co.r), tmps()], [[true, 64, true], idx, before]);
   const ig = repo(); ig.g('commit', '-q', '--allow-empty', '-m', 'f'); nest(ig.r, 'vendor'); put(ig.r, '.gitignore', 'vendor/\n'); put(ig.r, 'f', 'a\n');

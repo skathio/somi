@@ -9,7 +9,7 @@
 // common-and-catastrophic class of mistakes; nuanced cases are the human's call. Block
 // list focuses on irreversible / system-destructive / supply-chain shapes, plus
 // shell-level writes to secret-bearing paths — the Bash-side complement of
-// block-secret-writes.mjs, whose Write|Edit matcher a redirect / tee / sed -i /
+// block-secret-writes.mjs, whose file-tool matcher a redirect / tee / sed -i /
 // cp / mv would otherwise bypass entirely. Intentionally conservative — false positives
 // cost less than false negatives here.
 //

@@ -103,10 +103,10 @@ function refuseHidden(root) {
 // the index, a gitlink in HEAD (what `git rm --cached` leaves), or a checked-out submodule, which git lists as an
 // untracked directory with a trailing slash (a nested repository). .somi/ and .claude/ are outside the measurement.
 const EXCLUDED = /^\.(somi|claude)(\/|$)/;
-function refuseSubmodules(root) {
+export function refuseSubmodules(root) {
   const list = (args) => {
     try {
-      return run(root, args, { encoding: 'utf8', maxBuffer: MAX_LISTING }).split('\0');
+      return run(root, args, { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0');
     } catch (e) {
       if (e instanceof LoopExit) throw e;
       throw cannot('git could not look for submodules');
@@ -115,9 +115,11 @@ function refuseSubmodules(root) {
   const gitlinks = (rows) => rows.filter((t) => t.startsWith('160000 ')).map((t) => t.slice(t.indexOf('\t') + 1));
   let unborn = false; // a repository with no commit has no gitlink in HEAD
   try { run(root, ['rev-parse', '--verify', '--quiet', 'HEAD'], { stdio: 'ignore' }); } catch (e) { if (e instanceof LoopExit) throw e; if (e.status !== 1) throw cannot('git could not read HEAD'); unborn = true; }
-  const found = [...gitlinks(list(['ls-files', '-s', '-z'])), ...(unborn ? [] : gitlinks(list(['ls-tree', '-r', '-z', 'HEAD']))), ...list(['ls-files', '-o', '--exclude-standard', '-z']).filter((t) => t.endsWith('/'))]
-    .find((p) => !EXCLUDED.test(p));
-  if (found !== undefined) throw cannot(`the loop's diff gate does not support repositories with submodules (${shown(found)})`);
+  const nested = list(['ls-files', '-o', '--exclude-standard', '-z']).filter((t) => t.endsWith('/'));
+  const found = [...gitlinks(list(['ls-files', '-s', '-z'])), ...(unborn ? [] : gitlinks(list(['ls-tree', '-r', '-z', 'HEAD'])))].find((p) => !EXCLUDED.test(p));
+  const untracked = found === undefined ? nested.find((p) => !EXCLUDED.test(p)) : undefined;
+  const hint = untracked === undefined ? '' : '; if it is not a submodule, add it to .gitignore';
+  if (found !== undefined || untracked !== undefined) throw cannot(`the loop's diff gate does not support repositories with submodules (${shown(found ?? untracked)})${hint}`);
 }
 
 // The working tree as a git tree object: tracked and untracked files, .somi/ and .claude/ excluded, the same
@@ -213,11 +215,10 @@ function blobLines(root, ids) {
 // The files that differ between two trees (or a commit and a tree) as [{added, deleted, file}].
 // NUL-separated, so a name with a tab, a quote or non-ASCII bytes is exact; renames off, so a rename into another
 // path is the whole file added there and removed here. Both ids must be hex object ids, and follow --end-of-options.
-// A file git prints as binary
-// (a real binary, a NUL byte, or text a .gitattributes `-diff` or `binary` line hides) is counted from the object
-// store: the lines of its old blob as deleted and of its new blob as added. Exact for hidden text, an upper bound for
-// a real binary (a floor of one line per 50 bytes, so binaries count toward the cap), and not dodgeable by an attribute
-// the coder adds.
+// A file git prints as binary (a real binary, a NUL byte, or text a .gitattributes `-diff` or `binary` line hides) is
+// counted from the object store: the lines of its old blob as deleted and of its new blob as added. Exact for hidden
+// text, an upper bound for a real binary (a floor of one line per 50 bytes, so binaries count toward the cap), and not
+// dodgeable by an attribute the coder adds.
 export function treeNumstat(root, from, to) {
   if (![from, to].every((id) => typeof id === 'string' && OBJECT_ID.test(id))) throw cannot('a recorded revision is not an object id');
   const list = (...format) => {

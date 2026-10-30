@@ -364,6 +364,27 @@ for case_file in "$CASES_DIR"/*.json; do
   done
 done
 
+# The write guards must be registered for every file-writing tool, in the plugin's hooks.json and in this repo's
+# vendored .claude/settings.json, or a payload for the tool never reaches them. Both files must list the same tools.
+total=$((total + 1))
+if ! node --input-type=module -e '
+  import fs from "node:fs";
+  const tools = new Map();
+  for (const file of process.argv.slice(1)) {
+    const reg = JSON.parse(fs.readFileSync(file, "utf8")).hooks.PreToolUse;
+    for (const guard of ["block-secret-writes", "guard-protected-paths"]) {
+      const entry = reg.find((e) => e.hooks.some((h) => h.command.includes(`/${guard}.mjs`)));
+      const listed = (entry?.matcher ?? "").split("|");
+      for (const t of ["Write", "Edit", "MultiEdit", "NotebookEdit"]) if (!listed.includes(t)) { console.error(`${file}: ${guard} is not registered for ${t}`); process.exit(1); }
+      tools.set(`${file}:${guard}`, [...listed].sort().join("|"));
+    }
+  }
+  if (new Set(tools.values()).size !== 1) { console.error(`the matchers differ: ${JSON.stringify([...tools])}`); process.exit(1); }
+' "$ROOT/hooks/hooks.json" "$ROOT/.claude/settings.json"; then
+  echo "FAIL: a write guard is not registered for every file-writing tool in hooks.json and .claude/settings.json" >&2
+  failures=$((failures + 1))
+fi
+
 if (( failures > 0 )); then
   echo "hook fixtures: $failures of $total cases FAILED" >&2
   exit 1

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// hooks/pre-tool/block-secret-writes.mjs — PreToolUse hook (matcher: Write|Edit) — block
+// hooks/pre-tool/block-secret-writes.mjs — PreToolUse hook (matcher: Write|Edit|MultiEdit|NotebookEdit) — block
 // writes to secret-bearing paths.
 //
 // Imports the shared read/deny/context helpers from ../lib/common.mjs rather than
@@ -22,11 +22,9 @@
 // raw COMMAND-STRING content — irrelevant here, since every pattern below matches a
 // normalized file-path BASENAME extracted from the JSON payload, never raw content, and
 // no realistic basename contains a line-terminator character for that divergence to bite.
-// One platform sensitivity later hooks must inherit knowingly: path.basename() is posix-vs-win32
-// separator-aware (on Windows, `C:\Users\me\.env` → `.env` → DENY, where bash basename on
-// Linux treats `\` as a regular character → allow). For THIS hook the Windows behavior is
-// strictly safer; for path-heavier hooks (guard-protected-paths) the same divergence could
-// cut the unsafe way. The Linux fixture corpus validates only the posix axis.
+// Platform note: path.basename() is separator-aware on Windows only (`C:\Users\me\.env` → `.env` →
+// DENY), where on Linux a `\` is an ordinary character. main() therefore turns `\` into `/` first, so
+// both platforms read the same basename and a backslash path cannot hide a secret name on Linux.
 
 import path from 'node:path';
 import { readPayload, field, denyPretool, matchesAny, runHook, writeTargets } from '../lib/common.mjs';
@@ -82,7 +80,7 @@ function main() {
   }
   for (const pathInput of paths) {
     // Normalise to basename for pattern matching.
-    const basename = path.basename(pathInput);
+    const basename = path.basename(pathInput.replace(/\\/g, '/')); // a `\` separator on POSIX would hide `x\.env`
     if (EXAMPLE_BASENAMES.includes(basename)) continue;
     if (matchesAny(basename, SECRET_PATTERNS)) {
       denyPretool(payload, `somi refused to ${tool} \`${pathInput}\`: this path is in the secret-bearing allowlist.

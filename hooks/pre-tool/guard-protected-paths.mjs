@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// hooks/pre-tool/guard-protected-paths.mjs — PreToolUse hook (matcher: Write|Edit) — block
+// hooks/pre-tool/guard-protected-paths.mjs — PreToolUse hook (matcher: Write|Edit|MultiEdit|NotebookEdit) — block
 // writes to paths the agent shouldn't be editing.
 //
 // Imports the shared read/deny/config helpers from ../lib/common.mjs rather than
@@ -48,25 +48,23 @@
 //
 // --- platform reasoning (posix vs win32) ----------------------------------------------------
 // This is the "path-heavier hook" block-secret-writes.mjs's header warned later hooks to reason
-// through explicitly — its own divergence there was Windows-SAFER; here one of them is not:
-//   1. PROTECTED_GLOBS are forward-slash literals (`*/node_modules/*`). If `tool_input.file_path`
-//      ever arrives with backslash separators (a native-Windows path not already normalized to
-//      forward slashes upstream), the translated regex requires a literal `/` and will NOT match
-//      a `\`-separated path — a protected write could slip through undenied. This reproduces the
-//      bash original's identical gap (its globs were just as forward-slash-only) rather than
-//      introducing a new one; documented, not fixed — fixing would
-//      mean choosing a separator-normalization policy this behavior-preserving port doesn't own.
-//   2. The relative-path check (`pathInput.startsWith('/')`) hardcodes a literal POSIX leading-
-//      `/` test, deliberately NOT `path.isAbsolute()` (platform-aware; would treat `C:\...` as
-//      absolute on win32) — this mirrors bash's own `[[ "$PATH_INPUT" != /* ]]` glob-prefix test
-//      byte-for-byte. A Windows-style absolute path would be misclassified as relative and get
-//      the project root prepended — the same failure bash's own check would have on such input
-//      (bash never ran natively on Windows either, so this is not a new gap either).
-//   3. `path.basename()` (platform-default: posix on Linux, win32 on Windows) is used for the
-//      lockfile-name comparison. Unlike (1), this divergence is SAFE: win32's basename
-//      recognizes BOTH `/` and `\` as separators (documented Node behavior), so on Windows it is
-//      a superset of bash's posix-only basename — never narrower. Same conclusion class as
-//      block-secret-writes.mjs's own basename note, on the safe side here too.
+// through explicitly. checkPath() turns the target into one canonical forward-slash string
+// before any glob sees it:
+//   1. Backslashes become `/`, so a native-Windows `.git\config` or `C:\proj\.git\config` meets
+//      the same forward-slash globs. On POSIX a backslash is a legal filename character, so this
+//      can only over-match (a file literally named `a\b` is read as `a/b`), never under-match.
+//   2. A path is absolute if it starts with `/` or a drive letter (`C:/`); anything else is
+//      joined to projectRoot() (also slash-converted). The test is a literal one, deliberately
+//      not `path.isAbsolute()`, so the result does not depend on the platform running the hook.
+//   3. path.posix.normalize() then collapses `..`, `.` and `//`, so `.somi/plans/../somi-state/
+//      loop/x` cannot hide from a glob. A drive-letter path is normalized as it stands: posix
+//      resolve() would take it for a relative path and prefix the current directory.
+//   4. Climbing past a drive root (`a:/../.git/config`) leaves a relative result, which no `*/`-led
+//      glob matches; a result that is neither `/`-led nor drive-led gets a leading `/`.
+//   5. `path.basename()` for the lockfile-name comparison runs on that canonical string.
+// Case: the `.git`, `.somi` and `.claude` globs match case-insensitively, as a case-insensitive file
+// system (macOS, Windows) resolves `.GIT` to the same directory. The vendored-output globs do not.
+// Not covered: Windows 8.3 short names (`PROGRA~1`), and the Windows behavior is tested on Linux only.
 
 import path from 'node:path';
 import { readPayload, field, denyPretool, runHook, projectRoot, config, writeTargets } from '../lib/common.mjs';
@@ -81,6 +79,11 @@ const PROTECTED_GLOBS = [
   // The sizing CLI's records (scripts/somi-tier.mjs): they gate the brief-only path, so only the
   // CLI writes them, never an agent's Write/Edit.
   '*/.somi/somi-state/tier/*',
+
+  // The loop's state and the run budget's (scripts/somi-loop.mjs, scripts/lib/run-budget.mjs): the loop's
+  // scripts write them from node, which no hook sees, so only an agent's Write/Edit is refused.
+  '*/.somi/somi-state/loop/*',
+  '*/.somi/somi-state/run/*',
 
   // Vendored deps & build outputs.
   '*/node_modules/*',
@@ -106,15 +109,21 @@ const LOCKFILES = [
 ];
 
 // See the glob-translation notes in the header comment.
-function globToRegExp(glob) {
+function globToRegExp(glob, flags) {
   const body = glob
     .split('*')
     .map((segment) => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('[\\s\\S]*');
-  return new RegExp(`^${body}$`);
+  return new RegExp(`^${body}$`, flags);
 }
 
-const PROTECTED_PATTERNS = PROTECTED_GLOBS.map((glob) => ({ glob, re: globToRegExp(glob) }));
+// The globs naming a directory the agent must not even replace with a file (`.git` is a worktree's pointer file).
+// A trailing-slash retest checks the path itself, not just paths under it; the vendored-output globs are left
+// out, since a file named `build` or `vendor` anywhere is ordinary.
+const OWN_PATH_GLOBS = new Set(['*/.git/*', '*/.claude/plugins/somi/*', '*/.somi/somi-state/tier/*', '*/.somi/somi-state/loop/*', '*/.somi/somi-state/run/*']);
+const CASE_FOLDED = /\/\.(git|somi|claude)\//;
+
+const PROTECTED_PATTERNS = PROTECTED_GLOBS.map((glob) => ({ glob, re: globToRegExp(glob, CASE_FOLDED.test(glob) ? 'i' : ''), own: OWN_PATH_GLOBS.has(glob) }));
 
 // See the lockfile-gate reconciliation notes in the header comment.
 function lockfilesAllowed() {
@@ -133,20 +142,31 @@ function main() {
   for (const target of paths) checkPath(payload, tool, target);
 }
 
-function checkPath(payload, tool, target) {
-  let pathInput = target;
-  // Normalise relative paths so the leading-`*/` globs above still match (a relative
-  // `node_modules/x.js` would otherwise slip past `*/node_modules/*`). Reuses common.mjs's
-  // projectRoot() — the centralized ${...}-unexpanded-variable guard — rather than
-  // re-duplicating it here.
-  if (!pathInput.startsWith('/')) {
-    pathInput = `${projectRoot()}/${pathInput}`;
-  }
+const ABSOLUTE = /^(\/|[A-Za-z]:\/)/;
+const slashes = (p) => p.replace(/\\/g, '/');
 
-  for (const { glob, re } of PROTECTED_PATTERNS) {
-    if (re.test(pathInput)) {
+// Where to send the agent instead, for the paths that tooling writes through a CLI.
+function nextStep(glob) {
+  if (glob.includes('/somi-state/tier/')) return 'Tier records are written by `node scripts/somi-tier.mjs`; change them through it.';
+  if (glob.includes('/somi-state/')) return 'Loop and run state are written by the loop CLI (`node scripts/somi-loop.mjs`, or `somi-loop.mjs step`); change them through that.';
+  return '';
+}
+
+function checkPath(payload, tool, target) {
+  // One canonical string before any glob sees the path: forward slashes, joined to the project root when
+  // relative (projectRoot() is the centralized ${...}-unexpanded-variable guard), `..`, `.` and `//` collapsed.
+  // See the platform notes in the header comment.
+  const t = slashes(target);
+  const normal = path.posix.normalize(ABSOLUTE.test(t) ? t : `${slashes(projectRoot())}/${t}`);
+  const pathInput = ABSOLUTE.test(normal) ? normal : `/${normal}`; // see note 4 in the header
+
+  for (const { glob, re, own } of PROTECTED_PATTERNS) {
+    // The trailing-slash form catches a write at a protected directory's own path (`.git` as a worktree's
+    // pointer file, `.somi/somi-state/loop`), which the globs' `/*` would otherwise need a child for.
+    if (re.test(pathInput) || (own && re.test(`${pathInput}/`))) {
+      const next = nextStep(glob);
       denyPretool(payload, `somi refused to ${tool} \`${pathInput}\`: this path matches a protected glob (\`${glob}\`).
-These paths are owned by tooling (git / package managers / SOMI itself); changes belong in their respective workflows.`);
+These paths are owned by tooling (git / package managers / SOMI itself); changes belong in their respective workflows.${next ? `\n${next}` : ''}`);
     }
   }
 
