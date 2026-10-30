@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **A bundled `somi_loop` MCP tool runs a bounded-loop transition in one call, and `/code-loop` and `/plan-loop` now run
+  on it.** `step` is `open`, `after-code`, `after-review`, `close` or `status`, over the same code as
+  `somi-loop.mjs step <name>`; a clean pass is four tool calls plus the two agent starts. Every outcome is the engine's
+  JSON: a fired gate (exit 2 to 5) is a normal result, any other nonzero `exit` a refusal marked `isError`. The tool
+  writes the diary entries and the iteration's progress row and hands back as `unwritten` what it did not write (a
+  plan loop's `awaiting-approval` Status line always). A cap argument (`max_passes`, `diff_cap`) can only lower a cap
+  in force, and the server's environment never sets one. A write needs a project root the host supplies, else exit 67;
+  `project_dir` can narrow inside a host root, and `status` alone may read one without it. Both flows keep the CLI
+  procedure as their "Host fallback".
+
 ### Fixed
 
 - **The code loop's diff gate no longer misses changes.** `check-diff` and the loop step skipped untracked files

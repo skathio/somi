@@ -8,7 +8,8 @@ user-invocable: false
 
 You are running the **bounded code↔review loop** of somi.
 
-The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, iteration M`).
+The user's target: **$ARGUMENTS** (a work-item slug, optionally with `phase N, iteration M`, and `, unattended` when no
+user can answer).
 
 This command automates the manual `/code` → `/review` → `/code` cycle for a single iteration,
 with **hard gates** that ensure it terminates. It has no `cost:` of its own — a command has no
@@ -137,7 +138,7 @@ with a user to answer, report the gate and the result's `cli` line (it runs from
 invoked you says the run is unattended, as `/ship-loop`'s does; when unsure, ask) do not ask: call `close` at once and
 take the stop path; recovery is a restart through the CLI `init` with the raised cap, not a raise. For 4 and 5 there is no cap to raise: report, call `close`, take the stop path. Never widen
 a gate yourself: a cap argument above the stored cap is refused, and raising one is the user's, by CLI flag or env var.
-Any `recurring_cross_run` ids in a result, on any `exit`, go into the summary (§6); under `/ship-loop` they end the loop
+Any `recurring_cross_run` ids in a result, on any `exit`, go into the summary (§6); when run unattended they end the loop
 now: call `close` with `stopped-circuit-breaker` and report the ids. Any other nonzero `exit` is a refusal marked
 `isError`: 64, 65 and 66 mean show `error` and change something before trying again, never the same call; 67 with no
 root at `open` means use the Host fallback, and any other 67 (a corrupt config on a resolve or a dispatch record) means

@@ -191,7 +191,7 @@ reviewed the brief; they do not approve every iteration.
 1. If Stage 0 ran (brief approved but not yet planned), run the plan loop now:
 
    ```text
-   Task /plan-loop "<slug>"
+   Task /plan-loop "<slug>, unattended"
    ```
 
    On a non-`done` exit (`max-passes-exceeded`, `divergence`, `user-stop`) → STOP and hand back.
