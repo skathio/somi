@@ -12,7 +12,7 @@ import { computeDiff } from './loop-diff.mjs';
 import { dispatchEntry } from './loop-dispatch.mjs';
 import { checkRun, startRun } from './run-budget.mjs';
 import { loadConfig } from './config-files.mjs';
-import { LoopExit, PROG, ok, refuse, usageError } from './loop-exit.mjs';
+import { EXIT_DIFF_CAP, EXIT_MAX_PASSES, EXIT_TIME_BUDGET, LoopExit, PROG, ok, refuse, usageError } from './loop-exit.mjs';
 import { applyCapOverride, configVal, firstDefined, resolveInitCap, reresolveCap, validateCap } from './loop-caps.mjs';
 import { loadState, nowIso, requireState, saveState, stateFile } from './loop-state.mjs';
 import { SEVERITIES } from './findings-ledger.mjs';
@@ -113,9 +113,9 @@ export const pass = guarded(({ env, stateDir, now = nowIso }, args) => {
     saveState(sf, state); // persist the raise even if the gate below still fails
   }
   const cur = state.pass;
-  if (cur + 1 > max) throw new LoopExit(2, `max-passes-exceeded: pass ${cur + 1} > cap ${max}`);
+  if (cur + 1 > max) throw new LoopExit(EXIT_MAX_PASSES, `max-passes-exceeded: pass ${cur + 1} > cap ${max}`);
   const run = checkRun(path.dirname(stateDir), args.slug, Date.parse(now()));
-  if (run?.over) throw new LoopExit(4, `time-budget-exceeded: ${run.elapsed_minutes} of ${run.max_minutes} minutes used by this run`);
+  if (run?.over) throw new LoopExit(EXIT_TIME_BUDGET, `time-budget-exceeded: ${run.elapsed_minutes} of ${run.max_minutes} minutes used by this run`);
   state.pass = cur + 1;
   saveState(sf, state);
   return ok({ pass: state.pass, max_passes: max, ...withReviewMin(state) });
@@ -169,7 +169,7 @@ export const checkDiff = guarded(({ env, root, stateDir, now = nowIso }, args) =
   }
   const { total, weighted, outOfScope } = computeDiff(root, state.baseline_sha, state.iteration_files);
   const out = { diff_lines: total, weighted_lines: weighted, cap, out_of_scope: outOfScope };
-  if (cap > 0 && weighted > cap) return refuse(3, `diff-cap-exceeded: weighted ${weighted} > cap ${cap} (out-of-scope counts double)`, out);
+  if (cap > 0 && weighted > cap) return refuse(EXIT_DIFF_CAP, `diff-cap-exceeded: weighted ${weighted} > cap ${cap} (out-of-scope counts double)`, out);
   return ok(out);
 });
 

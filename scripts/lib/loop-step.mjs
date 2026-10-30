@@ -22,7 +22,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { LoopExit, PROG, usageError } from './loop-exit.mjs';
+import { EXIT_DIFF_CAP, EXIT_INTERNAL, EXIT_MAX_PASSES, EXIT_TIME_BUDGET, KIND, LoopExit, PROG, usageError } from './loop-exit.mjs';
 import { applyCapOverride, configVal, firstDefined, reresolveCap, resolveInitCap, tightenCap } from './loop-caps.mjs';
 import { init, readConfig } from './loop-engine.mjs';
 import { loadState, nowIso, saveState, stateFile } from './loop-state.mjs';
@@ -115,7 +115,7 @@ function cardOf(a, ctx, state) {
 // A gate stop: never stored, `next` is close with the status to close with, and for the gates a cap can move, the primitive that re-runs it raised.
 function stop(step, state, code, reason, a, extra = {}) {
   const at = a.iteration ? ` --iteration ${a.iteration}` : '';
-  const cli = { 2: `node scripts/somi-loop.mjs pass --slug ${a.slug}${at} --max-passes <N>`, 3: `node scripts/somi-loop.mjs check-diff --slug ${a.slug}${at} --diff-cap <N>` }[code];
+  const cli = { [EXIT_MAX_PASSES]: `node scripts/somi-loop.mjs pass --slug ${a.slug}${at} --max-passes <N>`, [EXIT_DIFF_CAP]: `node scripts/somi-loop.mjs check-diff --slug ${a.slug}${at} --diff-cap <N>` }[code];
   return base(step, { ok: false, pass: state.pass, next: 'close', close_args: { status: `stopped-${reason}` }, stop_reason: reason, exit: code, ...extra, ...(cli ? { cli } : {}) });
 }
 
@@ -172,8 +172,8 @@ function open(ctx, a) {
   if (T > passes.cap || run?.over) { // the raise is kept even when the gate still fails, as `pass` does
     if (overrides.length) { applyAll(); saveState(sf, state); }
     return T > passes.cap
-      ? stop('open', state, 2, 'max-passes-exceeded', a, { caps: capsView(state).caps })
-      : stop('open', state, 4, 'time-budget', a, { elapsed_minutes: run.elapsed_minutes, max_minutes: run.max_minutes });
+      ? stop('open', state, EXIT_MAX_PASSES, 'max-passes-exceeded', a, { caps: capsView(state).caps })
+      : stop('open', state, EXIT_TIME_BUDGET, 'time-budget', a, { elapsed_minutes: run.elapsed_minutes, max_minutes: run.max_minutes });
   }
 
   const entry = begin(ctx, state, key);
@@ -192,7 +192,7 @@ function open(ctx, a) {
       keep(out, appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title, body: gates, now: entry.at })); // the unwritten line is a pointer to the entry, not the entry: the response has a budget
     });
     if (state.loop === 'code') advance(ctx, sf, state, entry, 'row', () => {
-      if (kind !== 'started' && rowStatus(ctx.root, a.slug, state.iteration) === 'blocked') out.unwritten.push({ file: 'progress.md', reason: 'row-left-blocked', kind: 'iteration-row', line: `iteration ${state.iteration} is marked blocked; left as it is` });
+      if (kind !== 'started' && rowStatus(ctx.root, a.slug, state.iteration) === 'blocked') out.unwritten.push({ file: 'progress.md', reason: 'row-left-blocked', kind: KIND.notice, line: `iteration ${state.iteration} is marked blocked; left as it is` });
       else keep(out, markIteration({ root: ctx.root, slug: a.slug }, state.iteration, { status: 'in-progress', activity: title, now: entry.at }));
     }); // the row says the loop is running; close makes the one move to done. A row a person marked blocked stays so on a resume
   }
@@ -246,7 +246,7 @@ function afterCode(ctx, a) {
   const diff = { diff_lines: total, weighted_lines: weighted, cap: diffCap.cap, out_of_scope: shown, ...(outOfScope.length > shown.length ? { out_of_scope_total: outOfScope.length } : {}) };
   if (diffCap.cap > 0 && weighted > diffCap.cap) {
     if (entry.response) { delete entry.response; delete entry.measured; saveState(sf, state); } // an earlier pass of the gate no longer stands: no later step may read this tree as gated
-    return stop('after-code', state, 3, outOfScope.length ? 'scope-expansion' : 'diff-cap-exceeded', a, { diff });
+    return stop('after-code', state, EXIT_DIFF_CAP, outOfScope.length ? 'scope-expansion' : 'diff-cap-exceeded', a, { diff });
   }
   const s = scopeOf(ctx.root, state, review.scope);
   const scope = s.scope === 'full' ? s : { ...s, files: s.files.slice(0, 5).map((f) => cut(f, 60)), files_total: s.files.length };
@@ -283,7 +283,7 @@ export function runStep(ctx, args) {
     const name = typeof step === 'string' ? step.slice(0, 20) : null;
     if (!(e instanceof LoopExit)) {
       try { (ctx.log ?? console.error)(JSON.stringify({ somi_loop_step: name, ...(e instanceof Error ? { error: String(e.name).slice(0, 100), stack: String(e.stack).slice(0, 4000) } : { thrown: String(e).slice(0, 200) }) })); } catch { /* a failing sink must not turn exit 70 into a crash */ } // the operator sees it; the response carries none of it
-      return base(name, { ok: false, exit: 70, error: 'internal error: the step did not complete; retry it, and report it if it repeats' });
+      return base(name, { ok: false, exit: EXIT_INTERNAL, error: 'internal error: the step did not complete; retry it, and report it if it repeats' });
     }
     return base(name, { ok: false, exit: e.code, error: clean(e.message.replace(`${PROG}: `, ''), 300) });
   }

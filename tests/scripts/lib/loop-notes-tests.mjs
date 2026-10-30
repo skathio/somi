@@ -169,12 +169,12 @@ console.log('== size caps: an oversized diary or archive is reported, never read
   const bigDiary = path.join(big.dir, 'diary.md'); truncateSync(bigDiary, cap);
   const b = snap(big.root);
   const r = appendDiary(big.plan, note());
-  check('a diary over 4 MiB is left alone and reported too-large with the entry text', [r.wrote, r.unwritten.map((u) => [u.file, u.reason, u.line.startsWith('## 2026-10-29 09:30 — Writers done')]), snap(big.root)], [[], [['diary.md', 'too-large', true]], b]);
+  check('a diary over 4 MiB is left alone and reported too-large with its summary: category, title and body', [r.wrote, r.unwritten.map((u) => [u.file, u.reason, u.line]), snap(big.root)], [[], [['diary.md', 'too-large', 'note — Writers done — two writers']], b]);
   const { plan, dir } = fresh({ diary: diaryOf(41) });
   const archiveFile = path.join(dir, 'diary-archive.md'); writeFileSync(archiveFile, ''); truncateSync(archiveFile, cap);
   const first = appendDiary(plan, note({ title: 'one' }));
   const second = appendDiary(plan, note({ title: 'two' }));
-  check('an archive over 4 MiB: the entry is still written uncompacted, archive-too-large comes back on every call, the archive is untouched', [first.wrote, second.wrote, [first, second].map((x) => x.unwritten.map((u) => [u.file, u.reason])), headings(read(path.join(dir, 'diary.md'))), statSync(archiveFile).size], [['.somi/plans/p1/diary.md'], ['.somi/plans/p1/diary.md'], Array(2).fill([['diary-archive.md', 'archive-too-large']]), 43, cap]);
+  check('an archive over 4 MiB: the entry is still written uncompacted, archive-too-large comes back on every call, the archive is untouched', [first.wrote, second.wrote, [first, second].map((x) => x.unwritten.map((u) => [u.file, u.reason, u.kind])), headings(read(path.join(dir, 'diary.md'))), statSync(archiveFile).size], [['.somi/plans/p1/diary.md'], ['.somi/plans/p1/diary.md'], Array(2).fill([['diary-archive.md', 'archive-too-large', 'notice']]), 43, cap]);
 }
 console.log('== progress writers: the row and the line, nothing else ==');
 {
@@ -208,6 +208,8 @@ console.log('== progress writers: the row and the line, nothing else ==');
   const reasonOf = (progress, status = 'in-progress') => { const { plan, root } = fresh({ progress }); const b = snap(root); try { const r = markIteration(plan, '2.1', { status, now: NOW }); return [r.unwritten[0]?.reason ?? 'ok', r.wrote.length ? 'wrote' : isDeepStrictEqual(snap(root), b)]; } catch (e) { return [e.name]; } };
   const row = PROGRESS.match(/\| 2\.1 .*\n/)[0];
   check('a Status cell named like an Object.prototype member is transition-refused, not a TypeError, and nothing is written', ['constructor', '__proto__', 'toString', 'hasOwnProperty'].map((st) => reasonOf(PROGRESS.replace('| in-progress |', `| ${st} |`))), Array(4).fill(['transition-refused', true]));
+  const kinds = (progress, iteration, status) => markIteration(fresh({ progress }).plan, iteration, { status, now: NOW }).unwritten.map((u) => [u.reason, u.kind]);
+  check('a refused move is a notice, to be reported; a row that is missing is still a record to write', [kinds(PROGRESS.replace('| in-progress |', '| done        |'), '2.1', 'in-progress'), kinds(PROGRESS, '9.9', 'done')], [[['transition-refused', 'notice']], [['row-missing', 'iteration-row']]]);
   check('a move out of done, back to not-started and to superseded are each transition-refused by the writer, nothing written', [reasonOf(PROGRESS.replace('| in-progress |', '| done        |')), reasonOf(PROGRESS, 'not-started'), reasonOf(PROGRESS, 'superseded')], Array(3).fill(['transition-refused', true]));
   const shapes = { 'a second heading, as a fenced example would add': `${PROGRESS}\n\`\`\`\n## Iteration progress\n\`\`\`\n`, 'a fence in the section': PROGRESS.replace('\n## Follow-ups', '\n```\n```\n\n## Follow-ups'), 'a comment in the section': PROGRESS.replace('\n## Follow-ups', '\n<!-- x -->\n\n## Follow-ups'), 'front matter': `---\ntitle: x\n---\n${PROGRESS}`, 'a stray CR': PROGRESS.replace('Started', 'Sta\rrted') };
   check('findIterationRow refuses a repeated heading, a fence or <!-- in the section, front matter and a stray CR as not-template-shape', Object.values(shapes).map((t) => findIterationRow(t, '2.1').reason), Array(5).fill('not-template-shape'));
@@ -267,7 +269,7 @@ console.log('== confinement: closed set of paths, nothing outside, links refused
     check('a FIFO at diary.md is refused as not-a-regular-file without blocking, and the tree is unchanged', [r.stdout.trim(), snap(q.root)], ['["not-a-regular-file"]', b]);
   }
   const d = fresh({ diary: '# Diary\n\nno entries here\n' });
-  check('a diary with no entry headings is left byte-identical and the entry text comes back', unchanged(base, () => appendDiary(d.plan, note()).unwritten.map((u) => [u.reason, u.line.startsWith('## 2026-10-29 09:30 — Writers done')])), [[['not-template-shape', true]], true]);
+  check('a diary with no entry headings is left byte-identical and the summary of the entry (category, title, body) comes back', unchanged(base, () => appendDiary(d.plan, note()).unwritten.map((u) => [u.reason, u.line])), [[['not-template-shape', 'note — Writers done — two writers']], true]);
 }
 console.log('== atomic write: a failed archive write must not drop the entries it was to hold ==');
 {

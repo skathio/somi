@@ -23,6 +23,14 @@ export function loadState(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+// Opened without following a link: a link standing at `file` is refused (ELOOP), never written through, and so is anything
+// that is not a regular file. The state is truncated only after that check.
 export function saveState(file, state) {
-  fs.writeFileSync(file, JSON.stringify(state));
+  const { O_WRONLY, O_CREAT, O_NOFOLLOW = 0, O_NONBLOCK = 0 } = fs.constants;
+  const fd = fs.openSync(file, O_WRONLY | O_CREAT | O_NOFOLLOW | O_NONBLOCK, 0o666);
+  try {
+    if (!fs.fstatSync(fd).isFile()) throw new Error('the state file is not a regular file');
+    fs.ftruncateSync(fd);
+    fs.writeFileSync(fd, JSON.stringify(state));
+  } finally { fs.closeSync(fd); }
 }

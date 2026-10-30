@@ -18,6 +18,10 @@ export function reviewMinFor(root, slug) {
 
 const EXCLUDE = ':(exclude)';
 const PATHSPEC = ['.', `${EXCLUDE}.somi`, `${EXCLUDE}.claude`];
+// The time one git call may take. A call that exceeds it is a refusal (exit 64, "git did not answer") from every caller: the CLI prints
+// the message and exits 64, a step answers exit 64, and no gate passes on a measurement that was not made. Mutable for the tests only.
+// shortcut: one limit for all calls, so a repository too large for 60 s is refused; raise it when one is reported.
+export const LIMITS = { gitTimeoutMs: 60000 };
 const MAX_LISTING = 256 * 1024 * 1024; // bytes of git output read in one go; a bigger listing is refused, never truncated
 export const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const MAX_BLOB = 1024 * 1024; // a blob over this is counted by size (50 bytes a line) instead of read
@@ -64,8 +68,14 @@ const run = (root, args, opts = {}) => {
   try { real = fs.realpathSync(root); } catch { throw cannot('the project directory cannot be resolved'); }
   const top = topLevel(real);
   const pinned = { ...bare(), GIT_WORK_TREE: top };
-  const GIT_DIR = execFileSync('git', ['-C', top, ...SAFE, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8', env: pinned }).trim();
-  return execFileSync('git', ['-C', real, ...SAFE, ...args], { ...opts, env: { ...pinned, GIT_DIR, ...opts.env } });
+  const limit = { timeout: LIMITS.gitTimeoutMs, killSignal: 'SIGKILL' };
+  try {
+    const GIT_DIR = execFileSync('git', ['-C', top, ...SAFE, 'rev-parse', '--absolute-git-dir'], { ...limit, encoding: 'utf8', env: pinned }).trim();
+    return execFileSync('git', ['-C', real, ...SAFE, ...args], { ...limit, ...opts, env: { ...pinned, GIT_DIR, ...opts.env } });
+  } catch (e) { // fails closed: a git that does not answer is a refusal, so the loop counts nothing, never a smaller diff
+    if (e.code === 'ETIMEDOUT') throw cannot(`git did not answer within ${LIMITS.gitTimeoutMs / 1000} seconds (retry once it responds)`);
+    throw e;
+  }
 };
 const present = (p) => { try { fs.lstatSync(p); return true; } catch (e) { return e.code !== 'ENOENT'; } };
 const shown = (v) => String(v).replace(CONTROL, '').slice(0, 80); // a path or a git message as text a person can read: no control characters, bounded
@@ -142,7 +152,7 @@ export function measuredTree(root) {
     }
     const env = { GIT_INDEX_FILE: index };
     // git add refuses an exclusion that names only ignored paths (a .gitignore with `.somi`) and would not add them anyway
-    const ignored = (p) => { try { run(root, ['check-ignore', '-q', '--no-index', '--', p], { stdio: 'ignore' }); return true; } catch { return false; } };
+    const ignored = (p) => { try { run(root, ['check-ignore', '-q', '--no-index', '--', p], { stdio: 'ignore' }); return true; } catch (e) { if (e instanceof LoopExit) throw e; return false; } };
     const spec = PATHSPEC.filter((p) => !p.startsWith(EXCLUDE) || !ignored(p.slice(EXCLUDE.length)));
     // Stat settings are pinned: a looser one would let a same-size edit with a put-back mtime read as clean.
     // --sparse: an untracked file outside a sparse checkout's cone is still part of the tree.
@@ -189,6 +199,7 @@ function blobLines(root, ids) {
     try {
       return run(root, ['cat-file', mode], { input: ids2.join('\n') + '\n', maxBuffer: MAX_LISTING, stdio: ['pipe', 'pipe', 'ignore'] });
     } catch (e) {
+      if (e instanceof LoopExit) throw e;
       throw cannot(e.code === 'ENOBUFS' ? 'the changed files hidden from diff are too large to read' : 'git could not read a changed file');
     }
   };
@@ -225,6 +236,7 @@ export function treeNumstat(root, from, to) {
     try {
       return run(root, ['diff', ...format, '-z', '--no-renames', '--relative', '--ignore-submodules=none', '--end-of-options', from, to, '--', ...PATHSPEC], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0');
     } catch (e) {
+      if (e instanceof LoopExit) throw e;
       throw cannot(e.code === 'ENOBUFS' ? 'the changed-file listing is too large' : 'git diff failed');
     }
   };

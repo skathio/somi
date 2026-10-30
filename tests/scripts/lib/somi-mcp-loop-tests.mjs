@@ -11,6 +11,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { McpClient } from './somi-mcp-client.mjs';
+import { KINDS, NEXT } from '../../../scripts/lib/loop-exit.mjs';
+import { LIMITS } from '../../../scripts/lib/loop-review.mjs';
 import { callLoopStep } from '../../../scripts/lib/loop-step-tool.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -42,11 +44,12 @@ async function withClient(root, fn, { env = {}, roots } = {}) {
   if (roots) client.rootsHandler = async () => roots;
   try { await client.initialize(roots ? { roots: {} } : {}); return await fn(client); } finally { client.close(); }
 }
-const sizes = [];
+const sizes = []; const seen = { next: new Set(), kind: new Set() };
 async function step(c, name, args = {}) {
   const r = await c.request('tools/call', { name: 'somi_loop', arguments: { step: name, slug: 'p1', iteration: '1.1', ...args } });
   const text = r?.content?.[0]?.text ?? ''; sizes.push(Buffer.byteLength(text));
-  return { err: r.isError === true, ...JSON.parse(text) };
+  const got = JSON.parse(text); seen.next.add(got.next); for (const u of got.unwritten ?? []) seen.kind.add(u.kind);
+  return { err: r.isError === true, ...got };
 }
 const review = (v = 'approve', extra = {}) => ({ reviewers: ['somi-reviewer'], verdict: v, blockers: 0, majors: 0, review: 'r1.md', ...extra });
 const MAJOR = { file: 'a.js', symbol: 'f', title: 'the same defect', severity: 'Major', confidence: 'High' };
@@ -57,7 +60,7 @@ console.log('== somi_loop over MCP ==');
   const root = repo();
   await withClient(root, async (c) => {
     const t = (await c.request('tools/list', {})).tools.find((x) => x.name === 'somi_loop');
-    check('tools/list: somi_loop requires step and slug, and its description is at most 900 bytes', [t.inputSchema.required, Buffer.byteLength(t.description) <= 900], [['step', 'slug'], true]);
+    check('tools/list: somi_loop requires step and slug; its description is at most 900 bytes and the whole definition at most 2850', [t.inputSchema.required, Buffer.byteLength(t.description) <= 900, Buffer.byteLength(JSON.stringify(t)) <= 2850], [['step', 'slug'], true, true]);
     const o = await step(c, 'open', { files: ['a.js'] }); writeFileSync(file(root, 'a.js'), '1\n2\n3\n');
     check('open starts pass 1: the run card is the brief, the caps are the defaults, the server wrote the diary and the row', [o.err, o.exit, o.pass, o.next, o.brief.startsWith('```somi-card'), o.caps, o.wrote], [false, 0, 1, 'task-coder', true, { max_passes: 3, diff_cap_lines: 400, severity_floor: 'Major' }, ['.somi/plans/p1/diary.md', '.somi/plans/p1/progress.md']]);
     const cli = JSON.parse(execFileSync(process.execPath, [file(ROOT, 'scripts', 'somi-loop.mjs'), 'resume', '--slug', 'p1', '--iteration', '1.1'], { env: { ...process.env, ...CAPS_OFF, CLAUDE_PROJECT_DIR: root }, encoding: 'utf8' }));
@@ -185,7 +188,7 @@ console.log('== one result shape, the root once, the environment, the state dire
   const rev = repo(); const gcfg = path.join(tmp, 'global.json'); writeFileSync(gcfg, '{"code_loop":{"max_passes":2}}');
   await withClient(rev, async (c) => {
     const o = await step(c, 'open', { files: ['a.js'] }); const ac = await step(c, 'after-code', { agent: 'somi-coder' });
-    check('the review mode, review scope and severity floor in the server env reach the loop, the diff-cap variable does not, and SOMI_GLOBAL_CONFIG does', [ac.review_mode, ac.next, ac.scope.scope, o.caps.severity_floor, o.caps.diff_cap_lines, o.caps.max_passes], ['security', 'task-reviewers', 'full', 'Minor', 400, 2]);
+    check('the review mode, review scope and severity floor in the server env reach the loop, the diff-cap variable does not, and SOMI_GLOBAL_CONFIG does', [ac.review_mode, ac.next, ac.scope.scope, ac.scope.why, o.caps.severity_floor, o.caps.diff_cap_lines, o.caps.max_passes], ['security', 'task-reviewers', 'full', 'setting', 'Minor', 400, 2]);
   }, { env: { SOMI_CODE_LOOP_REVIEW: 'security', SOMI_CODE_LOOP_REVIEW_SCOPE: 'full', SOMI_CODE_LOOP_SEVERITY_FLOOR: 'Minor', SOMI_CODE_LOOP_DIFF_CAP: '5', SOMI_GLOBAL_CONFIG: gcfg } });
   const link = repo(); const away = path.join(tmp, 'away'); mkdirSync(away); mkdirSync(file(link, '.somi'), { recursive: true }); symlinkSync(away, file(link, '.somi', 'somi-state'));
   await withClient(link, async (c) => {
@@ -202,6 +205,16 @@ console.log('== one result shape, the root once, the environment, the state dire
     const added = (diary(evil).split(DIARY.slice(DIARY.indexOf('## ')))[0] + readFileSync(file(evil, '.somi', 'plans', 'p1', 'progress.md'), 'utf8')).replace(/`(note|blocker)`/g, '');
     check('hostile findings and a hostile reviewers entry run through open to close: refused or recorded, and diary.md and progress.md hold no markup from them', [bad.exit, ar.exit, cl.err, ['<!--', '![', '`', '[x](u)'].filter((m) => added.includes(m))], [64, 0, false, []]);
   });
+}
+console.log('== a git that does not answer, and the words the results use ==');
+{
+  const stuck = repo(); const fake = path.join(tmp, 'fakegit'); mkdirSync(fake); writeFileSync(path.join(fake, 'git'), '#!/bin/sh\nexec sleep 3\n', { mode: 0o755 });
+  const call = async (args) => { const r = await callLoopStep({ slug: 'p1', iteration: '1.1', ...args }, { resolveRoot: async () => ({ ok: true, root: stuck, hosted: true }), env: { SOMI_GLOBAL_CONFIG: '' }, installRoot: ROOT }); return { err: r.isError, ...JSON.parse(r.text) }; };
+  await call({ step: 'open', files: ['a.js'] });
+  const [real, limit] = [process.env.PATH, LIMITS.gitTimeoutMs]; process.env.PATH = `${fake}:${real}`; LIMITS.gitTimeoutMs = 300;
+  let ac; try { ac = await call({ step: 'after-code', agent: 'somi-coder' }); } finally { process.env.PATH = real; LIMITS.gitTimeoutMs = limit; }
+  check('a git that does not answer within the limit is a refusal (64 saying so), never a diff gate pass; no review is asked for', [ac.err, ac.exit, ac.next, /git did not answer within 0\.3 seconds/.test(ac.error)], [true, 64, null, true]);
+  check('every next and every unwritten kind this file saw is one the engine owns', [[...seen.next].filter((x) => x !== null && !NEXT.includes(x)), [...seen.kind].filter((x) => x !== undefined && !KINDS.includes(x))], [[], []]);
 }
 console.log(`somi_loop tests: ${pass} ok, ${fail} failed`);
 process.exit(fail ? 1 : 0);

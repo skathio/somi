@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { EXIT_CIRCUIT_BREAKER } from './loop-exit.mjs';
 
 export const PROG = 'somi-findings';
 
@@ -174,7 +175,7 @@ export function recordFindings({ root, slug, review, run, pass, input, now = now
 
   // An empty batch changes nothing: leave the file as it is, seed literal included.
   if (input.length > 0) saveLedger(file, ledger);
-  return { lines, code: breaker ? 5 : 0, message: '' };
+  return { lines, code: breaker ? EXIT_CIRCUIT_BREAKER : 0, message: '' };
 }
 
 export const SEVERITIES = ['Blocker', 'Major', 'Minor', 'Nit']; // strongest first

@@ -83,9 +83,11 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
 - **`somi_loop`** — one bounded-loop transition per call: `step` is `open`, `after-code`, `after-review`, `close` or
   `status` (read only), with the loop's state, findings ledger, diary and progress row kept by the same code as
   `node scripts/somi-loop.mjs step <name>`. Every outcome is the engine's JSON response, with `next`, `wrote`,
-  `unwritten`, `exit` and `stop_reason`. A fired gate (2 max passes, 3 diff cap, 4 time budget, 5 circuit breaker) is a
+  `unwritten`, `exit` and `stop_reason`. The `next` call is one of: `task-coder`, `task-planner`, `task-reviewer`,
+  `task-reviewers`, `task-panel`, `open`, `close`, `summarise`, `ask-user`. A fired gate (2 max passes, 3 diff cap, 4 time budget, 5 circuit breaker) is a
   normal result; any other nonzero `exit` is a refusal and the result is marked `isError` (64 arguments, 65 and 66 the
-  agent, 67 no host project root, or an unreadable config to fix). Writes need a host-supplied root and are refused (67, run the
+  agent, 67 no host project root, ambiguous roots or an unreadable config to fix, 70 an internal error). Every git call
+  the server makes is cut off after 60 seconds and refused as 64, never counted as a pass. Writes need a host-supplied root and are refused (67, run the
   CLI) without one; only `status` reads a `project_dir` alone, `project_dir` can only select inside a host root, and
   two host roots without one are ambiguous. A write step refuses a `.somi/somi-state/loop` that is a link. Cap
   arguments only lower a cap, and the server's own environment never sets one: the tool ignores
@@ -98,9 +100,11 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   tightening. It writes `diary.md` entries (each
   ends with a fixed provenance line; never a decision-change or plan-change entry, and no file name from a call) and, in
   `progress.md`, the iteration's row and the Last activity line. A record the tool could not write, a failed disk write
-  included, comes back in `unwritten` as part of a normal result, each item naming its `file`, its `kind` (diary-entry,
-  iteration-row, last-activity, status-line) and a one-line summary: record it in that file yourself from the summary
-  (the `line` is a cut summary, not text to paste). A repeated call replays the stored result and does not retry the
+  included, and a fact it only reports come back in `unwritten` as part of a normal result, each item naming its
+  `file`, its `kind` and a `line`. The `kind` is one of: `diary-entry`, `iteration-row`, `last-activity`, `status-line`,
+  `notice`. Record the first four in the file named, yourself, from the `line`, a cut summary (a diary entry's is its
+  category, title and body), not text to paste. A `notice` (a progress row a person marked blocked, a refused status move, a
+  skipped diary compaction) is only reported, never written. `reason` is text for a person: do not branch on it. A repeated call replays the stored result and does not retry the
   write. `after-code` returns `changed`: true when the tree moved since `open`, false when
   nothing outside `.somi/` and `.claude/` changed (the reviewer re-checks the open findings), absent when it was not
   measured (a pass the CLI started); the dispatch record is self-attested, the first call wins. Where the host runs

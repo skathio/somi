@@ -14,7 +14,8 @@
 import path from 'node:path';
 import { EXIT_PROJECT_ENV, EXIT_USAGE } from './dispatch-resolver.mjs';
 import { FIELDS, runStep } from './loop-step.mjs';
-import { base, clean, GATE_STOPS, stepLog } from './loop-step-kit.mjs';
+import { GATE_STOPS } from './loop-exit.mjs';
+import { base, clean, stepLog } from './loop-step-kit.mjs';
 import { plainDir } from './loop-notes.mjs';
 
 // The server's environment variables the engine may read: where the global config is, and the operator settings that apply as they
@@ -27,34 +28,34 @@ export const LOOP_TOOL = {
   description:
     'Run one bounded-loop (/code-loop, /plan-loop) transition and return its JSON result. step: open (start or resume a pass, with the run ' +
     'card; a code loop needs files), after-code (agent that ran; diff gate), after-review ' +
-    '(reviewers, verdict, blockers, majors, findings, review file, fixed ids), close (status done or stopped-<reason>), status ' +
-    '(read only). The result names the `next` call, what it `wrote` and the records left `unwritten` (file, kind, a summary `line`): record each in its file yourself; ' +
-    'a repeated call replays the stored result and does not retry a write. A fired gate is a result with `exit` and `stop_reason` (2 max ' +
-    'passes, 3 diff cap, 4 time budget, 5 circuit breaker). Any other nonzero `exit` is a refusal (isError): 64 bad arguments, ' +
-    '65/66 agent, 67 no host project root (use the CLI) or an unreadable config (fix the file). max_passes and diff_cap may only lower a cap.',
+    '(reviewers, verdict, blockers, majors, findings, review file, fixed ids), close (done or stopped-<reason>), status (read only). ' +
+    'The result names the `next` call, what it `wrote` and the `unwritten` items (file, kind, `line`: a summary to write from, not text to ' +
+    'paste): record a diary-entry, iteration-row, last-activity or status-line item in its file yourself; a notice is only reported. ' +
+    'A repeat replays the stored result and retries no write. A gate (exit 2-5) is a result with `stop_reason`; any other nonzero `exit` ' +
+    'is a refusal (isError): 64 arguments, 65/66 agent, 67 no or ambiguous host root (use the CLI) or an unreadable config.',
   inputSchema: {
     type: 'object',
     properties: {
       step: { type: 'string', enum: ['open', 'after-code', 'after-review', 'close', 'status'] },
-      slug: { type: 'string', description: 'work item, ^[a-z0-9][a-z0-9-]{0,63}$' },
-      loop: { type: 'string', enum: ['code', 'plan'], description: 'default code; a plan loop takes no iteration, files, diff_cap or review settings' },
+      slug: { type: 'string', description: '^[a-z0-9][a-z0-9-]{0,63}$' },
+      loop: { type: 'string', enum: ['code', 'plan'], description: 'default code; a plan loop takes no iteration, files, diff_cap or review_*' },
       iteration: { type: 'string', description: 'code loop: N.M, e.g. 3.1b' },
-      files: { type: 'array', items: { type: 'string' }, description: 'open: relative paths the iteration may touch' },
+      files: { type: 'array', items: { type: 'string' }, description: 'open: relative paths in scope' },
       host: { type: 'string', enum: ['claude-code', 'copilot'] },
-      max_passes: { type: 'integer', description: 'open: lower the pass cap' },
-      diff_cap: { type: 'integer', description: 'open, after-code: lower the diff cap' },
-      agent: { type: 'string', description: 'after-code: the agent that just ran' },
-      review_mode: { type: 'string', enum: ['single', 'security', 'panel'], description: 'after-code: stronger lens only' },
+      max_passes: { type: 'integer', description: 'open: may only lower' },
+      diff_cap: { type: 'integer', description: 'open, after-code: may only lower' },
+      agent: { type: 'string', description: 'after-code: agent that just ran' },
+      review_mode: { type: 'string', enum: ['single', 'security', 'panel'], description: 'after-code: only stronger' },
       review_scope: { type: 'string', enum: ['delta', 'full'], description: 'after-code' },
-      reviewers: { type: 'array', items: { type: 'string' }, description: 'after-review: review agents that ran' },
+      reviewers: { type: 'array', items: { type: 'string' }, description: 'after-review: agents that ran' },
       verdict: { type: 'string', enum: ['approve', 'approve-with-comments', 'request-changes', 'reject'] },
-      blockers: { type: 'integer', description: 'after-review: count of Blocker findings listed' },
-      majors: { type: 'integer', description: 'after-review: count of Major findings listed' },
+      blockers: { type: 'integer', description: 'after-review: Blocker findings listed' },
+      majors: { type: 'integer', description: 'after-review: Major findings listed' },
       findings: { type: 'array', items: { type: 'object' }, description: 'after-review: {file, title, severity, symbol?, confidence?}' },
-      review: { type: 'string', description: 'after-review: review file name, no path' },
-      fixed: { type: 'array', items: { type: 'string' }, description: 'after-review: finding ids really fixed, e.g. F-12' },
-      status: { type: 'string', description: 'close: done, or stopped-<reason> from the last response' },
-      project_dir: { type: 'string', description: 'absolute project path; narrows a host root, read-only status without one' },
+      review: { type: 'string', description: 'after-review: file name, no path' },
+      fixed: { type: 'array', items: { type: 'string' }, description: 'after-review: ids really fixed, e.g. F-12' },
+      status: { type: 'string', description: 'close: done, or stopped-<reason> as the last result says' },
+      project_dir: { type: 'string', description: 'absolute path; narrows the host root; status alone may use it without one' },
     },
     required: ['step', 'slug'],
   },

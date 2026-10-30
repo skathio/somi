@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { usageError } from './loop-exit.mjs';
+import { KIND, usageError } from './loop-exit.mjs';
 import { ITERATION_RE, SLUG_RE } from './run-card.mjs';
 import { archiveHead, archiveShape, CATEGORIES, compactDiary, formatEntry, insertEntry, isReplay, isSummaryTitle } from './loop-notes-compact.mjs';
 
@@ -94,10 +94,12 @@ function writeAtomic(file, text, mode = 0o644) {
   }
 }
 
-// `kind` names the record the line summarises (diary-entry, iteration-row, last-activity), so the caller knows what to write where.
+// `kind` names the record the line summarises (diary-entry, iteration-row, last-activity), so the caller knows what to write where;
+// an item that asks for no write (a refused move, a skipped compaction) has the kind `notice`.
 const refusal = (file, reason, line, kind) => ({ wrote: [], unwritten: [{ file, reason, line, kind }] });
 const writeFailed = (file, code, line, kind) => ({ file, reason: 'write-failed', code, line, kind });
 const SKIPPED = 'compaction skipped; diary.md is over 40 entries';
+const skipped = (reason, code) => ({ file: 'diary-archive.md', reason, ...(code ? { code } : {}), line: SKIPPED, kind: KIND.notice });
 
 export function appendDiary(plan, entry) {
   const { stamp } = stampOf(entry.now);
@@ -106,13 +108,13 @@ export function appendDiary(plan, entry) {
   if (!/[\p{L}\p{N}]/u.test(title)) throw usageError('title must contain a letter or a digit');
   if (isSummaryTitle(title)) throw usageError('a title starting "Compacted:" is reserved for the compaction summary');
   const text = formatEntry({ stamp, title, category: entry.category, phase: oneLine(entry.phase ?? 'work-item-wide', 'phase') || 'work-item-wide', body: [oneLine(entry.body ?? '', 'body'), PROVENANCE].filter(Boolean).join('\n\n') });
-  const line = text.replace(/\n*---\n*$/, '');
+  const line = [entry.category, title, oneLine(entry.body ?? '', 'body')].filter(Boolean).join(' — '); // what a caller reads: not the entry, whose stamp, markup and provenance it builds itself
   const p = planDir(plan);
-  if (p.refused) return refusal('diary.md', p.refused, line, 'diary-entry');
+  if (p.refused) return refusal('diary.md', p.refused, line, KIND.diaryEntry);
   const file = path.join(p.dir, 'diary.md');
   const cur = readPlanFile(file);
   const next = cur.text === undefined ? null : insertEntry(cur.text, text);
-  if (next === null) return refusal('diary.md', cur.reason ?? 'not-template-shape', line, 'diary-entry');
+  if (next === null) return refusal('diary.md', cur.reason ?? 'not-template-shape', line, KIND.diaryEntry);
   if (isReplay(cur.text, text)) return { wrote: [], unwritten: [], skipped: 'replay' }; // a replayed step: this exact entry is already newest
   const wrote = []; const unwritten = [];
   let diary = next;
@@ -123,15 +125,15 @@ export function appendDiary(plan, entry) {
     if (arch.reason === 'missing' || (arch.text !== undefined && archiveShape(arch.text))) {
       // The archive first: a crash between the two writes duplicates entries, it never loses any.
       const code = writeAtomic(archiveFile, (arch.text ?? archiveHead(plan.slug)).replace(/\n*$/, '\n\n') + compacted.archived, arch.mode);
-      if (code) unwritten.push(writeFailed('diary-archive.md', code, SKIPPED));
+      if (code) unwritten.push(skipped('write-failed', code));
       else {
         wrote.push(`${p.rel}/diary-archive.md`);
         diary = compacted.diary;
       }
-    } else unwritten.push({ file: 'diary-archive.md', reason: arch.reason === 'too-large' ? 'archive-too-large' : arch.reason ?? 'not-template-shape', line: SKIPPED });
+    } else unwritten.push(skipped(arch.reason === 'too-large' ? 'archive-too-large' : arch.reason ?? 'not-template-shape'));
   }
   const failed = writeAtomic(file, diary, cur.mode);
-  if (failed) return { wrote, unwritten: [...unwritten, writeFailed('diary.md', failed, line, 'diary-entry')] };
+  if (failed) return { wrote, unwritten: [...unwritten, writeFailed('diary.md', failed, line, KIND.diaryEntry)] };
   wrote.push(`${p.rel}/diary.md`);
   return { wrote, unwritten };
 }
@@ -143,7 +145,7 @@ function editProgress(plan, edit, line, kind) {
   const file = path.join(p.dir, 'progress.md');
   const cur = readPlanFile(file);
   const out = cur.text === undefined ? cur : archiveShape(cur.text) ? edit(cur.text) : { reason: 'not-template-shape' };
-  if (out.text === undefined) return refusal('progress.md', out.reason, line, kind);
+  if (out.text === undefined) return refusal('progress.md', out.reason, line, out.notice ? KIND.notice : kind);
   const failed = writeAtomic(file, out.text, cur.mode);
   if (failed) return { wrote: [], unwritten: [writeFailed('progress.md', failed, line, kind)] };
   return { wrote: [`${p.rel}/progress.md`], unwritten: [] };
@@ -194,11 +196,11 @@ export function markIteration(plan, iteration, { status, reviewed, activity, now
     if (!found.lines) return { reason: { missing: 'row-missing', ambiguous: 'row-ambiguous' }[found.reason] ?? found.reason };
     const { lines, index, cells } = found;
     const was = cells[2].trim();
-    if (status !== undefined && status !== was && !(Object.hasOwn(MOVES, was) && MOVES[was].includes(status))) return { reason: 'transition-refused' };
+    if (status !== undefined && status !== was && !(Object.hasOwn(MOVES, was) && MOVES[was].includes(status))) return { reason: 'transition-refused', notice: true };
     for (const i of [2, 3, 4]) if (patch[i] !== undefined) cells[i] = ` ${patch[i]} `.padEnd(cells[i].length);
     lines[index] = `|${cells.join('|')}|`;
     return { text: lines.join('\n') };
-  }, line, 'iteration-row');
+  }, line, KIND.iterationRow);
 }
 
 export function setLastActivity(plan, { activity, now }) {
@@ -210,5 +212,5 @@ export function setLastActivity(plan, { activity, now }) {
     if (hits.length !== 1) return { reason: hits.length === 0 ? 'row-missing' : 'row-ambiguous' };
     lines[hits[0]] = value;
     return { text: lines.join('\n') };
-  }, value, 'last-activity');
+  }, value, KIND.lastActivity);
 }
