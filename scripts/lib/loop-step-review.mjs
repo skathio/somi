@@ -24,12 +24,13 @@ const text = (v, n) => typeof v === 'string' && v.length > 0 && v.length <= n &&
 export function checkReview(a, { bad, intArg }) {
   if (!Array.isArray(a.reviewers) || a.reviewers.length < 1 || new Set(a.reviewers).size !== a.reviewers.length || !a.reviewers.every((r) => REVIEWERS.includes(r))) throw bad('reviewers', `is required: the review agents that just ran, each once, from ${REVIEWERS.join('|')}`);
   if (!VERDICTS.includes(a.verdict)) throw bad('verdict', `must be one of ${VERDICTS.join('|')}`);
-  if (typeof a.review !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(a.review)) throw bad('review', 'must be the review file name, without a path');
+  if (a.review !== undefined && (typeof a.review !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(a.review))) throw bad('review', 'must be the review file name, without a path'); // absent: afterReview names it from the pass
   a.blockers = intArg(a.blockers, 'blockers'); a.majors = intArg(a.majors, 'majors');
   a.findings ??= []; a.fixed ??= [];
-  const f = (x) => x !== null && typeof x === 'object' && Object.keys(x).every((key) => FINDING_KEYS.includes(key)) && text(x.file, 200) && text(x.title, 300) && (x.symbol === undefined || text(x.symbol, 100))
+  if (Array.isArray(a.findings)) a.findings = a.findings.map((x) => (x !== null && typeof x === 'object' ? Object.fromEntries(FINDING_KEYS.filter((key) => key in x).map((key) => [key, x[key]])) : x)); // a key the ledger has no use for is dropped, the known ones are still checked
+  const f = (x) => x !== null && typeof x === 'object' && text(x.file, 200) && text(x.title, 300) && (x.symbol === undefined || text(x.symbol, 100))
     && SEVERITIES.includes(x.severity) && (x.confidence === undefined || ['High', 'Medium', 'Low'].includes(x.confidence));
-  if (!Array.isArray(a.findings) || a.findings.length > 100 || !a.findings.every(f)) throw bad('findings', 'expected up to 100 of {file, title, severity, symbol?, confidence?}, with no other key');
+  if (!Array.isArray(a.findings) || a.findings.length > 100 || !a.findings.every(f)) throw bad('findings', 'expected up to 100 of {file, title, severity, symbol?, confidence?}');
   for (const [field, level] of [['blockers', 'Blocker'], ['majors', 'Major']]) if (a[field] !== a.findings.filter((x) => x.severity === level).length) throw bad(field, `must equal the number of ${level} findings listed in this call`);
   if (!Array.isArray(a.fixed) || a.fixed.length > 100 || !a.fixed.every((id) => typeof id === 'string' && /^F-\d{1,6}$/.test(id))) throw bad('fixed', 'expected up to 100 ids like F-12');
   a.fixed = [...new Set(a.fixed)];
@@ -66,6 +67,7 @@ export function afterReview(ctx, a) {
   if (state.loop !== a.loop) throw k.bad('loop', `the loop state of this slug is a ${state.loop} loop`);
   const key = `${state.pass}:after-review`;
   const prior = state.steps?.[key];
+  a.review ??= `pass-${state.pass}-${String(state.started).replace(/\D/g, '').slice(0, 12)}`; // no review file to name: the ledger's provenance string, the same on a retry of this pass
   const sig = sigOf(a);
   if (prior && prior.sig !== sig) throw k.bad('arguments', 'this pass already has an after-review with other arguments');
   const again = k.replayOf(state, key, []); if (again) return again;

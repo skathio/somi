@@ -20,7 +20,7 @@ export const MAX_BYTES = 2048;
 // A path as printable text: control and bidi characters removed, length capped.
 const printable = (s) => String(s).replace(/[\u0000-\u001f\u007f‎‏‪-‮⁦-⁩]/g, '').slice(0, 200);
 
-function phaseFile(planDir, iteration) {
+export function phaseFile(planDir, iteration) {
   const n = iteration.split('.')[0].padStart(2, '0');
   try {
     const hit = fs.readdirSync(path.join(planDir, 'phases')).filter((f) => f.startsWith(`${n}-`) && f.endsWith('.md')).sort()[0];

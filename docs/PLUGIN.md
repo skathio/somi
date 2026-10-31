@@ -100,7 +100,13 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   locate the global config (`SOMI_GLOBAL_CONFIG`, `XDG_CONFIG_HOME`, `APPDATA`). Only a tool argument is held to
   tightening. It writes `diary.md` entries (each
   ends with a fixed provenance line; never a decision-change or plan-change entry, and no file name from a call) and, in
-  `progress.md`, the iteration's row and the Last activity line. A record the tool could not write, a failed disk write
+  `progress.md`, the iteration's row and the Last activity line. It forgives what a model adds by habit where that loses no
+  gate: `host` and `project_dir` are accepted and ignored on a step that has no use for them (any other unknown argument is a
+  64); `open` reads `files` from the iteration's "Files (approx)" line in its phase file when the argument is absent (a given
+  list wins; no such line is a 64); `after-review` names the review itself when `review` is absent and drops a finding's
+  unknown keys, the known ones still checked; the progress row is found by the names in its table's header (`Iteration`
+  first, a `Status` column; `Reviewed` and `Last activity` are set where the table has them); a diary holding only its title
+  and a quoted preamble takes its first entry. A record the tool could not write, a failed disk write
   included, and a fact it only reports come back in `unwritten` as part of a normal result, each item naming its
   `file`, its `kind` and a `line`. The `kind` is one of: `diary-entry`, `iteration-row`, `last-activity`, `status-line`,
   `notice`. Record the first four in the file named, yourself, from the `line`, a cut summary (a diary entry's is its

@@ -9,6 +9,7 @@ import { documentedStatus, entryOk } from './loop-engine.mjs';
 import { loadState, nowIso, saveState } from './loop-state.mjs';
 import { OBJECT_ID, REVIEW_SCOPES } from './loop-review.mjs';
 import { CONTROL, plainDir, readPlanFile } from './loop-notes.mjs';
+import { phaseFile } from './run-card.mjs';
 import { atOrAbove, ledgerPaths, SEVERITIES } from './findings-ledger.mjs';
 
 export const BUDGET = 2500;
@@ -154,4 +155,25 @@ export function stepLog(root, stateDir, explicit) {
     const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOCTTY ?? 0), 0o600);
     try { if (fs.fstatSync(fd).isFile()) fs.writeSync(fd, text); } finally { fs.closeSync(fd); }
   };
+}
+
+// The paths on the "Files (approx)" line of an iteration's section in its phase file (phases/<NN>-*.md): the backticked
+// ones, once each, the line's wrapped continuation included. null when there is no such file, section or line. The text is
+// data: the caller checks every path as it checks a path it was given.
+export function phaseFiles(root, slug, iteration) {
+  const dir = plainDir(root, ['.somi', 'plans', slug, 'phases']).dir;
+  const rel = dir && phaseFile(path.join(root, '.somi', 'plans', slug), iteration);
+  const text = rel && readPlanFile(path.join(dir, path.basename(rel))).text;
+  if (!text) return null;
+  const lines = text.split('\n');
+  const from = lines.findIndex((l) => new RegExp(`^#{2,4}\\s+Iteration\\s+${iteration.replace('.', '\\.')}(?![0-9A-Za-z])`).test(l));
+  const rest = from < 0 ? [] : lines.slice(from + 1);
+  const end = rest.findIndex((l) => /^#{1,4}\s/.test(l));
+  const section = end < 0 ? rest : rest.slice(0, end);
+  const at = section.findIndex((l) => /^\s*[-*]\s+\*\*Files \(approx\)\*\*\s*:/.test(l));
+  if (at < 0) return null;
+  const tail = section.slice(at + 1);
+  const stop = tail.findIndex((l) => !/^\s+\S/.test(l) || /^\s*[-*]\s/.test(l));
+  const paths = [...new Set([...[section[at], ...(stop < 0 ? tail : tail.slice(0, stop))].join(' ').matchAll(/`([^`]+)`/g)].map((m) => m[1]))];
+  return paths.length ? paths : null;
 }

@@ -327,8 +327,8 @@ console.log('== close and the step tool: cursors from an earlier build, labels, 
   ok.put((s) => { delete s.steps['1:close'].open; return s; }); const okx = close(ok, { status: 'stopped-user-stop' });
   check('a close resumed from a cursor that was finished without its open-findings record reads the ledger now instead of failing', [okx.ok, okx.exit, okx.open_findings, ok.diary().includes('open at or above Major: F-1')], [true, 0, ['F-1: finding 1 here'], true]);
 
-  const wa = gated(); const wt = tree(wa.root); const wb = review(wa, { findings: [{ ...F(1, 'Minor'), extra: { a: { b: 1 } } }], verdict: 'approve' });
-  check('a finding with a key outside file, symbol, title, severity and confidence is refused 64 naming findings, and nothing is written', [wb.exit, wb.error?.startsWith('findings:'), isDeepStrictEqual(tree(wa.root), wt)], [64, true, true]);
+  const wa = gated(); const wb = review(wa, { findings: [{ ...F(1, 'Minor'), extra: { a: { b: 1 } } }], verdict: 'approve' });
+  check('a finding with a key outside file, symbol, title, severity and confidence is recorded with the key dropped', [wb.exit, readFileSync(path.join(wa.root, '.somi', 'reviews', 'p1', 'findings.json'), 'utf8').includes('extra')], [0, false]);
 
   const np = gated(); review(np, { verdict: 'request-changes', majors: 1, findings: [F(1)] }); open(np); np.put((s) => { delete s.history[0].pass; return s; }); const npx = close(np, { status: 'stopped-user-stop' });
   check('a history entry without a pass number is named by its verdict alone, never "(pass null)"', [npx.ok, np.diary().includes('null'), np.diary().includes('last verdict request-changes\n'), npx.verdict_pass], [true, false, true, null]);

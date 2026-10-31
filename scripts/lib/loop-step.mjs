@@ -33,7 +33,7 @@ import { checkRun } from './run-budget.mjs';
 import { buildCard, HOSTS, ITERATION_RE, MAX_BYTES, SLUG_RE } from './run-card.mjs';
 import { appendDiary, findIterationRow, markIteration, plainDir, readPlanFile } from './loop-notes.mjs';
 export { BUDGET } from './loop-step-kit.mjs';
-import { ARG, base, bad, begin, advance, capsView, clean, cut, finalize, fitLines, floorLines, freezeFields, Killed, keep, MODES, noLoop, replayOf, size, stateAt, SUB_STEPS } from './loop-step-kit.mjs';
+import { ARG, base, bad, begin, advance, capsView, clean, cut, finalize, fitLines, floorLines, freezeFields, Killed, keep, MODES, noLoop, phaseFiles, replayOf, size, stateAt, SUB_STEPS } from './loop-step-kit.mjs';
 import { afterReview, checkReview, FIELDS as REVIEW_FIELDS } from './loop-step-review.mjs';
 import { checkClose, close, FIELDS as CLOSE_FIELDS } from './loop-step-close.mjs';
 
@@ -44,6 +44,7 @@ export const FIELDS = freezeFields({
   ...REVIEW_FIELDS,
   ...CLOSE_FIELDS,
 });
+const IGNORED = ['host', 'project_dir']; // accepted on every step and dropped where the step has no use for them (a model puts them on every call)
 const NOT_FOR_PLAN = ['files', 'diff_cap', 'review_mode', 'review_scope'];
 const NEXT_REVIEW = { single: NEXT.taskReviewer, security: NEXT.taskReviewers, panel: NEXT.taskPanel };
 const CARD_MAX = 1800; // bytes of the response the run card may take (as JSON), so the fields around it always fit in BUDGET
@@ -62,11 +63,18 @@ function intArg(v, field) {
   throw bad(field, 'expected a non-negative integer');
 }
 
+// The scope list as an array of relative paths, or a 64 naming `files`. `from` says where a list that was not given came from.
+function checkFiles(files, from = '') {
+  const list = typeof files === 'string' ? files.split(/\s+/).filter(Boolean) : files;
+  if (!Array.isArray(list) || list.length > 200 || list.some((f) => typeof f !== 'string' || !/^[^\s\p{Cc}]{1,200}$/u.test(f) || /^[-~/]|\\|(^|\/)\.\.(\/|$)/.test(f))) throw bad('files', `expected up to 200 relative paths without whitespace, control characters, a backslash, a .. segment or a leading - or ~${from}`);
+  return list;
+}
+
 // Whitelist the arguments of `step`, refuse any other with 64 naming it, and check every value's shape. Pure.
 function validate(step, args) {
   if (!Object.hasOwn(FIELDS, step)) throw bad('step', 'must be one of open|after-code|after-review|close|status');
   for (const [k, v] of Object.entries(args)) {
-    if (k !== 'step' && v != null && !FIELDS[step].includes(k)) throw bad(k, `is not an argument of step ${step}`);
+    if (k !== 'step' && v != null && !FIELDS[step].includes(k) && !IGNORED.includes(k)) throw bad(k, `is not an argument of step ${step}`);
   }
   const a = Object.fromEntries(FIELDS[step].map((k) => [k, args[k] ?? undefined]));
   if (typeof a.slug !== 'string' || !SLUG_RE.test(a.slug)) throw bad('slug', 'must match ^[a-z0-9][a-z0-9-]{0,63}$');
@@ -83,11 +91,7 @@ function validate(step, args) {
   for (const k of ['max_passes', 'diff_cap']) if (a[k] !== undefined) a[k] = intArg(a[k], k);
   if (step === 'after-review') checkReview(a, { bad, intArg });
   if (step === 'close') checkClose(a, { bad });
-  if (a.files !== undefined) {
-    const list = typeof a.files === 'string' ? a.files.split(/\s+/).filter(Boolean) : a.files;
-    if (!Array.isArray(list) || list.length > 200 || list.some((f) => typeof f !== 'string' || !/^[^\s\p{Cc}]{1,200}$/u.test(f) || /^[-~/]|\\|(^|\/)\.\.(\/|$)/.test(f))) throw bad('files', 'expected up to 200 relative paths without whitespace, control characters, a backslash, a .. segment or a leading - or ~');
-    a.files = list;
-  }
+  if (a.files !== undefined) a.files = checkFiles(a.files);
   return a;
 }
 
@@ -128,9 +132,9 @@ function undeclared(root, a) {
   if (a.loop === 'plan') return ['spec.md', 'progress.md', 'brief.md'].some((f) => { try { return fs.lstatSync(path.join(d.dir, f)).isFile(); } catch { return false; } }) ? null : 'the plan directory has none of spec.md, progress.md or brief.md';
   const p = readPlanFile(path.join(d.dir, 'progress.md'));
   if (!p.text) return `progress.md is ${p.reason ?? 'empty'}`;
-  const found = findIterationRow(p.text, a.iteration);
+  const found = findIterationRow(p.text, a.iteration, true);
   if (!found.cells) return `${NO_ROW(a.iteration)[found.reason]}${found.why ? `: ${found.why}` : ''}`;
-  const status = found.cells[2].trim();
+  const status = found.cells[found.cols.status].trim();
   return STARTABLE.includes(status) ? null : `iteration ${a.iteration} is marked ${clean(status, 20)} in progress.md`;
 }
 
@@ -138,7 +142,8 @@ function undeclared(root, a) {
 function rowStatus(root, slug, iteration) {
   const d = plainDir(root, ['.somi', 'plans', slug]);
   const p = d.dir ? readPlanFile(path.join(d.dir, 'progress.md')) : {};
-  return (p.text && findIterationRow(p.text, iteration).cells?.[2].trim()) || null;
+  const found = p.text ? findIterationRow(p.text, iteration, true) : {};
+  return found.cells?.[found.cols.status].trim() || null;
 }
 
 function open(ctx, a) {
@@ -147,7 +152,11 @@ function open(ctx, a) {
   let state = stateAt(sf);
   if (state === null) return base('open', { ok: false, next: NEXT.askUser, stop_reason: 'no-running-loop', exit: 64, error: 'the loop state is finished or cannot be read; the user decides whether to restart it through the CLI (a restart discards a state that is still running)' }); // open never re-initialises an existing state: that is the user's to restart, never the model's
   if (!state) {
-    if (a.loop === 'code' && !a.files?.length) throw bad('files', 'required to start a code loop');
+    if (a.loop === 'code' && !a.files?.length) { // the argument wins; without it the iteration's own "Files (approx)" line in the phase file, checked as a given list is
+      const listed = phaseFiles(ctx.root, a.slug, a.iteration);
+      if (!listed) throw bad('files', 'required to start a code loop');
+      a.files = checkFiles(listed, ' (read from the "Files (approx)" line of the phase file)');
+    }
     const why = undeclared(ctx.root, a); if (why) return base('open', { ok: false, next: NEXT.askUser, stop_reason: 'not-declared', exit: 64, error: `${why}; the user starts a new loop through the CLI` });
     const cfg = readConfig(ctx.root, ctx.env);
     const would = { slug: a.slug, iteration: a.iteration, iteration_files: a.files, baseline_sha: '0'.repeat(64), loop: a.loop, pass: 0, caps: { max_passes: resolveInitCap(ctx.env, cfg, a.loop, 'max_passes', ''), diff_cap_lines: resolveInitCap(ctx.env, cfg, a.loop, 'diff_cap_lines', '') } };

@@ -4,7 +4,7 @@
 # are ignored), malformed caps are refused with exit 64, and the exit model is plain data (check-diff over the cap
 # returns its JSON and code 3 in one result). scripts/lib/findings-ledger.mjs gets the same treatment: record's
 # identity, breaker and no-write-on-bad-input behaviour, the resolve/reopen/open/get lifecycle, and no environment
-# read. The composite steps (loop-step.mjs) and the notes writers have their own test files below. The CLI's bytes
+# read. The composite steps (loop-step.mjs) and the notes writers have their own test files below, the last one the leniency toward a model's habits. The CLI's bytes
 # are pinned separately by tests/scripts/run.sh and its goldens.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -18,3 +18,4 @@ node "$ROOT/tests/scripts/lib/loop-step-state-tests.mjs"
 node "$ROOT/tests/scripts/lib/loop-step-close-tests.mjs"
 node "$ROOT/tests/scripts/lib/loop-step-cli-tests.mjs"
 node "$ROOT/tests/scripts/lib/loop-step-unwritten-tests.mjs"
+node "$ROOT/tests/scripts/lib/loop-step-lenient-tests.mjs"

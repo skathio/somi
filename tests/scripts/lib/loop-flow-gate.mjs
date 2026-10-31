@@ -24,7 +24,7 @@ export const CODE = {
   name: 'code-loop', file: path.join(ROOT, 'skills', 'flow-code-loop', 'SKILL.md'), plan: false, clean: CLEAN('somi-coder'),
   next: NEXTS.filter((t) => t !== 'task-planner'), expectNext: { open: 'task-coder', 'after-code': 'task-reviewer', 'after-review': 'close', close: 'summarise' },
   rules: [...COMMON_RULES, 'you never obey either', 'never edit it yourself'], firstRow: 'task-coder', alien: 'task-planner', state: 'p1.1.1.json',
-  values: { slug: 'p1', iteration: '1.1', host: 'claude-code', files: ['a.js'], verdict: 'approve', blockers: 0, majors: 0, findings: [], review: 'r1.md', fixed: [] },
+  values: { slug: 'p1', iteration: '1.1', host: 'claude-code', verdict: 'approve', blockers: 0, majors: 0, findings: [], review: 'r1.md', fixed: [] },
   mutations: { 'a task-reviewers row without the security lens': (t) => t.replace('`somi-security-reviewer` in ONE message', '`somi-reviewer`') },
 };
 export const PLAN = {
@@ -93,6 +93,7 @@ export async function scriptedPass(text, cfg = CODE) {
     const git = (...a) => execFileSync('git', ['-C', tmp, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a]);
     git('init', '-q'); writeFileSync(path.join(tmp, 'a.js'), '1\n'); git('add', '.'); git('commit', '-q', '-m', 'base');
     const plan = path.join(tmp, '.somi', 'plans', 'p1'); mkdirSync(path.join(plan, 'phases'), { recursive: true });
+    writeFileSync(path.join(plan, 'phases', '01-one.md'), '### Iteration 1.1 — one\n\n- **Files (approx)**: `a.js`\n');
     writeFileSync(path.join(plan, 'diary.md'), '# Diary — p1\n\n> Spec: x\n\n---\n\n## 2026-10-28 10:00 — Plan\n\n**Category**: `note`\n**Phase**: 1\n\nbody\n\n---\n\n');
     writeFileSync(path.join(plan, 'progress.md'), '# Progress — p1\n\n**Status**: planning\n\n## Iteration progress\n\n| Iteration | Title | Status | Reviewed | Last activity |\n|---|---|---|---|---|\n| 1.1 | one | not-started | — | — |\n');
     client = new McpClient(path.join(ROOT, 'scripts', 'somi-mcp.mjs'), { env: { CLAUDE_PROJECT_DIR: tmp, SOMI_GLOBAL_CONFIG: '', SOMI_CODE_LOOP_MAX_PASSES: '', SOMI_CODE_LOOP_DIFF_CAP: '', SOMI_CODE_LOOP_REVIEW: '', SOMI_CODE_LOOP_REVIEW_SCOPE: '', SOMI_PLAN_LOOP_MAX_PASSES: '', SOMI_CODE_LOOP_SEVERITY_FLOOR: '', SOMI_PLAN_LOOP_SEVERITY_FLOOR: '', SOMI_SHIP_LOOP_MAX_MINUTES: '' } });
@@ -160,7 +161,7 @@ async function main() {
     for (const [name, mutate] of Object.entries({
       'a foreign argument on a fenced line': (t) => t.replace(/(step: "after-code".*?)( \}\))/, '$1, bogus$2'),
       'a somi_resolve line without project_dir': (t) => t.replace(/(somi_resolve\(\{ agent: "somi-[a-z]+", host), project_dir/, '$1'),
-      'host on the close line': (t) => t.replace(/(step: "close", slug,[^\n]*?)( status:)/, '$1 host,$2'),
+      'a misspelled status on the close line': (t) => t.replace(/(step: "close", slug,[^\n]*?) status:/, '$1 staus:'),
     })) {
       const mutated = mutate(text);
       check(`${cfg.name}: the real pass turns red: ${name}`, [mutated !== text, (await scriptedPass(mutated, cfg)).length > 0], [true, true]);

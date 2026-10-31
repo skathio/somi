@@ -191,7 +191,7 @@ console.log('== progress writers: the row and the line, nothing else ==');
     'a missing row': [PROGRESS.replace(/\| 2\.1 .*\n/, ''), 'row-missing'],
     'a row with an extra column': [PROGRESS.replace('| in-progress | —        | —             |', '| in-progress | — | — | extra |'), 'row-not-template-shape'],
     'a duplicated row': [PROGRESS.replace('| 1.1       | First', '| 2.1       | Dup     | done        | x        | y             |\n| 1.1       | First'), 'row-ambiguous'],
-    'a table without the template header': [PROGRESS.replace('| Reviewed |', '| Verdict  |'), 'not-template-shape'],
+    'a table whose first column is not Iteration': [PROGRESS.replace('| Iteration |', '| Number    |'), 'not-template-shape'],
   };
   for (const [name, [text, reason]] of Object.entries(bad)) {
     const { plan, root } = fresh({ progress: text });
@@ -199,6 +199,12 @@ console.log('== progress writers: the row and the line, nothing else ==');
     const r = markIteration(plan, '2.1', { status: 'done', reviewed: 'approve', now: NOW });
     check(`${name}: nothing is written and the row text comes back (${reason})`, [snap(root), r.wrote, r.unwritten.map((u) => [u.file, u.reason, u.line])], [before, [], [['progress.md', reason, 'iteration 2.1: Status=done, Reviewed=approve, Last activity=2026-10-29']]]);
   }
+  const four = '# Progress — p1\n\n## Iteration progress\n\n| Iteration | Title | Status | Reviewed |\n|-----------|-------|--------|----------|\n| 2.1 | Writers | not-started | — |\n';
+  const lenient = (progress, status = 'in-progress') => { const { plan, dir } = fresh({ progress }); const r = markIteration(plan, '2.1', { status, reviewed: 'approve', activity: 'x', now: NOW }); return [r.wrote, r.unwritten, read(path.join(dir, 'progress.md')).split('\n').find((l) => l.startsWith('| 2.1'))]; };
+  check('a four-column table (no Last activity) has its Status and Reviewed cells set and nothing else', lenient(four), [['.somi/plans/p1/progress.md'], [], '| 2.1 | Writers | in-progress | approve |']);
+  check('a table without a Reviewed column has its Status set; the Reviewed value is skipped, not refused', lenient(four.replace('| Reviewed |', '| Verdict  |')), [['.somi/plans/p1/progress.md'], [], '| 2.1 | Writers | in-progress | — |']);
+  check('a table with its columns in another order is read by the names of its header', lenient('# Progress — p1\n\n## Iteration progress\n\n| Iteration | Reviewed | Status |\n|---|---|---|\n| 2.1 | — | not-started |\n'), [['.somi/plans/p1/progress.md'], [], '| 2.1 | approve | in-progress |']);
+  check('a table with no Status column, or with a row of another width, is still handed back', [lenient(four.replace('| Status |', '| State  |'))[1].map((u) => u.reason), lenient(four.replace('| — |', '| — | x |'))[1].map((u) => u.reason)], [['not-template-shape'], ['row-not-template-shape']]);
   const noLine = fresh({ progress: PROGRESS.replace(/\*\*Last activity\*\*.*\n/, '') });
   const before = snap(noLine.root);
   const r = setLastActivity(noLine.plan, { activity: 'x', now: NOW });
@@ -268,6 +274,11 @@ console.log('== confinement: closed set of paths, nothing outside, links refused
     const b = snap(q.root); const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { timeout: 5000, encoding: 'utf8' });
     check('a FIFO at diary.md is refused as not-a-regular-file without blocking, and the tree is unchanged', [r.stdout.trim(), snap(q.root)], ['["not-a-regular-file"]', b]);
   }
+  const bare = fresh({ diary: '# Diary — p1\n\n> Newest entries at the top.\n' });
+  const bw = appendDiary(bare.plan, note());
+  check('a diary with only its title and quoted preamble is template shape: the entry is written below the preamble', [bw.wrote, bw.unwritten, read(path.join(bare.dir, 'diary.md')).startsWith('# Diary — p1\n\n> Newest entries at the top.\n\n## 2026-10-29 09:30 — Writers done\n'), headings(read(path.join(bare.dir, 'diary.md')))], [['.somi/plans/p1/diary.md'], [], true, 1]);
+  const bare2 = fresh({ diary: '# Diary — p1\n' }); appendDiary(bare2.plan, note()); appendDiary(bare2.plan, note({ title: 'Next' }));
+  check('a title-only diary takes an entry, and the next goes above it', read(path.join(bare2.dir, 'diary.md')).split('\n').filter((l) => l.startsWith('## ')).map((l) => l.split(' — ')[1]), ['Next', 'Writers done']);
   const d = fresh({ diary: '# Diary\n\nno entries here\n' });
   check('a diary with no entry headings is left byte-identical and the summary of the entry (category, title, body) comes back', unchanged(base, () => appendDiary(d.plan, note()).unwritten.map((u) => [u.reason, u.line])), [[['not-template-shape', 'note — Writers done — two writers']], true]);
 }

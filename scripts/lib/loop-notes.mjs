@@ -98,6 +98,8 @@ function writeAtomic(file, text, mode = 0o644) {
 // an item that asks for no write (a refused move, a skipped compaction) has the kind `notice`.
 const refusal = (file, reason, line, kind) => ({ wrote: [], unwritten: [{ file, reason, line, kind }] });
 const writeFailed = (file, code, line, kind) => ({ file, reason: 'write-failed', code, line, kind });
+// A diary with no entry yet: the title, then only blank, quoted (`> `) and `---` lines. The first entry goes after them.
+const bareDiary = (text) => archiveShape(text) && text.split('\n').slice(1).every((l) => l.trim() === '' || l.startsWith('>') || l.trim() === '---');
 const SKIPPED = 'compaction skipped; diary.md is over 40 entries';
 const skipped = (reason, code) => ({ file: 'diary-archive.md', reason, ...(code ? { code } : {}), line: SKIPPED, kind: KIND.notice });
 
@@ -113,7 +115,7 @@ export function appendDiary(plan, entry) {
   if (p.refused) return refusal('diary.md', p.refused, line, KIND.diaryEntry);
   const file = path.join(p.dir, 'diary.md');
   const cur = readPlanFile(file);
-  const next = cur.text === undefined ? null : insertEntry(cur.text, text);
+  const next = cur.text === undefined ? null : insertEntry(cur.text, text) ?? (bareDiary(cur.text) ? `${cur.text.replace(/\n*$/, '\n\n')}${text}` : null);
   if (next === null) return refusal('diary.md', cur.reason ?? 'not-template-shape', line, KIND.diaryEntry);
   if (isReplay(cur.text, text)) return { wrote: [], unwritten: [], skipped: 'replay' }; // a replayed step: this exact entry is already newest
   const wrote = []; const unwritten = [];
@@ -157,10 +159,12 @@ const HEADER = ['Iteration', null, 'Status', 'Reviewed', 'Last activity'];
 // The one reader of the `| N.M |` row, for markIteration and for `open`: the file is in template shape (a `# ` title
 // first, no CR), the `## Iteration progress` heading is there exactly once, its section (which ends at the next heading
 // of any level) holds no code fence or `<!--`, the template header and its separator open it, and the row exists once
-// with five cells.
-// -> { lines, index, cells } | { reason: 'not-template-shape' | 'row-not-template-shape' | 'missing' | 'ambiguous', why? } where `why`
-// names the condition that failed (for a person; nothing branches on it).
-export function findIterationRow(text, iteration) {
+// with five cells. With `loose` the header need not be the template's: it must start with Iteration, name a Status column,
+// and the row must have as many cells as the header; Reviewed and Last activity are used where the header has them.
+// -> { lines, index, cells, cols } (the column of each cell, -1 where the table has none) | { reason: 'not-template-shape' |
+// 'row-not-template-shape' | 'missing' | 'ambiguous', why? } where `why` names the condition that failed (for a person;
+// nothing branches on it).
+export function findIterationRow(text, iteration, loose = false) {
   const lines = text.split('\n');
   const at = lines.flatMap((l, i) => (l === '## Iteration progress' ? [i] : []));
   const shape = (why) => ({ reason: 'not-template-shape', why });
@@ -171,33 +175,37 @@ export function findIterationRow(text, iteration) {
   if (lines.slice(start + 1, stop < 0 ? undefined : stop).some((l) => /^\s*(```|~~~)|<!--/.test(l))) return shape('the section holds a code fence or <!--');
   const rows = lines.flatMap((l, i) => (i > start && (stop < 0 || i < stop) && l.startsWith('|') ? [i] : []));
   const head = rows.length >= 2 ? splitRow(lines[rows[0]]) : null;
-  if (!head || head.length !== 5 || HEADER.some((h, i) => h && head[i].trim() !== h) || !/^\|[-| :]+\|$/.test(lines[rows[1]])) return shape('the table header or its separator row is not the template\'s');
+  const names = head?.map((h) => h.trim());
+  const template = head?.length === 5 && HEADER.every((h, i) => !h || names[i] === h);
+  const lenient = loose && names?.[0] === 'Iteration' && names.includes('Status');
+  if (!head || !/^\|[-| :]+\|$/.test(lines[rows[1]]) || !(template || lenient)) return shape('the table header or its separator row is not the template\'s');
+  const cols = template ? { status: 2, reviewed: 3, activity: 4 } : { status: names.indexOf('Status'), reviewed: names.indexOf('Reviewed'), activity: names.indexOf('Last activity') };
   const hits = rows.slice(2).filter((i) => splitRow(lines[i])?.[0].trim() === iteration);
   if (hits.length !== 1) return { reason: hits.length === 0 ? 'missing' : 'ambiguous' };
   const cells = splitRow(lines[hits[0]]);
-  return cells.length === 5 ? { lines, index: hits[0], cells } : { reason: 'row-not-template-shape' };
+  return cells.length === head.length ? { lines, index: hits[0], cells, cols } : { reason: 'row-not-template-shape' };
 }
 
 // The moves of a Status cell (a rewrite of the same status is always allowed). Nothing leaves done or superseded, and
 // superseded is set by a human editing the plan, never by this writer.
 const MOVES = { 'not-started': ['in-progress'], 'in-progress': ['done', 'blocked'], blocked: ['in-progress'] };
 
-// Change Status (col 3), Reviewed (col 4) and Last activity (col 5) of the `| N.M |` row, keeping Title and the
-// column widths. The row must exist once, with exactly the five columns of the template's table, and a Status change
-// must be one of MOVES (else `transition-refused`, nothing written).
+// Change Status, Reviewed and Last activity of the `| N.M |` row (the template's columns 3 to 5, or the ones a table with
+// another header has), keeping the other cells and the column widths. The row must exist once with as many cells as its
+// header, and a Status change must be one of MOVES (else `transition-refused`, nothing written).
 export function markIteration(plan, iteration, { status, reviewed, activity, now }) {
   if (typeof iteration !== 'string' || !ITERATION_RE.test(iteration)) throw usageError('iteration must look like 1.2');
   const { date } = stampOf(now);
   if (status !== undefined && !STATUSES.includes(status)) throw usageError(`status must be one of ${STATUSES.join('|')}`);
-  const patch = { 2: status, 3: reviewed === undefined ? undefined : cell(reviewed, 'reviewed'), 4: activity === undefined ? date : `${date} — ${cell(activity, 'activity')}` };
-  const line = `iteration ${iteration}: Status=${patch[2] ?? '(unchanged)'}, Reviewed=${patch[3] ?? '(unchanged)'}, Last activity=${patch[4]}`;
+  const patch = { status, reviewed: reviewed === undefined ? undefined : cell(reviewed, 'reviewed'), activity: activity === undefined ? date : `${date} — ${cell(activity, 'activity')}` };
+  const line = `iteration ${iteration}: Status=${patch.status ?? '(unchanged)'}, Reviewed=${patch.reviewed ?? '(unchanged)'}, Last activity=${patch.activity}`;
   return editProgress(plan, (text) => {
-    const found = findIterationRow(text, iteration);
+    const found = findIterationRow(text, iteration, true);
     if (!found.lines) return { reason: { missing: 'row-missing', ambiguous: 'row-ambiguous' }[found.reason] ?? found.reason };
-    const { lines, index, cells } = found;
-    const was = cells[2].trim();
+    const { lines, index, cells, cols } = found;
+    const was = cells[cols.status].trim();
     if (status !== undefined && status !== was && !(Object.hasOwn(MOVES, was) && MOVES[was].includes(status))) return { reason: 'transition-refused', notice: true };
-    for (const i of [2, 3, 4]) if (patch[i] !== undefined) cells[i] = ` ${patch[i]} `.padEnd(cells[i].length);
+    for (const field of Object.keys(patch)) if (patch[field] !== undefined && cols[field] >= 0) cells[cols[field]] = ` ${patch[field]} `.padEnd(cells[cols[field]].length); // a column the table lacks is skipped
     lines[index] = `|${cells.join('|')}|`;
     return { text: lines.join('\n') };
   }, line, KIND.iterationRow);

@@ -91,7 +91,7 @@ it, with `slug` and `iteration` on every call and `host` (`claude-code` or `copi
 A clean pass is four `somi_loop` calls, two `somi_resolve` calls and two `Task`s:
 
 ```text
-somi_loop({ step: "open", slug, iteration, host, files: [<the iteration's "Files (approx)" paths>] })
+somi_loop({ step: "open", slug, iteration, host })
 somi_resolve({ agent: "somi-coder", host, project_dir })
 Task somi-coder ( = result.brief (the run card first), then /code <slug> phase <N>, iteration <M> )
 somi_loop({ step: "after-code", slug, iteration, host, agent: "somi-coder" })
@@ -102,12 +102,13 @@ somi_loop({ step: "close", slug, iteration, status: result.close_args.status })
 ```
 
 - `open` starts the loop, or resumes a running one from its recorded pass and baseline (a `pass` above 1 on your first
-  call means it resumed: tell the user). Its `brief` is the run card, then from pass 2 the open findings at or above the floor.
+  call means it resumed: tell the user). It takes the file scope from the iteration's "Files (approx)" line in its phase
+  file; pass `files: [<paths>]` only to override that line or when the phase file has none. Its `brief` is the run card, then from pass 2 the open findings at or above the floor.
 - Before each agent start call `somi_resolve` (pass `project_dir`, the model, and the cost line in the briefing);
   full rules: the `somi-dispatch` skill (`somi_skill`, or `somi:somi-dispatch` on Claude Code). `after-code` and
   `after-review` record the agent that just ran; the engine re-resolves it, so the record is what SoMi decided.
 - `after-review` takes the reviewer's findings as `[{file, symbol, title, severity, confidence}]`, with `blockers` and
-  `majors` equal to the count listed, `review` the review file's name (no path) and `fixed` the ledger ids (`F-<n>`)
+  `majors` equal to the count listed, `review` the review file's name (no path; leave it out when no file was written) and `fixed` the ledger ids (`F-<n>`)
   the fresh reviewer's re-check reports resolved, never the coder's claim; if an approve is refused for findings
   still open, the verdict changes, `fixed` does not grow.
 - The tool decides the review lens and scope from the gates table and the sizing record; `next` names the reviewer set

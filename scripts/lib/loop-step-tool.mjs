@@ -27,8 +27,8 @@ export const LOOP_TOOL = {
   name: 'somi_loop',
   description:
     'Run one bounded-loop (/code-loop, /plan-loop) transition and return its JSON result. step: open (start or resume a pass, with the run ' +
-    'card; a code loop needs files), after-code (agent that ran; diff gate), after-review ' +
-    '(reviewers, verdict, blockers, majors, findings, review file, fixed ids), close (done or stopped-<reason>), status (read only). ' +
+    'card; files default to the phase file\'s Files (approx) line), after-code (agent that ran; diff gate), after-review ' +
+    '(reviewers, verdict, blockers, majors, findings, fixed ids), close (done or stopped-<reason>), status (read only). ' +
     'The result names the `next` call, what it `wrote` and the `unwritten` items (file, kind, `line`: a summary to write from, not text to ' +
     'paste): record a diary-entry, iteration-row, last-activity or status-line item in its file yourself; a notice is only reported. ' +
     'A repeat replays the stored result and retries no write. A gate (exit 2-5) is a result with `stop_reason`; any other nonzero `exit` ' +
@@ -52,7 +52,7 @@ export const LOOP_TOOL = {
       blockers: { type: 'integer', description: 'after-review: Blocker findings listed' },
       majors: { type: 'integer', description: 'after-review: Major findings listed' },
       findings: { type: 'array', items: { type: 'object' }, description: 'after-review: {file, title, severity, symbol?, confidence?}' },
-      review: { type: 'string', description: 'after-review: file name, no path' },
+      review: { type: 'string', description: 'after-review: file name, no path; optional' },
       fixed: { type: 'array', items: { type: 'string' }, description: 'after-review: ids really fixed, e.g. F-12' },
       status: { type: 'string', description: 'close: done, or stopped-<reason> as the last result says' },
       project_dir: { type: 'string', description: 'absolute path; narrows the host root; status alone may use it without one' },

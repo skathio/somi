@@ -18,6 +18,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   `project_dir` can narrow inside a host root, and `status` alone may read one without it. Both flows keep the CLI
   procedure as their "Host fallback".
 
+- **The `somi_loop` tool no longer refuses the calls a model makes by habit.** `open` reads `files` from the iteration's
+  "Files (approx)" line in its phase file, a progress table with its own columns is updated by its header names, a diary
+  with only its heading takes its entries, `host` and `project_dir` are ignored where unused, and `after-review` names a
+  missing `review` and drops a finding's unknown keys.
+
 ### Fixed
 
 - **The code loop's diff gate no longer misses changes.** `check-diff` and the loop step skipped untracked files
