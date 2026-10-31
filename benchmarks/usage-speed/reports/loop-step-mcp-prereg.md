@@ -63,3 +63,13 @@ on `close`, a missing review file name, an extra findings key) and on records th
 semantics. The metrics, the mechanism bar and the smoke bar above are unchanged. The `2e01a8f2` smoke rows are not
 part of the candidate baseline. L0 on `3e9dbab7`: `code-loop` 59,875 bytes (+4,685 on the baseline),
 `ship-loop-stage-m1` +36, every other scenario unchanged.
+
+## Amendment, 2026-10-31: the candidate for the full run is `e376e986`
+
+The second S1 smoke on `3e9dbab7` ($0.14) passed checks (1), (2) and (4); (3) failed by its letter. Seed 1, a
+one-pass loop with no refused call, took 17 turns, $0.034 and 102 s (the 6cced12 S1 SoMi medians: 28.5 turns,
+$0.046, 180 s). Seed 2 needed a second pass, which a per-draw turn bar cannot fit (33 turns, $0.095, 198 s), and
+hit two refusals on a lower-case `confidence`. Candidate `e376e98672eca7ec652c3b658a8f6d4625475ed4` reads a
+finding's severity and confidence in any letter case and names the refused field. The full run (S1–S3 × 8 seeds)
+measures this commit; the metrics and the mechanism bar above are unchanged, and the smoke rows are not part of
+the candidate baseline. L0 is the same as on `3e9dbab7`.
