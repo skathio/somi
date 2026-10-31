@@ -137,6 +137,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   A progress.md that the iteration reader refuses is now refused with the condition that failed. A findings-ledger
   save removes the temp files of killed saves that are over an hour old.
 
+### Measured
+
+The `somi_loop` tool, against the run-card baseline (48 live draws, low tier, `reports/e376e98-vs-6cced12.md`):
+**inconclusive on cost**, the primary metric (overhead 1.02, 0.64 to 1.33; the SoMi arm's own cost 0.89). On
+`/code-loop` (S1) the main thread fell from 164k to 117k weighted tokens and from 24.5 to 16 turns, and the SoMi
+draw from $0.046 and 180 s to $0.036 and 132 s (bare: $0.004, 21 s); the pre-registered bar was 13 turns. The rest
+went to second passes (3 of 8 draws) and to progress.md edits made by hand after `close` in every draw. `/ship-loop`
+(S2, S3) did not move. The quality guard is clear; L0 rises 1.0%.
+
 ## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
 
 **Minor — additive.** Commands, agent names, tiers and the MCP tools are unchanged; two agents and
