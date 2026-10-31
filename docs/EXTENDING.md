@@ -98,10 +98,20 @@ or examples, anti-patterns, when *not* to apply, when to escalate. See existing 
 
 > **Worked example — a skill kept out of its consumer:**
 > [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md) is loaded by the `somi`
-> agent's classify step (Copilot's front door) instead of being embedded inline, so the
-> problem-shape → command table has exactly one edit site.
+> dispatcher's classify step (Copilot's front door) instead of being embedded inline, so the
+> problem-shape → command table has exactly one edit site. The same pattern holds every workflow's
+> procedure (`skills/flow-<name>/`) and each heavy agent's procedure (`skills/role-<agent>/`).
 
 ## Adding a command
+
+A command is two files: the procedure, `skills/flow-<name>/SKILL.md` (frontmatter `name: flow-<name>`,
+a one-line `description`, `user-invocable: false`), and a thin `commands/<name>.md` wrapper that
+loads it (copy an existing wrapper). Add the name to the known-command list in `agents/somi.md` and
+a row to the `somi-routing` table; `tests/scripts/somi-agent-dispatch-contract.sh` fails the build
+when the list and `commands/` differ. Write every user question in the procedure as a plain "ask
+the user" step: run as a command it is asked directly, run by `somi-flow` it becomes a
+`CHECKPOINT` ([`skills/somi-checkpoint`](../skills/somi-checkpoint/SKILL.md)).
+
 
 `commands/<name>.md`:
 
@@ -130,11 +140,11 @@ rule in "Adding an agent" above. Keep commands thin; agents do the heavy lifting
 linking `../commands/<name>.md` to [`docs/COMMANDS.md`](./COMMANDS.md) — `scripts/validate.sh` fails
 the build otherwise (`COMMAND NOT INDEXED`).
 
-**Starting an agent.** At the point in the command's own procedure that Tasks an agent, start it
+**Starting an agent.** At the point in the flow skill's procedure that Tasks an agent, start it
 per [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) — a one-line reference
 (`Start it per skills/somi-dispatch`) at that point in the command's text is enough; do not restate
-the resolve-then-start procedure inline. This applies whether the front door is running the
-command's procedure or the command is typed directly — every entry path resolves an agent's tier
+the resolve-then-start procedure inline. This applies whether `somi-flow` is running the
+procedure or the command is typed directly — every entry path resolves an agent's tier
 and model against the session ceiling the same way. `scripts/validate.sh` derives which commands
 Task an agent from the real agent names under `agents/` and fails the build (`MISSING DISPATCH
 REFERENCE`) if one of them doesn't reference the skill.

@@ -1,0 +1,34 @@
+---
+name: flow-pr
+description: The /pr procedure, loaded by the /pr command and by the somi-flow runner.
+user-invocable: false
+---
+
+# /pr — Work item → pull request handoff
+
+You are running the **PR handoff** workflow of somi: turning a work item's `.somi/` artifact set
+into the PR description the team actually reviews, instead of leaving the author to retype it.
+
+Target work item: **$ARGUMENTS** (a slug under `.somi/plans/`; empty = the single work item with
+`status: in-progress` or `done`-but-unmerged, else ask).
+
+## What to do
+
+1. **Brief the `somi-pr` agent** ([`agents/somi-pr.md`](../../agents/somi-pr.md)) — before this `Task`, call
+   `somi_resolve` for `somi-pr` (with `project_dir`), pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`); full rules: the `somi-dispatch` skill (`somi_skill`, or
+   `somi:somi-dispatch` on Claude Code) — with the resolved slug. It gathers
+   the artifacts itself and returns a composed title + body — it never writes or publishes
+   anything; this command owns every write, including `gh pr create`.
+2. **Show the composed title + body to the user.** Opening a PR is outward-facing — only run
+   `gh pr create` after the user confirms (use `--draft` if they asked for a draft, and their
+   base branch if named). No `gh` available or the user declines → hand them the composed
+   markdown to paste. Never push branches or create the PR unprompted.
+3. **After opening (if opened)**:
+   - Append a `diary.md` entry (category `note`): `PR opened: <url>`.
+
+## Guardrails
+
+- **Confirmation before `gh pr create` — always.** Publishing is not reversible the way a local
+  edit is.
+- **Report reality.** If the agent's composed description shows red tests, open findings, or
+  incomplete iterations, don't soften it before showing the user.

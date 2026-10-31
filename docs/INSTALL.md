@@ -92,7 +92,7 @@ path uses `hooks/hooks.json` instead.
 **The bundled MCP server is not part of this merge.** Only the `hooks` and `permissions` blocks are
 vendored above; the plugin-manifest-declared `mcpServers` entry (see
 ["The bundled MCP server"](#the-bundled-mcp-server) above) isn't read outside an actual plugin
-install, so a vendored copy has no `somi_resolve`/`somi_command` tools available. The front door
+install, so a vendored copy has no `somi_resolve`/`somi_skill` tools available. The front door
 still works here without extra setup: its CLI fallback (`node scripts/somi-dispatch.mjs resolve
 ...`) applies precisely because a vendored install's path (`${SOMI_VENDOR_ROOT}`) is already known,
 which is exactly the case that fallback is for.

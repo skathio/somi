@@ -38,14 +38,16 @@ artifacts inside `.somi/plans/<slug>/` and `.somi/reviews/<slug>/`.
 > `/review` (use `/review plan <slug>` or pass an `.somi/plans/<slug>/` path).
 
 > **Note:** there is no `/somi` command. The status dashboard and problem-shape router it used to
-> provide now live entirely in the `somi` **agent** — GitHub Copilot's front-door persona (see
-> [`docs/PLUGIN.md`](./PLUGIN.md)) — whose classification table is
-> [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md). Claude Code has no equivalent
-> entry point; use the direct commands in the table above.
+> provide now live in the `somi` **agent** — the front-door dispatcher made for GitHub Copilot (see
+> [`docs/AGENTS.md`](./AGENTS.md#the-front-door-agents)) — which hands each request to the
+> `somi-flow` runner (or `somi-general` when no workflow fits); its classification table is
+> [`skills/somi-routing/SKILL.md`](../skills/somi-routing/SKILL.md). On Claude Code, use the direct
+> commands in the table above.
 
 ## Command file shape
 
-Each command lives in `commands/<name>.md` with frontmatter:
+Each command is a thin wrapper in `commands/<name>.md`; its procedure is the skill
+`skills/flow-<name>/SKILL.md` ([Workflow procedures](./SKILLS.md#workflow-procedures)):
 
 ```markdown
 ---
@@ -56,28 +58,32 @@ allowed-tools: Task, Read, Edit, Write, Bash, Grep, Glob, WebFetch
 
 # /command-name — Title
 
-The body of the command (the prompt that runs when the user types `/command-name`).
-You can reference `$ARGUMENTS` to insert the user's argument string.
+The procedure lives in the `flow-command-name` skill, shared with the `somi-flow` runner. Load it
+and follow it step by step, passing the arguments below. You are in the main conversation, so ask
+the user at its gates directly.
 ```
 
-The command body is essentially a **prompt template**. It tells Claude what to do when the user
-invokes the command. SoMi commands typically:
+The wrapper exists so the same procedure has two entry points that cannot drift apart: typed as a
+command, it runs in the main conversation and asks the user at its gates directly; started by the
+`somi` dispatcher, it runs inside `somi-flow`, which returns a `CHECKPOINT` at each gate instead
+([`skills/somi-checkpoint`](../skills/somi-checkpoint/SKILL.md)). A flow procedure typically:
 
-1. Validate input (ask the user if `$ARGUMENTS` is missing/unclear).
-2. Resolve context — work-item slug, current iteration, target diff.
-3. Invoke one or more agents via the Task tool.
-4. Write artifacts under `.somi/plans/<slug>/` (the **command** owns the writes — review agents are
-   contractually forbidden from writing and return text; the command persists).
-5. Update `progress.md` and `diary.md` as appropriate.
-6. Summarise back with verdict + next step.
+1. Validates input (asks the user if the arguments are missing or unclear).
+2. Resolves context — work-item slug, current iteration, target diff.
+3. Invokes one or more agents via the Task tool.
+4. Writes artifacts under `.somi/plans/<slug>/` (the **procedure** owns the writes — review agents are
+   contractually forbidden from writing and return text; the procedure persists).
+5. Updates `progress.md` and `diary.md` as appropriate.
+6. Summarises back with verdict + next step.
 
 ## Why commands are thin orchestrators
 
-The heavy lifting lives in **agents**. Commands are deliberately small because:
+The heavy lifting lives in **agents**, and each heavy agent's own procedure lives in its
+`role-<agent>` skill. Flow procedures are deliberately small because:
 
 - They're easy to read and modify.
 - They make the workflow visible — a new team member can read `/plan.md` in 60 seconds and
-  understand what the planner workflow does.
+  understand what the planner workflow does (its procedure is `skills/flow-plan/SKILL.md`).
 - They isolate orchestration from agent-internal behavior; you can swap an agent's prompt without
   touching the command.
 - They carry no `cost:` of their own, and no `model:` either — `cost:` sizes an agent instance
@@ -103,10 +109,10 @@ already using. The agent a command Tasks runs on its own **default tier** (from 
 refactorer) — `low` selected for
 a `low` ceiling (flag, env var, `cost.ceiling`, or one set earlier by flag or env var) or a
 `cost.agents` entry of `low`, with the ceiling and its
-source announced before the first agent it applies to starts. Every command that Tasks an agent
+source announced before the first agent it applies to starts. Every flow procedure that Tasks an agent
 directly is instructed to resolve it per
 [`skills/somi-dispatch`](../skills/somi-dispatch/SKILL.md) — the same resolve-then-start procedure
-the `somi` front door uses; `scripts/validate.sh` checks that every such command references the
+the `somi` dispatcher uses; `scripts/validate.sh` checks that every such flow skill references the
 skill, though the resolution itself is a prompt-level instruction, not something the check runs.
 See
 [Cost tiering](./AGENTS.md#cost-tiering). Review commands (`/review`, `/security-review`,

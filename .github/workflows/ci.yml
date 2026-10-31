@@ -88,8 +88,12 @@ jobs:
     with:
       library_ref: 'v2' # MUST match the uses: pin above (dual-pin invariant, D9) — same ref as publish.yml
       node_version: '24'
-      # test_command, coverage_path, scan_disable left at their documented
-      # defaults — see the comments above for why each is correct as-is.
+      # The light shard: every test script except the slow ones, which the `tests`
+      # matrix job below runs on runners of their own (tests/scripts/suite-plan.json).
+      # Still validate.sh, so every inline check and the coverage stub run here.
+      test_command: 'SOMI_SUITE_SHARD=light npm test'
+      # coverage_path, scan_disable left at their documented defaults — see the
+      # comments above for why each is correct as-is.
 
   # Preserves the old hand-rolled `ci` job's publishability gate (D10
   # consumer-composition pattern — same shape as rogue's 4 custom jobs
@@ -138,6 +142,35 @@ jobs:
         run: |
           npm pkg set version="0.0.0-dryrun.${{ github.run_id }}"
           npm publish --dry-run --tag dryrun
+
+  # The slow test scripts, one runner per shard of tests/scripts/suite-plan.json, so none of them shares a
+  # machine with the rest of the suite. The plan's `light` shard (the `ci` job above) is every script no
+  # shard names, and run-suites.mjs refuses a plan that names a script validate.sh no longer queues, so
+  # the four jobs together run each script exactly once. Each shard also re-runs validate.sh's inline
+  # checks (about a minute), which keeps every job a complete `npm test` entry point.
+  # No `needs:`, for the same reason as publish-dry-run.
+  tests:
+    name: tests (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [heavy-1, heavy-2, heavy-3]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '24'
+
+      - name: Run the shard
+        env:
+          SOMI_SUITE_SHARD: ${{ matrix.shard }}
+        run: bash scripts/validate.sh
 
   # The overview page (site/), which publish.yml deploys to GitHub Pages with each release. It is its
   # own package with its own lockfile, so the `ci` job above (the zero-dependency plugin package)

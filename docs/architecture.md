@@ -89,11 +89,14 @@ that Task a `cost: high` agent for their **entire** job — `somi-discovery-anal
 one high-quality deep repo read, paid once. `/adopt` Tasks the `somi-atlas` agent as its own Stage 1, at
 the agent's own default tier — it does not inline that read.
 
-**How dispatch actually happens.** Neither a command nor the front door hands a whole command's
-procedure to one Tasked agent that runs it end-to-end. On Claude Code, invoking a command runs its
-own steps live, in that turn; on Copilot, selecting the `somi` front-door persona
-(`agents/somi.md`) runs the matched command's own procedure live instead. Either way, every agent
-that procedure starts — one `Task` call per agent, never the whole command in one call — resolves
+**How dispatch actually happens.** No specialist is handed a whole workflow. Every workflow's procedure is
+one skill, `skills/flow-<name>/SKILL.md`, with two entry points. On Claude Code, invoking a command
+loads that skill and runs it live, in that turn. On Copilot, the `somi` front-door dispatcher
+(`agents/somi.md`) routes the request and starts the `somi-flow` runner, which loads the same
+skill and runs it as a subagent; the dispatcher itself runs no procedure, and a user gate inside the
+flow comes back to it as a `CHECKPOINT` it asks the user ([`somi-checkpoint`](../skills/somi-checkpoint/SKILL.md)).
+Either way, every agent the procedure starts — one `Task` call per agent, never the whole workflow
+in one call — resolves
 its cost tier and model through `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md)
 skill, served over the bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP
 isn't reachable — see [`docs/PLUGIN.md`](./PLUGIN.md#bundled-mcp-server)) before the `Task`, and

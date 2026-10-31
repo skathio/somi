@@ -1,6 +1,6 @@
 {
   "name": "@skathio/somi",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "scripts": {
     "test": "bash scripts/validate.sh",
     "eval:behavioral": "node tests/evals/run.mjs",

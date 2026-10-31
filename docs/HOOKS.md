@@ -17,10 +17,10 @@ non-negotiables and uses agents for judgment-heavy work.
 
 All hook scripts under `hooks/` are zero-dependency Node ES modules (`.mjs`), invoked as
 `node <file>` — no `bash`, no `jq`. That makes the hook *runtime* itself Windows-native: `node
-<file>` works the same on Windows, Linux, and macOS. One caveat, not yet closed: the path-matching
-guards (`guard-protected-paths`, `block-secret-writes`) build their globs against forward-slash
-paths, and their behavior against native Windows `\`-separated paths hasn't been verified yet — a
-tracked follow-up, not a claim of full guard parity on Windows.
+<file>` works the same on Windows, Linux, and macOS. One caveat: the path-matching
+guards (`guard-protected-paths`, `block-secret-writes`) read `\` as `/`, treat a drive letter as an
+absolute path, collapse `..`, `.` and `//`, and match `.git`, `.somi` and `.claude` case-insensitively,
+but that is tested on Linux only, and Windows 8.3 short names (`PROGRA~1`) are not resolved.
 
 ## What SoMi ships
 
@@ -30,8 +30,8 @@ tracked follow-up, not a claim of full guard parity on Windows.
 | `PreToolUse`       | `Write\|Edit\|MultiEdit\|mcp__.*somi_config` | `pre-tool/guard-cost-lowering.mjs` | Asks the user before a change to `.somi/config.json` (through the `somi_config` MCP tool or a file edit) that would lower an agent's effective cost tier, judged over the global config, and before any file edit of the global config. Silent for raises, no-ops and every other call. |
 | `PreToolUse`       | `Bash`        | `pre-tool/block-dangerous-bash.mjs`              | Denies `rm -rf /`, `curl \| sh`, force-push to protected branches **or without a verifiable target branch**, destructive SQL (case-insensitive), and shell-level writes to secret paths (`> .env`, `tee`, `sed -i`, `cp`/`mv`). Also matches inside `bash -c "…"` quoting. |
 | `PreToolUse`       | `Bash`        | `pre-tool/gate-dep-install.mjs`                  | Denies `npm install <pkg>` / `pip install <pkg>` / `cargo add` / etc. without `SOMI_ALLOW_DEP_INSTALL=1` or a `.somi/config.json` `dep_install.allow` prefix match. Bare reinstall is allowed. |
-| `PreToolUse`       | `Write\|Edit` | `pre-tool/block-secret-writes.mjs`               | Denies writes to `.env`, `*.pem`, `id_rsa`, secret YAML/JSON.                                                              |
-| `PreToolUse`       | `Write\|Edit` | `pre-tool/guard-protected-paths.mjs`             | Denies writes to `.git/`, `node_modules/`, `dist/`, lockfiles, the SoMi plugin dir.                                     |
+| `PreToolUse`       | `Write\|Edit\|MultiEdit\|NotebookEdit` | `pre-tool/block-secret-writes.mjs`               | Denies writes to `.env`, `*.pem`, `id_rsa`, secret YAML/JSON.                                                              |
+| `PreToolUse`       | `Write\|Edit\|MultiEdit\|NotebookEdit` | `pre-tool/guard-protected-paths.mjs`             | Denies writes to `.git/`, `node_modules/`, `dist/`, lockfiles, the SoMi plugin dir, and `.somi/somi-state/{tier,loop,run}/`. |
 | `PostToolUse`      | `Write\|Edit` | `post-tool/lint-changed-files.mjs`               | Runs the project's linter on the changed file; surfaces output back to the model via `hookSpecificOutput.additionalContext`. |
 | `PostToolUse`      | `*`           | `post-tool/audit-log.mjs`                        | Appends every tool call to `.somi/audit.log`.                                                                              |
 | `UserPromptSubmit` | (any)         | `user-prompt-submit/inject-workflow-context.mjs` | Injects a SoMi reminder + active work-item state on first turn / state-change; surfaces TODO(claude)/scratch-file loose ends every turn. |
@@ -85,7 +85,7 @@ protected-branch check meaningful), destructive SQL (`DROP DATABASE`, `DROP SCHE
 `DROP TABLE …`, `TRUNCATE …`, `DELETE FROM x;` — case-insensitive), `--no-verify` on commit/push,
 and **shell-level writes to secret-bearing paths** (`> .env`, `>> …/.env`, `tee .env`,
 `sed -i … .env`, `cp`/`mv` onto a secret path) — the Bash-side twin of `block-secret-writes.mjs`,
-whose `Write|Edit` matcher those shapes would otherwise bypass. All checks also run against a
+whose `Write|Edit|MultiEdit|NotebookEdit` matcher those shapes would otherwise bypass. All checks also run against a
 **quote-stripped copy** of the command, so `bash -c "rm -rf /"` can't hide inside quoting.
 
 ### `gate-dep-install.mjs`
@@ -109,9 +109,12 @@ Refuses to write/edit files whose basename matches a secret-bearing pattern (`.e
 ### `guard-protected-paths.mjs`
 
 Refuses to write to paths owned by tooling: `.git/`, `node_modules/`, `dist/`, `build/`, `target/`,
-`__pycache__/`, and the SoMi plugin install itself (so agents can't rewrite their own ruleset under
-you). Relative paths are normalised against the project root before matching, so
-`node_modules/x.js` can't slip past the globs. Also blocks hand-editing of lockfiles by default —
+`__pycache__/`, the SoMi plugin install itself (so agents can't rewrite their own ruleset under
+you), and the sizing, loop and run-budget state under `.somi/somi-state/{tier,loop,run}/`. Scripts write
+that state from node, which no hook sees; only an agent's file-tool write is refused. Paths are resolved
+against the project root before matching (`\` read as `/`, `..`, `.` and `//` collapsed), so `node_modules/x.js`,
+`.git\config` and `.somi/plans/../somi-state/loop/x.json` can't slip past the globs, and a write at a protected
+directory's own path (`.git`, `.somi/somi-state/loop`) is refused. Also blocks hand-editing of lockfiles by default —
 those should be regenerated by package managers. Override per-session with
 `SOMI_ALLOW_LOCKFILES=1`, or as committed project policy with `lockfiles.allow_edit: true` in
 `.somi/config.json` (env wins, including `=0` to re-deny for a session).
