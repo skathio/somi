@@ -52,3 +52,14 @@ Go only if all hold:
 
 A failure of (1) stops the measurement for a fix; a failure of (3) alone stops it until the extra turns are
 found. The full run (24 chunks, worst case $72) starts only after a separate go-ahead.
+
+## Amendment, 2026-10-31: the candidate moves to `3e9dbab7`
+
+The S1 smoke on `2e01a8f2` (2 draws, $0.12) failed the turns check: 26 and 33 main-thread turns against 16, with
+cost and time about the baseline's ($0.051 and $0.059 per SoMi draw, 177 and 195 s). The transcripts put 10–14
+turns per draw on calls the tool refused (no file list, a four-column progress table, a header-only diary, `host`
+on `close`, a missing review file name, an extra findings key) and on records then written by hand. Candidate
+`3e9dbab751784f6d331b39f855e81ca4aa62ae89` makes the tool accept those inputs; every gate keeps its exit
+semantics. The metrics, the mechanism bar and the smoke bar above are unchanged. The `2e01a8f2` smoke rows are not
+part of the candidate baseline. L0 on `3e9dbab7`: `code-loop` 59,875 bytes (+4,685 on the baseline),
+`ship-loop-stage-m1` +36, every other scenario unchanged.
