@@ -168,6 +168,41 @@ under `fixtures/`, an authored entry with no request or fixture) and computes `l
 ids, labels, sensitive flags, tasks, fixture names and request texts, in id order. Reasons are prose and are not
 hashed. A run recorded against one set is comparable only with a run on the same hash.
 
+`tests/evals/lib/sizing-score.mjs` scores a recorded probe against the set, so no one computes the bar by hand. Over an
+entry's draws it takes the modal tier and its share. An entry passes when the modal tier is its label and at least
+four of five draws (`ceil(0.8 * draws)`) agree; a floor case passes only when every draw agrees. A tie for the mode has
+no modal tier and fails, and a draw with no tier, or one outside the three, matches no label. The bar can be read per
+task (every entry passes) or pooled (at most one draw in ten off-label across the set, and every floor case still on
+every draw); both numbers are always printed, and `--pooled` chooses which one decides the exit code.
+
+Each chunk of the probe writes its own `results.jsonl` under its `--out`. Concatenate the chunk files of one arm into one
+file, then build a record from it and score that:
+
+```bash
+# the --out directories of one arm's probe chunks, here named sizing-<n>
+cat "$HOME"/bench-runs/sizing-*/results.jsonl > somi-rows.jsonl
+node tests/evals/lib/sizing-score.mjs --build somi-rows.jsonl --plugin-sha <sha> [--arm somi] [--set <file>] > record.json
+node tests/evals/lib/sizing-score.mjs --score record.json [--pooled] [--set <file>]
+node tests/evals/lib/sizing-score.mjs --compare baseline.json candidate.json [--pooled] [--set <file>]
+```
+
+`--build` reads one file, ignores the entries that did not finish (status other than `done`), and writes a record of the
+plugin sha, the arm, the label hash and each entry's draws. It refuses, naming the row: a row of another phase than
+`sizing`, a row of another arm than `--arm`, a row for a scenario the set does not hold, a draw that ended `paused` or
+`over-budget` (that is a harness event, not an answer, so it is drawn again rather than scored as a wrong tier), and
+entries with different draw counts or none. A file that mixes both arms is therefore refused: build one record per arm
+from that arm's rows. `--arm` (default `somi`) names the arm the rows belong to; `--plugin-sha` is the 7 to 40 hex
+characters of the plugin build that was probed and is required; `--set` reads a set file instead of the committed one,
+for all three commands; `--pooled` makes the pooled reading, not the per-task one, decide the exit code of `--score`
+(and the line `--compare` prints). A flag that needs a value and has none is a usage refusal.
+
+`--score` exits `0` when the bar is met, `3` when it is missed (the line names the entries that disagree) and `2` on a
+refusal; `--compare` exits `0` when the two records are comparable, whichever way each scored. A refusal is never a
+verdict: a record whose label hash is not the committed set's, two records with different hashes, a malformed record
+or mixed draw counts, a line of the rows file that is not JSON (the message names its number), or a set that fails
+validation. Only those exit `2`; any other failure is a defect in the tool and exits `1` with its stack. Exit codes
+`64` and `65` belong to `somi-tier` and are not used.
+
 ### 4.4 Turn the outputs into a baseline file
 
 Assemble the baseline from `l0.json`, `l1.json` and every chunk's `results.jsonl`. Only entries with status

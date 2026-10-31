@@ -391,6 +391,7 @@ res "$([ "$(cat "$TMP/o-mutsymout.rc")" = 0 ] && echo 1 || echo 0)" "a driver th
 res "$(grep -rqF -- "$TOKEN" "$TMP/t-mutredact" && echo 1 || echo 0)" "a sink that writes the token unredacted was not caught by the disk scan"
 
 node tests/scripts/lib/sizing-set-tests.mjs || FAILN=$((FAILN + 1))  # the labelled sizing set: free, no stub needed
+node tests/scripts/lib/sizing-score-tests.mjs || FAILN=$((FAILN + 1))  # the sizing scorer and its mutations: free, no stub needed
 
 echo "  $PASS passed, $FAILN failed"
 [ "$FAILN" -eq 0 ]
