@@ -22,6 +22,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   "Files (approx)" line in its phase file, a progress table with its own columns is updated by its header names, a diary
   with only its heading takes its entries, `host` and `project_dir` are ignored where unused, and `after-review` names a
   missing `review` and drops a finding's unknown keys.
+- **`after-review` reads a finding's `severity` and `confidence` in any letter case, and a refused finding names its field and index.**
+  `"confidence": "high"` is recorded as `High`; a value still outside the set is refused as
+  `findings[2].confidence: must be one of High|Medium|Low`, where it used to be a message that named no field.
 
 ### Fixed
 

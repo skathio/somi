@@ -104,7 +104,7 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   gate: `host` and `project_dir` are accepted and ignored on a step that has no use for them (any other unknown argument is a
   64); `open` reads `files` from the iteration's "Files (approx)" line in its phase file when the argument is absent (a given
   list wins; no such line is a 64); `after-review` names the review itself when `review` is absent and drops a finding's
-  unknown keys, the known ones still checked; the progress row is found by the names in its table's header (`Iteration`
+  unknown keys, the known ones still checked, and reads a finding's `severity` (`Blocker|Major|Minor|Nit`) and `confidence` (`High|Medium|Low`) in any letter case; a refused finding names its field and index, e.g. `findings[2].confidence`; the progress row is found by the names in its table's header (`Iteration`
   first, a `Status` column; `Reviewed` and `Last activity` are set where the table has them); a diary holding only its title
   and a quoted preamble takes its first entry. A record the tool could not write, a failed disk write
   included, and a fact it only reports come back in `unwritten` as part of a normal result, each item naming its

@@ -95,10 +95,19 @@ console.log('== what stays refused ==');
   runStep(bc, { step: 'open', slug: 'expired-token', iteration: '1.1' }); writeFileSync(path.join(bad, 'src', 'auth', 'token.mjs'), 'x\n');
   runStep(bc, { step: 'after-code', slug: 'expired-token', iteration: '1.1', agent: 'somi-coder' });
   const rv = (over) => runStep(bc, { step: 'after-review', slug: 'expired-token', iteration: '1.1', reviewers: ['somi-reviewer'], verdict: 'request-changes', blockers: 0, majors: 1, findings: [{ file: 'a.js', title: 't', severity: 'Major' }], ...over });
-  check('a finding is still refused for a missing field or a bad value, and a review name with a path is still refused', [{ findings: [{ file: 'a.js', severity: 'Major', extra: 1 }] }, { findings: [{ file: 'a.js', title: 't', severity: 'Huge' }] }, { review: 'a/b.md' }].map((o) => refusal(rv(o))), [[64, 'findings'], [64, 'findings'], [64, 'review']]);
+  const ledgerOf = () => JSON.parse(text(path.join(bad, '.somi', 'reviews', 'expired-token', 'findings.json'))).findings ?? [];
+  check('a finding is still refused for a missing field or a bad value, each naming the field and the index, and a review name with a path is still refused', [{ findings: [{ file: 'a.js', severity: 'Major', extra: 1 }] }, { findings: [{ file: 'a.js', title: 't', severity: 'Huge' }] }, { findings: [{ file: 'a.js', title: 't', severity: 'Major' }, { file: 'b.js', title: 't', severity: 'Major', confidence: 'certain secret' }] }, { findings: ['x'] }, { review: 'a/b.md' }].map((o) => rv(o).error), ['findings[0].title: is required', 'findings[0].severity: must be one of Blocker|Major|Minor|Nit', 'findings[1].confidence: must be one of High|Medium|Low', 'findings[0]: must be an object {file, title, severity, symbol?, confidence?}', 'review: must be the review file name, without a path']);
+  check('nothing was recorded by the refused calls', ledgerOf(), []);
   const first = rv({}); const again = rv({});
-  const led = JSON.parse(text(path.join(bad, '.somi', 'reviews', 'expired-token', 'findings.json'))).findings ?? [{ seen: [], introduced_by: '' }];
-  check('with no review name the same one is generated for a retry of the pass: replayed, one finding, one sighting', [first.exit, again.replayed, led.length, led[0].seen.length, /^pass-1-\d{12}$/.test(led[0].introduced_by)], [0, true, 1, 1, true]);
+  const led = ledgerOf();
+  check('with no review name the same one is generated for a retry of the pass: replayed, one finding, one sighting', [first.exit, again.replayed, led.length, led[0]?.seen.length, /^pass-1-\d{12}$/.test(led[0]?.introduced_by)], [0, true, 1, 1, true]);
+
+  const low = fixture(); const lw = { ...ctx, root: low, stateDir: path.join(low, '.somi', 'somi-state', 'loop') };
+  runStep(lw, { step: 'open', slug: 'expired-token', iteration: '1.1' }); writeFileSync(path.join(low, 'src', 'auth', 'token.mjs'), 'x\n');
+  runStep(lw, { step: 'after-code', slug: 'expired-token', iteration: '1.1', agent: 'somi-coder' });
+  const lower = runStep(lw, { step: 'after-review', slug: 'expired-token', iteration: '1.1', reviewers: ['somi-reviewer'], verdict: 'request-changes', blockers: 0, majors: 1, findings: [{ file: 'a.js', title: 'lower case', severity: 'major', confidence: 'high' }, { file: 'b.js', title: 'upper case', severity: 'MINOR', confidence: 'LOW' }] });
+  const stored = (JSON.parse(text(path.join(low, '.somi', 'reviews', 'expired-token', 'findings.json'))).findings ?? []).map((f) => [f.title, f.severity, f.confidence]);
+  check('severity and confidence in any letter case are recorded in the canonical spelling', [lower.exit, stored], [0, [['lower case', 'Major', 'High'], ['upper case', 'Minor', 'Low']]]);
 }
 
 console.log(`loop step leniency tests: ${pass} ok, ${fail} failed`);

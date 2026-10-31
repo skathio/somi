@@ -182,7 +182,9 @@ export const SEVERITIES = ['Blocker', 'Major', 'Minor', 'Nit']; // strongest fir
 // A stored severity is read as one of the four names, else Unrated; an Unrated one counts as at the floor (it fails closed).
 export const readSeverity = (s) => (SEVERITIES.includes(s) ? s : 'Unrated');
 export const atOrAbove = (severity, floor) => !SEVERITIES.includes(severity) || SEVERITIES.indexOf(severity) <= SEVERITIES.indexOf(floor);
-const canonSeverity = (v) => SEVERITIES.find((n) => typeof v === 'string' && n.toLowerCase() === v.toLowerCase()) ?? v; // blocker -> Blocker
+export const CONFIDENCES = ['High', 'Medium', 'Low'];
+export const canonName = (names, v) => names.find((n) => typeof v === 'string' && n.toLowerCase() === v.toLowerCase()) ?? v; // blocker -> Blocker
+const canonSeverity = (v) => canonName(SEVERITIES, v);
 const STATUSES = ['fixed', 'accepted', 'wontfix'];
 const refuse = (msg) => ({ lines: [], code: 64, message: `${PROG}: ${msg}` });
 const ok = (lines = []) => ({ lines, code: 0, message: '' });

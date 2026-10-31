@@ -143,7 +143,7 @@ console.log('== arguments and confinement: refused 64 naming the field, nothing 
     ['blockers', { blockers: 3 }], ['majors', { majors: 1 }], ['findings', { findings: [{ file: 'a.js', title: 't' }] }], ['verdict', { majors: 1, findings: [F(1)] }], ['verdict', { verdict: 'approve-with-comments', blockers: 1, findings: [F(1, 'Blocker')] }],
     ['reviewers', { reviewers: ['somi-coder'] }], ['reviewers', { reviewers: ['somi-reviewer', 'somi-coder'] }], ['reviewers', { reviewers: ['no-such-agent'] }], ['reviewers', { reviewers: ['somi-reviewer', 'somi-reviewer'] }], ['findings', { findings: [{ ...F(1), title: 'a\u202eb' }] }], ['findings', { findings: [{ ...F(1), title: 'a\u2028b' }] }],
     ['fixed', { verdict: 'request-changes', majors: 1, findings: [F(1)], fixed: ['F-1'] }], ['fixed', { fixed: 'F-1' }], ['agent', { agent: 'somi-coder' }], ['diff_cap', { diff_cap: 1 }]];
-  const got = bad.map(([f, a]) => { const x = review(r, a); return [x.exit, x.error?.startsWith(`${f}:`)]; });
+  const got = bad.map(([f, a]) => { const x = review(r, a); return [x.exit, new RegExp(`^${f}(\\[\\d+\\](\\.\\w+)?)?:`).test(x.error ?? '')]; }); // a finding is named by its index and field
   check('a bad reviewers list, verdict, review name, count, finding, fixed id or foreign field exits 64 naming its field', got, bad.map(() => [64, true]));
   check('none of these wrote anything: the tree is byte-identical and no cursor was made', [tree(r.root), Object.keys(r.state().steps)], [before, ['1:open', '1:after-code']]);
   const shapes = ['{"next_id":"x","findings":[]}', '{"next_id":1000000,"findings":[]}', '{"next_id":1,"findings":[{"id":"F-1","key":"k","status":"open","seen":[5]}]}', '{"next_id":1,"findings":[{"id":"F-1","key":"k","seen":[]}]}'];

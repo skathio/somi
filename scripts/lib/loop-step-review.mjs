@@ -12,13 +12,27 @@ import { passEntry } from './loop-engine.mjs';
 import { nowIso, stateFile } from './loop-state.mjs';
 import { appendDiary, plainDir, readPlanFile } from './loop-notes.mjs';
 import * as k from './loop-step-kit.mjs';
-import { atOrAbove, ledgerPaths, locusKey, readSeverity, recordFindings, resolveFinding, SEVERITIES } from './findings-ledger.mjs';
+import { atOrAbove, canonName, CONFIDENCES, ledgerPaths, locusKey, readSeverity, recordFindings, resolveFinding, SEVERITIES } from './findings-ledger.mjs';
 
 export const FIELDS = k.freezeFields({ 'after-review': ['slug', 'loop', 'iteration', 'host', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed'] });
 const VERDICTS = ['approve', 'approve-with-comments', 'request-changes', 'reject'];
 const REVIEWERS = ['somi-reviewer', 'somi-security-reviewer', 'somi-architecture-reviewer', 'somi-test-strategist', 'somi-plan-reviewer', 'somi-sdlc-reviewer']; // review agents only: never the coder
 const FINDING_KEYS = ['file', 'symbol', 'title', 'severity', 'confidence'];
 const text = (v, n) => typeof v === 'string' && v.length > 0 && v.length <= n && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(v);
+
+// Every refusal names the field and the finding's index, never the model's text.
+function checkFindings(list, bad) {
+  if (!Array.isArray(list)) throw bad('findings', 'must be a list');
+  if (list.length > 100) throw bad('findings', 'expected up to 100, got more');
+  list.forEach((x, i) => {
+    const at = `findings[${i}]`;
+    if (x === null || typeof x !== 'object' || Array.isArray(x)) throw bad(at, 'must be an object {file, title, severity, symbol?, confidence?}');
+    for (const [key, n] of [['file', 200], ['title', 300]]) if (x[key] === undefined) throw bad(`${at}.${key}`, 'is required'); else if (!text(x[key], n)) throw bad(`${at}.${key}`, `must be a string of 1 to ${n} characters without control characters`);
+    if (x.symbol !== undefined && !text(x.symbol, 100)) throw bad(`${at}.symbol`, 'must be a string of 1 to 100 characters without control characters');
+    if (!SEVERITIES.includes(x.severity)) throw bad(`${at}.severity`, `must be one of ${SEVERITIES.join('|')}`);
+    if (x.confidence !== undefined && !CONFIDENCES.includes(x.confidence)) throw bad(`${at}.confidence`, `must be one of ${CONFIDENCES.join('|')}`);
+  });
+}
 
 // The shape of this step's own arguments (slug, loop, iteration and host are checked by the caller). Throws 64 naming the field.
 export function checkReview(a, { bad, intArg }) {
@@ -27,10 +41,8 @@ export function checkReview(a, { bad, intArg }) {
   if (a.review !== undefined && (typeof a.review !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(a.review))) throw bad('review', 'must be the review file name, without a path'); // absent: afterReview names it from the pass
   a.blockers = intArg(a.blockers, 'blockers'); a.majors = intArg(a.majors, 'majors');
   a.findings ??= []; a.fixed ??= [];
-  if (Array.isArray(a.findings)) a.findings = a.findings.map((x) => (x !== null && typeof x === 'object' ? Object.fromEntries(FINDING_KEYS.filter((key) => key in x).map((key) => [key, x[key]])) : x)); // a key the ledger has no use for is dropped, the known ones are still checked
-  const f = (x) => x !== null && typeof x === 'object' && text(x.file, 200) && text(x.title, 300) && (x.symbol === undefined || text(x.symbol, 100))
-    && SEVERITIES.includes(x.severity) && (x.confidence === undefined || ['High', 'Medium', 'Low'].includes(x.confidence));
-  if (!Array.isArray(a.findings) || a.findings.length > 100 || !a.findings.every(f)) throw bad('findings', 'expected up to 100 of {file, title, severity, symbol?, confidence?}');
+  if (Array.isArray(a.findings)) a.findings = a.findings.map((x) => (x !== null && typeof x === 'object' ? Object.fromEntries(FINDING_KEYS.filter((key) => key in x).map((key) => [key, key === 'severity' ? canonName(SEVERITIES, x[key]) : key === 'confidence' ? canonName(CONFIDENCES, x[key]) : x[key]])) : x)); // a key the ledger has no use for is dropped, the known ones are still checked; severity and confidence are read in any letter case
+  checkFindings(a.findings, bad);
   for (const [field, level] of [['blockers', 'Blocker'], ['majors', 'Major']]) if (a[field] !== a.findings.filter((x) => x.severity === level).length) throw bad(field, `must equal the number of ${level} findings listed in this call`);
   if (!Array.isArray(a.fixed) || a.fixed.length > 100 || !a.fixed.every((id) => typeof id === 'string' && /^F-\d{1,6}$/.test(id))) throw bad('fixed', 'expected up to 100 ids like F-12');
   a.fixed = [...new Set(a.fixed)];
