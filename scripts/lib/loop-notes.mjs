@@ -1,14 +1,14 @@
 // loop-notes.mjs -- the loop's two narrow writers into a work item (the tool writes only these): a diary entry at the
 // top of diary.md (40/15 compaction into diary-archive.md), and in progress.md only the `| N.M |` row of the iteration
 // table, the done count in that phase's row of the phase table (`a/b` in `Iterations done / total`, set to the number of
-// the phase's rows marked done) and the `**Last activity**` line (a missing one is inserted at the end of `## Status`).
-// Writes are confined to <root>/.somi/plans/<slug>/: slug and iteration match a
-// closed pattern before any path is built, links and special files are refused, free text is one printable line, and
-// a file or row not in template shape stays byte-identical and comes back in `unwritten`. Writes are temp file +
-// rename; time is the `now` parameter. Every writer returns { wrote: [paths relative to root], unwritten: [{ file,
-// reason, line }] } (a write-failed item also carries the errno `code`; a replayed diary entry adds `skipped:
-// 'replay'`); a bad argument throws a usage error (64). Markdown safety rests on the callers: every title and body is built from
-// enums, numbers and ids, never from a model's text (oneLine strips breaks and control characters, not markup).
+// the phase's rows marked done; recounted on every row mark, `open` included) and the `**Last activity**` line (a
+// missing one is inserted at the end of `## Status`). Writes are confined to <root>/.somi/plans/<slug>/: slug and
+// iteration match a closed pattern before any path is built, links and special files are refused, free text is one
+// printable line, and a file or row not in template shape stays byte-identical and comes back in `unwritten`. Writes are
+// temp file + rename; time is the `now` parameter. Every writer returns { wrote: [paths relative to root], unwritten: [{
+// file, reason, line }] } (a write-failed item also carries the errno `code`; a replayed diary entry adds `skipped:
+// 'replay'`); a bad argument throws a usage error (64). Markdown safety rests on the callers: every title and body is
+// built from enums, numbers and ids, never from a model's text (oneLine strips breaks and control characters, not markup).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -206,18 +206,23 @@ function setPhaseDone(lines, index, cols, iteration, line) {
   const phase = iteration.split('.')[0];
   const sec = sectionOf(lines, 'Phase progress');
   if (!sec) return [];
-  const rows = lines.flatMap((l, i) => (i > sec.start && i < sec.end && l.startsWith('|') ? [i] : []));
-  const names = rows.length >= 2 ? splitRow(lines[rows[0]])?.map((h) => h.trim()) : null;
+  let top = lines.findIndex((l, i) => i > sec.start && i < sec.end && l.startsWith('|')); // the table is the run of `|` lines from the first
+  if (top < 0) return [];
+  const rows = [];
+  while (top < sec.end && lines[top].startsWith('|')) rows.push(top++);
+  const names = rows.length >= 2 && /^\|[-| :]+\|$/.test(lines[rows[1]]) ? splitRow(lines[rows[0]])?.map((h) => h.trim()) : null;
   const col = names ? names.indexOf('Iterations done / total') : -1;
   const hits = col < 0 ? [] : rows.slice(2).filter((i) => splitRow(lines[i])?.[0].trim() === phase);
   const cells = hits.length === 1 ? splitRow(lines[hits[0]]) : null;
-  const m = cells?.length === names.length ? /^(\s*)(\d+)\/(\d+)(\s*)$/.exec(cells[col]) : null;
+  const m = names && cells?.length === names.length ? /^(\s*)(\d{1,4})\/(\d{1,4})(\s*)$/.exec(cells[col]) : null;
   if (!m) return [];
   let first = index; let last = index; // the iteration table is the run of table lines around the row
   while (lines[first - 1]?.startsWith('|')) first--;
   while (lines[last + 1]?.startsWith('|')) last++;
-  const done = lines.slice(first, last + 1).filter((l) => { const c = splitRow(l); return c && c[0].trim().startsWith(`${phase}.`) && c[cols.status]?.trim() === 'done'; }).length;
-  if (done > Number(m[3])) return [{ file: 'progress.md', reason: 'count-above-total', line: `${line}; phase ${phase}: ${done} iterations done, total ${m[3]}`, kind: KIND.notice }];
+  // the marked row's width (findIterationRow proved it equals the header's): a row of another width is not counted, a repeated id counts once
+  const width = splitRow(lines[index]).length;
+  const done = new Set(lines.slice(first, last + 1).flatMap((l) => { const c = splitRow(l); return c?.length === width && c[0].trim().startsWith(`${phase}.`) && c[cols.status]?.trim() === 'done' ? [c[0].trim()] : []; })).size;
+  if (done > Number(m[3])) return [{ file: 'progress.md', reason: 'count-above-total', line: `phase ${phase}: ${done} iterations done, total ${m[3]}; ${line}`, kind: KIND.notice }];
   if (done !== Number(m[2])) {
     cells[col] = `${m[1]}${done}/${m[3]}`.padEnd(cells[col].length);
     lines[hits[0]] = `|${cells.join('|')}|`;
@@ -263,6 +268,7 @@ export function setLastActivity(plan, { activity, now }) {
     else { // no line yet: it goes after the last line of `## Status`, set off by a blank line unless that is a `**key**: ` line
       const sec = sectionOf(lines, 'Status');
       if (!sec) return { reason: 'line-missing' };
+      if (lines.slice(sec.start, sec.end).some((l) => /^[\W_]*last activity(?![a-z0-9])/i.test(l))) return { reason: 'row-ambiguous' }; // the line is there in another spelling
       let last = sec.end - 1;
       while (lines[last].trim() === '') last--;
       lines.splice(last + 1, 0, ...(/^\*\*[^*]+\*\*: /.test(lines[last]) ? [] : ['']), value);

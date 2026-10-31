@@ -42,6 +42,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   as it was and comes back as a `notice`), and adds the `**Last activity**` line at the end of the `## Status` section
   when the file has none. A progress.md without a single `## Status` section is handed back as `line-missing` (it was
   `row-missing`). A phase table the writer cannot read is skipped silently.
+- **The phase done count and the Last activity insert are stricter about what they touch.** Only the first table of
+  `## Phase progress` is read, and only when its second line is a separator row; a repeated iteration id counts once
+  and a row of another width is not counted; a Status section that already has a Last activity line in another
+  spelling (`**Last activity:**`, plain `Last activity:`) is handed back as `row-ambiguous` instead of getting a second
+  line; an `a/b` cell with more than 4 digits is read as absent, and the above-total notice now leads with the phase
+  text. The loop flows say the verdict follows the findings: with a finding at or above the floor, a reviewer's
+  `approve` or `approve-with-comments` goes in as `request-changes` (the tool's refusal of an approve with one is
+  unchanged).
 
 - **The coder agent cannot write the loop's state, and `init` refuses a repository the diff gate cannot measure.**
   `guard-protected-paths` now refuses a Write or Edit to `.somi/somi-state/loop/*` and `.somi/somi-state/run/*`, as it

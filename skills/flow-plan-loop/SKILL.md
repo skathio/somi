@@ -110,8 +110,10 @@ somi_loop({ step: "close", slug, loop: "plan", status: result.close_args.status 
 - `after-review` takes the reviewer's findings as `[{file, symbol, title, severity, confidence}]` (the locus file of a
   plan finding is the artifact — `spec.md`, `decisions.md`, `phases/02-…md` — and the symbol its section), with
   `blockers` and `majors` equal to the count listed, `review` the review file's name (no path) and `fixed` the ledger
-  ids (`F-<n>`) the fresh reviewer's re-check reports resolved, never the planner's claim; if an approve is refused for
-  findings still open, the verdict changes, `fixed` does not grow.
+  ids (`F-<n>`) the fresh reviewer's re-check reports resolved, never the planner's claim. The verdict follows the
+  findings: with a finding at or above the floor, a reviewer's `approve` or `approve-with-comments` goes in as
+  `request-changes`. The tool refuses an approve that comes with one; if an approve is refused for findings still
+  open, the verdict changes, `fixed` does not grow.
 
 ### 3. Acting on a result
 

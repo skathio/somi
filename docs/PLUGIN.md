@@ -98,9 +98,10 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   `SOMI_CODE_LOOP_REVIEW_SCOPE`, `SOMI_CODE_LOOP_SEVERITY_FLOOR`, `SOMI_PLAN_LOOP_SEVERITY_FLOOR`; they can loosen a
   loop as well as tighten it, e.g. `single` over a configured `security`, or a higher severity floor), and the ones that
   locate the global config (`SOMI_GLOBAL_CONFIG`, `XDG_CONFIG_HOME`, `APPDATA`). Only a tool argument is held to
-  tightening. It writes `diary.md` entries (each
-  ends with a fixed provenance line; never a decision-change or plan-change entry, and no file name from a call) and, in
-  `progress.md`, the iteration's row and the Last activity line. It forgives what a model adds by habit where that loses no
+  tightening. It writes `diary.md` entries (each ends with a fixed provenance line; never a decision-change or plan-change
+  entry, and no file name from a call) and, in `progress.md`, the iteration's row, the done count in that phase's row of
+  the Phase progress table (recounted on every row mark, `open` included) and the Last activity line (added at the end of
+  the Status section when the file has none). It forgives what a model adds by habit where that loses no
   gate: `host` and `project_dir` are accepted and ignored on a step that has no use for them (any other unknown argument is a
   64); `open` reads `files` from the iteration's "Files (approx)" line in its phase file when the argument is absent (a given
   list wins; no such line is a 64); `after-review` names the review itself when `review` is absent and drops a finding's

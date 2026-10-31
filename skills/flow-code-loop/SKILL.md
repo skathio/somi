@@ -109,8 +109,10 @@ somi_loop({ step: "close", slug, iteration, status: result.close_args.status })
   `after-review` record the agent that just ran; the engine re-resolves it, so the record is what SoMi decided.
 - `after-review` takes the reviewer's findings as `[{file, symbol, title, severity, confidence}]`, with `blockers` and
   `majors` equal to the count listed, `review` the review file's name (no path; leave it out when no file was written) and `fixed` the ledger ids (`F-<n>`)
-  the fresh reviewer's re-check reports resolved, never the coder's claim; if an approve is refused for findings
-  still open, the verdict changes, `fixed` does not grow.
+  the fresh reviewer's re-check reports resolved, never the coder's claim. The verdict follows the findings: with a
+  finding at or above the floor, a reviewer's `approve` or `approve-with-comments` goes in as `request-changes`. The
+  tool refuses an approve that comes with one; if an approve is refused for findings still open, the verdict changes,
+  `fixed` does not grow.
 - The tool decides the review lens and scope from the gates table and the sizing record; `next` names the reviewer set
   and `review_brief` says what the generalist reads (pass 1 and the last allowed pass are full). Follow both. Arguments
   may only strengthen a lens (`review_mode`, `review_scope`) or lower a cap (`max_passes`, `diff_cap`).
@@ -168,7 +170,8 @@ missing row or plan directory; for a done or superseded row, stop and ask the us
 
 `close` with `done` ends the loop state, writes the closing diary entry (with any `cap_overrides`), marks the iteration
 done, sets the phase's done count in the Phase progress table to the number of its iterations marked done, and sets
-Last activity (a missing line is added at the end of the Status section); nothing in `phases/` changes. Record any `unwritten` item (§3), then summarise (§6).
+Last activity (a missing line is added at the end of the Status section); nothing in `phases/` changes. Record any
+`unwritten` item (§3), then summarise (§6).
 
 ### 5. On STOP (gate hit, or the user replies `stop`)
 
