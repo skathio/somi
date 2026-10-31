@@ -152,6 +152,10 @@ draw from $0.046 and 180 s to $0.036 and 132 s (bare: $0.004, 21 s); the pre-reg
 went to second passes (3 of 8 draws) and to progress.md edits made by hand after `close` in every draw. `/ship-loop`
 (S2, S3) did not move. The quality guard is clear; L0 rises 1.0%.
 
+With `close` writing those progress.md lines itself, an S1-only check (8 draws, `reports/75f886b-s1-check.md`, a
+transcript check, not a rule verdict) meets the bar: main thread 13 turns and 99k weighted tokens, the SoMi draw
+$0.033 and 149 s against bare $0.005 and 22 s.
+
 ## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
 
 **Minor — additive.** Commands, agent names, tiers and the MCP tools are unchanged; two agents and
