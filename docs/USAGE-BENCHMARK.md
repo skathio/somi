@@ -148,6 +148,26 @@ codes: 0 every planned draw has a terminal row, 1 halted (the reason is printed)
 The baseline needs all planned draws. A halted chunk is not a loss: re-run the same command after the halt
 reason clears (section 9).
 
+#### The labelled sizing set
+
+The sizing step is judged against a labelled set, `tests/evals/sizing-set/set.json`: 16 requests, each with the
+tier a person confirmed (`trivial`, `small` or `full`) and a one-line reason. The micro tasks all size `small` by
+construction, so scoring against them alone would pass a step that always answers `small`; the set adds the
+larger tasks (T1, H1, H2, H4) and four authored requests that reach the trivial boundary and the security floor.
+
+An entry is a **corpus** entry (`task`, for example `ab/T1-proration`, whose own fixture is the workspace) or an
+**authored** entry (`request` and a required `fixture`). A request has no task, so `fixture` names a directory
+directly under `tests/evals/fixtures/` that a run copies as its workspace: without a tree a model cannot name a
+real file, and a request naming no file reads as its worst case. The fixture is read only. An entry with
+`sensitive: true` is a security-floor case and must be labelled `full`. The probe scenario id of an entry is
+`S4-` plus its id (`S4-M01`, `S4-T1`).
+
+`tests/evals/lib/sizing-set.mjs` validates the set (a missing label or tier, a sensitive entry below `full`, a
+duplicate id, a task or fixture that does not exist, a fixture that is a link, climbs with `..` or is not directly
+under `fixtures/`, an authored entry with no request or fixture) and computes `labelHash(set)`: the sha256 of the
+ids, labels, sensitive flags, tasks, fixture names and request texts, in id order. Reasons are prose and are not
+hashed. A run recorded against one set is comparable only with a run on the same hash.
+
 ### 4.4 Turn the outputs into a baseline file
 
 Assemble the baseline from `l0.json`, `l1.json` and every chunk's `results.jsonl`. Only entries with status

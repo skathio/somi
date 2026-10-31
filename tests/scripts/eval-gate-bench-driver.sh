@@ -390,5 +390,7 @@ res "$(grep -q 'regular file' "$TMP/o-mutsymres.err" && echo 0 || echo 1)" "a dr
 res "$([ "$(cat "$TMP/o-mutsymout.rc")" = 0 ] && echo 1 || echo 0)" "a driver that accepts an --out link was not caught"
 res "$(grep -rqF -- "$TOKEN" "$TMP/t-mutredact" && echo 1 || echo 0)" "a sink that writes the token unredacted was not caught by the disk scan"
 
+node tests/scripts/lib/sizing-set-tests.mjs || FAILN=$((FAILN + 1))  # the labelled sizing set: free, no stub needed
+
 echo "  $PASS passed, $FAILN failed"
 [ "$FAILN" -eq 0 ]
