@@ -27,6 +27,7 @@ export class Refusal extends Error {}
 const refuse = (msg) => { throw new Refusal(msg); };
 const plain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const HARNESS_EVENTS = ['paused', 'over-budget'];
+const isEvent = (r) => HARNESS_EVENTS.includes(r.outcome) || (r.outcome === 'invalid' && r.reason !== 'probe');
 const SHA = /^[0-9a-f]{7,40}$/;
 const HASH = /^[0-9a-f]{64}$/;
 // Integer arithmetic, so 4/5 and 12/15 are exact: ceil(0.8 * n).
@@ -34,9 +35,10 @@ const needOf = (draws) => Math.ceil((draws * 4) / 5);
 const allowedOff = (total) => Math.floor(total / 10);
 
 // Sizing-phase rows ({scenario, arm, phase, tier}) to a record. Refuses a row outside the sizing phase, of another arm
-// or for a scenario the set does not hold, a draw that ended on a harness event (paused, over budget) rather than an
-// answer, an entry with no draw, and entries with different draw counts. A row without an `outcome` is taken as an
-// answer; the probe's own `invalid` rows are answers too (the probe marks every sizing draw so).
+// or for a scenario the set does not hold, a draw that ended on a harness event rather than an answer (over budget, or an
+// `invalid` row whose `reason` is anything but `probe`: a timeout, an output cap, a leak), an entry with no draw, and
+// entries with different draw counts. A row without an `outcome` is taken as an answer; the probe marks every answered
+// sizing draw `invalid` with reason `probe`, so that pair is an answer too.
 export function buildResult(set, rows, { plugin_sha, arm }) {
   if (!SHA.test(plugin_sha ?? '')) refuse('plugin_sha must be 7 to 40 hex characters');
   if (!ARMS.includes(arm)) refuse(`arm must be one of ${ARMS.join(', ')}`);
@@ -47,7 +49,7 @@ export function buildResult(set, rows, { plugin_sha, arm }) {
     if (r.phase !== 'sizing') refuse(`row ${i} is in phase ${JSON.stringify(r.phase)}, not sizing`);
     if (r.arm !== arm) refuse(`row ${i} is for arm ${JSON.stringify(r.arm)}, not ${arm}`);
     if (!idOf.has(r.scenario)) refuse(`row ${i} names scenario ${JSON.stringify(r.scenario)}, which is not in the set`);
-    if (HARNESS_EVENTS.includes(r.outcome)) refuse(`row ${i} (${r.scenario}) ended ${r.outcome}, not on an answer; draw it again`);
+    if (isEvent(r)) refuse(`row ${i} (${r.scenario}) ended ${r.outcome}${r.outcome === 'invalid' ? ` (${JSON.stringify(r.reason)})` : ''}, not on an answer; draw it again`);
     entries[idOf.get(r.scenario)].push(TIERS.includes(r.tier) ? r.tier : null);
   });
   const counts = [...new Set(Object.values(entries).map((d) => d.length))];
@@ -131,12 +133,12 @@ const readJson = (f) => { try { return JSON.parse(readText(f)); } catch (e) { re
 const USAGE = 'usage: sizing-score.mjs --score <record.json> | --compare <base.json> <cand.json> | --build <rows.jsonl> --plugin-sha <sha> [--arm somi]  [--pooled] [--set <file>]';
 const FLAGS_WITH_VALUE = ['--set', '--plugin-sha', '--arm'];
 
-// A results.jsonl line is one entry ({status, row}); a bare row is taken as it is. A line that is not JSON names its number.
+// A results.jsonl line is one entry ({status, reason, row}); its row is taken with the entry's reason; a bare row is taken as it is. A line that is not JSON names its number.
 function rowsOf(file) {
   const lines = readText(file).split('\n').map((text, i) => ({ text, n: i + 1 })).filter((l) => l.text.trim() !== '').map(({ text, n }) => {
     try { return JSON.parse(text); } catch (e) { return refuse(`${file} line ${n} is not JSON: ${e.message}`); }
   });
-  return lines.filter((l) => !plain(l) || !('status' in l) || l.status === 'done').map((l) => (plain(l) && l.row !== undefined ? l.row : l));
+  return lines.filter((l) => !plain(l) || !('status' in l) || l.status === 'done').map((l) => (plain(l) && plain(l.row) ? { ...l.row, reason: l.reason } : l));
 }
 
 function main(argv) {

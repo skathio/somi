@@ -109,8 +109,8 @@ cap. See section 10.
 
 The default scenarios are S1, S2 and S3. Two more are opt-in with `--scenarios`: S5, a security-sensitive
 task (H4, files served by a name the user gives), and S6, a migration with design choices (H2). The sizing
-probe S4-T1 runs only the sizing step on T1-proration, the task whose tier varied between draws. A
-comparison needs the same scenario list on both sides, so record an opt-in scenario on both baselines or on
+probes (`--sizing-probe`, scenarios `S4-<id>`) run only the sizing step, one per entry of the labelled sizing set
+below. A comparison needs the same scenario list on both sides, so record an opt-in scenario on both baselines or on
 neither.
 
 Build the plugin directory from the candidate commit without the test tree, because the driver refuses a
@@ -153,14 +153,24 @@ reason clears (section 9).
 The sizing step is judged against a labelled set, `tests/evals/sizing-set/set.json`: 16 requests, each with the
 tier a person confirmed (`trivial`, `small` or `full`) and a one-line reason. The micro tasks all size `small` by
 construction, so scoring against them alone would pass a step that always answers `small`; the set adds the
-larger tasks (T1, H1, H2, H4) and four authored requests that reach the trivial boundary and the security floor.
+borderline task T1, the harder tasks H1, H2 and H4, and four authored requests that reach the trivial boundary and the security floor.
 
 An entry is a **corpus** entry (`task`, for example `ab/T1-proration`, whose own fixture is the workspace) or an
 **authored** entry (`request` and a required `fixture`). A request has no task, so `fixture` names a directory
 directly under `tests/evals/fixtures/` that a run copies as its workspace: without a tree a model cannot name a
 real file, and a request naming no file reads as its worst case. The fixture is read only. An entry with
 `sensitive: true` is a security-floor case and must be labelled `full`. The probe scenario id of an entry is
-`S4-` plus its id (`S4-M01`, `S4-T1`).
+`S4-` plus its id (`S4-M01`, `S4-T1`). The probe lists every entry by default; `--scenarios` picks some. A corpus entry
+runs in its task's own fixture with the task text as the prompt. An authored entry runs its request text as the prompt in a
+scratch copy of its fixture made file by file from the fixture's lstat manifest (a link anywhere in the fixture is
+refused, never followed), without the fixture's `_somi` plan tree, so no plan or brief exists in the workspace. The plan
+binds the manifest and the request text, so a changed fixture or request refuses a resume, and a fixture that cannot be
+read is refused before any draw.
+
+Probe the set with the rules of this section: the plugin built from `git archive` without the test tree, one-repeat chunks
+per scenario, and a `--budget-total` at or above the sum of the per-draw caps. Check one chunk with `--plan-only` first.
+Whether the bar is read per task or pooled across the set is an open question until the maintainer answers it; both
+numbers are always printed.
 
 `tests/evals/lib/sizing-set.mjs` validates the set (a missing label or tier, a sensitive entry below `full`, a
 duplicate id, a task or fixture that does not exist, a fixture that is a link, climbs with `..` or is not directly
@@ -188,8 +198,9 @@ node tests/evals/lib/sizing-score.mjs --compare baseline.json candidate.json [--
 
 `--build` reads one file, ignores the entries that did not finish (status other than `done`), and writes a record of the
 plugin sha, the arm, the label hash and each entry's draws. It refuses, naming the row: a row of another phase than
-`sizing`, a row of another arm than `--arm`, a row for a scenario the set does not hold, a draw that ended `paused` or
-`over-budget` (that is a harness event, not an answer, so it is drawn again rather than scored as a wrong tier), and
+`sizing`, a row of another arm than `--arm`, a row for a scenario the set does not hold, a draw that ended
+`over-budget`, or `invalid` for any reason but `probe` (a timeout, an output cap, a leak: a harness event, not an answer, so it
+is drawn again rather than scored as a wrong tier), and
 entries with different draw counts or none. A file that mixes both arms is therefore refused: build one record per arm
 from that arm's rows. `--arm` (default `somi`) names the arm the rows belong to; `--plugin-sha` is the 7 to 40 hex
 characters of the plugin build that was probed and is required; `--set` reads a set file instead of the committed one,

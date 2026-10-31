@@ -11,12 +11,14 @@
 // Either kind may carry `sensitive: true` (a security-floor case): its label must then be `full`.
 //
 // Closed grammar: an unknown key is refused, because a key outside the hash would be a way to change the set unseen.
-// Pure reads; no network, no model. A problem is reported as a string and never throws; loadSet throws with all of them.
+// Reads only, except stageFixture, which writes the copy it is asked for. No network, no model. A problem is reported as a
+// string and never throws; loadSet throws with all of them.
 
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lstatManifest } from './manifest.mjs';
 
 export const TIERS = Object.freeze(['trivial', 'small', 'full']);
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -110,4 +112,35 @@ export function loadSet(file = SET_FILE, { root = REPO_ROOT } = {}) {
   const problems = validateSet(set, { root });
   if (problems.length > 0) throw new Error(`sizing set invalid:\n  ${problems.join('\n  ')}`);
   return set;
+}
+
+// The probe scenarios of the set, keyed by scenario id and in set order, as the benchmark driver's table holds them: a
+// corpus entry runs in its task (`kind: 'task'`), an authored entry runs its request in a copy of its fixture (`kind: 'set'`).
+export function sizingScenarios(set) {
+  return Object.fromEntries(set.entries.map((e) => {
+    if (kindOf(e) === 'authored') return [scenarioId(e), { kind: 'set', dir: `tests/evals/fixtures/${e.fixture}`, request: e.request, probe: true }];
+    const [corpus, task] = e.task.split('/');
+    return [scenarioId(e), { kind: 'task', corpus: `tests/evals/${corpus}`, task, probe: true }];
+  }));
+}
+
+// What a set scenario is run against: sha256 of the fixture's lstat manifest and the request text, so a changed fixture or
+// request refuses a resume. null when the fixture cannot be read (missing, or a link anywhere in it).
+export function setMaterial(dir, request) {
+  const m = lstatManifest(dir);
+  return m?.ok ? createHash('sha256').update(JSON.stringify(m.files)).update('\0').update(request).digest('hex') : null;
+}
+
+// Copies the fixture `dir` into `dest` file by file from its lstat manifest, so a link anywhere in it is a refusal and is
+// never followed. The fixture's `_somi` plan tree is left out, or kept as `.somi` when `keepPlans` is set.
+export function stageFixture(dir, dest, { keepPlans = false } = {}) {
+  const m = lstatManifest(dir);
+  if (!m?.ok) throw new Error(`the fixture could not be read${m?.reason ? ` (${m.reason})` : ''}`);
+  for (const [p] of m.files) {
+    const plan = p.startsWith('_somi/');
+    if (plan && !keepPlans) continue;
+    const to = path.join(dest, plan ? `.somi/${p.slice(6)}` : p);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(path.join(dir, p), to);
+  }
 }

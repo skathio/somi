@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { REPO_ROOT, SET_FILE, TIERS, labelHash, loadSet, scenarioId, validateSet } from '../../evals/lib/sizing-set.mjs';
+import { REPO_ROOT, SET_FILE, TIERS, labelHash, loadSet, scenarioId, setMaterial, sizingScenarios, stageFixture, validateSet } from '../../evals/lib/sizing-set.mjs';
 
 let pass = 0; let fail = 0;
 const check = (name, got, want) => {
@@ -89,16 +89,43 @@ check('holds the planned entries', set.entries.map((e) => e.id), ['M01', 'M02', 
 check('uses all three tiers', TIERS.filter((t) => set.entries.some((e) => e.label === t)), [...TIERS]);
 check('has floor cases, all labelled full', set.entries.filter((e) => e.sensitive).map((e) => `${e.id}:${e.label}`), ['H4:full', 'A3:full', 'A4:full']);
 check('derives the scenario ids already in use', ['M01', 'T1'].map((id) => scenarioId(set.entries.find((e) => e.id === id))), ['S4-M01', 'S4-T1']);
-// A reason or request that cites a path its fixture does not hold is a wrong label, so every cited path must exist.
+// A reason or request that cites a path its fixture does not hold is a wrong label, so every cited path must exist: in the
+// authored entry's fixture, or for a corpus entry in the repository (tests/...) or in its task's fixture (src/...).
+const EV = path.join(REPO_ROOT, 'tests', 'evals');
 const missing = [];
-for (const e of set.entries.filter((x) => x.fixture)) {
-  for (const cited of `${e.request} ${e.reason}`.match(/(?<![\w/.-])(?:src|tests|docs)\/[\w./-]*\w/g) ?? []) {
-    if (!fs.existsSync(path.join(REPO_ROOT, 'tests', 'evals', 'fixtures', e.fixture, cited))) missing.push(`${e.id}: ${cited}`);
+for (const e of set.entries) {
+  const bases = e.fixture ? [path.join(EV, 'fixtures', e.fixture)] : [REPO_ROOT, path.join(EV, e.task, 'fixture')];
+  for (const cited of `${e.request ?? ''} ${e.reason}`.match(/(?<![\w/.-])(?:src|tests|docs)\/[\w./-]*\w/g) ?? []) {
+    if (!bases.some((b) => fs.existsSync(path.join(b, cited)))) missing.push(`${e.id}: ${cited}`);
   }
 }
-check('authored entries cite only paths their fixture holds', missing, []);
+check('every entry cites only paths its tree holds', missing, []);
 check('loadSet refuses a set that fails validation', (() => { const f = path.join(tmp, 'bad.json'); fs.writeFileSync(f, '{"schema_version":1,"entries":[{"id":"Z"}]}'); try { loadSet(f); return 'no throw'; } catch (e) { return /no label/.test(e.message); } })(), true);
 check('loadSet refuses a file that is not JSON', (() => { const f = path.join(tmp, 'junk.json'); fs.writeFileSync(f, 'nope'); try { loadSet(f); return 'no throw'; } catch (e) { return /unreadable/.test(e.message); } })(), true);
+
+console.log('== sizing set: probe scenarios and fixture staging ==');
+const scen = sizingScenarios(set);
+check('has one probe scenario per entry, in set order', Object.keys(scen), set.entries.map(scenarioId));
+check('runs a corpus entry in its task', scen['S4-M03'], { kind: 'task', corpus: 'tests/evals/ab-micro', task: 'M03-rank-aggregation', probe: true });
+const a3 = set.entries.find((e) => e.id === 'A3');
+check('runs an authored entry as its request in a copy of its fixture', scen['S4-A3'], { kind: 'set', dir: 'tests/evals/fixtures/task02-code', request: a3.request, probe: true });
+const fixtureDir = path.join(REPO_ROOT, scen['S4-A3'].dir);
+const staged = path.join(tmp, 'staged');
+stageFixture(fixtureDir, staged);
+check('stages the fixture files and leaves the plan tree out', [fs.existsSync(path.join(staged, 'src/auth/token.mjs')), fs.existsSync(path.join(staged, '_somi')), fs.existsSync(path.join(staged, '.somi'))], [true, false, false]);
+check('keeps the plan tree as .somi when asked', (() => { stageFixture(fixtureDir, `${staged}-plans`, { keepPlans: true }); return [fs.existsSync(`${staged}-plans/.somi/plans`), fs.existsSync(`${staged}-plans/_somi`)]; })(), [true, false]);
+// A scratch fixture: a file, a plan tree, and a link to a file outside it that staging must never read through.
+const fx = path.join(tmp, 'tests/evals/fixtures/fx');
+fs.mkdirSync(path.join(fx, '_somi/plans'), { recursive: true });
+fs.writeFileSync(path.join(fx, 'a.txt'), 'a'); fs.writeFileSync(path.join(fx, '_somi/plans/p.md'), 'p');
+const h1 = setMaterial(fx, 'req');
+check('binds a fixture and a request in a stable hash that moves with either', [/^[0-9a-f]{64}$/.test(h1), setMaterial(fx, 'req') === h1, setMaterial(fx, 'req2') !== h1, (fs.writeFileSync(path.join(fx, 'a.txt'), 'b'), setMaterial(fx, 'req') !== h1)], [true, true, true, true]);
+fs.writeFileSync(path.join(tmp, 'outside.txt'), 'SECRET');
+fs.symlinkSync(path.join(tmp, 'outside.txt'), path.join(fx, 'inner'));
+const out = path.join(tmp, 'out-link');
+const thrown = (() => { try { stageFixture(fx, out); return 'no throw'; } catch (e) { return e.message; } })();
+check('refuses a fixture with an inner link: nothing is staged, so nothing is read through it', [/could not be read/.test(thrown), fs.existsSync(out)], [true, false]);
+check('has no material for a fixture with an inner link or one that is missing', [setMaterial(fx, 'req'), setMaterial(path.join(tmp, 'nope'), 'req')], [null, null]);
 
 console.log(`  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -38,7 +38,7 @@ let scratchN = 0;
 function scratch(from, to) {
   const dir = path.join(tmp, `scratch${scratchN++}`, 'tests', 'evals');
   fs.mkdirSync(path.join(dir, 'lib'), { recursive: true });
-  for (const f of ['sizing-set.mjs', 'bench-schema.mjs']) fs.copyFileSync(path.join(LIB, f), path.join(dir, 'lib', f));
+  for (const f of ['sizing-set.mjs', 'bench-schema.mjs', 'manifest.mjs']) fs.copyFileSync(path.join(LIB, f), path.join(dir, 'lib', f));
   for (const d of ['ab', 'ab-micro', 'fixtures', 'sizing-set']) fs.symlinkSync(path.join(REPO_ROOT, 'tests', 'evals', d), path.join(dir, d));
   const original = fs.readFileSync(path.join(LIB, 'sizing-score.mjs'), 'utf8');
   fs.writeFileSync(path.join(dir, 'lib', 'sizing-score.mjs'), original.replace(from, to));
@@ -66,9 +66,12 @@ async function suite(modPath, say) {
   check('refuses a row of the other arm', refusedWith(() => M.buildResult(set, rowsFor(1).map((r, i) => (i === 0 ? { ...r, arm: 'bare' } : r)), META), /arm "bare"/), true);
   check('refuses entries with different draw counts', refusedWith(() => M.buildResult(set, [...rowsFor(2), rowsFor(1)[0]], META), /same number of draws/), true);
   check('refuses an entry with no draw', refusedWith(() => M.buildResult(set, rowsFor(2).slice(2), META), /same number of draws/), true);
+  check('refuses an empty list of rows', refusedWith(() => M.buildResult(set, [], META), /at least one/), true);
   const withOutcome = (outcome) => rowsFor(1).map((r, i) => (i === 0 ? { ...r, outcome } : r));
   check('refuses a draw that ended paused or over budget, so it has to be drawn again', ['paused', 'over-budget'].map((o) => refusedWith(() => M.buildResult(set, withOutcome(o), META), new RegExp(`ended ${o}`))), [true, true]);
-  check("takes a scored draw and the probe's own invalid draw as answers", ['scored', 'invalid'].map((o) => M.buildResult(set, withOutcome(o), META).entries[O1.id]), [[O1.label], [O1.label]]);
+  const withEnd = (outcome, reason) => rowsFor(1).map((r, i) => (i === 0 ? { ...r, outcome, reason } : r));
+  check("takes a scored draw and the probe's own invalid draw as answers", [['scored'], ['invalid', 'probe']].map((a) => M.buildResult(set, withEnd(...a), META).entries[O1.id]), [[O1.label], [O1.label]]);
+  check('refuses a draw that ended invalid for any reason but probe: a harness event, not an answer', ['timeout', 'output-cap', 'leak: token', 'unpinned-model', undefined].map((why) => refusedWith(() => M.buildResult(set, withEnd('invalid', why), META), /ended invalid/)), Array(5).fill(true));
   check('refuses a bad plugin sha', refusedWith(() => M.buildResult(set, rowsFor(1), { plugin_sha: 'main', arm: 'somi' }), /plugin_sha/), true);
 
   say('== sizing score: the bar per entry ==');
@@ -87,12 +90,20 @@ async function suite(modPath, say) {
   check('scales the share to the draw count (10 draws need 8)', [8, 7].map((n) => entry(rec({ [O1.id]: [...Array(n).fill(O1.label), ...Array(10 - n).fill(X1)], ...Object.fromEntries(set.entries.filter((e) => e.id !== O1.id).map((e) => [e.id, Array(10).fill(e.label)])) }), O1.id).pass), [true, false]);
 
   say('== sizing score: the pooled reading ==');
-  const off = (e, n) => ({ [e.id]: offDraws(e, n) });
-  const eight = rec({ ...off(O1, 5), ...off(O2, 3) });
-  check('accepts 8 of 80 off-label draws', [score(eight, { mode: 'pooled' }).pooled.off, score(eight, { mode: 'pooled' }).bar_met], [8, true]);
-  check('the same 8 miss the per-task bar and both numbers are reported', [score(eight).bar_met, score(eight).per_task.passing, score(eight).pooled.allowed], [false, set.entries.length - 2, 8]);
-  const nine = rec({ ...off(O1, 5), ...off(O2, 4) });
-  check('rejects 9 of 80 off-label draws', [score(nine, { mode: 'pooled' }).pooled.off, score(nine, { mode: 'pooled' }).bar_met], [9, false]);
+  // Off-label draws spread over the ordinary entries, five to an entry (the set size sets the allowance: one draw in ten).
+  const ordinary = set.entries.filter((e) => !isFloorCase(e));
+  const spread = (n, per = 5) => Object.fromEntries(ordinary.map((e, i) => [e.id, offDraws(e, Math.max(0, Math.min(per, n - i * per)))]));
+  const allowed = Math.floor((set.entries.length * 5) / 10);
+  const atLimit = rec(spread(allowed)); const overLimit = rec(spread(allowed + 1));
+  const failing = Math.ceil((allowed - 1) / 5);
+  check(`accepts ${allowed} of ${set.entries.length * 5} off-label draws`, [score(atLimit, { mode: 'pooled' }).pooled.off, score(atLimit, { mode: 'pooled' }).bar_met], [allowed, true]);
+  check('the same draws miss the per-task bar and both numbers are reported', [score(atLimit).bar_met, score(atLimit).per_task.passing, score(atLimit).pooled.allowed], [false, set.entries.length - failing, allowed]);
+  check(`rejects ${allowed + 1} of ${set.entries.length * 5} off-label draws`, [score(overLimit, { mode: 'pooled' }).pooled.off, score(overLimit, { mode: 'pooled' }).bar_met], [allowed + 1, false]);
+  // 3 draws an entry is a total that is not a multiple of ten: the allowance rounds down, so one draw over is rejected.
+  const few = (n) => Object.fromEntries(ordinary.map((e, i) => { const k = Math.max(0, Math.min(3, n - i * 3)); return [e.id, [...Array(k).fill(otherThan(e.label)[0]), ...Array(3 - k).fill(e.label)]]; }));
+  const rec3 = (over) => rec(Object.fromEntries(set.entries.map((e) => [e.id, over[e.id] ?? Array(3).fill(e.label)])));
+  const allowed3 = Math.floor((set.entries.length * 3) / 10);
+  check(`rounds the allowance down: ${allowed3} of ${set.entries.length * 3} accepted, ${allowed3 + 1} rejected`, [allowed3, allowed3 + 1].map((n) => score(rec3(few(n)), { mode: 'pooled' }).bar_met), [true, false]);
   check('still fails a floor case at 4 of 5', score(rec({ [F1.id]: draws(4, F1.label, otherThan(F1.label)[0]) }), { mode: 'pooled' }).bar_met, false);
   check('refuses an unknown mode', refusedWith(() => score(rec(), { mode: 'loose' }), /unknown mode/), true);
 
@@ -125,7 +136,7 @@ async function suite(modPath, say) {
   check('exits 2 on a refusal, not 3 and not 64 or 65', [cli('--score', wrong).status, /different label set/.test(cli('--score', wrong).stderr)], [2, true]);
   check('exits 2 on a record that is not JSON', cli('--score', put('junk.json', 'nope')).status, 2);
   check('exits 2 on a usage error', [cli().status, cli('--score').status, cli('--bogus').status], [2, 2, 2]);
-  check('--pooled reads the same record by the pooled bar', [cli('--score', put('eight.json', eight), '--pooled').status, cli('--score', put('eight2.json', eight)).status], [0, 3]);
+  check('--pooled reads the same record by the pooled bar', [cli('--score', put('at-limit.json', atLimit), '--pooled').status, cli('--score', put('at-limit2.json', atLimit)).status], [0, 3]);
   check('--compare exits 0 on comparable records even when the candidate missed', [cli('--compare', met, missed).status, /^baseline: sizing bar met[^\n]*\ncandidate: sizing bar missed/.test(cli('--compare', met, missed).stdout)], [0, true]);
   check('--compare exits 2 when the label hashes differ', cli('--compare', met, wrong).status, 2);
   const rowsFile = put('rows.jsonl', rowsFor(1).map((r) => JSON.stringify({ status: 'halted', row: null, ...r })).concat(rowsFor(5).map((r) => JSON.stringify({ status: 'done', row: r }))).join('\n'));
@@ -142,6 +153,8 @@ async function suite(modPath, say) {
   const badRows = put('bad-rows.jsonl', `${JSON.stringify({ status: 'done', row: rowsFor(1)[0] })}\n\n{"status": "done", row\n`);
   const badRun = cli('--build', badRows, '--plugin-sha', SHA);
   check('--build names the line whose JSON does not parse', [badRun.status, /line 3 is not JSON/.test(badRun.stderr)], [2, true]);
+  check('--build refuses an empty rows file', [cli('--build', put('empty.jsonl', ''), '--plugin-sha', SHA).status, /at least one/.test(cli('--build', put('empty.jsonl', ''), '--plugin-sha', SHA).stderr)], [2, true]);
+  check('--build refuses a finished draw whose entry reason is not probe, and takes one that is', [['timeout', 2], ['probe', 0]].map(([why, code]) => cli('--build', put(`why-${why}.jsonl`, rowsFor(1).map((r) => JSON.stringify({ status: 'done', reason: why, row: { ...r, outcome: 'invalid' } })).join('\n')), '--plugin-sha', SHA).status === code), [true, true]);
   check('--build refuses a file that is missing', cli('--build', path.join(work, 'nope.jsonl'), '--plugin-sha', SHA).status, 2);
   check('a flag that needs a value and has none is a usage refusal, even last or before another flag', [
     cli('--score', met, '--set'), cli('--build', rowsFile, '--plugin-sha'), cli('--build', rowsFile, '--plugin-sha', SHA, '--arm'), cli('--score', met, '--set', '--pooled'),
@@ -162,9 +175,12 @@ const MUTATIONS = [
   ['the floor rule dropped', 'const need = floor ? draws.length : needOf(draws.length);', 'const need = needOf(draws.length);'],
   ['the label-hash check dropped', 'if (rec.label_sha256 !== labelHash(set))', 'if (false)'],
   // A tie can only change the reported modal tier, never `pass` (a tied top count is below the need); the suite pins the modal.
+  ['the empty-rows guard dropped', 'counts.length !== 1 || counts[0] === 0', 'counts.length !== 1'],
+  ['the pooled allowance rounded up', 'Math.floor(total / 10)', 'Math.ceil(total / 10)'],
+  ['an invalid draw taken as an answer', "(r.outcome === 'invalid' && r.reason !== 'probe')", 'false'],
   ['ties resolved to the first tier', 'if (top.length !== 1) return { tier: null, count };', 'if (top.length === 0) return { tier: null, count };'],
 ];
-  let mutFail = 0;
+let mutFail = 0;
 for (const [name, from, to] of MUTATIONS) {
   const m = scratch(from, to);
   const r = m.applies ? await suite(m.file, () => {}) : { fail: 0 };
