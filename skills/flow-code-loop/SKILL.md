@@ -167,7 +167,8 @@ missing row or plan directory; for a done or superseded row, stop and ask the us
 ### 4. On DONE (clean exit)
 
 `close` with `done` ends the loop state, writes the closing diary entry (with any `cap_overrides`), marks the iteration
-done and sets Last activity; nothing in `phases/` changes. Record any `unwritten` item (§3), then summarise (§6).
+done, sets the phase's done count in the Phase progress table to the number of its iterations marked done, and sets
+Last activity (a missing line is added at the end of the Status section); nothing in `phases/` changes. Record any `unwritten` item (§3), then summarise (§6).
 
 ### 5. On STOP (gate hit, or the user replies `stop`)
 

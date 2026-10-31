@@ -37,6 +37,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ### Changed
 
+- **A clean `close` now leaves progress.md complete.** The writer sets the phase's `Iterations done / total` cell to the
+  number of that phase's iterations marked done (the total and the phase Status are kept; a count above the total is left
+  as it was and comes back as a `notice`), and adds the `**Last activity**` line at the end of the `## Status` section
+  when the file has none. A progress.md without a single `## Status` section is handed back as `line-missing` (it was
+  `row-missing`). A phase table the writer cannot read is skipped silently.
+
 - **The coder agent cannot write the loop's state, and `init` refuses a repository the diff gate cannot measure.**
   `guard-protected-paths` now refuses a Write or Edit to `.somi/somi-state/loop/*` and `.somi/somi-state/run/*`, as it
   already does for the tier records; the loop's own scripts write them from node and are unaffected. A code loop's

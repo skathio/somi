@@ -205,10 +205,34 @@ console.log('== progress writers: the row and the line, nothing else ==');
   check('a table without a Reviewed column has its Status set; the Reviewed value is skipped, not refused', lenient(four.replace('| Reviewed |', '| Verdict  |')), [['.somi/plans/p1/progress.md'], [], '| 2.1 | Writers | in-progress | — |']);
   check('a table with its columns in another order is read by the names of its header', lenient('# Progress — p1\n\n## Iteration progress\n\n| Iteration | Reviewed | Status |\n|---|---|---|\n| 2.1 | — | not-started |\n'), [['.somi/plans/p1/progress.md'], [], '| 2.1 | approve | in-progress |']);
   check('a table with no Status column, or with a row of another width, is still handed back', [lenient(four.replace('| Status |', '| State  |'))[1].map((u) => u.reason), lenient(four.replace('| — |', '| — | x |'))[1].map((u) => u.reason)], [['not-template-shape'], ['row-not-template-shape']]);
-  const noLine = fresh({ progress: PROGRESS.replace(/\*\*Last activity\*\*.*\n/, '') });
+  const noLine = fresh({ progress: PROGRESS.replace(/\*\*Last activity\*\*.*\n/, '').replace('## Status', '## State') });
   const before = snap(noLine.root);
   const r = setLastActivity(noLine.plan, { activity: 'x', now: NOW });
-  check('a progress file without the Last activity line is left alone and the line comes back', [snap(noLine.root), r.unwritten], [before, [{ file: 'progress.md', reason: 'row-missing', line: '**Last activity**: 2026-10-29 — x', kind: 'last-activity' }]]);
+  check('a progress file with no Status section and no Last activity line is left alone and the line comes back as line-missing', [snap(noLine.root), r.unwritten], [before, [{ file: 'progress.md', reason: 'line-missing', line: '**Last activity**: 2026-10-29 — x', kind: 'last-activity' }]]);
+}
+{
+  const NO_LINE = PROGRESS.replace(/\*\*Last activity\*\*.*\n/, '');
+  const last = (progress) => { const { plan, dir, root } = fresh({ progress }); const b = snap(root); const r = setLastActivity(plan, { activity: 'x', now: NOW }); return [read(path.join(dir, 'progress.md')), r.wrote.length, r.unwritten.map((u) => u.reason), isDeepStrictEqual(b, snap(root))]; };
+  check('a missing Last activity line is inserted straight after a **key**: line that ends the Status section', last(NO_LINE).slice(0, 3), [PROGRESS.replace('2026-10-28 — start', '2026-10-29 — x'), 1, []]);
+  const plain = '# Progress — p1\n\n## Status\n\n`in-progress`\n\n## Iteration progress\n';
+  check('after a plain line it gets a blank line before it, and the blank line before the next heading stays', last(plain).slice(0, 3), ['# Progress — p1\n\n## Status\n\n`in-progress`\n\n**Last activity**: 2026-10-29 — x\n\n## Iteration progress\n', 1, []]);
+  check('a Status section that ends the file takes the line at the end', last('# P\n\n## Status\n\n`done`\n').slice(0, 2), ['# P\n\n## Status\n\n`done`\n\n**Last activity**: 2026-10-29 — x\n', 1]);
+  check('two Last activity lines are still refused as row-ambiguous, nothing written', [PROGRESS.replace('\n## Iteration progress', '**Last activity**: again\n\n## Iteration progress')].map((t) => last(t)).map(([, w, why, same]) => [w, why, same]), [[0, ['row-ambiguous'], true]]);
+  const refused = { 'no Status heading': NO_LINE.replace('## Status', '## State'), 'two Status headings': `${NO_LINE}\n## Status\n\ntext\n`, 'a fence in the Status section': NO_LINE.replace('**Started**: 2026-10-28', '```\nx\n```'), 'a comment in the Status section': NO_LINE.replace('**Started**: 2026-10-28', '<!-- x -->'), 'a CR in the file': NO_LINE.replace('Started', 'Sta\rrted') };
+  check('no single clean Status section, or a file not in template shape: handed back unchanged', Object.values(refused).map((t) => last(t).slice(1)), Object.keys(refused).map((k) => [0, [k === 'a CR in the file' ? 'not-template-shape' : 'line-missing'], true]));
+}
+{
+  const PHASES = '## Phase progress\n\n| # | Phase | Status | Iterations done / total |\n|---|---|---|---|\n| 1 | A | done | 1/1 |\n| 2 | B | in-progress | 0/3     |\n\n## Iteration progress';
+  const PHASED = PROGRESS.replace('## Iteration progress', PHASES).replace('| 2.1       | Writers | in-progress | —        | —             |\n', '| 2.1       | Writers | in-progress | —        | —             |\n| 2.2       | More    | done        | approve  | 2026-10-28    |\n| 2.3       | Last    | not-started | —        | —             |\n');
+  const DONE = '| 2.1       | Writers | done        | approve  | 2026-10-29 — w |';
+  const mark = (progress) => { const { plan, dir, root } = fresh({ progress }); const b = snap(root); const r = markIteration(plan, '2.1', { status: 'done', reviewed: 'approve', activity: 'w', now: NOW }); return { text: read(path.join(dir, 'progress.md')), wrote: r.wrote.length, unwritten: r.unwritten, same: isDeepStrictEqual(b, snap(root)) }; };
+  const m = mark(PHASED);
+  check('marking 2.1 done sets phase 2 to the count of its done rows (2.1 and 2.2, not 1.1) and keeps the total, the cell width and the Status cells', [m.text, m.wrote, m.unwritten], [PHASED.replace('| 2.1       | Writers | in-progress | —        | —             |', DONE).replace('0/3    ', '2/3    '), 1, []]);
+  const high = mark(PHASED.replace('0/3     ', '1/1     '));
+  check('a count above the total leaves the cell as it was, still writes the row, and comes back as a notice', [high.text.includes(DONE), high.text.includes('| 1/1     |'), high.wrote, high.unwritten.map((u) => [u.file, u.reason, u.kind])], [true, true, 1, [['progress.md', 'count-above-total', 'notice']]]);
+  const skips = { 'no Phase progress table': PROGRESS, 'no done-count column': PHASED.replace('Iterations done / total', 'Done'), 'no row for the phase': PHASED.replace(/\| 2 \| B.*\n/, ''), 'a done count that is not a/b': PHASED.replace('0/3', 'zero'), 'a fence in the section': PHASED.replace('0/3     |\n', '0/3     |\n```\n```\n'), 'the heading twice': `${PHASED}\n## Phase progress\n` };
+  check('a phase table that cannot be read is skipped with no hand-back: the row is written, the rest is as it was', Object.values(skips).map((t) => { const x = mark(t); return [x.wrote, x.unwritten, x.text.replace(DONE, '| 2.1       | Writers | in-progress | —        | —             |') === t]; }), Object.keys(skips).map(() => [1, [], true]));
+  check('a phase table that already shows the right count is not rewritten', mark(PHASED.replace('0/3     ', '2/3     ').replace('| 2.2       | More    | done', '| 2.2       | More    | done')).text.includes('| 2/3     |'), true);
 }
 {
   const reasonOf = (progress, status = 'in-progress') => { const { plan, root } = fresh({ progress }); const b = snap(root); try { const r = markIteration(plan, '2.1', { status, now: NOW }); return [r.unwritten[0]?.reason ?? 'ok', r.wrote.length ? 'wrote' : isDeepStrictEqual(snap(root), b)]; } catch (e) { return [e.name]; } };
@@ -310,6 +334,15 @@ if (typeof process.getuid === 'function' && process.getuid() !== 0) {
   chmodSync(big.dir, 0o755);
   check('a compacting append in an unwritable directory reports both the archive and the diary as write-failed, throws nothing, leaves no temp file', [bthrew, br?.wrote, br?.unwritten.map((u) => [u.file, u.reason, u.code]), snap(big.dir)], [false, [], [['diary-archive.md', 'write-failed', 'EACCES'], ['diary.md', 'write-failed', 'EACCES']], bigBefore]);
 } else console.log('  skip (running as root: a mode bit does not stop the write)');
+
+console.log('== the writers in close order on a progress.md a plan opened: Last activity under Status, the phase done count ==');
+{
+  const fixture = read(path.join(LIB, '..', '..', 'tests', 'evals', 'fixtures', 'task02-code', '_somi', 'plans', 'expired-token', 'progress.md'));
+  const { plan, dir } = fresh({ progress: fixture });
+  const results = [markIteration(plan, '1.1', { status: 'in-progress', now: NOW }), markIteration(plan, '1.1', { status: 'done', reviewed: 'approve', activity: 'loop done', now: NOW }), setLastActivity(plan, { activity: 'loop done for iteration 1.1', now: NOW })];
+  const after = read(path.join(dir, 'progress.md'));
+  check('on the fixture progress.md markIteration then setLastActivity run clean: Last activity lands under Status, 0/1 becomes 1/1, row 1.1 is done', [results.flatMap((x) => x.unwritten), after.includes('`in-progress`\n\n**Last activity**: 2026-10-29 — loop done for iteration 1.1\n\n## Phase progress'), after.includes('| in-progress | 1/1 |'), /\| 1\.1 \| Reject an expired token \| done +\| approve +\|/.test(after)], [[], true, true, true]);
+}
 
 console.log(`loop notes tests: ${pass} ok, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -1,6 +1,8 @@
 // loop-notes.mjs -- the loop's two narrow writers into a work item (the tool writes only these): a diary entry at the
 // top of diary.md (40/15 compaction into diary-archive.md), and in progress.md only the `| N.M |` row of the iteration
-// table and the `**Last activity**` line. Writes are confined to <root>/.somi/plans/<slug>/: slug and iteration match a
+// table, the done count in that phase's row of the phase table (`a/b` in `Iterations done / total`, set to the number of
+// the phase's rows marked done) and the `**Last activity**` line (a missing one is inserted at the end of `## Status`).
+// Writes are confined to <root>/.somi/plans/<slug>/: slug and iteration match a
 // closed pattern before any path is built, links and special files are refused, free text is one printable line, and
 // a file or row not in template shape stays byte-identical and comes back in `unwritten`. Writes are temp file +
 // rename; time is the `now` parameter. Every writer returns { wrote: [paths relative to root], unwritten: [{ file,
@@ -140,7 +142,7 @@ export function appendDiary(plan, entry) {
   return { wrote, unwritten };
 }
 
-// Edit progress.md through `edit(text)` -> { text } (the new file) or { reason } (not in template shape: no write).
+// Edit progress.md through `edit(text)` -> { text, notices? } (the new file; notices ride along as unwritten items) or { reason } (not in template shape: no write).
 function editProgress(plan, edit, line, kind) {
   const p = planDir(plan);
   if (p.refused) return refusal('progress.md', p.refused, line, kind);
@@ -150,7 +152,17 @@ function editProgress(plan, edit, line, kind) {
   if (out.text === undefined) return refusal('progress.md', out.reason, line, out.notice ? KIND.notice : kind);
   const failed = writeAtomic(file, out.text, cur.mode);
   if (failed) return { wrote: [], unwritten: [writeFailed('progress.md', failed, line, kind)] };
-  return { wrote: [`${p.rel}/progress.md`], unwritten: [] };
+  return { wrote: [`${p.rel}/progress.md`], unwritten: out.notices ?? [] };
+}
+
+// The `## <title>` section: { start, end } (the heading's line and the next heading's, or the end), or null unless the
+// heading is there exactly once and its section holds no code fence or `<!--`.
+function sectionOf(lines, title) {
+  const at = lines.flatMap((l, i) => (l === `## ${title}` ? [i] : []));
+  if (at.length !== 1) return null;
+  const stop = lines.findIndex((l, i) => i > at[0] && /^#{1,6}\s/.test(l));
+  const end = stop < 0 ? lines.length : stop;
+  return lines.slice(at[0] + 1, end).some((l) => /^\s*(```|~~~)|<!--/.test(l)) ? null : { start: at[0], end };
 }
 
 const splitRow = (l) => (l.startsWith('|') && l.endsWith('|') ? l.slice(1, -1).split('|') : null);
@@ -186,13 +198,41 @@ export function findIterationRow(text, iteration, loose = false) {
   return cells.length === head.length ? { lines, index: hits[0], cells, cols } : { reason: 'row-not-template-shape' };
 }
 
+// Set phase N's `a/b` cell of the `## Phase progress` table (column named `Iterations done / total`, row whose first cell is
+// N) to the number of the iteration table's `N.*` rows that are done, keeping the total and the cell's width. Edits `lines`.
+// -> [] (also when the table, the column, the row or an `a/b` cell is absent: nothing to keep in step) | [a notice
+// item] when the count is above the total, in which case the cell is left as it was.
+function setPhaseDone(lines, index, cols, iteration, line) {
+  const phase = iteration.split('.')[0];
+  const sec = sectionOf(lines, 'Phase progress');
+  if (!sec) return [];
+  const rows = lines.flatMap((l, i) => (i > sec.start && i < sec.end && l.startsWith('|') ? [i] : []));
+  const names = rows.length >= 2 ? splitRow(lines[rows[0]])?.map((h) => h.trim()) : null;
+  const col = names ? names.indexOf('Iterations done / total') : -1;
+  const hits = col < 0 ? [] : rows.slice(2).filter((i) => splitRow(lines[i])?.[0].trim() === phase);
+  const cells = hits.length === 1 ? splitRow(lines[hits[0]]) : null;
+  const m = cells?.length === names.length ? /^(\s*)(\d+)\/(\d+)(\s*)$/.exec(cells[col]) : null;
+  if (!m) return [];
+  let first = index; let last = index; // the iteration table is the run of table lines around the row
+  while (lines[first - 1]?.startsWith('|')) first--;
+  while (lines[last + 1]?.startsWith('|')) last++;
+  const done = lines.slice(first, last + 1).filter((l) => { const c = splitRow(l); return c && c[0].trim().startsWith(`${phase}.`) && c[cols.status]?.trim() === 'done'; }).length;
+  if (done > Number(m[3])) return [{ file: 'progress.md', reason: 'count-above-total', line: `${line}; phase ${phase}: ${done} iterations done, total ${m[3]}`, kind: KIND.notice }];
+  if (done !== Number(m[2])) {
+    cells[col] = `${m[1]}${done}/${m[3]}`.padEnd(cells[col].length);
+    lines[hits[0]] = `|${cells.join('|')}|`;
+  }
+  return [];
+}
+
 // The moves of a Status cell (a rewrite of the same status is always allowed). Nothing leaves done or superseded, and
 // superseded is set by a human editing the plan, never by this writer.
 const MOVES = { 'not-started': ['in-progress'], 'in-progress': ['done', 'blocked'], blocked: ['in-progress'] };
 
 // Change Status, Reviewed and Last activity of the `| N.M |` row (the template's columns 3 to 5, or the ones a table with
 // another header has), keeping the other cells and the column widths. The row must exist once with as many cells as its
-// header, and a Status change must be one of MOVES (else `transition-refused`, nothing written).
+// header, and a Status change must be one of MOVES (else `transition-refused`, nothing written). In the same write the
+// phase's done count is brought in step with the table (setPhaseDone).
 export function markIteration(plan, iteration, { status, reviewed, activity, now }) {
   if (typeof iteration !== 'string' || !ITERATION_RE.test(iteration)) throw usageError('iteration must look like 1.2');
   const { date } = stampOf(now);
@@ -207,7 +247,8 @@ export function markIteration(plan, iteration, { status, reviewed, activity, now
     if (status !== undefined && status !== was && !(Object.hasOwn(MOVES, was) && MOVES[was].includes(status))) return { reason: 'transition-refused', notice: true };
     for (const field of Object.keys(patch)) if (patch[field] !== undefined && cols[field] >= 0) cells[cols[field]] = ` ${patch[field]} `.padEnd(cells[cols[field]].length); // a column the table lacks is skipped
     lines[index] = `|${cells.join('|')}|`;
-    return { text: lines.join('\n') };
+    const notices = setPhaseDone(lines, index, cols, iteration, line);
+    return { text: lines.join('\n'), notices };
   }, line, KIND.iterationRow);
 }
 
@@ -217,8 +258,15 @@ export function setLastActivity(plan, { activity, now }) {
   return editProgress(plan, (text) => {
     const lines = text.split('\n');
     const hits = lines.flatMap((l, i) => (l.startsWith('**Last activity**: ') ? [i] : []));
-    if (hits.length !== 1) return { reason: hits.length === 0 ? 'row-missing' : 'row-ambiguous' };
-    lines[hits[0]] = value;
+    if (hits.length > 1) return { reason: 'row-ambiguous' };
+    if (hits.length === 1) lines[hits[0]] = value;
+    else { // no line yet: it goes after the last line of `## Status`, set off by a blank line unless that is a `**key**: ` line
+      const sec = sectionOf(lines, 'Status');
+      if (!sec) return { reason: 'line-missing' };
+      let last = sec.end - 1;
+      while (lines[last].trim() === '') last--;
+      lines.splice(last + 1, 0, ...(/^\*\*[^*]+\*\*: /.test(lines[last]) ? [] : ['']), value);
+    }
     return { text: lines.join('\n') };
   }, value, KIND.lastActivity);
 }
