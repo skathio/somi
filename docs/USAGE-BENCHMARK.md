@@ -169,8 +169,10 @@ read is refused before any draw.
 
 Probe the set with the rules of this section: the plugin built from `git archive` without the test tree, one-repeat chunks
 per scenario, and a `--budget-total` at or above the sum of the per-draw caps. Check one chunk with `--plan-only` first.
-Whether the bar is read per task or pooled across the set is an open question until the maintainer answers it; both
-numbers are always printed.
+The bar is read per task; the pooled reading is printed beside it. The baseline before fact-backed sizing, plugin
+`489c079`, misses it on M02, M03, M05, M06, M07, A1 and A2 (9 of 16 entries pass, every floor case passes):
+[the report](../benchmarks/usage-speed/reports/489c079-sizing-baseline.md), record
+[`baseline-489c079-sizing.json`](../benchmarks/usage-speed/baseline-489c079-sizing.json).
 
 `tests/evals/lib/sizing-set.mjs` validates the set (a missing label or tier, a sensitive entry below `full`, a
 duplicate id, a task or fixture that does not exist, a fixture that is a link, climbs with `..` or is not directly
