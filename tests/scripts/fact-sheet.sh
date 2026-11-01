@@ -28,7 +28,7 @@ mutate() {
   node -e "const fs=require('fs');const s=fs.readFileSync(process.argv[1],'utf8');const t=s.replace(process.argv[2],()=>process.argv[3]);if(t===s)process.exit(3);fs.writeFileSync(process.argv[4],t)" "$mod" "$5" "$6" "$mut"
   if [ $? != 0 ]; then bad "mutation '$label' did not change the module (stale pattern)"; return; fi
   local out; out="$(node "$lib" "$mut" 2>&1)"
-  if printf '%s\n' "$out" | grep -qF "  FAIL $named"; then ok "mutation '$label' turns '$named' red"; else bad "mutation '$label' did not turn '$named' red"; fi
+  if grep -qF -- "  FAIL $named" <<<"$out"; then ok "mutation '$label' turns '$named' red"; else bad "mutation '$label' did not turn '$named' red"; fi
 }
 
 # ---- scripts/lib/path-safety.mjs ----
@@ -132,6 +132,64 @@ ps 'an unreadable root is read through' 'an unreadable root is refused' "} catch
     return { kind: 'contained', exists: false, rel: '' };
   }
   if (found.result)"
+
+# ---- scripts/lib/path-facts.mjs ----
+echo "== fact sheet: path facts =="
+PF="$ROOT/scripts/lib/path-facts.mjs"; PFT="$ROOT/tests/scripts/lib/path-facts-tests.mjs"
+ln -s "$PS" "$TMP/path-safety.mjs"   # a scratch copy of the module imports its sibling
+run_suite "$PFT" "$PF"
+pf() { mutate "$PFT" "$PF" "$@"; }
+T_FLAG='an unconfigured repo flags .env, a migrations directory, a lockfile and a route file'
+T_ADD='config globs are added to the built-ins, not instead of them'
+T_CONT='still two with an empty container list'
+T_HOSTILE='a hostile section reads as the defaults'
+T_DIR='a directory glob with a slash is anchored'
+T_LIT='a config glob is literal text except star'
+T_UNUSABLE='an unusable entry floors instead of vanishing'
+T_KEY='module key under a built-in container'
+T_DENY='a denied name reports a deny_list hit'
+pf 'a default glob dropped: migrations' "$T_FLAG" "migrations: ['migrations', 'migration*', 'migrate']," 'migrations: [],'
+pf 'a default glob dropped: routes' "$T_FLAG" "routes: ['routes', " "routes: ["
+pf 'a default glob dropped: the lockfile name' "$T_FLAG" "'package-lock.json', " ''
+pf 'config replaces the sensitive globs' "$T_ADD" "const sensitive = [...SENSITIVE, ['config', extra.sensitive]];" "const sensitive = extra.sensitive.length ? [['config', extra.sensitive]] : SENSITIVE;"
+pf 'config replaces the built-in containers' "$T_CONT" 'new Set([...BUILTIN_CONTAINERS, ...extra.containers])' 'new Set(extra.containers.length ? extra.containers : BUILTIN_CONTAINERS)'
+T_CSPLIT='a configured container splits its children'
+pf 'config containers are ignored' "$T_CSPLIT" 'out.containers.push(...names.map(containerName))' 'names.map(containerName)'
+pf 'a container name is not reduced to one segment' "$T_CSPLIT" 'const s = split(g);' 'const s = [fold(g)];'
+pf 'a container with a slash or wildcard accepted' "$T_HOSTILE" 's.length === 1 && !/[*?]/.test(s[0])' 's.length > 0'
+pf 'a test file counted as production' 'a test file is not a production file' 'production: !isTest(segs)' 'production: true'
+pf 'a test directory not recognised' 'a test file is not a production file' 'TEST_DIRS.has(s)' 'false'
+pf 'a test file name not recognised' 'a test file is not a production file' " || TEST_FILES.some((g) => segMatch(g, segs.at(-1) ?? ''))" ''
+pf 'the deny floor left out of the aggregates' "$T_DENY" 'const floor = denied ? [DENY_LIST] : [];' 'const floor = [];'
+pf 'a hostile entry not floored' "$T_UNUSABLE" 'const denied = !usable || denyListed(raw);' 'const denied = usable && denyListed(raw);'
+pf 'a list over the count cap classified' "$T_UNUSABLE" 'Array.isArray(paths) && paths.length <= MAX_PATHS ? paths' 'Array.isArray(paths) ? paths'
+pf 'a long path echoed' "$T_UNUSABLE" "path: usable ? raw : ''," 'path: raw,'
+pf 'the module key loses its container' 'one name under two containers' '`${raw[0]}/${raw[1]}`' 'raw[1]'
+pf 'the module count counts files' 'one name under two containers' 'modules: new Set(files.map((f) => f.module)).size' 'modules: files.length'
+pf 'a root file keyed by its name' 'module key: first segment' "if (raw.length < 2) return '';" ''
+pf 'a file in a container keyed by its name' "$T_KEY" 'containers.has(pathSegs(raw[0])[0]) && raw.length > 2' 'containers.has(pathSegs(raw[0])[0])'
+pf 'case folding removed' 'matching is case-folded' 'const split = (s) => parts(fold(s));' 'const split = (s) => parts(s);'
+pf 'the module key is folded' 'the module key keeps the case' '`${raw[0]}/${raw[1]}` : raw[0]' '`${raw[0]}/${raw[1]}`.toLowerCase() : raw[0].toLowerCase()'
+pf 'the container match is not folded' 'the module key keeps the case' 'containers.has(pathSegs(raw[0])[0])' 'containers.has(raw[0])'
+pf 'a trailing dot or space kept on a segment' 'a trailing dot or space on a segment' ".map((x) => x.replace(/[. ]+\$/, ''))" ''
+pf 'a glob with a slash not anchored' "$T_DIR" "/[\\\\/]/.test(glob) ? split(glob) : ['**', ...split(glob)]" "['**', ...split(glob)]"
+pf 'a ** segment read as one segment' "$T_DIR" "part === '**'" 'part === "\0"'
+pf 'a ** step restarts from every position' 'nested-quantifier shapes' 'for (let k = Math.min(...at); k <= segs.length; k++) next.add(k);' 'for (const pos of at) for (let k = pos; k <= segs.length; k++) next.add(k);'
+pf 'a test directory named fixtures' 'a test file is not a production file' "'e2e', '__mocks__'" "'e2e', 'fixtures', '__mocks__'"
+pf 'layers read as the last one only' 'a later layer, valid, empty' 'Array.isArray(layers) ? layers : [layers]' 'Array.isArray(layers) ? layers.slice(-1) : [layers]'
+pf 'one invalid key drops the whole layer' 'one invalid key drops only itself' 'if (bounded(globs, validGlob)) out' 'if (bounded(globs, validGlob) && bounded(names, validGlob)) out'
+pf 'an unusable list reported as one entry' 'an unusable list reports the counts' 'Array(MAX_PATHS).fill(null)' '[null]'
+pf 'a glob no longer matches what is under its directory' "$T_DIR" 'return at.size > 0;' 'return at.has(segs.length);'
+pf 'a star cannot backtrack' "$T_LIT" 'else if (star >= 0) { i = star + 1; j = ++mark; }' ''
+pf 'the matcher builds a regex from config text' "$T_LIT" 'function segMatch(p, s) {' 'function segMatch(p, s) { return new RegExp(`^${p.replace(/\*/g, ".*").replace(/\?/g, ".")}$`).test(s); }
+function segMatchUnused(p, s) {'
+pf 'the glob length cap removed' "$T_HOSTILE" ' && g.length <= MAX_GLOB_CHARS' ''
+pf 'the glob count cap off by one' "$T_HOSTILE" 'v.length <= MAX_GLOBS' 'v.length <= MAX_GLOBS + 1'
+pf 'a glob with .. accepted' "$T_HOSTILE" " && !g.includes('..')" ''
+pf 'an absolute glob accepted' "$T_HOSTILE" ' && !/^(?:[\\/]|[a-z]:)/i.test(g)' ''
+pf 'a glob with control characters accepted' "$T_HOSTILE" '!/[\p{C}\p{Zl}\p{Zp}]/u.test(g) && ' ''
+pf 'a glob with no segment accepted' "$T_HOSTILE" ' && split(g).length > 0' ''
+pf 'a non-array section accepted' "$T_HOSTILE" 'Array.isArray(v) && ' ''
 
 total=$((pass + fail))
 echo "SUMMARY $total checks, $fail failed"
