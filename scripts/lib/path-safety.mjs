@@ -52,8 +52,11 @@ const NAME_SUFFIXES = ['.pem', '.key', '.p12', '.pfx', '.crt', '.cer', '.der', '
 const NAME_PATTERN = /service[-_]?account[^]*\.json$|client_secret[^]*\.json$|secrets?\.(?:ya?ml|json)$|^key\.json$|\.tfstate\.[^]*\.backup$/;
 
 const segmentsOf = (raw) => raw.split(SEPARATORS).filter((s) => s !== '' && s !== '.');
-const trimDots = (s) => { let e = s.length; while (e > 0 && (s[e - 1] === '.' || s[e - 1] === ' ')) e--; return s.slice(0, e); };
+export const trimDots = (s) => { let e = s.length; while (e > 0 && (s[e - 1] === '.' || s[e - 1] === ' ')) e--; return s.slice(0, e); };
 const refused = (refusal, denied = false) => (denied ? { kind: 'refused', refusal, denied: true } : { kind: 'refused', refusal });
+
+// The fold every name test shares (case, compatibility forms): callers that read names the way the deny list does import it.
+export const foldName = (s) => s.normalize('NFKC').toUpperCase().toLowerCase();
 
 // Pure string test, case-folded (upper then lower, so a sharp s reads as ss): the same answer for .ENV as .env on every filesystem.
 // The raw path is split first and each segment folded after, because seven code points fold to a separator (U+FF0F,
@@ -63,7 +66,7 @@ export function denyListed(raw) {
   if (typeof raw !== 'string') return false;
   if (raw.length > MAX_PATH_CHARS) return true;
   return raw.split(SEPARATORS).some((segment) => {
-    const folded = segment.normalize('NFKC').toUpperCase().toLowerCase();
+    const folded = foldName(segment);
     return [...new Set([folded, ...folded.split(SEPARATORS)])].some((piece) => {
       const name = trimDots(piece);
       return NAME_EXACT.includes(name) || /~\d/.test(name) || name.includes(':') || NAME_PATTERN.test(name) || NAME_PREFIXES.some((p) => name.startsWith(p)) || NAME_SUFFIXES.some((s) => name.endsWith(s));

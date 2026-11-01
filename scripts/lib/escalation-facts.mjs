@@ -7,10 +7,11 @@
 //   { facts, source, notes }
 //   facts   escalation()'s input: counts, flags and class names from its closed lists
 //   source  where each plan input came from: { plan: ['target'|'paths'], sdlc: ['slug'|'paths'] }, as ids
-//   notes   ids of what degraded: rows_unusable (not a list, or over MAX_ROWS), row_unusable, time_box, config_refused,
+//   notes   ids of what degraded: rows_unusable (not a list, over MAX_ROWS, or a count past the safe integers), row_unusable, time_box, config_refused,
 //           internal_error (a bug here: the result is the floor, never a throw)
-// options: { config, slug, target, planPaths, workItemPaths, budgetMs }. `config` is passed to classifyPaths unchanged: give it
-// loadConfig's `{global, project}` result, never `.config` (a merged config is the erase that classifyPaths documents).
+// options: { config, slug, target, planPaths, workItemPaths, budgetMs }. `config` is loadConfig's `{global, project}` result or
+// nothing: any other shape (a merged `.config` erases the user's own additions) is noted `config_refused` and the built-in lists apply.
+// A key of it that classifyPaths refuses is noted too, and adds the sensitive name `config`: a refused list must raise, never lower.
 // `target` is the review target a caller names (a plan directory, a brief or an ADR path), judged by its name only. `planPaths`
 // and `workItemPaths` are names-only lists the caller built; only whether they are empty matters. `budgetMs` can only shorten
 // TIME_BOX_MS.
@@ -19,12 +20,15 @@
 // class name, every flag, so each seat, reason, hard-surface id and flag is at least a full read's. A time box cannot interrupt
 // synchronous code, so the clock is read between chunks of CHUNK rows: the bound is the budget plus one chunk, which is small
 // because classifyPaths caps the cost of one path. A denied name sets `denied` whatever its status or prefix: a deleted `.env`
-// floors, and so does one under `.somi/`. Rows under `.somi/` and `.claude/` are ignored (the measurement excludes them) except
-// `.claude/` (not `plugins/somi/`, which the hooks protect) and `.somi/config.json`: those are the sensitive name `config` (D28).
+// floors, and so does one under `.somi/`. Rows under `.somi/` and `.claude/` are ignored (the measurement excludes them), by their
+// exact prefix, and every row, ignored or not, is read for the guard: on its segments folded as the deny list folds them (case,
+// compatibility forms, trailing dots and spaces, either separator) a first segment `.claude`, at any depth and with no exemption, or
+// `.somi` alone or followed by `config.json` is the sensitive name `config`. A row that is not a plain name (an empty, `.` or `..`
+// segment, git never writes one) is unusable.
 // `new_top_dirs` counts first directories whose every changed row is an add; a diff cannot know the base, so a directory that
 // existed and only gained files reads as new, and the residual is one extra architecture seat.
 import { classifyPaths } from './path-facts.mjs';
-import { MAX_PATH_CHARS, UNSAFE_CHARS, denyListed } from './path-safety.mjs';
+import { MAX_PATH_CHARS, UNSAFE_CHARS, denyListed, foldName, trimDots } from './path-safety.mjs';
 import { CLASS_NAMES } from './escalation.mjs';
 
 export const MAX_ROWS = 2000;
@@ -34,10 +38,14 @@ const KINDS = ['sensitive', 'boundary', 'contract'];
 const COUNTS = ['production_lines', 'production_files', 'test_lines_added', 'test_lines_deleted', 'test_files_deleted', 'test_files_changed', 'modules', 'new_top_dirs'];
 
 const count = (v) => Number.isSafeInteger(v) && v >= 0;
-const sane = (r) => r !== null && typeof r === 'object' && typeof r.file === 'string' && r.file.length > 0 && r.file.length <= MAX_PATH_CHARS
-  && !r.file.startsWith('"') && !UNSAFE_CHARS.test(r.file) && count(r.added) && count(r.deleted) && typeof r.status === 'string' && /^[A-Z]$/.test(r.status);
+const SEP = /[\\/]/;
+// A name's segments as the deny list reads them: each raw segment folded and re-split (a fold can make a separator), dots and spaces trimmed off the end.
+const pieces = (file) => file.split(SEP).flatMap((s) => foldName(s).split(SEP)).map(trimDots);
+const sane = (r) => r !== null && typeof r === 'object' && typeof r.file === 'string' && r.file.length > 0 && r.file.length <= MAX_PATH_CHARS && foldName(r.file).length <= MAX_PATH_CHARS
+  && !r.file.startsWith('"') && !UNSAFE_CHARS.test(r.file) && !pieces(r.file).includes('') && count(r.added) && count(r.deleted) && typeof r.status === 'string' && /^[A-Z]$/.test(r.status);
 const hidden = (file) => ['.somi', '.claude'].includes(file.split('/')[0]);
-const guarded = (f) => (f.startsWith('.claude/') && !f.startsWith('.claude/plugins/somi/')) || f === '.somi/config.json';
+const guarded = (file) => { const [head, second] = pieces(file); return head === '.claude' || (head === '.somi' && (second === undefined || second === 'config.json')); };
+const loaded = (c) => c === undefined || ['global', 'project'].every((k) => { const l = Object.hasOwn(Object(c), k) ? c[k] : undefined; const cfg = l !== null && typeof l === 'object' && Object.hasOwn(l, 'config') ? l.config : undefined; return cfg !== null && typeof cfg === 'object' && !Array.isArray(cfg); });
 const given = (v) => v !== undefined && v !== null && v !== false && v !== '' && !(Array.isArray(v) && v.length === 0);
 const PLAN_TARGET = /(^|\/)(\.somi\/plans|adrs?|decisions)(\/|$)|(^|\/)(brief\.md|adr[-_]?\d[^/]*)$/;
 const names = (set) => [...set].sort();
@@ -62,17 +70,20 @@ function measure(rows, opts, plan) {
   const f = { ...Object.fromEntries(COUNTS.map((k) => [k, 0])), denied: false, ...plan };
   const seen = { sensitive: new Set(), boundary: new Set(), contract: new Set() };
   const modules = new Set(); const tops = new Map(); const kept = []; const notes = new Set();
+  const config = loaded(opts.config) ? opts.config : undefined;
+  if (config !== opts.config) notes.add('config_refused');
+  const refused = classifyPaths([], config).refused; // no row may be needed to learn that a key was refused
+  if (refused.length > 0) notes.add('config_refused');
+  if (refused.includes('sensitive_paths')) seen.sensitive.add('config');
   for (const r of rows) {
-    if (!hidden(r.file)) kept.push(r);
-    else { f.denied ||= denyListed(r.file); if (guarded(r.file)) seen.sensitive.add('config'); }
+    if (guarded(r.file)) seen.sensitive.add('config');
+    if (!hidden(r.file)) kept.push(r); else f.denied ||= denyListed(r.file);
   }
   const start = Date.now(); const budget = Math.min(TIME_BOX_MS, Number.isFinite(opts.budgetMs) && opts.budgetMs >= 0 ? opts.budgetMs : TIME_BOX_MS);
   for (let at = 0; at < kept.length; at += CHUNK) {
     if (Date.now() - start >= budget) return { facts: floor(plan), notes: ['time_box'] };
     const chunk = kept.slice(at, at + CHUNK);
-    const result = classifyPaths(chunk.map((r) => r.file), opts.config);
-    if (result.files.length !== chunk.length) return { facts: floor(plan), notes: ['config_refused'] }; // more layers than loadConfig gives
-    if (result.refused.length > 0) notes.add('config_refused');
+    const result = classifyPaths(chunk.map((r) => r.file), config);
     result.files.forEach((c, j) => {
       const r = chunk[j];
       f.denied ||= c.denied;
@@ -87,6 +98,7 @@ function measure(rows, opts, plan) {
     });
   }
   f.modules = modules.size; f.new_top_dirs = [...tops.values()].filter(Boolean).length;
+  if (!COUNTS.every((k) => count(f[k]))) return { facts: floor(plan), notes: ['rows_unusable'] }; // a sum past the safe integers is no count
   // CI paths are a sensitive name (they raise security); `classes.ci` carries the hard-surface id beside it.
   f.classes = { sensitive: names(seen.sensitive), boundary: names(seen.boundary), contract: names(seen.contract), ci: seen.sensitive.has('ci') ? ['ci'] : [] };
   return { facts: f, notes: names(notes) };

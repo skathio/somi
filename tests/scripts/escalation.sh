@@ -127,7 +127,11 @@ ln -s "$ROOT/scripts/lib/path-facts.mjs" "$TMP/path-facts.mjs"; ln -s "$ROOT/scr
 run_suite "$EFT" "$EF"
 ef() { mutate "$EFT" "$EF" "$@"; }
 TF_ROWS='a new 40-line file sizes nothing'; TF_DENY='a deleted .env, a renamed id_rsa'; TF_HARD='each hard-surface id comes from its path'; TF_CI='CI paths raise security as a sensitive name'
-TF_WEAK='tests_weakened: a moved test'; TF_TOP='a top directory is new only when'; TF_IGN='.somi and .claude rows are ignored'; TF_CFG='through the real loadConfig'; TF_PLAN='plan inputs: a plan directory'
+TF_WEAK='tests_weakened: a moved test'; TF_TOP='a top directory is new only when'; TF_IGN='planning churn under .somi is ignored'; TF_CFG='through the real loadConfig'; TF_PLAN='plan inputs: a plan directory'
+TF_GUARD='the guard raises sensitive config on every row'; TF_UNPLAIN='a name with an empty, dot or dot-dot segment'; TF_SUM='a summed count past the safe integers'
+TF_GROWN='a name that only passes the length cap once folded'; TF_ONLY='only undefined or the loadConfig shape is read'; TF_REF='a refused sensitive_paths key is noted'
+TF_ALSO='the guard raises on a row among ordinary ones'
+TF_COVER='every degraded result covers a full read'
 TF_HOST='a path over the length cap, a control character'; TF_MANY='10,000 rows, a non-list'; TF_BOX='a time box that runs out returns the floor'
 ef 'the contract class not mapped' "$TF_HARD" "const KINDS = ['sensitive', 'boundary', 'contract'];" "const KINDS = ['sensitive', 'boundary'];"
 ef 'the boundary class not mapped' "$TF_ROWS" "const KINDS = ['sensitive', 'boundary', 'contract'];" "const KINDS = ['sensitive', 'contract'];"
@@ -144,16 +148,33 @@ ef 'the quoted-name rule removed' 'a git-quoted name is an unusable row' "&& !r.
 ef 'the control-character check removed' "$TF_HOST" ' && !UNSAFE_CHARS.test(r.file)' ''
 ef 'the path length check removed' "$TF_HOST" 'r.file.length > 0 && r.file.length <= MAX_PATH_CHARS' 'r.file.length > 0'
 ef 'the row cap removed' "$TF_MANY" 'rows.length > MAX_ROWS' 'false'
-ef 'the config not passed on' "$TF_CFG" 'classifyPaths(chunk.map((r) => r.file), opts.config)' 'classifyPaths(chunk.map((r) => r.file))'
-ef 'a refused config key not reported' 'a refused config key is reported as a note' "if (result.refused.length > 0) notes.add('config_refused');" ''
+ef 'the config not passed on' "$TF_CFG" 'classifyPaths(chunk.map((r) => r.file), config)' 'classifyPaths(chunk.map((r) => r.file))'
 ef 'the time box removed' "$TF_BOX" 'if (Date.now() - start >= budget) return' 'if (false) return'
 ef 'the time box returns the partial facts' "$TF_BOX" "return { facts: floor(plan), notes: ['time_box'] };" 'break;'
 ef 'the floor lets test lines switch tests_weakened off' 'every degraded result covers a full read' 'test_lines_added: 0, test_files_changed: 0, ' ''
-ef 'a config with too many layers read as a short chunk' 'every degraded result covers a full read' 'if (result.files.length !== chunk.length)' 'if (false)'
 ef 'the chunk step skips a row' 'rows past the first chunk are read' 'at += CHUNK) {' 'at += CHUNK + 1) {'
 ef 'the chunk loop stops after the first chunk' 'rows past the first chunk are read' 'at += CHUNK) {' 'at += 1000) {'
-ef 'the .claude/ rows left ignored' "$TF_IGN" "(f.startsWith('.claude/') && !f.startsWith('.claude/plugins/somi/')) ||" ''
-ef '.somi/config.json left ignored' "$TF_IGN" " || f === '.somi/config.json'" ''
+ef 'the guard reads the case as written' "$TF_GUARD" 'flatMap((s) => foldName(s).split(SEP))' 'flatMap((s) => s.split(SEP))'
+ef 'the guard does not re-split a folded separator' "$TF_GUARD" 'foldName(s).split(SEP)' '[foldName(s)]'
+ef 'the guard splits on forward slashes only' "$TF_GUARD" 'const SEP = /[\\/]/;' 'const SEP = /\//;'
+ef 'the guard keeps trailing dots and spaces' "$TF_GUARD" '.map(trimDots);' ';'
+ef 'the guard runs only on ignored rows' "$TF_GUARD" 'if (guarded(r.file)) seen' 'if (hidden(r.file) && guarded(r.file)) seen'
+ef 'the guard drops a bare .claude' "$TF_GUARD" "head === '.claude' ||" "(head === '.claude' && second !== undefined) ||"
+ef 'the guard drops a bare .somi' "$TF_GUARD" 'second === undefined || ' ''
+ef 'the guard drops .somi/config.json' "$TF_GUARD" " || second === 'config.json'" ''
+ef 'the plugins exemption restored' "$TF_GUARD" "head === '.claude' ||" "(head === '.claude' && pieces(file).slice(1, 3).join('/') !== 'plugins/somi') ||"
+ef 'the guard reaches only the first level of .claude' "$TF_GUARD" "head === '.claude' ||" "(head === '.claude' && pieces(file).length < 3) ||"
+ef 'a guarded row dropped when it is not an exact ignored prefix' "$TF_ALSO" 'if (!hidden(r.file)) kept.push(r);' 'if (!hidden(r.file) && !guarded(r.file)) kept.push(r);'
+ef 'a name that grows past the cap when folded accepted' "$TF_GROWN" ' && foldName(r.file).length <= MAX_PATH_CHARS' ''
+ef 'an empty, dot or dot-dot segment accepted' "$TF_UNPLAIN" " && !pieces(r.file).includes('')" ''
+ef 'a summed count past the safe integers kept' "$TF_SUM" 'if (!COUNTS.every((k) => count(f[k]))) return' 'if (false) return'
+ef 'a refused sensitive_paths key adds nothing' "$TF_REF" "if (refused.includes('sensitive_paths')) seen.sensitive.add('config');" ''
+ef 'a refused key is noted only when a row reaches the classifier' "$TF_REF" "const refused = classifyPaths([], config).refused;" "const refused = kept.length > 0 ? classifyPaths([], config).refused : [];"
+ef 'a refused key not reported' "$TF_REF" "if (refused.length > 0) notes.add('config_refused');" ''
+ef 'any config shape read' "$TF_ONLY" 'loaded(opts.config) ? opts.config : undefined' 'opts.config'
+ef 'a refused config shape not reported' "$TF_ONLY" "if (config !== opts.config) notes.add('config_refused');" ''
+ef 'the floor lets the new top directories switch off' "$TF_COVER" 'test_lines_added: 0, test_files_changed: 0, denied: true' 'test_lines_added: 0, test_files_changed: 0, new_top_dirs: 0, denied: true'
+ef 'the floor counts a test file changed' "$TF_COVER" 'test_lines_added: 0, test_files_changed: 0, denied: true' 'test_lines_added: 0, test_files_changed: 1e9, denied: true'
 ef 'an internal error without its note' 'an unexpected error is the floor' "notes: ['internal_error']" 'notes: []'
 ef 'an unusable target no longer raises' "$TF_PLAN" "typeof target !== 'string' || target.length > MAX_PATH_CHARS || " ''
 ef 'the plan-paths input ignored' 'plan and sdlc sources' 'plan_paths: given(planPaths)' 'plan_paths: false'

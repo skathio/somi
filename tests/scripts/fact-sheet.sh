@@ -52,10 +52,10 @@ T_BIG='a huge name is refused as path_length'
 ps 'the raw-length bound removed' "$T_BIG" 'if (raw.length > MAX_PATH_CHARS) return true;' ''
 ps 'the regex trim restored without the bound' "$T_BIG" "if (raw.length > MAX_PATH_CHARS) return true;
   return raw.split(SEPARATORS).some((segment) => {
-    const folded = segment.normalize('NFKC').toUpperCase().toLowerCase();
+    const folded = foldName(segment);
     return [...new Set([folded, ...folded.split(SEPARATORS)])].some((piece) => {
       const name = trimDots(piece);" "return raw.split(SEPARATORS).some((segment) => {
-    const folded = segment.normalize('NFKC').toUpperCase().toLowerCase();
+    const folded = foldName(segment);
     return [...new Set([folded, ...folded.split(SEPARATORS)])].some((piece) => {
       const name = piece.replace(/[. ]+\$/, '');"
 ps 'the short-name rule removed' 'denies Windows short names' '/~\d/.test(name) || ' ''
@@ -100,11 +100,11 @@ ps 'the client_secret rule stops at a line terminator' "$T_TERM" 'client_secret[
 ps 'the tfstate backup-copy rule stops at a line terminator' "$T_TERM" '\.tfstate\.[^]*\.backup$' '\.tfstate\..*\.backup$'
 ps 'a bare config denied' 'a bare config stays allowed on purpose' "'.docker', 'credentials'];" "'.docker', 'credentials', 'config'];"
 ps 'credentials denied only as a file, not as a directory' 'credentials/ is denied as a directory' "return raw.split(SEPARATORS).some((segment) => {
-    const folded = segment.normalize('NFKC').toUpperCase().toLowerCase();
+    const folded = foldName(segment);
     return [...new Set([folded, ...folded.split(SEPARATORS)])].some((piece) => {
       const name = trimDots(piece);
       return NAME_EXACT.includes(name) ||" "return raw.split(SEPARATORS).some((segment, _, all) => {
-    const folded = segment.normalize('NFKC').toUpperCase().toLowerCase();
+    const folded = foldName(segment);
     return [...new Set([folded, ...folded.split(SEPARATORS)])].some((piece) => {
       const name = trimDots(piece);
       return (NAME_EXACT.includes(name) && (name !== 'credentials' || segment === all.at(-1))) ||"
