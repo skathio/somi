@@ -1,0 +1,148 @@
+// path-safety.mjs — inspectPath(root, raw): may a script look at this model-named path?
+//
+// A model, steered by request text, names paths; this module is the only door between those names and the
+// filesystem. It returns a result by class, never file content:
+//   { kind: 'denied' }                      the NAME is a secret (.env*, key and certificate files, .git/): decided
+//                                           on the string alone, no lstat, no realpath, no open, whatever the
+//                                           file's state, so nothing can be learned about it
+//   { kind: 'refused', refusal, denied? }   unsafe or unreadable; `refusal` is one of REFUSAL_IDS (ASCII, never
+//                                           the input text); `denied: true` when the name is also deny-listed,
+//                                           so a malformed secret name (../../.env) keeps its floor
+//   { kind: 'contained', exists, rel, ... } inside the root: a plain file (exists: true, with its size, and
+//                                           `answer` when a probe was given) or a new path whose parent exists
+// `rel` is the caller's own text and may be non-ASCII; the output layer escapes it. A name over MAX_PATH_CHARS is
+// never normalised or judged: it counts as deny-listed, so it is refused `path_length` with `denied: true`.
+// Backslashes are separators everywhere here, so `a\..\b` is a traversal on every platform.
+//
+// A probe is called with the open descriptor and the size, and returns true or false; this module closes the
+// descriptor, so it never escapes. This module returns only that boolean, so the probe must be synchronous; a
+// probe that throws becomes the `probe` refusal, never its message.
+//
+// Seams: `realpath` (default fs.realpathSync.native) and `constants` (default fs.constants).
+// shortcut: containment is checked, then the file is opened by its canonical path; a directory swapped in
+// between the walk and the open by a process already running as the user is not defended (O_NOFOLLOW covers the
+// last component), upgrade when the script runs for a different user than the files' owner.
+import fs from 'node:fs';
+import path from 'node:path';
+
+export const MAX_PATHS = 40;
+export const MAX_PATH_CHARS = 240;
+export const MAX_FILE_BYTES = 1024 * 1024;
+
+export const REFUSAL_IDS = Object.freeze([
+  'malformed', 'path_count', 'path_length', 'control', 'absolute', 'traversal', 'symlink', 'escape',
+  'no_parent', 'not_file', 'file_size', 'platform', 'unreadable', 'probe',
+]);
+
+const SEPARATORS = /[\\/]+/;
+// Cf includes ZWNJ and ZWJ: refusing them (they matter in some scripts) is deliberate, a hidden join is a spoof.
+const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+const ABSOLUTE = /^(?:[\\/]|[a-z]:)/i;
+const PARENT_SEGMENT = /^\.{2}[. ]*$/;
+const NAME_EXACT = ['.git', '.ssh', '.gnupg', '.aws'];
+const NAME_PREFIXES = ['.env', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', '.npmrc', '.netrc', '.git-credentials', '.pypirc', '.pgpass', 'terraform.tfstate'];
+const NAME_SUFFIXES = ['.pem', '.key', '.p12', '.pfx', '.crt', '.cer', '.der', '.jks', '.keystore', '.ppk', '.tfvars', '.kdbx'];
+
+const segmentsOf = (raw) => raw.split(SEPARATORS).filter((s) => s !== '' && s !== '.');
+const trimDots = (s) => { let e = s.length; while (e > 0 && (s[e - 1] === '.' || s[e - 1] === ' ')) e--; return s.slice(0, e); };
+const refused = (refusal, denied = false) => (denied ? { kind: 'refused', refusal, denied: true } : { kind: 'refused', refusal });
+
+// Pure string test, case-folded: the same answer for .ENV as .env on every filesystem.
+export function denyListed(raw) {
+  if (typeof raw !== 'string') return false;
+  if (raw.length > MAX_PATH_CHARS) return true;
+  return raw.normalize('NFKC').toLowerCase().split(SEPARATORS).some((segment) => {
+    const name = trimDots(segment);
+    return NAME_EXACT.includes(name) || /~\d/.test(name) || name.includes(':') || NAME_PREFIXES.some((p) => name.startsWith(p)) || NAME_SUFFIXES.some((s) => name.endsWith(s));
+  });
+}
+
+// The list-level cap. A list over it is refused whole, and keeps the deny-listed fact for any name in it.
+export function refuseList(paths) {
+  if (!Array.isArray(paths)) return refused('malformed');
+  if (paths.length <= MAX_PATHS) return null;
+  return refused('path_count', paths.some(denyListed));
+}
+
+function malformed(raw) {
+  if (typeof raw !== 'string') return 'malformed';
+  if (raw.length > MAX_PATH_CHARS) return 'path_length';
+  if (UNSAFE_CHARS.test(raw)) return 'control';
+  if (ABSOLUTE.test(raw)) return 'absolute';
+  const segments = segmentsOf(raw);
+  if (segments.some((s) => PARENT_SEGMENT.test(s))) return 'traversal';
+  return segments.length === 0 ? 'malformed' : null;
+}
+
+// Walks the root downwards one component at a time; any symlink refuses. Returns the canonical path and
+// whether it exists, or a result to hand back.
+function locate(root, segments, realpath) {
+  const base = realpath(root);
+  let current = base;
+  for (let i = 0; i < segments.length; i++) {
+    const next = path.join(current, segments[i]);
+    let stat;
+    try {
+      stat = fs.lstatSync(next);
+    } catch (e) {
+      if (e.code !== 'ENOENT') return { result: refused('unreadable') };
+      if (i < segments.length - 1) return { result: refused('no_parent') };
+      return { base, real: path.join(realpath(current), segments[i]), exists: false };
+    }
+    if (stat.isSymbolicLink()) return { result: refused('symlink') };
+    if (i < segments.length - 1 && !stat.isDirectory()) return { result: refused('not_file') };
+    if (i === segments.length - 1 && !stat.isFile()) return { result: refused('not_file') };
+    current = next;
+  }
+  return { base, real: realpath(current), exists: true };
+}
+
+// Opens without following a link or blocking on a FIFO; returns the descriptor and size, or a result.
+function openPlainFile(real, constants) {
+  let fd;
+  try {
+    fd = fs.openSync(real, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK | (constants.O_NOCTTY ?? 0));
+  } catch (e) {
+    return { result: refused(e.code === 'ELOOP' ? 'symlink' : 'unreadable') };
+  }
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) throw Object.assign(new Error(), { refusal: 'not_file' });
+    if (stat.size > MAX_FILE_BYTES) throw Object.assign(new Error(), { refusal: 'file_size' });
+    return { fd, size: stat.size };
+  } catch (e) {
+    fs.closeSync(fd);
+    return { result: refused(e.refusal ?? 'unreadable') };
+  }
+}
+
+export function inspectPath(root, raw, probe = null, { realpath = fs.realpathSync.native, constants = fs.constants } = {}) {
+  const denied = denyListed(raw);
+  const bad = malformed(raw);
+  if (bad) return refused(bad, denied);
+  if (denied) return { kind: 'denied' };
+  if (!(constants.O_NOFOLLOW > 0 && constants.O_NONBLOCK > 0)) return refused('platform');
+  let found;
+  try {
+    found = locate(root, segmentsOf(raw), realpath);
+  } catch {
+    return refused('unreadable');
+  }
+  if (found.result) return found.result;
+  const rel = path.relative(found.base, found.real);
+  if (rel === '' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return refused('escape');
+  if (denyListed(rel)) return { kind: 'denied' };
+  const contained = { kind: 'contained', exists: found.exists, rel: rel.split(path.sep).join('/') };
+  if (!found.exists) return contained;
+  const opened = openPlainFile(found.real, constants);
+  if (opened.result) return opened.result;
+  try {
+    contained.size = opened.size;
+    if (probe) contained.answer = probe(opened.fd, opened.size) === true;
+    return contained;
+  } catch {
+    return refused('probe');
+  } finally {
+    fs.closeSync(opened.fd);
+  }
+}

@@ -92,6 +92,7 @@ suite tests/scripts/global-config.sh
 echo "==> Dispatch resolver tests... (queued)"
 suite tests/scripts/somi-dispatch.sh
 suite tests/scripts/size-tier.sh
+suite tests/scripts/fact-sheet.sh
 
 echo "==> Front-door agent <-> dispatch resolver contract tests... (queued)"
 # agents/somi.md is a prompt and can't be exercised without a model, but what its Step 4 tells the
