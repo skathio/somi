@@ -246,6 +246,14 @@ if (mode === 'unit') {
   check('a model outside the pinned set makes the row invalid with reason unpinned-model', unp.row.outcome === 'invalid' && unp.reason === 'unpinned-model' && Sc.rowProblems(unp.row).length === 0);
   const probe = mk(draw({ outcome: 'invalid', reason: 'probe' }), { ...parsedOk, modelsSeen: ['x-1'] }, null);
   check('a sizing probe is checked for pinning too; an already invalid draw keeps its first cause', probe.reason === 'unpinned-model' && mk(draw({ outcome: 'invalid', reason: 'timeout' }), { ...parsedOk, modelsSeen: ['x-1'] }, null).reason === 'timeout');
+  const killed = (name, model) => U.parseStream(stream(name, [ev({ type: 'assistant', message: { model, content: [tu('k', 'Bash')] } }), ev({ type: 'user', message: { content: [] } })]), { allowNoResult: true });
+  const full = { tier: 'full', tierSource: 'file' }; const timedOut = (p, t = full) => mk(draw({ outcome: 'invalid', reason: 'timeout' }), p, null, t);
+  const kOk = killed('killed-ok', 'm-1'); const tOk = timedOut(kOk);
+  check('a killed stream (no result line) is read for its models from the assistant events: tokens empty, tool calls counted; by default it is still null', kOk.modelsSeen.join() === 'm-1' && Object.keys(kOk.tokens).length === 0 && kOk.results === 0 && kOk.toolCalls === 1 && U.parseStream(`${dir}/killed-ok`) === null);
+  check('a timed-out full draw recorded in the file keeps reason timeout when its models are pinned, and its row carries them', tOk.reason === 'timeout' && tOk.row.outcome === 'invalid' && tOk.row.models.join() === 'm-1' && Sc.rowProblems(tOk.row).length === 0);
+  check('a timed-out full draw is refused when a model is unpinned, unknown or too long, or the stream is unusable', eq([timedOut(killed('killed-x', 'x-1')).reason, timedOut(killed('killed-none', undefined)).reason, timedOut(killed('killed-long', 'm'.repeat(130))).reason, timedOut(null).reason], ['unpinned-model', 'models-unknown', 'models-truncated', 'unusable-stream']));
+  check('a full/file draw invalid for another cause (output-cap, a leak) keeps that reason when the model is unpinned: only a timeout is re-checked', ['output-cap', 'leak:token'].every((r) => { const t = mk(draw({ outcome: 'invalid', reason: r }), killed('killed-x', 'x-1'), null, full); return t.reason === r && t.row.outcome === 'invalid'; }));
+  check('any other timeout is not checked: a small tier, a tier from the stream, or none keeps reason timeout whatever the models', [{ tier: 'small', tierSource: 'file' }, { tier: 'full', tierSource: 'stream' }, { tier: null, tierSource: 'none' }].every((t) => timedOut(killed('killed-x', 'x-1'), t).reason === 'timeout' && timedOut(null, t).reason === 'timeout'));
   check('no model information, or no usable stream, is invalid rather than assumed pinned', mk(draw(), { ...parsedOk, modelsSeen: [] }, { green: 1, total: 1 }).reason === 'models-unknown' && mk(draw(), null, { green: 1, total: 1 }).reason === 'unusable-stream');
   check('a scored outcome without a hidden-suite score is invalid; a paused row keeps its score and sets paused', mk(draw(), parsedOk, null).reason === 'unscored' && (() => { const p = mk(draw({ outcome: 'paused' }), parsedOk, { green: 2, total: 4 }).row; return p.paused === true && p.green === 2 && Sc.rowProblems(p).length === 0; })());
   const junk = mk(draw({ costUsd: NaN, durationMs: -5, turns: 'x' }), { ...parsedOk, tokens: { 'm-1': { input: 1.5 } } }, { green: 9, total: 4 });
@@ -388,6 +396,9 @@ red_unit mut-cumulative tests/evals/lib/bench-usage.mjs "call.cost = cost;" "cal
 red_unit mut-haltedrow tests/evals/lib/bench-usage.mjs "if (e.status === 'halted') { if (e.row !== null" "if (e.status === 'halted') { if (false && e.row !== null"
 red_unit mut-mismatch tests/evals/lib/bench-usage.mjs "canon(stored[k]) !== canon(fresh[k])" "false"
 red_unit mut-skipbad tests/evals/lib/bench-usage.mjs 'catch { return { ok: false, reason: `${at} is not JSON` }; }' 'catch { continue; }'
+red_unit mut-timedfull tests/evals/lib/bench-usage.mjs "reason === 'probe' || timedFull;" "reason === 'probe';"
+red_unit mut-timedreason tests/evals/lib/bench-usage.mjs "const timedFull = reason === 'timeout' && tierInfo" "const timedFull = tierInfo"
+red_unit mut-nores tests/evals/lib/bench-usage.mjs "if (out.results === 0 && !allowNoResult) return null;" "if (out.results === 0) return null;"
 red_unit mut-dedupe tests/evals/lib/bench-usage.mjs "if (ids.has(id) || ids.size >= MAX_IDS) continue; ids.add(id);" "ids.add(id);"
 # Driver-level proofs: a copy of the driver with one guard removed must behave wrongly in a small run.
 scratch mut-plan; mutate mut-plan tests/scripts/manual/usage-bench.mjs "if (diff.length > 0) die(" "if (false) die("

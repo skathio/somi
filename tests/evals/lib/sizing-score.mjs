@@ -27,7 +27,11 @@ export class Refusal extends Error {}
 const refuse = (msg) => { throw new Refusal(msg); };
 const plain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const HARNESS_EVENTS = ['paused', 'over-budget'];
-const isEvent = (r) => HARNESS_EVENTS.includes(r.outcome) || (r.outcome === 'invalid' && r.reason !== 'probe');
+// `full` has no Stage -1 stop, so a draw that sizes `full` and never pauses runs on into the design work until the probe
+// timeout; the tier record it wrote at Stage -1 is its answer. A timeout with any other tier, or a tier not read from the
+// record file, has no such answer and stays a harness event.
+export const isTakenTimeout = (r) => r.outcome === 'invalid' && r.reason === 'timeout' && r.tier === 'full' && r.tierSource === 'file';
+const isEvent = (r) => HARNESS_EVENTS.includes(r.outcome) || (r.outcome === 'invalid' && r.reason !== 'probe' && !isTakenTimeout(r));
 const SHA = /^[0-9a-f]{7,40}$/;
 const HASH = /^[0-9a-f]{64}$/;
 // Integer arithmetic, so 4/5 and 12/15 are exact: ceil(0.8 * n).
@@ -36,26 +40,32 @@ const allowedOff = (total) => Math.floor(total / 10);
 
 // Sizing-phase rows ({scenario, arm, phase, tier}) to a record. Refuses a row outside the sizing phase, of another arm
 // or for a scenario the set does not hold, a draw that ended on a harness event rather than an answer (over budget, or an
-// `invalid` row whose `reason` is anything but `probe`: a timeout, an output cap, a leak), an entry with no draw, and
+// `invalid` row whose `reason` is anything but `probe`: a timeout, an output cap, a leak; a timeout on a `full` tier read
+// from the record file is the one answer among them), an entry with no draw, and
 // entries with different draw counts. A row without an `outcome` is taken as an answer; the probe marks every answered
-// sizing draw `invalid` with reason `probe`, so that pair is an answer too.
-export function buildResult(set, rows, { plugin_sha, arm }) {
+// sizing draw `invalid` with reason `probe`, so that pair is an answer too. buildRecord also counts the timed-out full
+// draws it took, so the count and the acceptance are one decision; buildResult is the record alone.
+export function buildRecord(set, rows, { plugin_sha, arm }) {
   if (!SHA.test(plugin_sha ?? '')) refuse('plugin_sha must be 7 to 40 hex characters');
   if (!ARMS.includes(arm)) refuse(`arm must be one of ${ARMS.join(', ')}`);
   const entries = Object.fromEntries(set.entries.map((e) => [e.id, []]));
   const idOf = new Map(set.entries.map((e) => [scenarioId(e), e.id]));
+  let taken = 0;
   rows.forEach((r, i) => {
     if (!plain(r)) refuse(`row ${i} is not an object`);
     if (r.phase !== 'sizing') refuse(`row ${i} is in phase ${JSON.stringify(r.phase)}, not sizing`);
     if (r.arm !== arm) refuse(`row ${i} is for arm ${JSON.stringify(r.arm)}, not ${arm}`);
     if (!idOf.has(r.scenario)) refuse(`row ${i} names scenario ${JSON.stringify(r.scenario)}, which is not in the set`);
     if (isEvent(r)) refuse(`row ${i} (${r.scenario}) ended ${r.outcome}${r.outcome === 'invalid' ? ` (${JSON.stringify(r.reason)})` : ''}, not on an answer; draw it again`);
+    if (isTakenTimeout(r)) taken++;
     entries[idOf.get(r.scenario)].push(TIERS.includes(r.tier) ? r.tier : null);
   });
   const counts = [...new Set(Object.values(entries).map((d) => d.length))];
   if (counts.length !== 1 || counts[0] === 0) refuse(`every entry needs the same number of draws (at least one); found ${counts.join(', ')}`);
-  return { label_sha256: labelHash(set), plugin_sha, arm, entries };
+  return { record: { label_sha256: labelHash(set), plugin_sha, arm, entries }, taken };
 }
+
+export const buildResult = (set, rows, meta) => buildRecord(set, rows, meta).record;
 
 // A record that is not shaped as above, or whose entries are not exactly the set's, is refused.
 function checkRecord(set, rec, what) {
@@ -157,7 +167,10 @@ function main(argv) {
   let set;
   try { set = val['--set'] ? loadSet(val['--set']) : loadSet(); } catch (e) { return refuse(e.message); }
   if (cmd === '--build') {
-    console.log(JSON.stringify(buildResult(set, rowsOf(pos[0]), { plugin_sha: val['--plugin-sha'], arm: val['--arm'] ?? 'somi' }), null, 2));
+    const rows = rowsOf(pos[0]);
+    const { record, taken } = buildRecord(set, rows, { plugin_sha: val['--plugin-sha'], arm: val['--arm'] ?? 'somi' });
+    if (taken > 0) process.stderr.write(`sizing-score: timed-out full draws taken as answers (tier from the record file): ${taken}\n`);
+    console.log(JSON.stringify(record, null, 2));
     return 0;
   }
   if (cmd === '--score') {

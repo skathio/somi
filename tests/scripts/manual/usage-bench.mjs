@@ -384,7 +384,7 @@ async function main() {
         if (stop) st.halt = stop;
         score = { green: scratch.green, total: sc.total };
       }
-      const { row, reason } = toRow({ scenario: d.scenario, arm: d.arm, phase: plan.phase, outcome: scratch.outcome, reason: scratch.reason, costUsd, durationMs: run.wallMs, turns: run.turns, model: args.model, pinnedExtra: args.pinnedExtra }, parseStream(streamFile), score, tierInfo);
+      const { row, reason } = toRow({ scenario: d.scenario, arm: d.arm, phase: plan.phase, outcome: scratch.outcome, reason: scratch.reason, costUsd, durationMs: run.wallMs, turns: run.turns, model: args.model, pinnedExtra: args.pinnedExtra }, parseStream(streamFile, { allowNoResult: scratch.reason === 'timeout' }), score, tierInfo);
       return entry('done', reason, { ...base, row });
     } catch (e) {
       process.stderr.write(`usage-bench: ${d.id}: harness fault: ${redactToken(String(e?.message ?? e), token).slice(0, 160)}\n`);

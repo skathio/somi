@@ -200,7 +200,9 @@ node tests/evals/lib/sizing-score.mjs --compare baseline.json candidate.json [--
 plugin sha, the arm, the label hash and each entry's draws. It refuses, naming the row: a row of another phase than
 `sizing`, a row of another arm than `--arm`, a row for a scenario the set does not hold, a draw that ended
 `over-budget`, or `invalid` for any reason but `probe` (a timeout, an output cap, a leak: a harness event, not an answer, so it
-is drawn again rather than scored as a wrong tier), and
+is drawn again rather than scored as a wrong tier; the one exception is a timeout on a draw whose recorded tier, read from
+the record file, is `full`: `full` has no Stage -1 stop, so such a draw runs on until the timeout and its record is its
+answer, and `--build` reports on stderr how many it took; such a draw's model pin is checked from its stream like a probe draw's), and
 entries with different draw counts or none. A file that mixes both arms is therefore refused: build one record per arm
 from that arm's rows. `--arm` (default `somi`) names the arm the rows belong to; `--plugin-sha` is the 7 to 40 hex
 characters of the plugin build that was probed and is required; `--set` reads a set file instead of the committed one,

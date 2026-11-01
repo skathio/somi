@@ -72,6 +72,11 @@ async function suite(modPath, say) {
   const withEnd = (outcome, reason) => rowsFor(1).map((r, i) => (i === 0 ? { ...r, outcome, reason } : r));
   check("takes a scored draw and the probe's own invalid draw as answers", [['scored'], ['invalid', 'probe']].map((a) => M.buildResult(set, withEnd(...a), META).entries[O1.id]), [[O1.label], [O1.label]]);
   check('refuses a draw that ended invalid for any reason but probe: a harness event, not an answer', ['timeout', 'output-cap', 'leak: token', 'unpinned-model', undefined].map((why) => refusedWith(() => M.buildResult(set, withEnd('invalid', why), META), /ended invalid/)), Array(5).fill(true));
+  const timedOut = (tier, tierSource) => rowsFor(1).map((r, i) => (i === 0 ? { ...r, outcome: 'invalid', reason: 'timeout', tier, tierSource } : r));
+  check('takes a timed-out draw whose tier is full from the record file as an answer', M.buildResult(set, timedOut('full', 'file'), META).entries[O1.id], ['full']);
+  check('counts only the timed-out full draws it took, and never a scored draw that carries a timeout reason', [M.buildRecord(set, timedOut('full', 'file'), META).taken, M.buildRecord(set, rowsFor(1), META).taken, M.buildRecord(set, rowsFor(1).map((r, i) => (i === 0 ? { ...r, outcome: 'scored', reason: 'timeout', tier: 'full', tierSource: 'file' } : r)), META).taken], [1, 0, 0]);
+  check('refuses a timeout on any other tier or tier source', [['small', 'file'], ['trivial', 'file'], ['unknown', 'file'], ['full', 'stream'], ['full', 'none'], ['full', undefined]].map((a) => refusedWith(() => M.buildResult(set, timedOut(...a), META), /ended invalid \("timeout"\)/)), Array(6).fill(true));
+  check('refuses a full/file draw that ended invalid for a reason but timeout', ['output-cap', 'leak: token', 'unpinned-model', undefined].map((why) => refusedWith(() => M.buildResult(set, timedOut('full', 'file').map((r, i) => (i === 0 ? { ...r, reason: why } : r)), META), /ended invalid/)), Array(4).fill(true));
   check('refuses a bad plugin sha', refusedWith(() => M.buildResult(set, rowsFor(1), { plugin_sha: 'main', arm: 'somi' }), /plugin_sha/), true);
 
   say('== sizing score: the bar per entry ==');
@@ -155,6 +160,13 @@ async function suite(modPath, say) {
   check('--build names the line whose JSON does not parse', [badRun.status, /line 3 is not JSON/.test(badRun.stderr)], [2, true]);
   check('--build refuses an empty rows file', [cli('--build', put('empty.jsonl', ''), '--plugin-sha', SHA).status, /at least one/.test(cli('--build', put('empty.jsonl', ''), '--plugin-sha', SHA).stderr)], [2, true]);
   check('--build refuses a finished draw whose entry reason is not probe, and takes one that is', [['timeout', 2], ['probe', 0]].map(([why, code]) => cli('--build', put(`why-${why}.jsonl`, rowsFor(1).map((r) => JSON.stringify({ status: 'done', reason: why, row: { ...r, outcome: 'invalid' } })).join('\n')), '--plugin-sha', SHA).status === code), [true, true]);
+  const timeoutFile = (tier) => put(`timeout-${tier}.jsonl`, rowsFor(5).map((r, i) => JSON.stringify({ status: 'done', reason: i === 0 ? 'timeout' : 'probe', row: i === 0 ? { ...r, outcome: 'invalid', tier, tierSource: 'file' } : r })).join('\n'));
+  const tFull = cli('--build', timeoutFile('full'), '--plugin-sha', SHA); const tSmall = cli('--build', timeoutFile('small'), '--plugin-sha', SHA);
+  const tRows = rowsFor(5).map((r, i) => (i === 0 ? { ...r, outcome: 'invalid', reason: 'timeout', tier: 'full', tierSource: 'file' } : { ...r, outcome: 'invalid', reason: 'probe' }));
+  check('--build takes a timed-out full draw, says so on stderr and prints exactly the record (stdout is one JSON document)', [tFull.status, tFull.stderr, tFull.status === 0 && isDeepStrictEqual(JSON.parse(tFull.stdout), M.buildResult(set, tRows, META))],
+    [0, 'sizing-score: timed-out full draws taken as answers (tier from the record file): 1\n', true]);
+  check('--build refuses a timed-out small draw, exit 2', [tSmall.status, /ended invalid/.test(tSmall.stderr)], [2, true]);
+  check('--build says nothing on stderr when it took no timeout', [out.status, out.stderr], [0, '']);
   check('--build refuses a file that is missing', cli('--build', path.join(work, 'nope.jsonl'), '--plugin-sha', SHA).status, 2);
   check('a flag that needs a value and has none is a usage refusal, even last or before another flag', [
     cli('--score', met, '--set'), cli('--build', rowsFile, '--plugin-sha'), cli('--build', rowsFile, '--plugin-sha', SHA, '--arm'), cli('--score', met, '--set', '--pooled'),
@@ -177,7 +189,11 @@ const MUTATIONS = [
   // A tie can only change the reported modal tier, never `pass` (a tied top count is below the need); the suite pins the modal.
   ['the empty-rows guard dropped', 'counts.length !== 1 || counts[0] === 0', 'counts.length !== 1'],
   ['the pooled allowance rounded up', 'Math.floor(total / 10)', 'Math.ceil(total / 10)'],
-  ['an invalid draw taken as an answer', "(r.outcome === 'invalid' && r.reason !== 'probe')", 'false'],
+  ['an invalid draw taken as an answer', "(r.outcome === 'invalid' && r.reason !== 'probe' && !isTakenTimeout(r))", 'false'],
+  ['a timeout taken whatever its tier', "r.tier === 'full' && r.tierSource === 'file'", "r.tierSource === 'file'"],
+  ['a timeout taken whatever its reason', "r.reason === 'timeout' && r.tier === 'full'", "r.tier === 'full'"],
+  ['a timeout counted whatever its outcome', "r.outcome === 'invalid' && r.reason === 'timeout'", "r.reason === 'timeout'"],
+  ['a timeout taken whatever its tier source', "r.tier === 'full' && r.tierSource === 'file'", "r.tier === 'full'"],
   ['ties resolved to the first tier', 'if (top.length !== 1) return { tier: null, count };', 'if (top.length === 0) return { tier: null, count };'],
 ];
 let mutFail = 0;
