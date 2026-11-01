@@ -35,7 +35,7 @@
 // `classifyPaths` takes `loadConfig`'s `{global, project}` result as it is, or an array of layers, or one layer; the merged `.config`
 // must never be passed (mergeConfig replaces an array between layers, so it would erase the user's own additions).
 // A layer key that is refused (one bad glob drops its whole key list) is reported in `refused` by key name, never silently.
-import { MAX_PATHS, MAX_PATH_CHARS, denyListed } from './path-safety.mjs';
+import { MAX_PATHS, MAX_PATH_CHARS, denyListed, foldName as fold, trimDots as trim } from './path-safety.mjs';
 
 export const MAX_GLOBS = 32;
 export const MAX_GLOB_CHARS = 100;
@@ -69,15 +69,12 @@ const DEFAULTS = {
 const TEST_DIRS = new Set(['test', 'tests', '__tests__', 'spec', 'specs', 'e2e', '__mocks__', 'testdata']);
 const TEST_FILES = ['*.test.*', '*.spec.*', '*_test.*', '*-test.*', '*_tests.*', '*-tests.*', '*_spec.*', 'test_*'];
 
-const fold = (s) => s.normalize('NFKC').toUpperCase().toLowerCase();
 // Separators only, no folding: the module key keeps the case a case-sensitive filesystem tells apart.
 const parts = (s) => s.split(/[\\/]+/).filter((x) => x !== '' && x !== '.');
 // The primary reading: split on the raw separators, then fold each segment, so a segment keeps a folded-in separator.
 const split = (s) => parts(s).map(fold);
 // The re-split reading: fold, then split (how a glob is read), so `a／b` is `a`, `b`.
 const resplit = (s) => parts(fold(s));
-// Segments without trailing dots and spaces, as path-safety's deny test reads them.
-const trim = (x) => x.replace(/[. ]+$/, '');
 const trimmed = (segs) => segs.map(trim).filter(Boolean);
 // The readings a glob is tried against, without repeats (the common name has one or two, so the cost grows only for odd names).
 const readings = (raw) => { const p = split(raw); const r = resplit(raw); return [...new Map([p, trimmed(p), r, trimmed(r)].map((x) => [JSON.stringify(x), x])).values()]; };

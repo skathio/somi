@@ -237,7 +237,7 @@ pf 'the module key loses its container' 'one name under two containers' '`${segs
 pf 'the module count counts files' 'one name under two containers' 'modules: new Set(files.map((f) => f.module)).size' 'modules: files.length'
 pf 'a root file keyed by its name' 'module key: first segment' "if (segs.length < 2) return '';" ''
 pf 'a file in a container keyed by its name' "$T_KEY" 'containers.has(head) && segs.length > 2' 'containers.has(head)'
-pf 'case folding removed' 'matching is case-folded' "const fold = (s) => s.normalize('NFKC').toUpperCase().toLowerCase();" 'const fold = (s) => s;'
+pf 'case folding removed' 'matching is case-folded' "denyListed, foldName as fold, trimDots as trim } from './path-safety.mjs';" "denyListed, trimDots as trim } from './path-safety.mjs'; const fold = (s) => s;"
 pf 'the module key is folded' 'the module key keeps the case' '`${segs[0]}/${segs[1]}` : segs[0]' '`${segs[0]}/${segs[1]}`.toLowerCase() : segs[0].toLowerCase()'
 pf 'the container match is not folded' 'the module key keeps the case' 'const head = trim(fold(segs[0]));' 'const head = trim(segs[0]);'
 T_TRIM='the trim is an extra reading'

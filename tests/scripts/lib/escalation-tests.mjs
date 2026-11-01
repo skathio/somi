@@ -18,7 +18,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
 const M = await import(pathToFileURL(path.resolve(process.argv[2])).href);
-const { escalation, HARD_SURFACE_IDS, SEAT_REASONS, CLASS_NAMES, REFUSED_REASON } = M;
+const { escalation, HARD_SURFACE_IDS, SEAT_REASONS, CLASS_NAMES, REFUSED_REASON, INTERNAL_REASON } = M;
 
 let pass = 0; let fail = 0;
 const clip = (v) => JSON.stringify(v).slice(0, 160);
@@ -82,13 +82,19 @@ const REFUSALS = {
 check('refused input returns the raising result and never throws', Object.fromEntries(Object.entries(REFUSALS).map(([k, v]) => [k, (() => { try { const r = escalation(v); return [r.review_min, r.reasons]; } catch { return 'threw'; } })()])),
   Object.fromEntries(Object.keys(REFUSALS).map((k) => [k, ['security', [REFUSED_REASON]]])));
 check('the refused result seats every lens, flags size and carries every hard-surface id', (({ seats, size_flag, tests_weakened, hard_surface }) => [seated({ seats }), size_flag, tests_weakened, hard_surface])(escalation(null)), [LENSES, true, false, [...HARD_SURFACE_IDS]]);
+// Array.prototype.filter is called by the rules and not by the input reader, so a throwing one is a bug in the rules, not bad input.
+const whileBroken = (fn) => { const keep = Array.prototype.filter; Array.prototype.filter = () => { throw new Error('bug'); }; try { return fn(); } finally { Array.prototype.filter = keep; } };
+const broken = whileBroken(() => { try { return escalation(facts()); } catch { return { threw: true }; } });
+check('an unexpected error in the rules is the raising result under its own reason id, not the unreadable-input one; bad input keeps its id', [
+  broken.threw ?? [broken.review_min, broken.reasons, broken.hard_surface, seated(broken), LENSES.map((l) => broken.seats[l].reasons)], escalation(null).reasons, INTERNAL_REASON !== REFUSED_REASON,
+], [['security', [INTERNAL_REASON], [...HARD_SURFACE_IDS], LENSES, LENSES.map(() => [INTERNAL_REASON])], [REFUSED_REASON], true]);
 check('a plain object with a null prototype and a frozen input are read', [escalation(Object.assign(Object.create(null), facts())).review_min, escalation(Object.freeze(facts())).review_min], [null, null]);
 
 console.log('== escalation: output ==');
 const sample = [run(), run({ denied: true, test_lines_deleted: 40, modules: 3 }, { sensitive: ['auth'], contract: ['manifest'] }), escalation(null)];
 check('the output is deterministic, pure ASCII and has the same keys always', [escalation(facts()), JSON.stringify(sample).length > 0 && /^[\x20-\x7e]*$/.test(JSON.stringify(sample)), sample.map((r) => Object.keys(r).join())],
   [run(), true, sample.map(() => 'review_min,reasons,tests_weakened,size_flag,hard_surface,seats')]);
-const SHAPE = ['always', 'facts_unreadable', 'review_min', ...Object.values(SEAT_REASONS).flat(), 'security'];
+const SHAPE = ['always', 'facts_unreadable', 'internal_error', 'review_min', ...Object.values(SEAT_REASONS).flat(), 'security'];
 const strings = (v) => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.entries(v).flatMap(([k, x]) => [...(Array.isArray(v) ? [] : [k]), ...strings(x)]) : []);
 const ids = new Set(strings(sample).concat(strings(run({ denied: true }, { sensitive: ['auth'], boundary: ['data'], contract: ['schema'] }))));
 const known = new Set([...SHAPE, 'seat', 'reasons', 'tests_weakened', 'size_flag', 'hard_surface', 'seats', ...LENSES, ...HARD_SURFACE_IDS, ...CLASS_NAMES.sensitive.map((n) => `sensitive:${n}`), ...CLASS_NAMES.boundary.map((n) => `boundary:${n}`), ...CLASS_NAMES.contract.map((n) => `contract:${n}`)]);

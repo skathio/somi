@@ -52,6 +52,7 @@ T_HARD='hard-surface ids: manifest, lockfile'
 T_SECLENS='the raising classes and reasons name security'
 T_REFUSED='refused input returns the raising result'
 T_REFALL='the refused result seats every lens'
+T_INTERNAL='an unexpected error in the rules'
 T_FROZEN='the registries and constants are frozen'
 T_DOM='the monotonicity domain has 55,296 evaluations'
 T_MONO='a fact moved one step up never turns off'
@@ -98,16 +99,19 @@ es 'a new top directory turns the module seat off' "$T_MONO" 'f.modules > MAX_MO
 es 'the refused result lacks a hard-surface id' "$T_TOP" 'hard_surface: [...HARD_SURFACE_IDS],' 'hard_surface: [],'
 # refused input
 es 'the refused result does not raise' "$T_REFUSED" "review_min: 'security',
-  reasons: [REFUSED_REASON]," "review_min: null,
-  reasons: [REFUSED_REASON],"
-es 'a throw escapes' "$T_REFUSED" 'catch { return refused(); }' 'catch (e) { throw e; }'
+  reasons: [reason]," "review_min: null,
+  reasons: [reason],"
+es 'a throw escapes' "$T_REFUSED" 'catch { return refused(REFUSED_REASON); }' 'catch (e) { throw e; }'
+es 'an unreadable input is reported as an internal error' "$T_REFUSED" 'catch { return refused(REFUSED_REASON); }' 'catch { return refused(INTERNAL_REASON); }'
+es 'an internal error is reported as unreadable input' "$T_INTERNAL" 'catch { return refused(INTERNAL_REASON); }' 'catch { return refused(REFUSED_REASON); }'
+es 'an internal error escapes' "$T_INTERNAL" 'catch { return refused(INTERNAL_REASON); }' 'catch (e) { throw e; }'
 es 'an accessor is read' "$T_REFUSED" "return d && 'value' in d ? d.value : refuse();" 'return d ? o[k] : refuse();'
 es 'a negative count accepted' "$T_REFUSED" 'Number.isSafeInteger(v) && v >= 0' 'Number.isSafeInteger(v)'
 es 'an unknown class name accepted' "$T_REFUSED" 'out.every((n) => allowed.includes(n)) ?' 'true ?'
 es 'a non-plain object accepted' "$T_REFUSED" '[Object.prototype, null].includes(Object.getPrototypeOf(o))' 'true'
 es 'a duplicate class name kept' "$T_SECLENS" '? [...new Set(out)].sort() :' '? out.sort() :'
 es 'an unknown key accepted' "$T_REFUSED" 'have.length === want.length && ' ''
-es 'the refused result seats fewer lenses' "$T_REFALL" 'seated(Object.fromEntries(SEATS.map((l) => [l, [REFUSED_REASON]])))' "seated(Object.fromEntries(SEATS.map((l) => [l, l === 'somi-reviewer' ? ['always'] : []])))"
+es 'the refused result seats fewer lenses' "$T_REFALL" 'seated(Object.fromEntries(SEATS.map((l) => [l, [reason]])))' "seated(Object.fromEntries(SEATS.map((l) => [l, l === 'somi-reviewer' ? ['always'] : []])))"
 es 'the registries left mutable' "$T_FROZEN" '[k, Object.freeze(v)]' '[k, v]'
 
 # A shrunk monotonicity domain must turn the suite red: the same lib with one value taken out, run on the real module.
@@ -130,7 +134,8 @@ TF_ROWS='a new 40-line file sizes nothing'; TF_DENY='a deleted .env, a renamed i
 TF_WEAK='tests_weakened: a moved test'; TF_TOP='a top directory is new only when'; TF_IGN='planning churn under .somi is ignored'; TF_CFG='through the real loadConfig'; TF_PLAN='plan inputs: a plan directory'
 TF_GUARD='the guard raises sensitive config on every row'; TF_UNPLAIN='a name with an empty, dot or dot-dot segment'; TF_SUM='a summed count past the safe integers'
 TF_GROWN='a name that only passes the length cap once folded'; TF_ONLY='only undefined or the loadConfig shape is read'; TF_REF='a refused sensitive_paths key is noted'
-TF_ALSO='the guard raises on a row among ordinary ones'
+TF_ALSO='the guard raises on a row among ordinary ones'; TF_QUIET='the guard is not wider than its names'
+TF_FLIP='the config layers are read once'; TF_NOROW='a refused config shape raises sensitive config with no row'
 TF_COVER='every degraded result covers a full read'
 TF_HOST='a path over the length cap, a control character'; TF_MANY='10,000 rows, a non-list'; TF_BOX='a time box that runs out returns the floor'
 ef 'the contract class not mapped' "$TF_HARD" "const KINDS = ['sensitive', 'boundary', 'contract'];" "const KINDS = ['sensitive', 'boundary'];"
@@ -156,14 +161,23 @@ ef 'the chunk step skips a row' 'rows past the first chunk are read' 'at += CHUN
 ef 'the chunk loop stops after the first chunk' 'rows past the first chunk are read' 'at += CHUNK) {' 'at += 1000) {'
 ef 'the guard reads the case as written' "$TF_GUARD" 'flatMap((s) => foldName(s).split(SEP))' 'flatMap((s) => s.split(SEP))'
 ef 'the guard does not re-split a folded separator' "$TF_GUARD" 'foldName(s).split(SEP)' '[foldName(s)]'
+ef 'the guard re-splits a folded separator on forward slashes only' "$TF_GUARD" 'foldName(s).split(SEP)' "foldName(s).split('/')"
 ef 'the guard splits on forward slashes only' "$TF_GUARD" 'const SEP = /[\\/]/;' 'const SEP = /\//;'
 ef 'the guard keeps trailing dots and spaces' "$TF_GUARD" '.map(trimDots);' ';'
 ef 'the guard runs only on ignored rows' "$TF_GUARD" 'if (guarded(r.file)) seen' 'if (hidden(r.file) && guarded(r.file)) seen'
-ef 'the guard drops a bare .claude' "$TF_GUARD" "head === '.claude' ||" "(head === '.claude' && second !== undefined) ||"
+ef 'the guard reaches only a root .claude' "$TF_GUARD" "segs.includes('.claude') ||" "head === '.claude' ||"
+ef 'the guard drops a bare .claude' "$TF_GUARD" "segs.includes('.claude') ||" "(segs.includes('.claude') && second !== undefined) ||"
 ef 'the guard drops a bare .somi' "$TF_GUARD" 'second === undefined || ' ''
 ef 'the guard drops .somi/config.json' "$TF_GUARD" " || second === 'config.json'" ''
-ef 'the plugins exemption restored' "$TF_GUARD" "head === '.claude' ||" "(head === '.claude' && pieces(file).slice(1, 3).join('/') !== 'plugins/somi') ||"
-ef 'the guard reaches only the first level of .claude' "$TF_GUARD" "head === '.claude' ||" "(head === '.claude' && pieces(file).length < 3) ||"
+ef 'the plugins exemption restored' "$TF_GUARD" "segs.includes('.claude') ||" "(segs.includes('.claude') && segs.slice(1, 3).join('/') !== 'plugins/somi') ||"
+ef 'the guard reaches only the first level of .claude' "$TF_GUARD" "segs.includes('.claude') ||" "(segs.includes('.claude') && segs.length < 3) ||"
+ef 'the guard drops .somi/rules' "$TF_GUARD" " || second === 'rules'" ''
+ef 'the guard drops CLAUDE.md' "$TF_GUARD" "segs.includes('claude.md') || " ''
+ef 'the guard drops AGENTS.md' "$TF_GUARD" "segs.includes('agents.md') || " ''
+ef 'CLAUDE.md guarded at the root only' "$TF_GUARD" "segs.includes('claude.md')" "head === 'claude.md'"
+ef 'AGENTS.md guarded at the root only' "$TF_GUARD" "segs.includes('agents.md')" "head === 'agents.md'"
+ef 'a name that merely contains claude.md guarded' "$TF_QUIET" "segs.includes('claude.md')" "segs.some((x) => x.includes('claude.md'))"
+ef 'every .somi child guarded' "$TF_QUIET" "second === 'rules'" 'second !== undefined'
 ef 'a guarded row dropped when it is not an exact ignored prefix' "$TF_ALSO" 'if (!hidden(r.file)) kept.push(r);' 'if (!hidden(r.file) && !guarded(r.file)) kept.push(r);'
 ef 'a name that grows past the cap when folded accepted' "$TF_GROWN" ' && foldName(r.file).length <= MAX_PATH_CHARS' ''
 ef 'an empty, dot or dot-dot segment accepted' "$TF_UNPLAIN" " && !pieces(r.file).includes('')" ''
@@ -171,8 +185,13 @@ ef 'a summed count past the safe integers kept' "$TF_SUM" 'if (!COUNTS.every((k)
 ef 'a refused sensitive_paths key adds nothing' "$TF_REF" "if (refused.includes('sensitive_paths')) seen.sensitive.add('config');" ''
 ef 'a refused key is noted only when a row reaches the classifier' "$TF_REF" "const refused = classifyPaths([], config).refused;" "const refused = kept.length > 0 ? classifyPaths([], config).refused : [];"
 ef 'a refused key not reported' "$TF_REF" "if (refused.length > 0) notes.add('config_refused');" ''
-ef 'any config shape read' "$TF_ONLY" 'loaded(opts.config) ? opts.config : undefined' 'opts.config'
-ef 'a refused config shape not reported' "$TF_ONLY" "if (config !== opts.config) notes.add('config_refused');" ''
+ef 'any config shape read' "$TF_ONLY" 'if (!plain(cfg)) return null;' 'if (!plain(cfg)) continue;'
+ef 'a refused config shape not reported' "$TF_ONLY" "{ notes.add('config_refused'); seen.sensitive.add('config'); }" "{ seen.sensitive.add('config'); }"
+ef 'a refused config shape adds nothing' "$TF_ONLY" "{ notes.add('config_refused'); seen.sensitive.add('config'); }" "{ notes.add('config_refused'); }"
+ef 'a refused config shape adds nothing when no row is read' "$TF_NOROW" "{ notes.add('config_refused'); seen.sensitive.add('config'); }" "{ notes.add('config_refused'); if (rows.length > 0) seen.sensitive.add('config'); }"
+ef 'the classifier reads the caller config again in each chunk' "$TF_FLIP" 'classifyPaths(chunk.map((r) => r.file), config)' 'classifyPaths(chunk.map((r) => r.file), opts.config)'
+ef 'the layers are passed on without a copy' "$TF_FLIP" "layers.push({ sizing: { sensitive_paths: glist(once(sizing, 'sensitive_paths')), module_containers: glist(once(sizing, 'module_containers')) } });" 'layers.push(cfg);'
+ef 'the time box starts after the preparation' 'the time box starts before the config' 'for (let at = 0; at < kept.length; at += CHUNK) {' 'for (let at = 0, start = Date.now(); at < kept.length; at += CHUNK) {'
 ef 'the floor lets the new top directories switch off' "$TF_COVER" 'test_lines_added: 0, test_files_changed: 0, denied: true' 'test_lines_added: 0, test_files_changed: 0, new_top_dirs: 0, denied: true'
 ef 'the floor counts a test file changed' "$TF_COVER" 'test_lines_added: 0, test_files_changed: 0, denied: true' 'test_lines_added: 0, test_files_changed: 1e9, denied: true'
 ef 'an internal error without its note' 'an unexpected error is the floor' "notes: ['internal_error']" 'notes: []'

@@ -13,7 +13,8 @@
 // the loop takes the max with the earlier pass. The input is a closed grammar read once into a plain
 // copy: an unknown or missing key, a wrong type, a negative count, an unknown class name, an accessor or a
 // non-plain object is the refused result, which is the raising result (every seat, every hard-surface id), as
-// size-tier does for unreadable signals. `escalation` never throws.
+// size-tier does for unreadable signals. An unexpected error in the rules themselves (a bug, not the input) is the same raising
+// result under its own reason id, so it is not reported as unreadable input. `escalation` never throws.
 //
 // Provisional: the numbers are the research report's guesses (150 lines, 5 files) or the planner's, and live
 // here so they can be fitted without touching the rules.
@@ -26,6 +27,7 @@ export const LARGE_TEST_CHANGE = 100;
 export const UNTESTED_PRODUCTION_LINES = 60;
 export const MAX_CLASS_NAMES = 16;
 export const REFUSED_REASON = 'facts_unreadable';
+export const INTERNAL_REASON = 'internal_error';
 const DENY = 'deny_list';
 
 const freezeAll = (o) => Object.freeze(Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Object.freeze(v)])));
@@ -111,15 +113,17 @@ function judge(f) {
   };
 }
 
-const refused = () => ({
+const refused = (reason) => ({
   review_min: 'security',
-  reasons: [REFUSED_REASON],
+  reasons: [reason],
   tests_weakened: false,
   size_flag: true,
   hard_surface: [...HARD_SURFACE_IDS],
-  seats: seated(Object.fromEntries(SEATS.map((l) => [l, [REFUSED_REASON]]))),
+  seats: seated(Object.fromEntries(SEATS.map((l) => [l, [reason]]))),
 });
 
 export function escalation(facts) {
-  try { return judge(read(facts)); } catch { return refused(); }
+  let f;
+  try { f = read(facts); } catch { return refused(REFUSED_REASON); }
+  try { return judge(f); } catch { return refused(INTERNAL_REASON); }
 }

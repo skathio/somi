@@ -50,8 +50,11 @@ check('a top directory is new only when every row under it is an add; a root fil
 ], [1, 0, 0, 2, 4]);
 check('planning churn under .somi is ignored and a denied name there still floors', [diff([row('.somi/plans/x/spec.md', 900)]).facts, diff([row('.somi/reviews/r.md', 900)]).facts, diff([row('.somi/x/.env')]).facts.denied, ids([row('.somi/plans/x.md')])[0]],
   [diff([]).facts, diff([]).facts, true, null]);
-const GUARDED = ['.Claude/settings.json', '.CLAUDE/hooks/x', '.somi/Config.json', '.SOMI/config.json', '.claude', '.somi', '.claude/plugins/somi/x', '.claude\\settings.json', '.claude/a/b/c/d', '.claude./x', '.somi/config.json.', '.claude\uff0fsettings.json', '\uff0e\uff43laude/x'];
+const GUARDED = ['.Claude/settings.json', '.CLAUDE/hooks/x', '.somi/Config.json', '.SOMI/config.json', '.claude', '.somi', '.claude/plugins/somi/x', '.claude\\settings.json', '.claude/a/b/c/d', '.claude./x', '.somi/config.json.', '.claude\uff0fsettings.json', '\uff0e\uff43laude/x',
+  '.claude\uff3csettings.json', '.claude\ufe68x', 'packages/app/.claude/settings.json', 'examples/x/.claude/hooks/h', 'a/.claude', '.somi/rules/99-overrides.md', '.SOMI/Rules/x', 'AGENTS.md', 'docs/CLAUDE.md', 'a/agents.md', 'a/AGENTS.md.', 'a\\Claude.MD'];
 check('the guard raises sensitive config on every row, hidden or not: any case, either separator, bare names, any depth, no plugins exemption', GUARDED.map((f) => ids([row(f)]).slice(0, 2)), GUARDED.map(() => ['security', ['sensitive:config']]));
+const QUIET = ['docs/agents-guide.md', '.somi/plans/x.md', 'docs/claude-md.txt', 'src/claude.mdx', '.somi/rules2/x', 'a/.claudes/x'];
+check('the guard is not wider than its names: a longer name, planning churn and a neighbouring directory raise nothing', QUIET.map((f) => ids([row(f)])[0]), QUIET.map(() => null));
 check('the guard raises on a row among ordinary ones, and a guarded row is also classified when it is not an exact ignored prefix', [ids([row('src/a.mjs'), row('.Somi')])[1], diff([row('.Claude/evil.mjs', 9)]).facts.production_lines], [['sensitive:config'], 9]);
 const late = Array.from({ length: 25 }, (_, i) => row(`src/m${i % 3}/f${i}.mjs`)); late[10] = row('.env'); late[21] = row('.circleci/c.yml'); late[24] = row('tests/t.test.mjs', 0, 9, 'D');
 check('rows past the first chunk are read: a denied name, a ci row and a deleted test after row 10 all count', (({ facts: f }) => [f.production_files, f.test_files_deleted, f.denied, f.classes.ci])(diff(late)), [24, 1, true, ['ci']]);
@@ -61,17 +64,26 @@ console.log('== escalation facts: config, plan inputs and what is returned ==');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'escalation-facts-')); process.on('exit', () => fs.rmSync(tmp, { recursive: true, force: true }));
 fs.mkdirSync(path.join(tmp, '.somi')); fs.writeFileSync(path.join(tmp, '.somi', 'config.json'), JSON.stringify({ sizing: { sensitive_paths: [] } })); fs.writeFileSync(path.join(tmp, 'global.json'), JSON.stringify({ sizing: { sensitive_paths: ['zed'] } }));
 const loaded = loadConfig(tmp, { SOMI_GLOBAL_CONFIG: path.join(tmp, 'global.json') });
-check('through the real loadConfig, a project list of [] keeps the global glob; the merged .config would erase it; config cannot remove ci', [
+check('through the real loadConfig, a project list of [] keeps the global glob; the merged .config is refused (it would erase the glob) and raises config on its own; config cannot remove ci', [
   diff([row('zed/x.mjs')], { config: loaded }).facts.classes.sensitive, diff([row('zed/x.mjs')], { config: loaded.config }).facts.classes.sensitive, diff([row('.circleci/c.yml')], { config: loaded }).facts.classes.ci,
-], [['config'], [], ['ci']]);
+], [['config'], ['config'], ['ci']]);
 const REFUSED = { global: { config: { sizing: { sensitive_paths: ['*.'] } } }, project: { config: {} } };
 const cfgOnly = (rows, config) => { const d = diff(rows, { config }); return [d.notes, d.facts.classes.sensitive]; };
 check('a refused sensitive_paths key is noted, adds sensitive config, and does so with no row, or only an ignored row, reaching the classifier', [
   cfgOnly([row('a/x')], REFUSED), cfgOnly([], REFUSED), cfgOnly([row('.somi/plans/x.md')], REFUSED), cfgOnly([row('a/x')], loaded), cfgOnly([row('a/x')]),
 ], [[['config_refused'], ['config']], [['config_refused'], ['config']], [['config_refused'], ['config']], [[], []], [[], []]]);
-check('only undefined or the loadConfig shape is read: a merged .config, a layer list, one layer, null and a shape without its config are noted, and only the built-in lists apply', [
+check('only undefined or the loadConfig shape is read: a merged .config, a layer list, one layer, null and a shape without its config are noted, raise sensitive config, and only the built-in lists apply', [
   loaded.config, [loaded.global.config, loaded.project.config], loaded.global.config, null, { global: {}, project: {} }, { global: { config: {} }, project: { config: [] } }, 'x',
-].map((config) => cfgOnly([row('zed/x.mjs')], config)), Array(7).fill([['config_refused'], []]));
+].map((config) => cfgOnly([row('zed/x.mjs')], config)), Array(7).fill([['config_refused'], ['config']]));
+check('a refused config shape raises sensitive config with no row at all', [diff([], { config: loaded.config }).notes, ids([], { config: loaded.config })], [['config_refused'], ['security', ['sensitive:config'], []]]);
+// A getter that answers differently on a later read: the layers are read once, so the first answer holds for every chunk.
+let reads = 0;
+const flipTop = { get global() { return reads++ === 0 ? { config: { sizing: { sensitive_paths: ['zed'] } } } : { config: {} }; }, project: { config: {} } };
+const flipDeep = { global: { config: { sizing: { get sensitive_paths() { return reads++ === 0 ? ['zed'] : []; } } } }, project: { config: {} } };
+const once25 = Array.from({ length: 25 }, (_, i) => row(i === 24 ? 'zed/x.mjs' : `src/m${i}/f.mjs`));
+reads = 0; const topSeen = diff(once25, { config: flipTop }).facts.classes.sensitive; const topReads = reads;
+reads = 0; const deepSeen = diff(once25, { config: flipDeep }).facts.classes.sensitive;
+check('the config layers are read once: a getter that flips after its first read, at the top or in a list, cannot change the layers for a later chunk, and a top-level accessor is read one time', [topSeen, topReads, deepSeen], [['config'], 1, ['config']]);
 const plan = (o) => { const d = diff([], o); return [d.facts.plan_target, d.facts.plan_paths, d.facts.slug_given, d.facts.work_item_paths, d.source]; };
 check('plan inputs: a plan directory, a brief and an ADR path name a plan target, other paths and nothing do not, and a bad target raises', [
   ['.somi/plans/s/', 'x/brief.md', 'docs/adr/0001-x.md', 'docs\\decisions\\a.md'].map((target) => plan({ target })[0]), ['src/a.mjs', undefined, ''].map((target) => plan({ target })[0]), plan({ target: 5 })[0], plan({ target: 'a'.repeat(300) })[0],
@@ -81,7 +93,7 @@ check('plan and sdlc sources: paths and slug are named, empty lists are nothing,
 const FILES = ['zzsecret-token.mjs', 'qédir/kk.pem', 'src/auth/zzlogin.mjs', 'zzpkg/package.json'];
 const serial = JSON.stringify(diff(FILES.map((f) => row(f)), { slug: 'zzslug-name', target: 'zzplans/brief.md' }));
 check('the result carries no input path, no slug and no target, and is pure ASCII', [FILES.filter((f) => serial.includes(f)), serial.includes('zzslug'), serial.includes('zzplans'), /^[\x20-\x7e]*$/.test(serial)], [[], false, false, true]);
-check('every result is a grammar escalation() reads: none comes back as facts_unreadable', [[row('src/a.mjs')], [row('.env')], [row('"x"')], [], [row('t/a.test.js', 0, 30, 'D')], [row('docs/adr-0001.md')], [row('.claude/settings.json')], [null]].filter((r) => esc(r, { slug: 's' }).reasons.includes('facts_unreadable')).length, 0);
+check('every result is a grammar escalation() reads: none comes back as facts_unreadable', [[row('src/a.mjs')], [row('.env')], [row('"x"')], [], [row('t/a.test.js', 0, 30, 'D')], [row('docs/adr-0001.md')], [row('.claude/settings.json')], [null]].filter((r) => esc(r, { slug: 's' }).reasons.some((x) => ['facts_unreadable', 'internal_error'].includes(x))).length, 0);
 
 console.log('== escalation facts: hostile and degraded input ==');
 const raising = (rows, options) => { const d = diff(rows, options); return [d.threw === true, esc(rows, options).review_min, d.notes]; };
@@ -101,6 +113,9 @@ const started = Date.now(); const many = raising(Array(10000).fill(row('src/a.mj
 check('10,000 rows, a non-list and MAX_ROWS + 1 rows are the raising result with the rows_unusable note, quickly; MAX_ROWS rows are read', [many, raising('x'), raising(Array(MAX_ROWS + 1).fill(row('a.mjs'))), raising(Array(MAX_ROWS).fill(row('a.mjs')))[2], Date.now() - started < 2000],
   [[false, 'security', ['rows_unusable']], [false, 'security', ['rows_unusable']], [false, 'security', ['rows_unusable']], [], true]);
 const timed = diff([row('src/a.mjs'), row('.env')], { budgetMs: 0 });
+// A fake clock that the config getter moves 10 s while the rows are being prepared: the box counts that time.
+const slowPrep = () => { const real = Date.now; let t = 0; Date.now = () => t; try { return diff([row('src/a.mjs')], { config: { get global() { t += 10000; return { config: {} }; }, project: { config: {} } } }).notes; } finally { Date.now = real; } };
+check('the time box starts before the config and rows are prepared: preparation that outruns the budget floors', slowPrep(), ['time_box']);
 check('a time box that runs out returns the floor, never the partial facts; a budget that is not a finite number is no time box', [timed.notes, escalation(timed.facts).seats['somi-architecture-reviewer'].seat, [null, 'x', NaN].map((budgetMs) => diff([row('src/a.mjs')], { budgetMs }).notes)], [['time_box'], true, [[], [], []]]);
 const FULL = [row('src/auth/a.mjs', 900), row('src/routes/r.mjs'), row('db/migrations/1.sql'), row('package-lock.json'), row('openapi.yaml'), row('.github/w.yml'), row('src/new/x.mjs', 5, 0, 'A'), row('tests/t.test.mjs', 0, 80, 'D')];
 const OPT = { slug: 's', target: '.somi/plans/s', planPaths: ['p'], workItemPaths: ['w'] }; const sup = (a, b) => b.every((x) => a.includes(x));
