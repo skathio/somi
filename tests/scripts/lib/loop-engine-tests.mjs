@@ -108,7 +108,8 @@ check('a handler given a global-config path in its env does read it (the sentine
 const started = init(ctxFor({ SOMI_CODE_LOOP_MAX_PASSES: '2' }), base);
 check('init succeeds with the golden output keys and the env-given cap', [started.code, started.message, Object.keys(started.out), started.out.caps], [0, '', ['baseline_sha', 'caps', 'state_file'], { max_passes: 2, diff_cap_lines: 400, severity_floor: 'Major' }]);
 const sf = stateFile(stateDir, 's', '');
-check('the state file holds the golden state shape, in order', Object.keys(JSON.parse(readFileSync(sf, 'utf8'))), ['slug', 'loop', 'iteration', 'baseline_sha', 'started', 'status', 'caps', 'iteration_files', 'pass', 'history']);
+check('the state file holds the golden state shape, in order', Object.keys(JSON.parse(readFileSync(sf, 'utf8'))), ['slug', 'loop', 'iteration', 'baseline_sha', 'started', 'status', 'caps', 'iteration_files', 'pass', 'history', 'ignored_guarded']);
+check('the init snapshot of the ignored files under the policy paths is empty and within its caps in a clean repository', JSON.parse(readFileSync(sf, 'utf8')).ignored_guarded, { over: false, files: {} });
 const again = init(ctxFor(), base);
 check('init over a running state is refused (64) with no stdout', [again.code, again.out, again.message], [64, undefined, `somi-loop: loop state already running at ${sf} — use 'resume' to continue it, or 'init --force' to discard`]);
 passPass(ctxFor(), base);

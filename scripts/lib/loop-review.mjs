@@ -1,6 +1,7 @@
 // loop-review.mjs -- what /code-loop's reviewer must see (which lens, which scope), decided from recorded state
 // rather than from the reviewer's reading of evidence. Shared by scripts/somi-loop.mjs; no output of its own.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -269,9 +270,40 @@ export const treeNumstat = (root, from, to) => treeRows(root, from, to).map(({ s
 // The changes the measurement leaves out because it excludes .somi and .claude, for the folders and files that carry agent policy:
 // as { file, added: 0, deleted: 0, status } (no lines are counted), relative to `root`, the working tree against the commit
 // `from`, untracked files (not ignored ones) as A. Read the way treeRows reads (renames off, so a file moved out of a guarded
-// folder is a D here), and the index flags were refused by the measurement that precedes it.
+// folder is a D here; submodules compared in full, so a `.gitmodules` `ignore` or `diff.ignoreSubmodules` cannot hide a moved or
+// dirty one), and the index flags were refused by the measurement that precedes it. A gitlink in the index under .claude or at or
+// under .somi is a row of its own (status G, which git never prints) when the diff did not list it: the measurement exempts both, so
+// a submodule there is reachable, and an unchanged one still carries code the loop does not read. So is a nested repository at
+// .somi (a .somi/.git), which hides .somi/config.json and .somi/rules from every listing here. The ignored files under the
+// guarded paths are compared with `before`, the snapshot taken at loop init (ignoredSnapshot): one that is new or changed is a row.
 const GUARDED = ['.claude', '.somi/config.json', '.somi/rules'];
-export function guardedRows(root, from) {
+const MAX_IGNORED = 256; // ignored files under the guarded paths that one snapshot holds; more is the over marker
+const MAX_IGNORED_BYTES = 1024 * 1024; // one such file read in full; a bigger one is the over marker
+const OVER = Object.freeze({ over: true, files: {} });
+const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+// The ignored files under the guarded paths (a self-ignoring .claude/.gitignore, a root .gitignore line, an ignored settings.local.json)
+// with a content hash each, as { over, files }: over is true when there are too many, one is too big, or one cannot be read, and then every
+// comparison raises (fails closed). A link is hashed by its target, never followed. Never throws but as a refusal from the pinned git.
+export function ignoredSnapshot(root) {
+  let names;
+  try { names = run(root, ['ls-files', '-o', '-i', '--exclude-standard', '-z', '--', ...GUARDED], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0').filter((t) => t !== ''); } catch (e) {
+    if (e instanceof LoopExit) throw e;
+    throw cannot('git could not list the ignored files under the agent policy paths');
+  }
+  if (names.length > MAX_IGNORED) return OVER;
+  const base = fs.realpathSync(root); const files = Object.create(null);
+  try {
+    for (const f of names) {
+      const full = path.join(base, f); const st = fs.lstatSync(full);
+      if (st.isSymbolicLink()) files[f] = `l:${fs.readlinkSync(full)}`;
+      else if (st.isFile() && st.size <= MAX_IGNORED_BYTES) files[f] = sha(fs.readFileSync(full));
+      else return OVER;
+    }
+  } catch { return OVER; }
+  return { over: false, files };
+}
+const plainSnapshot = (v) => v !== null && typeof v === 'object' && typeof v.over === 'boolean' && v.files !== null && typeof v.files === 'object' && Object.values(v.files).every((h) => typeof h === 'string');
+export function guardedRows(root, from, before) {
   if (typeof from !== 'string' || !OBJECT_ID.test(from)) throw cannot('a recorded revision is not an object id');
   const list = (args) => {
     try { return run(root, args, { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0'); } catch (e) {
@@ -283,7 +315,17 @@ export function guardedRows(root, from) {
   const changed = [];
   for (let i = 0; i + 1 < raw.length; i += 2) changed.push({ file: raw[i + 1], added: 0, deleted: 0, status: raw[i].split(' ')[4] });
   const added = list(['ls-files', '-o', '--exclude-standard', '-z', '--', ...GUARDED]).filter((t) => t !== '').map((file) => ({ file, added: 0, deleted: 0, status: 'A' }));
-  return [...changed, ...added];
+  const listed = new Set(changed.map((r) => r.file));
+  const links = list(['ls-files', '-s', '-z', '--', '.claude', '.somi']).filter((t) => t.startsWith('160000 ')).map((t) => t.slice(t.indexOf('\t') + 1))
+    .filter((file) => !listed.has(file)).map((file) => ({ file, added: 0, deleted: 0, status: 'G' }));
+  if (present(path.join(root, '.somi', '.git')) && !links.some((r) => r.file === '.somi')) links.push({ file: '.somi', added: 0, deleted: 0, status: 'G' });
+  const ignored = [];
+  if (before !== undefined) { // a state without a snapshot (a loop begun before this snapshot existed) is read as it always was: nothing new is raised
+    const now = ignoredSnapshot(root);
+    if (!plainSnapshot(before) || before.over || now.over) ignored.push({ file: '.claude', added: 0, deleted: 0, status: 'A' });
+    else for (const [file, hash] of Object.entries(now.files)) if (!Object.hasOwn(before.files, file) || before.files[file] !== hash) ignored.push({ file, added: 0, deleted: 0, status: Object.hasOwn(before.files, file) ? 'M' : 'A' });
+  }
+  return [...changed, ...added, ...links, ...ignored];
 }
 
 export const REVIEW_SCOPES = Object.freeze(['delta', 'full']);

@@ -2,7 +2,8 @@
 //
 // A row is { file, added, deleted, status }: the changed-file listing's shape plus git's status letter. The listing must be
 // read NUL-separated (`-z`): git's default form quotes a non-ASCII name (`"\303\251/a.pem"`), which the deny list cannot
-// read, so a name that starts with a double quote is an unusable row here (a name that really starts with one over-flags), and so is a name with a control, format or line-separator character (`.e<ZWNJ>nv` is `.env` on HFS+).
+// read, so a name that starts with a double quote is an unusable row here (a name that really starts with one over-flags),
+// and so is a name with a control, format or line-separator character (`.e<ZWNJ>nv` is `.env` on HFS+).
 // Pure but for a clock: no filesystem, no git, no content, and no path in the result. Returns
 //   { facts, source, notes }
 //   facts   escalation()'s input: counts, flags and class names from its closed lists
@@ -22,12 +23,14 @@
 // Every degraded outcome (an unusable row too: it may hide anything) is the FLOOR, the top of the lattice: every count at the cap, every
 // class name, every flag, so each seat, reason, hard-surface id and flag is at least a full read's. A time box cannot interrupt
 // synchronous code, so the clock is read between chunks of CHUNK rows: the bound is the budget plus one chunk, which is small
-// because classifyPaths caps the cost of one path. The clock starts before the first row is read, so the row checks count too. A denied name sets `denied` whatever its status or prefix: a deleted `.env`
+// because classifyPaths caps the cost of one path. The clock starts before the first row is read, so the row checks count too, and
+// it is read at least once whatever the kept count. A denied name sets `denied` whatever its status or prefix: a deleted `.env`
 // floors, and so does one under `.somi/`. Rows under `.somi/` and `.claude/` are ignored (the measurement excludes them), by their
 // exact prefix, and every row, ignored or not, is read for the guard: on its segments folded as the deny list folds them (case,
 // compatibility forms, trailing dots and spaces, either separator) a segment `.claude` at any depth and with no exemption, a
-// `CLAUDE.md` or `AGENTS.md` segment at any depth, or a first segment `.somi` alone or followed by `config.json` or `rules`, is the
-// sensitive name `config`. A case variant (`agents.md`) raises too: the folded name is the name. A row that is not a plain name (an empty, `.` or `..`
+// `CLAUDE.md` or `AGENTS.md` segment at any depth, a `.mcp.json` segment at any depth, a `.vscode` segment directly followed by
+// `mcp.json` (project MCP servers: a command that runs on a developer's machine), or a first segment `.somi` alone or followed
+// by `config.json` or `rules`, is the sensitive name `config`. A case variant (`agents.md`) raises too: the folded name is the name. A row that is not a plain name (an empty, `.` or `..`
 // segment, git never writes one) is unusable.
 // `new_top_dirs` counts first directories whose every changed row is an add; a diff cannot know the base, so a directory that
 // existed and only gained files reads as new, and the residual is one extra architecture seat.
@@ -50,11 +53,13 @@ const sane = (r) => r !== null && typeof r === 'object' && typeof r.file === 'st
 const hidden = (file) => ['.somi', '.claude'].includes(file.split('/')[0]);
 const guarded = (file) => {
   const segs = pieces(file); const [head, second] = segs;
-  return segs.includes('.claude') || segs.includes('claude.md') || segs.includes('agents.md') || (head === '.somi' && (second === undefined || second === 'config.json' || second === 'rules'));
+  return segs.includes('.claude') || segs.includes('claude.md') || segs.includes('agents.md') || segs.includes('.mcp.json')
+    || segs.some((s, i) => s === '.vscode' && segs[i + 1] === 'mcp.json') || (head === '.somi' && (second === undefined || second === 'config.json' || second === 'rules'));
 };
 const plain = (o) => o !== null && typeof o === 'object' && !Array.isArray(o);
 const once = (o, k) => (plain(o) && Object.hasOwn(o, k) ? o[k] : undefined); // the one read of a key
-const glist = (v) => (Array.isArray(v) ? Array.prototype.slice.call(v, 0, MAX_GLOBS + 1) : v); // a list over the cap stays over it
+// A list read by index into a plain array, capped just over the limit (a list over the cap stays over it); a hole reads as undefined, which the classifier refuses.
+const glist = (v) => (Array.isArray(v) ? Array.from({ length: Math.min(v.length, MAX_GLOBS + 1) }, (_, i) => v[i]) : v);
 // The config layers as plain copies of what the classifier reads, each accessor read once; null when the shape is not loadConfig's.
 function layersOf(c) {
   if (c === undefined) return [];
@@ -103,7 +108,8 @@ function measure(rows, opts, plan) {
     if (!hidden(r.file)) kept.push(r); else f.denied ||= denyListed(r.file);
   }
   const budget = Math.min(TIME_BOX_MS, Number.isFinite(opts.budgetMs) && opts.budgetMs >= 0 ? opts.budgetMs : TIME_BOX_MS);
-  for (let at = 0; at < kept.length; at += CHUNK) {
+  let at = 0;
+  do { // the clock is read at least once, whatever the kept count
     if (Date.now() - start >= budget) return { facts: floor(plan), notes: ['time_box'] };
     const chunk = kept.slice(at, at + CHUNK);
     const result = classifyPaths(chunk.map((r) => r.file), config);
@@ -119,7 +125,8 @@ function measure(rows, opts, plan) {
       const dirs = r.file.split(/[\\/]+/).filter((x) => x !== '' && x !== '.');
       if (dirs.length > 1) tops.set(dirs[0], (tops.get(dirs[0]) ?? true) && r.status === 'A');
     });
-  }
+    at += CHUNK;
+  } while (at < kept.length);
   f.modules = modules.size; f.new_top_dirs = [...tops.values()].filter(Boolean).length;
   if (!COUNTS.every((k) => count(f[k]))) return { facts: floor(plan), notes: ['rows_unusable'] }; // a sum past the safe integers is no count
   // CI paths are a sensitive name (they raise security); `classes.ci` carries the hard-surface id beside it.

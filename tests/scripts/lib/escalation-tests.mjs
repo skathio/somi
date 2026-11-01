@@ -83,8 +83,11 @@ check('refused input returns the raising result and never throws', Object.fromEn
   Object.fromEntries(Object.keys(REFUSALS).map((k) => [k, ['security', [REFUSED_REASON]]])));
 check('the refused result seats every lens, flags size and carries every hard-surface id', (({ seats, size_flag, tests_weakened, hard_surface }) => [seated({ seats }), size_flag, tests_weakened, hard_surface])(escalation(null)), [LENSES, true, false, [...HARD_SURFACE_IDS]]);
 // Array.prototype.filter is called by the rules and not by the input reader, so a throwing one is a bug in the rules, not bad input.
-const whileBroken = (fn) => { const keep = Array.prototype.filter; Array.prototype.filter = () => { throw new Error('bug'); }; try { return fn(); } finally { Array.prototype.filter = keep; } };
+// `reached` counts the calls: when the rules stop calling it, the next check says so instead of failing on its values.
+let reached = 0;
+const whileBroken = (fn) => { const keep = Array.prototype.filter; Array.prototype.filter = () => { reached++; throw new Error('bug'); }; try { return fn(); } finally { Array.prototype.filter = keep; } };
 const broken = whileBroken(() => { try { return escalation(facts()); } catch { return { threw: true }; } });
+check('the internal-error test breaks the rules where it means to: Array.prototype.filter is reached (if not, patch whichever method the rules call now)', reached > 0, true);
 check('an unexpected error in the rules is the raising result under its own reason id, not the unreadable-input one; bad input keeps its id', [
   broken.threw ?? [broken.review_min, broken.reasons, broken.hard_surface, seated(broken), LENSES.map((l) => broken.seats[l].reasons)], escalation(null).reasons, INTERNAL_REASON !== REFUSED_REASON,
 ], [['security', [INTERNAL_REASON], [...HARD_SURFACE_IDS], LENSES, LENSES.map(() => [INTERNAL_REASON])], [REFUSED_REASON], true]);

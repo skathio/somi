@@ -51,9 +51,12 @@ check('a top directory is new only when every row under it is an add; a root fil
 check('planning churn under .somi is ignored and a denied name there still floors', [diff([row('.somi/plans/x/spec.md', 900)]).facts, diff([row('.somi/reviews/r.md', 900)]).facts, diff([row('.somi/x/.env')]).facts.denied, ids([row('.somi/plans/x.md')])[0]],
   [diff([]).facts, diff([]).facts, true, null]);
 const GUARDED = ['.Claude/settings.json', '.CLAUDE/hooks/x', '.somi/Config.json', '.SOMI/config.json', '.claude', '.somi', '.claude/plugins/somi/x', '.claude\\settings.json', '.claude/a/b/c/d', '.claude./x', '.somi/config.json.', '.claude\uff0fsettings.json', '\uff0e\uff43laude/x',
-  '.claude\uff3csettings.json', '.claude\ufe68x', 'packages/app/.claude/settings.json', 'examples/x/.claude/hooks/h', 'a/.claude', '.somi/rules/99-overrides.md', '.SOMI/Rules/x', 'AGENTS.md', 'docs/CLAUDE.md', 'a/agents.md', 'a/AGENTS.md.', 'a\\Claude.MD'];
+  '.claude\uff3csettings.json', '.claude\ufe68x', 'packages/app/.claude/settings.json', 'examples/x/.claude/hooks/h', 'a/.claude', '.somi/rules/99-overrides.md', '.SOMI/Rules/x', 'AGENTS.md', 'docs/CLAUDE.md', 'a/agents.md', 'a/AGENTS.md.', 'a\\Claude.MD',
+  '.mcp.json', 'packages/a/.mcp.json', '.vscode/mcp.json', '.MCP.JSON', '.vscode/MCP.json', 'a\\.mcp.json.', 'packages/a/.vscode\\mcp.json', '.mcp\uff0ejson'];
 check('the guard raises sensitive config on every row, hidden or not: any case, either separator, bare names, any depth, no plugins exemption', GUARDED.map((f) => ids([row(f)]).slice(0, 2)), GUARDED.map(() => ['security', ['sensitive:config']]));
-const QUIET = ['docs/agents-guide.md', '.somi/plans/x.md', 'docs/claude-md.txt', 'src/claude.mdx', '.somi/rules2/x', 'a/.claudes/x'];
+// `mcp.json` without the dot is no host's project-level file, so it is quiet (a Cursor-style `.cursor/mcp.json` and plugin manifests are recorded residuals).
+const QUIET = ['docs/agents-guide.md', '.somi/plans/x.md', 'docs/claude-md.txt', 'src/claude.mdx', '.somi/rules2/x', 'a/.claudes/x',
+  'mcp.json', 'src/mcp.json', '.mcp.json.bak', 'docs/mcp-notes.md', '.vscode/settings.json', '.vscode/x/mcp.json', 'vscode/mcp.json', '.vscode.bak/mcp.json', 'a.mcp.json'];
 check('the guard is not wider than its names: a longer name, planning churn and a neighbouring directory raise nothing', QUIET.map((f) => ids([row(f)])[0]), QUIET.map(() => null));
 check('the guard raises on a row among ordinary ones, and a guarded row is also classified when it is not an exact ignored prefix', [ids([row('src/a.mjs'), row('.Somi')])[1], diff([row('.Claude/evil.mjs', 9)]).facts.production_lines], [['sensitive:config'], 9]);
 const late = Array.from({ length: 25 }, (_, i) => row(`src/m${i % 3}/f${i}.mjs`)); late[10] = row('.env'); late[21] = row('.circleci/c.yml'); late[24] = row('tests/t.test.mjs', 0, 9, 'D');
@@ -72,6 +75,10 @@ const cfgOnly = (rows, config) => { const d = diff(rows, { config }); return [d.
 check('a refused sensitive_paths key is noted, adds sensitive config, and does so with no row, or only an ignored row, reaching the classifier', [
   cfgOnly([row('a/x')], REFUSED), cfgOnly([], REFUSED), cfgOnly([row('.somi/plans/x.md')], REFUSED), cfgOnly([row('a/x')], loaded), cfgOnly([row('a/x')]),
 ], [[['config_refused'], ['config']], [['config_refused'], ['config']], [['config_refused'], ['config']], [[], []], [[], []]]);
+const sizing = (list) => ({ global: { config: { sizing: { sensitive_paths: list } } }, project: { config: {} } });
+const globs = (n) => Array.from({ length: n }, (_, i) => `zz${i}`);
+check('a glob list with a hole or past the cap is refused and raises config; a list at the cap is read', [cfgOnly([row('a/x')], sizing(['zz0', , 'zz2'])), cfgOnly([row('a/x')], sizing(globs(33))), cfgOnly([row('a/x')], sizing(globs(32)))],
+  [[['config_refused'], ['config']], [['config_refused'], ['config']], [[], []]]);
 check('only undefined or the loadConfig shape is read: a merged .config, a layer list, one layer, null and a shape without its config are noted, raise sensitive config, and only the built-in lists apply', [
   loaded.config, [loaded.global.config, loaded.project.config], loaded.global.config, null, { global: {}, project: {} }, { global: { config: {} }, project: { config: [] } }, 'x',
 ].map((config) => cfgOnly([row('zed/x.mjs')], config)), Array(7).fill([['config_refused'], ['config']]));
@@ -116,6 +123,7 @@ const timed = diff([row('src/a.mjs'), row('.env')], { budgetMs: 0 });
 // A fake clock that the config getter moves 10 s while the rows are being prepared: the box counts that time.
 const slowPrep = () => { const real = Date.now; let t = 0; Date.now = () => t; try { return diff([row('src/a.mjs')], { config: { get global() { t += 10000; return { config: {} }; }, project: { config: {} } } }).notes; } finally { Date.now = real; } };
 check('the time box starts before the config and rows are prepared: preparation that outruns the budget floors', slowPrep(), ['time_box']);
+check('the clock is read once whatever the kept count: a budget of 0 floors when every row is ignored, and with no row at all', [diff([row('.somi/plans/x.md')], { budgetMs: 0 }).notes, diff([], { budgetMs: 0 }).notes], [['time_box'], ['time_box']]);
 check('a time box that runs out returns the floor, never the partial facts; a budget that is not a finite number is no time box', [timed.notes, escalation(timed.facts).seats['somi-architecture-reviewer'].seat, [null, 'x', NaN].map((budgetMs) => diff([row('src/a.mjs')], { budgetMs }).notes)], [['time_box'], true, [[], [], []]]);
 const FULL = [row('src/auth/a.mjs', 900), row('src/routes/r.mjs'), row('db/migrations/1.sql'), row('package-lock.json'), row('openapi.yaml'), row('.github/w.yml'), row('src/new/x.mjs', 5, 0, 'A'), row('tests/t.test.mjs', 0, 80, 'D')];
 const OPT = { slug: 's', target: '.somi/plans/s', planPaths: ['p'], workItemPaths: ['w'] }; const sup = (a, b) => b.every((x) => a.includes(x));

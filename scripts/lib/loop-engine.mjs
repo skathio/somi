@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { verifyBriefOnly } from './tier-record.mjs';
-import { REVIEW_SCOPES, headCommit, refuseSubmodules, reviewMinFor, reviewScope as scopeOf, snapshotTree } from './loop-review.mjs';
+import { REVIEW_SCOPES, headCommit, ignoredSnapshot, refuseSubmodules, reviewMinFor, reviewScope as scopeOf, snapshotTree } from './loop-review.mjs';
 import { computeDiff } from './loop-diff.mjs';
 import { dispatchEntry } from './loop-dispatch.mjs';
 import { checkRun, startRun } from './run-budget.mjs';
@@ -92,6 +92,7 @@ export const init = guarded(({ env, root, stateDir, now = nowIso }, args) => {
     history: [],
   };
   if (loop === 'code') state.review_min = reviewMinFor(root, slug) ?? undefined; // undefined: not serialised
+  if (loop === 'code') state.ignored_guarded = ignoredSnapshot(root); // the ignored files under the policy paths now; the escalation raises any that is new or changed later
   fs.mkdirSync(stateDir, { recursive: true }); // only now: a refused init leaves no directory behind
   saveState(sf, state);
   return ok({ baseline_sha: state.baseline_sha, caps: state.caps, state_file: sf, ...withReviewMin(state) });

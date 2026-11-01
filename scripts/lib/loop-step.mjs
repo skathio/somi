@@ -258,7 +258,7 @@ function afterCode(ctx, a) {
     if (entry.response) { delete entry.response; delete entry.measured; saveState(sf, state); } // an earlier pass of the gate no longer stands: no later step may read this tree as gated
     return stop('after-code', state, EXIT_DIFF_CAP, outOfScope.length ? 'scope-expansion' : 'diff-cap-exceeded', a, { diff });
   }
-  const found = reported(escalate(ctx.root, ctx.env, rows, state.baseline_sha)); // report only: the lens above is not touched by it
+  const found = reported(escalate(ctx.root, ctx.env, rows, state.baseline_sha, state.ignored_guarded)); // report only: the lens above is not touched by it
   const s = scopeOf(ctx.root, state, review.scope);
   const scope = s.scope === 'full' ? s : { ...s, files: s.files.slice(0, 5).map((f) => cut(f, 60)), files_total: s.files.length };
   const brief = s.scope === 'full'

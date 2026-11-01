@@ -2,7 +2,7 @@
 // adapter (escalation-facts.mjs) and the pure rules (escalation.mjs), so loop-step.mjs stays small. It reports only: nothing
 // here changes a review mode, a cap or a stop.
 //
-// escalate(root, env, rows, baseline) -> { ran: true, reasons, size_flag, tests_weakened, hard_surface, notes } or { ran: false }.
+// escalate(root, env, rows, baseline, ignoredBefore) -> { ran: true, reasons, size_flag, tests_weakened, hard_surface, notes } or { ran: false }.
 // `rows` are the measured diff's rows ({file, added, deleted, status}); the folders the measurement excludes (.claude, and the
 // two .somi paths that carry policy) are listed here and added, because a change there is the one an injected coder would make
 // to loosen its own limits. Everything the object carries is an id from a closed list; a path or file text never goes in. Any
@@ -20,9 +20,9 @@ const ids = (list) => {
   return list;
 };
 
-export function escalate(root, env, rows, baseline) {
+export function escalate(root, env, rows, baseline, ignoredBefore) {
   try {
-    const all = [...rows, ...guardedRows(root, baseline)];
+    const all = [...rows, ...guardedRows(root, baseline, ignoredBefore)];
     const { facts, notes } = diffFacts(all, { config: loadConfig(root, env) }); // its {global, project}, never the merged `.config`
     const e = escalation(facts);
     return { ran: true, reasons: ids(e.reasons), size_flag: e.size_flag === true, tests_weakened: e.tests_weakened === true, hard_surface: ids(e.hard_surface), notes: ids(notes) };
