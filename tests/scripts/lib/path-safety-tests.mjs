@@ -82,27 +82,56 @@ check('every refusal the suite saw is in the closed list', [...new Set(hostile.m
 
 console.log('== path safety: the deny list is name-only ==');
 const SECRET_NAMES = ['.env', 'cfg/.env.local', 'id_rsa', 'k/id_rsa.pub', 'id_dsa', 'id_ecdsa', 'id_ed25519', 'a.pem', 'a.key', 'a.p12', 'a.pfx', 'a.crt', 'a.cer', 'a.der', 'a.jks', 'a.keystore', 'a.ppk', '.git/config', 'sub/.git/HEAD', '.git',
-  '.npmrc', 'h/.netrc', '.git-credentials', '.pypirc', '.pgpass', 'terraform.tfstate', 'a.tfvars', 'a.kdbx', '.ssh/config', 'x/.gnupg/k', '.aws/credentials'];
+  '.npmrc', 'h/.netrc', '.git-credentials', '.pypirc', '.pgpass', 'terraform.tfstate', 'a.tfvars', 'a.kdbx', '.ssh/config', 'x/.gnupg/k', '.aws/credentials',
+  'prod.netrc', 'x.pgpass', 'credentials.json', 'gcp/Credentials.JSON', 'service-account.json', 'service_account.json', 'serviceAccountKey.json', 'service-account-prod.json', 'client_secret.json', 'client_secret_123.apps.json', 'terraform.tfstate.backup', 'prod.tfstate.backup',
+  'key.json', 'gcp/Key.JSON', 'key.json.', 'prod.tfstate.1600000000.backup'];
 check('denies .env, key and certificate file names and any .git segment', refusals(SECRET_NAMES), same(SECRET_NAMES.length, 'denied'));
+check('credentials/ is denied as a directory, with anything under it', ['credentials/token.txt', 'a/credentials/b/c', 'credentials\\x'].map(denyListed), same(3, true));
 check('does not deny look-alikes', ['.gitignore', '.github/workflows/a.yml', 'environment.md', 'src/keyboard.js', 'key.txt', 'sub/b.txt', 'a.pem.txt', 'notes~.txt', 'terraform.tf', '.aws.md', 'ssh/a'].map(denyListed), same(11, false));
+check('does not deny the look-alikes of the added names', ['credentials.md', 'account.json', 'service-account.md', 'service.json', 'netrc.md', 'netrc', 'pgpass', 'client_secret.md', 'client-secret.txt', 'a.tfstate.bak', 'notes.backup', 'tfstate.backup.md', 'credentials.json.md', 'monkey.json', 'key.json.md', 'prod.tfstate.1600000000.bak'].filter(denyListed), []);
+check('a bare config stays allowed on purpose, as a file and as a directory, while the secret-bearing configs are denied by their segment', [['config', 'config/app.yml', 'src/config', 'config.json'].filter(denyListed), ['.git/config', '.ssh/config', '.aws/config', '.kube/config', '.docker/config.json'].filter((n) => !denyListed(n))], [[], []]);
 const HOOK_NAMES = ['gcp-key.json', 'a/b-credentials.json', 'service-account.json', 'service-account-prod.json', 'secret.yaml', 'secrets.yaml', 'secret.yml', 'config/secrets.yml', 'secret.json', 'secrets.json', 'credentials', 'x/credentials',
   'a.tfstate', '_netrc', '_pgpass', '.htpasswd', 'a.p8', '.vault-token', '.kube/config', 'x/.docker/config.json'];
 check('denies the secret names the repository secret-write hook denies', HOOK_NAMES.filter((n) => !denyListed(n)), []);
-check('does not deny look-alikes of those names', ['credentials.md', 'terraform.tf', 'service-account.md', 'secrets.md', 'secret.txt', 'secretsanta.json', 'monkey.json', 'key.json', 'a.mp8', 'htpasswd', 'vault-token', 'netrc', 'a.tfstates', '.dockerignore', '.kubernetes', 'docs/kube/a'].filter(denyListed), []);
-// One representative per SECRET_PATTERNS entry of the hook, in its order. The hook runs on import and does not export the
-// list, so the count is read from its source (bounded) and must equal the table's length: a pattern added there fails here.
-// `config` is represented by its aws path: a bare `config` file is common and is not denied here.
-const HOOK_TABLE = ['.env', '.env.local', '.env.production', '.env.prod', '.env.staging', '.env.secret', 'a.pem', 'a.key', 'a.p12', 'a.pfx', 'a.jks', 'id_rsa', 'id_ed25519', 'id_ecdsa', 'id_dsa', 'credentials', '.aws/config',
-  'gcp-key.json', 'gcp-credentials.json', 'service-account-prod.json', '.netrc', '.pgpass', 'a.kdbx', 'secrets.yml', 'secrets.json'];
-const hookFile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../hooks/pre-tool/block-secret-writes.mjs');
-const hookCount = (() => {
+check('does not deny look-alikes of those names', ['credentials.md', 'terraform.tf', 'service-account.md', 'secrets.md', 'secret.txt', 'secretsanta.json', 'monkey.json', 'key.json.md', 'a.mp8', 'htpasswd', 'vault-token', 'netrc', 'a.tfstates', '.dockerignore', '.kubernetes', 'docs/kube/a'].filter(denyListed), []);
+// Parity with the secret-write hook (hooks/pre-tool/block-secret-writes.mjs, the file hooks.json runs; common.mjs holds only
+// the matching helpers). Each SECRET_PATTERNS literal is read from the hook's source with its flags, built with
+// new RegExp, and must match the basename of its own representative: the widest name it matches (an unanchored
+// suffix gets `a.<suffix>`, so the overlap with a prefix or exact rule cannot hide a gap). Every representative must be
+// denied here. The hook runs on import and exports nothing, so its text is the only way to read the list.
+// `^config$` is the one pattern whose basename is allowed here (see NAME_EXACT): its representative is denied through
+// the `.aws` segment, and a bare `config` is pinned as allowed above.
+const HOOK_TABLE = [
+  [String.raw`/^\.env$/`, '.env'], [String.raw`/^\.env\.local$/`, '.env.local'], [String.raw`/^\.env\.production$/`, '.env.production'], [String.raw`/^\.env\.prod$/`, '.env.prod'],
+  [String.raw`/^\.env\.staging$/`, '.env.staging'], [String.raw`/^\.env\.secret$/`, '.env.secret'], [String.raw`/\.pem$/`, 'a.pem'], [String.raw`/\.key$/`, 'a.key'], [String.raw`/\.p12$/`, 'a.p12'],
+  [String.raw`/\.pfx$/`, 'a.pfx'], [String.raw`/\.jks$/`, 'a.jks'], [String.raw`/^id_rsa$/`, 'id_rsa'], [String.raw`/^id_ed25519$/`, 'id_ed25519'], [String.raw`/^id_ecdsa$/`, 'id_ecdsa'],
+  [String.raw`/^id_dsa$/`, 'id_dsa'], [String.raw`/^credentials$/`, 'credentials'], [String.raw`/^config$/`, '.aws/config'], [String.raw`/-key\.json$/`, 'gcp-key.json'],
+  [String.raw`/-credentials\.json$/`, 'gcp-credentials.json'], [String.raw`/service-account.*\.json$/`, 'my-service-account-prod.json'], [String.raw`/\.netrc$/`, 'prod.netrc'],
+  [String.raw`/\.pgpass$/`, 'prod.pgpass'], [String.raw`/\.kdbx$/`, 'a.kdbx'], [String.raw`/secrets?\.ya?ml$/`, 'my-secrets.yml'], [String.raw`/secrets?\.json$/`, 'my-secrets.json'],
+];
+// SECRET_HOOK_SOURCE is a seam for fact-sheet.sh's hook mutants only: it is read when it names a file called hook-mutant.mjs, so a
+// stray exported value (a stale copy, /dev/null) can never repoint the parity check, here or when this lib is run directly.
+const hookSeam = path.basename(process.env.SECRET_HOOK_SOURCE ?? '') === 'hook-mutant.mjs' ? process.env.SECRET_HOOK_SOURCE : undefined;
+const hookFile = hookSeam ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../hooks/pre-tool/block-secret-writes.mjs');
+// The block runs from its opening line to the first line that is just `];`, so a character class inside a pattern cannot end it early.
+const hookLiterals = (() => {
   try {
-    if (fs.statSync(hookFile).size > 65536) return -1;
-    const block = /const SECRET_PATTERNS = \[\n([^\]]*)\n\];/.exec(fs.readFileSync(hookFile, 'utf8'));
-    return block ? block[1].split('\n').filter((l) => /^\s*\/(?!\/).*\/,/.test(l)).length : 0;
-  } catch { return -1; }
+    if (fs.statSync(hookFile).size > 65536) return null;
+    const block = /const SECRET_PATTERNS = \[\n([\s\S]*?)\n\];/.exec(fs.readFileSync(hookFile, 'utf8'));
+    if (!block) return null;
+    const lines = block[1].split('\n').filter((l) => l.trim() !== '' && !l.trim().startsWith('//'));
+    const found = lines.map((l) => /^\s*(\/(.+)\/([a-z]*)),\s*(?:\/\/.*)?$/.exec(l));
+    return { patterns: found.filter(Boolean).map((m) => ({ literal: m[1], source: m[2], flags: m[3] })), unparsed: found.filter((m) => !m).length };
+  } catch { return null; }
 })();
-check('every secret-name pattern of the hook has a representative here, and each is denied', [HOOK_TABLE.length === hookCount, HOOK_TABLE.filter((n) => !denyListed(n))], [true, []]);
+const parsed = hookLiterals?.patterns ?? [];
+const repOf = new Map(HOOK_TABLE);
+// A pattern whose flags changed has no row of its own; it is still tried against the representative of its body.
+const repOfBody = new Map(HOOK_TABLE.map(([literal, rep]) => [literal.slice(1, literal.lastIndexOf('/')), rep]));
+const hookBase = (rep) => rep.replace(/\\/g, '/').split('/').pop();
+check('the hook secret-name patterns and the representative table list the same literals, flags included, and every line parses', [hookLiterals !== null, hookLiterals?.unparsed, parsed.filter((p) => !repOf.has(p.literal)).map((p) => p.literal), HOOK_TABLE.map(([l]) => l).filter((l) => !parsed.some((p) => p.literal === l))], [true, 0, [], []]);
+check('each hook pattern, built with its own flags, matches the basename of its representative', parsed.filter((p) => { const rep = repOf.get(p.literal) ?? repOfBody.get(p.source); return rep !== undefined && !new RegExp(p.source, p.flags).test(hookBase(rep)); }).map((p) => p.literal), []);
+check('every representative of a hook pattern is denied here', HOOK_TABLE.filter(([, rep]) => !denyListed(rep)).map(([l]) => l), []);
 const WIN = ['ENV~1', 'ENV~1.LOC', 'GIT~1/config', 'key.pem::$DATA', 'a/b:c'];
 check('denies Windows short names and stream suffixes', refusals(WIN), same(WIN.length, 'denied'));
 const CASED = ['.ENV', '.Env.local', 'ID_RSA', 'Key.PEM', '.Git/config', '.GIT/hooks/x', 'CERT.Crt'];
@@ -110,6 +139,9 @@ check('floors drive-letter paths and ~<digit> names as denied, on purpose', ['C:
 check('denies case variants exactly as the lower-case forms', refusals(CASED), same(CASED.length, 'denied'));
 check('denies a name that only full case folding reads as denied', refusals(['.pgpa\u00df', '.\u00dfh']), same(2, 'denied'));
 check('denies a name written with another separator, a trailing dot or space, or compatibility characters', refusals(['sub\\.env', '.git\\config', '.env.', 'Key.pem ', '\uff0eenv', '.\uff45\uff4e\uff56', '\uff49\uff44_rsa']), same(7, 'denied'));
+const FOLDED_SEP = ['x\uff0f.env', 'service-account\uff0fprod.json', 'client_secret\uff0fx.json', 'a\uff3c.git', 'service-account\ufe68prod.json', 'client_secret\u2100x.json', 'client_secret\u2105x.json'];
+check('denies a name whose compatibility fold writes a separator: the segment whole and its pieces both count', refusals(FOLDED_SEP), same(FOLDED_SEP.length, 'denied'));
+check('a fold-to-separator code point does not deny a plain name', ['a\uff0fb.txt', 'a\ufe68b', 'src\u2100main.js'].map(denyListed), same(3, false));
 check('a deny-listed name is decided without any filesystem call, for a root that does not exist too', [watched(() => { inspectPath(root, '.env'); inspectPath(root, 'sub/.GIT/x'); inspectPath('/nonexistent-root', 'a.pem', null, { realpath: () => { throw new Error('called'); } }); })], [[]]);
 check('denied names make no call to the injected realpath', (() => { let n = 0; ins('.env', null, { realpath: (p) => { n++; return p; } }); return n; })(), 0);
 check('a missing, a symlinked and an unreadable-directory .env give the same result', [ins('nothing/.env'), ins('.env'), ins('locked/.env'), ins('.env.missing')], same(4, DENIED));
@@ -131,8 +163,10 @@ check('refuses a directory, a path through a file, a path under a missing direct
 check('a FIFO is refused and the call returns, also when swapped in after the check', fifo ? [inChild('pipe'), inChild('a.txt', path.join(root, 'pipe'))] : 'no mkfifo', same(2, { kind: 'refused', refusal: 'not_file' }));
 check('a device is refused', fs.existsSync('/dev/null') ? inspectPath('/dev', 'null') : 'no /dev/null', { kind: 'refused', refusal: 'not_file' });
 check('refuses a file over the size cap and accepts one at it', [refusalOf('big.bin'), ins('max.bin').size], ['file_size', MAX_FILE_BYTES]);
-const longName = '\u00e9'.repeat(128); // 256 bytes, over NAME_MAX on Linux: lstat fails with ENAMETOOLONG, as root too
-check('a name the filesystem cannot look up is refused as unreadable, for any user', refusalOf(longName), 'unreadable');
+// Linux only: NAME_MAX counts bytes there (255), so 128 two-byte characters are over it; APFS counts characters and accepts them.
+const longName = '\u00e9'.repeat(128);
+if (process.platform !== 'linux') skip('a name the filesystem cannot look up is refused as unreadable', 'not Linux: the name limit counts bytes only there');
+else check('a name the filesystem cannot look up is refused as unreadable, for any user', refusalOf(longName), 'unreadable');
 if (process.getuid?.() === 0) skip('a file in an unreadable directory is refused as unreadable', 'running as root, which reads it');
 else check('a file in an unreadable directory is refused as unreadable', refusalOf('locked/f.txt'), 'unreadable');
 check('an unreadable root is refused, not read through', inspectPath(path.join(base, 'no-root'), 'a.txt'), { kind: 'refused', refusal: 'unreadable' });
@@ -145,11 +179,13 @@ console.log('== path safety: the descriptor ==');
 check('the probe gets an open descriptor and the size and its answer is a boolean', [ins('a.txt', (fd, size) => size === 5 && fs.readSync(fd, Buffer.alloc(5), 0, 5, 0) === 5).answer, ins('a.txt', () => 'hello').answer, ins('a.txt', () => 1).answer], [true, false, false]);
 const openClose = (fn) => { const c = watched(fn); return [c.filter((n) => n === 'openSync').length, c.filter((n) => n === 'closeSync').length]; };
 check('the descriptor is closed after a probe, after a refusal and after a probe that throws', [openClose(() => ins('a.txt', () => true)), openClose(() => ins('a.txt', null, swapTo('folder'))), openClose(() => ins('big.bin')), openClose(() => { try { inspectPath(root, 'a.txt', () => { throw new Error('probe'); }); } catch { /* only reached by a module that rethrows */ } })], same(4, [1, 1]));
+const failingClose = (probe) => { const real = fs.closeSync; fs.closeSync = (fd) => { real(fd); throw new Error('EIO'); }; try { return ins('a.txt', probe); } finally { fs.closeSync = real; } };
+check('a close that fails is unreadable with no probe, and the probe refusal with one', [failingClose(null), failingClose(() => true)], [{ kind: 'refused', refusal: 'unreadable' }, { kind: 'refused', refusal: 'probe' }]);
 check('a probe that closes the descriptor is a refusal, not a throw', ins('a.txt', (fd) => { fs.closeSync(fd); return true; }), { kind: 'refused', refusal: 'probe' });
 check('an error from the probe is a refusal and its message does not leave', ins('a.txt', () => { throw new Error('PROBEMSG'); }), { kind: 'refused', refusal: 'probe' });
 check('a path that does not exist, a directory or a FIFO opens nothing', openClose(() => { ins('new.txt'); ins('folder'); ins('pipe'); }), [0, 0]);
 const openFlags = () => { const real = fs.openSync; const seen = []; fs.openSync = (p, f, ...r) => { seen.push(f); return real(p, f, ...r); }; try { ins('a.txt'); } finally { fs.openSync = real; } return seen; };
-check('the open follows no link, cannot block, and never takes a controlling terminal', openFlags().map((f) => [fs.constants.O_NOFOLLOW, fs.constants.O_NONBLOCK, fs.constants.O_NOCTTY].every((b) => (f & b) === b)), [true]);
+check('the open follows no link, cannot block, and never takes a controlling terminal', openFlags().map((f) => [fs.constants.O_NOFOLLOW, fs.constants.O_NONBLOCK, fs.constants.O_NOCTTY ?? 0].every((b) => (f & b) === b)), [true]);
 const spied = watched(() => ins('a.txt'));
 check('the filesystem spy sees the calls a contained path makes', [spied.includes('lstatSync'), spied.includes('realpathSync.native')], [true, true]);
 

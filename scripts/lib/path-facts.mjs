@@ -19,7 +19,16 @@
 // Globs are folded to lower case and matched by the code below, never turned into a regular expression: `*` is any
 // run inside one path segment, `?` one character, a `**` segment any number of segments, anything else is itself.
 // A glob without a slash matches one segment anywhere; with a slash it is anchored at the root and also matches
-// what is under it. Cost is bounded by the caps on glob count and length and on path length.
+// what is under it. Some filesystems ignore a trailing dot or space on a name (`package.json.` is `package.json`), so
+// a path is read as written and with those trimmed, and a glob hits when either reading does: the trim adds a
+// reading and never replaces one. A glob or container name is trimmed the same way, and one that trims to nothing, or
+// whose trim leaves only wildcards (`*.` would widen to `*`), is refused.
+// Some code points fold to a separator (U+FF0F is `/`): the primary reading folds each segment of the path as written, so
+// `tests／x.js` is one segment and a file, never the directory `tests`. A second, re-split reading (fold, then split, as a
+// glob is read) is an extra one for glob hits only. Test directories and file names are judged on the primary reading
+// as written only, so neither a trimmed nor a re-split name can turn production code into a test.
+// Cost is bounded by the caps on glob count (per layer; `loadConfig` supplies two), glob length and path length, and
+// is at most four readings per path (two in the common case, one when the name has no trailing dot or space).
 import { MAX_PATHS, MAX_PATH_CHARS, denyListed } from './path-safety.mjs';
 
 export const MAX_GLOBS = 32;
@@ -55,11 +64,17 @@ const TEST_FILES = ['*.test.*', '*.spec.*', '*_test.*', '*-test.*', '*_tests.*',
 const fold = (s) => s.normalize('NFKC').toUpperCase().toLowerCase();
 // Separators only, no folding: the module key keeps the case a case-sensitive filesystem tells apart.
 const parts = (s) => s.split(/[\\/]+/).filter((x) => x !== '' && x !== '.');
-const split = (s) => parts(fold(s));
-// A path segment loses trailing dots and spaces as path-safety's deny test does, so `package.json.` is the manifest.
-const pathSegs = (raw) => split(raw).map((x) => x.replace(/[. ]+$/, '')).filter(Boolean);
-// Adjacent `**` mean one, so a glob of many of them costs one step.
-const compile = (glob) => (/[\\/]/.test(glob) ? split(glob) : ['**', ...split(glob)]).filter((p, i, all) => !(p === '**' && all[i - 1] === '**'));
+// The primary reading: split on the raw separators, then fold each segment, so a segment keeps a folded-in separator.
+const split = (s) => parts(s).map(fold);
+// The re-split reading: fold, then split (how a glob is read), so `a／b` is `a`, `b`.
+const resplit = (s) => parts(fold(s));
+// Segments without trailing dots and spaces, as path-safety's deny test reads them.
+const trim = (x) => x.replace(/[. ]+$/, '');
+const trimmed = (segs) => segs.map(trim).filter(Boolean);
+// The readings a glob is tried against, without repeats (the common name has one or two, so the cost grows only for odd names).
+const readings = (raw) => { const p = split(raw); const r = resplit(raw); return [...new Map([p, trimmed(p), r, trimmed(r)].map((x) => [JSON.stringify(x), x])).values()]; };
+const globParts = (g) => trimmed(resplit(g));
+const compile = (glob) => (/[\\/]/.test(glob) ? globParts(glob) : ['**', ...globParts(glob)]);
 const build = (byName) => Object.entries(byName).map(([name, globs]) => [name, globs.map(compile)]);
 const SENSITIVE = build(DEFAULTS.sensitive);
 const BOUNDARY = build(DEFAULTS.boundary);
@@ -90,20 +105,24 @@ function globMatches(glob, segs) {
   return at.size > 0;
 }
 
-const hitsOf = (rules, segs) => rules.filter(([, globs]) => globs.some((g) => globMatches(g, segs))).map(([name]) => name);
+const hitsOf = (rules, reads) => rules.filter(([, globs]) => globs.some((g) => reads.some((segs) => globMatches(g, segs)))).map(([name]) => name);
 const isTest = (segs) => segs.slice(0, -1).some((s) => TEST_DIRS.has(s)) || TEST_FILES.some((g) => segMatch(g, segs.at(-1) ?? ''));
 // A container's children are modules (`packages/a`), never the bare child, so one name under two containers is two
 // modules; a file directly in a container, or at the root, belongs to the container, or to the root's one module.
-const moduleOf = (raw, containers) => {
-  if (raw.length < 2) return '';
-  return containers.has(pathSegs(raw[0])[0]) && raw.length > 2 ? `${raw[0]}/${raw[1]}` : raw[0];
+// `segs` are the unfolded segments of the path. Container names are stored trimmed, so a first segment that is the
+// container written with a trailing dot or space (`services.`) still names it; the key keeps the text as written.
+const moduleOf = (segs, containers) => {
+  if (segs.length < 2) return '';
+  const head = trim(fold(segs[0]));
+  return containers.has(head) && segs.length > 2 ? `${segs[0]}/${segs[1]}` : segs[0];
 };
 
 const field = (o, k) => (o !== null && typeof o === 'object' && !Array.isArray(o) && Object.hasOwn(o, k) ? o[k] : undefined);
 // Shape checks on the text as written: a glob never reaches the filesystem, so `..` and absolute only need refusing.
-const validGlob = (g) => !/[\p{C}\p{Zl}\p{Zp}]/u.test(g) && !/^(?:[\\/]|[a-z]:)/i.test(g) && !g.includes('..') && split(g).length > 0;
-// A container is exactly one plain segment (`services/` and `./services` are `services`); anything else is no container.
-const containerName = (g) => { const s = split(g); return s.length === 1 && !/[*?]/.test(s[0]) ? s[0] : null; };
+const widened = (g) => resplit(g).some((s) => { const t = trim(s); return t !== s && /^[*?]+$/.test(t); });
+const validGlob = (g) => !/[\p{C}\p{Zl}\p{Zp}]/u.test(g) && !/^(?:[\\/]|[a-z]:)/i.test(g) && !g.includes('..') && globParts(g).length > 0 && !widened(g);
+// A container is exactly one plain segment (`services/`, `./services` and `services.` are `services`); anything else is no container.
+const containerName = (g) => { const s = globParts(g); return s.length === 1 && !/[*?]/.test(s[0]) ? s[0] : null; };
 const bounded = (v, ok) => Array.isArray(v) && v.length <= MAX_GLOBS && v.every((g) => typeof g === 'string' && g.length > 0 && g.length <= MAX_GLOB_CHARS && ok(g));
 
 // The additions of every layer; a key that is invalid adds nothing, and no layer or key affects another's.
@@ -124,21 +143,22 @@ export function classifyPaths(paths, layers) {
   const sensitive = [...SENSITIVE, ['config', extra.sensitive]];
   const containers = new Set([...BUILTIN_CONTAINERS, ...extra.containers]);
   // A list that is not an array, or is over the count cap, is MAX_PATHS unusable entries: it floors instead of vanishing.
-  // An unusable entry is a module of its own (`?<index>`), so the counts are the largest the cap allows.
+  // An unusable entry is a module of its own (`/?<index>`: a key with a separator, which no real module key has), so the counts are the largest the cap allows.
   const list = Array.isArray(paths) && paths.length <= MAX_PATHS ? paths : Array(MAX_PATHS).fill(null);
   const files = list.map((raw, i) => {
     const usable = typeof raw === 'string' && raw.length <= MAX_PATH_CHARS;
-    const segs = usable ? pathSegs(raw) : [];
+    const segs = usable ? split(raw) : [];
     const denied = !usable || denyListed(raw);
     const floor = denied ? [DENY_LIST] : [];
+    const reads = usable ? readings(raw) : [[]];
     return {
       path: usable ? raw : '',
       denied,
       production: !isTest(segs),
-      module: usable ? moduleOf(parts(raw), containers) : `?${i}`,
-      sensitive: [...hitsOf(sensitive, segs), ...floor],
-      boundary: [...hitsOf(BOUNDARY, segs), ...floor],
-      contract: hitsOf(CONTRACT, segs),
+      module: usable ? moduleOf(parts(raw), containers) : `/?${i}`,
+      sensitive: [...hitsOf(sensitive, reads), ...floor],
+      boundary: [...hitsOf(BOUNDARY, reads), ...floor],
+      contract: hitsOf(CONTRACT, reads),
     };
   });
   const names = (key) => [...new Set(files.flatMap((f) => f[key]))].sort();

@@ -17,7 +17,7 @@
 // A probe is called with the open descriptor and the size, and returns true or false; this module closes the
 // descriptor, so it never escapes. This module returns only that boolean, so the probe must be synchronous; a
 // probe that throws becomes the `probe` refusal, never its message. The probe must not close the descriptor: a
-// probe that does makes this module's own close fail, which is the `probe` refusal too.
+// probe that does makes this module's own close fail, which is the `probe` refusal too (a close that fails with no probe is `unreadable`).
 //
 // Seams: `realpath` (default fs.realpathSync.native) and `constants` (default fs.constants).
 // shortcut: containment is checked, then the file is opened by its canonical path; a directory swapped in
@@ -40,27 +40,38 @@ const SEPARATORS = /[\\/]+/;
 const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
 const ABSOLUTE = /^(?:[\\/]|[a-z]:)/i;
 const PARENT_SEGMENT = /^\.{2}[. ]*$/;
+// A bare `config` is allowed on purpose, though the secret-write hook denies it: this match is per segment, so `config`
+// here would deny every `config/` directory. The secret-bearing configs sit under the `.git`, `.ssh`, `.aws`, `.kube`
+// and `.docker` segments below. `credentials` also denies a `credentials/` directory, which the hook (basename only) does not.
 const NAME_EXACT = ['.git', '.ssh', '.gnupg', '.aws', '.kube', '.docker', 'credentials'];
 const NAME_PREFIXES = ['.env', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', '.npmrc', '.netrc', '.git-credentials', '.pypirc', '.pgpass', 'terraform.tfstate', '_netrc', '_pgpass', '.htpasswd', '.vault-token'];
-const NAME_SUFFIXES = ['.pem', '.key', '.p12', '.pfx', '.crt', '.cer', '.der', '.jks', '.keystore', '.ppk', '.tfvars', '.kdbx', '.tfstate', '.p8', '-key.json', '-credentials.json'];
-// Names the repository's own secret-write hook denies by pattern rather than by affix.
-const NAME_PATTERN = /service-account.*\.json$|secrets?\.(?:ya?ml|json)$/;
+const NAME_SUFFIXES = ['.pem', '.key', '.p12', '.pfx', '.crt', '.cer', '.der', '.jks', '.keystore', '.ppk', '.tfvars', '.kdbx', '.tfstate', '.tfstate.backup', '.p8', '.netrc', '.pgpass', '-key.json', 'credentials.json'];
+// Names the repository's own secret-write hook denies by pattern rather than by affix, and the common service-account
+// and OAuth client key files it does not name: the exact `key.json` (the GCP docs' default) and a `.tfstate.<n>.backup` copy.
+const NAME_PATTERN = /service[-_]?account.*\.json$|client_secret.*\.json$|secrets?\.(?:ya?ml|json)$|^key\.json$|\.tfstate\..*\.backup$/;
 
 const segmentsOf = (raw) => raw.split(SEPARATORS).filter((s) => s !== '' && s !== '.');
 const trimDots = (s) => { let e = s.length; while (e > 0 && (s[e - 1] === '.' || s[e - 1] === ' ')) e--; return s.slice(0, e); };
 const refused = (refusal, denied = false) => (denied ? { kind: 'refused', refusal, denied: true } : { kind: 'refused', refusal });
 
 // Pure string test, case-folded (upper then lower, so a sharp s reads as ss): the same answer for .ENV as .env on every filesystem.
+// The raw path is split first and each segment folded after, because seven code points fold to a separator (U+FF0F,
+// U+FF3C, U+FE68, U+2100, U+2101, U+2105, U+2106): a segment is tested whole and as its re-split pieces (a union), so
+// `x／.env` and `service-account／prod.json` are both denied.
 export function denyListed(raw) {
   if (typeof raw !== 'string') return false;
   if (raw.length > MAX_PATH_CHARS) return true;
-  return raw.normalize('NFKC').toUpperCase().toLowerCase().split(SEPARATORS).some((segment) => {
-    const name = trimDots(segment);
-    return NAME_EXACT.includes(name) || /~\d/.test(name) || name.includes(':') || NAME_PATTERN.test(name) || NAME_PREFIXES.some((p) => name.startsWith(p)) || NAME_SUFFIXES.some((s) => name.endsWith(s));
+  return raw.split(SEPARATORS).some((segment) => {
+    const folded = segment.normalize('NFKC').toUpperCase().toLowerCase();
+    return [...new Set([folded, ...folded.split(SEPARATORS)])].some((piece) => {
+      const name = trimDots(piece);
+      return NAME_EXACT.includes(name) || /~\d/.test(name) || name.includes(':') || NAME_PATTERN.test(name) || NAME_PREFIXES.some((p) => name.startsWith(p)) || NAME_SUFFIXES.some((s) => name.endsWith(s));
+    });
   });
 }
 
-// The list-level cap. A list over it is refused whole, and keeps the deny-listed fact for any name in it.
+// The list-level cap. A list over it is refused whole and keeps the deny-listed fact for any name in it; a list over
+// 4 x MAX_PATHS is not scanned at all and is refused as denied outright.
 export function refuseList(paths) {
   if (!Array.isArray(paths)) return refused('malformed');
   if (paths.length <= MAX_PATHS) return null;
@@ -150,7 +161,7 @@ export function inspectPath(root, raw, probe = null, { realpath = fs.realpathSyn
   try {
     fs.closeSync(opened.fd);
   } catch {
-    return refused('probe');
+    return refused(probe ? 'probe' : 'unreadable'); // with a probe, the likely cause is the probe closing the descriptor
   }
   return result;
 }
