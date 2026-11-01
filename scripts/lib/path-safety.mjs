@@ -16,7 +16,8 @@
 //
 // A probe is called with the open descriptor and the size, and returns true or false; this module closes the
 // descriptor, so it never escapes. This module returns only that boolean, so the probe must be synchronous; a
-// probe that throws becomes the `probe` refusal, never its message.
+// probe that throws becomes the `probe` refusal, never its message. The probe must not close the descriptor: a
+// probe that does makes this module's own close fail, which is the `probe` refusal too.
 //
 // Seams: `realpath` (default fs.realpathSync.native) and `constants` (default fs.constants).
 // shortcut: containment is checked, then the file is opened by its canonical path; a directory swapped in
@@ -36,24 +37,26 @@ export const REFUSAL_IDS = Object.freeze([
 
 const SEPARATORS = /[\\/]+/;
 // Cf includes ZWNJ and ZWJ: refusing them (they matter in some scripts) is deliberate, a hidden join is a spoof.
-const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
 const ABSOLUTE = /^(?:[\\/]|[a-z]:)/i;
 const PARENT_SEGMENT = /^\.{2}[. ]*$/;
-const NAME_EXACT = ['.git', '.ssh', '.gnupg', '.aws'];
-const NAME_PREFIXES = ['.env', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', '.npmrc', '.netrc', '.git-credentials', '.pypirc', '.pgpass', 'terraform.tfstate'];
-const NAME_SUFFIXES = ['.pem', '.key', '.p12', '.pfx', '.crt', '.cer', '.der', '.jks', '.keystore', '.ppk', '.tfvars', '.kdbx'];
+const NAME_EXACT = ['.git', '.ssh', '.gnupg', '.aws', '.kube', '.docker', 'credentials'];
+const NAME_PREFIXES = ['.env', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', '.npmrc', '.netrc', '.git-credentials', '.pypirc', '.pgpass', 'terraform.tfstate', '_netrc', '_pgpass', '.htpasswd', '.vault-token'];
+const NAME_SUFFIXES = ['.pem', '.key', '.p12', '.pfx', '.crt', '.cer', '.der', '.jks', '.keystore', '.ppk', '.tfvars', '.kdbx', '.tfstate', '.p8', '-key.json', '-credentials.json'];
+// Names the repository's own secret-write hook denies by pattern rather than by affix.
+const NAME_PATTERN = /service-account.*\.json$|secrets?\.(?:ya?ml|json)$/;
 
 const segmentsOf = (raw) => raw.split(SEPARATORS).filter((s) => s !== '' && s !== '.');
 const trimDots = (s) => { let e = s.length; while (e > 0 && (s[e - 1] === '.' || s[e - 1] === ' ')) e--; return s.slice(0, e); };
 const refused = (refusal, denied = false) => (denied ? { kind: 'refused', refusal, denied: true } : { kind: 'refused', refusal });
 
-// Pure string test, case-folded: the same answer for .ENV as .env on every filesystem.
+// Pure string test, case-folded (upper then lower, so a sharp s reads as ss): the same answer for .ENV as .env on every filesystem.
 export function denyListed(raw) {
   if (typeof raw !== 'string') return false;
   if (raw.length > MAX_PATH_CHARS) return true;
-  return raw.normalize('NFKC').toLowerCase().split(SEPARATORS).some((segment) => {
+  return raw.normalize('NFKC').toUpperCase().toLowerCase().split(SEPARATORS).some((segment) => {
     const name = trimDots(segment);
-    return NAME_EXACT.includes(name) || /~\d/.test(name) || name.includes(':') || NAME_PREFIXES.some((p) => name.startsWith(p)) || NAME_SUFFIXES.some((s) => name.endsWith(s));
+    return NAME_EXACT.includes(name) || /~\d/.test(name) || name.includes(':') || NAME_PATTERN.test(name) || NAME_PREFIXES.some((p) => name.startsWith(p)) || NAME_SUFFIXES.some((s) => name.endsWith(s));
   });
 }
 
@@ -61,6 +64,7 @@ export function denyListed(raw) {
 export function refuseList(paths) {
   if (!Array.isArray(paths)) return refused('malformed');
   if (paths.length <= MAX_PATHS) return null;
+  if (paths.length > 4 * MAX_PATHS) return refused('path_count', true); // not scanned: a list this long is hostile
   return refused('path_count', paths.some(denyListed));
 }
 
@@ -136,13 +140,17 @@ export function inspectPath(root, raw, probe = null, { realpath = fs.realpathSyn
   if (!found.exists) return contained;
   const opened = openPlainFile(found.real, constants);
   if (opened.result) return opened.result;
+  let result = contained;
   try {
     contained.size = opened.size;
     if (probe) contained.answer = probe(opened.fd, opened.size) === true;
-    return contained;
+  } catch {
+    result = refused('probe');
+  }
+  try {
+    fs.closeSync(opened.fd);
   } catch {
     return refused('probe');
-  } finally {
-    fs.closeSync(opened.fd);
   }
+  return result;
 }

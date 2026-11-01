@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const modPath = path.resolve(process.argv[2]);
 const M = await import(pathToFileURL(modPath).href);
@@ -64,14 +64,16 @@ check('refuses an absolute path, a drive path and a UNC path', refusals(['/etc/p
 check('refuses a parent segment in any position or separator', refusals(['../a.txt', 'sub/../../a.txt', 'sub\\..\\..\\a.txt', 'a/..', '.. /x', '..../x']), same(6, 'traversal'));
 check('refuses NUL and control characters', refusals(['a\0.txt', 'a\n.txt', 'a\u001b[0m', 'a\u007f', 'a\u0085']), same(5, 'control'));
 check('refuses bidi, zero-width and line-separator characters', refusals(['\u202eagro.txt', 'a\u2066b', 'a\u200bb', 'a\u2028b', 'a\ufeffb']), same(5, 'control'));
+check('refuses lone surrogates and keeps paired ones', [refusals(['a\ud800b', '\udc00']), ins('\u{1F600}.txt').kind], [same(2, 'control'), 'contained']);
 check('refuses an empty, dot-only or non-string name', refusals(['', '.', './', './/.', 5, null, undefined, {}, ['a.txt']]), same(9, 'malformed'));
-const LONG = `${'.'.repeat(50000)}x`;
+const LONG = `${'.'.repeat(10000)}x`; // long enough that a quadratic trim costs seconds, short enough to keep the suite quick
 const t0 = performance.now();
 const longResults = [ins(LONG), refuseList(Array(MAX_PATHS + 1).fill(LONG)), refuseList([LONG]), denyListed(LONG)];
 check('a huge name is refused as path_length and denied, in bounded time', [longResults, performance.now() - t0 < 500], [[{ kind: 'refused', refusal: 'path_length', denied: true }, { kind: 'refused', refusal: 'path_count', denied: true }, null, true], true]);
 check('refuses a name over the length cap and accepts one at it', [refusalOf('a'.repeat(MAX_PATH_CHARS + 1)), ins('a'.repeat(MAX_PATH_CHARS))], ['path_length', { kind: 'contained', exists: false, rel: 'a'.repeat(MAX_PATH_CHARS) }]);
 check('refuses a list over the count cap and accepts one at it', [refuseList(Array(MAX_PATHS + 1).fill('a.txt')), refuseList(Array(MAX_PATHS).fill('a.txt')), refuseList('a.txt')], [{ kind: 'refused', refusal: 'path_count' }, null, { kind: 'refused', refusal: 'malformed' }]);
 check('a list over the cap keeps the denied fact of any name in it', refuseList([...Array(MAX_PATHS).fill('a.txt'), '.env']), { kind: 'refused', refusal: 'path_count', denied: true });
+check('a list far over the cap is refused as denied without being scanned', [refuseList(same(4 * MAX_PATHS + 1, 'a.txt')), refuseList(same(4 * MAX_PATHS, 'a.txt'))], [{ kind: 'refused', refusal: 'path_count', denied: true }, { kind: 'refused', refusal: 'path_count' }]);
 const marker = 'SECRETMARK\u00e9';
 const hostile = [`../${marker}`, `/${marker}`, `${marker}\0`, `${marker}/nope/x`, `${marker}/a.txt`, `x${'y'.repeat(MAX_PATH_CHARS)}${marker}`];
 const out = JSON.stringify(hostile.map((p) => ins(p)));
@@ -83,10 +85,30 @@ const SECRET_NAMES = ['.env', 'cfg/.env.local', 'id_rsa', 'k/id_rsa.pub', 'id_ds
   '.npmrc', 'h/.netrc', '.git-credentials', '.pypirc', '.pgpass', 'terraform.tfstate', 'a.tfvars', 'a.kdbx', '.ssh/config', 'x/.gnupg/k', '.aws/credentials'];
 check('denies .env, key and certificate file names and any .git segment', refusals(SECRET_NAMES), same(SECRET_NAMES.length, 'denied'));
 check('does not deny look-alikes', ['.gitignore', '.github/workflows/a.yml', 'environment.md', 'src/keyboard.js', 'key.txt', 'sub/b.txt', 'a.pem.txt', 'notes~.txt', 'terraform.tf', '.aws.md', 'ssh/a'].map(denyListed), same(11, false));
+const HOOK_NAMES = ['gcp-key.json', 'a/b-credentials.json', 'service-account.json', 'service-account-prod.json', 'secret.yaml', 'secrets.yaml', 'secret.yml', 'config/secrets.yml', 'secret.json', 'secrets.json', 'credentials', 'x/credentials',
+  'a.tfstate', '_netrc', '_pgpass', '.htpasswd', 'a.p8', '.vault-token', '.kube/config', 'x/.docker/config.json'];
+check('denies the secret names the repository secret-write hook denies', HOOK_NAMES.filter((n) => !denyListed(n)), []);
+check('does not deny look-alikes of those names', ['credentials.md', 'terraform.tf', 'service-account.md', 'secrets.md', 'secret.txt', 'secretsanta.json', 'monkey.json', 'key.json', 'a.mp8', 'htpasswd', 'vault-token', 'netrc', 'a.tfstates', '.dockerignore', '.kubernetes', 'docs/kube/a'].filter(denyListed), []);
+// One representative per SECRET_PATTERNS entry of the hook, in its order. The hook runs on import and does not export the
+// list, so the count is read from its source (bounded) and must equal the table's length: a pattern added there fails here.
+// `config` is represented by its aws path: a bare `config` file is common and is not denied here.
+const HOOK_TABLE = ['.env', '.env.local', '.env.production', '.env.prod', '.env.staging', '.env.secret', 'a.pem', 'a.key', 'a.p12', 'a.pfx', 'a.jks', 'id_rsa', 'id_ed25519', 'id_ecdsa', 'id_dsa', 'credentials', '.aws/config',
+  'gcp-key.json', 'gcp-credentials.json', 'service-account-prod.json', '.netrc', '.pgpass', 'a.kdbx', 'secrets.yml', 'secrets.json'];
+const hookFile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../hooks/pre-tool/block-secret-writes.mjs');
+const hookCount = (() => {
+  try {
+    if (fs.statSync(hookFile).size > 65536) return -1;
+    const block = /const SECRET_PATTERNS = \[\n([^\]]*)\n\];/.exec(fs.readFileSync(hookFile, 'utf8'));
+    return block ? block[1].split('\n').filter((l) => /^\s*\/(?!\/).*\/,/.test(l)).length : 0;
+  } catch { return -1; }
+})();
+check('every secret-name pattern of the hook has a representative here, and each is denied', [HOOK_TABLE.length === hookCount, HOOK_TABLE.filter((n) => !denyListed(n))], [true, []]);
 const WIN = ['ENV~1', 'ENV~1.LOC', 'GIT~1/config', 'key.pem::$DATA', 'a/b:c'];
 check('denies Windows short names and stream suffixes', refusals(WIN), same(WIN.length, 'denied'));
 const CASED = ['.ENV', '.Env.local', 'ID_RSA', 'Key.PEM', '.Git/config', '.GIT/hooks/x', 'CERT.Crt'];
+check('floors drive-letter paths and ~<digit> names as denied, on purpose', ['C:\\x', 'c:x', 'file~1.txt', 'notes~2'].map(denyListed), same(4, true));
 check('denies case variants exactly as the lower-case forms', refusals(CASED), same(CASED.length, 'denied'));
+check('denies a name that only full case folding reads as denied', refusals(['.pgpa\u00df', '.\u00dfh']), same(2, 'denied'));
 check('denies a name written with another separator, a trailing dot or space, or compatibility characters', refusals(['sub\\.env', '.git\\config', '.env.', 'Key.pem ', '\uff0eenv', '.\uff45\uff4e\uff56', '\uff49\uff44_rsa']), same(7, 'denied'));
 check('a deny-listed name is decided without any filesystem call, for a root that does not exist too', [watched(() => { inspectPath(root, '.env'); inspectPath(root, 'sub/.GIT/x'); inspectPath('/nonexistent-root', 'a.pem', null, { realpath: () => { throw new Error('called'); } }); })], [[]]);
 check('denied names make no call to the injected realpath', (() => { let n = 0; ins('.env', null, { realpath: (p) => { n++; return p; } }); return n; })(), 0);
@@ -109,6 +131,8 @@ check('refuses a directory, a path through a file, a path under a missing direct
 check('a FIFO is refused and the call returns, also when swapped in after the check', fifo ? [inChild('pipe'), inChild('a.txt', path.join(root, 'pipe'))] : 'no mkfifo', same(2, { kind: 'refused', refusal: 'not_file' }));
 check('a device is refused', fs.existsSync('/dev/null') ? inspectPath('/dev', 'null') : 'no /dev/null', { kind: 'refused', refusal: 'not_file' });
 check('refuses a file over the size cap and accepts one at it', [refusalOf('big.bin'), ins('max.bin').size], ['file_size', MAX_FILE_BYTES]);
+const longName = '\u00e9'.repeat(128); // 256 bytes, over NAME_MAX on Linux: lstat fails with ENAMETOOLONG, as root too
+check('a name the filesystem cannot look up is refused as unreadable, for any user', refusalOf(longName), 'unreadable');
 if (process.getuid?.() === 0) skip('a file in an unreadable directory is refused as unreadable', 'running as root, which reads it');
 else check('a file in an unreadable directory is refused as unreadable', refusalOf('locked/f.txt'), 'unreadable');
 check('an unreadable root is refused, not read through', inspectPath(path.join(base, 'no-root'), 'a.txt'), { kind: 'refused', refusal: 'unreadable' });
@@ -120,9 +144,12 @@ check('result keys per kind are fixed: nothing carries file content', [ins('a.tx
 console.log('== path safety: the descriptor ==');
 check('the probe gets an open descriptor and the size and its answer is a boolean', [ins('a.txt', (fd, size) => size === 5 && fs.readSync(fd, Buffer.alloc(5), 0, 5, 0) === 5).answer, ins('a.txt', () => 'hello').answer, ins('a.txt', () => 1).answer], [true, false, false]);
 const openClose = (fn) => { const c = watched(fn); return [c.filter((n) => n === 'openSync').length, c.filter((n) => n === 'closeSync').length]; };
-check('the descriptor is closed after a probe, after a refusal and after a probe that throws', [openClose(() => ins('a.txt', () => true)), openClose(() => ins('a.txt', null, swapTo('folder'))), openClose(() => ins('big.bin')), openClose(() => { try { inspectPath(root, 'a.txt', () => { throw new Error('probe'); }); } catch { /* the probe's error propagates */ } })], same(4, [1, 1]));
+check('the descriptor is closed after a probe, after a refusal and after a probe that throws', [openClose(() => ins('a.txt', () => true)), openClose(() => ins('a.txt', null, swapTo('folder'))), openClose(() => ins('big.bin')), openClose(() => { try { inspectPath(root, 'a.txt', () => { throw new Error('probe'); }); } catch { /* only reached by a module that rethrows */ } })], same(4, [1, 1]));
+check('a probe that closes the descriptor is a refusal, not a throw', ins('a.txt', (fd) => { fs.closeSync(fd); return true; }), { kind: 'refused', refusal: 'probe' });
 check('an error from the probe is a refusal and its message does not leave', ins('a.txt', () => { throw new Error('PROBEMSG'); }), { kind: 'refused', refusal: 'probe' });
 check('a path that does not exist, a directory or a FIFO opens nothing', openClose(() => { ins('new.txt'); ins('folder'); ins('pipe'); }), [0, 0]);
+const openFlags = () => { const real = fs.openSync; const seen = []; fs.openSync = (p, f, ...r) => { seen.push(f); return real(p, f, ...r); }; try { ins('a.txt'); } finally { fs.openSync = real; } return seen; };
+check('the open follows no link, cannot block, and never takes a controlling terminal', openFlags().map((f) => [fs.constants.O_NOFOLLOW, fs.constants.O_NONBLOCK, fs.constants.O_NOCTTY].every((b) => (f & b) === b)), [true]);
 const spied = watched(() => ins('a.txt'));
 check('the filesystem spy sees the calls a contained path makes', [spied.includes('lstatSync'), spied.includes('realpathSync.native')], [true, true]);
 
