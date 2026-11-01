@@ -24,7 +24,7 @@ run_suite() {
 
 # mutate <test lib> <module> <label> <test it must break> <from> <to>: the first <from> in the module becomes <to>.
 mutate() {
-  local lib="$1" mod="$2" label="$3" named="$4" mut="$TMP/mutant-$(basename "$2")"
+  local lib="$1" mod="$2" label="$3" named="$4" mut="${MUT_OUT:-$TMP/mutant-$(basename "$2")}"
   node -e "const fs=require('fs');const s=fs.readFileSync(process.argv[1],'utf8');const t=s.replace(process.argv[2],()=>process.argv[3]);if(t===s)process.exit(3);fs.writeFileSync(process.argv[4],t)" "$mod" "$5" "$6" "$mut"
   if [ $? != 0 ]; then bad "mutation '$label' did not change the module (stale pattern)"; return; fi
   local out; out="$(node "$lib" "$mut" 2>&1)"
@@ -198,6 +198,30 @@ ef 'an internal error without its note' 'an unexpected error is the floor' "note
 ef 'an unusable target no longer raises' "$TF_PLAN" "typeof target !== 'string' || target.length > MAX_PATH_CHARS || " ''
 ef 'the plan-paths input ignored' 'plan and sdlc sources' 'plan_paths: given(planPaths)' 'plan_paths: false'
 ef 'the slug input ignored' 'plan and sdlc sources' 'slug_given: given(slug)' 'slug_given: false'
+
+# ---- scripts/lib/loop-escalate.mjs and the rows and steps it reads ----
+echo "== loop escalation =="
+LET="$ROOT/tests/scripts/lib/loop-escalate-tests.mjs"
+run_suite "$LET" ""
+lm_n=0
+# lm <file in scripts/lib> <label> <test it must break> <from> <to>: the suite runs on a scratch copy of the whole directory with one file mutated.
+lm() { local d="$TMP/lib-$((++lm_n))"; cp -r "$ROOT/scripts/lib" "$d"; ESCALATE_LIB="$d" MUT_OUT="$d/$1" mutate "$LET" "$d/$1" "$2" "$3" "$4" "$5"; }
+TL_KEY='a clean 40-line new file has no escalation key'; TL_IDS='the escalation object holds ids only'; TL_RAN='a config file that cannot be parsed gives'; TL_POL='a new .claude/settings.json (untracked)'
+lm loop-review.mjs 'the status letter not carried' 'treeRows carries git' 'const status = letters.get(file);' 'const status = undefined;'
+lm loop-review.mjs 'the policy listing without untracked files' "$TL_POL" 'return [...changed, ...added];' 'return [...changed];'
+lm loop-review.mjs 'the policy listing without tracked changes' 'a committed .claude/settings.json edited' 'return [...changed, ...added];' 'return [...added];'
+lm loop-review.mjs 'the policy listing without .somi/rules' 'a new .somi/config.json and a new .somi/rules/x.md' "'.somi/config.json', '.somi/rules'" "'.somi/config.json'"
+lm loop-review.mjs 'the policy listing in the repository top level terms' 'a project root in a subfolder' "'-z', '--no-renames', '--no-ext-diff', '--no-textconv', '--relative', '--ignore-submodules=none', '--end-of-options', from, '--', ...GUARDED" "'-z', '--no-renames', '--no-ext-diff', '--no-textconv', '--ignore-submodules=none', '--end-of-options', from, '--', ...GUARDED"
+lm loop-review.mjs 'a diff without the driver flags' 'every git diff the loop runs' "'--no-renames', '--no-ext-diff', '--no-textconv', '--relative', '--ignore-submodules=none', '--end-of-options', from, to" "'--no-renames', '--relative', '--ignore-submodules=none', '--end-of-options', from, to"
+lm loop-diff.mjs 'the rows not returned' "$TL_KEY" 'return { total, weighted, outOfScope, rows };' 'return { total, weighted, outOfScope };'
+lm loop-escalate.mjs 'a failure swallowed as a run' "$TL_RAN" '    return { ran: false };' '    return { ran: true, reasons: [], size_flag: false, tests_weakened: false, hard_surface: [], notes: [] };'
+lm loop-escalate.mjs 'the object emitted when empty' "$TL_KEY" '(e.ran === false || e.reasons.length > 0' '(true || e.reasons.length > 0'
+lm loop-escalate.mjs 'a path leaked into the object' "$TL_IDS" 'reasons: ids(e.reasons),' 'reasons: [...ids(e.reasons), rows[0].file],'
+lm loop-escalate.mjs 'the id shape not checked' 'the diary text reads stored state as untrusted' "|| !list.every((x) => typeof x === 'string' && ID.test(x))" ''
+lm loop-escalate.mjs 'the policy rows not added' "$TL_POL" '[...rows, ...guardedRows(root, baseline)]' '[...rows]'
+lm loop-escalate.mjs 'the merged config handed on' "$TL_KEY" 'loadConfig(root, env) }' 'loadConfig(root, env).config }'
+lm loop-step.mjs 'the escalation not put in the response' "$TL_KEY" 'review_mode: review.mode, ...found,' 'review_mode: review.mode,'
+lm loop-step-review.mjs 'the ids not put in the diary line' 'the pass' "\${diaryText(gate?.response?.escalation)}" ''
 
 total=$((pass + fail))
 echo "SUMMARY $total checks, $fail failed"

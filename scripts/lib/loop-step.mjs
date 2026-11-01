@@ -27,6 +27,7 @@ import { applyCapOverride, configVal, firstDefined, reresolveCap, resolveInitCap
 import { init, readConfig } from './loop-engine.mjs';
 import { loadState, nowIso, saveState, stateFile } from './loop-state.mjs';
 import { computeDiff } from './loop-diff.mjs';
+import { escalate, reported } from './loop-escalate.mjs';
 import { dispatchEntry } from './loop-dispatch.mjs';
 import { REVIEW_SCOPES, reviewScope as scopeOf, snapshotTree } from './loop-review.mjs';
 import { checkRun } from './run-budget.mjs';
@@ -250,13 +251,14 @@ function afterCode(ctx, a) {
   if (diffCap.overrides.length) saveState(sf, state); // a cap changed on a resumed step is kept too
   if (!code) return finalize(sf, state, entry, base('after-code', { pass: state.pass, loop: 'plan', next: NEXT.taskReviewer }));
 
-  const { total, weighted, outOfScope } = computeDiff(ctx.root, state.baseline_sha, state.iteration_files);
+  const { total, weighted, outOfScope, rows } = computeDiff(ctx.root, state.baseline_sha, state.iteration_files);
   const shown = outOfScope.slice(0, 6).map((f) => cut(f, 60));
   const diff = { diff_lines: total, weighted_lines: weighted, cap: diffCap.cap, out_of_scope: shown, ...(outOfScope.length > shown.length ? { out_of_scope_total: outOfScope.length } : {}) };
   if (diffCap.cap > 0 && weighted > diffCap.cap) {
     if (entry.response) { delete entry.response; delete entry.measured; saveState(sf, state); } // an earlier pass of the gate no longer stands: no later step may read this tree as gated
     return stop('after-code', state, EXIT_DIFF_CAP, outOfScope.length ? 'scope-expansion' : 'diff-cap-exceeded', a, { diff });
   }
+  const found = reported(escalate(ctx.root, ctx.env, rows, state.baseline_sha)); // report only: the lens above is not touched by it
   const s = scopeOf(ctx.root, state, review.scope);
   const scope = s.scope === 'full' ? s : { ...s, files: s.files.slice(0, 5).map((f) => cut(f, 60)), files_total: s.files.length };
   const brief = s.scope === 'full'
@@ -266,7 +268,7 @@ function afterCode(ctx, a) {
   const [was, tree] = [state.steps?.[`${state.pass}:open`]?.tree, snapshotTree(ctx.root)]; // what the coder changed outside .somi since open, when both trees are known
   entry.measured = tree ?? undefined; // the tree this response gated
   const changed = was && tree ? { changed: was !== tree, ...(was === tree ? { note: 'nothing changed since open outside .somi, .claude and ignored files: the reviewer re-checks the open findings' } : {}) } : {};
-  return finalize(sf, state, entry, base('after-code', { pass: state.pass, loop: 'code', next: NEXT_REVIEW[review.mode], diff, scope, review_mode: review.mode, ...changed, review_brief: brief }));
+  return finalize(sf, state, entry, base('after-code', { pass: state.pass, loop: 'code', next: NEXT_REVIEW[review.mode], diff, scope, review_mode: review.mode, ...found, ...changed, review_brief: brief }));
 }
 
 // Read only: the state (a finished loop too), the last cursor entries, every open finding. It records nothing.

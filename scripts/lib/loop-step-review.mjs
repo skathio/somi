@@ -12,6 +12,7 @@ import { passEntry } from './loop-engine.mjs';
 import { nowIso, stateFile } from './loop-state.mjs';
 import { appendDiary, plainDir, readPlanFile } from './loop-notes.mjs';
 import * as k from './loop-step-kit.mjs';
+import { diaryText } from './loop-escalate.mjs';
 import { atOrAbove, canonName, CONFIDENCES, ledgerPaths, locusKey, readSeverity, recordFindings, resolveFinding, SEVERITIES } from './findings-ledger.mjs';
 
 export const FIELDS = k.freezeFields({ 'after-review': ['slug', 'loop', 'iteration', 'host', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed'] });
@@ -124,7 +125,7 @@ export function afterReview(ctx, a) {
   });
   const h = state.history[state.pass - 1];
   adv('diary', () => {
-    const r = appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title: `${state.loop}-loop pass ${h.pass} reviewed: ${h.verdict}`, body: `${h.blockers} Blocker, ${h.majors} Major; cumulative diff ${h.diff_lines} lines${entry.fixed.resolved.length ? `; fixed: ${entry.fixed.resolved.join(', ')}` : ''}`, now: entry.at });
+    const r = appendDiary({ root: ctx.root, slug: a.slug }, { category: 'note', phase: state.iteration || 'work-item-wide', title: `${state.loop}-loop pass ${h.pass} reviewed: ${h.verdict}`, body: `${h.blockers} Blocker, ${h.majors} Major; cumulative diff ${h.diff_lines} lines${diaryText(gate?.response?.escalation)}${entry.fixed.resolved.length ? `; fixed: ${entry.fixed.resolved.join(', ')}` : ''}`, now: entry.at });
     k.keep(out, r);
   });
   const f = entry.found;

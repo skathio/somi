@@ -223,18 +223,20 @@ function blobLines(root, ids) {
   return lines;
 }
 
-// The files that differ between two trees (or a commit and a tree) as [{added, deleted, file}].
+// The files that differ between two trees (or a commit and a tree) as [{added, deleted, file, status}], `status` being git's
+// letter for the file (A, M, D, T), read from --raw. treeNumstat is the same without it.
 // NUL-separated, so a name with a tab, a quote or non-ASCII bytes is exact; renames off, so a rename into another
 // path is the whole file added there and removed here. Both ids must be hex object ids, and follow --end-of-options.
+// No external diff program and no textconv driver runs, whatever the repository or the user configures.
 // A file git prints as binary (a real binary, a NUL byte, or text a .gitattributes `-diff` or `binary` line hides) is
 // counted from the object store: the lines of its old blob as deleted and of its new blob as added. Exact for hidden
 // text, an upper bound for a real binary (a floor of one line per 50 bytes, so binaries count toward the cap), and not
 // dodgeable by an attribute the coder adds.
-export function treeNumstat(root, from, to) {
+export function treeRows(root, from, to) {
   if (![from, to].every((id) => typeof id === 'string' && OBJECT_ID.test(id))) throw cannot('a recorded revision is not an object id');
   const list = (...format) => {
     try {
-      return run(root, ['diff', ...format, '-z', '--no-renames', '--relative', '--ignore-submodules=none', '--end-of-options', from, to, '--', ...PATHSPEC], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0');
+      return run(root, ['diff', ...format, '-z', '--no-renames', '--no-ext-diff', '--no-textconv', '--relative', '--ignore-submodules=none', '--end-of-options', from, to, '--', ...PATHSPEC], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0');
     } catch (e) {
       if (e instanceof LoopExit) throw e;
       throw cannot(e.code === 'ENOBUFS' ? 'the changed-file listing is too large' : 'git diff failed');
@@ -242,9 +244,11 @@ export function treeNumstat(root, from, to) {
   };
   const raw = list('--raw', '--no-abbrev');
   const blobs = new Map(); // path -> [old blob id, new blob id]
+  const letters = new Map(); // path -> status letter
   for (let i = 0; i + 1 < raw.length; i += 2) { // pairs of "<modes, ids, status>" and path: a name that starts with ':' is not mistaken for a record
-    const [, , oldId, newId] = raw[i].split(' ');
+    const [, , oldId, newId, letter] = raw[i].split(' ');
     blobs.set(raw[i + 1], [oldId, newId]);
+    letters.set(raw[i + 1], letter);
   }
   const rows = list('--numstat').filter((t) => t !== '').map((t) => {
     const m = /^(\d+|-)\t(\d+|-)\t([\s\S]+)$/.exec(t);
@@ -254,10 +258,32 @@ export function treeNumstat(root, from, to) {
   const ids = rows.filter((r) => r.added === null).flatMap((r) => blobs.get(r.file) ?? []);
   const lines = blobLines(root, ids);
   return rows.map(({ added, deleted, file }) => {
-    if (added !== null) return { added, deleted, file };
+    const status = letters.get(file);
+    if (added !== null) return { added, deleted, file, status };
     const [o, n] = blobs.get(file) ?? [];
-    return o === undefined || o === n ? { added: 0, deleted: 0, file } : { added: lines.get(n), deleted: lines.get(o), file };
+    return o === undefined || o === n ? { added: 0, deleted: 0, file, status } : { added: lines.get(n), deleted: lines.get(o), file, status };
   });
+}
+export const treeNumstat = (root, from, to) => treeRows(root, from, to).map(({ status, ...row }) => row);
+
+// The changes the measurement leaves out because it excludes .somi and .claude, for the folders and files that carry agent policy:
+// as { file, added: 0, deleted: 0, status } (no lines are counted), relative to `root`, the working tree against the commit
+// `from`, untracked files (not ignored ones) as A. Read the way treeRows reads (renames off, so a file moved out of a guarded
+// folder is a D here), and the index flags were refused by the measurement that precedes it.
+const GUARDED = ['.claude', '.somi/config.json', '.somi/rules'];
+export function guardedRows(root, from) {
+  if (typeof from !== 'string' || !OBJECT_ID.test(from)) throw cannot('a recorded revision is not an object id');
+  const list = (args) => {
+    try { return run(root, args, { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0'); } catch (e) {
+      if (e instanceof LoopExit) throw e;
+      throw cannot('git could not list the changes to agent policy files');
+    }
+  };
+  const raw = list(['diff', '--raw', '--no-abbrev', '-z', '--no-renames', '--no-ext-diff', '--no-textconv', '--relative', '--ignore-submodules=none', '--end-of-options', from, '--', ...GUARDED]);
+  const changed = [];
+  for (let i = 0; i + 1 < raw.length; i += 2) changed.push({ file: raw[i + 1], added: 0, deleted: 0, status: raw[i].split(' ')[4] });
+  const added = list(['ls-files', '-o', '--exclude-standard', '-z', '--', ...GUARDED]).filter((t) => t !== '').map((file) => ({ file, added: 0, deleted: 0, status: 'A' }));
+  return [...changed, ...added];
 }
 
 export const REVIEW_SCOPES = Object.freeze(['delta', 'full']);
