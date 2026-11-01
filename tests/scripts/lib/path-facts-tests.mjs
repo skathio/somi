@@ -41,10 +41,12 @@ check('an unconfigured repo flags .env, a migrations directory, a lockfile and a
 ]);
 check('flags secrets, auth, crypto and infra as sensitive', [
   hits('lib/client_secret.go')[0], hits('src/auth/login.ts')[0], hits('pkg/crypto/aes.go')[0], hits('.github/workflows/ci.yml')[0], hits('infra/main.tf')[0],
-], [['secrets'], ['auth'], ['crypto'], ['infra'], ['infra']]);
+], [['secrets'], ['auth'], ['crypto'], ['infra', 'ci'], ['infra']]);
 check('flags sinks and contracts', [
   hits('app/uploads/handler.py')[1], hits('x/Spawn.js')[1], hits('db/schema.sql')[1], hits('package.json')[2], hits('api/openapi.yaml')[2], hits('proto/a.proto')[2],
 ], [['input'], ['process'], ['data'], ['manifest'], ['schema'], ['schema']]);
+const CI_PATHS = ['.github/workflows/ci.yml', '.gitlab-ci.yml', 'x/.circleci/config.yml', '.travis.yml', 'azure-pipelines.yml', 'bitbucket-pipelines.yml', 'Jenkinsfile', 'ci/Jenkinsfile', '.gitlab/ci/build.yml', '.gitlab-ci.yaml', 'action.yml', 'sub/action.yaml', '.gitea/workflows/w.yml', '.forgejo/workflows/w.yml', 'Jenkinsfile.groovy', 'build.jenkinsfile', 'azure-pipelines-ci.yaml', '.azure-pipelines/b.yml', '.buildkite/pipeline.yml', '.drone.yml', '.woodpecker/b.yml', '.woodpecker.yaml', 'appveyor.yml', 'cloudbuild.yaml', 'buildspec.yml', '.pre-commit-config.yaml'];
+check('every CI system is a ci hit in the sensitive list (a sensitive name, so it raises), and a look-alike is not', [CI_PATHS.map((p) => hits(p)[0].includes('ci')), ['docs/ci.md', 'src/jenkins.md', 'ci/run.sh', 'azure.md', 'action.md'].map((p) => hits(p)[0].includes('ci'))], [CI_PATHS.map(() => true), Array(5).fill(false)]);
 check('does not flag ordinary source or a look-alike', [hits('src/util/strings.js'), hits('docs/author.md'), hits('README.md')], [[[], [], []], [[], [], []], [[], [], []]]);
 check('matching is case-folded', [hits('DB/Migrations/001.SQL'), hits('SRC/Routes/X.JS')[1]], [[['migrations'], ['data'], []], ['routes']]);
 check('a directory glob with a slash is anchored and also matches what is under it', [
@@ -95,7 +97,7 @@ check('an unusable entry floors instead of vanishing: not a string, over the len
 check('an unusable list reports the counts at the path cap', [run('src/a.js'), run(Array(41).fill('a.js'))].map((r) => [r.files.length, r.production_files, r.modules]), [[40, 40, 40], [40, 40, 40]]);
 
 console.log('== path facts: config only adds ==');
-const ALL = ['.env', 'db/migrations/1.sql', 'package-lock.json', 'src/routes/u.js', 'lib/secret.js'];
+const ALL = ['.env', 'db/migrations/1.sql', 'package-lock.json', 'src/routes/u.js', 'lib/secret.js', '.circleci/config.yml'];
 const base = run(ALL);
 check('config globs are added to the built-ins, not instead of them', [hits('zed/x.js', with1('sensitive_paths', ['zed']))[0], run(ALL, with1('sensitive_paths', ['zzz'])).sensitive], [['config'], base.sensitive]);
 const a = { sizing: { sensitive_paths: ['a/**'] } }; const b = { sizing: { sensitive_paths: ['b/**'] } };
@@ -109,7 +111,23 @@ check('one invalid key drops only itself: its sibling key and the other layers s
   hits('good/x', sizing({ sensitive_paths: ['good'], module_containers: ['..'] }))[0], modules(['services/a/x', 'services/b/y'], sizing({ sensitive_paths: ['..'], module_containers: ['services'] })),
   hits('good/x', [sizing({ sensitive_paths: ['..'] }), sizing({ sensitive_paths: ['good'] })])[0], hits('one/x', [sizing({ sensitive_paths: ['one', '..'] })])[0],
 ], [['config'], 2, ['config'], []]);
-check('config cannot remove a built-in glob even when it lists nothing or something else', [run(ALL, with1('sensitive_paths', [])).sensitive, run(ALL, sizing({ sensitive_paths: ['q'], module_containers: ['q'] })).files.map((f) => f.sensitive.length > 0)], [base.sensitive, [true, true, false, false, true]]);
+check('config cannot remove a built-in glob even when it lists nothing or something else', [run(ALL, with1('sensitive_paths', [])).sensitive, run(ALL, sizing({ sensitive_paths: ['q'], module_containers: ['q'] })).files.map((f) => f.sensitive.length > 0)], [base.sensitive, [true, true, false, false, true, true]]);
+check('a config cannot remove the ci class: it stays a sensitive hit with an empty list, an other list and a hostile one', [with1('sensitive_paths', []), with1('sensitive_paths', ['zzz']), with1('sensitive_paths', ['..']), null].map((c) => hits('.circleci/config.yml', c)[0].includes('ci')), [true, true, true, true]);
+
+const WRAP = (g, p) => ({ config: with1('sensitive_paths', ['merged']), global: { path: null, present: true, config: g }, project: { path: 'p', present: true, config: p } });
+check('loadConfig\'s {global, project} result is the layers [global.config, project.config]: an empty project list keeps the global glob, and the merged .config is not read', [
+  hits('zed/x', WRAP(with1('sensitive_paths', ['zed']), with1('sensitive_paths', [])))[0], hits('p/x', WRAP(with1('sensitive_paths', ['zed']), with1('sensitive_paths', ['p'])))[0],
+  hits('merged/x', WRAP({}, {}))[0], hits('zed/x', WRAP(with1('sensitive_paths', ['zed']), {}))[0], hits('zed/x', { global: {}, project: {} })[0],
+], [['config'], ['config'], [], ['config'], []]);
+
+console.log('== path facts: caps count the folded text ==');
+const FDFA = '\ufdfa'; // one character that folds to eighteen
+const L = with1('sensitive_paths', ['q']);
+check('a path whose fold exceeds the path cap is an unusable entry with the floor, one at the cap is usable', [one(FDFA.repeat(14)).denied, one(FDFA.repeat(14)).path, one(FDFA.repeat(13)).denied, one('a/'.repeat(119) + 'a').denied], [true, '', false, false]);
+check('a glob whose fold exceeds the glob cap is refused and named, and so is one whose raw text does though its fold is short; one at the cap is accepted', [hits('q/x', with1('sensitive_paths', [FDFA.repeat(6)]))[0], run(['a.js'], with1('sensitive_paths', [FDFA.repeat(6)])).refused,
+  run(['a.js'], with1('sensitive_paths', ['e\u0301'.repeat(51)])).refused, run(['a.js'], with1('sensitive_paths', [FDFA.repeat(5)])).refused], [[], ['sensitive_paths'], ['sensitive_paths'], []]);
+check('more layers than loadConfig supplies floor every path, and two do not', [run(['a.js'], [L, L, L]).files[0].denied, run(['a.js'], [L, L]).files[0].denied, run(['a.js'], [L, L]).files[0].path], [true, false, 'a.js']);
+check('a refused key is named in refused, once, and a valid or absent one is not', [run(['a.js'], sizing({ sensitive_paths: ['*.'], module_containers: 'x' })).refused, run(['a.js'], [with1('sensitive_paths', 5), with1('sensitive_paths', 6)]).refused, run(['a.js'], sizing({ sensitive_paths: ['q'] })).refused, run(['a.js']).refused], [['module_containers', 'sensitive_paths'], ['sensitive_paths'], [], []]);
 
 console.log('== path facts: the module override only splits ==');
 const PAIR = ['packages/a/x', 'packages/b/y'];
@@ -129,34 +147,42 @@ const HOSTILE = [
   with1('sensitive_paths', ['x'.repeat(10000)]), with1('sensitive_paths', ['x'.repeat(MAX_GLOB_CHARS + 1)]), with1('sensitive_paths', ['..']), with1('sensitive_paths', ['a/../b']), with1('sensitive_paths', ['/etc/passwd']),
   with1('sensitive_paths', ['C:\\x']), with1('sensitive_paths', ['\\x']), with1('sensitive_paths', 'abc'), with1('sensitive_paths', 5), with1('sensitive_paths', { a: 1 }), with1('sensitive_paths', [1]),
   with1('sensitive_paths', ['']), with1('sensitive_paths', ['/']), with1('sensitive_paths', ['.']), with1('sensitive_paths', ['./']), with1('sensitive_paths', ['a\u0000b']), with1('sensitive_paths', ['a\u202eb']), with1('sensitive_paths', Array(MAX_GLOBS + 1).fill('q')),
-  with1('sensitive_paths', [' ']), with1('sensitive_paths', ['. ']), with1('sensitive_paths', ['*.']), with1('sensitive_paths', ['a/**. /b']), with1('module_containers', [' ']), with1('module_containers', ['. ']),
+  with1('sensitive_paths', [' ']), with1('sensitive_paths', ['. ']), with1('sensitive_paths', ['*.']), with1('sensitive_paths', ['*/.']), with1('sensitive_paths', ['*\uff0f.']), with1('sensitive_paths', ['a/**. /b']), with1('module_containers', [' ']), with1('module_containers', ['. ']),
   with1('module_containers', ['a/b']), with1('module_containers', ['..']), with1('module_containers', ['a\\b']), with1('module_containers', 'src'),
   sizing({ sensitive_paths: ['good', '..'], module_containers: ['..'] }), with1('module_containers', ['*']), with1('module_containers', ['a*']), with1('module_containers', ['**']),
 ];
 const HOSTILE_PATHS = ['.env', 'good/x.js', 'services/a/x', 'services/b/y', 'q/z', 'src/routes/a.js', 'packages/a/x', 'packages/b/y', '../x', 'a/../b', 'etc/passwd', 'x', 'c:/x', 'a\u0000b', 'a\u202eb', 'a/b.js', 'a/c/x', 'a/d/y', 'x'.repeat(MAX_GLOB_CHARS + 1)];
 const baseline = run(HOSTILE_PATHS);
-check('a hostile section reads as the defaults: the same facts as no config', HOSTILE.map((c) => run(HOSTILE_PATHS, c)), HOSTILE.map(() => baseline));
+check('a hostile section reads as the defaults: the same facts as no config', HOSTILE.map((c) => ({ ...run(HOSTILE_PATHS, c), refused: [] })), HOSTILE.map(() => baseline));
 check('the caps are stated: a section at the limit is accepted', [hits('q', with1('sensitive_paths', Array(MAX_GLOBS).fill('q')))[0], hits('y'.repeat(MAX_GLOB_CHARS), with1('sensitive_paths', ['y'.repeat(MAX_GLOB_CHARS)]))[0]], [['config'], ['config']]);
 
 // Pathological shapes in their own process with a clock, so a hang is a failed check and not a stuck suite.
 const SHAPES = ['(a+)+$', '(a|aa)+$', 'a*a*a*a*a*a*a*a*a*a*b', '**/**/**/**/**/**/x', '*?*?*?*?*?*?*?*?c'];
-// The shape a config can make expensive: two layers (what loadConfig supplies) of MAX_GLOBS globs each (one of 31 adjacent **, the rest ** between
-// segments that keep every position alive) on paths of 120 segments with one trailing-dot segment, which a path is read twice for. 20 such paths
-// are 40 readings, as many as 40 plain paths; the cap allows 40 of them, about twice the cost, which this check does not time.
-// Measured worst case: 40 trailing-dot paths (the cap) take about 1.3 s in-process against the 1.5 s bound here, so this check times about half of it; a trailing dot plus a U+FF0F adds a third reading (40 such paths about 1.9 s), untimed.
-// Measured on the development machine: this shape takes about 0.75 s (child start included) with the bound at 1.5 s, and the quadratic mutant about 3.0 s: a margin of about 2x on each side.
-const GLOBS = Array.from({ length: MAX_GLOBS }, (_, i) => (i ? '**/a/'.repeat(19) : '**/'.repeat(31)) + 'z');
-const COST = { layers: [GLOBS, GLOBS], paths: Array(20).fill(`${'a/'.repeat(59)}a./${'a/'.repeat(59)}a`) };
 const VICTIMS = [`${'a'.repeat(32)}!`, 'a/'.repeat(100), 'a'.repeat(200)];
+// The real worst case under the caps (measured on the development machine): 40 paths, the cap, each of 119 segments with a trailing-dot segment and
+// a U+FF0F, so all four readings differ, against two full layers (what loadConfig supplies) of 32 globs that keep every position alive (`**/a/` x19 and one
+// of 31 adjacent **): about 2.5 s in-process, about 60 ms a path. The caps on the folded text are what bound it: before them a glob of `*` and 98 `?` against
+// U+FDFA paths took 17 s. This check times 20 such paths, about 1.3 s, against a 2.6 s bound; the quadratic-step mutant takes about 5.4 s: a margin of about 2x each side.
+// A caller with many paths bounds the total itself (escalation-facts reads the clock between chunks).
+const GLOBS = Array.from({ length: MAX_GLOBS }, (_, i) => (i ? '**/a/'.repeat(19) : '**/'.repeat(31)) + 'z');
+const WORST = `${'a/'.repeat(58)}a./${'a/'.repeat(30)}a／${'a/'.repeat(28)}a`;
+// Adjacent ** in a glob are one step: 64 globs of 31 of them on the same paths take about 0.12 s collapsed (40 paths) and about 2.2 s without the collapse; bound 1 s.
+const STARS = Array(MAX_GLOBS).fill(`${'**/'.repeat(31)}z`);
 const child = `import * as M from ${JSON.stringify(pathToFileURL(modPath).href)};
-const shapes = JSON.parse(process.argv[1]); const victims = JSON.parse(process.argv[2]); const cost = JSON.parse(process.argv[3]);
-console.log(JSON.stringify([...shapes.map((s) => M.classifyPaths(victims, { sizing: { sensitive_paths: [s] } }).sensitive), M.classifyPaths(cost.paths, cost.layers.map((globs) => ({ sizing: { sensitive_paths: globs } }))).sensitive]));`;
-const COST_BOUND_MS = 1500;
-// fact-sheet.sh sets SKIP_TIMED=mutant-run for the scratch mutants that this check does not name, so most of them need not wait for the child.
+const jobs = JSON.parse(process.argv[1]);
+console.log(JSON.stringify(jobs.map(({ paths, layers }) => M.classifyPaths(paths, layers.map((globs) => ({ sizing: { sensitive_paths: globs } }))).sensitive)));`;
+const timedJobs = (jobs, boundMs) => spawnSync(process.execPath, ['--input-type=module', '-e', child, JSON.stringify(jobs)], { encoding: 'utf8', timeout: boundMs });
+const outcome = (t) => (t.status === 0 ? JSON.parse(t.stdout) : `child ended ${t.status ?? t.signal}`);
+// fact-sheet.sh sets SKIP_TIMED=mutant-run for the scratch mutants that these checks do not name, so most of them need not wait for the child.
 // Only that exact value skips: a stray exported SKIP_TIMED=1 never turns the cost check off, here or when this lib is run directly.
-const timed = process.env.SKIP_TIMED === 'mutant-run' ? null : spawnSync(process.execPath, ['--input-type=module', '-e', child, JSON.stringify(SHAPES), JSON.stringify(VICTIMS), JSON.stringify(COST)], { encoding: 'utf8', timeout: COST_BOUND_MS });
-if (timed === null) skip('nested-quantifier shapes, star runs and two layers of the largest glob list', 'SKIP_TIMED=mutant-run is set by the mutation runs that do not name this check');
-else check('nested-quantifier shapes, star runs and two layers of the largest glob list on 120-segment paths finish inside the time bound and match nothing', timed.status === 0 ? JSON.parse(timed.stdout) : `child ended ${timed.status ?? timed.signal}`, [...SHAPES.map(() => []), []]);
+// Residual, stated: the stray-seam check there runs the real module with SKIP_TIMED=1, not a stale copy that is named like a sentinel; the guard is the exact comparison below.
+const skipTimed = process.env.SKIP_TIMED === 'mutant-run';
+const SHAPE_JOBS = SHAPES.map((s) => ({ paths: VICTIMS, layers: [[s]] }));
+if (skipTimed) skip('nested-quantifier shapes, star runs and two layers of the largest glob list', 'SKIP_TIMED=mutant-run is set by the mutation runs that do not name this check');
+else check('nested-quantifier shapes, star runs and two layers of the largest glob list on 119-segment paths with four readings finish inside the time bound and match nothing',
+  outcome(timedJobs([...SHAPE_JOBS, { paths: Array(20).fill(WORST), layers: [GLOBS, GLOBS] }], 2600)), [...SHAPES.map(() => []), []]);
+if (skipTimed) skip('adjacent ** segments in a glob are one step', 'SKIP_TIMED=mutant-run is set by the mutation runs that do not name this check');
+else check('adjacent ** segments in a glob are one step: 64 globs of 31 of them on 40 four-reading paths finish inside the time bound', outcome(timedJobs([{ paths: Array(40).fill(WORST), layers: [STARS, STARS] }], 1000)), [[]]);
 check('a nested-quantifier glob is literal text: it matches only itself', [hits('(a+)+$', with1('sensitive_paths', ['(a+)+$']))[0], hits('a', with1('sensitive_paths', ['(a+)+$']))[0]], [['config'], []]);
 
 console.log('== path facts: no content ==');
@@ -165,7 +191,7 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'path-facts-')); process.on('e
 fs.mkdirSync(path.join(dir, 'src')); fs.writeFileSync(path.join(dir, 'src/a.js'), SECRET); fs.writeFileSync(path.join(dir, '.env'), SECRET);
 const result = run(['src/a.js', '.env', 'src/b.js']);
 check('a result holds only the fixed fact fields, none of the file text', [JSON.stringify(result).includes(SECRET), Object.keys(result), Object.keys(result.files[0])], [false,
-  ['files', 'production_files', 'modules', 'sensitive', 'boundary', 'contract'], ['path', 'denied', 'production', 'module', 'sensitive', 'boundary', 'contract']]);
+  ['files', 'production_files', 'modules', 'sensitive', 'boundary', 'contract', 'refused'], ['path', 'denied', 'production', 'module', 'sensitive', 'boundary', 'contract']]);
 check('the module touches no filesystem API', /node:fs|readFile|openSync|statSync/.test(fs.readFileSync(modPath, 'utf8')), false);
 
 console.log(`SUMMARY ${pass + fail} ${fail}`);

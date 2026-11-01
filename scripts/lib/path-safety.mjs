@@ -37,7 +37,7 @@ export const REFUSAL_IDS = Object.freeze([
 
 const SEPARATORS = /[\\/]+/;
 // Cf includes ZWNJ and ZWJ: refusing them (they matter in some scripts) is deliberate, a hidden join is a spoof.
-const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
+export const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
 const ABSOLUTE = /^(?:[\\/]|[a-z]:)/i;
 const PARENT_SEGMENT = /^\.{2}[. ]*$/;
 // A bare `config` is allowed on purpose, though the secret-write hook denies it: this match is per segment, so `config`
@@ -48,7 +48,8 @@ const NAME_PREFIXES = ['.env', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', '.n
 const NAME_SUFFIXES = ['.pem', '.key', '.p12', '.pfx', '.crt', '.cer', '.der', '.jks', '.keystore', '.ppk', '.tfvars', '.kdbx', '.tfstate', '.tfstate.backup', '.p8', '.netrc', '.pgpass', '-key.json', 'credentials.json'];
 // Names the repository's own secret-write hook denies by pattern rather than by affix, and the common service-account
 // and OAuth client key files it does not name: the exact `key.json` (the GCP docs' default) and a `.tfstate.<n>.backup` copy.
-const NAME_PATTERN = /service[-_]?account.*\.json$|client_secret.*\.json$|secrets?\.(?:ya?ml|json)$|^key\.json$|\.tfstate\..*\.backup$/;
+// `[^]*`, not `.*`: a line terminator in the middle of a name must not stop the match (`.` does not match one).
+const NAME_PATTERN = /service[-_]?account[^]*\.json$|client_secret[^]*\.json$|secrets?\.(?:ya?ml|json)$|^key\.json$|\.tfstate\.[^]*\.backup$/;
 
 const segmentsOf = (raw) => raw.split(SEPARATORS).filter((s) => s !== '' && s !== '.');
 const trimDots = (s) => { let e = s.length; while (e > 0 && (s[e - 1] === '.' || s[e - 1] === ' ')) e--; return s.slice(0, e); };

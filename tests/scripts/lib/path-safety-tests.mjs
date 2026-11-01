@@ -86,6 +86,8 @@ const SECRET_NAMES = ['.env', 'cfg/.env.local', 'id_rsa', 'k/id_rsa.pub', 'id_ds
   'prod.netrc', 'x.pgpass', 'credentials.json', 'gcp/Credentials.JSON', 'service-account.json', 'service_account.json', 'serviceAccountKey.json', 'service-account-prod.json', 'client_secret.json', 'client_secret_123.apps.json', 'terraform.tfstate.backup', 'prod.tfstate.backup',
   'key.json', 'gcp/Key.JSON', 'key.json.', 'prod.tfstate.1600000000.backup'];
 check('denies .env, key and certificate file names and any .git segment', refusals(SECRET_NAMES), same(SECRET_NAMES.length, 'denied'));
+const TERMINATED = ['service-account\nprod.json', 'client_secret\u2028x.json', 'client_secret\r\ny.json', 'prod.tfstate.\n.backup', 'prod.tfstate.1\u2029.backup'];
+check('denies a name with a line terminator inside the matched span, and the refusal keeps the denied fact', [TERMINATED.filter((n) => !denyListed(n)), TERMINATED.map((n) => inspectPath(root, n).denied)], [[], same(TERMINATED.length, true)]);
 check('credentials/ is denied as a directory, with anything under it', ['credentials/token.txt', 'a/credentials/b/c', 'credentials\\x'].map(denyListed), same(3, true));
 check('does not deny look-alikes', ['.gitignore', '.github/workflows/a.yml', 'environment.md', 'src/keyboard.js', 'key.txt', 'sub/b.txt', 'a.pem.txt', 'notes~.txt', 'terraform.tf', '.aws.md', 'ssh/a'].map(denyListed), same(11, false));
 check('does not deny the look-alikes of the added names', ['credentials.md', 'account.json', 'service-account.md', 'service.json', 'netrc.md', 'netrc', 'pgpass', 'client_secret.md', 'client-secret.txt', 'a.tfstate.bak', 'notes.backup', 'tfstate.backup.md', 'credentials.json.md', 'monkey.json', 'key.json.md', 'prod.tfstate.1600000000.bak'].filter(denyListed), []);

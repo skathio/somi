@@ -27,12 +27,19 @@
 // `tests／x.js` is one segment and a file, never the directory `tests`. A second, re-split reading (fold, then split, as a
 // glob is read) is an extra one for glob hits only. Test directories and file names are judged on the primary reading
 // as written only, so neither a trimmed nor a re-split name can turn production code into a test.
-// Cost is bounded by the caps on glob count (per layer; `loadConfig` supplies two), glob length and path length, and
-// is at most four readings per path (two in the common case, one when the name has no trailing dot or space).
+// Cost is bounded by the caps on layers (MAX_LAYERS, which `loadConfig` fills), glob count per layer, and glob and path length
+// counted on the FOLDED text (NFKC grows a name: U+FDFA is 18 characters), so a path has at most MAX_PATH_CHARS folded characters
+// and, since a separator needs a character either side, at most 120 segments in any reading. A path over a cap is an unusable
+// entry with the floor, a glob over its cap is refused. At most four readings per path (two in the common case, one when the
+// name has no trailing dot or space). `**` runs in a glob are collapsed so a long run is one step.
+// `classifyPaths` takes `loadConfig`'s `{global, project}` result as it is, or an array of layers, or one layer; the merged `.config`
+// must never be passed (mergeConfig replaces an array between layers, so it would erase the user's own additions).
+// A layer key that is refused (one bad glob drops its whole key list) is reported in `refused` by key name, never silently.
 import { MAX_PATHS, MAX_PATH_CHARS, denyListed } from './path-safety.mjs';
 
 export const MAX_GLOBS = 32;
 export const MAX_GLOB_CHARS = 100;
+export const MAX_LAYERS = 2;
 export const BUILTIN_CONTAINERS = Object.freeze(['packages', 'apps', 'libs', 'src']);
 const DENY_LIST = 'deny_list';
 
@@ -45,6 +52,7 @@ const DEFAULTS = {
     crypto: ['*crypt*', '*cipher*'],
     migrations: ['migrations', 'migration*', 'migrate'],
     infra: ['.github', '.gitlab-ci.yml', 'dockerfile*', 'docker-compose*', '*.tf'],
+    ci: ['.github', '.gitlab', '.gitlab-ci.y*ml', '.gitea', '.forgejo', 'action.y*ml', '.circleci', '.travis.yml', 'azure-pipelines*.y*ml', '.azure-pipelines', 'bitbucket-pipelines.yml', 'jenkinsfile*', '*.jenkinsfile', '.buildkite', '.drone*.yml', '.woodpecker*', 'appveyor.yml', 'cloudbuild*.y*ml', 'buildspec*.y*ml', '.pre-commit-config.yaml'],
   },
   boundary: {
     routes: ['routes', 'route', 'route.*', 'router*', 'controllers', 'handlers', 'api', 'endpoints', 'middleware', 'webhook*', 'graphql'],
@@ -74,7 +82,8 @@ const trimmed = (segs) => segs.map(trim).filter(Boolean);
 // The readings a glob is tried against, without repeats (the common name has one or two, so the cost grows only for odd names).
 const readings = (raw) => { const p = split(raw); const r = resplit(raw); return [...new Map([p, trimmed(p), r, trimmed(r)].map((x) => [JSON.stringify(x), x])).values()]; };
 const globParts = (g) => trimmed(resplit(g));
-const compile = (glob) => (/[\\/]/.test(glob) ? globParts(glob) : ['**', ...globParts(glob)]);
+const collapse = (g) => g.filter((p, i) => p !== '**' || g[i - 1] !== '**');
+const compile = (glob) => collapse(/[\\/]/.test(glob) ? globParts(glob) : ['**', ...globParts(glob)]);
 const build = (byName) => Object.entries(byName).map(([name, globs]) => [name, globs.map(compile)]);
 const SENSITIVE = build(DEFAULTS.sensitive);
 const BOUNDARY = build(DEFAULTS.boundary);
@@ -119,34 +128,41 @@ const moduleOf = (segs, containers) => {
 
 const field = (o, k) => (o !== null && typeof o === 'object' && !Array.isArray(o) && Object.hasOwn(o, k) ? o[k] : undefined);
 // Shape checks on the text as written: a glob never reaches the filesystem, so `..` and absolute only need refusing.
-const widened = (g) => resplit(g).some((s) => { const t = trim(s); return t !== s && /^[*?]+$/.test(t); });
-const validGlob = (g) => !/[\p{C}\p{Zl}\p{Zp}]/u.test(g) && !/^(?:[\\/]|[a-z]:)/i.test(g) && !g.includes('..') && globParts(g).length > 0 && !widened(g);
+// `widened` reads the segments as written (a `.` segment included, which `parts` drops): `*.` and `*/.` both read as `*`.
+const wild = (s) => /^[*?]+$/.test(s);
+const widened = (g) => { const r = fold(g).split(/[\\/]+/).filter((x) => x !== ''); return r.some((s, i) => { const t = trim(s); return t !== s && (wild(t) || (t === '' && wild(r[i - 1] ?? ''))); }); };
+const validGlob = (g) => !/[\p{C}\p{Zl}\p{Zp}]/u.test(g) && !/^(?:[\\/]|[a-z]:)/i.test(g) && !g.includes('..') && fold(g).length <= MAX_GLOB_CHARS && globParts(g).length > 0 && !widened(g);
 // A container is exactly one plain segment (`services/`, `./services` and `services.` are `services`); anything else is no container.
 const containerName = (g) => { const s = globParts(g); return s.length === 1 && !/[*?]/.test(s[0]) ? s[0] : null; };
 const bounded = (v, ok) => Array.isArray(v) && v.length <= MAX_GLOBS && v.every((g) => typeof g === 'string' && g.length > 0 && g.length <= MAX_GLOB_CHARS && ok(g));
 
-// The additions of every layer; a key that is invalid adds nothing, and no layer or key affects another's.
+// loadConfig's `{global, project}` result is the layers [global.config, project.config]; otherwise an array is the layers and anything else one layer.
+const layersOf = (l) => (field(field(l, 'global'), 'config') !== undefined && field(field(l, 'project'), 'config') !== undefined ? [l.global.config, l.project.config] : Array.isArray(l) ? l : [l]);
+
+// The additions of every layer; a key that is invalid adds nothing (and is named in `refused`), and no layer or key affects another's.
 function additions(layers) {
-  const out = { sensitive: [], containers: [] };
-  for (const layer of Array.isArray(layers) ? layers : [layers]) {
+  const out = { sensitive: [], containers: [], refused: [] };
+  for (const layer of layers) {
     const sizing = field(layer, 'sizing');
     const globs = field(sizing, 'sensitive_paths') ?? [];
     const names = field(sizing, 'module_containers') ?? [];
-    if (bounded(globs, validGlob)) out.sensitive.push(...globs.map(compile));
-    if (bounded(names, (g) => validGlob(g) && containerName(g))) out.containers.push(...names.map(containerName));
+    if (bounded(globs, validGlob)) out.sensitive.push(...globs.map(compile)); else out.refused.push('sensitive_paths');
+    if (bounded(names, (g) => validGlob(g) && containerName(g))) out.containers.push(...names.map(containerName)); else out.refused.push('module_containers');
   }
   return out;
 }
 
 export function classifyPaths(paths, layers) {
-  const extra = additions(layers);
+  const layerList = layersOf(layers);
+  const extra = additions(layerList);
   const sensitive = [...SENSITIVE, ['config', extra.sensitive]];
   const containers = new Set([...BUILTIN_CONTAINERS, ...extra.containers]);
-  // A list that is not an array, or is over the count cap, is MAX_PATHS unusable entries: it floors instead of vanishing.
+  // A list that is not an array, or is over the count cap, or a config with more layers than MAX_LAYERS (a layer list that long
+  // is not what loadConfig gives, and dropping one would drop an addition), is MAX_PATHS unusable entries: it floors instead of vanishing.
   // An unusable entry is a module of its own (`/?<index>`: a key with a separator, which no real module key has), so the counts are the largest the cap allows.
-  const list = Array.isArray(paths) && paths.length <= MAX_PATHS ? paths : Array(MAX_PATHS).fill(null);
+  const list = Array.isArray(paths) && paths.length <= MAX_PATHS && layerList.length <= MAX_LAYERS ? paths : Array(MAX_PATHS).fill(null);
   const files = list.map((raw, i) => {
-    const usable = typeof raw === 'string' && raw.length <= MAX_PATH_CHARS;
+    const usable = typeof raw === 'string' && raw.length <= MAX_PATH_CHARS && fold(raw).length <= MAX_PATH_CHARS;
     const segs = usable ? split(raw) : [];
     const denied = !usable || denyListed(raw);
     const floor = denied ? [DENY_LIST] : [];
@@ -169,5 +185,6 @@ export function classifyPaths(paths, layers) {
     sensitive: names('sensitive'),
     boundary: names('boundary'),
     contract: names('contract'),
+    refused: [...new Set(extra.refused)].sort(),
   };
 }

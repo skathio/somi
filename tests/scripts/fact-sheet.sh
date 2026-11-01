@@ -77,13 +77,13 @@ ps 'the -key.json suffix over-matches key.json' 'does not deny look-alikes of th
 ps 'the credentials.json suffix not matched' "$T_REP" ", 'credentials.json'" ''
 ps 'the credentials.json suffix not matched (file in the name table)' "$T_ADDED" ", 'credentials.json'" ''
 ps 'the credentials.json suffix over-matches any json' 'does not deny look-alikes of those names' ", 'credentials.json'" ", '.json'"
-ps 'the service-account rule not matched' "$T_HOOK" 'service[-_]?account.*\.json$|' ''
-ps 'the service-account rule loses its extension' 'does not deny look-alikes of those names' 'service[-_]?account.*\.json$' 'service[-_]?account'
+ps 'the service-account rule not matched' "$T_HOOK" 'service[-_]?account[^]*\.json$|' ''
+ps 'the service-account rule loses its extension' 'does not deny look-alikes of those names' 'service[-_]?account[^]*\.json$' 'service[-_]?account'
 ps 'the service-account rule loses its underscore form' "$T_ADDED" 'service[-_]?account' 'service-?account'
 ps 'the service-account rule loses its optional separator' "$T_ADDED" 'service[-_]?account' 'service[-_]account'
 ps 'the service-account rule matches a bare account.json' "$T_LOOK" 'service[-_]?account' 'account'
-ps 'the client_secret rule not matched' "$T_ADDED" '|client_secret.*\.json$' ''
-ps 'the client_secret rule loses its extension' "$T_LOOK" 'client_secret.*\.json$' 'client_secret'
+ps 'the client_secret rule not matched' "$T_ADDED" '|client_secret[^]*\.json$' ''
+ps 'the client_secret rule loses its extension' "$T_LOOK" 'client_secret[^]*\.json$' 'client_secret'
 ps 'the .netrc suffix not matched' "$T_REP" " '.netrc', '.pgpass', '-key.json'" " '.pgpass', '-key.json'"
 ps 'the .netrc suffix not matched (name table)' "$T_ADDED" " '.netrc', '.pgpass', '-key.json'" " '.pgpass', '-key.json'"
 ps 'the .pgpass suffix not matched' "$T_REP" " '.pgpass', '-key.json'" " '-key.json'"
@@ -92,8 +92,12 @@ ps 'the .tfstate.backup suffix not matched' "$T_ADDED" " '.tfstate.backup'," ''
 ps 'the .tfstate.backup suffix over-matches any .backup' "$T_LOOK" "'.tfstate.backup'" "'.backup'"
 ps 'the exact key.json rule removed' "$T_ADDED" '|^key\.json$' ''
 ps 'the key.json rule unanchored' 'does not deny look-alikes of those names' '^key\.json$' 'key\.json$'
-ps 'the tfstate backup-copy rule removed' "$T_ADDED" '|\.tfstate\..*\.backup$' ''
-ps 'the tfstate backup-copy rule over-matches' "$T_LOOK" '\.tfstate\..*\.backup$' '\.tfstate\..*'
+ps 'the tfstate backup-copy rule removed' "$T_ADDED" '|\.tfstate\.[^]*\.backup$' ''
+ps 'the tfstate backup-copy rule over-matches' "$T_LOOK" '\.tfstate\.[^]*\.backup$' '\.tfstate\.[^]*'
+T_TERM='denies a name with a line terminator inside the matched span'
+ps 'the service-account rule stops at a line terminator' "$T_TERM" 'service[-_]?account[^]*\.json$' 'service[-_]?account.*\.json$'
+ps 'the client_secret rule stops at a line terminator' "$T_TERM" 'client_secret[^]*\.json$' 'client_secret.*\.json$'
+ps 'the tfstate backup-copy rule stops at a line terminator' "$T_TERM" '\.tfstate\.[^]*\.backup$' '\.tfstate\..*\.backup$'
 ps 'a bare config denied' 'a bare config stays allowed on purpose' "'.docker', 'credentials'];" "'.docker', 'credentials', 'config'];"
 ps 'credentials denied only as a file, not as a directory' 'credentials/ is denied as a directory' "return raw.split(SEPARATORS).some((segment) => {
     const folded = segment.normalize('NFKC').toUpperCase().toLowerCase();
@@ -203,7 +207,7 @@ ln -s "$PS" "$TMP/path-safety.mjs"   # a scratch copy of the module imports its 
 run_suite "$PFT" "$PF"
 # The timed cost check costs about a second a run, so only the mutants that name it run it.
 # SKIP_TIMED is honoured only as the value mutant-run (see the stray-seam check at the end).
-pf() { local skip_timed=mutant-run; case "$2" in *nested-quantifier*) skip_timed= ;; esac; SKIP_TIMED=$skip_timed mutate "$PFT" "$PF" "$@"; }
+pf() { local skip_timed=mutant-run; case "$2" in *nested-quantifier*|*adjacent*) skip_timed= ;; esac; SKIP_TIMED=$skip_timed mutate "$PFT" "$PF" "$@"; }
 T_FLAG='an unconfigured repo flags .env, a migrations directory, a lockfile and a route file'
 T_ADD='config globs are added to the built-ins, not instead of them'
 T_CONT='still two with an empty container list'
@@ -227,7 +231,7 @@ pf 'a test directory not recognised' 'a test file is not a production file' 'TES
 pf 'a test file name not recognised' 'a test file is not a production file' " || TEST_FILES.some((g) => segMatch(g, segs.at(-1) ?? ''))" ''
 pf 'the deny floor left out of the aggregates' "$T_DENY" 'const floor = denied ? [DENY_LIST] : [];' 'const floor = [];'
 pf 'a hostile entry not floored' "$T_UNUSABLE" 'const denied = !usable || denyListed(raw);' 'const denied = usable && denyListed(raw);'
-pf 'a list over the count cap classified' "$T_UNUSABLE" 'Array.isArray(paths) && paths.length <= MAX_PATHS ? paths' 'Array.isArray(paths) ? paths'
+pf 'a list over the count cap classified' "$T_UNUSABLE" 'Array.isArray(paths) && paths.length <= MAX_PATHS && ' 'Array.isArray(paths) && '
 pf 'a long path echoed' "$T_UNUSABLE" "path: usable ? raw : ''," 'path: raw,'
 pf 'the module key loses its container' 'one name under two containers' '`${segs[0]}/${segs[1]}`' 'segs[1]'
 pf 'the module count counts files' 'one name under two containers' 'modules: new Set(files.map((f) => f.module)).size' 'modules: files.length'
@@ -255,23 +259,37 @@ pf 'a glob with a slash not anchored' "$T_DIR" "/[\\\\/]/.test(glob) ? globParts
 pf 'a ** segment read as one segment' "$T_DIR" "part === '**'" 'part === "\0"'
 pf 'a ** step restarts from every position' 'nested-quantifier shapes' 'for (let k = Math.min(...at); k <= segs.length; k++) next.add(k);' 'for (const pos of at) for (let k = pos; k <= segs.length; k++) next.add(k);'
 pf 'a test directory named fixtures' 'a test file is not a production file' "'e2e', '__mocks__'" "'e2e', 'fixtures', '__mocks__'"
-pf 'layers read as the last one only' 'a later layer, valid, empty' 'Array.isArray(layers) ? layers : [layers]' 'Array.isArray(layers) ? layers.slice(-1) : [layers]'
+pf 'layers read as the last one only' 'a later layer, valid, empty' 'Array.isArray(l) ? l : [l]' 'Array.isArray(l) ? l.slice(-1) : [l]'
 pf 'one invalid key drops the whole layer' 'one invalid key drops only itself' 'if (bounded(globs, validGlob)) out' 'if (bounded(globs, validGlob) && bounded(names, validGlob)) out'
 pf 'an unusable list reported as one entry' 'an unusable list reports the counts' 'Array(MAX_PATHS).fill(null)' '[null]'
 pf 'a glob no longer matches what is under its directory' "$T_DIR" 'return at.size > 0;' 'return at.has(segs.length);'
 pf 'a star cannot backtrack' "$T_LIT" 'else if (star >= 0) { i = star + 1; j = ++mark; }' ''
 pf 'the matcher builds a regex from config text' "$T_LIT" 'function segMatch(p, s) {' 'function segMatch(p, s) { return new RegExp(`^${p.replace(/\*/g, ".*").replace(/\?/g, ".")}$`).test(s); }
 function segMatchUnused(p, s) {'
-pf 'the glob length cap removed' "$T_HOSTILE" ' && g.length <= MAX_GLOB_CHARS' ''
+pf 'the glob length cap removed' 'a glob whose fold exceeds the glob cap' ' && g.length <= MAX_GLOB_CHARS' ''
 pf 'the glob count cap off by one' "$T_HOSTILE" 'v.length <= MAX_GLOBS' 'v.length <= MAX_GLOBS + 1'
 pf 'a glob with .. accepted' "$T_HOSTILE" " && !g.includes('..')" ''
 pf 'an absolute glob accepted' "$T_HOSTILE" ' && !/^(?:[\\/]|[a-z]:)/i.test(g)' ''
 pf 'a glob with control characters accepted' "$T_HOSTILE" '!/[\p{C}\p{Zl}\p{Zp}]/u.test(g) && ' ''
 pf 'a non-array section accepted' "$T_HOSTILE" 'Array.isArray(v) && ' ''
+# the ci class, the layer cap and the folded caps
+T_CI='every CI system is a ci hit'
+pf 'the ci list emptied' "$T_CI" "ci: ['.github'," "cx: ['.github',"
+pf 'a CI system dropped from the ci list' "$T_CI" "'.circleci', " ''
+pf 'config removes the ci class' 'a config cannot remove the ci class' "const sensitive = [...SENSITIVE, ['config', extra.sensitive]];" "const sensitive = [...SENSITIVE.filter(([n]) => n !== 'ci' || extra.sensitive.length === 0), ['config', extra.sensitive]];"
+pf 'the loadConfig result read as one layer' "loadConfig's {global, project} result is the layers" '[l.global.config, l.project.config]' '[l.config]'
+pf 'the loadConfig result read as the global layer only' "loadConfig's {global, project} result is the layers" '[l.global.config, l.project.config]' '[l.global.config]'
+pf 'the path cap counts the raw text only' 'a path whose fold exceeds the path cap' ' && fold(raw).length <= MAX_PATH_CHARS' ''
+pf 'the glob cap counts the raw text only' 'a glob whose fold exceeds the glob cap' ' && fold(g).length <= MAX_GLOB_CHARS' ''
+pf 'the layer cap removed' 'more layers than loadConfig supplies' ' && layerList.length <= MAX_LAYERS' ''
+pf 'a refused key is not reported' 'a refused key is named in refused' "; else out.refused.push('sensitive_paths');" ';'
+pf 'a wildcard then a dot segment still widens nothing' "$T_HOSTILE" "(t === '' && wild(r[i - 1] ?? ''))" 'false'
+pf 'adjacent ** segments not collapsed' 'adjacent ** segments in a glob are one step' 'const compile = (glob) => collapse(' 'const compile = (glob) => ((x) => x)('
 
 # A stray exported seam must change nothing: the timed cost check and the real-hook parity check still run.
+# Stated residual: this runs the real module with a stray value, not a stale copy that is named like a sentinel; the guard under test is the exact comparison.
 stray="$(env SKIP_TIMED=1 SECRET_HOOK_SOURCE=/dev/null node "$PFT" "$PF" 2>&1; env SKIP_TIMED=1 SECRET_HOOK_SOURCE=/dev/null node "$PST" "$PS" 2>&1)"
-if grep -qF '  ok   nested-quantifier shapes' <<<"$stray" && grep -qF '  ok   the hook secret-name patterns and the representative table' <<<"$stray" && ! grep -qF '  skip nested-quantifier' <<<"$stray"; then ok 'a stray exported SKIP_TIMED and SECRET_HOOK_SOURCE skip and repoint nothing'; else bad 'a stray exported SKIP_TIMED or SECRET_HOOK_SOURCE changed a check'; fi
+if grep -qF '  ok   nested-quantifier shapes' <<<"$stray" && grep -qF '  ok   the hook secret-name patterns and the representative table' <<<"$stray" && ! grep -qF '  skip nested-quantifier' <<<"$stray" && ! grep -qF '  skip adjacent' <<<"$stray"; then ok 'a stray exported SKIP_TIMED and SECRET_HOOK_SOURCE skip and repoint nothing'; else bad 'a stray exported SKIP_TIMED or SECRET_HOOK_SOURCE changed a check'; fi
 
 total=$((pass + fail))
 echo "SUMMARY $total checks, $fail failed"

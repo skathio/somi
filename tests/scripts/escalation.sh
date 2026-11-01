@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guards scripts/lib/escalation.mjs. Runs its test lib, then proves the suite has teeth: every mutation of the module,
+# Guards scripts/lib/escalation.mjs and escalation-facts.mjs. Runs each test lib, then proves the suite has teeth: every mutation of the module,
 # applied to a scratch copy, must turn the test NAMED for it red (a mutant that fails some other way, or not at all, is
 # a failure). Hermetic: temp tree only, no network, no model.
 set -uo pipefail
@@ -119,6 +119,45 @@ if grep -qF -- "  FAIL $T_DOM" <<<"$out"; then ok 'a shrunk monotonicity domain 
 # A stray exported SKIP_DOMAIN must not turn the exhaustive checks off.
 stray="$(SKIP_DOMAIN=1 node "$EST" "$ES" 2>&1)"
 if grep -qF "  ok   $T_DOM" <<<"$stray" && ! grep -qF '  skip ' <<<"$stray"; then ok 'a stray exported SKIP_DOMAIN skips nothing'; else bad 'a stray exported SKIP_DOMAIN skipped a check'; fi
+
+# ---- scripts/lib/escalation-facts.mjs ----
+echo "== escalation facts =="
+EF="$ROOT/scripts/lib/escalation-facts.mjs"; EFT="$ROOT/tests/scripts/lib/escalation-facts-tests.mjs"
+ln -s "$ROOT/scripts/lib/path-facts.mjs" "$TMP/path-facts.mjs"; ln -s "$ROOT/scripts/lib/path-safety.mjs" "$TMP/path-safety.mjs"; ln -s "$ES" "$TMP/escalation.mjs"   # a scratch copy imports its siblings
+run_suite "$EFT" "$EF"
+ef() { mutate "$EFT" "$EF" "$@"; }
+TF_ROWS='a new 40-line file sizes nothing'; TF_DENY='a deleted .env, a renamed id_rsa'; TF_HARD='each hard-surface id comes from its path'; TF_CI='CI paths raise security as a sensitive name'
+TF_WEAK='tests_weakened: a moved test'; TF_TOP='a top directory is new only when'; TF_IGN='.somi and .claude rows are ignored'; TF_CFG='through the real loadConfig'; TF_PLAN='plan inputs: a plan directory'
+TF_HOST='a path over the length cap, a control character'; TF_MANY='10,000 rows, a non-list'; TF_BOX='a time box that runs out returns the floor'
+ef 'the contract class not mapped' "$TF_HARD" "const KINDS = ['sensitive', 'boundary', 'contract'];" "const KINDS = ['sensitive', 'boundary'];"
+ef 'the boundary class not mapped' "$TF_ROWS" "const KINDS = ['sensitive', 'boundary', 'contract'];" "const KINDS = ['sensitive', 'contract'];"
+ef 'CI routed only into classes.ci' "$TF_CI" 'sensitive: names(seen.sensitive),' "sensitive: names(new Set([...seen.sensitive].filter((n) => n !== 'ci'))),"
+ef 'the ci list emptied' "$TF_CI" "ci: seen.sensitive.has('ci') ? ['ci'] : []" 'ci: []'
+ef 'the status letter ignored for deleted tests' "$TF_WEAK" "if (r.status === 'D') f.test_files_deleted++;" 'f.test_files_deleted++;'
+ef 'the status letter ignored for new directories' "$TF_TOP" "&& r.status === 'A'" ''
+ef 'denied computed after the status filter' "$TF_DENY" 'f.denied ||= c.denied;' "f.denied ||= c.denied && r.status !== 'D';"
+ef 'the production split ignored' '151 production lines flag the size mark' 'if (c.production) {' 'if (true) {'
+ef 'the module count dropped' "$TF_TOP" 'modules.add(c.module);' ''
+ef 'the .somi ignore removed' "$TF_IGN" "['.somi', '.claude'].includes(file.split('/')[0])" 'false'
+ef 'an ignored row no longer floors a denied name' "$TF_IGN" 'f.denied ||= denyListed(r.file);' ';'
+ef 'the quoted-name rule removed' 'a git-quoted name is an unusable row' "&& !r.file.startsWith('\"')" ''
+ef 'the control-character check removed' "$TF_HOST" ' && !UNSAFE_CHARS.test(r.file)' ''
+ef 'the path length check removed' "$TF_HOST" 'r.file.length > 0 && r.file.length <= MAX_PATH_CHARS' 'r.file.length > 0'
+ef 'the row cap removed' "$TF_MANY" 'rows.length > MAX_ROWS' 'false'
+ef 'the config not passed on' "$TF_CFG" 'classifyPaths(chunk.map((r) => r.file), opts.config)' 'classifyPaths(chunk.map((r) => r.file))'
+ef 'a refused config key not reported' 'a refused config key is reported as a note' "if (result.refused.length > 0) notes.add('config_refused');" ''
+ef 'the time box removed' "$TF_BOX" 'if (Date.now() - start >= budget) return' 'if (false) return'
+ef 'the time box returns the partial facts' "$TF_BOX" "return { facts: floor(plan), notes: ['time_box'] };" 'break;'
+ef 'the floor lets test lines switch tests_weakened off' 'every degraded result covers a full read' 'test_lines_added: 0, test_files_changed: 0, ' ''
+ef 'a config with too many layers read as a short chunk' 'every degraded result covers a full read' 'if (result.files.length !== chunk.length)' 'if (false)'
+ef 'the chunk step skips a row' 'rows past the first chunk are read' 'at += CHUNK) {' 'at += CHUNK + 1) {'
+ef 'the chunk loop stops after the first chunk' 'rows past the first chunk are read' 'at += CHUNK) {' 'at += 1000) {'
+ef 'the .claude/ rows left ignored' "$TF_IGN" "(f.startsWith('.claude/') && !f.startsWith('.claude/plugins/somi/')) ||" ''
+ef '.somi/config.json left ignored' "$TF_IGN" " || f === '.somi/config.json'" ''
+ef 'an internal error without its note' 'an unexpected error is the floor' "notes: ['internal_error']" 'notes: []'
+ef 'an unusable target no longer raises' "$TF_PLAN" "typeof target !== 'string' || target.length > MAX_PATH_CHARS || " ''
+ef 'the plan-paths input ignored' 'plan and sdlc sources' 'plan_paths: given(planPaths)' 'plan_paths: false'
+ef 'the slug input ignored' 'plan and sdlc sources' 'slug_given: given(slug)' 'slug_given: false'
 
 total=$((pass + fail))
 echo "SUMMARY $total checks, $fail failed"
