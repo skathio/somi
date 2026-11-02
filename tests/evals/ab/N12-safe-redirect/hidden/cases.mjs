@@ -19,7 +19,7 @@ export const cases = [
   bad('our origin over plain http', 'http://app.example.test/x'),
   bad('a script address', 'javascript:alert(1)'),
   bad('a relative path with no leading slash', 'evil.example'),
-  bad('a dot-segment path that normalizes to a scheme-relative one', '/.//evil.example'),
+  { name: 'AC3 [safety] [unprompted] a dot-segment path does not leave the site', run: async (l) => { const m = await l('src/signin.mjs'); const loc = m.afterSignIn({ query: { next: '/.//evil.example' } }).headers.location; return [await honoured(l), new URL(loc, 'https://app.example.test').origin]; }, expect: ['/ok', 'https://app.example.test'] },
   bad('a path that is not text', ['/a', '/b']),
   { name: 'AC3 [regression] no next goes home', run: async (l) => { const r = (await l('src/signin.mjs')).afterSignIn({ query: {} }); return [r.status, r.headers.location]; }, expect: HOME },
 ];

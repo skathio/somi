@@ -9,7 +9,7 @@
 //                    [--review-model ID] [--plugin-41 DIR] [--env-file FILE] [--timeout-min N] [--quiet-wait-min 90]
 //                    [--claude PATH --no-sandbox --tasks ID,ID]   a stub agent, for proving the harness without spending anything
 //   bench.mjs record takes what run takes: runs chunks to the end or a stop, then writes the record and the report skeleton
-//   bench.mjs select --pilot DIR [--allow-short]                                      writes task-set.json from a pilot
+//   bench.mjs select --pilot DIR[,DIR] [--allow-short]                                      writes task-set.json from a pilot
 //   bench.mjs prereg                                                                  binds task-set.json into prereg.json
 //   bench.mjs report --out DIR [--write DIR]                                          prints the report, or writes the record
 //   bench.mjs decide --aa DIR --main DIR                                              the release rule; exit 0 only when it ships
@@ -236,7 +236,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   if (!args.model || !/^[A-Za-z0-9][A-Za-z0-9._:[\]-]*$/.test(args.model)) throw new Error('--model is required');
   if (!stub && !isFullModelId(args.model)) throw new Error('--model must be a full model id, not an alias: an alias can move between recordings');
   const pins = [args.model, ...(args['review-model'] ? [args['review-model']] : [])];
-  if (args.tasks && !stub) throw new Error('--tasks is for stub runs: a paid recording runs its whole plan');
+  if (args.tasks && !stub && phase !== 'pilot') throw new Error('--tasks is for a pilot or a stub: a paid recording runs its whole plan');
   if (!args.out) throw new Error('--out is required');
   const budgetTotal = Number(args['budget-total']);
   if (!(budgetTotal > 0)) throw new Error('--budget-total is required');
@@ -375,6 +375,17 @@ const gitChanged = (ws) => {
 
 const completed = (dir) => readResults(dir).filter((r) => !r.halted).map((r) => ({ ...r, draw: r.k }));
 
+// Several pilots read as one. A task edited after its probe is probed again, and only its newest draws count, so a later directory replaces
+// an earlier one task by task.
+export function pilotRows(dirs, read = completed) {
+  const byTaskId = new Map();
+  for (const dir of dirs) {
+    const groups = Map.groupBy(read(dir), (r) => r.task);
+    for (const [task, rows] of groups) byTaskId.set(task, rows);
+  }
+  return [...byTaskId.values()].flat();
+}
+
 // A comparison across recordings means nothing unless both ran on the same model, the same host and the same rule.
 export function comparableRecordings(aaDir, mainDir) {
   const meta = (d) => { const { model, review_model: review, rule, host } = readJson(path.join(d, 'plan.json')); return JSON.stringify({ model, review, rule, host }); };
@@ -495,7 +506,7 @@ async function main(argv) {
   if (command === 'select') {
     if (!args.pilot) throw new Error('--pilot is required');
     const reg = readJson(PREREG);
-    const picked = selectTasks(completed(args.pilot), liveCandidates(readJson(CANDIDATES).tasks), { want: reg.tasks_wanted, minBoundary: reg.min_boundary, k: reg.pilot_k });
+    const picked = selectTasks(pilotRows(args.pilot.split(',')), liveCandidates(readJson(CANDIDATES).tasks), { mix: reg.mix, minBoundary: reg.min_boundary, k: reg.pilot_k });
     console.log(JSON.stringify({ kept: picked.tasks.length, boundary: picked.boundary, strata: picked.strata, shortfalls: picked.shortfalls }));
     if (picked.shortfalls.length > 0 && !args['allow-short']) { console.error('the set falls short; author more tasks, or pass --allow-short to record the shortfall'); return 1; }
     fs.writeFileSync(TASK_SET, `${JSON.stringify({ tasks: picked.tasks, hardest: picked.hardest, shortfalls: picked.shortfalls }, null, 2)}\n`);

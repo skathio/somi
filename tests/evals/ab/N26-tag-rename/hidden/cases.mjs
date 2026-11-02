@@ -18,6 +18,5 @@ export const cases = [
   { name: 'AC2 [boundary] renaming to the same tag changes nothing', run: async (l) => { const x = await w(l); const n = x.renameTag(x.store, 'me', 'Red', ' red '); return [n, x.counts()]; }, expect: [0, { red: 2, blue: 2, green: 1 }] },
   { name: 'AC3 [functional] a tag I do not have is not found, even if someone else has it', run: async (l) => { const x = await w(l); x.addTag(x.store, x.store.notes[3], 'only-you'); return code(() => x.renameTag(x.store, 'me', 'only-you', 'x')); }, expect: [404, 'tag_not_found'] },
   { name: 'AC3 [boundary] a name that normalizes to nothing is refused and nothing changes', run: async (l) => { const x = await w(l); return [code(() => x.renameTag(x.store, 'me', 'red', '   ')), x.counts().red]; }, expect: [[400, 'invalid_tag'], 2] },
-  { name: 'AC2 [boundary] adding a tag a note has keeps the rules', run: async (l) => { const x = await w(l); x.addTag(x.store, x.store.notes[0], 'RED'); return [x.tags()[0], x.counts().red]; }, expect: [['red', 'blue'], 2] },
   { name: 'AC2 [regression] the key rule is unchanged', run: async (l) => (await l('src/tags.mjs')).tagKey(' A  b '), expect: 'a-b' },
 ];

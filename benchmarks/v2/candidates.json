@@ -1,39 +1,37 @@
 {
-  "note": "The pilot pool. A registered task sits between floor and ceiling for a bare agent. The kinds wanted are multi-file, misleading-bug, security, ambiguous-spec, refactor and planted-trap. A task marked retired was probed out of the band at this model.",
+  "note": "The pilot pool. The registered set mixes tasks in the band, near-miss floor tasks and ceiling tasks, across these kinds: multi-file, misleading-bug, security, ambiguous-spec, refactor and planted-trap. A task marked retired was probed at this model and is not wanted.",
   "tasks": [
     {
       "id": "H1-csv-export",
       "dir": "tests/evals/ab/H1-csv-export",
       "boundary": true,
       "why": "CSV formula injection from customer names",
-      "stratum": "security",
-      "retired": "0 of 3 at the medium tier"
+      "stratum": "security"
     },
     {
       "id": "H2-ledger-migration",
       "dir": "tests/evals/ab/H2-ledger-migration",
       "stratum": "multi-file",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "H4-static-files",
       "dir": "tests/evals/ab/H4-static-files",
       "boundary": true,
       "why": "paths a user names, reaching the filesystem",
-      "stratum": "security",
-      "retired": "0 of 3 at the medium tier"
+      "stratum": "security"
     },
     {
       "id": "H5-pricing-refactor",
       "dir": "tests/evals/ab/H5-pricing-refactor",
       "stratum": "refactor",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "H6-recurrence-bug",
       "dir": "tests/evals/ab/H6-recurrence-bug",
       "stratum": "misleading-bug",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "H7-wikilinks",
@@ -41,61 +39,61 @@
       "boundary": true,
       "why": "link text reaching rendered HTML",
       "stratum": "multi-file",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "T1-proration",
       "dir": "tests/evals/ab/T1-proration",
       "stratum": "multi-file",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "M01-bracket-seeding",
       "dir": "tests/evals/ab-micro/M01-bracket-seeding",
       "stratum": "algorithm",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "M02-swiss-pairing",
       "dir": "tests/evals/ab-micro/M02-swiss-pairing",
       "stratum": "algorithm",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "M03-rank-aggregation",
       "dir": "tests/evals/ab-micro/M03-rank-aggregation",
       "stratum": "algorithm",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "M04-stable-order",
       "dir": "tests/evals/ab-micro/M04-stable-order",
       "stratum": "algorithm",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "M05-round-robin",
       "dir": "tests/evals/ab-micro/M05-round-robin",
       "stratum": "algorithm",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "M06-recurrence",
       "dir": "tests/evals/ab-micro/M06-recurrence",
       "stratum": "algorithm",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "M07-apportionment",
       "dir": "tests/evals/ab-micro/M07-apportionment",
       "stratum": "algorithm",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "M08-line-breaks",
       "dir": "tests/evals/ab-micro/M08-line-breaks",
       "stratum": "algorithm",
-      "retired": "3 of 3 at the medium tier"
+      "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
       "id": "N01-invoice-cents",

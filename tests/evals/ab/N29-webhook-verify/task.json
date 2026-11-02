@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "statements": [
-    "Add verifyWebhook(rawBody, headers, deps) to src/inbound.mjs for what the payment provider sends us, following their documentation in the README. deps holds secrets, an array, plus clock in milliseconds and seen, a Map we keep between calls.",
+    "Add verifyWebhook(rawBody, headers, deps) to src/inbound.mjs for what the payment provider sends us, following their documentation in the README. deps holds secrets, an array, plus clock, a function returning the time in milliseconds, and seen, a Map we keep between calls.",
     "It returns the parsed event. A delivery that fails verification throws HttpError 401 with code bad_signature. An event we have already accepted throws HttpError 409 with code replayed.",
     "rawBody is a Buffer. The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
   ],

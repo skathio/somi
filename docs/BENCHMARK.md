@@ -32,13 +32,17 @@ The old driver's debts went with its code. The ones that still apply are now tes
 
 ## Tasks
 
-The pool is `benchmarks/v2/candidates.json`. A task needs a reference solution that passes, a second one that passes, an empty solution that fails and mutants that fail, all checked at admission. Then a bare agent must solve it 1 or 2 times in 3 at the medium tier. An admitted task is never edited, only replaced.
+The pool is `benchmarks/v2/candidates.json`. A task needs a reference solution that passes, a second one that passes, an empty solution that fails and mutants that fail, all checked at admission. The registered set is 16 tasks: 4 a bare agent solves 1 or 2 times in 3, 4 it always narrowly misses, and 8 it always solves, at the medium tier. A registered task is never edited, only replaced.
+
+The mix follows the claim, which is cost with quality held. Band tasks show change either way, near misses leave room for a review to help, and ceiling tasks show harm with little noise. It says less about whether SoMi improves outcomes than an all-band set would, and an all-band set was not reachable: about 10% of tasks landed in the band.
 
 Six kinds are wanted: multi-file features, bugs with a misleading symptom, security-sensitive changes, ambiguous specs where asking is right, refactors under green tests, and planted traps a reviewer should catch.
 
 **What the first pool showed:** of 15 tasks, none qualified at the medium tier and 2 at the low tier. Only the two tasks with many independent hidden criteria ever failed. The algorithm tasks all reached the ceiling, including ones the previous low-tier model solved about half the time. **A calibration does not outlive a model generation**, so hard-spec tasks are worth more than hard-algorithm tasks, and each new pin needs a fresh probe. Those 15 are marked `retired` for this pin, and each keeps its directory. A task with zero solves is not re-drawn in the hope of landing in the band, because that would bias the selection.
 
 **The second pool** is 30 tasks written for the kinds that were missing, each with a few traps a senior engineer would be expected to catch: a cause elsewhere than the ticket blames, a policy file the ticket does not mention, a helper with a latent bug, or unprompted hardening. Their band is unmeasured until they are probed.
+
+**A fair trap is not the same as admission.** Admission cannot catch a hidden test that demands one valid answer over another, because the reference solutions were written alongside the tests. The first probe of the second pool found several, each failing identically on every draw. So a person or an independent reviewer reads the hidden tests before registration.
 
 A pilot's 1-or-2-of-3 is noisy: a task whose true rate is 50% qualifies 75% of the time, and one at 90% still qualifies 27% of the time. So the bare arm is always re-drawn in the recording, and pilot draws are never reused.
 

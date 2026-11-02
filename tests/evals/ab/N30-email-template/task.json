@@ -3,6 +3,7 @@
   "statements": [
     "Our emails go out as HTML now, and customer names broke one last week. Add renderHtml(template, data, options) to src/template.mjs, which fills in a template the way renderText does and makes the result safe as HTML.",
     "{{{name}}} puts a value in unescaped, but only for the names in options.trusted. For anything else it is treated like {{name}}.",
+    "In renderHtml only a plain value of the data shows, so a name that reaches an object, a list or anything inherited is empty.",
     "renderText keeps working exactly as it does now, because plain-text emails must not show entities.",
     "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
   ],

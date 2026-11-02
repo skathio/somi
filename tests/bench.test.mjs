@@ -6,7 +6,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { REPO, makeRepo, writeFiles } from './helpers.mjs';
 import { armSummary, callRatio, testShare, costDrawsPerArm, evaluateAa, evaluateRelease, holm, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, pairedDifference, passDrawsPerArm, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
-import { liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
+import { pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
 import { adherence, agentSplit, journalFacts, labelDraw, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
 
 // Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
@@ -93,13 +93,29 @@ test('the release rule refuses each failure, and says which', () => {
   assert.match(gaveUp.reasons.join(), /no valid score/);
 });
 
-test('selection keeps tasks between floor and ceiling, boundary tasks first, and names shortfalls', () => {
-  const candidates = [{ id: 't0' }, { id: 't1', boundary: true }, { id: 't2' }, { id: 't3' }];
-  const pilot = drawsFor('bare', [3, 2, 0, 1]);
-  const picked = selectTasks(pilot, candidates);
-  assert.deepEqual(picked.tasks.map((t) => t.id), ['t1', 't3']);
-  assert.equal(picked.shortfalls.length, 2);
-  assert.deepEqual(picked.hardest, ['t3', 't1']);
+test('selection fills each part of the mix, boundary tasks first, and names shortfalls', () => {
+  const candidates = [{ id: 't0', stratum: 'a' }, { id: 't1', boundary: true, stratum: 'a' }, { id: 't2', stratum: 'a' }, { id: 't3', stratum: 'a' }, { id: 't4', stratum: 'a' }];
+  const pilot = [...drawsFor('bare', [3, 2, 0, 1]), ...drawsFor('bare', [0, 0, 0, 0, 0], { missed: 8 }).filter((r) => r.task === 't4')];
+  const picked = selectTasks(pilot, candidates, { mix: { band: 1, floor: 2, ceiling: 1 } });
+  assert.deepEqual(picked.tasks.map((t) => t.id), ['t1', 't2', 't0']);
+  assert.deepEqual(picked.shortfalls, ['1 floor tasks, 2 wanted', '1 trust-boundary tasks, 4 wanted']);
+  assert.deepEqual(picked.hardest, ['t2', 't1', 't0']);
+});
+
+test('selection lets kinds take turns', () => {
+  const candidates = [{ id: 'a1', stratum: 'a' }, { id: 'a2', stratum: 'a' }, { id: 'b1', stratum: 'b' }];
+  const rows = ['a1', 'a2', 'b1'].flatMap((task) => drawsFor('bare', [3]).map((r) => ({ ...r, task })));
+  assert.deepEqual(selectTasks(rows, candidates, { mix: { ceiling: 2 } }).tasks.map((t) => t.id), ['a1', 'b1']);
+});
+
+test('a later pilot replaces an earlier one task by task', () => {
+  const dirs = { old: [{ task: 'x', solved: false }, { task: 'y', solved: true }], new: [{ task: 'x', solved: true }] };
+  assert.deepEqual(pilotRows(['old', 'new'], (d) => dirs[d]).map((r) => [r.task, r.solved]), [['x', true], ['y', true]]);
+});
+
+test('a paid recording cannot run part of its plan, and only a pilot can', () => {
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'aa', '--out', 'x', '--model', 'claude-x-5-5', '--budget-total', '1', '--go', '--tasks', 'a'], { encoding: 'utf8' });
+  assert.match(r.stderr, /--tasks is for a pilot or a stub/);
 });
 
 test('the main plan gives 4.1 fewer draws, in the same rounds', () => {

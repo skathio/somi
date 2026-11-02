@@ -98,21 +98,41 @@ export function evaluateRelease({ aa, main, candidate = 'somi5', baseline = 'bar
   return { ships: reasons.length === 0, reasons, aa: floor, token_ratio: ratio, solved, test_share: share, arms: { [candidate]: cand, [baseline]: base } };
 }
 
-// Keep tasks between floor and ceiling: bare solves 1 or 2 of k, so an arm has room to do better or worse.
-export function selectTasks(pilotRows, candidates, { want = 16, minBoundary = 4, k = K_DRAWS } = {}) {
+// The set is mixed on purpose. Tasks in the band show change either way, tasks a bare agent always misses leave room for a review to help,
+// and tasks it always solves show harm with little noise. A floor task must be a near miss: passing under half its tests says the task
+// is broken or out of reach, not that one trap decided it.
+const FLOOR_MIN_SHARE = 0.5;
+export function selectTasks(pilotRows, candidates, { mix = { band: 4, floor: 4, ceiling: 8 }, minBoundary = 4, k = K_DRAWS } = {}) {
   const tasks = byTask(pilotRows);
-  const offCeiling = candidates.filter((c) => {
+  const classOf = (c) => {
     const list = tasks.get(c.id);
-    if (!list || list.length !== k) return false;
+    if (!list || list.length !== k) return null;
     const solved = list.filter((r) => r.solved).length;
-    return solved >= 1 && solved < k;
-  });
-  const boundaryFirst = [...offCeiling].sort((a, b) => Number(Boolean(b.boundary)) - Number(Boolean(a.boundary)) || a.id.localeCompare(b.id));
-  const kept = boundaryFirst.slice(0, want);
+    if (solved === k) return 'ceiling';
+    if (solved > 0) return 'band';
+    return list.reduce((s, r) => s + testShare(r), 0) / k >= FLOOR_MIN_SHARE ? 'floor' : null;
+  };
+  // Within a class the kinds take turns and trust-boundary tasks go first, so no one kind fills the set.
+  const take = (name, n) => {
+    const pool = candidates.filter((c) => classOf(c) === name).sort((a, b) => Number(Boolean(b.boundary)) - Number(Boolean(a.boundary)) || a.id.localeCompare(b.id));
+    const picked = [];
+    const kinds = [...new Set(pool.map((c) => c.stratum))];
+    for (let round = 0; picked.length < Math.min(n, pool.length); round++) {
+      for (const kind of kinds) {
+        const next = pool.filter((c) => c.stratum === kind)[round];
+        if (next && picked.length < n) picked.push(next);
+      }
+    }
+    return picked;
+  };
+  const kept = Object.entries(mix).flatMap(([name, n]) => take(name, n));
   const boundary = kept.filter((c) => c.boundary).length;
   const shortfalls = [];
   const strata = [...new Set(kept.map((c) => c.stratum).filter(Boolean))].sort();
-  if (kept.length < want) shortfalls.push(`${kept.length} off-ceiling tasks, ${want} wanted`);
+  for (const [name, n] of Object.entries(mix)) {
+    const got = kept.filter((c) => classOf(c) === name).length;
+    if (got < n) shortfalls.push(`${got} ${name} tasks, ${n} wanted`);
+  }
   if (boundary < minBoundary) shortfalls.push(`${boundary} trust-boundary tasks, ${minBoundary} wanted`);
   // The hardest are the ones a bare agent solved least, then the ones where it passed the smallest share of tests.
   const hardness = (c) => { const list = tasks.get(c.id); return [list.filter((r) => r.solved).length, list.reduce((s, r) => s + testShare(r), 0)]; };

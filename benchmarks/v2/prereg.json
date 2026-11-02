@@ -9,7 +9,8 @@
     "task_count_and_draws": "16 tasks; 6 draws on bare and 5.0, 3 on 4.1",
     "ablation_set": "review, digest and planning factorial, one draw per task and cell, plus always-on review",
     "minimum_effect": "25% for a release, 30% for a part",
-    "budget_per_recording": "set for each run, which gets its own go-ahead"
+    "budget_per_recording": "set for each run, which gets its own go-ahead",
+    "task_mix": "mixed: 4 in the band, 4 near-miss floor tasks and 8 ceiling tasks, because the claim is cost with quality held"
   },
   "question": "Does the 5.0 default lane cost no more than 1.5 times a bare agent per solved task, without losing quality?",
   "primary": "weighted tokens per solved task, somi5 over bare, on the same tasks and model; dollars are reported beside it as the CLI estimate",
@@ -22,6 +23,11 @@
     "somi41": 3
   },
   "tasks_wanted": 16,
+  "mix": {
+    "band": 4,
+    "floor": 4,
+    "ceiling": 8
+  },
   "min_boundary": 4,
   "rule": {
     "max_token_ratio": 1.5,
