@@ -56,8 +56,8 @@
 //   2. A path is absolute if it starts with `/` or a drive letter (`C:/`); anything else is
 //      joined to projectRoot() (also slash-converted). The test is a literal one, deliberately
 //      not `path.isAbsolute()`, so the result does not depend on the platform running the hook.
-//   3. path.posix.normalize() then collapses `..`, `.` and `//`, so `.somi/plans/../state/
-//      x` cannot hide from a glob. A drive-letter path is normalized as it stands: posix
+//   3. path.posix.normalize() then collapses `..`, `.` and `//`, so a path that climbs back
+//      into a protected folder cannot hide from a glob. A drive-letter path is normalized as it stands: posix
 //      resolve() would take it for a relative path and prefix the current directory.
 //   4. Climbing past a drive root (`a:/../.git/config`) leaves a relative result, which no `*/`-led
 //      glob matches; a result that is neither `/`-led nor drive-led gets a leading `/`.
@@ -155,7 +155,7 @@ function checkPath(payload, tool, target) {
 
   for (const { glob, re, own } of PROTECTED_PATTERNS) {
     // The trailing-slash form catches a write at a protected directory's own path (`.git` as a worktree's
-    // pointer file, `.somi/state`), which the globs' `/*` would otherwise need a child for.
+    // pointer file, the state folder), which the globs' `/*` would otherwise need a child for.
     if (re.test(pathInput) || (own && re.test(`${pathInput}/`))) {
       const next = nextStep(glob);
       denyPretool(payload, `somi refused to ${tool} \`${pathInput}\`: this path matches a protected glob (\`${glob}\`).
