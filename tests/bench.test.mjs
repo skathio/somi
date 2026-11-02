@@ -6,7 +6,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { REPO, makeRepo, writeFiles } from './helpers.mjs';
 import { armSummary, evaluateAa, evaluateRelease, pairedDifference, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
-import { abandonedArms, armPrompt, buildPlan, preregProblem, sha256, streamUsage } from '../benchmarks/v2/bench.mjs';
+import { abandonedArms, armPrompt, buildPlan, isQuiet, preregProblem, sha256, streamUsage } from '../benchmarks/v2/bench.mjs';
 
 // Three draws per task for one arm, from a list of solved counts per task.
 function drawsFor(arm, solvedCounts, { weighted = 100 } = {}) {
@@ -110,6 +110,12 @@ test('each arm gets the same task text, with only the front door added', () => {
   assert.equal(armPrompt('bare-a', 'do it'), 'do it');
   assert.equal(armPrompt('somi5', 'do it'), '/somi:task do it');
   assert.equal(armPrompt('somi41', 'do it'), '/somi:ship-loop do it');
+});
+
+test('a recording counts the machine as quiet only under half its cores', () => {
+  assert.equal(isQuiet(3.9, 8), true);
+  assert.equal(isQuiet(4, 8), true);
+  assert.equal(isQuiet(22.9, 8), false);
 });
 
 test('an arm is abandoned after two window exhaustions in a row', () => {

@@ -4,7 +4,7 @@
 //
 //   bench.mjs plan   --phase pilot|aa|main|confirm [--model M] [--seed N]             prints the draws, spends nothing
 //   bench.mjs run    --phase ... --out DIR --model M --go --budget-total USD [--chunk 24] [--budget-draw USD] [--window-tokens N]
-//                    [--plugin-41 DIR] [--env-file FILE] [--timeout-min 40]
+//                    [--plugin-41 DIR] [--env-file FILE] [--timeout-min 40] [--quiet-wait-min 90]
 //                    [--claude PATH --no-sandbox]   a stub agent, for proving the harness without spending anything
 //   bench.mjs select --pilot DIR [--allow-short]                                      writes task-set.json from a pilot
 //   bench.mjs prereg                                                                  binds task-set.json into prereg.json
@@ -34,6 +34,11 @@ const PREREG = path.join(HERE, 'prereg.json');
 const MAX_CHUNK = 24;
 const WINDOW_STOP_SHARE = 0.6;
 const ABANDON_AFTER = 2;
+const QUIET_LOAD_SHARE = 0.5;
+const QUIET_WAIT_MIN = 90;
+const QUIET_POLL_MS = 30000;
+const ADMIT_TRIES = 3;
+const MAX_FAILED_NAMES = 20;
 
 export const PHASE_ARMS = Object.freeze({
   pilot: ['bare'],
@@ -131,6 +136,32 @@ function removeTree(dir) {
   try { unlock(dir); fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { console.error(`bench: could not remove ${dir}: ${e.code}`); }
 }
 
+// Hidden suites carry per-family time limits, and CPU contention breaks them. A draw on a busy machine would score the machine, so a
+// recording waits for quiet and each row keeps the load it started under.
+export const isQuiet = (load, cores, share = QUIET_LOAD_SHARE) => load <= cores * share;
+
+async function waitForQuiet(minutes, stopped) {
+  const deadline = Date.now() + minutes * 60000;
+  let told = false;
+  while (!isQuiet(os.loadavg()[0], os.cpus().length)) {
+    if (stopped() || Date.now() > deadline) return false;
+    if (!told) { console.log(`waiting for a quiet machine: load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores`); told = true; }
+    await new Promise((resolve) => { setTimeout(resolve, QUIET_POLL_MS); });
+  }
+  return true;
+}
+
+// Admission runs the reference solution through the same timed suites, so it gets a few tries. A task is refused only if all fail.
+function admitWithRetries(dir, hash) {
+  let last = 'no attempt';
+  for (let i = 0; i < ADMIT_TRIES; i++) {
+    const adm = admitTask(dir, { repeats: 1 });
+    if (adm.ok && adm.hash === hash) return adm;
+    last = adm.ok ? 'the task changed' : adm.reason;
+  }
+  throw new Error(`not admitted after ${ADMIT_TRIES} tries: ${String(last).slice(0, 200)}`);
+}
+
 const scoreRow = (d, fields) => ({ schema: 2, draw: d.id, task: d.task, arm: d.arm, k: d.draw, ...fields });
 
 export function abandonedArms(rows) {
@@ -209,12 +240,13 @@ async function run(args) {
     const windowTokens = Number(args['window-tokens']);
     if (windowTokens > 0 && chunkWeighted >= windowTokens * WINDOW_STOP_SHARE) { console.log('window stop: this chunk used 60% of the stated window'); break; }
 
+    if (!await waitForQuiet(Number(args['quiet-wait-min'] ?? QUIET_WAIT_MIN), () => interrupted)) { console.log('quiet stop: the machine stayed busy, so this chunk ends here; run it again later'); break; }
+    const load = Number(os.loadavg()[0].toFixed(1));
     const dir = path.join(REPO, d.dir);
     if (!admitted.has(dir)) {
       const th = taskHash(dir);
       if (!th.ok) throw new Error(`task ${d.task}: ${th.reason}`);
-      const adm = admitTask(dir, { repeats: 1 });
-      if (!adm.ok || adm.hash !== th.hash) throw new Error(`task ${d.task} is not admitted`);
+      const adm = admitWithRetries(dir, th.hash);
       admitted.set(dir, { task: th.task, hash: adm.hash, expect: { total: adm.total, names: adm.names } });
     }
     const t = admitted.get(dir);
@@ -250,7 +282,7 @@ async function run(args) {
       if (!sc.ok) throw new Error(`the scorer failed on ${d.id}: ${sc.reason}`);
       const stop = foldScore(scratch, sc);
       const solved = scratch.outcome === 'scored' && sc.total > 0 && scratch.green === sc.total && !Object.values(scratch.flags ?? {}).some(Boolean);
-      row = scoreRow(d, { outcome: scratch.outcome, reason: scratch.reason, green: scratch.green, total: sc.total, solved, ...measured });
+      row = scoreRow(d, { outcome: scratch.outcome, reason: scratch.reason, green: scratch.green, total: sc.total, solved, failed: (scratch.failedNames ?? []).slice(0, MAX_FAILED_NAMES), flags: scratch.flags, load, ...measured });
       fs.appendFileSync(resultsFile, `${JSON.stringify(row)}\n`);
       rows.push(row);
       console.log(`done ${d.id}: ${solved ? 'solved' : 'not solved'}, $${measured.cost.toFixed(3)}`);
@@ -270,7 +302,7 @@ async function main(argv) {
     options: {
       phase: { type: 'string' }, out: { type: 'string' }, model: { type: 'string' }, seed: { type: 'string' }, go: { type: 'boolean' }, chunk: { type: 'string' },
       'budget-total': { type: 'string' }, 'budget-draw': { type: 'string' }, 'window-tokens': { type: 'string' }, 'plugin-41': { type: 'string' }, 'env-file': { type: 'string' },
-      'timeout-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
+      'timeout-min': { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
     },
   });
   if (command === 'plan' || command === 'run') {

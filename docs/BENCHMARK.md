@@ -37,7 +37,9 @@ node benchmarks/v2/bench.mjs run --phase confirm --model <top-tier> --out .somi/
 node benchmarks/v2/bench.mjs decide --aa .somi/bench/aa --main .somi/bench/main
 ```
 
-Run the same `run` command again to continue. Each call does at most one chunk of 24 draws, one draw at a time, and finished draws are skipped. Run nothing else heavy during a chunk.
+Run the same `run` command again to continue. Each call does at most one chunk of 24 draws, one draw at a time, and finished draws are skipped.
+
+Run nothing else heavy during a chunk. The hidden suites have per-family time limits, so contention would score the machine instead of the agent. Before each draw the harness waits, up to 90 minutes by default, for the one-minute load to fall to half the cores. Each row records the load it started under.
 
 ## Budget and stops
 
