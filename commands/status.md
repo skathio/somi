@@ -1,5 +1,10 @@
 ---
-description: "Show the open milestone, closed work, logged findings and decisions, rendered from the journal."
+description: "Show open work, findings and decisions."
+argument-hint: ""
 ---
 
-`somi` means the CLI named in your session context, or `npx @skathio/somi`. Run `somi status` and show its output as it is.
+Call `somi_step` with action `route`, hint `status`, and this request, word for word:
+
+$ARGUMENTS
+
+Each answer has a `next` field and a `how` field. Do exactly what `how` says and nothing else until `next` is `done`.

@@ -1,4 +1,5 @@
-// The surface stays small because a test says so. Raising a limit here is a deliberate decision, in plain sight in the diff.
+// What a host lists must stay small, because hosts silently drop descriptions past a budget and an unlisted tool is not picked. The
+// library behind the step engine has no limit. Raising a limit here is a deliberate decision, in plain sight in the diff.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,12 +12,29 @@ const read = (rel) => fs.readFileSync(path.join(REPO, rel), 'utf8');
 const json = (rel) => JSON.parse(read(rel));
 const FLOW_FILES = [...list('commands').map((f) => `commands/${f}`), ...list('agents').map((f) => `agents/${f}`), 'rules/digest.md'];
 
-test('five commands', () => assert.deepEqual(list('commands').sort(), ['plan.md', 'review.md', 'ship.md', 'status.md', 'task.md']));
-test('three agents', () => assert.deepEqual(list('agents').sort(), ['somi-coder.md', 'somi-reviewer.md', 'somi-security-reviewer.md']));
-test('at most ten skills, none of them a flow or a role', () => {
-  const skills = list('skills');
-  assert.ok(skills.length <= 10, `${skills.length} skills`);
-  assert.deepEqual(skills.filter((s) => /^(flow|role)-/.test(s)), []);
+const description = (text) => /^description: "?(.*?)"?$/m.exec(text)?.[1] ?? '';
+const listedCommands = () => list('commands').filter((f) => !/^disable-model-invocation: true$/m.test(read(`commands/${f}`)));
+const listed = () => [...listedCommands().map((f) => [f.replace('.md', ''), description(read(`commands/${f}`))]), ...list('skills').map((s) => [s, description(read(`skills/${s}/SKILL.md`))])];
+
+test('a host lists at most 15 entries and 8,000 characters', () => {
+  assert.ok(listed().length <= 15, `${listed().length} entries`);
+  const chars = listed().reduce((n, [name, d]) => n + name.length + d.length, 0) + list('agents').reduce((n, f) => n + description(read(`agents/${f}`)).length, 0);
+  assert.ok(chars <= 8000, `${chars} characters`);
+  for (const [name, d] of listed()) assert.ok(d.length > 0 && d.length <= 200, `${name}: ${d.length} characters`);
+});
+test('four agents, and shared files name no tools and no models', () => {
+  assert.deepEqual(list('agents').sort(), ['somi-reviewer.md', 'somi-security-reviewer.md', 'somi-worker.md', 'somi.md']);
+  for (const f of [...list('agents').map((a) => `agents/${a}`), ...list('commands').map((c) => `commands/${c}`), ...list('skills').map((s) => `skills/${s}/SKILL.md`)]) {
+    const front = /^---\n([\s\S]*?)\n---/.exec(read(f))[1];
+    assert.doesNotMatch(front, /^(tools|disallowedTools|model):/m, f);
+  }
+});
+test('expertise stays behind the engine, focused and free of version templates', () => {
+  assert.deepEqual(list('skills'), ['somi-expertise']);
+  for (const f of list('library/skills')) assert.ok(read(`library/skills/${f}`).split('\n').length < 100, f);
+});
+test('the Copilot manifest lists exactly the listed commands', () => {
+  assert.deepEqual(json('.copilot-extension/extension.json').commands.map((c) => c.name).sort(), listedCommands().map((f) => f.replace('.md', '')).sort());
 });
 test('the digest is at most 150 lines', () => {
   const lines = read('rules/digest.md').split('\n').length;
@@ -26,10 +44,6 @@ test('the digest is at most 150 lines', () => {
 test('flow text never asks a model to edit a state file', () => {
   const EDIT = /\b(edit|update|write|append|create|modify|tick|add)\b[^.\n]{0,60}(\.somi\/|progress\.md|diary\.md|decisions\.md|state\.json|journal\.jsonl)/i;
   for (const f of FLOW_FILES) assert.doesNotMatch(read(f), EDIT, f);
-});
-
-test('the reviewers cannot write', () => {
-  for (const f of ['agents/somi-reviewer.md', 'agents/somi-security-reviewer.md']) assert.match(read(f), /^disallowedTools: Write, Edit, MultiEdit, NotebookEdit$/m, f);
 });
 
 test('every hook registered on Claude Code exists', () => {
@@ -56,7 +70,7 @@ test('version files agree', () => {
 
 test('the package ships what the plugin needs and no tests or benchmarks', () => {
   const { files } = json('package.json');
-  for (const f of ['commands/', 'agents/', 'skills/', 'rules/', 'hooks/', 'scripts/', 'profiles/']) assert.ok(files.includes(f), f);
+  for (const f of ['commands/', 'agents/', 'skills/', 'library/', 'rules/', 'hooks/', 'scripts/', 'profiles/']) assert.ok(files.includes(f), f);
   assert.equal(files.includes('tests/'), false);
   assert.equal(files.includes('benchmarks/'), false);
   assert.ok(fs.existsSync(path.join(REPO, json('package.json').bin.somi)));

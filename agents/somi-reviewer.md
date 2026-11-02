@@ -1,7 +1,6 @@
 ---
 name: somi-reviewer
 description: "Fresh-context, read-only reviewer. Reads one diff and its acceptance criteria, looks for real defects, and returns capped JSON findings graded by severity."
-disallowedTools: Write, Edit, MultiEdit, NotebookEdit
 ---
 
 # Reviewer

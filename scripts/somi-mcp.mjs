@@ -14,7 +14,10 @@ import { fileURLToPath } from 'node:url';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
 import { repoRoot } from './lib/git-tree.mjs';
 import { StateError } from './lib/journal.mjs';
-import { TransitionError, afterCode, afterReview, close, decide, open, status } from './lib/kernel.mjs';
+import { abandon, closeMilestone, decide, done, resume, reviewed, route } from './lib/engine.mjs';
+import { TransitionError, afterCode, open, status } from './lib/kernel.mjs';
+import { addToLedger } from './lib/ledger.mjs';
+import { expertiseIndex } from './lib/workflows.mjs';
 import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
 import { detectHost } from './lib/tiers.mjs';
@@ -54,17 +57,25 @@ async function listClientRoots() {
 
 const TOOL = {
   name: 'somi_step',
-  description: 'Move the SoMi state machine one transition and get the next action. Every state write happens here. Run `somi check` in the shell before after-code.',
+  description: 'SoMi\'s step engine. Pass a request to action "route"; every answer names the next action and how to carry it out.',
   inputSchema: {
     type: 'object',
     properties: {
-      action: { type: 'string', enum: ['open', 'after-code', 'after-review', 'decide', 'close', 'status'] },
+      action: { type: 'string', enum: ['route', 'done', 'after-review', 'decide', 'close', 'status', 'resume', 'abandon', 'ledger', 'expertise', 'open', 'after-code'] },
+      request: { type: 'string', description: 'route: what the maintainer asked for, or a ticket\'s text' },
+      ticket: { type: 'object', description: 'route: ticket fields when there is one, such as type and labels' },
+      hint: { type: 'string', description: 'route: a route name, from a command or from choices' },
+      status: { type: 'string', enum: ['ok', 'too-big', 'blocked'], description: 'done: how the agent finished' },
+      summary: { type: 'string', description: 'done: what the agent reported' },
+      milestones: { type: 'array', items: { type: 'string' }, description: 'done: the parts, when too-big' },
+      keep: { type: 'array', items: { type: 'string' }, description: 'done: the finding ids a critic confirmed' },
+      kind: { type: 'string', enum: ['decision', 'constraint', 'pointer'], description: 'ledger: what this entry is' },
       title: { type: 'string', description: 'open: what this milestone delivers' },
       ask: { type: 'string', description: 'open: a question for the maintainer, only when the request names an expensive-to-reverse choice' },
       follow_up: { type: 'string', description: 'open: the area, when this continues earlier work there' },
       release_candidate: { type: 'boolean', description: 'open: review this milestone whatever the signals say' },
       reviews: { type: 'array', description: 'after-review: each reviewer\'s JSON, one entry per dispatched reviewer', items: { type: 'object' } },
-      text: { type: 'string', description: 'decide: the maintainer\'s own words' },
+      text: { type: 'string', description: 'decide: the maintainer\'s own words; ledger: the entry' },
       then: { type: 'string', enum: ['continue', 'close', 'abort'], description: 'decide: what the maintainer chose' },
     },
     required: ['action'],
@@ -94,11 +105,17 @@ async function callStep(args) {
     switch (a.action) {
       case 'open': return textResult(open(ctx, { title: a.title, ask: a.ask, followUp: a.follow_up, releaseCandidate: a.release_candidate === true }));
       case 'after-code': return textResult(afterCode(ctx));
-      case 'after-review': return textResult(afterReview(ctx, { reviews: a.reviews }));
+      case 'route': return textResult(route(ctx, { request: a.request, ticket: a.ticket, hint: a.hint }));
+      case 'done': return textResult(done(ctx, { status: a.status, summary: a.summary, milestones: a.milestones, keep: a.keep }));
+      case 'resume': return textResult(resume(ctx));
+      case 'abandon': return textResult(abandon(ctx));
+      case 'ledger': return textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env));
+      case 'expertise': return textResult(expertiseIndex());
+      case 'after-review': return textResult(reviewed(ctx, { reviews: a.reviews }));
       case 'decide': return textResult(decide(ctx, { text: a.text, then: a.then }));
-      case 'close': return textResult(close(ctx));
+      case 'close': return textResult(closeMilestone(ctx));
       case 'status': return textResult(status(ctx));
-      default: return textResult('action must be open, after-code, after-review, decide, close or status', true);
+      default: return textResult('action must be route, done, after-review, decide, close, status, resume, abandon, ledger, expertise, open or after-code', true);
     }
   } catch (e) {
     const expected = e instanceof TransitionError || e instanceof ReviewInputError || e instanceof StateError;

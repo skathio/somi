@@ -46,6 +46,7 @@
     ".copilot-extension/",
     "mcp.json",
     "VERSION",
-    "LICENSE"
+    "LICENSE",
+    "library/"
   ]
 }

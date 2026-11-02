@@ -1,28 +1,72 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-hooks.json",
-  "description": "SoMi tripwires: dangerous shell commands, dependency installs, secret and protected-path writes, an audit log, and the rules digest once per session. They catch honest mistakes. The OS sandbox is the security boundary.",
+  "description": "SoMi tripwires: dangerous shell commands, dependency installs, secret and protected-path writes, an audit log, and the rules digest. Also applies routed model tiers.",
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start/inject-digest.mjs" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start/inject-digest.mjs"
+          }
+        ]
+      }
     ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-dangerous-bash.mjs" },
-          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/gate-dep-install.mjs" }
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-dangerous-bash.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/gate-dep-install.mjs"
+          }
         ]
       },
       {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-secret-writes.mjs" },
-          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-protected-paths.mjs" }
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-secret-writes.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-protected-paths.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-tier-config.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/keep-work-delegated.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task|task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/apply-tier.mjs"
+          }
         ]
       }
     ],
     "PostToolUse": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool/audit-log.mjs" } ] }
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool/audit-log.mjs"
+          }
+        ]
+      }
     ]
   }
 }

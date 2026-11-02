@@ -5,7 +5,6 @@ import path from 'node:path';
 import { journal, journalPath, journalText, makeRepo, somi, writeFiles } from './helpers.mjs';
 import { decideAfterReview, isBlocking, parseReviews } from '../scripts/lib/policy.mjs';
 import { deriveCursor, journalProblems } from '../scripts/lib/journal.mjs';
-import { resolveTier } from '../scripts/lib/tiers.mjs';
 
 const finding = (over = {}) => ({ severity: 'Minor', file: 'src/app.js', line: 3, claim: 'something small', ...over });
 const review = (agent, findings = [], verdict = 'approve') => ({ agent, verdict, findings });
@@ -35,7 +34,7 @@ test('a diff touching a sink dispatches the generalist and the security lens', (
   assert.equal(after.json.next, 'review');
   assert.deepEqual(reviewers(after), ['somi-reviewer', 'somi-security-reviewer']);
   assert.ok(after.json.security.includes('sink'));
-  assert.deepEqual(after.json.reviewers.map((r) => r.tier), ['work', 'review']);
+  assert.deepEqual(after.json.reviewers.map((r) => r.tier), ['low', 'high']);
 });
 
 test('a Minor never triggers a second pass, and a Major off a boundary only logs', (t) => {
@@ -273,14 +272,6 @@ test('the cursor is a pure fold of the events', () => {
   const opened = deriveCursor([{ seq: 1, type: 'open', milestone: 'm1', title: 't', base: 'b', next: 'code' }]);
   assert.equal(opened.milestone, 'm1');
   assert.equal(deriveCursor([{ seq: 1, type: 'open', milestone: 'm1', title: 't', base: 'b', next: 'code' }, { seq: 2, type: 'close', milestone: 'm1' }]).milestone, null);
-});
-
-test('tiers come from config per host, and a bad model name falls back', () => {
-  assert.equal(resolveTier({}, 'claude', 'review'), 'opus');
-  assert.equal(resolveTier({ tiers: { claude: { work: 'haiku' } } }, 'claude', 'work'), 'haiku');
-  assert.equal(resolveTier({ tiers: { claude: { work: 'x; rm -rf /' } } }, 'claude', 'work'), 'sonnet');
-  assert.equal(resolveTier({}, 'copilot', 'work'), null);
-  assert.equal(resolveTier({}, 'constructor', 'work'), null);
 });
 
 test('migrate imports open findings and decisions once, and changes no old file', (t) => {

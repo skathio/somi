@@ -8,7 +8,7 @@ import { SCHEMA_VERSION, appendEvent, deriveCursor, readEvents, writeCursor } fr
 import { MAX_PASSES, decideAfterReview, isBlocking, parseReviews } from './policy.mjs';
 import { computeSignals } from './signals.mjs';
 import { baseRef, headSha, readDiff, reviewDiffCommand, snapshotTree } from './git-tree.mjs';
-import { resolveTier } from './tiers.mjs';
+import { resolveSpawn } from './tiers.mjs';
 
 export const MAX_RESPONSE_BYTES = 2560;
 export class TransitionError extends Error {}
@@ -55,9 +55,8 @@ export function open(ctx, { title, ask, followUp, releaseCandidate = false }) {
 }
 
 function reviewersFor(ctx, security) {
-  const list = [{ agent: 'somi-reviewer', tier: 'work', model: resolveTier(ctx.config, ctx.host, 'work') }];
-  if (security) list.push({ agent: 'somi-security-reviewer', tier: 'review', model: resolveTier(ctx.config, ctx.host, 'review') });
-  return list.map(clean);
+  const seat = (agent, wanted) => { const { tier, model } = resolveSpawn(ctx.config, ctx.host, wanted); return clean({ agent, tier, model }); };
+  return [seat('somi-reviewer', 'low'), ...(security ? [seat('somi-security-reviewer', 'high')] : [])];
 }
 
 const afterCodeResponse = (e) => cap(clean({

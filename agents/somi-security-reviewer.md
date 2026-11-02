@@ -1,7 +1,6 @@
 ---
 name: somi-security-reviewer
 description: "Fresh-context, read-only security lens. Runs when a diff touches a trust boundary. Walks untrusted input to sensitive sinks and returns capped JSON findings with concrete attack paths."
-disallowedTools: Write, Edit, MultiEdit, NotebookEdit
 ---
 
 # Security reviewer

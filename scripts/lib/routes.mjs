@@ -1,0 +1,46 @@
+// routes.mjs: the deterministic half of routing. It classifies what the work is, never how big it will be, because model size forecasts
+// were 2 to 8 times too high. A clear request gets one route. Conflicting signals return a short list for the coordinator to choose
+// from, which spends one turn and no extra agent. Pure, and scored against a labelled set in the benchmark.
+
+// Checked first, in order: when one of these applies it decides, whatever else the request mentions.
+const FIRST = [
+  ['status', /^\s*(status|what('s| is) (in flight|open|running))\b/i],
+  ['resume', /^\s*(continue|resume|pick up|carry on)\b/i],
+  ['config', /\bsomi\b.*\b(config|tiers?|model map)\b|\b(tier|model) map\b/i],
+  ['incident', /\b(outage|incident|sev[ -]?[012]\b|on fire)\b|\b(prod|production|site|service)\b.{0,30}\b(is |are )?(down|broken|failing|on fire)\b/i],
+  ['security-review', /\b(security|threat|vulnerabilit\w*|pentest|owasp)\b.{0,40}\b(review|audit|check|assess\w*|look)\b|\b(review|audit|check|assess)\b.{0,40}\b(security|vulnerabilit\w*|threats?)\b/i],
+  ['accessibility', /\b(accessib\w*|a11y|wcag|screen ?readers?|aria)\b/i],
+];
+
+// Work kinds. One match decides; several conflicting matches go to the coordinator.
+const KINDS = [
+  ['review', /^\s*(please |can you |could you )?(review|audit|assess|critique)\b|\bcode review\b|\breview (this|the|my|pr|#)|\bis this (ok|okay|right|safe|correct)\b/i],
+  ['ship', /\b(ship it|ship this|cut a release|open (a |the )?(pr|pull request)|prepare (a |the )?(release|pr|pull request)|ready to merge|release notes)\b/i],
+  ['upgrade', /\b(upgrade|bump|update)\b.{0,40}\b(dependenc\w*|version|package|library|framework|sdk|to v?\d)\b|\bdependabot\b|\bupgrade\b/i],
+  ['migrate', /\b(migrat\w*|schema change|backfill|move .{1,40} from .{1,40} to)\b/i],
+  ['perf', /\b(too slow|slow|performance|latency|optimi[sz]e|speed up|memory (leak|usage)|profil(e|ing)|throughput|n\+1)\b/i],
+  ['refactor', /\b(refactor\w*|clean ?up|tidy|untangle|simplify|decouple|extract|dedupe|deduplicate|rename)\b/i],
+  ['debug', /\b(bug|broken|fails?|failing|failure|errors?|crash\w*|exception|regression|stack ?trace|doesn'?t work|not working|flaky|wrong (result|output|value|total)s?)\b|\bfix(es|ing)?\b/i],
+  ['discover', /\b(new product|greenfield|product idea|idea for a|competitors?|market research)\b/i],
+  ['design', /\b(design|architecture|how should we|adr|trade-?offs?|rfc|which approach|options for)\b/i],
+  ['atlas', /\b(map (the|this)|codebase overview|onboard\w*|atlas|blast radius|impact of)\b/i],
+  ['plan', /\b(plan (for|this|out|the)|roadmap|break (this|it) down|milestones?|epic)\b/i],
+];
+
+const ANSWER = /\?\s*$|^\s*(what|why|how|where|when|who|which|does|do|is|are|can|explain|show me|list)\b/i;
+const TICKET_TYPES = Object.freeze({ bug: 'debug', defect: 'debug', incident: 'incident', epic: 'plan', spike: 'design', story: 'build', task: 'build', feature: 'build', improvement: 'build' });
+
+export const ROUTE_NAMES = Object.freeze([...new Set([...FIRST, ...KINDS].map(([r]) => r)), 'answer', 'build']);
+
+export function classify({ request = '', ticket, hint } = {}) {
+  if (typeof hint === 'string' && ROUTE_NAMES.includes(hint)) return { route: hint, via: 'hint' };
+  const type = String(ticket?.type ?? '').trim().toLowerCase();
+  if (Object.hasOwn(TICKET_TYPES, type)) return { route: TICKET_TYPES[type], via: 'ticket' };
+  const text = String(request);
+  for (const [route, re] of FIRST) if (re.test(text)) return { route, via: 'rule' };
+  const matched = KINDS.filter(([, re]) => re.test(text)).map(([route]) => route);
+  // A request opening with a question word is asking something, unless it clearly names work to do.
+  if (matched.length === 0) return ANSWER.test(text) ? { route: 'answer', via: 'rule' } : { route: 'build', via: 'default' };
+  if (matched.length === 1) return { route: matched[0], via: 'rule' };
+  return { route: null, via: 'choose', choices: matched };
+}

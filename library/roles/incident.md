@@ -1,0 +1,1 @@
+Production is hurting, so restore service first with the smallest safe step: a flag flip, a revert or a narrow patch. Guardrails still apply. Do not hunt for the root cause while it is down. Once it is mitigated, your report must include: what you changed and how to undo it, what you saw and when, what you do not know yet, and the follow-up that should find the real cause.

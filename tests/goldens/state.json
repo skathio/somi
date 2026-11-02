@@ -14,5 +14,10 @@
   "reviewers": [],
   "blocking": [],
   "extra_passes": 0,
-  "follow_up": null
+  "follow_up": null,
+  "route": null,
+  "tier": null,
+  "escalated": false,
+  "lane": null,
+  "awaiting": null
 }

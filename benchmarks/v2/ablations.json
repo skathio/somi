@@ -17,20 +17,41 @@
       "replace": "const parts = [];"
     },
     "planning-on": {
-      "file": "commands/task.md",
-      "find": "Do the work in `$ARGUMENTS` yourself, in this thread.",
-      "replace": "First write a short feature-sized plan for `$ARGUMENTS`, with a test or command that proves each milestone, and pipe it to `somi plan`. Then do the work yourself, in this thread."
+      "file": "library/roles/build.md",
+      "find": "You build one small, clear change.",
+      "replace": "First write a short plan with a test or command that proves each milestone, and pipe it to `somi plan`. Then build it. You build one small, clear change."
     }
   },
   "cells": {
     "somi5": [],
-    "abl-review-off": ["review-off"],
-    "abl-digest-off": ["digest-off"],
-    "abl-planning-on": ["planning-on"],
-    "abl-review-off-digest-off": ["review-off", "digest-off"],
-    "abl-review-off-planning-on": ["review-off", "planning-on"],
-    "abl-digest-off-planning-on": ["digest-off", "planning-on"],
-    "abl-review-off-digest-off-planning-on": ["review-off", "digest-off", "planning-on"],
-    "abl-review-always": ["review-always"]
+    "abl-review-off": [
+      "review-off"
+    ],
+    "abl-digest-off": [
+      "digest-off"
+    ],
+    "abl-planning-on": [
+      "planning-on"
+    ],
+    "abl-review-off-digest-off": [
+      "review-off",
+      "digest-off"
+    ],
+    "abl-review-off-planning-on": [
+      "review-off",
+      "planning-on"
+    ],
+    "abl-digest-off-planning-on": [
+      "digest-off",
+      "planning-on"
+    ],
+    "abl-review-off-digest-off-planning-on": [
+      "review-off",
+      "digest-off",
+      "planning-on"
+    ],
+    "abl-review-always": [
+      "review-always"
+    ]
   }
 }

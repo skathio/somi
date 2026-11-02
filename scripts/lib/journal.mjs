@@ -12,9 +12,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const SCHEMA_VERSION = 1;
-export const EVENT_TYPES = Object.freeze(['open', 'check', 'after-code', 'after-review', 'decide', 'close', 'migrate']);
+export const EVENT_TYPES = Object.freeze(['open', 'check', 'after-code', 'after-review', 'decide', 'close', 'migrate', 'route', 'plan', 'escalate', 'halt', 'critic', 'finish']);
 export const NEXT_ACTIONS = Object.freeze(['open', 'code', 'fix', 'review', 'close', 'ask']);
-export const STOP_REASONS = Object.freeze(['intent-gate', 'area-follow-up', 'max-passes', 'recurring-finding']);
+export const STOP_REASONS = Object.freeze(['intent-gate', 'area-follow-up', 'max-passes', 'recurring-finding', 'still-failing', 'worker-blocked']);
 
 export class StateError extends Error {}
 
@@ -90,7 +90,11 @@ export function writeCursor(root, cursor, env = process.env) {
 const IDLE = Object.freeze({
   v: SCHEMA_VERSION, seq: 0, milestone: null, title: null, next: 'open', pass: 0, base: null, tree: null, reviewed_tree: null,
   stop: null, question: null, release_candidate: false, reviewers: [], blocking: [], extra_passes: 0, follow_up: null,
+  route: null, tier: null, escalated: false, lane: null, awaiting: null,
 });
+
+// What a route holds across its milestones. A milestone's own fields reset at each open and close.
+const routeFields = (c) => ({ route: c.route, tier: c.tier, escalated: c.escalated, lane: c.lane, awaiting: c.awaiting });
 
 // The cursor is a pure fold of the events: state.json is only a cached copy of this.
 export function deriveCursor(events) {
@@ -99,7 +103,7 @@ export function deriveCursor(events) {
     c.seq = e.seq;
     switch (e.type) {
       case 'open':
-        c = { ...IDLE, seq: e.seq, milestone: e.milestone, title: e.title, next: e.next, base: e.base, stop: e.stop ?? null, question: e.question ?? null, release_candidate: Boolean(e.release_candidate), follow_up: e.follow_up ?? null };
+        c = { ...IDLE, ...routeFields(c), seq: e.seq, milestone: e.milestone, title: e.title, next: e.next, base: e.base, stop: e.stop ?? null, question: e.question ?? null, release_candidate: Boolean(e.release_candidate), follow_up: e.follow_up ?? null };
         break;
       case 'after-code':
         Object.assign(c, { tree: e.tree, next: e.next, stop: e.stop ?? null, question: e.question ?? null, reviewers: e.reviewers ?? [] });
@@ -111,6 +115,26 @@ export function deriveCursor(events) {
         Object.assign(c, { next: e.next, stop: null, question: null, extra_passes: c.extra_passes + (e.grants_pass ? 1 : 0) });
         break;
       case 'close':
+        c = { ...IDLE, ...routeFields(c), seq: e.seq };
+        if (c.lane) c.lane = { ...c.lane, index: c.lane.index + 1 };
+        break;
+      case 'route':
+        c = { ...IDLE, seq: e.seq, route: e.route, tier: e.tier };
+        break;
+      case 'plan':
+        c.lane = { milestones: e.milestones, index: c.lane?.index ?? 0 };
+        c.awaiting = e.approved ? null : e.awaiting ?? null;
+        break;
+      case 'escalate':
+        Object.assign(c, { tier: e.tier, escalated: true });
+        break;
+      case 'halt':
+        Object.assign(c, { next: e.next, stop: e.stop ?? null, question: e.question ?? null });
+        break;
+      case 'critic':
+        c.awaiting = e.done ? null : e.awaiting ?? null;
+        break;
+      case 'finish':
         c = { ...IDLE, seq: e.seq };
         break;
       default: // check and migrate carry facts and move no cursor
@@ -127,6 +151,12 @@ const REQUIRED = {
   decide: ['milestone', 'text', 'next'],
   close: ['milestone', 'outcome'],
   migrate: ['slug'],
+  route: ['route', 'tier', 'request'],
+  plan: ['milestones'],
+  escalate: ['tier'],
+  halt: ['milestone', 'next'],
+  critic: [],
+  finish: ['outcome'],
 };
 
 // What the artefact gate runs: a journal that fails here means a writer broke the documented shape.

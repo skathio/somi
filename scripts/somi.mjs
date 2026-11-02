@@ -7,6 +7,8 @@
 //   somi step decide --text T --then continue|close|abort
 //   somi step close | status
 //   somi check [--full]
+//   somi slot <step> <plugin:component> [--mode read|write] [--project] | somi slot --list | --remove | --confirm
+//   somi ledger --kind decision|constraint --text T
 //   somi status | pr | migrate
 //   somi plan                                    saves the plan text from stdin
 //   somi doctor [--host claude|copilot] [--profile]
@@ -26,7 +28,9 @@ import { writeCopilotHooks } from './lib/init.mjs';
 import { StateError, readEvents } from './lib/journal.mjs';
 import { TransitionError, afterCode, afterReview, close, decide, open, recordCheck, status } from './lib/kernel.mjs';
 import { migrate } from './lib/migrate.mjs';
+import { addToLedger } from './lib/ledger.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
+import { ShardError, confirmProjectShards, listShards, slot, unslot } from './lib/shards.mjs';
 import { detectHost } from './lib/tiers.mjs';
 import { renderPr, renderStatus } from './lib/views.mjs';
 
@@ -55,7 +59,11 @@ function checkAndRecord(ctx, { full = false } = {}) {
   return result;
 }
 
+const MAX_PLAN_LINES = 200;
+const MAX_PLAN_BYTES = 16384;
+
 function savePlan(root, text) {
+  if (text.split('\n').length > MAX_PLAN_LINES || Buffer.byteLength(text) > MAX_PLAN_BYTES) throw new StateError(`a plan is limited to ${MAX_PLAN_LINES} lines and ${MAX_PLAN_BYTES} bytes; state milestones and their proofs, not the design`);
   const dir = path.join(root, '.somi');
   if (fs.existsSync(dir) && fs.lstatSync(dir).isSymbolicLink()) throw new StateError('refusing to write through a link at .somi');
   fs.mkdirSync(dir, { recursive: true });
@@ -137,6 +145,20 @@ function main(argv) {
     case 'plan':
       print({ saved: savePlan(ctx.root, fs.readFileSync(0, 'utf8')) });
       return 0;
+    case 'slot': {
+      const { values, positionals } = parseArgs({ args, allowPositionals: true, options: { mode: { type: 'string' }, project: { type: 'boolean' }, list: { type: 'boolean' }, remove: { type: 'boolean' }, confirm: { type: 'boolean' } } });
+      if (values.list) { print(listShards({ root: ctx.root, env: ctx.env }).map(({ step, ref, kind, mode, scope, state }) => ({ step, ref, kind, mode, scope, state }))); return 0; }
+      if (values.confirm) { print(confirmProjectShards({ root: ctx.root, env: ctx.env })); return 0; }
+      const [step, ref] = positionals;
+      if (values.remove) { print(unslot({ root: ctx.root, step, ref, project: values.project, env: ctx.env })); return 0; }
+      print(slot({ root: ctx.root, step, ref, mode: values.mode, project: values.project, env: ctx.env, now: ctx.now() }));
+      return 0;
+    }
+    case 'ledger': {
+      const { values } = parseArgs({ args, options: { kind: { type: 'string' }, text: { type: 'string' } } });
+      print(addToLedger(ctx.root, { kind: values.kind, text: values.text }, ctx.env));
+      return 0;
+    }
     case 'migrate':
       print(migrate({ root: ctx.root, env: ctx.env, now: ctx.now }));
       return 0;
@@ -148,14 +170,14 @@ function main(argv) {
       return result.written ? 0 : 1;
     }
     default:
-      throw new TransitionError('somi takes step, check, status, pr, plan, migrate, doctor or init');
+      throw new TransitionError('somi takes step, check, status, pr, plan, slot, ledger, migrate, doctor or init');
   }
 }
 
 try {
   process.exitCode = main(process.argv.slice(2));
 } catch (e) {
-  const refused = e instanceof TransitionError || e instanceof ReviewInputError || e instanceof StateError || e?.code?.startsWith?.('ERR_PARSE_ARGS');
+  const refused = e instanceof TransitionError || e instanceof ReviewInputError || e instanceof StateError || e instanceof ShardError || e?.code?.startsWith?.('ERR_PARSE_ARGS');
   process.stderr.write(`somi: ${refused ? e.message : e.stack ?? e}\n`);
   process.exitCode = refused ? 64 : 70;
 }

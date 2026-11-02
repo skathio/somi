@@ -3,18 +3,83 @@
   "displayName": "SoMi",
   "version": "5.0.0-rc.1",
   "description": "A small kernel for coding agents: bare-first by default, one reviewer only when the real diff calls for it, state written by tools, and the OS sandbox as the security boundary.",
-  "keywords": ["workflow", "review", "security", "sandbox", "claude-code", "copilot"],
-  "author": { "name": "Skathi", "url": "https://github.com/skathio" },
+  "keywords": [
+    "workflow",
+    "review",
+    "security",
+    "sandbox",
+    "claude-code",
+    "copilot"
+  ],
+  "author": {
+    "name": "Skathi",
+    "url": "https://github.com/skathio"
+  },
   "homepage": "https://github.com/skathio/somi",
   "repository": "https://github.com/skathio/somi",
   "license": "MIT",
   "type": "agent",
-  "components": { "agents": "./agents", "commands": "./commands", "skills": "./skills" },
+  "components": {
+    "agents": "./agents",
+    "commands": "./commands",
+    "skills": "./skills"
+  },
   "commands": [
-    { "name": "task", "description": "Do one piece of work bare-first; review only if the real diff calls for it." },
-    { "name": "plan", "description": "Opt-in: feature-sized milestones, each with a test or command that proves it." },
-    { "name": "review", "description": "Review a diff once, on request." },
-    { "name": "ship", "description": "Run the full suite, then prepare the pull request text." },
-    { "name": "status", "description": "Show work, findings and decisions from the journal." }
+    {
+      "name": "a11y-check",
+      "description": "Build or fix interface against an accessibility checklist and checker."
+    },
+    {
+      "name": "code",
+      "description": "Build one clear change, with a review only if the diff calls for it."
+    },
+    {
+      "name": "debug",
+      "description": "Fix a bug whose cause is unknown, starting from a failing test."
+    },
+    {
+      "name": "design",
+      "description": "Settle an expensive-to-reverse choice, with options and reversal costs."
+    },
+    {
+      "name": "incident",
+      "description": "Restore a broken production service first, then record the follow-up."
+    },
+    {
+      "name": "plan",
+      "description": "Split large work into milestones that each get fresh context."
+    },
+    {
+      "name": "refactor",
+      "description": "Change structure and keep behaviour, under green tests."
+    },
+    {
+      "name": "review",
+      "description": "Review the current changes or a named diff once."
+    },
+    {
+      "name": "security-review",
+      "description": "Review for security on the strong tier, tracing input to each sink."
+    },
+    {
+      "name": "ship",
+      "description": "Run the full suite, then write the pull request text from the journal."
+    },
+    {
+      "name": "somi-config",
+      "description": "Show which model each tier uses in this environment."
+    },
+    {
+      "name": "somi",
+      "description": "Give SoMi any request or ticket, and it routes the work to the right workflow."
+    },
+    {
+      "name": "status",
+      "description": "Show open work, findings and decisions."
+    },
+    {
+      "name": "upgrade",
+      "description": "Upgrade a dependency from its real changelog and migrate its uses."
+    }
   ]
 }
