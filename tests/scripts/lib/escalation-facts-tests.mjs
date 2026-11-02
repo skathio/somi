@@ -51,11 +51,11 @@ check('a top directory is new only when every row under it is an add; a root fil
 check('planning churn under .somi is ignored and a denied name there still floors', [diff([row('.somi/plans/x/spec.md', 900)]).facts, diff([row('.somi/reviews/r.md', 900)]).facts, diff([row('.somi/x/.env')]).facts.denied, ids([row('.somi/plans/x.md')])[0]],
   [diff([]).facts, diff([]).facts, true, null]);
 const GUARDED = ['.Claude/settings.json', '.CLAUDE/hooks/x', '.somi/Config.json', '.SOMI/config.json', '.claude', '.somi', '.claude/plugins/somi/x', '.claude\\settings.json', '.claude/a/b/c/d', '.claude./x', '.somi/config.json.', '.claude\uff0fsettings.json', '\uff0e\uff43laude/x',
-  '.claude\uff3csettings.json', '.claude\ufe68x', 'packages/app/.claude/settings.json', 'examples/x/.claude/hooks/h', 'a/.claude', '.somi/rules/99-overrides.md', '.SOMI/Rules/x', 'AGENTS.md', 'docs/CLAUDE.md', 'a/agents.md', 'a/AGENTS.md.', 'a\\Claude.MD',
+  '.claude\uff3csettings.json', '.claude\ufe68x', 'packages/app/.claude/settings.json', 'examples/x/.claude/hooks/h', 'a/.claude', '.somi/rules/99-overrides.md', '.SOMI/Rules/x', 'AGENTS.md', 'docs/CLAUDE.md', 'CLAUDE.local.md', 'docs/Claude.Local.md', 'a/agents.md', 'a/AGENTS.md.', 'a\\Claude.MD',
   '.mcp.json', 'packages/a/.mcp.json', '.vscode/mcp.json', '.MCP.JSON', '.vscode/MCP.json', 'a\\.mcp.json.', 'packages/a/.vscode\\mcp.json', '.mcp\uff0ejson'];
 check('the guard raises sensitive config on every row, hidden or not: any case, either separator, bare names, any depth, no plugins exemption', GUARDED.map((f) => ids([row(f)]).slice(0, 2)), GUARDED.map(() => ['security', ['sensitive:config']]));
 // `mcp.json` without the dot is no host's project-level file, so it is quiet (a Cursor-style `.cursor/mcp.json` and plugin manifests are recorded residuals).
-const QUIET = ['docs/agents-guide.md', '.somi/plans/x.md', 'docs/claude-md.txt', 'src/claude.mdx', '.somi/rules2/x', 'a/.claudes/x',
+const QUIET = ['docs/agents-guide.md', '.somi/plans/x.md', 'docs/claude-md.txt', 'src/claude.mdx', 'src/claude.local.mdx', 'claude.local', '.somi/rules2/x', 'a/.claudes/x',
   'mcp.json', 'src/mcp.json', '.mcp.json.bak', 'docs/mcp-notes.md', '.vscode/settings.json', '.vscode/x/mcp.json', 'vscode/mcp.json', '.vscode.bak/mcp.json', 'a.mcp.json'];
 check('the guard is not wider than its names: a longer name, planning churn and a neighbouring directory raise nothing', QUIET.map((f) => ids([row(f)])[0]), QUIET.map(() => null));
 check('the guard raises on a row among ordinary ones, and a guarded row is also classified when it is not an exact ignored prefix', [ids([row('src/a.mjs'), row('.Somi')])[1], diff([row('.Claude/evil.mjs', 9)]).facts.production_lines], [['sensitive:config'], 9]);

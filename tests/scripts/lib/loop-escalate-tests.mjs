@@ -10,8 +10,9 @@
 // check fails the run. Hermetic: no model, no
 // network; temp repos with a fixed author.
 
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -24,7 +25,7 @@ const LIB = MUTANT ? process.env.ESCALATE_LIB : path.join(SOMI, 'scripts', 'lib'
 const lib = (name) => import(pathToFileURL(path.join(LIB, name)).href);
 const { runStep } = await lib('loop-step.mjs');
 const { escalate, reported, diaryText } = await lib('loop-escalate.mjs');
-const { guardedRows, ignoredSnapshot, treeNumstat, treeRows, measuredTree } = await lib('loop-review.mjs');
+const { LIMITS, guardedRows, ignoredSnapshot, treeNumstat, treeRows, measuredTree, unopened } = await lib('loop-review.mjs');
 const { stateFile } = await lib('loop-state.mjs');
 
 let pass = 0; let fail = 0;
@@ -42,7 +43,7 @@ const section = (title, body) => {
   if (ONLY !== null) {
     const at = source.indexOf(`section('${title}'`); const end = source.indexOf("\nsection('", at + 1);
     const text = source.slice(at, end < 0 ? undefined : end);
-    if (!['check', 'lazy'].some((f) => text.includes(`${f}('${ONLY}`))) return;
+    if (!['check', 'lazy', 'perm'].some((f) => text.includes(`${f}('${ONLY}`))) return;
   }
   console.log(`== ${title} ==`); body();
 };
@@ -181,14 +182,144 @@ section('the folders the measurement excludes are listed apart and added (agent 
   }, []);
   lazy('a snapshot that is over, or not of the stored shape, raises on every pass', () => {
     const r = ignoredRepo(); const head = r.git('rev-parse', 'HEAD'); const file = (b) => { try { return guardedRows(r.root, head, b).map((x) => x.file); } catch { return 'threw'; } };
-    return [file({ over: true, files: {} }), file({ over: false, files: 5 }), file(null), file({ over: false, files: { '.claude/s1': 7 } })];
-  }, [['.claude'], ['.claude'], ['.claude'], ['.claude']]);
-  lazy('257 ignored files under .claude, or one over 1 MiB, are the over marker; 256 files, or one of 1 MiB, are not', () => {
-    const many = (count) => { const r = repo({ files: { '.gitignore': '.claude/m/\n' } }); for (let i = 0; i < count; i++) r.put(`.claude/m/${i}`, 'x'); return r; };
-    const big = repo({ files: { '.gitignore': '.claude/big\n' } }); big.put('.claude/big', 'x'.repeat(1024 * 1024 + 1));
-    const ok = repo({ files: { '.gitignore': '.claude/big\n' } }); ok.put('.claude/big', 'x'.repeat(1024 * 1024));
-    return [many(257), big, many(256), ok].map((r) => ignoredSnapshot(r.root).over);
-  }, [true, true, false, false]);
+    return [file({ over: true, files: {} }), file({ over: false, files: 5 }), file(null), file({ over: false, files: { '.claude/s1': 7 } }), file({ over: false, files: {}, digest: 5 })];
+  }, [['.claude'], ['.claude'], ['.claude'], ['.claude'], ['.claude']]);
+  // The snapshot of every ignored file the guard names: `setup` runs before it is taken, `edit` after; -> the rows [file, status], sorted.
+  const HIDE = '*\n!.gitignore\n!a.js\n!b.js\n';
+  const ignoredRows = (setup, edit, ignore = HIDE) => {
+    const r = repo({ files: { '.gitignore': ignore } }); setup(r); const head = r.git('rev-parse', 'HEAD'); const before = ignoredSnapshot(r.root); edit(r);
+    return guardedRows(r.root, head, before).map((x) => [x.file, x.status]).sort();
+  };
+  const none = () => {};
+  const putAll = (r, names) => names.forEach((f) => r.put(f, 'x\n'));
+  lazy('every guarded name, new and ignored, at any depth and in any case, is a row; a neighbouring name is not', () => ignoredRows(none, (r) => putAll(r,
+    ['.vscode/mcp.json', '.mcp.json', 'src/CLAUDE.md', 'CLAUDE.local.md', 'docs/agents.md', 'pkg/.claude/x', '.CLAUDE/y', '.SOMI/Rules/r.md', '.somi/config.json', '.vscode/settings.json', 'mcp.json', 'src/x.js', 'docs/claude-notes.md', '.mcp.json.bak'])),
+  ['.CLAUDE/y', '.mcp.json', '.SOMI/Rules/r.md', '.somi/config.json', '.vscode/mcp.json', 'CLAUDE.local.md', 'docs/agents.md', 'pkg/.claude/x', 'src/CLAUDE.md'].map((x) => [x, 'A']).sort());
+  lazy('an ignored policy folder or rules folder that is itself a link is a row', () => ignoredRows(none, (r) => { mkdirSync(path.join(r.root, 'pkg')); symlinkSync('../x', path.join(r.root, '.somi/rules')); symlinkSync('../x', path.join(r.root, 'pkg/.claude')); }), [['.somi/rules', 'A'], ['pkg/.claude', 'A']]);
+  lazy('a deleted ignored policy file is a D row', () => ignoredRows((r) => putAll(r, ['.somi/config.json', '.claude/settings.local.json', 'src/keep.js']), (r) => ['.somi/config.json', '.claude/settings.local.json', 'src/keep.js'].forEach((f) => unlinkSync(path.join(r.root, f)))),
+    [['.claude/settings.local.json', 'D'], ['.somi/config.json', 'D']]);
+  lazy('a file under a dependency folder is no row, nor is a policy file under one; a dependency folder inside a policy folder is', () => ignoredRows(none, (r) => putAll(r,
+    ['node_modules/x/AGENTS.md', 'vendor/CLAUDE.md', 'bower_components/a/.mcp.json', '.venv/lib/CLAUDE.md', 'venv/b/agents.md', 'site-packages/c/CLAUDE.md', 'src/vendor/CLAUDE.local.md', '.claude/vendor/x.md', '.CLAUDE/vendor/x.md', 'foo.claude/vendor/CLAUDE.md', '.somi/rules/venv/y.md'])),
+  [['.CLAUDE/vendor/x.md', 'A'], ['.claude/vendor/x.md', 'A'], ['.somi/rules/venv/y.md', 'A']]);
+  lazy('a file over 1 MiB is read to its end and is not over', () => {
+    const body = 'x'.repeat(1024 * 1024 + 7) + 'y'; const r = repo({ files: { '.gitignore': '.claude/big\n' } }); r.put('.claude/big', body);
+    const now = ignoredSnapshot(r.root);
+    return [now.over, now.files['.claude/big'] === createHash('sha256').update(body).digest('hex')];
+  }, [false, true]);
+  lazy('smoke check, a live checkout and no proof of the bound (the 1 MiB case above is): this repository\'s own snapshot is not over', () => ignoredSnapshot(SOMI).over, false);
+  lazy('past 256 entries the snapshot is one digest: no row unchanged, one row for an edit, and one when the count crosses 256', () => {
+    const many = (count) => (r) => { for (let i = 0; i < count; i++) r.put(`.claude/m/${i}`, 'x'); };
+    const r = repo({ files: { '.gitignore': HIDE } }); many(257)(r); const snap = ignoredSnapshot(r.root); const exact = repo({ files: { '.gitignore': HIDE } }); many(256)(exact);
+    return [typeof snap.digest, snap.over, Object.keys(snap.files).length, ignoredRows(many(257), none), ignoredRows(many(257), (q) => q.put('.claude/m/3', 'y')), ignoredRows(many(256), none), ignoredRows(many(256), many(258)), typeof ignoredSnapshot(exact.root).digest];
+  }, ['string', false, 0, [], [['.claude', 'M']], [], [['.claude', 'M']], 'undefined']);
+  lazy('past the byte bound a file is stood for by its size and change time: an edit is still a row', () => {
+    const was = LIMITS.snapshotBytes; LIMITS.snapshotBytes = 100;
+    try {
+      const r = repo({ files: { '.gitignore': HIDE } }); r.put('.claude/a', 'a'.repeat(50)); r.put('.claude/b', 'b'.repeat(500)); const head = r.git('rev-parse', 'HEAD'); const before = ignoredSnapshot(r.root);
+      const rows = () => guardedRows(r.root, head, before).map((x) => [x.file, x.status]); const same = rows(); r.put('.claude/b', 'c'.repeat(500));
+      return [before.files['.claude/a'].length, before.files['.claude/b'].startsWith('s:'), same, rows()];
+    } finally { LIMITS.snapshotBytes = was; }
+  }, [64, true, [], [['.claude/b', 'M']]]);
+  lazy('a worktree or nested repository under an ignored folder is a marker: a row only when it appears or goes', () => {
+    const r = repo({ files: { '.gitignore': HIDE } }); const w = (n) => path.join('.claude', 'worktrees', n);
+    r.git('worktree', 'add', '-q', '--detach', w('w1')); const head = r.git('rev-parse', 'HEAD'); const before = ignoredSnapshot(r.root);
+    const rows = () => guardedRows(r.root, head, before).map((x) => [x.file, x.status]).sort();
+    r.put(path.join(w('w1'), 'f.txt'), 'edited\n'); const inside = rows();
+    r.git('worktree', 'add', '-q', '--detach', w('w2')); const added = rows();
+    r.git('worktree', 'remove', '--force', w('w1'));
+    return [before.over, inside, added, rows()];
+  }, [false, [], [['.claude', 'A'], ['.claude/worktrees/w2', 'A']], [['.claude', 'A'], ['.claude/worktrees/w1', 'D'], ['.claude/worktrees/w2', 'A']]]);
+  lazy('a nested repository made under an ignored .vscode, holding a new mcp.json, raises sensitive:config', () => reasons({ '.gitignore': '.vscode/\n' }, (r) => { execFileSync('git', ['init', '-q', path.join(r.root, '.vscode')]); r.put('.vscode/mcp.json', '{}\n'); }), CFG);
+  lazy('at the byte bound exactly, the next file is stood for by its size and change time: a same-size edit is a row', () => {
+    const was = LIMITS.snapshotBytes; LIMITS.snapshotBytes = 65536;
+    try {
+      const r = repo({ files: { '.gitignore': HIDE } }); r.put('.claude/a', 'a'.repeat(65536)); r.put('.claude/b', 'b'.repeat(500)); const head = r.git('rev-parse', 'HEAD'); const before = ignoredSnapshot(r.root);
+      r.put('.claude/b', 'c'.repeat(500));
+      return [before.files['.claude/a'].length, before.files['.claude/b'].startsWith('s:'), guardedRows(r.root, head, before).map((x) => [x.file, x.status])];
+    } finally { LIMITS.snapshotBytes = was; }
+  }, [64, true, [['.claude/b', 'M']]]);
+  lazy('a link that loops, or runs through a file, is read as dangling', () => {
+    const r = repo({ files: { '.gitignore': HIDE } }); r.put('tgt.txt', 'x\n'); mkdirSync(path.join(r.root, '.claude'));
+    for (const [name, to] of [['loop', 'loop'], ['a', 'b'], ['b', 'a'], ['nd', '../tgt.txt/x']]) symlinkSync(to, path.join(r.root, '.claude', name));
+    return Object.entries(ignoredSnapshot(r.root).files);
+  }, [['.claude/a', 'l:b:dangling'], ['.claude/b', 'l:a:dangling'], ['.claude/loop', 'l:loop:dangling'], ['.claude/nd', 'l:../tgt.txt/x:dangling']]);
+  // Root reads a mode 0 file and lists a mode 0311 folder, so the checks that rest on a permission are skipped for it (escalation.sh skips their mutants too).
+  const ROOT_USER = process.getuid() === 0; const perm = (name, got, want) => (ROOT_USER ? console.log(`  skip ${name} (root ignores file modes)`) : lazy(name, got, want));
+  perm('an entry that cannot be read is the over marker', () => {
+    const locked = repo({ files: { '.gitignore': HIDE } }); locked.put('.claude/u', 'x\n'); chmodSync(path.join(locked.root, '.claude/u'), 0);
+    return ignoredSnapshot(locked.root).over;
+  }, true);
+  // A folder made enterable but not listable (mode 0311): git warns on stderr, exits 0 and lists less than the tree holds.
+  const shut = (r, dir) => chmodSync(path.join(r.root, dir), 0o311); const open = (r, dir) => chmodSync(path.join(r.root, dir), 0o755);
+  perm('a policy folder git cannot list (mode 0311): the ignored snapshot is over, and the escalation does not run (the policy listing is refused)', () => {
+    const snap = repo({ files: { '.gitignore': '.claude/\n' } }); snap.put('.claude/settings.local.json', '{}\n'); shut(snap, '.claude');
+    const pass = repo(); pass.open(); pass.put('.claude/settings.local.json', '{}\n'); shut(pass, '.claude');
+    const over = () => { try { return ignoredSnapshot(snap.root).over; } catch { return 'threw'; } };
+    try { return [over(), pass.after().escalation]; } finally { open(snap, '.claude'); open(pass, '.claude'); }
+  }, [true, { ran: false }]);
+  perm('an untracked file in a folder git cannot list (mode 0311) is refused by the measured diff, never counted as nothing', () => {
+    const r = repo(); r.open(); r.put('src/new.mjs', lines(3)); shut(r, 'src');
+    const refusal = () => { try { measuredTree(r.root); return ['measured']; } catch (e) { return [e.code, /\.gitignore/.test(e.what)]; } };
+    try { return [r.after().exit, ...refusal()]; } finally { open(r, 'src'); }
+  }, [64, 64, true]);
+  // A folder git cannot open that is not a policy folder is an entry of its own (u:<errno text>), compared like a nested repository.
+  const lock = (r, dir) => chmodSync(path.join(r.root, dir), 0); const unlock = (rs) => rs.forEach((r) => { try { chmodSync(path.join(r.root, 'ign/sub'), 0o755); } catch { /* not locked */ } });
+  const ignRepo = () => { const r = repo({ files: { '.gitignore': 'ign/\n' } }); r.put('ign/sub/f', 'x\n'); return r; };
+  perm('an unreadable ignored folder outside the policy paths: there at init and unchanged it is no row and the loop runs, made unreadable after init it raises', () => {
+    const early = ignRepo(); lock(early, 'ign/sub'); const before = ignoredSnapshot(early.root); early.put('src/x.js', lines(3));
+    const rows = (r, b) => guardedRows(r.root, r.git('rev-parse', 'HEAD'), b).map((x) => [x.file, x.status]);
+    const pass = ignRepo(); lock(pass, 'ign/sub'); const ran = pass1(pass, (q) => q.put('src/x.js', lines(3)));
+    const late = ignRepo(); const lateBefore = ignoredSnapshot(late.root); lock(late, 'ign/sub');
+    try { return [before.over, before.files['ign/sub'], rows(early, before), ran.exit, ran.escalation?.ran, ran.escalation?.reasons ?? null, rows(late, lateBefore)]; } finally { unlock([early, pass, late]); }
+  }, [false, 'u:Permission denied', [], 0, undefined, null, [['ign/sub', 'A'], ['.claude', 'A']]]);
+  perm('an unreadable ignored folder that goes (made listable) or whose reason changes after init raises', () => {
+    const r = ignRepo(); lock(r, 'ign/sub'); const head = r.git('rev-parse', 'HEAD'); const before = ignoredSnapshot(r.root);
+    const rows = () => guardedRows(r.root, head, before).map((x) => [x.file, x.status]);
+    const forged = { over: false, files: { 'ign/sub': 'u:Not a directory' } };
+    try { chmodSync(path.join(r.root, 'ign/sub'), 0o755); return [rows(), guardedRows(r.root, head, forged).map((x) => [x.file, x.status])]; } finally { unlock([r]); }
+  }, [[['ign/sub', 'D'], ['.claude', 'A']], [['ign/sub', 'D'], ['.claude', 'A']]]);
+  perm('a folder git cannot open that is, holds or lies under a policy name stays over, so a file planted in it later is not hidden (0311 .claude, .vscode, nested .claude, .somi/rules)', () => {
+    const over = (ignore, dir, file) => {
+      const r = repo({ files: { '.gitignore': ignore } }); r.put(file, 'x\n'); chmodSync(path.join(r.root, dir), 0o311);
+      try { return [ignoredSnapshot(r.root).over, guardedRows(r.root, r.git('rev-parse', 'HEAD'), ignoredSnapshot(r.root)).map((x) => x.file)]; } finally { chmodSync(path.join(r.root, dir), 0o755); }
+    };
+    return [over('.claude/\n', '.claude', '.claude/a'), over('.vscode/\n', '.vscode', '.vscode/a'), over('pkg/\n', 'pkg/.claude', 'pkg/.claude/a'), over('.somi/rules/\n', '.somi/rules', '.somi/rules/a.md'), over('.claude/\n', '.claude/sub', '.claude/sub/a')];
+  }, [[true, ['.claude']], [true, ['.claude']], [true, ['.claude']], [true, ['.claude']], [true, ['.claude']]]);
+  perm('an unreadable ignored folder with the listing past 256 entries is stored in the digest with the others', () => {
+    const r = repo({ files: { '.gitignore': 'ign/\n.claude/\n' } }); r.put('ign/sub/f', 'x\n'); for (let i = 0; i < 256; i++) r.put(`.claude/m/${i}`, 'x'); lock(r, 'ign/sub');
+    try { return typeof ignoredSnapshot(r.root).digest; } finally { unlock([r]); }
+  }, 'string');
+  perm('a project root in a subfolder names its unreadable folder from the root, and a policy folder in it stays over', () => {
+    const mk = (sub) => { const r = repo({ sub: 'pkg', files: { '.gitignore': 'ign/\n.claude/\n' } }); r.put(sub, 'x\n'); return r; };
+    const a = mk('ign/sub/f'); chmodSync(path.join(a.root, 'ign/sub'), 0); const b = mk('.claude/f'); chmodSync(path.join(b.root, '.claude'), 0o311);
+    try { return [{ ...ignoredSnapshot(a.root).files }, ignoredSnapshot(b.root).over]; } finally { chmodSync(path.join(a.root, 'ign/sub'), 0o755); chmodSync(path.join(b.root, '.claude'), 0o755); }
+  }, [{ 'ign/sub': 'u:Permission denied' }, true]);
+  lazy('only the git warning line is an unopened directory: another warning that holds the phrase (a file named like it, under a CRLF attribute) refuses nothing', () => {
+    const r = repo(); r.put('.gitattributes', '* text eol=crlf\n'); r.put("could not open directory 'x': y", 'a\nb\n'); r.put('src/new.mjs', lines(3));
+    let tree; try { tree = typeof measuredTree(r.root); } catch (e) { tree = `refused ${e.code}`; }
+    return [tree, unopened("warning: in the working copy of 'could not open directory 'x': y', LF will be replaced by CRLF\n")];
+  }, ['string', []]);
+  lazy('the warning parser keeps the git lines, skips a directory that vanished (no such file or directory), and ignores anything else', () => unopened(
+    "warning: could not open directory 'a/b/': Permission denied\nwarning: could not open directory 'gone/': No such file or directory\nnoise warning: could not open directory 'c/': Permission denied\nwarning: could not open directory 'd/': Not a directory\n"),
+  [{ dir: 'a/b/', why: 'Permission denied' }, { dir: 'd/', why: 'Not a directory' }]);
+  lazy('a link is hashed with its target when that is a regular file: an edit to the target, or a target created later, is a row', () => [
+    ignoredRows((r) => { r.put('tgt.txt', 'a\n'); mkdirSync(path.join(r.root, '.claude')); symlinkSync('../tgt.txt', path.join(r.root, '.claude/s2')); }, (r) => appendFileSync(path.join(r.root, 'tgt.txt'), 'b\n')),
+    ignoredRows((r) => { mkdirSync(path.join(r.root, '.claude')); symlinkSync('../later.txt', path.join(r.root, '.claude/s3')); }, (r) => r.put('later.txt', 'x\n')),
+  ], [[['.claude/s2', 'M']], [['.claude/s3', 'M']]]);
+  lazy('a link to a directory or to a FIFO is read as its text and does not wait', () => {
+    const r = repo({ files: { '.gitignore': HIDE } }); r.put('src/x.js', 'x\n'); execFileSync('mkfifo', [path.join(r.root, 'pipe')]); mkdirSync(path.join(r.root, '.claude'));
+    symlinkSync('../src', path.join(r.root, '.claude/ld')); symlinkSync('../pipe', path.join(r.root, '.claude/lf'));
+    const url = pathToFileURL(path.join(LIB, 'loop-review.mjs')).href;
+    try {
+      const out = JSON.parse(execFileSync(process.execPath, ['-e', `import(${JSON.stringify(url)}).then((m) => console.log(JSON.stringify(m.ignoredSnapshot(${JSON.stringify(r.root)}))))`], { encoding: 'utf8', timeout: 10000 }));
+      return [out.over, out.files['.claude/ld'], out.files['.claude/lf']];
+    } catch { return 'hung or failed'; }
+  }, [false, 'l:../src:special', 'l:../pipe:special']);
+  lazy('in a pass: a new ignored .vscode/mcp.json, .mcp.json via .git/info/exclude and src/CLAUDE.md, and a deleted ignored .somi/config.json, each raise sensitive:config', () => {
+    const run = (files, setup, edit) => { const r = repo({ files }); setup(r); return (pass1(r, edit).escalation ?? {}).reasons ?? null; };
+    return [run({ '.gitignore': '.vscode/\nCLAUDE.md\n' }, none, (r) => r.put('.vscode/mcp.json', '{}\n')), run({}, (r) => writeFileSync(path.join(r.top, '.git/info/exclude'), '.mcp.json\n'), (r) => r.put('.mcp.json', '{}\n')),
+      run({ '.gitignore': 'CLAUDE.md\n' }, none, (r) => r.put('src/CLAUDE.md', 'x\n')), run({ '.gitignore': '.somi/config.json\n' }, (r) => r.put('.somi/config.json', '{}\n'), (r) => rmSync(path.join(r.root, '.somi/config.json')))];
+  }, [CFG, CFG, CFG, CFG]);
   // A gitlink exactly at .somi, or a nested repository there (.somi/.git), hides .somi/config.json and .somi/rules from every listing.
   const gitlink = (r) => r.git('update-index', '--add', '--cacheinfo', `160000,${r.git('rev-parse', 'HEAD')},.somi`);
   lazy('a gitlink exactly at .somi is a G row, and so is a nested repository at .somi', () => {

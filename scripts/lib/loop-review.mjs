@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readRecord } from './tier-record.mjs';
 import { LoopExit, usageError } from './loop-exit.mjs';
 import { CONTROL } from './loop-notes.mjs';
@@ -22,7 +22,7 @@ const PATHSPEC = ['.', `${EXCLUDE}.somi`, `${EXCLUDE}.claude`];
 // The time one git call may take. A call that exceeds it is a refusal (exit 64, "git did not answer") from every caller: the CLI prints
 // the message and exits 64, a step answers exit 64, and no gate passes on a measurement that was not made. Mutable for the tests only.
 // shortcut: one limit for all calls, so a repository too large for 60 s is refused; raise it when one is reported.
-export const LIMITS = { gitTimeoutMs: 60000 };
+export const LIMITS = { gitTimeoutMs: 60000, snapshotBytes: 256 * 1024 * 1024 }; // snapshotBytes: file content one ignored-file snapshot reads, past which a file is stood for by its size and change time
 const MAX_LISTING = 256 * 1024 * 1024; // bytes of git output read in one go; a bigger listing is refused, never truncated
 export const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const MAX_BLOB = 1024 * 1024; // a blob over this is counted by size (50 bytes a line) instead of read
@@ -64,6 +64,10 @@ const topLevel = (root) => {
     if (path.dirname(d) === d) throw cannot('no git repository (.git) at or above the project directory');
   }
 };
+// The directories git says it could not open, as { dir, why }: only git's own warning line (LC_ALL=C pins its text), so a file name inside another
+// warning, which never starts a line with this text, is not one. A directory that vanished while git walked (ENOENT) hides nothing and is skipped.
+const NOT_OPENED = /^warning: could not open directory '(.*)': (.*)$/gm;
+export const unopened = (stderr) => [...String(stderr).matchAll(NOT_OPENED)].filter((m) => m[2] !== 'No such file or directory').map((m) => ({ dir: m[1], why: m[2] }));
 const run = (root, args, opts = {}) => {
   let real; // a project reached through a symlink is measured under its real path, the one git's own cwd reports
   try { real = fs.realpathSync(root); } catch { throw cannot('the project directory cannot be resolved'); }
@@ -72,7 +76,17 @@ const run = (root, args, opts = {}) => {
   const limit = { timeout: LIMITS.gitTimeoutMs, killSignal: 'SIGKILL' };
   try {
     const GIT_DIR = execFileSync('git', ['-C', top, ...SAFE, 'rev-parse', '--absolute-git-dir'], { ...limit, encoding: 'utf8', env: pinned }).trim();
-    return execFileSync('git', ['-C', real, ...SAFE, ...args], { ...limit, ...opts, env: { ...pinned, GIT_DIR, ...opts.env } });
+    const { unlistable, ...rest } = opts;
+    if (!unlistable) return execFileSync('git', ['-C', real, ...SAFE, ...args], { ...limit, ...rest, env: { ...pinned, GIT_DIR, ...rest.env } });
+    // unlistable: git lists the tree, and a directory it cannot open is a warning on stderr with exit 0, so the listing is shorter than the tree (a
+    // policy folder made enterable but not listable hides a new file from it). The caller pipes stderr; that warning is a refusal, with no path in it.
+    const r = spawnSync('git', ['-C', real, ...SAFE, ...args], { ...limit, ...rest, env: { ...pinned, GIT_DIR, LC_ALL: 'C', ...rest.env } });
+    if (r.error) throw r.error;
+    if (r.status !== 0) throw Object.assign(new Error(`git exited ${r.status}`), { status: r.status, stderr: r.stderr });
+    const own = path.relative(top, real).split(path.sep).join('/'); // git names the directory from the repository top, the callers from the project root
+    const dirs = unopened(r.stderr).map(({ dir, why }) => ({ dir: (own !== '' && dir.startsWith(`${own}/`) ? dir.slice(own.length + 1) : dir).replace(/\/$/, ''), why }));
+    if (dirs.length) throw Object.assign(cannot('git could not open a directory, so its listing is shorter than the tree (make the directory listable, remove it, or add it to .gitignore)'), { unlistable: true, dirs, stdout: r.stdout });
+    return r.stdout;
   } catch (e) { // fails closed: a git that does not answer is a refusal, so the loop counts nothing, never a smaller diff
     if (e.code === 'ETIMEDOUT') throw cannot(`git did not answer within ${LIMITS.gitTimeoutMs / 1000} seconds (retry once it responds)`);
     throw e;
@@ -158,7 +172,7 @@ export function measuredTree(root) {
     // Stat settings are pinned: a looser one would let a same-size edit with a put-back mtime read as clean.
     // --sparse: an untracked file outside a sparse checkout's cone is still part of the tree.
     const pinned = ['-c', 'core.trustctime=true', '-c', 'core.checkStat=default'];
-    run(root, [...pinned, 'add', '-A', '--sparse', '--', ...spec], { env, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
+    run(root, [...pinned, 'add', '-A', '--sparse', '--', ...spec], { env, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'], unlistable: true });
     return run(root, ['write-tree'], { env, encoding: 'utf8' }).trim();
   } catch (e) {
     if (e instanceof LoopExit) throw e;
@@ -275,38 +289,67 @@ export const treeNumstat = (root, from, to) => treeRows(root, from, to).map(({ s
 // under .somi is a row of its own (status G, which git never prints) when the diff did not list it: the measurement exempts both, so
 // a submodule there is reachable, and an unchanged one still carries code the loop does not read. So is a nested repository at
 // .somi (a .somi/.git), which hides .somi/config.json and .somi/rules from every listing here. The ignored files under the
-// guarded paths are compared with `before`, the snapshot taken at loop init (ignoredSnapshot): one that is new or changed is a row.
+// guarded names are compared with `before`, the snapshot taken at loop init (ignoredSnapshot): one that is new, changed or gone is a row.
 const GUARDED = ['.claude', '.somi/config.json', '.somi/rules'];
-const MAX_IGNORED = 256; // ignored files under the guarded paths that one snapshot holds; more is the over marker
-const MAX_IGNORED_BYTES = 1024 * 1024; // one such file read in full; a bigger one is the over marker
-const OVER = Object.freeze({ over: true, files: {} });
+// The ignored files the guard names, at any depth and in any case (a self-ignoring .CLAUDE/ is the policy folder on a case-insensitive filesystem).
+const IGNORED_SPECS = ['**/.claude', '**/.claude/**', '**/claude.md', '**/claude.local.md', '**/agents.md', '**/.mcp.json', '**/.vscode/mcp.json', '.somi/config.json', '.somi/rules'].map((p) => `:(glob,icase)${p}`);
+const DEPENDENCY_DIRS = new Set(['node_modules', 'vendor', 'bower_components', '.venv', 'venv', 'site-packages']);
+const MAX_IGNORED = 256; // entries one snapshot stores by name; more are stored as one digest
+const CHUNK_BYTES = 64 * 1024;
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
-// The ignored files under the guarded paths (a self-ignoring .claude/.gitignore, a root .gitignore line, an ignored settings.local.json)
-// with a content hash each, as { over, files }: over is true when there are too many, one is too big, or one cannot be read, and then every
-// comparison raises (fails closed). A link is hashed by its target, never followed. Never throws but as a refusal from the pinned git.
-export function ignoredSnapshot(root) {
-  let names;
-  try { names = run(root, ['ls-files', '-o', '-i', '--exclude-standard', '-z', '--', ...GUARDED], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0').filter((t) => t !== ''); } catch (e) {
-    if (e instanceof LoopExit) throw e;
-    throw cannot('git could not list the ignored files under the agent policy paths');
+// A dependency folder (a shipped AGENTS.md is not this project's) puts a path out, unless a policy folder comes first: .claude/vendor/x.md is policy.
+// Done here, not by an exclude pathspec, which could not tell the two apart.
+const dependency = (file) => { for (const s of file.split('/')) { if (DEPENDENCY_DIRS.has(s)) return true; if (/^\.(claude|somi)$/i.test(s)) return false; } return false; };
+// -> the file's sha-256, read in chunks; with a link followed: 'dangling' when the target is not there, 'special' when it is not a regular file.
+// Without one, a non-regular file is a refusal (throws). Once the byte budget is spent a file is stood for by its size and change time (the size half is for readability: the change time already moves on every write).
+// shortcut: that stand-in misses an edit that puts the change time back, so only a tree past LIMITS.snapshotBytes has it; raise the bound when one is reported.
+function fileHash(full, follow, budget) {
+  let fd;
+  try { fd = fs.openSync(full, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | (follow ? 0 : fs.constants.O_NOFOLLOW)); } catch (e) { // O_NONBLOCK: a FIFO is not waited on
+    if (follow && ['ENOENT', 'ELOOP', 'ENOTDIR'].includes(e.code)) return 'dangling';
+    throw e;
   }
-  if (names.length > MAX_IGNORED) return OVER;
-  const base = fs.realpathSync(root); const files = Object.create(null);
   try {
-    for (const f of names) {
-      const full = path.join(base, f); const st = fs.lstatSync(full);
-      if (st.isSymbolicLink()) files[f] = `l:${fs.readlinkSync(full)}`;
-      else if (st.isFile() && st.size <= MAX_IGNORED_BYTES) files[f] = sha(fs.readFileSync(full));
-      else return OVER;
-    }
-  } catch { return OVER; }
-  return { over: false, files };
+    const st = fs.fstatSync(fd, { bigint: true });
+    if (!st.isFile()) { if (follow) return 'special'; throw new Error('not a regular file'); }
+    const h = crypto.createHash('sha256'); const buf = Buffer.alloc(CHUNK_BYTES);
+    for (let n; budget.left >= 0 && (n = fs.readSync(fd, buf, 0, CHUNK_BYTES, null)) > 0;) { h.update(buf.subarray(0, n)); budget.left -= n; }
+    return budget.left < 0 ? `s:${st.size}:${st.ctimeNs}` : h.digest('hex');
+  } finally { fs.closeSync(fd); }
 }
+// A link is its text and, when its target is a regular file, that file too: an edit to the target (outside the guarded paths) is an edit to the policy.
+function entryHash(full, budget) {
+  if (!fs.lstatSync(full).isSymbolicLink()) return fileHash(full, false, budget);
+  return `l:${fs.readlinkSync(full)}:${fileHash(full, true, budget)}`;
+}
+const POLICY_DIR = /(^|\/)\.(claude|vscode)(\/|$)|^\.somi(\/|$)/i;
+const OVER = Object.freeze({ over: true, files: {} });
+// The ignored files the guard names (a self-ignoring .claude/.gitignore, an ignored settings.local.json, a .vscode/mcp.json) with a content hash each,
+// as { over, files, digest? }. A nested repository or worktree (git lists it as a directory) is the marker 'd:' and is not read, and a directory git could not open is the marker 'u:<errno text>'. Past MAX_IGNORED
+// entries the names go into one digest, so a big tree still shows a change. over is true only for an entry that cannot be read or is not a regular
+// file, and then every comparison raises (fails closed). Never throws but as a refusal from the pinned git.
+export function ignoredSnapshot(root) {
+  let out; let dirs = [];
+  try { out = run(root, ['ls-files', '-o', '-i', '--exclude-standard', '-z', '--', ...IGNORED_SPECS], { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'pipe'], unlistable: true }); } catch (e) {
+    if (!e.unlistable) { if (e instanceof LoopExit) throw e; throw cannot('git could not list the ignored files under the agent policy paths'); }
+    ({ stdout: out, dirs } = e); // the rest of the listing is whole; each directory git could not open is an entry of its own
+  }
+  // A directory that is, holds or lies under a policy name stays over: what is planted in it cannot be seen. Any other is compared like a nested repository.
+  if (dirs.some(({ dir }) => POLICY_DIR.test(dir))) return OVER;
+  const names = out.split('\0').filter((t) => t !== '' && !dependency(t)).sort();
+  const base = fs.realpathSync(root); const files = Object.create(null); const budget = { left: LIMITS.snapshotBytes };
+  try {
+    for (const f of names) files[f.replace(/\/$/, '')] = f.endsWith('/') ? 'd:' : entryHash(path.join(base, f), budget);
+  } catch { return OVER; }
+  for (const { dir, why } of dirs) files[dir] = `u:${shown(why)}`;
+  return names.length + dirs.length > MAX_IGNORED ? { over: false, files: {}, digest: sha(JSON.stringify(Object.entries(files))) } : { over: false, files };
+}
+const marker = (v) => v === 'd:' || v?.startsWith('u:') === true;
 const plainSnapshot = (v) => v !== null && typeof v === 'object' && typeof v.over === 'boolean' && v.files !== null && typeof v.files === 'object' && Object.values(v.files).every((h) => typeof h === 'string');
 export function guardedRows(root, from, before) {
   if (typeof from !== 'string' || !OBJECT_ID.test(from)) throw cannot('a recorded revision is not an object id');
   const list = (args) => {
-    try { return run(root, args, { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0'); } catch (e) {
+    try { return run(root, args, { encoding: 'utf8', maxBuffer: MAX_LISTING, stdio: ['ignore', 'pipe', 'pipe'], unlistable: true }).split('\0'); } catch (e) {
       if (e instanceof LoopExit) throw e;
       throw cannot('git could not list the changes to agent policy files');
     }
@@ -323,7 +366,13 @@ export function guardedRows(root, from, before) {
   if (before !== undefined) { // a state without a snapshot (a loop begun before this snapshot existed) is read as it always was: nothing new is raised
     const now = ignoredSnapshot(root);
     if (!plainSnapshot(before) || before.over || now.over) ignored.push({ file: '.claude', added: 0, deleted: 0, status: 'A' });
-    else for (const [file, hash] of Object.entries(now.files)) if (!Object.hasOwn(before.files, file) || before.files[file] !== hash) ignored.push({ file, added: 0, deleted: 0, status: Object.hasOwn(before.files, file) ? 'M' : 'A' });
+    else if (before.digest !== now.digest) ignored.push({ file: '.claude', added: 0, deleted: 0, status: 'M' }); // a tree stored as a digest: any change, or a change of kind, is one row
+    else {
+      for (const [file, hash] of Object.entries(now.files)) if (!Object.hasOwn(before.files, file) || before.files[file] !== hash) ignored.push({ file, added: 0, deleted: 0, status: Object.hasOwn(before.files, file) ? 'M' : 'A' });
+      for (const file of Object.keys(before.files)) if (!Object.hasOwn(now.files, file)) ignored.push({ file, added: 0, deleted: 0, status: 'D' });
+      // A nested repository or worktree, or a directory git cannot open, that appears, goes or changes hides what it holds (.vscode/mcp.json inside a `git init .vscode`): not named, so one row stands for it.
+      if (ignored.some((r) => marker(now.files[r.file]) || marker(before.files[r.file]))) ignored.push({ file: '.claude', added: 0, deleted: 0, status: 'A' });
+    }
   }
   return [...changed, ...added, ...links, ...ignored];
 }

@@ -28,7 +28,7 @@
 // floors, and so does one under `.somi/`. Rows under `.somi/` and `.claude/` are ignored (the measurement excludes them), by their
 // exact prefix, and every row, ignored or not, is read for the guard: on its segments folded as the deny list folds them (case,
 // compatibility forms, trailing dots and spaces, either separator) a segment `.claude` at any depth and with no exemption, a
-// `CLAUDE.md` or `AGENTS.md` segment at any depth, a `.mcp.json` segment at any depth, a `.vscode` segment directly followed by
+// `CLAUDE.md`, `CLAUDE.local.md` or `AGENTS.md` segment at any depth, a `.mcp.json` segment at any depth, a `.vscode` segment directly followed by
 // `mcp.json` (project MCP servers: a command that runs on a developer's machine), or a first segment `.somi` alone or followed
 // by `config.json` or `rules`, is the sensitive name `config`. A case variant (`agents.md`) raises too: the folded name is the name. A row that is not a plain name (an empty, `.` or `..`
 // segment, git never writes one) is unusable.
@@ -53,7 +53,7 @@ const sane = (r) => r !== null && typeof r === 'object' && typeof r.file === 'st
 const hidden = (file) => ['.somi', '.claude'].includes(file.split('/')[0]);
 const guarded = (file) => {
   const segs = pieces(file); const [head, second] = segs;
-  return segs.includes('.claude') || segs.includes('claude.md') || segs.includes('agents.md') || segs.includes('.mcp.json')
+  return segs.includes('.claude') || segs.includes('claude.md') || segs.includes('claude.local.md') || segs.includes('agents.md') || segs.includes('.mcp.json')
     || segs.some((s, i) => s === '.vscode' && segs[i + 1] === 'mcp.json') || (head === '.somi' && (second === undefined || second === 'config.json' || second === 'rules'));
 };
 const plain = (o) => o !== null && typeof o === 'object' && !Array.isArray(o);
