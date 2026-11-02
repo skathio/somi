@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "People want to share a file without an account. Add createLink(fileId, expiresAt, deps) and openLink(token, now, deps) to src/links.mjs. deps holds secret and store.",
+    "createLink returns a token that fits in a URL. openLink returns { fileId } for a good token, and throws HttpError 403 with code invalid_link for any other.",
+    "revokeLink(fileId, deps) makes every link to that file stop working, including links made before. A link works up to, not including, its expiresAt.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N28-d6284be3a22f3812",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add signed share links, as the numbered statements describe. Follow the conventions already in the code and change only what the ticket needs."
+}

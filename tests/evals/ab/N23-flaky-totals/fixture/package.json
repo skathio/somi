@@ -1,0 +1,8 @@
+{
+  "name": "n23-flaky-totals",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

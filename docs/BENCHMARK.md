@@ -1,63 +1,137 @@
 # Benchmark and release decision
 
-5.0 ships as the default only if this benchmark says so. A paid run needs the maintainer's go-ahead with a budget, and `bench.mjs run` refuses without `--go`. Nothing here runs in `npm test`.
+5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** `bench.mjs run` refuses without `--go`, and the test suite spends nothing.
 
-## The rule
+**Status:** the free work is built and tested, and the design decisions below are recorded. No task set is bound yet, so no A/A or main run can start.
 
-Registered in [`benchmarks/v2/prereg.json`](../benchmarks/v2/prereg.json) before any paid main draw.
+## The questions
 
-- **Primary metric:** the paired per-task difference in success rate, 5.0 default lane minus bare. Success means the hidden acceptance tests pass. Each rate is over 3 draws. The standard error is clustered by task.
-- **Ships as default if:** the lower 95% bound is at or above -5 points, **and** weighted tokens per solved task are at most 1.5x bare, **and** the A/A interval contains zero, **and** all 20 tasks paired with no arm abandoned.
-- **An escalated-lane claim:** needs a positive lower bound on the hard subset.
-- **Secondary, reported but not deciding:** pass^3, pass@1, wall time and turns, and 4.1 against 5.0 the same way.
+1. **Is SoMi worth it?** Cost per solved task and quality per task, against a bare agent on the same model, on tasks where a bare agent sometimes fails.
+2. **Is 5.0 better than 4.1?** The same measurement on the same tasks.
+3. **Which parts pay?** Each part measured on and off, not argued.
 
-Weighted tokens count input at 1, cache writes at 1.25, cache reads at 0.1 and output at 5.
+## What the earlier benchmark got wrong, and what changed
 
-## The routine
+| Earlier | Now | Why |
+|---|---|---|
+| Every scenario at the ceiling | Tasks are probed and kept only between floor and ceiling | A guard at the ceiling can only say "no worse" |
+| Green tests were the only grade | Each draw gets a label, and a stopped loop is never solved | Draws that stopped at a gate scored full marks |
+| A verdict per scenario at 8 draws | One ratio blocked by task, pooled across tasks | Per-scenario verdicts could only resolve about 50% effects |
+| Medians, split rebuilt by hand | Tokens per solved task, with the per-agent split in each row | Nothing said why a draw cost what it did |
+| Adherence invisible | Route, agents, passes, gates and findings in each row | Tool bypasses and wrong scopes went unreported |
+| Manual assembly and comparison | `bench.mjs record` runs to the end or a stop and writes the record | A copied script is not a procedure |
+| Alias pinned, near matches passed | A full model id, and each served model must match it | One alias change moved the low tier off every calibration |
+
+**Kept:** pre-registration, a hash of the rule, refusal to compare across a different model, rule or host, resumable one-at-a-time draws, the privacy scan on committed records, per-draw budget caps, and the sandboxed draw engine with hidden-test scoring and task admission.
+
+**Replaced:** the statistics, because each task's difference is now the observation, and a mixed model would add a fitting dependency for the same estimate. The driver, because it was built around the old scenarios.
+
+**Dropped:** the size and latency layers, because `tests/surface.test.mjs` fixes the size and latency was bound to one machine. The committed 4.1 record as a baseline, because it is on tasks at the ceiling, so 4.1 runs live as an arm instead. Mediating variables as covariates, because passes and adherence are effects of the arm.
+
+The old driver's debts went with its code. The ones that still apply are now tested: an alias near-match, a timeout scored as an outcome, and a budget too small to start.
+
+## Tasks
+
+The pool is `benchmarks/v2/candidates.json`. A task needs a reference solution that passes, a second one that passes, an empty solution that fails and mutants that fail, all checked at admission. Then a bare agent must solve it 1 or 2 times in 3 at the medium tier. An admitted task is never edited, only replaced.
+
+Six kinds are wanted: multi-file features, bugs with a misleading symptom, security-sensitive changes, ambiguous specs where asking is right, refactors under green tests, and planted traps a reviewer should catch.
+
+**What the first pool showed:** of 15 tasks, none qualified at the medium tier and 2 at the low tier. Only the two tasks with many independent hidden criteria ever failed. The algorithm tasks all reached the ceiling, including ones the previous low-tier model solved about half the time. **A calibration does not outlive a model generation**, so hard-spec tasks are worth more than hard-algorithm tasks, and each new pin needs a fresh probe. Those 15 are marked `retired` for this pin, and each keeps its directory. A task with zero solves is not re-drawn in the hope of landing in the band, because that would bias the selection.
+
+**The second pool** is 30 tasks written for the kinds that were missing, each with a few traps a senior engineer would be expected to catch: a cause elsewhere than the ticket blames, a policy file the ticket does not mention, a helper with a latent bug, or unprompted hardening. Their band is unmeasured until they are probed.
+
+A pilot's 1-or-2-of-3 is noisy: a task whose true rate is 50% qualifies 75% of the time, and one at 90% still qualifies 27% of the time. So the bare arm is always re-drawn in the recording, and pilot draws are never reused.
+
+## Grading
+
+A draw is solved only if it **finished**, every hidden test is green, no scorer flag is raised, and no existing file changed outside what the task names. A new stray file is reported but does not un-solve the draw.
+
+| Label | Meaning |
+|---|---|
+| `finished` | The agent ended by itself |
+| `stopped-at-gate` | The journal stopped at a named gate, or the budget ran out |
+| `asked-user` | It ended on a question with nothing changed |
+| `timed-out` | It hit the limit. This is an outcome, and it counts as not solved |
+| `invalid` | A leak, a tampered scorer, a wrong model. Reported, never hidden |
+
+A paused draw gets one scripted "continue" on every arm, bare included. It used to go to the workflow arm only, which favoured it.
+
+## The record
+
+Each row of `results.jsonl` holds: draw, task, arm, `label`, `gate`, green and total, `solved`, failing test names, scorer flags, `scope` (touched and added), `adherence` (route, steps, agents and models, opened, closed, passes, gates, signals, security signals, diff facts, findings by severity), `agents` (weighted tokens per agent), `split_coverage`, cost, wall time, turns, tokens, weighted tokens, models and machine load.
+
+Totals come from the result's per-model usage, which includes subagents. The split joins stream ownership to the final per-message usage in the transcripts, because the stream's own per-message figures are placeholders. `split_coverage` says how much of the total the join accounts for.
+
+The diff facts and signals in each row are what the review thresholds can later be fitted from.
+
+## Statistics
+
+- **Cost, tokens, time:** the geometric-mean ratio between arms, blocked by task, with a 90% interval over tasks. Cost-per-solved is reported beside it.
+- **Solved rate:** the paired difference by task, with a 95% interval clustered by task, plus pass@1 and pass^k.
+- **Noise floor:** A/A, bare against bare, on the same tasks, before any A/B and on every model change.
+- **Stopping:** one registered look at half the draws, with a boundary of z 2.8. Anything else runs to the planned count.
+- **Parts:** factorial main effects use `logRatio` over arm sets, with Holm across main effects. Interactions are exploratory.
+
+### Power
+
+`node benchmarks/v2/bench.mjs power --pilot <dir>` prints these, and they are tested against hand calculations.
+
+**Cost or tokens, draws per arm** (90% interval, 80% power). Bare's within-task log spread is 0.13 to 0.18 on both pilots, so the workflow arm's spread sets the size. 4.x had a median of 0.41 and reached 1.81 in the worst scenario. 5.0's is unmeasured.
+
+| Workflow arm spread | 50% | 30% | 25% | 20% |
+|---|---|---|---|---|
+| 0.15 | 3 | 5 | 6 | 8 |
+| 0.41 | 5 | 12 | 17 | 26 |
+| 0.8 | 11 | 35 | 52 | 85 |
+| 1.2 | 21 | 74 | 112 | 184 |
+
+**Pass rate.** +20 points needs 91 draws per arm and +10 needs 385. Pairing saves little here: calibrating tasks into a narrow band removes the between-task variance pairing would cancel, leaving a correlation near 0.06.
+
+**A lane exactly as good as bare, clearing a pass-rate margin.** Each cell is the chance it passes. A simulation of the clustered rule agrees within 3 points.
+
+| Margin | 60 draws per arm | 96 | 128 | Draws per arm for 80% |
+|---|---|---|---|---|
+| -5 points | 8% | 10% | 12% | 1571 |
+| -10 points | 19% | 28% | 36% | 393 |
+| -15 points | 38% | 55% | 67% | 175 |
+| -20 points | 59% | 79% | 89% | 99 |
+
+**Share of hidden tests passed, -5 point margin:** 41 draws per arm at a per-draw spread of 0.08, 142 at 0.15 and 393 at 0.25. Off-ceiling spread on the current pool is under 0.1, but it has no catastrophic failures yet.
+
+### Time and usage per draw, bare
+
+| Tier | Minutes | Weighted tokens | CLI dollars | On the two hard tasks |
+|---|---|---|---|---|
+| Medium | 0.7 | 50k | 0.109 | 1.1 min, 71k, 0.151 |
+| Low | 1.7 | 190k | 0.022 | 2.0 min, 247k, 0.028 |
+
+The medium tier was faster and used fewer tokens per draw than the low tier, on these tasks and on a bare agent. How each tier counts against the usage window is unmeasured, so a window reading is part of the medium pilot.
+
+## Running it
 
 ```bash
-# 1. Pilot: bare, 3 draws per candidate task, to find tasks off the ceiling.
-node benchmarks/v2/bench.mjs run --phase pilot --model <work-tier> --out .somi/bench/pilot --budget-total <usd> --go
+# Free: every live task's admission and its mutants. Takes about a minute, so it is not in the fast gate.
+node benchmarks/v2/bench.mjs admit
 
-# 2. Keep tasks where bare solves 1 or 2 of 3, then bind and commit the set.
+# Paid. Each needs its own go-ahead.
+node benchmarks/v2/bench.mjs record --phase pilot --model <full-id> --out .somi/bench/pilot --budget-total <usd> --go
 node benchmarks/v2/bench.mjs select --pilot .somi/bench/pilot
-node benchmarks/v2/bench.mjs prereg
-git add benchmarks/v2/task-set.json benchmarks/v2/prereg.json && git commit -m "bench: register the task set"
-
-# 3. A/A noise floor. Re-run whenever the model pin changes.
-node benchmarks/v2/bench.mjs run --phase aa --model <work-tier> --out .somi/bench/aa --budget-total <usd> --go
-
-# 4. Main sweep. It refuses until step 2 is committed.
-node benchmarks/v2/bench.mjs run --phase main --model <work-tier> --plugin-41 <packed-4.1-dir> --out .somi/bench/main --budget-total <usd> --go
-
-# 5. Top-tier bare on the 6 hardest tasks, to see whether it simply dominates.
-node benchmarks/v2/bench.mjs run --phase confirm --model <top-tier> --out .somi/bench/confirm --budget-total <usd> --go
-
-# 6. The decision, mechanical. Exit 0 only when it ships.
+node benchmarks/v2/bench.mjs prereg   # refuses while a decision is open; commit prereg.json and task-set.json after it
+node benchmarks/v2/bench.mjs plan --phase aa --pilot .somi/bench/pilot   # prints the draws and the timeout from the pilot
+node benchmarks/v2/bench.mjs record --phase aa --model <full-id> --timeout-min <n> --out .somi/bench/aa --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase main --model <full-id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/main --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase ablation --model <full-id> --timeout-min <n> --out .somi/bench/ablation --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase confirm --model <top-tier-id> --timeout-min <n> --out .somi/bench/confirm --budget-total <usd> --go
 node benchmarks/v2/bench.mjs decide --aa .somi/bench/aa --main .somi/bench/main
 ```
 
-Run the same `run` command again to continue. Each call does at most one chunk of 24 draws, one draw at a time, and finished draws are skipped.
+`record` prints the worst case first, runs chunks of at most 24 draws one at a time, and writes the record and report skeleton to `benchmarks/v2/records/` once the plan finishes. A person writes the reading after reading 10 transcripts. Run the same command again to resume after a stop.
 
-Run nothing else heavy during a chunk. The hidden suites have per-family time limits, so contention would score the machine instead of the agent. Before each draw the harness waits, up to 90 minutes by default, for the one-minute load to fall to half the cores. Each row records the load it started under.
+**Stops:** `--budget-draw` per draw, `--budget-total` per recording, `--window-tokens` at 60% of the stated window, and a quiet-machine wait, because the hidden suites have time limits and contention would score the machine. Two window exhaustions in a row abandon an arm. Run nothing heavy during a recording.
 
-## Budget and stops
+**Free PR smoke:** `tests/bench.test.mjs` runs the whole pipeline with a stub agent on one small real task, using the real scorer and report. It is part of `npm test`.
 
-| Phase | Draws | Projected wall time |
-|---|---|---|
-| A/A | 60 | about 3.1 h |
-| Main | 180 | about 9.3 h |
-| Confirmatory | 18 | about 1 h |
-
-These figures project from 4.1's recording at about 3.1 minutes per draw, and they exclude the pilot. No published per-window quota exists for Claude Max, so measure weighted tokens per draw in the pilot and size each chunk to at most half a window.
-
-- **Per-draw cap:** `--budget-draw`, 3 dollars by default.
-- **Window stop:** `--window-tokens` stops a chunk at 60% of the window you state.
-- **Abandoning an arm:** two window exhaustions in a row abandon the arm, recorded as no valid score rather than a pass.
-
-## What the benchmark can detect
-
-With an assumed paired-difference standard deviation of 0.3 over 20 tasks, the standard error is about 0.067 and the minimum detectable effect at 80% power is about 19 points. Only large effects are detectable, and the A/A floor says what counts as noise.
+**Ablations** are find-and-replace edits on the arm's private plugin copy, listed in `benchmarks/v2/ablations.json`. The shipped plugin has no off switch, so no project config can lower a review. A patch that stops matching stops the recording.
 
 ## Host smoke
 
@@ -74,8 +148,33 @@ copilot --plugin-dir <packed-plugin> --allow-tool 'shell(node)' --allow-tool 'sh
 cut -c1-200 .somi/state/journal.jsonl
 ```
 
-## Candidate pool
+## Decisions
 
-[`benchmarks/v2/candidates.json`](../benchmarks/v2/candidates.json) holds the tasks written so far. The pilot target is about 40 candidates, so that 20 survive with at least 4 on a real trust boundary. The pool is smaller than that today. `select` names the shortfall and refuses unless you pass `--allow-short`, which records the shortfall in the task set and leaves the release rule unable to pass with fewer than 20 tasks.
+`benchmarks/v2/prereg.json` is the pre-registration, and `prereg` refuses while any of its `decisions` is empty. The maintainer accepted each recommendation below. Each is cheap to reverse until a main draw exists.
+
+**The ship rule:** tokens per solved task at most 1.5x bare, the lower 95% bound at or above -5 points on hidden tests passed and -20 points on solved rate, the A/A interval containing zero, and every task paired with no arm abandoned. A draw that did not finish scores zero on hidden tests passed. This replaces the earlier rule of -5 points on solved rate, which a lane equal to bare would pass 8% of the time.
+
+| Decision | Options | Recommendation accepted | Reversing it |
+|---|---|---|---|
+| **Primary claim** | Better than bare on outcome; or cheaper per solved task with quality held | Cost per solved task, with a quality guard. A 10-point outcome gain needs 385 draws per arm | Free before registration, a new recording after |
+| **Quality guard** | Keep -5 on solved rate; widen the margin; or add a finer measure | Keep -5, on the share of hidden tests passed. Add a -20 guard on solved rate. -5 on solved rate passes an equal lane 8% of the time | Same |
+| **Tier for the paired run** | Medium; low with a small medium check | Medium. Low-tier effects are not shown to transfer, and on bare it was not the cheaper tier in tokens | A recording per change |
+| **Review tier** | All agents at the work tier; or the security reviewer at the review tier, as shipped | As shipped, so it measures what users get | A recording |
+| **Tasks and draws** | 20 tasks by 3 draws; 16 by 6 | 16 tasks by 6 draws on bare and 5.0, 3 on 4.1 | A recording, and new tasks need authoring |
+| **Ablation set** | Full 3-factor factorial; one-at-a-time; none yet | Review, digest and planning factorial, one draw per task and cell, plus always-on review as the escalation check. Sizing no longer exists | One recording |
+| **Minimum effect** | 20%, 25% or 30% on cost | 25% for a release, 30% for a part | Free before registration |
+| **Budget per release** | Set per run | A figure per step, from the table below | Any time |
+
+### Projected size
+
+Using the two hard tasks' 1.1 minutes and $0.15 per bare draw at the medium tier, and a workflow arm at 1.5x to 7x. 5.0's real figure is unmeasured, so a small pilot comes first. Harder new tasks may cost more.
+
+| Step | Draws | Hours | CLI dollars |
+|---|---|---|---|
+| New-task probe, 30 tasks by 3 | 90 | 1.7 | about 14 |
+| A/A, 16 tasks by 3, two arms | 96 | 1.8 | about 15 |
+| Small workflow pilot, 4 tasks by 3 on 5.0 | 12 | 0.3 to 1.5 | about 3 to 13 |
+| Main, 16 by 6 on bare and 5.0, 16 by 3 on 4.1 | 240 | 7 to 20 | about 60 to 165 |
+| Ablations, 10 arms by 16 tasks | 160 | 4 to 19 | about 35 to 155 |
 
 Prefer tasks written for SoMi over public issues, to avoid contamination.

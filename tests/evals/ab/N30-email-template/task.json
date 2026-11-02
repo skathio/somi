@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Our emails go out as HTML now, and customer names broke one last week. Add renderHtml(template, data, options) to src/template.mjs, which fills in a template the way renderText does and makes the result safe as HTML.",
+    "{{{name}}} puts a value in unescaped, but only for the names in options.trusted. For anything else it is treated like {{name}}.",
+    "renderText keeps working exactly as it does now, because plain-text emails must not show entities.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N30-651ed5c0515043fe",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add an HTML renderer to the template module, as the numbered statements describe. Follow the conventions already in the code and change only what the ticket needs."
+}

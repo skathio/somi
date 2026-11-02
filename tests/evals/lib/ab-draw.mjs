@@ -137,7 +137,7 @@ export const probeSandbox = (spec) => spawnSync('bwrap', sandboxArgs({ ...spec, 
 const PATH_ONLY = (home) => ({ PATH: process.env.PATH ?? '', HOME: home });
 /** Fresh directories under `tmp` (made by the caller with mkdtemp) -> {ws, before}; throws an Error naming the step that failed. */
 /** `cost` is the already-validated `cost` block of the workspace's .somi/config.json (plain data; the caller validates it). */
-export function prepareWorkspace({ taskDir, tmp, cost = { ceiling: 'medium' } }) {
+export function prepareWorkspace({ taskDir, tmp, config = { cost: { ceiling: 'medium' } } }) {
   const ws = path.join(tmp, 'ws');
   fs.mkdirSync(ws, { mode: 0o700 });
   fs.mkdirSync(path.join(tmp, 'cfg'), { mode: 0o700 });
@@ -157,7 +157,7 @@ export function prepareWorkspace({ taskDir, tmp, cost = { ceiling: 'medium' } })
     if (r.error || r.status !== 0) throw new Error('the task setup failed');
   }
   fs.mkdirSync(path.join(ws, '.somi'), { recursive: true });
-  fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify({ cost })}\n`);
+  fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify(config)}\n`);
   const git = (...a) => { const r = spawnSync('git', a, { cwd: ws, env: { ...PATH_ONLY(tmp), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore', timeout: SETUP_MS }); if (r.error || r.status !== 0) throw new Error(`git ${a[0]} failed`); };
   git('init', '-q', '-b', 'main', '--template=');
   git('config', 'user.name', 'somi-ab');
@@ -171,17 +171,25 @@ export function prepareWorkspace({ taskDir, tmp, cost = { ceiling: 'medium' } })
 }
 
 /** `npm pack` the repository into `runTmp` and extract it read-only -> the plugin directory. Throws on any doubt. */
-export function buildPlugin({ repoRoot, runTmp }) {
+export function buildPlugin({ repoRoot, runTmp, dirName = 'plugin', patches = [] }) {
   const env = { PATH: process.env.PATH ?? '', HOME: runTmp, npm_config_cache: path.join(runTmp, 'npm-cache'), npm_config_update_notifier: 'false' };
   const pack = spawnSync('npm', ['pack', '--ignore-scripts', '--silent', '--pack-destination', runTmp], { cwd: repoRoot, env, encoding: 'utf8', timeout: 120000 });
   const name = (pack.stdout ?? '').trim().split('\n').pop();
   if (pack.status !== 0 || !/^[A-Za-z0-9._@-]+\.tgz$/.test(name)) throw new Error('npm pack failed');
-  const dest = path.join(runTmp, 'plugin');
+  const dest = path.join(runTmp, dirName);
   fs.mkdirSync(dest, { mode: 0o700 });
   const tar = spawnSync('tar', ['-xzf', path.join(runTmp, name), '-C', dest, '--strip-components=1', '--no-same-owner'], { stdio: 'ignore', timeout: 60000 });
   if (tar.status !== 0) throw new Error('extracting the package failed');
   const m = lstatManifest(dest);
   if (!m?.ok || m.files.some(([p]) => p.startsWith('tests/evals/') || p.startsWith('.somi/') || p.includes('/manual/'))) throw new Error('the packed plugin holds files that must not ship');
+  // An ablation edits this private copy only, so the shipped plugin has no switch for turning a part off. A patch that no longer
+  // matches exactly once stops the recording instead of quietly measuring the full plugin.
+  for (const { file, find, replace } of patches) {
+    const target = path.join(dest, file);
+    const text = fs.readFileSync(target, 'utf8');
+    if (text.split(find).length !== 2) throw new Error(`the ablation patch for ${file} does not match exactly once`);
+    fs.writeFileSync(target, text.replace(find, () => replace));
+  }
   const lock = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) lock(p); else fs.chmodSync(p, fs.statSync(p).mode & 0o111 ? 0o500 : 0o400); } fs.chmodSync(d, 0o500); };
   lock(dest);
   return dest;
@@ -229,7 +237,7 @@ export async function runDraw({ model, arm, prompt, budget, timeoutMs, claude, e
       run.turns += sink.state.turns;
       for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
       session = typeof res.session_id === 'string' ? res.session_id : null;
-      if (sink.state.limit || arm !== 'somi' || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= maxResumes) break;
+      if (sink.state.limit || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= maxResumes) break;
       if (budget - run.cost < MIN_REMAINING_USD) { run.exhausted = true; break; }
       run.resumes++; text = RESUME_PROMPT;
     }
@@ -252,7 +260,7 @@ export function classify({ run, arm, budget }) {
   if (!r) return inv(AUTH_STDERR.test(run.stderr) ? 'auth' : 'no-result');
   if (r.is_error && (AUTH_STDERR.test(run.stderr) || /please run \/login/i.test(String(r.result ?? '')))) return inv('auth');
   if (r.subtype === 'error_max_budget_usd' || run.cost > budget || run.exhausted) return { outcome: 'over-budget', reason: 'budget exhausted' };
-  if (arm === 'somi' && r.subtype === 'success' && looksPaused(run.text)) return { outcome: 'paused', reason: `still waiting after ${run.resumes} resume(s)` };
+  if (r.subtype === 'success' && looksPaused(run.text)) return { outcome: 'paused', reason: `still waiting after ${run.resumes} resume(s)` };
   return { outcome: 'scored', reason: r.subtype === 'success' ? '' : String(r.subtype ?? 'no-subtype').slice(0, 40) };
 }
 

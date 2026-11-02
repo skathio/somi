@@ -5,13 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { REPO, makeRepo, writeFiles } from './helpers.mjs';
-import { armSummary, evaluateAa, evaluateRelease, pairedDifference, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
-import { abandonedArms, armPrompt, buildPlan, isQuiet, preregProblem, sha256, streamUsage } from '../benchmarks/v2/bench.mjs';
+import { armSummary, callRatio, testShare, costDrawsPerArm, evaluateAa, evaluateRelease, holm, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, pairedDifference, passDrawsPerArm, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
+import { liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
+import { adherence, agentSplit, journalFacts, labelDraw, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
 
-// Three draws per task for one arm, from a list of solved counts per task.
-function drawsFor(arm, solvedCounts, { weighted = 100 } = {}) {
-  return solvedCounts.flatMap((solved, i) => [1, 2, 3].map((draw) => ({ task: `t${i}`, arm, draw, solved: draw <= solved, weighted, cost: 0.1, wall_ms: 1000, turns: 5 })));
+// Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
+function drawsFor(arm, solvedCounts, { weighted = 100, missed = 1 } = {}) {
+  return solvedCounts.flatMap((solved, i) => [1, 2, 3].map((draw) => ({ task: `t${i}`, arm, draw, solved: draw <= solved, label: 'finished', green: draw <= solved ? 10 : 10 - missed, total: 10, weighted, cost: 0.1, wall_ms: 1000, turns: 5 })));
 }
+const RULE = { min_tasks: 20, k: 3, aa_k: 3, max_token_ratio: 1.5, test_share_margin: -0.05, solved_rate_margin: -0.2 };
 const twenty = (values) => Array.from({ length: 20 }, (_, i) => values[i % values.length]);
 
 test('the paired difference matches a hand calculation', () => {
@@ -59,29 +61,34 @@ const aaOk = [...drawsFor('bare-a', twenty([1, 2])), ...drawsFor('bare-b', twent
 const bareRows = drawsFor('bare', twenty([1, 2]), { weighted: 100 });
 
 test('the release rule ships a non-inferior, affordable lane', () => {
-  const v = evaluateRelease({ aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 140 })] });
+  const v = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 140 })] });
   assert.equal(v.ships, true, v.reasons.join('; '));
   assert.ok(Math.abs(v.token_ratio - 1.4) < 1e-9);
 });
 
 test('the release rule refuses each failure, and says which', () => {
-  const costly = evaluateRelease({ aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 151 })] });
+  const costly = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 151 })] });
   assert.equal(costly.ships, false);
   assert.match(costly.reasons.join(), /tokens per solved/);
 
-  const worse = evaluateRelease({ aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([0, 1]), { weighted: 100 })] });
+  const worse = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([0, 0]), { weighted: 100 })] });
   assert.equal(worse.ships, false);
-  assert.match(worse.reasons.join(), /non-inferiority/);
+  assert.match(worse.reasons.join(), /solved-rate/);
 
-  const noFloor = evaluateRelease({ aa: [], main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 100 })] });
+  const thinner = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 100, missed: 5 })] });
+  assert.equal(thinner.ships, false);
+  assert.match(thinner.reasons.join(), /hidden-test share/);
+  assert.doesNotMatch(thinner.reasons.join(), /solved-rate/);
+
+  const noFloor = evaluateRelease({ rule: RULE, aa: [], main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 100 })] });
   assert.equal(noFloor.ships, false);
   assert.match(noFloor.reasons.join(), /A\/A/);
 
-  const small = evaluateRelease({ aa: aaOk, main: [...drawsFor('bare', [1, 2, 1]), ...drawsFor('somi5', [1, 2, 1])] });
+  const small = evaluateRelease({ rule: RULE, aa: aaOk, main: [...drawsFor('bare', [1, 2, 1]), ...drawsFor('somi5', [1, 2, 1])] });
   assert.equal(small.ships, false);
   assert.match(small.reasons.join(), /only 3 tasks/);
 
-  const gaveUp = evaluateRelease({ aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 100 }).map((r) => ({ ...r, abandoned: true }))] });
+  const gaveUp = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 100 }).map((r) => ({ ...r, abandoned: true }))] });
   assert.equal(gaveUp.ships, false);
   assert.match(gaveUp.reasons.join(), /no valid score/);
 });
@@ -92,6 +99,14 @@ test('selection keeps tasks between floor and ceiling, boundary tasks first, and
   const picked = selectTasks(pilot, candidates);
   assert.deepEqual(picked.tasks.map((t) => t.id), ['t1', 't3']);
   assert.equal(picked.shortfalls.length, 2);
+  assert.deepEqual(picked.hardest, ['t3', 't1']);
+});
+
+test('the main plan gives 4.1 fewer draws, in the same rounds', () => {
+  const plan = buildPlan('main', [{ id: 't', dir: 'd' }], 1, 6, { somi41: 3 });
+  const count = (arm) => plan.filter((d) => d.arm === arm).length;
+  assert.deepEqual([count('bare'), count('somi5'), count('somi41')], [6, 6, 3]);
+  assert.ok(plan.filter((d) => d.arm === 'somi41').every((d) => d.draw <= 3));
 });
 
 test('plans are paired, seeded and repeatable', () => {
@@ -164,9 +179,12 @@ test('a paid run refuses without --go, and the registration is sealed in the fil
   assert.equal(r.status, 1);
   assert.match(r.stderr, /--go/);
   const prereg = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/prereg.json'), 'utf8'));
-  assert.equal(prereg.rule.non_inferiority_margin, -0.05);
+  assert.equal(prereg.rule.test_share_margin, -0.05);
+  assert.equal(prereg.rule.solved_rate_margin, -0.2);
   assert.equal(prereg.rule.max_token_ratio, 1.5);
-  assert.equal(prereg.k, 3);
+  assert.equal(prereg.k, 6);
+  assert.equal(prereg.arm_k.somi41, 3);
+  assert.ok(Object.values(prereg.decisions).every((v) => typeof v === 'string'));
 });
 
 test('every candidate task exists and is well formed', () => {
@@ -177,4 +195,257 @@ test('every candidate task exists and is well formed', () => {
     assert.ok(Array.isArray(spec.statements) && spec.statements.length > 0, task.id);
     assert.ok(fs.existsSync(path.join(REPO, task.dir, 'hidden')), task.id);
   }
+});
+
+test('a ratio is blocked by task, and arm sets give a main effect', () => {
+  const row = (task, arm, weighted) => ({ task, arm, weighted });
+  const rows = [row('t1', 'a', 200), row('t1', 'b', 100), row('t2', 'a', 80), row('t2', 'b', 40), row('t3', 'a', 660), row('t3', 'b', 300)];
+  const r = logRatio(rows, 'a', 'b');
+  assert.equal(r.n, 3);
+  assert.ok(r.ratio > 2 && r.ratio < 2.1);
+  assert.ok(r.lower <= r.ratio && r.upper >= r.ratio);
+  const effect = logRatio([...rows, row('t1', 'c', 200), row('t2', 'c', 80), row('t3', 'c', 660), row('t1', 'd', 100), row('t2', 'd', 40), row('t3', 'd', 300)], ['a', 'c'], ['b', 'd']);
+  assert.ok(Math.abs(effect.ratio - r.ratio) < 1e-9);
+  assert.equal(logRatio([row('t1', 'a', 0), row('t1', 'b', 1)], 'a', 'b').dropped, 1);
+});
+
+test('a stopped draw scores no test share, and a ratio is called only when its whole interval clears the effect', () => {
+  assert.equal(testShare({ label: 'finished', green: 9, total: 10 }), 0.9);
+  assert.equal(testShare({ label: 'stopped-at-gate', green: 10, total: 10 }), 0);
+  assert.equal(callRatio({ ratio: 0.6, lower: 0.5, upper: 0.74 }, 0.25), 'lower');
+  assert.equal(callRatio({ ratio: 0.6, lower: 0.5, upper: 0.8 }, 0.25), 'inconclusive');
+  assert.equal(callRatio({ ratio: 1.6, lower: 1.34, upper: 2 }, 0.25), 'higher');
+  assert.equal(callRatio({ ratio: null }, 0.25), 'no estimate');
+});
+
+test('Holm stops at the first test that misses its share of alpha', () => {
+  const out = holm([{ name: 'a', p: 0.01 }, { name: 'b', p: 0.04 }, { name: 'c', p: 0.03 }]);
+  assert.deepEqual(out.map((t) => [t.name, t.significant]), [['a', true], ['c', false], ['b', false]]);
+});
+
+test('the power figures match hand calculations', () => {
+  // (1.645 + 0.842)^2 * (0.15^2 + 0.41^2) / ln(0.7)^2 = 9.3, plus 2 for the t correction, rounded up.
+  assert.equal(costDrawsPerArm({ sigmaA: 0.15, sigmaB: 0.41, effect: 0.3 }), 12);
+  assert.equal(passDrawsPerArm({ p1: 0.5, p2: 0.6 }), 385);
+  assert.equal(nonInferiorityDrawsPerArm({ margin: -0.05, sd: 0.5 }), 1571);
+  assert.ok(Math.abs(nonInferiorityPower({ margin: -0.05, drawsPerArm: 60 }) - 0.079) < 0.002);
+  assert.ok(Math.abs(nonInferiorityPower({ margin: -0.2, drawsPerArm: 99 }) - 0.8) < 0.01);
+});
+
+const line = (o) => JSON.stringify(o);
+
+test('the per-agent split joins the stream to the final figures in the transcripts', () => {
+  const stream = [
+    line({ type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', usage: { output_tokens: 1 }, content: [{ type: 'tool_use', id: 'tu1', name: 'Agent', input: { subagent_type: 'somi-reviewer', model: 'x' } }] } }),
+    line({ type: 'assistant', parent_tool_use_id: 'tu1', message: { id: 'm2', usage: { output_tokens: 1 }, content: [] } }),
+  ].join('\n');
+  const transcripts = [line({ type: 'assistant', message: { id: 'm1', model: 'x', usage: { output_tokens: 100 } } }), line({ type: 'assistant', isSidechain: true, message: { id: 'm2', model: 'x', usage: { input_tokens: 40, output_tokens: 10 } } })];
+  const { agents, coverage } = agentSplit(stream, transcripts, 1180);
+  assert.equal(agents.main.weighted, 500);
+  assert.equal(agents['somi-reviewer'].weighted, 90);
+  assert.equal(coverage, 590 / 1180);
+  assert.equal(agentSplit(stream, [], 100).coverage, 0);
+});
+
+test('adherence reads the route, the agents and the journal', () => {
+  const step = (name, input) => line({ type: 'assistant', parent_tool_use_id: null, message: { id: name, content: [{ type: 'tool_use', id: name, name, input }] } });
+  const journal = [
+    line({ type: 'open', milestone: 'm', next: 'code' }),
+    line({ type: 'after-code', signals: ['large-diff'], security: ['sink'], facts: { lines: 400 }, next: 'review' }),
+    line({ type: 'after-review', pass: 1, findings: [{ severity: 'Major' }, { severity: 'Minor' }], next: 'ask', stop: 'max-passes' }),
+  ].join('\n');
+  const a = adherence([step('mcp__somi__somi_step', {}), step('Bash', { command: 'node "x/somi.mjs" step after-code' }), step('Agent', { subagent_type: 'somi-reviewer', model: 'r' })].join('\n'), journal);
+  assert.equal(a.route, 'mixed');
+  assert.deepEqual(a.agents, [{ type: 'somi-reviewer', model: 'r' }]);
+  assert.equal(a.passes, 1);
+  assert.deepEqual(a.findings, { Major: 1, Minor: 1 });
+  assert.deepEqual(a.gates, ['max-passes']);
+  assert.equal(a.next, 'ask');
+  assert.deepEqual(a.signals, ['large-diff']);
+  assert.equal(adherence('', '').route, 'none');
+  assert.equal(journalFacts('not json\n').opened, false);
+});
+
+test('every draw gets one label, and a stopped loop is never finished', () => {
+  const none = { next: null };
+  assert.deepEqual(labelDraw({ outcome: 'scored', facts: { next: 'ask', stop: 'max-passes' } }), { label: 'stopped-at-gate', gate: 'max-passes' });
+  assert.deepEqual(labelDraw({ outcome: 'over-budget', facts: none }), { label: 'stopped-at-gate', gate: 'budget' });
+  assert.equal(labelDraw({ outcome: 'invalid', reason: 'timeout', facts: none }).label, 'timed-out');
+  assert.equal(labelDraw({ outcome: 'invalid', reason: 'tampered', facts: none }).label, 'invalid');
+  assert.equal(labelDraw({ outcome: 'paused', facts: none }).label, 'asked-user');
+  assert.equal(labelDraw({ outcome: 'scored', facts: none, paused: true, changed: false }).label, 'asked-user');
+  assert.equal(labelDraw({ outcome: 'scored', facts: none, paused: true, changed: true }).label, 'finished');
+  assert.equal(labelDraw({ outcome: 'scored', facts: { next: 'close' } }).label, 'finished');
+});
+
+test('the scope check separates a touched existing file from a new stray one', () => {
+  const task = { source: ['src/'], test_dir: 'test', root_files: ['README.md'] };
+  const before = [['src/a.js', '1'], ['README.md', '2'], ['lib/keep.js', '3'], ['.somi/config.json', '4']];
+  const after = [['src/a.js', '9'], ['README.md', '8'], ['lib/keep.js', '7'], ['.somi/config.json', '6'], ['test/new.js', '5'], ['notes.md', '5'], ['.somi/state/journal.jsonl', '5']];
+  assert.deepEqual(scopeCheck(before, after, task), { touched: ['lib/keep.js'], added: ['notes.md'] });
+  assert.deepEqual(scopeCheck(before, before.slice(0, 2).concat(before[3]), task).touched, ['lib/keep.js']);
+});
+
+test('a reference solution never trips the scope check', () => {
+  const { tasks } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/candidates.json'), 'utf8'));
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  for (const t of tasks) {
+    const dir = path.join(REPO, t.dir);
+    const spec = JSON.parse(fs.readFileSync(path.join(dir, 'task.json'), 'utf8'));
+    const list = (sub) => walk(path.join(dir, sub)).map((f) => [path.relative(path.join(dir, sub), f), '1']);
+    const changed = list('oracle').map(([p]) => [p, '2']);
+    assert.deepEqual(scopeCheck(list('fixture'), [...list('fixture').filter(([p]) => !changed.some(([q]) => q === p)), ...changed], spec), { touched: [], added: [] }, t.id);
+  }
+});
+
+test('a run is pinned to a full id, and an alias or a near match is refused', () => {
+  assert.equal(isFullModelId('claude-x-5-5'), true);
+  assert.equal(isFullModelId('sonnet'), false);
+  assert.equal(servedAsPinned(['claude-x-5-5'], ['claude-x-5-5']), true);
+  assert.equal(servedAsPinned(['claude-x-5-5-20261001'], ['claude-x-5-5']), true);
+  assert.equal(servedAsPinned(['claude-x-5-5-experimental'], ['claude-x-5-5']), false);
+  assert.equal(servedAsPinned(['my-claude-x-5-5'], ['claude-x-5-5']), false);
+  assert.equal(servedAsPinned(['claude-y-5-5'], ['claude-x-5-5']), false);
+  assert.equal(servedAsPinned(['<synthetic>', 'claude-x-5-5'], ['claude-x-5-5']), true);
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'pilot', '--out', 'x', '--model', 'sonnet', '--budget-total', '1', '--go'], { encoding: 'utf8' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /full model id/);
+});
+
+test('the privacy scan names the kind and place, never the value', () => {
+  assert.deepEqual(findLeaks({ ok: 'plain', p: `${['', 'home', 'someone'].join('/')}/x` }, 'r', 'nohost'), [{ at: 'r.p', kind: 'home path' }]);
+  assert.deepEqual(findLeaks([`sk-${'a'.repeat(20)}`], 'r', 'nohost'), [{ at: 'r[0]', kind: 'token-like string' }]);
+  assert.deepEqual(findLeaks('built on my-laptop', 'r', 'my-laptop'), [{ at: 'r', kind: 'hostname' }]);
+  assert.deepEqual(findLeaks({ a: 1, b: ['fine'] }, 'r', 'nohost'), []);
+});
+
+test('the timeout comes from the pilot and leaves room for a workflow arm', () => {
+  assert.equal(timeoutFromPilot([]), null);
+  const rows = Array.from({ length: 20 }, (_, i) => ({ wall_ms: (i + 1) * 60000 }));
+  assert.deepEqual(timeoutFromPilot(rows), { bare_min: 29, workflow_min: 200 });
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'aa', '--out', 'x', '--model', 'claude-x-5-5', '--budget-total', '1', '--go'], { encoding: 'utf8' });
+  assert.match(r.stderr, /--timeout-min is required/);
+});
+
+test('every ablation patch still matches the shipped file exactly once', () => {
+  const { patches, cells } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8'));
+  for (const [name, { file, find }] of Object.entries(patches)) assert.equal(fs.readFileSync(path.join(REPO, file), 'utf8').split(find).length, 2, name);
+  for (const [cell, list] of Object.entries(cells)) for (const name of list) assert.ok(patches[name], `${cell}: ${name}`);
+  assert.equal(armPrompt('abl-review-off', 'do it'), '/somi:task do it');
+  assert.ok(armsFor('ablation').includes('bare') && armsFor('ablation').includes('somi5'));
+  assert.deepEqual(armsFor('pilot'), ['bare']);
+});
+
+test('recordings on another model or rule cannot be compared', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-compare-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const write = (name, plan) => { fs.mkdirSync(path.join(dir, name)); fs.writeFileSync(path.join(dir, name, 'plan.json'), JSON.stringify(plan)); };
+  const same = { phase: 'aa', model: 'm', review_model: null, rule: 'r', host: { cores: 8 } };
+  write('a', same);
+  write('b', { ...same, phase: 'main' });
+  write('c', { ...same, model: 'other' });
+  assert.equal(comparableRecordings(path.join(dir, 'a'), path.join(dir, 'b')), null);
+  assert.match(comparableRecordings(path.join(dir, 'a'), path.join(dir, 'c')), /differ/);
+});
+
+test('a task that failed its probe stays out of later pilots', () => {
+  assert.deepEqual(liveCandidates([{ id: 'a', retired: 'at the ceiling' }, { id: 'b' }]).map((t) => t.id), ['b']);
+});
+
+test('every candidate names a known kind of task', () => {
+  const { tasks } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/candidates.json'), 'utf8'));
+  const kinds = ['multi-file', 'misleading-bug', 'security', 'ambiguous-spec', 'refactor', 'planted-trap', 'algorithm'];
+  for (const t of tasks) assert.ok(kinds.includes(t.stratum), t.id);
+});
+
+test('registration refuses while a decision is open', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-prereg-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  assert.equal(openDecisions({ decisions: { tier: 'medium', budget: null } }).join(), 'budget');
+  assert.deepEqual(openDecisions({ decisions: { tier: 'medium' } }), []);
+});
+
+// The free smoke: the whole pipeline on one small real task with a stub agent. It plans, runs, scores with the real scorer, labels,
+// reports and writes the record. It spends nothing.
+function stubAgent(dir, { journal = null } = {}) {
+  const oracle = path.join(REPO, 'tests/evals/ab/T1-proration/oracle');
+  const events = [
+    { type: 'system', subtype: 'init', session_id: 's' },
+    { type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', model: 'stub-1', content: [{ type: 'text', text: 'Done.' }], usage: { output_tokens: 1 } } },
+    { type: 'result', subtype: 'success', session_id: 's', result: 'Done.', num_turns: 1, total_cost_usd: 0.01, modelUsage: { 'stub-1': { inputTokens: 10, outputTokens: 20, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } } },
+  ];
+  const file = path.join(dir, journal ? 'stub-gate' : 'stub');
+  const body = [
+    '#!/usr/bin/env node',
+    "const fs = require('node:fs');",
+    // The reference solution carries the task's canary, and the leak guard rightly refuses a silent copy, so the stub writes it without.
+    `for (const f of fs.readdirSync(${JSON.stringify(oracle)}, { recursive: true, withFileTypes: true })) { if (!f.isFile()) continue; const from = require('node:path').join(f.parentPath, f.name); const to = require('node:path').relative(${JSON.stringify(oracle)}, from); fs.mkdirSync(require('node:path').dirname(to), { recursive: true }); fs.writeFileSync(to, fs.readFileSync(from, 'utf8').replace(/SOMI-CANARY-[A-Za-z0-9-]+/g, '')); }`,
+    ...(journal ? [`fs.mkdirSync('.somi/state', { recursive: true }); fs.writeFileSync('.somi/state/journal.jsonl', ${JSON.stringify(journal)});`] : []),
+    `for (const e of ${JSON.stringify(events)}) console.log(JSON.stringify(e));`,
+  ].join('\n');
+  fs.writeFileSync(file, body, { mode: 0o755 });
+  return file;
+}
+
+test('the smoke runs the whole pipeline with a stub agent, and a stopped loop does not count as solved', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-smoke-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const envFile = path.join(dir, 'eval.env');
+  fs.writeFileSync(envFile, `CLAUDE_CODE_OAUTH_TOKEN=stub-token-${sha256('smoke').slice(0, 40)}\n`, { mode: 0o600 });
+  const { CLAUDE_CODE_OAUTH_TOKEN: _drop, ...env } = process.env;
+  const bench = (args) => spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), ...args], { encoding: 'utf8', env, timeout: 120000 });
+  const common = ['--phase', 'pilot', '--model', 'stub-1', '--budget-total', '1', '--budget-draw', '0.1', '--go', '--no-sandbox', '--tasks', 'T1-proration', '--env-file', envFile];
+
+  const out = path.join(dir, 'solved');
+  const records = path.join(dir, 'records');
+  const r = bench(['record', ...common, '--claude', stubAgent(dir), '--out', out, '--write', records]);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /worst case: 3 draws/);
+  const rows = fs.readFileSync(path.join(out, 'results.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(rows.length, 3);
+  for (const row of rows) {
+    assert.equal(row.solved, true, JSON.stringify(row));
+    assert.equal(row.label, 'finished');
+    assert.deepEqual(row.scope, { touched: [], added: [] });
+    assert.equal(row.adherence.route, 'none');
+  }
+  const written = fs.readdirSync(records).sort();
+  assert.equal(written.length, 2);
+  const report = fs.readFileSync(path.join(records, written[1]), 'utf8');
+  assert.match(report, /\| bare \| 3 \| 3 \|/);
+  assert.match(report, /finished/);
+  assert.deepEqual(findLeaks(JSON.parse(fs.readFileSync(path.join(records, written[0]), 'utf8'))), []);
+
+  assert.match(bench(['run', ...common, '--claude', stubAgent(dir), '--out', out]).stdout, /ran 0 draws; 0 remain/);
+
+  const short = bench(['run', ...common.map((a) => (a === '1' ? '0.05' : a)), '--claude', stubAgent(dir), '--out', path.join(dir, 'short')]);
+  assert.equal(short.status, 1);
+  assert.match(short.stdout, /budget stop/);
+  assert.equal(fs.existsSync(path.join(dir, 'short', 'results.jsonl')), false);
+
+  const slow = path.join(dir, 'stub-slow');
+  fs.writeFileSync(slow, '#!/usr/bin/env node\nsetTimeout(() => {}, 60000);\n', { mode: 0o755 });
+  const late = path.join(dir, 'late');
+  assert.equal(bench(['run', ...common, '--claude', slow, '--timeout-min', '0.01', '--out', late]).status, 0);
+  const lateRows = fs.readFileSync(path.join(late, 'results.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(lateRows.length, 3);
+  for (const row of lateRows) {
+    assert.equal(row.label, 'timed-out');
+    assert.equal(row.solved, false);
+  }
+
+  const gated = path.join(dir, 'gated');
+  const journal = `${JSON.stringify({ type: 'after-review', pass: 2, findings: [], next: 'ask', stop: 'recurring-finding' })}\n`;
+  assert.equal(bench(['run', ...common, '--claude', stubAgent(dir, { journal }), '--out', gated]).status, 0);
+  for (const row of fs.readFileSync(path.join(gated, 'results.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))) {
+    assert.equal(row.green, row.total, 'the hidden suite passes');
+    assert.equal(row.solved, false, 'but the loop stopped');
+    assert.equal(row.gate, 'recurring-finding');
+  }
+});
+
+test('plan prints the draws and spends nothing', () => {
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'plan', '--phase', 'pilot'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /draws across \d+ tasks; chunks of at most 24; no spend/);
 });

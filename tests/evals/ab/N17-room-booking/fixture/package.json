@@ -1,0 +1,8 @@
+{
+  "name": "n17-room-booking",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

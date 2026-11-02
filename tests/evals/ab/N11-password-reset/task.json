@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "People forget their passwords. Add requestReset(store, email, deps) and confirmReset(store, token, newPassword, deps) to src/reset.mjs.",
+    "requestReset sends the person a link by calling deps.mailer.send(email, token). confirmReset sets the new password.",
+    "A reset token works for one hour. A token that cannot be used throws HttpError 400 with code invalid_token.",
+    "Time comes from deps.clock, in milliseconds. Follow the password rules in src/passwords.mjs. The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N11-d0372d7f33357630",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add password reset to the accounts service, as the numbered statements describe. Follow the conventions already in the code and change only what the ticket needs."
+}

@@ -12,6 +12,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 #### Changed
 
+- **Benchmark v2:** each draw now gets an outcome label, protocol fields and a per-agent token split. A stopped loop no longer counts as solved. A recording is pinned to a full model id, and one command runs it and writes the record. Parts can be measured on and off without any switch in the shipped plugin. The whole pipeline runs free with a stub agent in the test suite.
 - **The default lane is bare-first.** `/task` codes in the main thread, runs a fast gate, and reads the real diff. A clean small change gets no review.
 - **Reviews run once per feature.** One reviewer, plus a security reviewer on a real trust boundary. Only a Blocker or a Major confirmed on a boundary re-loops, at most twice, and the second pass reads only the fix diff. Minor and Nit findings are logged.
 - **State is one journal written by the tools.** Status and pull request text are rendered from it. Resuming after a kill at any transition leaves a byte-identical journal.

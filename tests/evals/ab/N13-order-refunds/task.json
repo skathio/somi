@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Support needs to refund all or part of an order. Add refundOrder(store, orderId, { amount, requestId }, now) to src/refunds.mjs, following the money rules in the README.",
+    "It returns { orderId, amount, tax, remaining, requestId }, where remaining is what can still be refunded.",
+    "An unknown order throws HttpError 404 not_found. An amount that is not a positive whole number of cents throws 400 invalid_amount. More than what remains throws 422 refund_too_large. An order that has not been paid throws 409 not_refundable.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N13-e37e3c4ebef5d811",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add refunds to the orders service, as the numbered statements describe. The README holds the money rules. Follow the conventions already in the code and change only what the ticket needs."
+}

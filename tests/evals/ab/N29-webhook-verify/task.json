@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Add verifyWebhook(rawBody, headers, deps) to src/inbound.mjs for what the payment provider sends us, following their documentation in the README. deps holds secrets, an array, plus clock in milliseconds and seen, a Map we keep between calls.",
+    "It returns the parsed event. A delivery that fails verification throws HttpError 401 with code bad_signature. An event we have already accepted throws HttpError 409 with code replayed.",
+    "rawBody is a Buffer. The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N29-76d22d6616b79c6c",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add verification of inbound provider webhooks, as the numbered statements describe. The README holds the provider's documentation. Follow the conventions already in the code and change only what the ticket needs."
+}

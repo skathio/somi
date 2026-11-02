@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-// bench.mjs: benchmark v2. It answers one question: does the 5.0 default lane stay as good as a bare agent, at no more than 1.5x the
-// tokens per solved task? See docs/BENCHMARK.md for the routine. A paid run needs --go. Nothing here runs in `npm test`.
+// bench.mjs: benchmark v2. Is SoMi worth it against a bare agent on the same model, is 5.0 better than 4.1, and which parts pay? See
+// docs/BENCHMARK.md for the design. A paid run needs --go. The test suite proves this driver with a stub agent and spends nothing.
 //
-//   bench.mjs plan   --phase pilot|aa|main|confirm [--model M] [--seed N]             prints the draws, spends nothing
-//   bench.mjs run    --phase ... --out DIR --model M --go --budget-total USD [--chunk 24] [--budget-draw USD] [--window-tokens N]
-//                    [--plugin-41 DIR] [--env-file FILE] [--timeout-min 40] [--quiet-wait-min 90]
-//                    [--claude PATH --no-sandbox]   a stub agent, for proving the harness without spending anything
+//   bench.mjs plan   --phase pilot|aa|main|ablation|confirm [--pilot DIR] [--seed N]    the draws and timeout, spends nothing
+//   bench.mjs admit                                                                      every live task's admission and mutants, spends nothing
+//   bench.mjs power  [--pilot DIR]                                                       draws per arm for each effect, spends nothing
+//   bench.mjs run    --phase ... --out DIR --model ID --go --budget-total USD [--chunk 24] [--budget-draw USD] [--window-tokens N]
+//                    [--review-model ID] [--plugin-41 DIR] [--env-file FILE] [--timeout-min N] [--quiet-wait-min 90]
+//                    [--claude PATH --no-sandbox --tasks ID,ID]   a stub agent, for proving the harness without spending anything
+//   bench.mjs record takes what run takes: runs chunks to the end or a stop, then writes the record and the report skeleton
 //   bench.mjs select --pilot DIR [--allow-short]                                      writes task-set.json from a pilot
 //   bench.mjs prereg                                                                  binds task-set.json into prereg.json
-//   bench.mjs report --out DIR                                                        prints each arm's figures
+//   bench.mjs report --out DIR [--write DIR]                                          prints the report, or writes the record
 //   bench.mjs decide --aa DIR --main DIR                                              the release rule; exit 0 only when it ships
 
 import fs from 'node:fs';
@@ -19,18 +22,20 @@ import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { admitTask } from '../../tests/evals/lib/admit.mjs';
-import { buildPlugin, childEnv, classify, foldScore, prepareWorkspace, probeSandbox, readEnvFile, resolveBinary, runDraw, sandboxSpec, seededShuffle, taskText } from '../../tests/evals/lib/ab-draw.mjs';
+import { buildPlugin, childEnv, classify, foldScore, looksPaused, prepareWorkspace, probeSandbox, readEnvFile, resolveBinary, runDraw, sandboxSpec, seededShuffle, taskText } from '../../tests/evals/lib/ab-draw.mjs';
 import { inspectDraw } from '../../tests/evals/lib/ab-stream.mjs';
 import { lstatManifest } from '../../tests/evals/lib/manifest.mjs';
 import { scoreHidden } from '../../tests/evals/lib/score-hidden.mjs';
 import { taskHash } from '../../tests/evals/lib/task-store.mjs';
-import { K_DRAWS, armSummary, evaluateAa, evaluateRelease, selectTasks, weightedTokens } from './stats.mjs';
+import { armSummary, callRatio, costDrawsPerArm, crossesInterim, pairedDifference, testShare, evaluateAa, evaluateRelease, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, passDrawsPerArm, selectTasks, weightedTokens } from './stats.mjs';
+import { adherence, agentSplit, labelDraw, scopeCheck } from './telemetry.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const CANDIDATES = path.join(HERE, 'candidates.json');
 const TASK_SET = path.join(HERE, 'task-set.json');
 const PREREG = path.join(HERE, 'prereg.json');
+const ABLATIONS = path.join(HERE, 'ablations.json');
 const MAX_CHUNK = 24;
 const WINDOW_STOP_SHARE = 0.6;
 const ABANDON_AFTER = 2;
@@ -44,29 +49,34 @@ export const PHASE_ARMS = Object.freeze({
   pilot: ['bare'],
   aa: ['bare-a', 'bare-b'],
   main: ['bare', 'somi5', 'somi41'],
+  ablation: ['bare'],
   confirm: ['bare'],
 });
 
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
-export const armPrompt = (arm, text) => (arm === 'somi5' ? `/somi:task ${text}` : arm === 'somi41' ? `/somi:ship-loop ${text}` : text);
-const engineArm = (arm) => (arm === 'somi5' || arm === 'somi41' ? 'somi' : 'bare');
+const isBare = (arm) => arm.startsWith('bare');
+export const armPrompt = (arm, text) => (isBare(arm) ? text : arm === 'somi41' ? `/somi:ship-loop ${text}` : `/somi:task ${text}`);
+const engineArm = (arm) => (isBare(arm) ? 'bare' : 'somi');
+export const armsFor = (phase, cells = readJson(ABLATIONS).cells) => (phase === 'ablation' ? [...PHASE_ARMS.ablation, ...Object.keys(cells)] : PHASE_ARMS[phase]);
 
-function tasksFor(phase) {
-  if (phase === 'pilot') return readJson(CANDIDATES).tasks;
+const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, ablation: reg.ablation_k, confirm: reg.confirm_k })[phase] ?? reg.k;
+export const liveCandidates = (tasks) => tasks.filter((t) => !t.retired);
+function tasksFor(phase, only) {
+  if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all); }
   if (!fs.existsSync(TASK_SET)) throw new Error('no task-set.json yet: run the pilot, then select');
   const set = readJson(TASK_SET);
-  return phase === 'confirm' ? set.tasks.slice(0, set.hardest ?? 6) : set.tasks;
+  return phase === 'confirm' ? set.tasks.filter((t) => set.hardest.includes(t.id)) : set.tasks;
 }
 
 // Every arm of a task runs in the same round, in a seeded order, so drift over a long recording falls on all arms alike.
-export function buildPlan(phase, tasks, seed = 1, k = K_DRAWS) {
-  const arms = PHASE_ARMS[phase];
+export function buildPlan(phase, tasks, seed = 1, k = 3, armK = {}) {
+  const arms = armsFor(phase);
   const draws = [];
   for (let draw = 1; draw <= k; draw++) {
     for (const task of seededShuffle(tasks, seed + draw)) {
-      for (const arm of seededShuffle(arms, seed + draw * 31)) draws.push({ id: `${task.id}.${arm}.${draw}`, task: task.id, dir: task.dir, arm, draw });
+      for (const arm of seededShuffle(arms.filter((a) => draw <= (armK[a] ?? k)), seed + draw * 31)) draws.push({ id: `${task.id}.${arm}.${draw}`, task: task.id, dir: task.dir, arm, draw });
     }
   }
   return draws;
@@ -92,6 +102,28 @@ export function preregProblem(repo = REPO, dir = HERE) {
     if (dirty.trim() !== '') return 'prereg.json or task-set.json has uncommitted changes';
   } catch { return 'prereg.json and task-set.json must be committed before the first paid main draw'; }
   return null;
+}
+
+// An alias can move to a new model between two recordings, and a calibration does not survive that, so a run is pinned to a full id
+// and every model the draw reports must be that id, with at most a date suffix.
+export const isFullModelId = (m) => /-\d/.test(m);
+export const servedAsPinned = (served, pins) => served.every((m) => m === '<synthetic>' || pins.some((p) => m === p || (m.startsWith(`${p}-`) && /^\d{8}$/.test(m.slice(p.length + 1)))));
+
+// Six plain fields so two recordings can be compared. Free text is reduced to a safe alphabet, so no name or path can survive into a record.
+const safeText = (v) => String(v ?? '').replace(/[^A-Za-z0-9 ().,+@-]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+export const hostFingerprint = () => ({ cpu: safeText(os.cpus()[0]?.model), cores: os.cpus().length, memGb: Math.round(os.totalmem() / 2 ** 30), os: safeText(os.release()), node: safeText(process.version) });
+
+// The scan on anything meant to be committed. It names the place and the kind, never the string.
+const LEAKS = [[/sk-[A-Za-z0-9_-]{8,}/, 'token-like string'], [/gh[pousr]_[A-Za-z0-9]{16,}|xox[abprs]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{12,}/, 'token-like string'], [/Bearer\s+\S{10,}/i, 'bearer token'], [/-----BEGIN [A-Z ]*PRIVATE KEY/, 'private key'], [/\/(?:home|Users|root)\/[^\s/]+|[A-Za-z]:\\+Users\\+/, 'home path']];
+export function findLeaks(value, at = 'record', hostname = os.hostname()) {
+  if (typeof value === 'string') {
+    const hit = LEAKS.find(([re]) => re.test(value));
+    if (hit) return [{ at, kind: hit[1] }];
+    return hostname.length >= 4 && value.includes(hostname) ? [{ at, kind: 'hostname' }] : [];
+  }
+  if (Array.isArray(value)) return value.flatMap((v, i) => findLeaks(v, `${at}[${i}]`, hostname));
+  if (value && typeof value === 'object') return Object.entries(value).flatMap(([k, v]) => [...findLeaks(k, `${at}.<key>`, hostname), ...findLeaks(v, `${at}.${k}`, hostname)]);
+  return [];
 }
 
 // Result events come in runs within one CLI call, where usage is cumulative: the last of a run is the call's total.
@@ -162,6 +194,16 @@ function admitWithRetries(dir, hash) {
   throw new Error(`not admitted after ${ADMIT_TRIES} tries: ${String(last).slice(0, 200)}`);
 }
 
+// A recording's timeout comes from what the pilot measured. Only a bare arm is piloted, so a workflow arm's limit scales by the widest
+// time overhead 4.1 recorded.
+const WORKFLOW_TIME_MARGIN = 7;
+export function timeoutFromPilot(rows) {
+  const walls = rows.filter((r) => r.wall_ms > 0).map((r) => r.wall_ms).sort((a, b) => a - b);
+  if (walls.length === 0) return null;
+  const p95 = walls[Math.min(walls.length - 1, Math.ceil(walls.length * 0.95) - 1)];
+  return { bare_min: Math.ceil((p95 * 1.5) / 60000), workflow_min: Math.ceil((p95 * 1.5 * WORKFLOW_TIME_MARGIN) / 60000) };
+}
+
 const scoreRow = (d, fields) => ({ schema: 2, draw: d.id, task: d.task, arm: d.arm, k: d.draw, ...fields });
 
 export function abandonedArms(rows) {
@@ -177,28 +219,45 @@ export function abandonedArms(rows) {
   return out;
 }
 
-async function run(args) {
+export const openDecisions = (prereg) => Object.entries(prereg.decisions ?? {}).filter(([, v]) => v === null).map(([k]) => k);
+const transcriptsOf = (drawDir) => {
+  const dir = path.join(drawDir, 'transcripts');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')).map((f) => fs.readFileSync(path.join(dir, f), 'utf8'));
+};
+const readOr = (file, fallback = '') => { try { return fs.readFileSync(file, 'utf8'); } catch { return fallback; } };
+const ruleHash = () => sha256(JSON.stringify({ ...readJson(PREREG), task_set_sha256: null }));
+
+async function run(args, session = { windowWeighted: 0 }) {
   const phase = args.phase;
+  const prereg = readJson(PREREG);
+  const stub = Boolean(args.claude);
   if (!args.go) throw new Error('a run spends real usage: pass --go once the maintainer has agreed the budget');
   if (!args.model || !/^[A-Za-z0-9][A-Za-z0-9._:[\]-]*$/.test(args.model)) throw new Error('--model is required');
+  if (!stub && !isFullModelId(args.model)) throw new Error('--model must be a full model id, not an alias: an alias can move between recordings');
+  const pins = [args.model, ...(args['review-model'] ? [args['review-model']] : [])];
+  if (args.tasks && !stub) throw new Error('--tasks is for stub runs: a paid recording runs its whole plan');
   if (!args.out) throw new Error('--out is required');
   const budgetTotal = Number(args['budget-total']);
   if (!(budgetTotal > 0)) throw new Error('--budget-total is required');
   const budgetDraw = Number(args['budget-draw'] ?? 3);
   const chunk = Math.min(Number(args.chunk ?? MAX_CHUNK), MAX_CHUNK);
-  if (phase === 'main') {
+  if (phase === 'main' || phase === 'ablation') {
     const problem = preregProblem();
     if (problem) throw new Error(problem);
-    if (!args['plugin-41']) throw new Error('main needs --plugin-41, a packed 4.1 release candidate');
+    if (phase === 'main' && !args['plugin-41']) throw new Error('main needs --plugin-41, a packed 4.1 release candidate');
+    if (!args['review-model'] || !isFullModelId(args['review-model'])) throw new Error('--review-model is required: the registered lane keeps the security reviewer on the review tier, named by its full id');
   }
+  if (phase !== 'pilot' && !args['timeout-min']) throw new Error('--timeout-min is required: take it from `bench.mjs plan --pilot DIR`, not from a guess');
   if (process.env.CLAUDE_CODE_OAUTH_TOKEN !== undefined) throw new Error('CLAUDE_CODE_OAUTH_TOKEN is in the environment; the scorer must run without it');
 
   const out = path.resolve(args.out);
   fs.mkdirSync(out, { recursive: true, mode: 0o700 });
-  const plan = buildPlan(phase, tasksFor(phase), Number(args.seed ?? 1));
+  const only = args.tasks ? args.tasks.split(',') : null;
+  const plan = buildPlan(phase, tasksFor(phase, only), Number(args.seed ?? 1), drawsFor(phase, prereg), phase === 'main' ? prereg.arm_k : {});
   const resultsFile = path.join(out, 'results.jsonl');
   const planFile = path.join(out, 'plan.json');
-  const planText = JSON.stringify({ phase, model: args.model, draws: plan.map((d) => d.id) });
+  const planText = JSON.stringify({ phase, model: args.model, review_model: args['review-model'] ?? null, rule: ruleHash(), host: hostFingerprint(), draws: plan.map((d) => d.id) });
   if (fs.existsSync(planFile) && fs.readFileSync(planFile, 'utf8') !== planText) throw new Error('--out holds a different plan');
   fs.writeFileSync(planFile, planText);
 
@@ -207,8 +266,14 @@ async function run(args) {
   const home = process.env.HOME ?? os.homedir();
   const runTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-v2-'));
   process.on('exit', () => removeTree(runTmp));
-  const plugin5 = buildPlugin({ repoRoot: REPO, runTmp });
-  const pluginOf = (arm) => (arm === 'somi5' ? plugin5 : arm === 'somi41' ? path.resolve(args['plugin-41']) : null);
+  const ablations = readJson(ABLATIONS);
+  const plugins = new Map();
+  const pluginOf = (arm) => {
+    if (isBare(arm)) return null;
+    if (arm === 'somi41') return path.resolve(args['plugin-41']);
+    if (!plugins.has(arm)) plugins.set(arm, buildPlugin({ repoRoot: REPO, runTmp, dirName: `plugin-${arm}`, patches: (ablations.cells[arm] ?? []).map((name) => ablations.patches[name]) }));
+    return plugins.get(arm);
+  };
   const env = readEnvFile(path.resolve(args['env-file'] ?? path.join(REPO, '.somi/eval.env')));
   if (!env.ok) throw new Error(env.reason);
   // The agent runs with bypassed permissions, so the sandbox can only be dropped for a stub the caller names.
@@ -223,8 +288,10 @@ async function run(args) {
   let interrupted = false;
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { interrupted = true; kills.forEach((k) => k()); });
   const rows = [...done];
+  const left = plan.filter((d) => !finished.has(d.id)).length;
+  console.log(`worst case: ${left} draws at $${budgetDraw} each is $${(left * budgetDraw).toFixed(2)}, capped by the total of $${budgetTotal}`);
+  let stop = null;
   let spent = done.reduce((s, r) => s + (r.cost ?? 0), 0);
-  let chunkWeighted = 0;
   let ran = 0;
 
   for (const d of plan) {
@@ -236,11 +303,11 @@ async function run(args) {
       continue;
     }
     if (interrupted || ran >= chunk) break;
-    if (spent + budgetDraw > budgetTotal) { console.log(`budget stop: spent $${spent.toFixed(2)} of $${budgetTotal}`); break; }
+    if (spent + budgetDraw > budgetTotal) { stop = 'budget'; console.log(`budget stop: spent $${spent.toFixed(2)} of $${budgetTotal}`); break; }
     const windowTokens = Number(args['window-tokens']);
-    if (windowTokens > 0 && chunkWeighted >= windowTokens * WINDOW_STOP_SHARE) { console.log('window stop: this chunk used 60% of the stated window'); break; }
+    if (windowTokens > 0 && session.windowWeighted >= windowTokens * WINDOW_STOP_SHARE) { stop = 'window'; console.log('window stop: this session used 60% of the stated window; run it again in the next window'); break; }
 
-    if (!await waitForQuiet(Number(args['quiet-wait-min'] ?? QUIET_WAIT_MIN), () => interrupted)) { console.log('quiet stop: the machine stayed busy, so this chunk ends here; run it again later'); break; }
+    if (!stub && !await waitForQuiet(Number(args['quiet-wait-min'] ?? QUIET_WAIT_MIN), () => interrupted)) { stop = 'quiet'; console.log('quiet stop: the machine stayed busy, so this chunk ends here; run it again later'); break; }
     const load = Number(os.loadavg()[0].toFixed(1));
     const dir = path.join(REPO, d.dir);
     if (!admitted.has(dir)) {
@@ -255,18 +322,19 @@ async function run(args) {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-v2-draw-'));
     console.log(`start ${d.id}`);
     try {
-      const { ws } = prepareWorkspace({ taskDir: dir, tmp });
+      const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config: { cost: { ceiling: 'medium' }, tiers: { claude: { work: args.model, review: args['review-model'] ?? args.model } } } });
       const result = await runDraw({
         model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
         claude, env: childEnv({ token: env.token, tmp }), cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
       });
-      if (interrupted) break;
-      result.leaks = [...new Set([...result.leaks, ...inspectDraw({ ws, cfg: path.join(tmp, 'cfg'), after: lstatManifest(ws), drawDir, token: env.token, canary: t.task.canary, absAb: path.dirname(dir) })])];
+      if (interrupted) { stop = 'interrupted'; break; }
+      const after = lstatManifest(ws);
+      result.leaks = [...new Set([...result.leaks, ...inspectDraw({ ws, cfg: path.join(tmp, 'cfg'), after, drawDir, token: env.token, canary: t.task.canary, absAb: path.dirname(dir) })])];
       const cls = classify({ run: result, arm: engineArm(d.arm), budget: budgetDraw });
       const usage = streamUsage(path.join(drawDir, 'stream.jsonl'));
       const measured = { cost: result.cost, wall_ms: result.wallMs ?? 0, turns: usage.turns, tokens: usage.tokens, weighted: weightedTokens(usage.tokens), models: usage.models };
       spent += measured.cost;
-      chunkWeighted += measured.weighted;
+      session.windowWeighted += measured.weighted;
       ran++;
       let row;
       if (cls.outcome === 'invalid' && /^(account-limit|bg-wait-ceiling|auth|spawn-error|no-result)/.test(cls.reason)) {
@@ -274,26 +342,134 @@ async function run(args) {
         fs.appendFileSync(resultsFile, `${JSON.stringify(row)}\n`);
         rows.push(row);
         console.log(`halted ${d.id}: ${row.halted}`);
-        if (row.halted !== 'account-limit' || !abandonedArms(rows).has(d.arm)) break;
+        if (row.halted !== 'account-limit' || !abandonedArms(rows).has(d.arm)) { stop = row.halted; break; }
         continue;
       }
       const scratch = { draw: d.id, outcome: cls.outcome, reason: cls.reason, green: 0 };
       const sc = scoreHidden({ workspace: ws, taskDir: dir, admittedHash: t.hash, expect: t.expect });
       if (!sc.ok) throw new Error(`the scorer failed on ${d.id}: ${sc.reason}`);
-      const stop = foldScore(scratch, sc);
-      const solved = scratch.outcome === 'scored' && sc.total > 0 && scratch.green === sc.total && !Object.values(scratch.flags ?? {}).some(Boolean);
-      row = scoreRow(d, { outcome: scratch.outcome, reason: scratch.reason, green: scratch.green, total: sc.total, solved, failed: (scratch.failedNames ?? []).slice(0, MAX_FAILED_NAMES), flags: scratch.flags, load, ...measured });
+      const halt = foldScore(scratch, sc);
+      const streamText = readOr(path.join(drawDir, 'stream.jsonl'));
+      const adh = adherence(streamText, readOr(path.join(ws, '.somi/state/journal.jsonl')));
+      const scope = scopeCheck(before.files, after?.ok ? after.files : before.files, t.task);
+      const { label, gate } = labelDraw({ outcome: scratch.outcome, reason: scratch.reason, facts: adh, paused: looksPaused(result.text), changed: scope.touched.length + scope.added.length > 0 || gitChanged(ws) });
+      const solved = label === 'finished' && scope.touched.length === 0 && scratch.outcome === 'scored' && sc.total > 0 && scratch.green === sc.total && !Object.values(scratch.flags ?? {}).some(Boolean);
+      const split = agentSplit(streamText, transcriptsOf(drawDir), measured.weighted);
+      if (!servedAsPinned(measured.models, pins)) { scratch.outcome = 'invalid'; scratch.reason = 'model-pin'; }
+      row = scoreRow(d, { outcome: scratch.outcome, reason: scratch.reason, label: scratch.reason === 'model-pin' ? 'invalid' : label, gate, green: scratch.green, total: sc.total, solved: solved && scratch.reason !== 'model-pin', scope, adherence: adh, agents: split.agents, split_coverage: split.coverage, failed: (scratch.failedNames ?? []).slice(0, MAX_FAILED_NAMES), flags: scratch.flags, load, ...measured });
       fs.appendFileSync(resultsFile, `${JSON.stringify(row)}\n`);
       rows.push(row);
       console.log(`done ${d.id}: ${solved ? 'solved' : 'not solved'}, $${measured.cost.toFixed(3)}`);
-      if (stop) throw new Error(stop);
+      if (halt) throw new Error(halt);
+      if (scratch.reason === 'model-pin') throw new Error(`${d.id}: served ${measured.models.join(', ')}, not the pinned model`);
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   }
-  console.log(`this chunk ran ${ran} draws; ${plan.length - rows.filter((r) => !r.halted).length} remain`);
-  return 0;
+  const remaining = plan.length - rows.filter((r) => !r.halted).length;
+  console.log(`this chunk ran ${ran} draws; ${remaining} remain`);
+  return { ran, remaining, stop };
 }
 
+const gitChanged = (ws) => {
+  try { return execFileSync('git', ['status', '--porcelain', '--', '.', ':(exclude).somi'], { cwd: ws, encoding: 'utf8' }).trim() !== ''; } catch { return false; }
+};
+
 const completed = (dir) => readResults(dir).filter((r) => !r.halted).map((r) => ({ ...r, draw: r.k }));
+
+// A comparison across recordings means nothing unless both ran on the same model, the same host and the same rule.
+export function comparableRecordings(aaDir, mainDir) {
+  const meta = (d) => { const { model, review_model: review, rule, host } = readJson(path.join(d, 'plan.json')); return JSON.stringify({ model, review, rule, host }); };
+  return meta(aaDir) === meta(mainDir) ? null : 'the A/A and main recordings differ in model, rule or host, so they cannot be compared';
+}
+
+const fmt = (x, digits = 2) => (x === null || x === undefined ? 'n/a' : Number(x).toFixed(digits));
+const ratioCell = (r) => (r.ratio === null ? 'n/a' : `${fmt(r.ratio)} (${fmt(r.lower)} to ${fmt(r.upper)})`);
+
+export function renderReport(dir) {
+  const rows = completed(dir);
+  const planned = readJson(path.join(dir, 'plan.json'));
+  const reg = readJson(PREREG);
+  const k = drawsFor(planned.phase, reg);
+  const arms = [...new Set(rows.map((r) => r.arm))].sort();
+  const base = arms.includes('bare') ? 'bare' : arms[0];
+  const out = [`# Benchmark record: ${planned.phase}`, '', `- Model: ${planned.model}${planned.review_model ? `, review ${planned.review_model}` : ''}`, `- Rule hash: ${planned.rule}`, `- Host: ${JSON.stringify(planned.host)}`, `- Draws recorded: ${rows.length} of ${planned.draws.length}. Dollars are the CLI's estimate.`, '', '## Arms', '', '| Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |', '|---|---|---|---|---|---|---|---|---|'];
+  for (const arm of arms) {
+    const a = armSummary(rows, arm, planned.phase === 'main' ? reg.arm_k[arm] ?? k : k);
+    out.push(`| ${arm} | ${a.draws} | ${a.solved} | ${fmt(a.pass_at_1)} | ${fmt(a.pass_all_k)} | ${fmt(a.weighted_per_solved, 0)} | ${fmt(a.cost_per_solved, 3)} | ${a.wall_ms_per_solved === null ? 'n/a' : fmt(a.wall_ms_per_solved / 60000, 1)} | ${JSON.stringify(a.labels)} |`);
+  }
+  const others = arms.filter((a) => a !== base);
+  if (others.length > 0) {
+    out.push('', `## Against ${base}`, '', 'Ratios are per draw, blocked by task, with a 90% interval.', '', '| Arm | Weighted tokens | Dollars | Wall time |', '|---|---|---|---|');
+    for (const arm of others) out.push(`| ${arm} | ${ratioCell(logRatio(rows, arm, base, 'weighted'))} | ${ratioCell(logRatio(rows, arm, base, 'cost'))} | ${ratioCell(logRatio(rows, arm, base, 'wall_ms'))} |`);
+  }
+  if (arms.includes('bare-a')) {
+    const aa = evaluateAa(rows, k);
+    out.push('', '## Noise floor', '', `A/A difference ${fmt(aa.mean)} (95% ${fmt(aa.lower)} to ${fmt(aa.upper)}), ${aa.contains_zero ? 'contains zero' : 'EXCLUDES ZERO'}. Tokens: ${ratioCell(logRatio(rows, 'bare-a', 'bare-b'))}.`);
+  }
+  if (planned.phase === 'main') {
+    const solved = pairedDifference(rows, 'somi5', base, k);
+    const share = pairedDifference(rows, 'somi5', base, k, testShare);
+    const vs41 = logRatio(rows, 'somi5', 'somi41');
+    out.push('', '## Registered figures', '', `Solved rate, 5.0 minus bare: ${fmt(solved.mean)} (95% ${fmt(solved.lower)} to ${fmt(solved.upper)}), margin ${reg.rule.solved_rate_margin}.`, `Hidden-test share, 5.0 minus bare: ${fmt(share.mean)} (95% ${fmt(share.lower)} to ${fmt(share.upper)}), margin ${reg.rule.test_share_margin}.`, `5.0 against 4.1, tokens: ${ratioCell(vs41)}, called ${callRatio(vs41, reg.rule.min_effect_release)} at a ${reg.rule.min_effect_release * 100}% minimum effect.`);
+  }
+  if (planned.phase === 'main' || planned.phase === 'ablation') {
+    const look = logRatio(rows, 'somi5', base);
+    if (look.se !== null) out.push('', `Interim boundary at z ${reg.interim.z}: tokens ${crossesInterim(Math.log(look.ratio), look.se, reg.interim.z) ? 'crossed' : 'not crossed'}. It is registered for the look at ${reg.interim.at_share * 100}% of the draws only.`);
+  }
+  out.push('', '## Protocol and per-agent tokens', '', '| Arm | Routes | Opened, closed | Mean passes | Gates | Findings | Mean weighted per agent | Split coverage |', '|---|---|---|---|---|---|---|---|');
+  for (const arm of arms) {
+    const list = rows.filter((r) => r.arm === arm && r.adherence);
+    const count = (f) => list.reduce((acc, r) => { for (const key of f(r)) acc[key] = (acc[key] ?? 0) + 1; return acc; }, {});
+    const perAgent = {};
+    for (const r of list) for (const [name, a] of Object.entries(r.agents ?? {})) perAgent[name] = (perAgent[name] ?? 0) + a.weighted / list.length;
+    const findings = {};
+    for (const r of list) for (const [s, n] of Object.entries(r.adherence.findings)) findings[s] = (findings[s] ?? 0) + n;
+    const cover = list.map((r) => r.split_coverage).filter((c) => c !== null);
+    out.push(`| ${arm} | ${JSON.stringify(count((r) => [r.adherence.route]))} | ${list.filter((r) => r.adherence.opened).length}, ${list.filter((r) => r.adherence.closed).length} | ${fmt(list.reduce((s, r) => s + r.adherence.passes, 0) / (list.length || 1))} | ${JSON.stringify(count((r) => r.adherence.gates))} | ${JSON.stringify(findings)} | ${JSON.stringify(Object.fromEntries(Object.entries(perAgent).map(([n, w]) => [n, Math.round(w)])))} | ${fmt(cover.length ? Math.min(...cover) : null)} |`);
+  }
+  out.push('', '## Reading', '', 'To be written by a person: read 10 transcripts first, then say what the figures mean. An inconclusive result is published as inconclusive, with every figure.', '');
+  return out.join('\n');
+}
+
+// The committed record is rows plus the report. It holds no stream or transcript, and the privacy scan refuses to write anything it flags.
+export function writeRecord(dir, target) {
+  const rows = readResults(dir);
+  const planned = readJson(path.join(dir, 'plan.json'));
+  const report = renderReport(dir);
+  const record = { schema: 2, plan: planned, rows };
+  const leaks = [...findLeaks(record), ...findLeaks(report, 'report')];
+  if (leaks.length > 0) { console.error(`privacy scan refused the record: ${JSON.stringify(leaks.slice(0, 10))}`); return false; }
+  fs.mkdirSync(target, { recursive: true });
+  const stem = path.join(target, `${planned.phase}-${planned.rule.slice(0, 12)}`);
+  fs.writeFileSync(`${stem}.json`, `${JSON.stringify(record, null, 1)}\n`);
+  fs.writeFileSync(`${stem}.md`, report);
+  console.log(`wrote ${path.basename(stem)}.json and .md`);
+  return true;
+}
+
+// One command: chunks to the end of the plan or to a stop, then the record. A stop leaves the draws in place, and running it again resumes.
+async function record(args) {
+  const session = { windowWeighted: 0 };
+  for (;;) {
+    const r = await run(args, session);
+    if (r.stop) { console.log(`stopped: ${r.stop}. Run the same command again to resume.`); return 1; }
+    if (r.remaining === 0 || r.ran === 0) break;
+  }
+  return writeRecord(path.resolve(args.out), args.write ?? path.join(HERE, 'records')) ? 0 : 1;
+}
+
+function renderPower(pilotRows) {
+  const out = ['Cost or tokens, draws per arm (90% interval, 80% power), bare spread 0.15:', '', '| Workflow arm spread | 50% | 30% | 25% | 20% |', '|---|---|---|---|---|'];
+  for (const sigmaB of [0.15, 0.41, 0.8, 1.2]) out.push(`| ${sigmaB} | ${[0.5, 0.3, 0.25, 0.2].map((effect) => costDrawsPerArm({ sigmaA: 0.15, sigmaB, effect })).join(' | ')} |`);
+  out.push('', 'Pass rate difference at a 50% baseline, draws per arm (95%, 80% power, no pairing gain):', '', `+20 points ${passDrawsPerArm({ p1: 0.5, p2: 0.7 })}, +10 points ${passDrawsPerArm({ p1: 0.5, p2: 0.6 })}`, '', 'Chance that a lane truly equal to bare clears a pass-rate margin:', '', '| Margin | 60 draws per arm | 96 | 128 | Draws per arm for 80% |', '|---|---|---|---|---|');
+  for (const margin of [-0.05, -0.1, -0.15, -0.2]) out.push(`| ${margin * 100} points | ${[60, 96, 128].map((drawsPerArm) => fmt(nonInferiorityPower({ margin, drawsPerArm }))).join(' | ')} | ${nonInferiorityDrawsPerArm({ margin, sd: 0.5 })} |`);
+  out.push('', 'Share of hidden tests passed, draws per arm for a -5 point margin at 80%:', '', [0.08, 0.15, 0.25].map((sd) => `spread ${sd}: ${nonInferiorityDrawsPerArm({ margin: -0.05, sd })}`).join(', '));
+  const rows = pilotRows.filter((r) => r.wall_ms > 0);
+  if (rows.length > 0) {
+    const mean = (key) => rows.reduce((s, r) => s + (r[key] ?? 0), 0) / rows.length;
+    out.push('', `Pilot, bare, per draw: ${fmt(mean('wall_ms') / 60000, 1)} minutes, ${fmt(mean('weighted'), 0)} weighted tokens, $${fmt(mean('cost'), 3)}. Timeout from it: ${JSON.stringify(timeoutFromPilot(rows))} minutes.`);
+  }
+  return out.join('\n');
+}
 
 async function main(argv) {
   const [command, ...rest] = argv;
@@ -302,27 +478,33 @@ async function main(argv) {
     options: {
       phase: { type: 'string' }, out: { type: 'string' }, model: { type: 'string' }, seed: { type: 'string' }, go: { type: 'boolean' }, chunk: { type: 'string' },
       'budget-total': { type: 'string' }, 'budget-draw': { type: 'string' }, 'window-tokens': { type: 'string' }, 'plugin-41': { type: 'string' }, 'env-file': { type: 'string' },
-      'timeout-min': { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
+      'timeout-min': { type: 'string' }, 'review-model': { type: 'string' }, tasks: { type: 'string' }, write: { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
     },
   });
-  if (command === 'plan' || command === 'run') {
-    if (!Object.hasOwn(PHASE_ARMS, args.phase ?? '')) throw new Error('--phase takes pilot, aa, main or confirm');
-    if (command === 'run') return run(args);
-    const plan = buildPlan(args.phase, tasksFor(args.phase), Number(args.seed ?? 1));
+  if (command === 'plan' || command === 'run' || command === 'record') {
+    if (!Object.hasOwn(PHASE_ARMS, args.phase ?? '')) throw new Error('--phase takes pilot, aa, main, ablation or confirm');
+    if (command === 'run') return (await run(args)).stop ? 1 : 0;
+    if (command === 'record') return record(args);
+    const prereg = readJson(PREREG);
+    const plan = buildPlan(args.phase, tasksFor(args.phase), Number(args.seed ?? 1), drawsFor(args.phase, prereg), args.phase === 'main' ? prereg.arm_k : {});
     console.log(`${plan.length} draws across ${new Set(plan.map((d) => d.task)).size} tasks; chunks of at most ${MAX_CHUNK}; no spend`);
+    if (args.pilot) console.log(`timeout from the pilot: ${JSON.stringify(timeoutFromPilot(completed(args.pilot)))} minutes`);
     plan.forEach((d) => console.log(`  ${d.id}`));
     return 0;
   }
   if (command === 'select') {
     if (!args.pilot) throw new Error('--pilot is required');
-    const picked = selectTasks(completed(args.pilot), readJson(CANDIDATES).tasks);
-    console.log(JSON.stringify({ kept: picked.tasks.length, boundary: picked.boundary, shortfalls: picked.shortfalls }));
+    const reg = readJson(PREREG);
+    const picked = selectTasks(completed(args.pilot), liveCandidates(readJson(CANDIDATES).tasks), { want: reg.tasks_wanted, minBoundary: reg.min_boundary, k: reg.pilot_k });
+    console.log(JSON.stringify({ kept: picked.tasks.length, boundary: picked.boundary, strata: picked.strata, shortfalls: picked.shortfalls }));
     if (picked.shortfalls.length > 0 && !args['allow-short']) { console.error('the set falls short; author more tasks, or pass --allow-short to record the shortfall'); return 1; }
-    fs.writeFileSync(TASK_SET, `${JSON.stringify({ tasks: picked.tasks, hardest: 6, shortfalls: picked.shortfalls }, null, 2)}\n`);
+    fs.writeFileSync(TASK_SET, `${JSON.stringify({ tasks: picked.tasks, hardest: picked.hardest, shortfalls: picked.shortfalls }, null, 2)}\n`);
     return 0;
   }
   if (command === 'prereg') {
     const prereg = readJson(PREREG);
+    const open = openDecisions(prereg);
+    if (open.length > 0) throw new Error(`these decisions are still open: ${open.join(', ')}`);
     prereg.task_set_sha256 = sha256(fs.readFileSync(TASK_SET));
     fs.writeFileSync(PREREG, `${JSON.stringify(prereg, null, 2)}\n`);
     console.log(`bound ${prereg.task_set_sha256}; commit prereg.json and task-set.json before the first paid main draw`);
@@ -330,18 +512,35 @@ async function main(argv) {
   }
   if (command === 'report') {
     if (!args.out) throw new Error('--out is required');
-    const rows = completed(args.out);
-    const arms = [...new Set(rows.map((r) => r.arm))].sort();
-    console.log(JSON.stringify({ arms: arms.map((a) => armSummary(rows, a)), aa: arms.includes('bare-a') ? evaluateAa(rows) : undefined }, null, 2));
+    if (args.write) return writeRecord(args.out, args.write) ? 0 : 1;
+    console.log(renderReport(args.out));
     return 0;
   }
   if (command === 'decide') {
     if (!args.aa || !args.main) throw new Error('--aa and --main are required');
-    const verdict = evaluateRelease({ aa: completed(args.aa), main: completed(args.main) });
+    const problem = preregProblem() ?? comparableRecordings(args.aa, args.main);
+    if (problem) throw new Error(problem);
+    const reg = readJson(PREREG);
+    const verdict = evaluateRelease({ aa: completed(args.aa), main: completed(args.main), rule: { ...reg.rule, min_tasks: reg.tasks_wanted, k: reg.k, aa_k: reg.aa_k } });
     console.log(JSON.stringify(verdict, null, 2));
     return verdict.ships ? 0 : 1;
   }
-  throw new Error('bench takes plan, run, select, prereg, report or decide');
+  // Free and deterministic, and too slow for the fast gate: every suite runs against each reference solution, the empty fixture and each mutant.
+  if (command === 'admit') {
+    let refused = 0;
+    for (const t of liveCandidates(readJson(CANDIDATES).tasks)) {
+      const dir = path.join(REPO, t.dir);
+      const r = admitTask(dir, { mutants: readJson(`${dir}.mutants.json`), repeats: 1 });
+      if (!r.ok) refused++;
+      console.log(`${t.id}: ${r.ok ? `admitted, ${r.total} tests, ${r.mutantsKilled.length} mutants killed` : `REFUSED ${r.reason}`}`);
+    }
+    return refused ? 1 : 0;
+  }
+  if (command === 'power') {
+    console.log(renderPower(args.pilot ? readResults(args.pilot) : []));
+    return 0;
+  }
+  throw new Error('bench takes plan, admit, power, run, record, select, prereg, report or decide');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

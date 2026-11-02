@@ -1,0 +1,20 @@
+[
+ {
+  "name": "utc-clock",
+  "file": "src/schedule.mjs",
+  "find": "const { minutes } = wallClock(now, zone);",
+  "replace": "const minutes = new Date(now).getUTCHours() * 60 + new Date(now).getUTCMinutes();"
+ },
+ {
+  "name": "urgent-waits",
+  "file": "src/schedule.mjs",
+  "find": "if (notification.urgent) return now;",
+  "replace": ""
+ },
+ {
+  "name": "end-is-quiet",
+  "file": "src/schedule.mjs",
+  "find": "const inQuiet = start <= end ? minutes >= start && minutes < end : minutes >= start || minutes < end;",
+  "replace": "const inQuiet = start <= end ? minutes >= start && minutes <= end : minutes >= start || minutes <= end;"
+ }
+]

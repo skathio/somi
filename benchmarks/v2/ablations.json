@@ -1,0 +1,36 @@
+{
+  "note": "Each arm is the packed plugin with these edits applied to its private copy. The shipped plugin has no switch for turning a part off, so a project's config can never do it. Sizing is gone in 5.0, so it has no factor. Escalation is the choice between signal-fired and always-on review.",
+  "patches": {
+    "review-off": {
+      "file": "scripts/lib/kernel.mjs",
+      "find": "const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || signals.review.length + signals.security.length > 0 || c.release_candidate);",
+      "replace": "const wantsReview = false;"
+    },
+    "review-always": {
+      "file": "scripts/lib/kernel.mjs",
+      "find": "const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || signals.review.length + signals.security.length > 0 || c.release_candidate);",
+      "replace": "const wantsReview = c.reviewed_tree !== tree;"
+    },
+    "digest-off": {
+      "file": "hooks/session-start/inject-digest.mjs",
+      "find": "const parts = [fs.readFileSync(path.join(root, 'rules', 'digest.md'), 'utf8').trim()];",
+      "replace": "const parts = [];"
+    },
+    "planning-on": {
+      "file": "commands/task.md",
+      "find": "Do the work in `$ARGUMENTS` yourself, in this thread.",
+      "replace": "First write a short feature-sized plan for `$ARGUMENTS`, with a test or command that proves each milestone, and pipe it to `somi plan`. Then do the work yourself, in this thread."
+    }
+  },
+  "cells": {
+    "somi5": [],
+    "abl-review-off": ["review-off"],
+    "abl-digest-off": ["digest-off"],
+    "abl-planning-on": ["planning-on"],
+    "abl-review-off-digest-off": ["review-off", "digest-off"],
+    "abl-review-off-planning-on": ["review-off", "planning-on"],
+    "abl-digest-off-planning-on": ["digest-off", "planning-on"],
+    "abl-review-off-digest-off-planning-on": ["review-off", "digest-off", "planning-on"],
+    "abl-review-always": ["review-always"]
+  }
+}

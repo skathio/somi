@@ -1,27 +1,61 @@
 {
-  "version": 1,
-  "question": "Is the 5.0 default lane non-inferior to a bare agent, at no more than 1.5 times the tokens per solved task?",
-  "primary": "paired per-task difference in success rate, somi5 minus bare; success means the hidden acceptance tests pass; each rate is over k draws; standard error clustered by task",
-  "k": 3,
-  "tasks_wanted": 20,
+  "version": 3,
+  "status": "decisions recorded; the task set is not bound yet",
+  "decisions": {
+    "primary_claim": "cost per solved task, with quality held",
+    "quality_guard": "hidden-test share at -5 points, and solved rate at -20 points",
+    "tier": "medium",
+    "review_tier": "the security reviewer stays on the review tier, as shipped",
+    "task_count_and_draws": "16 tasks; 6 draws on bare and 5.0, 3 on 4.1",
+    "ablation_set": "review, digest and planning factorial, one draw per task and cell, plus always-on review",
+    "minimum_effect": "25% for a release, 30% for a part",
+    "budget_per_recording": "set for each run, which gets its own go-ahead"
+  },
+  "question": "Does the 5.0 default lane cost no more than 1.5 times a bare agent per solved task, without losing quality?",
+  "primary": "weighted tokens per solved task, somi5 over bare, on the same tasks and model; dollars are reported beside it as the CLI estimate",
+  "k": 6,
+  "aa_k": 3,
+  "pilot_k": 3,
+  "ablation_k": 1,
+  "confirm_k": 3,
+  "arm_k": {
+    "somi41": 3
+  },
+  "tasks_wanted": 16,
+  "min_boundary": 4,
   "rule": {
-    "non_inferiority_margin": -0.05,
     "max_token_ratio": 1.5,
+    "test_share_margin": -0.05,
+    "solved_rate_margin": -0.2,
     "confidence": 0.95,
+    "min_effect_release": 0.25,
+    "min_effect_part": 0.3,
     "escalated_lane_claim": "needs a positive lower bound on the hard subset"
   },
+  "interim": {
+    "at_share": 0.5,
+    "z": 2.8
+  },
   "noise_floor": "A/A, bare versus bare, same tasks and k; its interval must contain zero; re-run whenever the model pin changes",
+  "solved": "finished, every hidden test green, no scorer flag, and no existing file changed outside what the task names",
+  "labels": [
+    "finished",
+    "stopped-at-gate",
+    "asked-user",
+    "timed-out",
+    "invalid"
+  ],
   "secondary": [
-    "pass^3",
+    "pass^k",
     "pass@1",
-    "weighted tokens per solved task",
+    "dollars per solved task",
     "wall time per solved task",
     "main-thread turns",
     "4.1 against 5.0, reported the same way"
   ],
   "tiers": {
-    "main_sweep": "the work tier",
-    "review_lens": "the review tier",
+    "main_sweep": "the medium tier, by full model id",
+    "review_lens": "the review tier, by full model id",
     "confirmatory": "top-tier bare on the 6 hardest tasks, 18 draws"
   },
   "stops": {

@@ -1,0 +1,20 @@
+[
+ {
+  "name": "no-inflight-sharing",
+  "file": "src/payments.mjs",
+  "find": "const running = inflight.get(order.id);\n  if (running) return running;",
+  "replace": ""
+ },
+ {
+  "name": "key-changes-each-try",
+  "file": "src/payments.mjs",
+  "find": "idempotencyKey: `order-${order.id}`",
+  "replace": "idempotencyKey: `order-${order.id}-${attempt}`"
+ },
+ {
+  "name": "retries-a-decline",
+  "file": "src/payments.mjs",
+  "find": "if (!e.retryable) throw e;",
+  "replace": ""
+ }
+]
