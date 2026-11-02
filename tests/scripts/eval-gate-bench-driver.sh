@@ -36,7 +36,7 @@ const cf = path.join(dir, 'count');
 const n = fs.existsSync(cf) ? Number(fs.readFileSync(cf, 'utf8')) : 0;
 fs.writeFileSync(cf, String(n + 1));
 const own = fs.existsSync('.somi/config.json') ? JSON.parse(fs.readFileSync('.somi/config.json', 'utf8')) : null;
-fs.appendFileSync(path.join(dir, 'argv.jsonl'), JSON.stringify({ argv, envKeys: Object.keys(process.env).sort(), tokenInEnv: process.env.CLAUDE_CODE_OAUTH_TOKEN === cfg.token, bgCeiling: process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS, cost: own && own.cost }) + '\n');
+fs.appendFileSync(path.join(dir, 'argv.jsonl'), JSON.stringify({ argv, envKeys: Object.keys(process.env).sort(), tokenInEnv: process.env.CLAUDE_CODE_OAUTH_TOKEN === cfg.token, bgCeiling: process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS, cost: own && own.cost, ws: { token: fs.existsSync('src/auth/token.mjs'), plans: fs.existsSync('.somi/plans'), plan: fs.existsSync('_somi') } }) + '\n');
 const emit = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 const say = (text) => emit({ type: 'assistant', message: { model: 'vendor-test-model-1', content: [{ type: 'text', text }] } });
 const usage = (extra = {}) => ({ 'vendor-test-model-1': { inputTokens: 1000, outputTokens: 200, cacheReadInputTokens: 3000, cacheCreationInputTokens: 400, costUSD: 0.4 }, 'test-model-sub': { inputTokens: 10, outputTokens: 20, cacheReadInputTokens: 30, cacheCreationInputTokens: 40 }, ...extra });
@@ -94,7 +94,7 @@ mutate() { # name file from to -> breaks one guard in the scratch copy (the matc
 
 # ---- live-shaped runs (stub claude, sandbox off) -----------------------------------------------------------------------
 S_OK=$(mkstub ok ok); S_UNP=$(mkstub unp unpinned); S_BG=$(mkstub bg bg); S_PAUSE=$(mkstub pause pause); S_ECHO=$(mkstub echo echo)
-S_HALT=$(mkstub halt ok '[2]'); S_WHOLE=$(mkstub whole ok); S_PROBE=$(mkstub probe pause '[]' bracket); S_BGT=$(mkstub bgt ok)
+S_HALT=$(mkstub halt ok '[2]'); S_WHOLE=$(mkstub whole ok); S_PROBE=$(mkstub probe pause '[]' bracket); S_BGT=$(mkstub bgt ok); S_PSET=$(mkstub pset pause '[]' bracket)
 cli full "$ROOT" "$S_OK" full --scenarios S1,S2,S3 --repeats 1
 cli unp "$ROOT" "$S_UNP" unp --scenarios S3 --repeats 1
 cli halt1 "$ROOT" "$S_HALT" halt --scenarios S3 --repeats 3
@@ -102,6 +102,8 @@ cli whole "$ROOT" "$S_WHOLE" whole --scenarios S3 --repeats 3
 cli bg "$ROOT" "$S_BG" bg --scenarios S3 --repeats 1
 cli pause "$ROOT" "$S_PAUSE" pause --scenarios S3 --repeats 1
 cli probe "$ROOT" "$S_PROBE" probe --phase sizing --sizing-probe --scenarios S4-M01 --repeats 1
+cli probeset "$ROOT" "$S_PSET" probeset --phase sizing --sizing-probe --scenarios S4-A3,S4-M03 --repeats 1
+cli drypr "$ROOT" "$(mkstub drypr ok)" drypr --phase sizing --sizing-probe --dry-run --repeats 1
 cli echo "$ROOT" "$S_ECHO" echo --scenarios S3 --repeats 1
 cli bgt1 "$ROOT" "$S_BGT" bgt --scenarios S3 --repeats 1 --budget-total 3 --force-budget
 cli dry "$ROOT" "$(mkstub dry ok)" dry --scenarios S1,S2,S3 --repeats 3 --dry-run
@@ -117,6 +119,14 @@ EOS
 S_SLOW=$(mkstub slow slow); mkdir -p "$TMP/t-sigint"
 node "$TMP/sigint.mjs" "$ROOT" "$TMP/t-sigint/out" "$S_SLOW" "$PLUGIN" "$TMP/eval.env" "$TMP/t-sigint" "$TMP/o-sigint.rc" > /dev/null 2>&1 &
 wait
+# A set scenario whose fixture holds a link, or is gone, is refused before any draw (a scratch tree with a one-entry set).
+for n in link gone; do
+  scratch "set$n"; mkdir -p "$TMP/set$n/tests/evals/sizing-set" "$TMP/set$n/tests/evals/fixtures/fx"; echo x > "$TMP/set$n/tests/evals/fixtures/fx/a.txt"
+  printf '{"schema_version":1,"entries":[{"id":"A1","label":"small","reason":"r","request":"Fix a.txt.","fixture":"fx"}]}\n' > "$TMP/set$n/tests/evals/sizing-set/set.json"
+done
+ln -s /etc/hostname "$TMP/setlink/tests/evals/fixtures/fx/inner"; rm -r "$TMP/setgone/tests/evals/fixtures/fx"
+cli setlink "$TMP/setlink" "$(mkstub setlink ok)" setlink --phase sizing --sizing-probe --scenarios S4-A1 --repeats 1
+cli setgone "$TMP/setgone" "$(mkstub setgone ok)" setgone --phase sizing --sizing-probe --scenarios S4-A1 --repeats 1
 # Dependent runs: the re-run of the halted out, the raised budget, and the plan-mismatch refusals (each with its own stub).
 S_HALT2=$(mkstub halt2 ok); cli halt2 "$ROOT" "$S_HALT2" halt --scenarios S3 --repeats 3
 S_BGT2=$(mkstub bgt2 ok); cli bgt2 "$ROOT" "$S_BGT2" bgt --scenarios S3 --repeats 1 --budget-total 100
@@ -167,6 +177,7 @@ BASE=(--sandbox off --plugin-dir "$PLUGIN" --claude "$REFSTUB" --env-file "$TMP/
   refuses 'a probe in the experiment phase' 'experiment phase' "${BASE[@]}" --phase experiment --sizing-probe --out "$TMP/t-ref/o1"
   refuses 'a probe scenario without --sizing-probe' 'need --sizing-probe' --sandbox off --phase calibration --scenarios S4-M01 --out "$TMP/t-ref/o1" --budget-total 1
   refuses 'a normal scenario with --sizing-probe' 'at most once' --sandbox off --phase sizing --sizing-probe --scenarios S1 --out "$TMP/t-ref/o1" --budget-total 1
+  refuses 'a probe scenario that is not in the set' 'at most once' --sandbox off --phase sizing --sizing-probe --scenarios S4-ZZ --out "$TMP/t-ref/o1" --budget-total 1
   refuses '--out outside HOME, the repository and the temp directory' 'under HOME' "${BASE[@]}" --phase calibration --out /var/tmp/bench-refusal-out
   if VT=$(mktemp -d -p /var/tmp bdrvt.XXXXXX 2>/dev/null); then refuses 'a temp directory outside /tmp is not an --out root' 'under HOME' "${BASE[@]}" --phase calibration --out "$VT/out"; rmdir "$VT" 2>/dev/null; fi
   refuses '--out with group access' 'mode 0700' "${BASE[@]}" --phase calibration --out "$TMP/t-ref/open"
@@ -235,6 +246,14 @@ if (mode === 'unit') {
   check('a model outside the pinned set makes the row invalid with reason unpinned-model', unp.row.outcome === 'invalid' && unp.reason === 'unpinned-model' && Sc.rowProblems(unp.row).length === 0);
   const probe = mk(draw({ outcome: 'invalid', reason: 'probe' }), { ...parsedOk, modelsSeen: ['x-1'] }, null);
   check('a sizing probe is checked for pinning too; an already invalid draw keeps its first cause', probe.reason === 'unpinned-model' && mk(draw({ outcome: 'invalid', reason: 'timeout' }), { ...parsedOk, modelsSeen: ['x-1'] }, null).reason === 'timeout');
+  const killed = (name, model) => U.parseStream(stream(name, [ev({ type: 'assistant', message: { model, content: [tu('k', 'Bash')] } }), ev({ type: 'user', message: { content: [] } })]), { allowNoResult: true });
+  const full = { tier: 'full', tierSource: 'file' }; const timedOut = (p, t = full) => mk(draw({ outcome: 'invalid', reason: 'timeout' }), p, null, t);
+  const kOk = killed('killed-ok', 'm-1'); const tOk = timedOut(kOk);
+  check('a killed stream (no result line) is read for its models from the assistant events: tokens empty, tool calls counted; by default it is still null', kOk.modelsSeen.join() === 'm-1' && Object.keys(kOk.tokens).length === 0 && kOk.results === 0 && kOk.toolCalls === 1 && U.parseStream(`${dir}/killed-ok`) === null);
+  check('a timed-out full draw recorded in the file keeps reason timeout when its models are pinned, and its row carries them', tOk.reason === 'timeout' && tOk.row.outcome === 'invalid' && tOk.row.models.join() === 'm-1' && Sc.rowProblems(tOk.row).length === 0);
+  check('a timed-out full draw is refused when a model is unpinned, unknown or too long, or the stream is unusable', eq([timedOut(killed('killed-x', 'x-1')).reason, timedOut(killed('killed-none', undefined)).reason, timedOut(killed('killed-long', 'm'.repeat(130))).reason, timedOut(null).reason], ['unpinned-model', 'models-unknown', 'models-truncated', 'unusable-stream']));
+  check('a full/file draw invalid for another cause (output-cap, a leak) keeps that reason when the model is unpinned: only a timeout is re-checked', ['output-cap', 'leak:token'].every((r) => { const t = mk(draw({ outcome: 'invalid', reason: r }), killed('killed-x', 'x-1'), null, full); return t.reason === r && t.row.outcome === 'invalid'; }));
+  check('any other timeout is not checked: a small tier, a tier from the stream, or none keeps reason timeout whatever the models', [{ tier: 'small', tierSource: 'file' }, { tier: 'full', tierSource: 'stream' }, { tier: null, tierSource: 'none' }].every((t) => timedOut(killed('killed-x', 'x-1'), t).reason === 'timeout' && timedOut(null, t).reason === 'timeout'));
   check('no model information, or no usable stream, is invalid rather than assumed pinned', mk(draw(), { ...parsedOk, modelsSeen: [] }, { green: 1, total: 1 }).reason === 'models-unknown' && mk(draw(), null, { green: 1, total: 1 }).reason === 'unusable-stream');
   check('a scored outcome without a hidden-suite score is invalid; a paused row keeps its score and sets paused', mk(draw(), parsedOk, null).reason === 'unscored' && (() => { const p = mk(draw({ outcome: 'paused' }), parsedOk, { green: 2, total: 4 }).row; return p.paused === true && p.green === 2 && Sc.rowProblems(p).length === 0; })());
   const junk = mk(draw({ costUsd: NaN, durationMs: -5, turns: 'x' }), { ...parsedOk, tokens: { 'm-1': { input: 1.5 } } }, { green: 9, total: 4 });
@@ -307,6 +326,12 @@ if (mode === 'unit') {
   const es = entries('probe'); const log = stubLog('probe');
   check('a sizing probe is one SoMi call, zero resumes, cap $1.00, phase sizing, outcome invalid with reason probe, never scored', rc('probe') === 0 && es.length === 1 && es[0].row.phase === 'sizing' && es[0].row.arm === 'somi' && es[0].row.outcome === 'invalid' && es[0].reason === 'probe' && es[0].row.total === 0 && es[0].resumes === 0 && log.length === 1 && log[0].argv[log[0].argv.indexOf('--max-budget-usd') + 1] === '1.00');
   check('the probe row validates and its plan is flagged probe with the probe cap', Sc.rowProblems(es[0].row).length === 0 && JSON.parse(read(`${TMP}/t-probe/out/plan.json`)).probe === true);
+  const Set = await import(`${LIB}/sizing-set.mjs`); const Man = await import(`${LIB}/manifest.mjs`);
+  const set = Set.loadSet(); const a3 = set.entries.find((e) => e.id === 'A3'); const ps = stubLog('pset'); const prompt = (l) => l.argv[l.argv.indexOf('--print') + 1];
+  const authored = ps.find((l) => prompt(l).includes(a3.request)); const corpus = ps.find((l) => !prompt(l).includes(a3.request));
+  check('a probe of an authored entry sends its request text as the prompt and runs in a copy of its fixture: src/auth/token.mjs exists, no plan tree and no .somi/plans', rc('probeset') === 0 && ps.length === 2 && prompt(authored) === `/somi:ship-loop ${a3.request}` && eq(authored.ws, { token: true, plans: false, plan: false }));
+  check('a probe of a corpus entry still sends its task text, in the task\'s own fixture', corpus !== undefined && prompt(corpus).startsWith('/somi:ship-loop Implement the following') && corpus.ws.token === false && entries('probeset').every((e) => e.row.phase === 'sizing' && e.reason === 'probe' && e.resumes === 0));
+  check('the scenario material of a set entry is bound in the plan, so a changed fixture or request refuses a resume', /^[0-9a-f]{64}$/.test(JSON.parse(read(`${TMP}/t-probeset/out/plan.json`)).material['S4-A3']));
 } else if (mode === 'echo') {
   const es = entries('echo');
   check('a draw that echoes the token is invalid with a leak reason in both arms; the stream on disk is redacted', rc('echo') === 0 && es.every((e) => e.row.outcome === 'invalid' && /^leak:/.test(e.reason) && e.reason.includes('token')) && read(`${TMP}/t-echo/out/${es[0].draw}/stream.jsonl`).includes('[REDACTED]'));
@@ -315,6 +340,11 @@ if (mode === 'unit') {
   check('a dry run prints the plan, the caps, the worst case and the pinned cost config, makes no claude call and writes nothing', rc('dry') === 0 && /18 draw\(s\)/.test(log) && /cap \$6/.test(log) && /cap \$2/.test(log) && /worst case[^\n]*\$72\.00/.test(log) && /pin-all on \(\d+ agents pinned to low\)/.test(log) && calls('dry') === 0 && !fs.existsSync(`${TMP}/t-dry/out`));
   const first = log.split('\n').filter((l) => /^\s+\d+ S\d-/.test(l)).slice(0, 6);
   check('the printed order is the plan order: ids with their caps', first.length === 6 && first.every((l) => /\(cap \$[62], 40 min\)/.test(l)));
+  const Set = await import(`${LIB}/sizing-set.mjs`); const Man = await import(`${LIB}/manifest.mjs`); const dl = read(`${TMP}/o-drypr.log`);
+  const set = Set.loadSet(); const prep = (e) => Number((dl.match(new RegExp(`prepared ${Set.scenarioId(e)}: (\\d+) file`)) ?? [])[1]);
+  check('the probe plan lists every set entry, and a dry run prepares each without a claude call', rc('drypr') === 0 && calls('drypr') === 0 && set.entries.every((e) => dl.includes(`${Set.scenarioId(e)}-somi-1 (cap $1`) && prep(e) > 0) && new RegExp(`${set.entries.length} draw\\(s\\)`).test(dl));
+  const a3 = set.entries.find((e) => e.id === 'A3'); const kept = Man.lstatManifest(path.join(Set.REPO_ROOT, 'tests/evals/fixtures', a3.fixture)).files.filter(([f]) => !f.startsWith('_somi/')).length;
+  check('an authored entry\'s staged workspace is its fixture without the plan tree, plus the config file', prep(a3) === kept + 1);
 } else if (mode === 'sigint') {
   const snap = JSON.parse(read(`${TMP}/o-sigint.rc`)); const first = (snap.results ?? '').split('\n').filter(Boolean).map((l) => JSON.parse(l)); const es = entries('sigint');
   check('SIGINT: exit 130, exactly one entry, halted `interrupted` with no row, charged the draw cap; no report; the lock released', snap.code === 130 && first.length === 1 && first[0].status === 'halted' && first[0].reason === 'interrupted' && first[0].row === null && [2, 6].includes(first[0].costUsd) && snap.report === false && snap.lock === false);
@@ -332,6 +362,7 @@ if (mode === 'unit') {
   check('a draw directory planted as a link is moved aside, never written through: the target stays empty and the run completes', rc('symdraw') === 0 && fs.readdirSync(`${TMP}/victim`).length === 0 && fs.lstatSync(`${TMP}/t-symdraw/out/S3-somi-1`).isDirectory() && fs.readdirSync(`${TMP}/t-symdraw/out`).some((n) => n.startsWith('S3-somi-1.halted-')));
   check('--out that is a link is refused', rc('symout') === 2 && /real directory/.test(read(`${TMP}/o-symout.err`)) && calls('symout') === 0);
   check('a call that ends with no result halts (no row, charged the cap, re-run later)', rc('nores') === 1 && entries('nores')[0].reason === 'no-result' && entries('nores')[0].row === null && [2, 6].includes(entries('nores')[0].costUsd));
+  check('a set scenario whose fixture holds a link is refused before any draw (exit 1, no claude call); one whose fixture is gone is refused by the set (exit 2)', rc('setlink') === 1 && /could not be read/.test(read(`${TMP}/o-setlink.err`)) && calls('setlink') === 0 && rc('setgone') === 2 && /fixture does not exist/.test(read(`${TMP}/o-setgone.err`)) && calls('setgone') === 0);
   check('CLAUDE_CODE_OAUTH_TOKEN already in the environment is refused', Number(read(`${TMP}/o-envtok.rc`).trim()) === 2 && read(`${TMP}/o-envtok.err`).includes('already in the environment'));
 } else if (mode === 'disk') {
   const dirs = process.env.DIRS.split(':').filter(Boolean); const files = dirs.flatMap((d) => walk(d)).filter((f) => !f.endsWith('/stub.json') && !f.endsWith('/eval.env'));
@@ -365,6 +396,9 @@ red_unit mut-cumulative tests/evals/lib/bench-usage.mjs "call.cost = cost;" "cal
 red_unit mut-haltedrow tests/evals/lib/bench-usage.mjs "if (e.status === 'halted') { if (e.row !== null" "if (e.status === 'halted') { if (false && e.row !== null"
 red_unit mut-mismatch tests/evals/lib/bench-usage.mjs "canon(stored[k]) !== canon(fresh[k])" "false"
 red_unit mut-skipbad tests/evals/lib/bench-usage.mjs 'catch { return { ok: false, reason: `${at} is not JSON` }; }' 'catch { continue; }'
+red_unit mut-timedfull tests/evals/lib/bench-usage.mjs "reason === 'probe' || timedFull;" "reason === 'probe';"
+red_unit mut-timedreason tests/evals/lib/bench-usage.mjs "const timedFull = reason === 'timeout' && tierInfo" "const timedFull = tierInfo"
+red_unit mut-nores tests/evals/lib/bench-usage.mjs "if (out.results === 0 && !allowNoResult) return null;" "if (out.results === 0) return null;"
 red_unit mut-dedupe tests/evals/lib/bench-usage.mjs "if (ids.has(id) || ids.size >= MAX_IDS) continue; ids.add(id);" "ids.add(id);"
 # Driver-level proofs: a copy of the driver with one guard removed must behave wrongly in a small run.
 scratch mut-plan; mutate mut-plan tests/scripts/manual/usage-bench.mjs "if (diff.length > 0) die(" "if (false) die("
@@ -389,6 +423,9 @@ res "$([ "$(cat "$TMP/o-mutlive.rc")" = 0 ] && echo 1 || echo 0)" "a driver that
 res "$(grep -q 'regular file' "$TMP/o-mutsymres.err" && echo 0 || echo 1)" "a driver that follows a results.jsonl link was not caught"
 res "$([ "$(cat "$TMP/o-mutsymout.rc")" = 0 ] && echo 1 || echo 0)" "a driver that accepts an --out link was not caught"
 res "$(grep -rqF -- "$TOKEN" "$TMP/t-mutredact" && echo 1 || echo 0)" "a sink that writes the token unredacted was not caught by the disk scan"
+
+node tests/scripts/lib/sizing-set-tests.mjs || FAILN=$((FAILN + 1))  # the labelled sizing set: free, no stub needed
+node tests/scripts/lib/sizing-score-tests.mjs || FAILN=$((FAILN + 1))  # the sizing scorer and its mutations: free, no stub needed
 
 echo "  $PASS passed, $FAILN failed"
 [ "$FAILN" -eq 0 ]

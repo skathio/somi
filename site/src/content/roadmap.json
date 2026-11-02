@@ -104,6 +104,12 @@
               ]
             }
           ]
+        },
+        {
+          "version": "4.1.0",
+          "covers": ["4.1.0"],
+          "title": "A front door that only dispatches",
+          "body": "The `somi` agent no longer runs procedures itself: it picks one workflow and hands it to the `somi-flow` runner, or to `somi-general` when nothing fits, and relays the runner's questions to you as checkpoints. Every workflow's procedure is now one flow skill shared by its command and the runner, and the largest agents load their procedures from role skills."
         }
       ]
     }

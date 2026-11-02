@@ -28,11 +28,14 @@ discovery produces the requirements & design foundation inside `.somi/rd/<slug>/
 > tier safe — it carries the decisions, the complexity map, and an explicit *"what execution does
 > NOT need to re-research"* list.
 
-**How dispatch actually happens.** Nothing hands a whole command's procedure to one Tasked agent
-that runs it end-to-end. On Claude Code, invoking a command directly runs its own steps live in
-that turn; on Copilot, selecting the `somi` front-door persona runs the matched command's own
-procedure live instead of Tasking a single agent to carry it out. Either way, every agent that
-procedure starts — one `Task` call per agent — resolves its cost tier and model first, through
+**How dispatch actually happens.** No specialist is handed a whole workflow. Every workflow's procedure is
+one skill, `skills/flow-<name>/SKILL.md`, with two entry points. On Claude Code, invoking a command
+loads that skill and runs it live, in that turn. On Copilot, the `somi` front-door dispatcher
+(`agents/somi.md`) routes the request and starts the `somi-flow` runner, which loads the same
+skill and runs it as a subagent; the dispatcher itself runs no procedure, and a user gate inside the
+flow comes back to it as a `CHECKPOINT` it asks the user ([`somi-checkpoint`](../skills/somi-checkpoint/SKILL.md)).
+Either way, every agent the procedure starts — one `Task` call per agent, never the whole workflow
+in one call — resolves its cost tier and model first, through
 `somi_resolve` (the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill, served over the
 bundled MCP server; a CLI and a disclosed-judgment fallback exist where MCP isn't reachable), and
 the spawned agent's briefing states `dispatched at cost: <tier>` when a model was enforced, or `requested cost: <tier> (not enforced: no mapped model)` when none was. The session ceiling is a **hard
@@ -449,6 +452,13 @@ simulating a state machine in context. Two scripts ship with SoMi:
   breaker; **cross-run recurrence** is `/ship-loop`'s cross-layer breaker — and both work across
   sessions, because the ledger is durable. `/review` starts by re-checking the open findings
   instead of starting blind, and `progress.md` follow-ups reference `F-<n>` ids.
+
+`/code-loop` reaches both through the bundled `somi_loop` MCP tool: one call per transition (`open`,
+`after-code`, `after-review`, `close`), so a clean pass is four tool calls plus the two agent
+starts. The tool runs the same code as the CLI, keeps the state and the ledger, and writes the
+diary entries and the iteration's progress row; anything it could not write comes back in
+`unwritten` for the orchestrator. It needs a project root from the host and only tightens a cap;
+without a root (or without MCP) the flow's Host fallback runs the CLI subcommands above one by one.
 
 The model keeps the judgment — what a finding *is*, what to do when a gate fires; the scripts own
 the counting. On hosts without a shell, the loops fall back to the old judgment-enforced

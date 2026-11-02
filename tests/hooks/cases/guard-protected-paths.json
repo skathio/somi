@@ -9,8 +9,37 @@
         "tool_input": {
           "file_path": "/repo/.somi/somi-state/tier/x.json"
         }
-      }
+      },
+      "expect_reason": "scripts/somi-tier.mjs"
     },
+    {"name": "write-git-backslash", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".git\\config"}}},
+    {"name": "write-loop-state-backslash", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".somi\\somi-state\\loop\\x.json"}}},
+    {"name": "write-git-backslash-dotdot", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "a\\..\\.git\\config"}}},
+    {"name": "write-git-windows-drive-path", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "C:\\proj\\.git\\config"}}, "env": {"CLAUDE_PROJECT_DIR": "C:\\proj"}},
+    {"name": "write-git-windows-root-relative-backslash", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".git\\config"}}, "env": {"CLAUDE_PROJECT_DIR": "C:\\proj"}},
+    {"name": "write-ordinary-windows-drive-path-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "C:\\proj\\src\\x.js"}}, "env": {"CLAUDE_PROJECT_DIR": "C:\\proj"}},
+    {"name": "write-two-keys-second-protected", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "ok.txt", "path": ".git/x"}}},
+    {"name": "write-non-string-key-fails-closed", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "ok.txt", "path": ["x"]}}},
+    {"name": "write-git-pointer-file", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.git"}}},
+    {"name": "write-loop-state-directory-path", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi/somi-state/loop"}}},
+    {"name": "write-node-modules-bare-name-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "node_modules"}}},
+    {"name": "write-loop-state-directory-trailing-slash", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi/somi-state/loop/"}}},
+    {"name": "write-loop-state-dotdot", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi/plans/../somi-state/loop/x.json"}}},
+    {"name": "write-loop-state-double-slash", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi/somi-state//loop/x.json"}}},
+    {"name": "write-loop-state-dot-segment", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi/somi-state/./loop/x.json"}}},
+    {"name": "write-run-state-dotdot-relative", "expect": "deny", "payload": {"tool_name": "Edit", "tool_input": {"file_path": ".somi/plans/../somi-state/run/x.json"}}},
+    {"name": "write-tier-record-double-slash", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi//somi-state/tier/x.json"}}},
+    {"name": "write-git-dotdot", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/src/../.git/config"}}},
+    {"name": "write-node-modules-dot-segment", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/./node_modules/x.js"}}},
+    {"name": "write-dotdot-out-of-protected-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/node_modules/../src/x.js"}}},
+    {"name": "multiedit-loop-state", "expect": "deny", "payload": {"tool_name": "MultiEdit", "tool_input": {"file_path": "/repo/.somi/somi-state/loop/s.json"}}},
+    {"name": "notebookedit-loop-state", "expect": "deny", "payload": {"tool_name": "NotebookEdit", "tool_input": {"notebook_path": "/repo/.somi/somi-state/loop/n.ipynb"}}},
+    {"name": "notebookedit-ordinary-notebook-allowed", "expect": "allow", "payload": {"tool_name": "NotebookEdit", "tool_input": {"notebook_path": "/repo/analysis/n.ipynb"}}},
+    {"name": "copilot-patch-loop-state", "expect": "deny", "payload": {"tool_name": "Edit", "tool_input": "*** Begin Patch\n*** Update File: /repo/.somi/somi-state/loop/s.json\n@@\n-a\n+b\n*** End Patch\n"}},
+    {"name": "write-loop-state", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi/somi-state/loop/s.json"}}, "expect_reason": "somi-loop.mjs step"},
+    {"name": "edit-loop-state-relative", "expect": "deny", "payload": {"tool_name": "Edit", "tool_input": {"file_path": ".somi/somi-state/loop/s.1.json"}}},
+    {"name": "write-run-budget-state", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi/somi-state/run/s.json"}}, "expect_reason": "node scripts/somi-loop.mjs"},
+    {"name": "write-other-state-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.somi/somi-state/looper.json"}}},
     {
       "name": "write-signals-file-allowed",
       "expect": "allow",
@@ -175,6 +204,19 @@
         "tool_name": "Edit",
         "tool_input": "just some text"
       }
-    }
+    },
+    {"name": "write-git-drive-root-climb", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "a:/../.git/config"}}},
+    {"name": "write-loop-state-drive-root-climb", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "a:/../.somi/somi-state/loop/x.json"}}},
+    {"name": "write-git-drive-root-climb-backslash", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "C:\\..\\.git\\config"}}},
+    {"name": "write-git-relative-climb-past-drive-root", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "..\\..\\.git\\x"}}, "env": {"CLAUDE_PROJECT_DIR": "C:\\proj"}},
+    {"name": "write-file-named-build-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "scripts/build"}}},
+    {"name": "write-bare-build-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "build"}}},
+    {"name": "write-file-named-vendor-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "bin/vendor"}}},
+    {"name": "write-git-uppercase", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.GIT/hooks/x"}}},
+    {"name": "write-loop-state-mixed-case", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.SOMI/somi-state/LOOP/x"}}},
+    {"name": "write-plugin-install-mixed-case", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.Claude/plugins/somi/x"}}},
+    {"name": "write-build-uppercase-not-folded-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/BUILD/x"}}},
+    {"name": "write-drive-path-ignores-protected-root-allowed", "expect": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "C:\\proj\\src\\x.js"}}, "env": {"CLAUDE_PROJECT_DIR": "D:\\build"}},
+    {"name": "write-drive-path-protected-tail-other-root", "expect": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "C:\\proj\\.git\\config"}}, "env": {"CLAUDE_PROJECT_DIR": "D:\\other"}}
   ]
 }

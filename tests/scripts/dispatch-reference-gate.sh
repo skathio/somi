@@ -100,13 +100,13 @@ else
   bad "synthetic call-site cases: $unit_bad mismatch(es) -- see MISMATCH lines above"
 fi
 
-# --- fixture-level: a `cp -a` copy of the real commands/ + agents/ -------------------------------
-cp -a "$ROOT/commands" "$TMP/commands"
+# --- fixture-level: a `cp -a` copy of the real skills/ + agents/ -------------------------------
+cp -a "$ROOT/skills" "$TMP/skills"
 cp -a "$ROOT/agents" "$TMP/agents"
 
 # --- GREEN: the unmodified copy passes -----------------------------------------------------------
-if out_green="$(node "$GATE" "$TMP/commands" "$TMP/agents" 2>&1)"; then
-  ok "gate exits 0 against an unmodified cp -a copy of the real commands/ + agents/"
+if out_green="$(node "$GATE" "$TMP/skills" "$TMP/agents" 2>&1)"; then
+  ok "gate exits 0 against an unmodified cp -a copy of the real skills/ + agents/"
 else
   bad "gate exited non-zero against an unmodified copy (got: $out_green)"
 fi
@@ -129,27 +129,27 @@ else
   bad "expected at least 21 commands derived as starting an agent, got $checked_count -- the call-site pattern derivation may have regressed"
 fi
 
-# --- RED: removing commands/code.md's dispatch reference must fail ------------------------------
+# --- RED: removing skills/flow-code/SKILL.md's dispatch reference must fail ------------------------------
 # Strips BOTH satisfying tokens, not just one -- the gate now accepts either "skills/somi-dispatch"
 # or "somi_resolve" (DISPATCH_REFERENCE_RE), so a fixture that only strips lines mentioning
 # "somi-dispatch" would leave a bare "somi_resolve" mention behind and this RED case would no
 # longer actually go red.
-sed -i -E '/somi-dispatch|somi_resolve/d' "$TMP/commands/code.md"
-out_red="$(node "$GATE" "$TMP/commands" "$TMP/agents" 2>&1)"; rc_red=$?
+sed -i -E '/somi-dispatch|somi_resolve/d' "$TMP/skills/flow-code/SKILL.md"
+out_red="$(node "$GATE" "$TMP/skills" "$TMP/agents" 2>&1)"; rc_red=$?
 if [ "$rc_red" -eq 1 ]; then
-  ok "gate exits 1 once commands/code.md's dispatch reference is removed"
+  ok "gate exits 1 once skills/flow-code/SKILL.md's dispatch reference is removed"
 else
-  bad "gate did not exit 1 after removing commands/code.md's reference (rc=$rc_red, out=$out_red)"
+  bad "gate did not exit 1 after removing skills/flow-code/SKILL.md's reference (rc=$rc_red, out=$out_red)"
 fi
 case "$out_red" in
-  *"MISSING DISPATCH REFERENCE: code.md"*) ok "gate names code.md as missing the dispatch reference" ;;
+  *"MISSING DISPATCH REFERENCE: flow-code/SKILL.md"*) ok "gate names code.md as missing the dispatch reference" ;;
   *) bad "gate's output does not name code.md as missing the reference (got: $out_red)" ;;
 esac
 
 # --- RED fixture does not spuriously flag OTHER commands (only code.md was touched) --------------
 case "$out_red" in
   *"MISSING DISPATCH REFERENCE"*"MISSING DISPATCH REFERENCE"*)
-    bad "more than one command flagged missing -- only commands/code.md was modified (got: $out_red)" ;;
+    bad "more than one command flagged missing -- only skills/flow-code/SKILL.md was modified (got: $out_red)" ;;
   *)
     ok "exactly one command (code.md) is flagged, not a spurious wider failure" ;;
 esac
@@ -159,12 +159,12 @@ router_out="$(node --input-type=module -e '
 import { agentStartedBy, agentNamesFrom } from "'"$GATE"'";
 const names = agentNamesFrom("'"$TMP"'/agents");
 import fs from "node:fs";
-const text = fs.readFileSync("'"$TMP"'/commands/ship.md", "utf8");
+const text = fs.readFileSync("'"$TMP"'/skills/flow-ship/SKILL.md", "utf8");
 console.log(agentStartedBy(text, names) === null ? "EXCLUDED" : "FALSE POSITIVE");
 ' 2>&1)"
 case "$router_out" in
-  EXCLUDED) ok "commands/ship.md (a router -- Tasks other commands, never an agent) is correctly excluded" ;;
-  *) bad "commands/ship.md was NOT excluded (got: $router_out) -- a router must never be misdiagnosed as starting an agent" ;;
+  EXCLUDED) ok "skills/flow-ship/SKILL.md (a router -- Tasks other commands, never an agent) is correctly excluded" ;;
+  *) bad "skills/flow-ship/SKILL.md was NOT excluded (got: $router_out) -- a router must never be misdiagnosed as starting an agent" ;;
 esac
 
 bash "$ROOT/tests/scripts/review-panel-seats.sh" || fail=$((fail+1))

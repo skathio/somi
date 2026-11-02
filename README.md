@@ -57,8 +57,8 @@ handoff, at whichever default tier the table gives them: `somi-security-reviewer
 
 > **Runtime**: a current Node (LTS) on `PATH` — no `bash`, no `jq` required. Both Claude Code and
 > GitHub Copilot already bundle Node, so most installs need nothing extra; the Node runtime itself
-> is Windows-native (no bash/jq to install). See [`docs/HOOKS.md`](docs/HOOKS.md) for one open
-> caveat on Windows path-separator coverage in the path-matching guards.
+> is Windows-native (no bash/jq to install). The path guards' Windows coverage is tested on Linux
+> only: see [`docs/HOOKS.md`](docs/HOOKS.md).
 
 ### Option 1 — Claude Code plugin (marketplace)
 
@@ -95,8 +95,9 @@ Once installed, use `@somi` in GitHub Copilot chat:
 @somi /review  rate-limiting-webhooks
 ```
 
-> On GitHub Copilot, select the **`somi`** agent as your session persona for this same
-> front-door behavior automatically — no need to already know which command to type. See
+> On GitHub Copilot, select the **`somi`** agent as your session persona: a dispatcher that hands
+> each request to the `somi-flow` runner for the matching workflow (or to `somi-general` when none
+> fits), so you don't need to know which command to type. See
 > [`docs/PLUGIN.md`](docs/PLUGIN.md#github-copilot-extension).
 
 > **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Three things do **not** carry

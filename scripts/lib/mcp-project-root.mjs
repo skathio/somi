@@ -53,6 +53,9 @@ function validateDir(dir) {
   return { ok: true, dir };
 }
 
+// A model's text echoed in an error: bounded, as install-text.mjs bounds a name.
+const echo = (v) => JSON.stringify(v)?.slice(0, 60);
+
 function realpathOrNull(dir) {
   try {
     return fs.realpathSync(dir);
@@ -99,9 +102,16 @@ async function hostRoot({ listRoots }) {
  * @param {string} [opts.projectDirArg] - the tool call's own `project_dir` argument, if given.
  * @param {() => Promise<string[]|undefined>} [opts.listRoots] - calls the client's `roots/list`
  *   and returns the raw URI strings, or `undefined` when the client never declared `roots`.
- * @returns {Promise<{ok: true, root: string, source: string} | {ok: false, code: number, message: string}>}
+ * @returns {Promise<{ok: true, root: string, source: string, hosted: boolean} | {ok: false, code: number, message: string, hosted?: boolean}>}
+ *   `hosted`: whether the HOST supplied a root at all (true even when it was ambiguous or refused project_dir); undefined
+ *   when the answer failed before the lookup (a malformed project_dir), so a caller asks the host only once.
  */
-export async function resolveProjectRoot({ projectDirArg, listRoots }) {
+export async function resolveProjectRoot(opts) {
+  const seen = { hosted: undefined };
+  return { ...(await resolveWith(opts, seen)), hosted: seen.hosted };
+}
+
+async function resolveWith({ projectDirArg, listRoots }, seen) {
   // Validated FIRST regardless of whether a host root exists -- a malformed value is 64 either
   // way, and the bounding check below needs a real, fs-verified directory to compare against.
   let projectDir; // undefined (not given), or the validated absolute path
@@ -109,10 +119,10 @@ export async function resolveProjectRoot({ projectDirArg, listRoots }) {
     const v = validateDir(projectDirArg);
     if (!v.ok) {
       const reason = {
-        empty: `project_dir requires a non-empty string, got ${JSON.stringify(projectDirArg)}`,
-        'not-absolute': `project_dir must be an absolute path, got ${JSON.stringify(projectDirArg)}`,
-        missing: `project_dir ${JSON.stringify(projectDirArg)} does not exist`,
-        'not-a-directory': `project_dir ${JSON.stringify(projectDirArg)} is not a directory`,
+        empty: `project_dir requires a non-empty string, got ${echo(projectDirArg)}`,
+        'not-absolute': `project_dir must be an absolute path, got ${echo(projectDirArg)}`,
+        missing: `project_dir ${echo(projectDirArg)} does not exist`,
+        'not-a-directory': `project_dir ${echo(projectDirArg)} is not a directory`,
       }[v.reason];
       return { ok: false, code: EXIT_USAGE, message: reason };
     }
@@ -120,6 +130,7 @@ export async function resolveProjectRoot({ projectDirArg, listRoots }) {
   }
 
   const host = await hostRoot({ listRoots });
+  seen.hosted = host !== undefined;
 
   if (!host) {
     // Host supplies nothing: project_dir alone decides.
@@ -175,7 +186,7 @@ export async function resolveProjectRoot({ projectDirArg, listRoots }) {
       ok: false,
       code: EXIT_USAGE,
       message:
-        `project_dir "${projectDir}" is outside the host-supplied root -- refusing (project_dir ` +
+        `project_dir ${echo(projectDir)} is outside the host-supplied root -- refusing (project_dir ` +
         `may only select a directory inside the host's own root, never override it)`,
     };
   }

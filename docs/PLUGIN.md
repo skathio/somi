@@ -5,8 +5,7 @@ underlying markdown files — agents, commands, skills, rules, hooks — so ther
 
 The hook scripts and state tooling underneath are zero-dependency Node (`.mjs`) — no `bash`, no
 `jq` to install on either host, and the runtime itself works the same on Windows, Linux, and
-macOS. (One open caveat on Windows path-separator coverage in the path-matching guards: see
-[`HOOKS.md`](./HOOKS.md).)
+macOS. (The path guards' Windows coverage is tested on Linux only: see [`HOOKS.md`](./HOOKS.md).)
 
 > **The two hosts are not feature-equivalent.** The shared markdown is portable, but there are two
 > **layers that don't fully carry to Copilot**: the deterministic **guardrail hooks** run on Copilot
@@ -81,6 +80,44 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   server also gets no project root of its own, so every write is refused (67) and you run the CLI.
   The CLI is also usable directly:
   `node scripts/somi-config.mjs <show|get|set|unset|init> [key] [value] [--project-dir DIR]`.
+- **`somi_loop`** — one bounded-loop transition per call: `step` is `open`, `after-code`, `after-review`, `close` or
+  `status` (read only), with the loop's state, findings ledger, diary and progress row kept by the same code as
+  `node scripts/somi-loop.mjs step <name>`. Every outcome is the engine's JSON response, with `next`, `wrote`,
+  `unwritten`, `exit` and `stop_reason`. Branch on `next` and `exit` only: `stop_reason` is text for a person, and its wording can change. The `next` call is one of: `task-coder`, `task-planner`, `task-reviewer`,
+  `task-reviewers`, `task-panel`, `open`, `close`, `summarise`, `ask-user`. A fired gate (2 max passes, 3 diff cap, 4 time budget, 5 circuit breaker) is a
+  normal result; any other nonzero `exit` is a refusal and the result is marked `isError` (64 arguments, 65 and 66 the
+  agent, 67 no host project root, ambiguous roots or an unreadable config to fix, 70 an internal error). Every git call
+  the server makes is cut off after 60 seconds, and a measurement that times out is refused (64), never counted as a pass; where the
+  tree only narrows a review (the delta scope), a tree that cannot be measured counts as unmeasured and the review is full. Writes need a host-supplied root and are refused (67, run the
+  CLI) without one; only `status` reads a `project_dir` alone, `project_dir` can only select inside a host root, and
+  two host roots without one are ambiguous. A write step refuses a `.somi/somi-state/loop` that is a link, and a state file that is a link, has a second hard link or is not a regular file (64, with the cause). Cap
+  arguments only lower a cap, and the server's own environment never sets one: the tool ignores
+  `SOMI_CODE_LOOP_MAX_PASSES`, `SOMI_PLAN_LOOP_MAX_PASSES` and `SOMI_CODE_LOOP_DIFF_CAP` (to raise a cap run the CLI with
+  its flag or env var). It does read the operator settings
+  from the server's launch environment and applies them as the CLI does (`SOMI_CODE_LOOP_REVIEW`,
+  `SOMI_CODE_LOOP_REVIEW_SCOPE`, `SOMI_CODE_LOOP_SEVERITY_FLOOR`, `SOMI_PLAN_LOOP_SEVERITY_FLOOR`; they can loosen a
+  loop as well as tighten it, e.g. `single` over a configured `security`, or a higher severity floor), and the ones that
+  locate the global config (`SOMI_GLOBAL_CONFIG`, `XDG_CONFIG_HOME`, `APPDATA`). Only a tool argument is held to
+  tightening. It writes `diary.md` entries (each ends with a fixed provenance line; never a decision-change or plan-change
+  entry, and no file name from a call) and, in `progress.md`, the iteration's row, the done count in that phase's row of
+  the Phase progress table (recounted on every row mark, `open` included) and the Last activity line (added at the end of
+  the Status section when the file has none). It forgives what a model adds by habit where that loses no
+  gate: `host` and `project_dir` are accepted and ignored on a step that has no use for them (any other unknown argument is a
+  64); `open` reads `files` from the iteration's "Files (approx)" line in its phase file when the argument is absent (a given
+  list wins; no such line is a 64); `after-review` names the review itself when `review` is absent and drops a finding's
+  unknown keys, the known ones still checked, and reads a finding's `severity` (`Blocker|Major|Minor|Nit`) and `confidence` (`High|Medium|Low`) in any letter case; a refused finding names its field and index, e.g. `findings[2].confidence`; the progress row is found by the names in its table's header (`Iteration`
+  first, a `Status` column; `Reviewed` and `Last activity` are set where the table has them); a diary holding only its title
+  and a quoted preamble takes its first entry. A record the tool could not write, a failed disk write
+  included, and a fact it only reports come back in `unwritten` as part of a normal result, each item naming its
+  `file`, its `kind` and a `line`. The `kind` is one of: `diary-entry`, `iteration-row`, `last-activity`, `status-line`,
+  `notice`. Record the first four in the file named, yourself, from the `line`, a cut summary (a diary entry's is its
+  category, title and body), not text to paste. A `notice` (a progress row a person marked blocked, a refused status move, a
+  skipped diary compaction) is only reported, never written. `reason` is text for a person: do not branch on it. A repeated call replays the stored result and does not retry the
+  write. `after-code` returns `changed`: true when the tree moved since `open`, false when
+  nothing outside `.somi/` and `.claude/` changed (the reviewer re-checks the open findings), absent when it was not
+  measured (a pass the CLI started); the dispatch record is self-attested, the first call wins. Where the host runs
+  SoMi's hooks, the PostToolUse audit log records each call as `mcp__<server>__somi_loop` with the first 240 bytes of
+  its arguments.
 - **`somi_agent_info`** — read-only agent registry and dispatch lookup. With no `agent`, the
   catalog: every canonical agent (`somi-coder`, …, and the `somi` front door), the aliases hosts
   actually register for it (today `somi:<name>` on Claude Code and Copilot CLI, the one alias each),
@@ -91,8 +128,9 @@ nothing at the repo root for a bare checkout to misread. It exposes these tools:
   65 and is never routed to another agent; a pre-4.0.0 bare name such as `coder` gets a "renamed"
   hint. Aliases live in one table, `scripts/lib/agent-registry.mjs`, which fails at start on a
   collision.
-- **`somi_command`** — returns a SoMi command's own procedure text (`commands/<name>.md`) from
-  the install root, so the front door can run a command live without knowing an install path.
+- **`somi_command`** — returns a SoMi command file (`commands/<name>.md`) from the install root.
+  Since 4.1.0 a command is a thin wrapper; its procedure is the `flow-<name>` skill, read with
+  `somi_skill`.
 - **`somi_skill`** — returns a SoMi skill's own text (`skills/<name>/SKILL.md`) from the install
   root, for the identical reason: a relative markdown link into `skills/` can't be followed from a
   consuming project either, so the [`somi-dispatch`](../skills/somi-dispatch/SKILL.md) skill —
@@ -268,13 +306,16 @@ have no effect.
 
 Copilot requires selecting one agent to drive the whole session. SoMi ships phase-specific experts
 (see [`docs/AGENTS.md`](./AGENTS.md)) that assume you already know which phase you're in, and one
-generic front door, **`somi`**. Select `somi` when you're not sure —
-bare `@somi` renders a read-only status dashboard, it recognizes an explicit command and proxies it, and
-classifies free-form requests into the matching flow, then **runs that flow's own procedure live,
-in the same turn** — resolving and `Task`ing every agent the flow starts through the same cost
-resolver a direct command uses, the same way a command body dispatches on Claude Code. On Claude
-Code the direct commands already select the right agent and run their own procedure themselves, so
-`somi` mainly matters here, on Copilot.
+generic front door, **`somi`**. Select `somi` when you're not sure. It is a dispatcher, not a
+worker: bare `@somi` shows the status dashboard, an explicit command or a free-form request is
+matched to one workflow and handed to the **`somi-flow`** runner (through the same cost resolver a
+direct command uses), and anything that matches no workflow goes to **`somi-general`**. The runner
+loads the workflow's `flow-<name>` skill and starts its specialists one level further down, so the
+whole chain stays two levels below the session, within Copilot CLI's nesting. A subagent cannot ask
+you anything, so each question a workflow needs comes back through `somi` as a checkpoint: answer
+it and the runner resumes. On Claude Code the direct commands run the same flow skills themselves,
+so `somi` mainly matters here, on Copilot. From the command line the agent's id is the plugin-namespaced one:
+`copilot --agent somi:somi` (a bare `--agent somi` is refused with "No such agent").
 
 ### Agent dispatch
 

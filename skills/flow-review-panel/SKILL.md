@@ -1,0 +1,154 @@
+---
+name: flow-review-panel
+description: The /review-panel procedure, loaded by the /review-panel command and by the somi-flow runner.
+user-invocable: false
+---
+
+# /review-panel — Parallel multi-lens review
+
+> **Scripts.** Every `node scripts/...` below runs from SoMi's install root, `${CLAUDE_PLUGIN_ROOT}`
+> (Claude Code fills in the real path when it loads this skill). Where that still reads as a variable, use
+> the root you already know; never search the disk for it.
+
+You are running the **review panel** of somi: several independent review lenses on the **same change
+at the same time**, merged into one verdict. Each lens is read-only **by contract** — it holds
+Write/Edit and is forbidden from using them.
+
+The user's target: **$ARGUMENTS** (a work-item slug, optionally `phase N, iteration M`, or a diff
+target such as a PR / commit range / working tree).
+
+The orchestrator (this command) has no `cost:` of its own — nor a `model:` of its own; it runs on
+whatever model this session is already using — and runs entirely inline. Each lens it Tasks
+resolves its model through the dispatch skill: its `cost.agents` entry if the config has
+one, otherwise the session ceiling itself. `somi-reviewer`, `somi-architecture-reviewer`, `somi-test-strategist`,
+`somi-plan-reviewer`, and `somi-sdlc-reviewer` default to `high`; pin them to `high` under
+`cost.agents` for the fresh-eyes depth a panel wants. `somi-security-reviewer` defaults to `high`
+alone — a missed vulnerability outweighs a lighter generalist pass — so pin it to `high` too (see
+its own `> **Cost:**` callout); an unpinned lens runs at the ceiling and is reported as degraded.
+The lenses are read-only **by contract, not by platform
+restriction** — they return findings; this command owns every write (the merged review file,
+`progress.md`, `diary.md`). The session ceiling is a hard cap that sets each lens's tier and never
+refuses one.
+
+> **Why this exists.** A single reviewer carries one set of priorities at a time; running the
+> specialist lenses *in parallel* on one diff catches what a sequential, escalation-only pass misses
+> — and parallelizing is safe because **this command is the sole writer**: every lens returns
+> findings as text and none is given a write to perform, so there is nothing for them to contend
+> over. **Concurrency does not weaken this**: zero writers is zero writers whether one lens runs or
+> six, so parallelism adds no contention risk the sequential case lacks. Note it rests on the
+> lenses honouring their contract — each carries a `## Write discipline` section — not on a platform
+> restriction; they do hold Write/Edit. Parallelism does raise the *cost* if that contract breaks:
+> concurrent violating writes race, where a sequential one would merely be last-write-wins.
+> This is the panel for a change you want scrutinized hard before merge. For a quick single-lens
+> pass, use [`/review`](../flow-review/SKILL.md).
+
+## When to use this vs. `/review`
+
+- **`/review`** — the default. One skeptical reviewer; fast; right for most iterations.
+- **`/review-panel`** — when the change is high-stakes, crosses several concerns at once (touches
+  auth *and* a new contract *and* the test shape), or is about to merge to a protected branch. More
+  model spend; broader coverage.
+
+## What to do
+
+### 1. Resolve the target and the diff
+
+Same resolution as [`/review`](../flow-review/SKILL.md): if a `<slug>` (and optional `phase N, iteration M`) is
+given, read the work-item artifact set and scope to that iteration's diff; otherwise scope to the
+given diff target (PR, commit range, or working tree). Capture the diff once and reuse it for every
+lens so they all review the identical change.
+
+### 2. Select the lenses (which panelists sit for this review)
+
+Always seat **`somi-reviewer`** (the generalist). Seat a specialist **only when the diff actually engages
+its domain** — seating an irrelevant lens is wasted spend and dilutes signal:
+
+| Lens | Seat it when the diff… |
+|---|---|
+| `somi-reviewer` | always |
+| `somi-security-reviewer` | touches auth/authz, crypto, secrets, input validation, deserialization, file uploads, third-party data, templating, or user-controlled input reaching a sink |
+| `somi-architecture-reviewer` | adds/splits a module or service, changes a public contract, or changes dependency direction |
+| `somi-test-strategist` | adds/changes meaningful test surface, or the diff's risk is concentrated where tests are thin/over-mocked/flaky |
+| `somi-plan-reviewer` | the review target is a plan or design (a `.somi/plans/<slug>/` artifact set, a `brief.md`, or an ADR), or the diff changes `spec.md` / `decisions.md` / `phases/` / `brief.md` — the plan's shape is what is under review, not only the code |
+| `somi-sdlc-reviewer` | a work-item `<slug>` was given, or the diff touches `progress.md` / `diary.md` / the findings ledger — so the planning record can be checked against what the diff actually did |
+
+Record which lenses you seated and **why each unseated one was skipped** — that record is part of
+the panel's value (it shows the surface was considered, not ignored).
+
+### 3. Run the panel **in parallel**
+
+Issue the seated lenses as **multiple `Task` calls in a single turn** so they run concurrently —
+call `somi_resolve` for each lens back-to-back immediately before the batch (each with its own
+`project_dir`); for each, pass its `model`, start it as its `agent_type`, and put the cost line in the briefing (`dispatched at cost: <tier>` only when `enforced` is true, else `requested cost: <tier> (not enforced: no mapped model)`) — in that lens's own briefing; this is the
+concurrent-batch case the `somi-dispatch` skill's §5 names explicitly). Give each the *same* scoped
+diff and work-item context, and each its own briefing:
+
+```text
+Task somi-reviewer            (= /review <target>, scope = this diff)
+Task somi-security-reviewer   (= security lens on this diff)            # if seated
+Task somi-architecture-reviewer (= structural lens on this diff)        # if seated
+Task somi-test-strategist     (= test-shape lens on this diff)          # if seated
+Task somi-plan-reviewer       (= plan lens on the plan artifacts)       # if seated
+Task somi-sdlc-reviewer       (= process lens on the planning record)   # if seated
+```
+
+> **Copilot / sequential fallback.** Parallel sub-agent execution is a Claude Code capability. Where
+> the host can't run sub-agents concurrently (e.g. the GitHub Copilot extension), seat the same
+> lenses and run them **one after another** — the merged result is identical, only slower. Never drop
+> a lens to save a round trip.
+
+### 4. Merge and de-duplicate the findings
+
+Collect every lens's findings into one list, then reconcile:
+
+- **De-duplicate** findings that multiple lenses raise. Two findings are the same when they share a
+  locus (file + symbol/function, **not** raw line number — lines drift) and the same underlying
+  problem. Collapse them into one entry and **credit every lens that raised it** ("flagged by
+  reviewer + security-reviewer") — independent agreement is signal; surface it.
+- **Reconcile severity** to the **highest** any lens assigned (a security `Blocker` wins over a
+  generalist `Minor` on the same issue). Reconcile confidence to the highest.
+- **Surface disagreement** explicitly. If one lens approves an area another flags as a Blocker, that
+  conflict is itself a finding — present both positions; do not average them away.
+- **Order** by severity then confidence. Lead with Blockers. Don't let fifteen Nits bury one Blocker.
+
+### 5. Compute the panel verdict
+
+The merged verdict is the **most severe** lens verdict (any `reject` → `reject`; else any
+`request-changes` → `request-changes`; else `approve-with-comments` if any comments; else
+`approve`). A security or architecture Blocker sets the verdict regardless of how clean the other
+lenses found the change.
+
+### 6. Write the merged review and update state
+
+- Write the merged review to
+  `.somi/reviews/<slug>/<YYYY-MM-DD>-<phase>.<iter>-panel-<verdict>.md` (work-item-scoped) using
+  [`templates/REVIEW.md.tmpl`](../../templates/REVIEW.md.tmpl), with a **Panel** header noting which
+  lenses sat and which were skipped (and why).
+- Record the **merged, de-duplicated** findings in the ledger
+  (`echo '<findings JSON array>' | node scripts/somi-findings.mjs record --slug <slug> --review
+  <review-filename>`) and resolve any previously-open findings the panel confirmed fixed — same
+  protocol as [`/review`](../flow-review/SKILL.md) §6. Record each finding once (post-merge), crediting the
+  lenses in the markdown, not as duplicate ledger entries.
+- Update `progress.md` (the iteration's `Reviewed` column → `panel:<verdict>`) and append a
+  `diary.md` entry (category `review-feedback`) naming the verdict, the seated lenses, and the top
+  finding. The lenses write nothing by contract; these writes are yours.
+- If any lens surfaced a **plan** issue (not just code), include its proposed diary entry and
+  recommend `/plan` (or the `/code` plan-change protocol) per [`/review`](../flow-review/SKILL.md).
+
+### 7. Summarise back
+
+- **Verdict** + count by severity (merged, de-duplicated).
+- **Lenses seated** and **skipped (with reason)**.
+- **Top findings** — lead with any Blocker; note which were raised by more than one lens.
+- **Disagreements** between lenses, if any.
+- Pointer to the merged review file. Next step (usually: address Blockers/Majors via `/code`, or
+  merge if clean).
+
+## Guardrails
+
+- **Same diff for every lens.** Capture it once; don't let lenses review drifting working trees.
+- **Read-only lenses; orchestrator writes.** Identical to `/review` — the agents return text, this
+  command persists. Never let a lens write the review file.
+- **Don't seat irrelevant lenses.** Coverage is seating the *right* panel, not the *largest* one.
+- **Don't average away a Blocker.** Highest severity wins; disagreement is surfaced, not smoothed.
+- **De-dupe on locus, not line number.** The same issue at a shifted line is one finding.

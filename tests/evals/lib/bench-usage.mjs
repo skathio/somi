@@ -7,7 +7,9 @@
 // cacheCreationInputTokens), summed over every invocation of the draw (a resume is another result line). Only assistant
 // events count tool_use blocks (a block repeated under one id counts once); a tool_use shape inside a user event, a
 // tool result or a string is not a tool call. `subagents` counts the blocks named Agent or Task. It returns null when
-// the file is unusable (missing, over the size cap, or without any result line); it never throws.
+// the file is unusable (missing, over the size cap, or without any result line); it never throws. A draw killed by its
+// timeout writes no result line: with `allowNoResult` such a stream is still returned, its models read from the assistant
+// events alone and its tokens empty, so the pin can be checked.
 //
 // isPinned(id, alias, extra): a model id is pinned when it IS the alias or an extra id, or contains the alias as a whole
 // word between non-alphanumeric characters (alias "x" matches "vendor-x-1-2024"). The driver knows no model names.
@@ -15,7 +17,8 @@
 // toRow(draw, parsed, score, tierInfo) -> {row, reason}. `row` has exactly the keys rowProblems (bench-schema) accepts and
 // always validates; `reason` is the vocabulary of the draw's outcome, kept beside the row because the row has no such
 // field. A model other than the pinned set (or no model information at all) makes the row invalid; so does a scored
-// outcome without a hidden-suite score.
+// outcome without a hidden-suite score. A timed-out draw whose tier is `full`, read from the record file, is checked like
+// a probe draw (its stream is then parsed with `allowNoResult`); any other timeout keeps its reason unchecked.
 //
 // Plan and results: buildPlan makes the ordered draw list (rounds of one pair per scenario, the pair's two arms back to back,
 // order and arm order shuffled with seeds derived from the plan seed, so any prefix of the run stays balanced); planMismatch names the fields in which a
@@ -58,7 +61,7 @@ function* lines(fd, maxLine) {
   if (over) yield null; else if (size > 0) yield Buffer.concat(carry).toString('utf8');
 }
 
-export function parseStream(file, { maxBytes = MAX_STREAM_FILE, maxLine = MAX_LINE } = {}) {
+export function parseStream(file, { maxBytes = MAX_STREAM_FILE, maxLine = MAX_LINE, allowNoResult = false } = {}) {
   let fd = null;
   try {
     fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
@@ -115,7 +118,7 @@ export function parseStream(file, { maxBytes = MAX_STREAM_FILE, maxLine = MAX_LI
       }
     }
     if (call !== null) closeCall(call);
-    if (out.results === 0) return null;
+    if (out.results === 0 && !allowNoResult) return null;
     const valid = [...tokens].filter(([m]) => ID.test(m)); const keep = valid.slice(0, 16);
     if (valid.length > 16) out.modelsTruncated = true;
     return { ...out, tokens: Object.fromEntries(keep), modelsSeen: [...seen].sort() };
@@ -139,8 +142,9 @@ const zeroRow = (draw, reason) => ({
 
 export function toRow(draw, parsed, score, tierInfo) {
   let outcome = draw.outcome; let reason = String(draw.reason ?? '').replace(/[^\x20-\x7e]/g, '?').slice(0, 80);
-  // An invalid draw keeps its first cause; a sizing probe (invalid by design) is still checked.
-  const live = () => outcome !== 'invalid' || reason === 'probe';
+  // An invalid draw keeps its first cause; a sizing probe (invalid by design) and a timed-out file-recorded full draw are still checked.
+  const timedFull = reason === 'timeout' && tierInfo?.tier === 'full' && tierInfo?.tierSource === 'file';
+  const live = () => outcome !== 'invalid' || reason === 'probe' || timedFull;
   const fail = (why) => { if (live()) { outcome = 'invalid'; reason = why; } };
   const seen = parsed?.modelsSeen ?? [];
   if (live()) {

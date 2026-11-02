@@ -21,9 +21,10 @@
 //   S5  H4 static files (tests/evals/ab/H4-static-files): a security-sensitive task (paths a user names), same arms and scoring.
 //   S6  H2 ledger migration (tests/evals/ab/H2-ledger-migration): a migration with design choices, same arms and scoring.
 //       S5 and S6 are opt-in (--scenarios); the default set stays S1,S2,S3 so earlier baselines remain comparable.
-//   S4-M01, S4-M03, S4-M05, S4-M08  sizing probes (--sizing-probe): SoMi arm only, one call, zero resumes, the draw ends where
-//       the sizing step stops, never scored. The row is outcome invalid with reason probe; its stratum is the phase.
-//   S4-T1  the same probe on T1-proration, the task whose sizing varied between draws; opt-in like S5 and S6.
+//   S4-<id>  one sizing probe per entry of the labelled set (--sizing-probe; the ids are in tests/evals/sizing-set/set.json):
+//       SoMi arm only, one call, zero resumes, the draw ends where the sizing step stops, never scored. The row is outcome
+//       invalid with reason probe; its stratum is the phase. A corpus entry runs in its task's fixture; an authored entry
+//       runs its request text in a staged copy of its fixture, without the fixture's plan tree. Default: every entry.
 //
 // Plan and resume: the first run writes plan.json (seed, model, caps, scenarios, rule hash, plugin hash, ordered draws, rounds
 // interleave arms and scenarios). A re-run into the same --out recomputes the plan from its flags and refuses on any
@@ -42,6 +43,7 @@ import { execFileSync } from 'node:child_process';
 import { admitTask } from '../../evals/lib/admit.mjs';
 import { scoreHidden } from '../../evals/lib/score-hidden.mjs';
 import { lstatManifest } from '../../evals/lib/manifest.mjs';
+import { loadSet, setMaterial, sizingScenarios, stageFixture } from '../../evals/lib/sizing-set.mjs';
 import { taskHash } from '../../evals/lib/task-store.mjs';
 import { armPrompt, buildPlugin, childEnv, classify, foldScore, prepareWorkspace, probeSandbox, readEnvFile, resolveBinary, resolveTier, runDraw, sandboxSpec, taskText } from '../../evals/lib/ab-draw.mjs';
 import { inspectDraw, redactToken } from '../../evals/lib/ab-stream.mjs';
@@ -65,16 +67,15 @@ process.on('exit', killAll);
 // ---- scenarios -------------------------------------------------------------------------------------------------
 
 const FIXTURE = 'tests/evals/fixtures/task02-code';
-const PROBES = { 'S4-M01': 'M01-bracket-seeding', 'S4-M03': 'M03-rank-aggregation', 'S4-M05': 'M05-round-robin', 'S4-M08': 'M08-line-breaks' };
 const SCENARIOS = {
   S1: { kind: 'fixture', slug: 'expired-token', iteration: '1.1' },
   S2: { kind: 'task', corpus: 'tests/evals/ab', task: 'T1-proration' },
   S3: { kind: 'task', corpus: 'tests/evals/ab-micro', task: 'M01-bracket-seeding' },
   S5: { kind: 'task', corpus: 'tests/evals/ab', task: 'H4-static-files' },
   S6: { kind: 'task', corpus: 'tests/evals/ab', task: 'H2-ledger-migration' },
-  'S4-T1': { kind: 'task', corpus: 'tests/evals/ab', task: 'T1-proration', probe: true },
-  ...Object.fromEntries(Object.entries(PROBES).map(([id, task]) => [id, { kind: 'task', corpus: 'tests/evals/ab-micro', task, probe: true }])),
 };
+/** The sizing probes are the labelled set's entries; the set is read only when a probe is asked for. */
+function addProbes() { try { Object.assign(SCENARIOS, sizingScenarios(loadSet())); } catch (e) { die(String(e?.message ?? e).slice(0, 400)); } }
 // S1 hidden checks: [name, expression]. `T` is the candidate's src/auth/token.mjs, `S` its session.mjs, `now` epoch seconds,
 // `throws(f)` true when f throws. Each runs in a child process (probe.mjs) that prints a nonce-tagged verdict.
 const S1_CASES = [
@@ -138,12 +139,14 @@ function parseArgs(argv) {
   if (a['sandbox'] !== undefined && !['auto', 'off'].includes(a.sandbox)) die('--sandbox must be auto or off');
   if (a['ceiling-somi'] !== undefined && !VALID_COSTS.includes(a['ceiling-somi'])) die(`--ceiling-somi must be one of ${VALID_COSTS.join('|')}`);
   const probe = a['sizing-probe'] === true;
+  if (probe) addProbes();
+  const known = Object.keys(SCENARIOS).filter((s) => Boolean(SCENARIOS[s].probe) === probe);
   if (probe && a.phase === 'experiment') die('--sizing-probe cannot run in the experiment phase (a probe is never an experiment draw)');
   if (!probe && a.phase === 'sizing') die('the sizing phase is for --sizing-probe draws only');
   const dry = a['plan-only'] === true || a['dry-run'] === true;
   if (!dry && (a.out === undefined || a['budget-total'] === undefined)) die('--out and --budget-total are required (neither is defaulted)');
-  const scenarios = (a.scenarios ?? (probe ? Object.keys(PROBES).join(',') : 'S1,S2,S3')).split(',');
-  if (new Set(scenarios).size !== scenarios.length || scenarios.some((s) => !Object.hasOwn(SCENARIOS, s) || Boolean(SCENARIOS[s].probe) !== probe)) die(`--scenarios must name each of ${Object.keys(SCENARIOS).filter((s) => Boolean(SCENARIOS[s].probe) === probe).join(', ')} at most once${probe ? '' : ' (probes need --sizing-probe)'}`);
+  const scenarios = (a.scenarios ?? (probe ? known.join(',') : 'S1,S2,S3')).split(',');
+  if (new Set(scenarios).size !== scenarios.length || scenarios.some((s) => !Object.hasOwn(SCENARIOS, s) || Boolean(SCENARIOS[s].probe) !== probe)) die(`--scenarios must name each of ${known.join(', ')} at most once${probe ? '' : ' (probes need --sizing-probe)'}`);
   const pinnedExtra = a['pinned-ids'] === undefined ? [] : [...new Set(a['pinned-ids'].split(','))].sort();
   if (pinnedExtra.some((m) => !MODEL.test(m))) die('--pinned-ids must list model ids (letters, digits and . _ : [ ] -)');
   return { ...a, dry, probe, scenarios, pinnedExtra, repeats: num('repeats', probe ? 2 : 8, 1, true), seed: num('seed', 1, 0, true), budgetTotal: dry && a['budget-total'] === undefined ? null : num('budget-total', 0, 0.1), budgetSomi: num('budget-somi', 6, 0.1), budgetBare: num('budget-bare', 2, 0.1), budgetProbe: num('budget-probe', 1, 0.1), timeoutMin: num('timeout-min', 40, 0.001), timeoutProbeMin: num('timeout-probe-min', 8, 0.001), ceilingSomi: a['ceiling-somi'] ?? 'low' };
@@ -246,6 +249,9 @@ async function main() {
       const m = lstatManifest(path.join(REPO, FIXTURE));
       if (!m?.ok) die('the S1 fixture could not be read', 1);
       material[id] = createHash('sha256').update(JSON.stringify(m.files)).update(S1_TESTS).update(S1_PROBE).digest('hex');
+    } else if (sc.kind === 'set') {
+      material[id] = setMaterial(path.join(REPO, sc.dir), sc.request);
+      if (material[id] === null) die(`scenario ${id}: the fixture ${sc.dir} could not be read (a link or a missing file)`, 1);
     } else { const th = taskHash(path.join(REPO, sc.corpus, sc.task)); if (!th.ok) die(`scenario ${id}: task ${sc.task} is unusable: ${th.reason}`, 1); material[id] = th.hash; }
   }
   const caps = { somi: args.budgetSomi, bare: args.budgetBare, probe: args.budgetProbe };
@@ -290,6 +296,10 @@ async function main() {
       ctx.set(id, { dir, bare, somi: `/somi:code-loop ${sc.slug} phase 1, iteration ${sc.iteration}`, canary: `SOMI-CANARY-S1-${createHash('sha256').update(runTmp).digest('hex').slice(0, 16)}`, task: 'task02-code' });
       continue;
     }
+    if (sc.kind === 'set') { // an authored request: the request is the prompt, the workspace a copy of the fixture
+      ctx.set(id, { dir: path.join(REPO, sc.dir), bare: sc.request, somi: armPrompt('somi', sc.request), canary: `SOMI-CANARY-${id}-${createHash('sha256').update(runTmp).digest('hex').slice(0, 16)}`, task: path.basename(sc.dir) });
+      continue;
+    }
     const dir = path.join(REPO, sc.corpus, sc.task); const th = taskHash(dir);
     if (!th.ok) die(`scenario ${id}: task ${sc.task} is unusable: ${th.reason}`, 1);
     let expect = null; let hash = th.hash;
@@ -301,14 +311,13 @@ async function main() {
     const text = taskText(th.task);
     ctx.set(id, { dir, expect, hash, bare: text, somi: armPrompt('somi', text), canary: th.task.canary, task: sc.task, corpus: path.join(REPO, sc.corpus) });
   }
-  /** Workspace of one draw: {ws, before}. S1 stages the fixture with its plan tree as .somi (what the convergence harness does). */
+  /** Workspace of one draw: {ws, before}. S1 stages the fixture with its plan tree as .somi (what the convergence harness does); a set entry stages it without one. */
   function prepare(id, tmp) {
-    const c = ctx.get(id);
-    if (SCENARIOS[id].kind !== 'fixture') return prepareWorkspace({ taskDir: c.dir, tmp, cost });
+    const c = ctx.get(id); const kind = SCENARIOS[id].kind;
+    if (kind === 'task') return prepareWorkspace({ taskDir: c.dir, tmp, cost });
     const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-stage-'));
     try {
-      fs.cpSync(c.dir, path.join(stage, 'fixture'), { recursive: true });
-      fs.renameSync(path.join(stage, 'fixture/_somi'), path.join(stage, 'fixture/.somi'));
+      stageFixture(c.dir, path.join(stage, 'fixture'), { keepPlans: kind === 'fixture' });
       return prepareWorkspace({ taskDir: stage, tmp, cost });
     } finally { fs.rmSync(stage, { recursive: true, force: true }); }
   }
@@ -375,7 +384,7 @@ async function main() {
         if (stop) st.halt = stop;
         score = { green: scratch.green, total: sc.total };
       }
-      const { row, reason } = toRow({ scenario: d.scenario, arm: d.arm, phase: plan.phase, outcome: scratch.outcome, reason: scratch.reason, costUsd, durationMs: run.wallMs, turns: run.turns, model: args.model, pinnedExtra: args.pinnedExtra }, parseStream(streamFile), score, tierInfo);
+      const { row, reason } = toRow({ scenario: d.scenario, arm: d.arm, phase: plan.phase, outcome: scratch.outcome, reason: scratch.reason, costUsd, durationMs: run.wallMs, turns: run.turns, model: args.model, pinnedExtra: args.pinnedExtra }, parseStream(streamFile, { allowNoResult: scratch.reason === 'timeout' }), score, tierInfo);
       return entry('done', reason, { ...base, row });
     } catch (e) {
       process.stderr.write(`usage-bench: ${d.id}: harness fault: ${redactToken(String(e?.message ?? e), token).slice(0, 160)}\n`);

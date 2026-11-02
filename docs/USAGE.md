@@ -317,9 +317,12 @@ There is no `/somi` command. On GitHub Copilot, select the `somi` **agent** pers
 (`agents/somi.md`) instead: bare `@somi` prints a status table of every work item, discovery,
 interrupted loop (resumable), and open finding — each with a mechanically derived **next action**
 ("answer D4", "approve the plan then `/code-loop`", "address F-3"). With free-form text, it
-classifies the request's problem shape and dispatches to the right entry command (`/debug` vs
-`/plan` vs `/design` vs `/review` …), checking for an existing matching work item first so you
-don't scaffold duplicates. See [`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension).
+classifies the request's problem shape and hands it to the `somi-flow` runner for the right
+workflow (`/debug` vs `/plan` vs `/design` vs `/review` …), or to `somi-general` when nothing fits
+(a question, an explanation, housekeeping). The runner checks for an existing matching work item
+first so you don't scaffold duplicates. `somi` itself never does the work; when the workflow needs
+your answer it comes back as a checkpoint question, and your reply resumes it. See
+[`docs/PLUGIN.md`](./PLUGIN.md#github-copilot-extension).
 
 Claude Code has no equivalent single entry point — the direct commands below already select the
 right agent, so start with whichever one matches your problem shape.
@@ -716,11 +719,10 @@ The [dispatch resolver](#dispatch-resolver) (below) composes this with the mappi
 [`skills/somi-dispatch/SKILL.md`](../skills/somi-dispatch/SKILL.md) is the one canonical procedure
 that calls it — primarily the bundled `somi_resolve` MCP tool, falling back to the CLI only where
 SoMi's own install path is already known. **Every** entry path is instructed to resolve via that
-same skill: the `somi` front-door agent (`agents/somi.md`), for every request it
-enters, runs that command's own procedure live and follows the skill before spawning **each** agent
-that procedure starts (never once for the whole command); and a **direct** command invocation on
-Claude Code follows the identical skill at its own agent-Tasking point, in the live turn actually
-running that command. This is a prompt-level instruction, not something a hook enforces at
+same skill: the `somi` front-door dispatcher (`agents/somi.md`) before it starts the
+`somi-flow` runner or `somi-general`; the runner before spawning **each** agent the flow's procedure
+starts (never once for the whole workflow); and a **direct** command invocation on Claude Code at
+the same points of the same flow skill, in the live turn actually running that command. This is a prompt-level instruction, not something a hook enforces at
 runtime: what `scripts/validate.sh` actually checks, mechanically, is that every command whose text
 starts a real agent references the skill somewhere in its own text (`MISSING DISPATCH REFERENCE`
 fails the build otherwise) — not only when a request happens to be routed through the `somi`

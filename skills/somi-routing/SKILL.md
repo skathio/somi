@@ -25,6 +25,8 @@ is what keeps routing decisions in sync across every place a classification is m
 | Security-only / architecture-only / test-shape question | [`/security-review`](../../commands/security-review.md) / [`/architecture-review`](../../commands/architecture-review.md) / [`/test-strategy`](../../commands/test-strategy.md) |
 | "Do the whole thing end to end" | [`/ship`](../../commands/ship.md) (gated) or [`/ship-loop`](../../commands/ship-loop.md) (continuous, one gate) |
 | Matches an **existing** work item in `.somi/` | continue it — name the slug and its next action instead of starting a parallel item |
+| "What is in flight?" — status, next actions | the dashboard (`status` flow: a bare `somi`) |
+| **None of the above** — a question about the code or the project, an explanation, research, git or shell housekeeping, help with SoMi itself; nothing that changes tracked files | `somi-general` (no command; it hands back a `REROUTE` if the request turns out to be a row above) |
 
 ## The trivial threshold
 
@@ -137,6 +139,8 @@ human `basis` (the evidence behind each signal) along with the tier and reasons.
 
 ## Existing-work-item check (do this first)
 
+Whoever starts a new work item runs this check before scaffolding it: the flow procedure, whether
+run from its command or by the `somi-flow` runner. The `somi` dispatcher only routes on the table.
 Check the existing-work-item row **first** — grep `.somi/plans/*/progress.md` and
 `.somi/rd/*/README.md` for overlap with the request — before starting a new work item. The
 most common routing mistake is scaffolding a duplicate work item for something already in flight.
@@ -148,7 +152,7 @@ disambiguates (e.g. "is the architecture for this settled?" splits `/plan` from 
 
 ## Consumers
 
-Loaded for the table by exactly one surface: `agents/somi.md` (the classify step, reached only
-after its own invocation-mode gate). Adding a new command's routing row means editing this file
+Loaded for the table by the `somi` dispatcher (`agents/somi.md`, its classify step) and by
+`somi-general` (to name the workflow in a `REROUTE`). Adding a new command's routing row means editing this file
 only — the consumer should not re-embed the table. The trivial threshold is also read by
 `commands/code.md`, which applies it when no work item resolves.

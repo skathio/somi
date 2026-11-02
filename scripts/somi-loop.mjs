@@ -1,82 +1,32 @@
-// somi-loop.mjs — deterministic state engine for the bounded loops.
+// somi-loop.mjs — command line of the deterministic state engine for the bounded loops: parses the arguments,
+// calls the handler in lib/loop-engine.mjs and prints its result. No gate logic lives here.
 //
-// Zero-dependency: stdlib only (node:fs, node:path, node:child_process). No jq,
-// no bash. Behavior-preserving — exit codes and stdout JSON shapes are frozen
-// and reproduced exactly; see the bash original's header comment for the full
-// rationale (state survives session death, caps are SoMi's central safety
-// claim, etc).
+// The gates live in lib/loop-engine.mjs, cap resolution (flag > env var > .somi/config.json > default) in
+// lib/loop-caps.mjs, state in lib/loop-state.mjs, diff measurement in lib/loop-diff.mjs. Exit codes and stdout
+// JSON shapes are frozen; callers branch on them: 0 ok, 2 max passes, 3 diff cap, 4 time budget, 5 circuit breaker
+// (step after-review), 64 usage, 65 record-dispatch's resolver refused the agent, 70 internal error (step only).
 //
-// State: .somi/somi-state/loop/<slug>[.<iteration>].json under the project
-// root (project-local, gitignored by SoMi's conventions). Never committed.
-//
-// Diff measurement covers tracked, staged AND untracked-but-not-ignored files.
-// The untracked half is deliberate: `git diff` alone cannot see a file git has
-// never been told about, so without it a new file costs nothing against the cap.
-//
-// Cap precedence (matches the gate tables): CLI flag > env var > .somi/config.json
-// > default. `init` resolves once from that chain and freezes the result into state.
-// `pass`/`check-diff` re-resolve their own cap on every call (the documented
-// remedy for a fired gate, "adjust the env var and re-run", used to be inert): absent
-// an explicit CLI flag or env var THIS invocation, the cap already in force for the
-// loop stands unchanged (a `.somi/config.json` edit made mid-loop cannot silently
-// reopen an already-resolved gate); see reresolveCap() below. Every cap value, at
-// `init` and on re-resolution alike, is validated as a non-negative integer before
-// use and rejected otherwise — a malformed value must not silently disable a gate.
-// Diff measurement EXCLUDES .somi/ and .claude/ — artifact churn (progress/diary
-// updates every pass) must not eat the code diff budget.
-//
-// Exit codes (callers branch on these — do not repurpose):
-//   0  ok
-//   2  max-passes-exceeded   (`pass` would exceed the cap)
-//   3  diff-cap-exceeded     (`check-diff`: weighted lines over the cap;
-//                             out-of-scope lines count double)
-//   4  time-budget-exceeded  (`pass`: the /ship-loop run started by `run-start` on this slug is out of time)
-//   64 usage / environment error (65: record-dispatch's resolver refused the agent)
-//
-// Subcommands (each prints one JSON object):
-//   run-start      record a /ship-loop run's start and optional --max-minutes budget (kept on resume)
-//   init           new loop state: baseline SHA, resolved caps, review_min from the sizing record
-//   resume | stats the stored state
-//   pass           next pass, or exit 2 (cap) / 4 (time budget); repeats review_min
-//   check-diff     weighted cumulative diff against the baseline, or exit 3
-//   review-scope   what the generalist reviewer reads this pass: delta (from/to trees, files) or full
-//   record-dispatch  append the resolver's answer for --agent [--host] to the state
-//   record-pass    append the verdict and counts, with the reviewed tree
-//   finish         terminal status, cap overrides, dispatches
+// Subcommands (each prints one JSON object): run-start, init, resume, stats, pass, check-diff, review-scope,
+// record-dispatch, record-pass, finish, and `step <open|after-code|after-review|close|status>`: the composite steps of
+// lib/loop-step.mjs, arguments as `--flag value` (--findings and --fixed as JSON text, --reviewers comma-separated), the
+// response on stdout as one JSON line, its `exit` as the exit code, nothing on stderr: the response carries every refusal
+// (a bad flag included, exit 64), and an internal error (70) goes to <state dir>/step-errors.log, never to the stderr a model reads.
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { verifyBriefOnly } from './lib/tier-record.mjs';
-import { REVIEW_SCOPES, reviewMinFor, reviewScope, snapshotTree } from './lib/loop-review.mjs';
-import { computeDiff } from './lib/loop-diff.mjs';
-import { dispatchEntry } from './lib/loop-dispatch.mjs';
-import { checkRun, startRun } from './lib/run-budget.mjs';
-import { loadConfig } from './lib/config-files.mjs';
+import { LoopExit, PROG, usageError } from './lib/loop-exit.mjs';
+import { runStep } from './lib/loop-step.mjs';
+import { base, clean, cut, stepLog } from './lib/loop-step-kit.mjs';
+import { checkDiff, finish, init, pass, recordDispatch, recordPass, resume, reviewScope, runStart } from './lib/loop-engine.mjs';
 
-const PROG = 'somi-loop';
-
-// Thrown to unwind to the top-level handler, which sets process.exitCode and
-// lets Node exit naturally — avoids process.exit()'s risk of truncating
-// buffered stdout/stderr writes on a pipe.
-class ExitSignal extends Error {
-  constructor(code) {
-    super(`exit ${code}`);
-    this.code = code;
-  }
-}
-
+// Unwinding with a LoopExit reaches the top-level handler, which writes its message to stderr and sets
+// process.exitCode, letting Node exit naturally — avoids process.exit()'s risk of truncating buffered
+// stdout/stderr writes on a pipe.
 function die(msg) {
-  process.stderr.write(`${PROG}: ${msg}\n`);
-  throw new ExitSignal(64);
-}
-
-function fail(code, msg) {
-  process.stderr.write(`${msg}\n`);
-  throw new ExitSignal(code);
+  throw usageError(msg);
 }
 
 function requireGit() {
@@ -93,404 +43,84 @@ function projectRoot() {
   return b;
 }
 
-// The effective config (global, with the project's .somi/config.json over it); an unreadable or
-// invalid file reads as unconfigured, so the documented defaults apply.
-function readConfig(root) {
-  try {
-    return loadConfig(root).config;
-  } catch {
-    return {};
-  }
+// A handler's result: its one JSON object on stdout, its message on stderr, its code as the exit code.
+function deliver(result, space) {
+  if (result.out !== undefined) console.log(JSON.stringify(result.out, null, space));
+  if (result.message) process.stderr.write(`${result.message}\n`);
+  process.exitCode = result.code;
 }
 
-function configVal(config, keys) {
-  let cur = config;
-  for (const k of keys) {
-    if (cur === undefined || cur === null) return undefined;
-    cur = cur[k];
-  }
-  return cur === null ? undefined : cur;
-}
-
-// Mirrors bash's `${a:-${b:-$c}}` — first arg that is neither unset nor an
-// empty string wins (a numeric 0 counts as "set", matching bash treating the
-// non-empty string "0" as set).
-function firstDefined(...vals) {
-  for (const v of vals) {
-    if (v === undefined || v === null) continue;
-    if (typeof v === 'string' && v === '') continue;
-    return v;
-  }
-  return undefined;
-}
-
-function nowIso() {
-  // `date -u +%Y-%m-%dT%H:%M:%SZ` — no milliseconds.
-  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-}
-
-// --- mid-loop cap re-resolution --------------------------------------------
-// `init` resolves caps once (CLI flag > env var > .somi/config.json > default) and
-// freezes them into state -- deliberately, so the diff baseline and pass history stay
-// stable across a whole loop. But commands/code-loop.md's Guardrails document a
-// remedy for a gate that's wrong for the work at hand: "the user adjusts the env var
-// explicitly and re-runs -- the loop does not 'decide' to widen its own bounds." That
-// remedy needs a path that re-reads the override on the SAME subcommand (`pass`,
-// `check-diff`), without `init --force` (which discards `pass`/`history`).
-//
-// `pass` and `check-diff` call reresolveCap() below before their gate check.
-// Precedence matches what's documented: CLI flag > env var > .somi/config.json >
-// default -- an explicit CLI flag or env var THIS invocation is the only thing that
-// can move the cap; absent one, the cap already in force for the loop stands (a
-// `.somi/config.json` edit made while a loop is running must NOT silently reopen an
-// already-resolved gate). A resolved value that differs from what's stored is
-// persisted into `caps` immediately, with an entry appended to a `cap_overrides`
-// audit trail (field, from, to, source, after_pass, at) -- the after-the-fact record
-// the documented remedy needs, since the env var itself lives only in a shell that
-// may since have exited. `cap_overrides` is created lazily, only on the first real
-// override, so a loop that never overrides anything keeps exactly today's state
-// shape (no golden-fixture regeneration forced by this fix). `baseline_sha`,
-// `started`, `pass`, and `history` are never touched here.
-//
-// Every value that reaches `Number()` on this path is user input (a CLI flag, an env
-// var, or a config value) and is validated before use: `Number()` on a malformed
-// string (`"1,000"`, `"unlimited"`) yields NaN, which is false against BOTH gate
-// comparisons (`cur + 1 > max`, `weighted > cap`) -- silently switching the gate off
-// -- and `JSON.stringify` then persists that NaN as `null`, which the next bare call
-// falls through past (via `firstDefined`) to re-arm at the default, with no
-// `cap_overrides` entry recording the reversion. `validateCap()` rejects rather than
-// coerces, so a malformed value dies loudly instead of disabling a gate.
-const CAP_ENV = {
-  code: { max_passes: 'SOMI_CODE_LOOP_MAX_PASSES', diff_cap_lines: 'SOMI_CODE_LOOP_DIFF_CAP' },
-  plan: { max_passes: 'SOMI_PLAN_LOOP_MAX_PASSES' },
+// subcommand -> handler, and the JSON indent where it is not the compact default (`stats` is read by people).
+const COMMANDS = {
+  'run-start': { handler: runStart }, init: { handler: init }, resume: { handler: resume }, stats: { handler: resume, space: 2 },
+  pass: { handler: pass }, 'check-diff': { handler: checkDiff }, 'review-scope': { handler: reviewScope },
+  'record-dispatch': { handler: recordDispatch }, 'record-pass': { handler: recordPass }, finish: { handler: finish },
 };
-const CAP_FLAG = { max_passes: '--max-passes', diff_cap_lines: '--diff-cap' };
-const CAP_CONFIG_SECTION = { code: 'code_loop', plan: 'plan_loop' };
-const CAP_DEFAULT = { max_passes: 3, diff_cap_lines: 400 };
-
-// Rejects a malformed cap value rather than letting `Number()` coerce it to NaN.
-// `label` names the source in the error so `die()`'s message points at what to fix
-// (a specific flag, env var, or the generic field name at `init`, where the value
-// may have come from any of CLI/env/config).
-function validateCap(raw, label) {
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 0) {
-    die(`${label}: expected a non-negative integer, got "${raw}"`);
+const STEP_FLAGS = ['slug', 'loop', 'iteration', 'files', 'host', 'max-passes', 'diff-cap', 'agent', 'review-mode', 'review-scope', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed', 'status'];
+// The step's arguments from `--flag value` pairs, as runStep takes them. A flag it does not know, a repeated one or one without a value is a usage error (echoed cut and cleaned).
+function stepArgs(argv) {
+  const args = { step: argv[0] };
+  for (let i = 1; i < argv.length; i += 2) {
+    const key = argv[i].replace(/^--/, '');
+    if (!argv[i].startsWith('--') || !STEP_FLAGS.includes(key) || argv[i + 1] === undefined) die(`unknown argument or missing value: ${cut(argv[i], 40)}`);
+    if (Object.hasOwn(args, key.replaceAll('-', '_'))) die(`repeated argument: ${cut(argv[i], 40)}`);
+    args[key.replaceAll('-', '_')] = argv[i + 1];
   }
-  return n;
+  for (const k of ['findings', 'fixed']) if (args[k] !== undefined) { try { args[k] = JSON.parse(args[k]); } catch { die(`--${k} expects JSON text`); } }
+  if (args.reviewers !== undefined) args.reviewers = args.reviewers.split(',');
+  return args;
 }
 
-// Resolves one cap at `init`, reading the same CAP_ENV / CAP_CONFIG_SECTION /
-// CAP_DEFAULT tables reresolveCap() uses, so the two paths cannot silently diverge
-// on an env var name, a config key, or a default value.
-function resolveInitCap(config, family, field, argVal) {
-  if (field === 'diff_cap_lines' && family === 'plan') return 0; // plan loops have no diff cap
-  const envVar = CAP_ENV[family][field];
-  const fromConfig = configVal(config, [CAP_CONFIG_SECTION[family], field]);
-  const picked = firstDefined(argVal, process.env[envVar], fromConfig, CAP_DEFAULT[field]);
-  return validateCap(picked, field);
-}
+const FLAGS = {
+  '--slug': 'slug', '--loop': 'loop', '--iteration': 'iteration', '--files': 'files', '--max-passes': 'maxPasses',
+  '--diff-cap': 'diffCap', '--severity-floor': 'severity', '--verdict': 'verdict', '--blockers': 'blockers',
+  '--majors': 'majors', '--status': 'status', '--agent': 'agent', '--host': 'host', '--max-minutes': 'maxMinutes',
+};
 
-function reresolveCap(state, field, argVal) {
-  const family = state.loop === 'plan' ? 'plan' : 'code';
-  if (field === 'diff_cap_lines' && family === 'plan') {
-    return { resolved: 0, override: null }; // plan loops have no diff cap (see `init`)
+function step(argv) {
+  const root = projectRoot();
+  const explicit = Boolean(process.env.SOMI_LOOP_STATE_DIR);
+  const stateDir = process.env.SOMI_LOOP_STATE_DIR || path.join(root, '.somi', 'somi-state', 'loop');
+  const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  let resp;
+  try {
+    resp = runStep({ root, env: process.env, stateDir, installRoot, via: 'cli', log: stepLog(root, stateDir, explicit) }, stepArgs(argv));
+  } catch (e) { // a flag the parser refuses answers like any other refusal of a step: the response on stdout
+    if (!(e instanceof LoopExit)) throw e;
+    resp = base(clean(argv[0] ?? '', 20) || null, { ok: false, exit: e.code, error: clean(e.message.replace(`${PROG}: `, ''), 300) });
   }
-  const envVar = CAP_ENV[family][field];
-  const stored = state.caps[field];
-  const explicit = firstDefined(argVal, process.env[envVar]);
-  const isCli = argVal !== undefined && argVal !== '';
-  const resolved = explicit === undefined
-    ? stored
-    : validateCap(explicit, isCli ? CAP_FLAG[field] : envVar);
-  let override = null;
-  if (explicit !== undefined && resolved !== stored) {
-    override = {
-      field,
-      from: stored,
-      to: resolved,
-      source: isCli ? 'cli' : 'env',
-      after_pass: state.pass,
-      at: nowIso(),
-    };
-  }
-  return { resolved, override };
-}
-
-// Mutates `state.caps[field]` and appends the audit entry. Caller still owns calling
-// saveState() -- kept separate so `pass`/`check-diff` persist the override BEFORE
-// their gate check can throw, not only on the success path.
-function applyCapOverride(state, override) {
-  state.caps[override.field] = override.to;
-  if (!Array.isArray(state.cap_overrides)) state.cap_overrides = [];
-  state.cap_overrides.push(override);
+  deliver({ out: resp, code: resp.exit }, undefined);
 }
 
 function main() {
   requireGit();
 
+  const cmd = process.argv[2] || '';
+  if (cmd === 'step') return step(process.argv.slice(3));
+  const args = { slug: '', loop: 'code', iteration: '', files: '', verdict: '', blockers: '0', majors: '0', status: '', agent: '', host: undefined, maxMinutes: '', force: false, maxPasses: '', diffCap: '', severity: '' };
+  for (let rest = process.argv.slice(3); rest.length > 0;) {
+    if (rest[0] === '--force') { args.force = true; rest = rest.slice(1); continue; }
+    if (!Object.hasOwn(FLAGS, rest[0])) die(`unknown argument: ${cut(rest[0], 40)}`);
+    args[FLAGS[rest[0]]] = rest[1];
+    rest = rest.slice(2);
+  }
+
+  if (!cmd) die('usage: somi-loop.mjs <run-start|init|resume|pass|check-diff|review-scope|record-dispatch|record-pass|finish|stats> --slug <slug> …, or step <name> …');
+  if (!args.slug) die('--slug is required');
+  if (!Object.hasOwn(COMMANDS, cmd)) die(`unknown subcommand: ${cut(cmd, 40)}`);
+
   const root = projectRoot();
-  const STATE_DIR = process.env.SOMI_LOOP_STATE_DIR || path.join(root, '.somi', 'somi-state', 'loop');
-
-  // --- argument parsing (shared) ---------------------------------------------
-  const argv = process.argv.slice(2);
-  const CMD = argv[0] || '';
-  let rest = argv.slice(1);
-
-  let SLUG = '';
-  let LOOP = 'code';
-  let ITERATION = '';
-  let FILES = '';
-  let VERDICT = '';
-  let BLOCKERS = '0';
-  let MAJORS = '0';
-  let STATUS = '';
-  let AGENT = '';
-  let HOST;
-  let ARG_MAX_MINUTES = '';
-  let FORCE = false;
-  let ARG_MAX_PASSES = '';
-  let ARG_DIFF_CAP = '';
-  let ARG_SEVERITY = '';
-
-  while (rest.length > 0) {
-    const a = rest[0];
-    switch (a) {
-      case '--slug': SLUG = rest[1]; rest = rest.slice(2); break;
-      case '--loop': LOOP = rest[1]; rest = rest.slice(2); break;
-      case '--iteration': ITERATION = rest[1]; rest = rest.slice(2); break;
-      case '--files': FILES = rest[1]; rest = rest.slice(2); break;
-      case '--max-passes': ARG_MAX_PASSES = rest[1]; rest = rest.slice(2); break;
-      case '--diff-cap': ARG_DIFF_CAP = rest[1]; rest = rest.slice(2); break;
-      case '--severity-floor': ARG_SEVERITY = rest[1]; rest = rest.slice(2); break;
-      case '--verdict': VERDICT = rest[1]; rest = rest.slice(2); break;
-      case '--blockers': BLOCKERS = rest[1]; rest = rest.slice(2); break;
-      case '--majors': MAJORS = rest[1]; rest = rest.slice(2); break;
-      case '--status': STATUS = rest[1]; rest = rest.slice(2); break;
-      case '--agent': AGENT = rest[1]; rest = rest.slice(2); break;
-      case '--host': HOST = rest[1]; rest = rest.slice(2); break;
-      case '--max-minutes': ARG_MAX_MINUTES = rest[1]; rest = rest.slice(2); break;
-      case '--force': FORCE = true; rest = rest.slice(1); break;
-      default: die(`unknown argument: ${a}`);
-    }
-  }
-
-  if (!CMD) die('usage: somi-loop.mjs <run-start|init|resume|pass|check-diff|review-scope|record-dispatch|record-pass|finish|stats> --slug <slug> …');
-  if (!SLUG) die('--slug is required');
-
-  function stateFile() {
-    let name = SLUG;
-    if (ITERATION) name = `${SLUG}.${ITERATION}`;
-    return path.join(STATE_DIR, `${name}.json`);
-  }
-  const SF = stateFile();
-
-  function requireState() {
-    if (!fs.existsSync(SF)) die(`no loop state at ${SF} — run init first`);
-  }
-
-  function loadState() {
-    return JSON.parse(fs.readFileSync(SF, 'utf8'));
-  }
-
-  function saveState(state) {
-    fs.writeFileSync(SF, JSON.stringify(state));
-  }
-
-  const RUN_ROOT = path.dirname(STATE_DIR);
-  switch (CMD) {
-    case 'run-start': {
-      const raw = firstDefined(ARG_MAX_MINUTES, process.env.SOMI_SHIP_LOOP_MAX_MINUTES, configVal(readConfig(root), ['ship_loop', 'max_minutes']));
-      const max = raw === undefined ? null : validateCap(raw, 'max_minutes');
-      if (max === 0) die('max_minutes: 0 would disable the budget; leave it unset instead');
-      console.log(JSON.stringify(startRun(RUN_ROOT, SLUG, max, { force: FORCE })));
-      break;
-    }
-
-    case 'init': {
-      fs.mkdirSync(STATE_DIR, { recursive: true });
-      if (fs.existsSync(SF) && !FORCE) {
-        let status;
-        try {
-          status = JSON.parse(fs.readFileSync(SF, 'utf8')).status;
-        } catch {
-          status = undefined;
-        }
-        if (status === 'running') {
-          die(`loop state already running at ${SF} — use 'resume' to continue it, or 'init --force' to discard`);
-        }
-      }
-
-      // A brief-only work item (a plan directory with no phases/) exists only for the sized, human-
-      // approved small tier of /ship-loop: refuse it without the tier record's approval stamp.
-      const planDir = path.join(root, '.somi', 'plans', SLUG);
-      if (LOOP === 'code' && fs.existsSync(planDir) && !fs.existsSync(path.join(planDir, 'phases'))) {
-        const v = verifyBriefOnly(root, SLUG);
-        if (!v.ok) die(`brief-only work item refused: ${v.reason}; use /plan or /ship-loop`);
-      }
-
-      // Cap resolution: CLI > env > config > default (per loop type), through the
-      // same CAP_ENV / CAP_CONFIG_SECTION / CAP_DEFAULT tables reresolveCap() uses,
-      // and validated the same way -- a malformed value dies here rather than
-      // silently resolving to a fail-open NaN/null.
-      const config = readConfig(root);
-      let maxPasses;
-      let diffCap;
-      let sevFloor;
-      if (LOOP === 'plan') {
-        maxPasses = resolveInitCap(config, 'plan', 'max_passes', ARG_MAX_PASSES);
-        sevFloor = firstDefined(ARG_SEVERITY, process.env.SOMI_PLAN_LOOP_SEVERITY_FLOOR, configVal(config, ['plan_loop', 'severity_floor']));
-        diffCap = 0; // plan loops have no diff cap
-      } else {
-        maxPasses = resolveInitCap(config, 'code', 'max_passes', ARG_MAX_PASSES);
-        sevFloor = firstDefined(ARG_SEVERITY, process.env.SOMI_CODE_LOOP_SEVERITY_FLOOR, configVal(config, ['code_loop', 'severity_floor']));
-        diffCap = resolveInitCap(config, 'code', 'diff_cap_lines', ARG_DIFF_CAP);
-      }
-      sevFloor = firstDefined(sevFloor, 'Major');
-
-      let baseline;
-      try {
-        baseline = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-      } catch {
-        die('cannot resolve HEAD');
-      }
-
-      const filesJson = FILES.split(' ').filter((s) => s.length > 0);
-
-      const state = {
-        slug: SLUG,
-        loop: LOOP,
-        iteration: ITERATION,
-        baseline_sha: baseline,
-        started: nowIso(),
-        status: 'running',
-        caps: { max_passes: maxPasses, diff_cap_lines: diffCap, severity_floor: sevFloor },
-        iteration_files: filesJson,
-        pass: 0,
-        history: [],
-      };
-      if (LOOP === 'code') state.review_min = reviewMinFor(root, SLUG) ?? undefined; // undefined: not serialised
-      saveState(state);
-      console.log(JSON.stringify({ baseline_sha: state.baseline_sha, caps: state.caps, state_file: SF, ...(state.review_min ? { review_min: state.review_min } : {}) }));
-      break;
-    }
-
-    case 'resume': {
-      requireState();
-      console.log(JSON.stringify(loadState()));
-      break;
-    }
-
-    case 'pass': {
-      requireState();
-      const state = loadState();
-      const { resolved: max, override } = reresolveCap(state, 'max_passes', ARG_MAX_PASSES);
-      if (override) {
-        applyCapOverride(state, override);
-        saveState(state); // persist the raise even if the gate below still fails
-      }
-      const cur = state.pass;
-      if (cur + 1 > max) {
-        fail(2, `max-passes-exceeded: pass ${cur + 1} > cap ${max}`);
-      }
-      const run = checkRun(RUN_ROOT, SLUG);
-      if (run?.over) fail(4, `time-budget-exceeded: ${run.elapsed_minutes} of ${run.max_minutes} minutes used by this run`);
-      state.pass = cur + 1;
-      saveState(state);
-      console.log(JSON.stringify({ pass: state.pass, max_passes: max, ...(state.review_min ? { review_min: state.review_min } : {}) }));
-      break;
-    }
-
-    case 'check-diff': {
-      requireState();
-      const state = loadState();
-      const { resolved: cap, override } = reresolveCap(state, 'diff_cap_lines', ARG_DIFF_CAP);
-      if (override) {
-        applyCapOverride(state, override);
-        saveState(state); // persist the raise even if the gate below still fails
-      }
-      const { total, weighted, outOfScope } = computeDiff(root, state.baseline_sha, state.iteration_files);
-      console.log(JSON.stringify({ diff_lines: total, weighted_lines: weighted, cap, out_of_scope: outOfScope }));
-      if (cap > 0 && weighted > cap) {
-        fail(3, `diff-cap-exceeded: weighted ${weighted} > cap ${cap} (out-of-scope counts double)`);
-      }
-      break;
-    }
-
-    case 'review-scope': {
-      requireState();
-      const state = loadState();
-      const setting = firstDefined(process.env.SOMI_CODE_LOOP_REVIEW_SCOPE, configVal(readConfig(root), ['code_loop', 'review_scope']), 'delta');
-      if (!REVIEW_SCOPES.includes(setting)) die(`review scope must be one of ${REVIEW_SCOPES.join('|')}, got ${JSON.stringify(setting)}`);
-      console.log(JSON.stringify({ ...reviewScope(root, state, setting), ...(state.review_min ? { review_min: state.review_min } : {}) }));
-      break;
-    }
-
-    case 'record-dispatch': {
-      requireState();
-      if (!AGENT) die('record-dispatch requires --agent');
-      const state = loadState();
-      const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-      const d = dispatchEntry({ root, installRoot, agent: AGENT, host: HOST, pass: state.pass });
-      if (!d.ok) fail(d.code, `${PROG}: ${d.message}`);
-      (state.dispatches ??= []).push(d.entry);
-      saveState(state);
-      console.log(JSON.stringify(d.entry));
-      break;
-    }
-
-    case 'record-pass': {
-      requireState();
-      if (!VERDICT) die('record-pass requires --verdict');
-      const state = loadState();
-      const { total } = computeDiff(root, state.baseline_sha, state.iteration_files);
-      const entry = {
-        pass: state.pass,
-        verdict: VERDICT,
-        blockers: Number(BLOCKERS),
-        majors: Number(MAJORS),
-        diff_lines: total,
-        tree: snapshotTree(root) ?? undefined, // the reviewed tree: the next pass's delta starts here
-        at: nowIso(),
-      };
-      state.history.push(entry);
-      saveState(state);
-      console.log(JSON.stringify(state.history[state.history.length - 1]));
-      break;
-    }
-
-    case 'finish': {
-      requireState();
-      if (!STATUS) die('finish requires --status');
-      const state = loadState();
-      state.status = STATUS;
-      state.finished = nowIso();
-      saveState(state);
-      console.log(JSON.stringify({
-        status: state.status,
-        pass: state.pass,
-        history: state.history.length,
-        cap_overrides: state.cap_overrides || [],
-        ...(state.dispatches ? { dispatches: state.dispatches } : {}),
-      }));
-      break;
-    }
-
-    case 'stats': {
-      requireState();
-      console.log(JSON.stringify(loadState(), null, 2));
-      break;
-    }
-
-    default:
-      die(`unknown subcommand: ${CMD}`);
-  }
+  const stateDir = process.env.SOMI_LOOP_STATE_DIR || path.join(root, '.somi', 'somi-state', 'loop');
+  const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const { handler, space } = COMMANDS[cmd];
+  deliver(handler({ root, env: process.env, stateDir, installRoot }, args), space);
 }
 
 try {
   main();
 } catch (e) {
-  if (e instanceof ExitSignal) {
+  if (e instanceof LoopExit) {
+    process.stderr.write(`${e.message}\n`);
     process.exitCode = e.code;
   } else {
     throw e;

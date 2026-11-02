@@ -6,6 +6,270 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **A bundled `somi_loop` MCP tool runs a bounded-loop transition in one call, and `/code-loop` and `/plan-loop` now run
+  on it.** `step` is `open`, `after-code`, `after-review`, `close` or `status`, over the same code as
+  `somi-loop.mjs step <name>`; a clean pass is four tool calls plus the two agent starts. Every outcome is the engine's
+  JSON: a fired gate (exit 2 to 5) is a normal result, any other nonzero `exit` a refusal marked `isError`. The tool
+  writes the diary entries and the iteration's progress row and hands back as `unwritten` what it did not write (a
+  plan loop's `awaiting-approval` Status line always). A cap argument (`max_passes`, `diff_cap`) can only lower a cap
+  in force, and the server's environment never sets one. A write needs a project root the host supplies, else exit 67;
+  `project_dir` can narrow inside a host root, and `status` alone may read one without it. Both flows keep the CLI
+  procedure as their "Host fallback".
+
+- **The `somi_loop` tool no longer refuses the calls a model makes by habit.** `open` reads `files` from the iteration's
+  "Files (approx)" line in its phase file, a progress table with its own columns is updated by its header names, a diary
+  with only its heading takes its entries, `host` and `project_dir` are ignored where unused, and `after-review` names a
+  missing `review` and drops a finding's unknown keys.
+- **`after-review` reads a finding's `severity` and `confidence` in any letter case, and a refused finding names its field and index.**
+  `"confidence": "high"` is recorded as `High`; a value still outside the set is refused as
+  `findings[2].confidence: must be one of High|Medium|Low`, where it used to be a message that named no field.
+
+### Fixed
+
+- **The code loop's diff gate no longer misses changes.** `check-diff` and the loop step skipped untracked files
+  whose names git quotes (non-ASCII, a tab, a quote), dropped the whole count when the changed-file listing passed
+  1 MB, and counted a file as zero lines when git prints it as binary: a NUL byte, or a `.gitattributes` `-diff` or
+  `binary` line the coder adds. Files are now read NUL-separated with no size limit that silently drops them, and a
+  file git calls binary is counted from its old and new contents. The delta review is told to use
+  `git diff --text`, so it sees those lines too.
+
+### Changed
+
+- **A clean `close` now leaves progress.md complete.** The writer sets the phase's `Iterations done / total` cell to the
+  number of that phase's iterations marked done (the total and the phase Status are kept; a count above the total is left
+  as it was and comes back as a `notice`), and adds the `**Last activity**` line at the end of the `## Status` section
+  when the file has none. A progress.md without a single `## Status` section is handed back as `line-missing` (it was
+  `row-missing`). A phase table the writer cannot read is skipped silently.
+- **The phase done count and the Last activity insert are stricter about what they touch.** Only the first table of
+  `## Phase progress` is read, and only when its second line is a separator row; a repeated iteration id counts once
+  and a row of another width is not counted; a Status section that already has a Last activity line in another
+  spelling (`**Last activity:**`, plain `Last activity:`) is handed back as `row-ambiguous` instead of getting a second
+  line; an `a/b` cell with more than 4 digits is read as absent, and the above-total notice now leads with the phase
+  text. The loop flows say the verdict follows the findings: with a finding at or above the floor, a reviewer's
+  `approve` or `approve-with-comments` goes in as `request-changes` (the tool's refusal of an approve with one is
+  unchanged).
+
+- **The coder agent cannot write the loop's state, and `init` refuses a repository the diff gate cannot measure.**
+  `guard-protected-paths` now refuses a Write or Edit to `.somi/somi-state/loop/*` and `.somi/somi-state/run/*`, as it
+  already does for the tier records; the loop's own scripts write them from node and are unaffected. A code loop's
+  `init` refuses a repository with submodules (exit 64, nothing written) instead of failing on the first measurement,
+  and the refusal for an untracked nested repository now says to add it to `.gitignore` if it is not a submodule.
+  The protected-path guard now reads `\` as `/` and resolves `..`, `.` and `//` before matching (so
+  `.somi/plans/../somi-state/loop/x` and `.git\config` no longer slip past any protected path), refuses a write at a
+  protected directory's own path (`.git`, the plugin install, the tier, loop and run state), matches `.git`, `.somi` and
+  `.claude` case-insensitively, and checks every path key a call carries
+  (`file_path`, `notebook_path`, `path`), refusing one that is not a string. With the secret-write guard it also
+  covers `MultiEdit` and `NotebookEdit`, in `hooks/hooks.json` and in the vendored `.claude/settings.json` matcher;
+  a registration test checks that both files list every file-writing tool.
+
+- **The loop's progress.md reader is stricter and the step tool's stored state is bounded.** `open` and the iteration
+  writer read the `## Iteration progress` section through one reader: the file must start with a `# ` title and have
+  no carriage return, the heading must appear once, and the section (which ends at a heading of any level) may hold no
+  code fence or `<!--`; a Status cell named like an `Object` member (`constructor`) is a refused move, not a crash. A
+  cursor entry in a loop state is read back only if its `out`, `review` and measured-tree fields have their types and
+  bounds, a replayed response carries only the fields a step stores, and a passed `after-code` records the tree it
+  gated and drops it when a later call stops at the diff gate. A repeated `after-code` may strengthen the review
+  lens or widen its scope (it never weakens it) instead of being refused. `open` shows the caps after a tightening
+  argument, `status` counts the findings it cuts and marks them as data, and an unexpected error is logged and
+  returned as exit 70 (65 stays the unknown agent).
+
+- **Renames count as a delete plus an add.** A rename into an out-of-scope path now counts as out of scope, in
+  full, in the diff gate and in the delta review's file list.
+- **The diff gate refuses (exit 64) instead of counting a smaller diff** for a file git cannot read, an
+  assume-unchanged file or a skip-worktree file that is on disk, a git replace ref, a listing over 256 MB, or a
+  `clean`, `smudge` or `process` filter in the repository's own, worktree or command-line git config. Submodules are
+  not supported: a repository with a gitlink in the index or in HEAD, or with a checked-out submodule (a nested
+  repository git lists as untracked), is refused before anything is measured. The message names the cause; for an
+  unreadable file it also says to leave the path out with `.gitignore`. Filters in the user's own git config are not
+  checked. A sparse checkout and a `.gitignore` that lists `.somi` are measured, not refused (an untracked file outside
+  the sparse cone counts), and so is a nested repository that `.gitignore` lists. The gate runs no `core.fsmonitor`
+  program or git hook, and no `core.worktree`, `GIT_DIR` or other repository-selecting setting can point it at another
+  tree or (`core.ignoreCase`) hide a file whose name differs only by case; a project directory below the repository top
+  level is measured on its own subtree. The project directory is resolved through symlinks first, so a project reached
+  through one is measured; a `.git` found on the way up must be a git directory or a `gitdir: <path>` file that points
+  at one (anything else is refused, not walked past); `init` reads the baseline `HEAD` through the same pinned git and
+  refuses (64) when it cannot (a repository with no commit says so); a path git rejects as invalid (a case variant of
+  `.git`) is named in the refusal. A gitfile may end in CRLF or blank lines, as git reads it, and is read without
+  following a symlink (a symlinked gitfile is refused). `iteration_files` and the reported file names are relative to
+  the project directory, not the repository top.
+- **Binary files count toward the cap**: a file git prints as binary counts at least one line per 50 bytes, so a
+  small binary no longer counts as one line; a file over 1 MiB that git prints as binary counts by size only. The
+  delta review is told to run `git --no-replace-objects diff --text`. Known limit: a hand-edited `.git/index` can make
+  the gate under-count; it does not defend against forged git internals (the review and the coder's sandbox do).
+- **The loop step tool gains `after-review`.** One call records the reviewers' dispatches, the pass, its findings
+  (exit 5 and `circuit-breaker` when the same finding recurs on consecutive passes) and the findings the coder fixed,
+  writes the per-pass diary line, and says whether to `open` again or `close`. A code loop's pass is refused (64, nothing
+  written) unless the working tree is the one the last `after-code` measured; a repeat with other arguments is refused;
+  a replay adds no second sighting to the findings ledger. The verdict must agree with the findings it lists (the
+  Blocker and Major counts equal the listed findings, every finding names a severity, an approve lists none at or
+  above the floor), the reviewers must be review agents and include what the pass's review mode requires, and `fixed`
+  resolves only findings that were open before the call (others come back as `skipped`, and a status a person set is
+  never changed). An approve is refused while an earlier finding at or above the floor is open and neither listed nor
+  fixed, and a finding listed again at a stronger severity is raised. The step reads a loop state with a malformed
+  history entry as unreadable. A failing error-log sink no longer turns exit 70 into a crash, and a stored severity floor that is an array is
+  read as Major.
+- **`somi-findings record` raises severity and normalises it; `record-pass` validates.** A finding seen again at a
+  stronger severity is raised (the sighting notes it), never lowered; `blocker` is stored as `Blocker`, and any other
+  severity is stored as given and shown as `Unrated`, which counts as at the floor. `record-pass` refuses (64) a verdict
+  with a control character or over 60 characters and counts that are not non-negative numbers. In `after-review`,
+  an unknown `fixed` id is refused, and the approve check looks only at findings sighted in this loop's run.
+- **The loop step tool gains `close`.** One call ends the loop with `done` or `stopped-<reason>` (`max-passes-exceeded`,
+  `diff-cap-exceeded`, `scope-expansion`, `circuit-breaker`, `user-stop`, `time-budget`), writes the closing diary entry
+  (a note for `done`, a blocker for a stop, with the cap overrides folded in), marks the iteration's row `done` on a
+  clean code loop and sets Last activity, and answers with the verdict, the cumulative diff, the dispatches (each host-
+  chosen model named), the cap overrides and every open finding at or above the floor as `F-id: title`, including ones
+  an earlier run of the iteration left. A `done` is refused, for a plan loop too, unless the last pass's `after-review` ended the
+  loop clean; a plan loop's `done` returns the `awaiting-approval` Status line in `unwritten`, since the tool does
+  not edit that field. A row it cannot mark comes back in `unwritten` and the loop still ends. `open` now marks a code
+  loop's row `in-progress` when it starts or resumes it, so `close` makes the single move to `done`.
+- **`somi-loop.mjs step <open|after-code|after-review|close|status>` runs the composite steps from the command line.**
+  Arguments are `--flag value` (`--findings` and `--fixed` as JSON text, `--reviewers` comma-separated); the response
+  is one JSON line on stdout and its `exit` is the exit code (0, 2, 3, 4, 5, 64, 65, 70), with nothing on stderr: a
+  bad flag is refused 64 in the same JSON shape as any other refusal, and the flag is echoed cut and cleaned (as is
+  the flag or subcommand name in the primitives' usage errors). An internal error (70) answers with the fixed text;
+  its detail goes to `.somi/somi-state/loop/step-errors.log`, not to the stderr a model reads. The log is written
+  only through real
+  directories (the default state directory is walked from the project root without following a link), is never
+  opened through a link or as a FIFO, and when a line would pass 64 KB it moves to `step-errors.log.1` (one
+  generation, replacing what was there) and starts again; the error name and stack are cut before the line is made.
+  A loop started by `init` can continue through the steps and the other way round. Every gate stop (max passes,
+  diff cap, time budget) now carries `close_args`, as the circuit breaker does.
+- **A finding passed to `after-review` may carry only `file`, `symbol`, `title`, `severity` and `confidence`.** Any
+  other key is refused 64, so a model cannot hand the step a deep structure that ends in an internal error. A
+  `close` resumed from a cursor finished by an earlier build reads the open findings from the ledger instead of failing.
+- **`close` is exact about a stopped loop.** A loop stopped before its pass was reviewed names the last recorded
+  verdict as that pass's (`verdict_pass`) instead of the in-progress pass's; the closing diary entry lists the open
+  findings at or above the floor by id, and the note on them says whether to record them as follow-ups (a stop) or
+  that they are still open at close (a done). A resumed `open` leaves a row a person marked `blocked` as it is
+  and says so in `unwritten`; a history entry without a pass number is named by its verdict alone. The stop
+  reasons and each step's argument table are frozen.
+- **`finish` refuses a loop that is already over (64)** instead of rewriting how it ended. The statuses it accepts are
+  unchanged. A loop state from an older build whose history holds a verdict over 60 characters or with a control
+  character is unreadable to the step tool (the CLI used to accept it): finish it with `finish`, or edit the entry.
+  A progress.md that the iteration reader refuses is now refused with the condition that failed. A findings-ledger
+  save removes the temp files of killed saves that are over an hour old.
+
+### Measured
+
+The `somi_loop` tool, against the run-card baseline (48 live draws, low tier, `reports/e376e98-vs-6cced12.md`):
+**inconclusive on cost**, the primary metric (overhead 1.02, 0.64 to 1.33; the SoMi arm's own cost 0.89). On
+`/code-loop` (S1) the main thread fell from 164k to 117k weighted tokens and from 24.5 to 16 turns, and the SoMi
+draw from $0.046 and 180 s to $0.036 and 132 s (bare: $0.004, 21 s); the pre-registered bar was 13 turns. The rest
+went to second passes (3 of 8 draws) and to progress.md edits made by hand after `close` in every draw. `/ship-loop`
+(S2, S3) did not move. The quality guard is clear; L0 rises 1.0%.
+
+With `close` writing those progress.md lines itself, an S1-only check (8 draws, `reports/75f886b-s1-check.md`, a
+transcript check, not a rule verdict) meets the bar: main thread 13 turns and 99k weighted tokens, the SoMi draw
+$0.033 and 149 s against bare $0.005 and 22 s.
+
+## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
+
+**Minor — additive.** Commands, agent names, tiers and the MCP tools are unchanged; two agents and
+32 skills are new. No migration action required.
+
+### Fixed
+
+- **The `somi` front door did the work itself about half the time.** It ran each command's
+  procedure in its own context and recursed into sub-commands, so over one `/ship-loop` run its
+  own context held about 115 KB of prompt and procedure text, against about 25 KB now (measured with
+  the L0 tool; `@somi /plan` 53 KB → 25 KB). Once
+  that context was full or compacted, it often stopped starting agents and did the planning,
+  coding or reviewing itself. It is now a dispatcher of about 85 lines that carries no procedure
+  text: it strips its `/somi` marker, picks one flow (a known command, or the `somi-routing` table
+  for free text), announces it, and starts **one** agent. It never edits, runs commands or follows a
+  procedure. A drift test keeps its list of known commands equal to `commands/`.
+
+### Added
+
+- **`somi-flow`** (agent, default `medium`): runs one named workflow end to end from its flow skill,
+  starting the specialists through `somi-dispatch`. A composite workflow (`/ship-loop` running
+  `/plan-loop` and `/code-loop`) runs its sub-flows inside the same runner, so the chain stays two
+  levels below the session: within Copilot CLI's nesting, and Claude Code's default.
+- **`somi-general`** (agent, default `medium`): the fallback for requests that match no workflow
+  (questions, explanations, research, housekeeping). It edits no tracked files and returns
+  `REROUTE <flow>` when a request turns out to be a workflow. `somi-routing` gains the matching
+  "none of the above" row, plus a `status` row.
+- **`somi-checkpoint`** (skill): neither host lets a subagent ask the user anything, so a gate inside
+  a runner (a slug confirmation, `DECISIONS-NEEDED`, `/ship-loop`'s brief-handoff gate, `/pr`'s
+  confirmation) saves its state, returns a `CHECKPOINT` block and stops; `somi` asks you and starts
+  the runner again with a `RESUME` block. It also defines the `DONE`, `STOPPED` and `REROUTE` blocks.
+- **`flow-status`** (skill): the dashboard, moved out of the front door.
+
+### Changed
+
+- **Every workflow's procedure is now a skill,** `skills/flow-<name>/SKILL.md` (25 of them, moved
+  verbatim with links rebased). `commands/<name>.md` is a thin wrapper that loads it, so a typed
+  command and the runner follow one procedure. Flow skills are `user-invocable: false` with a
+  one-line description, to keep the skill listing small. `somi_command` still serves the command
+  file, which is now the wrapper; read a procedure with `somi_skill`.
+- **The five largest agents are light.** `somi-planner`, `somi-discovery-analyst`, `somi-coder`,
+  `somi-reviewer` and `somi-designer` keep their role, tier note, `low` trims and write contract
+  (37 to 61 lines, from 192 to 394); their procedures moved to `role-planner`,
+  `role-discovery-analyst`, `role-coder`, `role-reviewer` and `role-designer`, which the agent loads
+  first. An agent that cannot load its role skill stops and says so.
+- Gates follow the move: the dispatch-reference and dispatch-line gates, the `/ship-loop` checkpoint
+  gate, the review-panel seat derivation, the size-tier text guards and the coder's Decision Ladder
+  check now read the flow and role skills. The size ledger entry for the planner moved with its
+  text to `skills/role-planner/SKILL.md` (402 → 354 lines); `somi-discovery-analyst` left the ledger.
+
+- **What a code loop's agents share: a run card.** `scripts/somi-card.mjs` prints, from the loop state, the
+  few facts every coder and reviewer start needs (SoMi's script path, the project, the plan files, the files in
+  scope, the baseline, the test command, which files only the orchestrator writes): under 2 KiB, byte-stable,
+  no history, so the reviewer stays independent. `/code-loop` pastes it first in every briefing. Its
+  orchestrator no longer reads or edits the iteration's code, runs its tests or reviews it, and flows that call
+  SoMi's scripts name `${CLAUDE_PLUGIN_ROOT}`, which Claude Code fills in when it loads the skill.
+- **The test suite runs in parallel, and CI splits it over four runners** (`tests/scripts/suite-plan.json`):
+  `npm test` runs its scripts half the cores at a time (`SOMI_TEST_JOBS`), runs
+  `eval-gate-micro-tasks.sh` by itself (a hidden-suite family uses 3 s of its 10 s limit and failed under
+  load), and CI runs three shards of slow scripts beside the rest (`SOMI_SUITE_SHARD`); a plan that names a
+  script `validate.sh` does not queue fails the run. CI went from 31 to under 10 minutes.
+
+### Verified live, and what it fixed
+
+Live runs on Copilot CLI 1.0.103 (`copilot --agent somi:somi -p ...` in a throwaway repo, full debug
+logs):
+
+- A one-line bug fix: `somi` loaded only the routing and dispatch skills and started `somi-flow`;
+  the runner loaded `flow-code` and started `somi-coder`, which loaded `role-coder` two levels
+  down and made the edit. The front door did no work. 1.74 AI credits for a one-line fix: each level
+  loads its own prompt and skills.
+- `/plan` across two turns: the runner stopped at the slug gate and at the planner's scope
+  decision, `somi` asked each time and stopped, and `--resume` with an answer continued the flow.
+  No decision was recorded as user-verified without an answer.
+- Fixed along the way: in `-p` mode `somi` answered checkpoints itself (Copilot tells it no user can
+  reply), `RESUME` dropped the request, and a resumed runner resolved agents for the wrong host. A
+  checkpoint now ends the dispatcher's turn even in a non-interactive session; `RESUME` keeps every
+  briefing line but `flow:`; the runner passes the briefing's `host:` to every resolve.
+
+Not verified: that a runner's subagents receive the repo's instruction files on Copilot, and a live
+run on Claude Code (the suite only). On Copilot the agent's id is `somi:somi`; `--agent somi` is
+refused.
+
+### Measured
+
+L0 (exact injected bytes, `benchmarks/usage-speed/reports/`): the `somi` front door's own context
+for `@somi /plan` falls from 53 KB to 25 KB (-53%), and over a `/ship-loop` run from 115 KB to 25 KB
+(-78%). The cost is on Claude Code's typed commands: each now injects 2 to 6% more bytes (the wrapper,
+the extra skill and agent headers, the routing rows).
+
+L2 (48 live draws on Claude Code, low tier, against 4.0.0 `f4e7cc1`; `reports/03c1f76-vs-f4e7cc1.md`):
+inconclusive on every metric. The point estimates lean worse (SoMi-arm overhead +31% time, +32% cost,
+tokens +22%, turns +7%, mostly S3), with every interval including no change; the quality guard is clear.
+Two of eight `/ship-loop` draws on S2 scored 0/31: sizing put T1 at `full` in 3 of 8 draws (4.0.0: 0 of 8,
+an estimate of about 110 lines against the 100-line limit), and a `full` run stops at the planner's
+decisions when no one answers. One of those draws also showed the main thread handing `/plan-loop` to a
+`somi-flow` subagent; the command wrappers now say a sub-workflow runs inline in the main conversation.
+
+The run card, the orchestrator limits and the script path, measured together against that 4.1.0 baseline
+(`reports/6cced12-vs-03c1f76.md`): **no measurable cost saving.** The primary metric, cost overhead, reads 0.87
+(0.70 to 1.41, inconclusive) and the SoMi arm's own cost 0.99. The transcripts show the orchestrator limits
+working (on S3 the main thread's cost fell a quarter and the coder's rose about as much: the coding moved to
+the coder) and the card saving nothing on these scenarios, whose loops rarely start a second coder or reviewer.
+The orchestrator limits and the script path stay for what they fix (the orchestrator coding, a search
+of the disk for SoMi); the card stays as the shared-context mechanism, with no measured benefit yet. L0 rises 1.3%.
+
 ## [4.0.1] — 2026-10-27 — fix: one global config for every project, merged with each repo's; config reads follow junctions and symlinks
 
 ### Fixed

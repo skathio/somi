@@ -16,7 +16,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GATE="$ROOT/tests/scripts/lib/checkpoint-gate.mjs"
-SHIP_LOOP="$ROOT/commands/ship-loop.md"
+SHIP_LOOP="$ROOT/skills/flow-ship-loop/SKILL.md"
 
 pass=0; fail=0
 ok()  { pass=$((pass+1)); printf '  ok   %s\n' "$1"; }
@@ -38,7 +38,7 @@ strip() { # $1 = source file, $2 = dest file, $3 = whole-file regex (JS, case-in
 
 # --- GREEN: the real, unmodified file must pass ---------------------------------------------
 if out_green="$(node "$GATE" "$SHIP_LOOP" 2>&1)"; then
-  ok "gate exits 0 against the real commands/ship-loop.md"
+  ok "gate exits 0 against the real skills/flow-ship-loop/SKILL.md"
 else
   bad "gate exited non-zero against the real file (got: $out_green)"
 fi

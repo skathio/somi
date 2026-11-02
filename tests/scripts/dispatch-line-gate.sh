@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Gate for the one dispatch line (#38) and native dispatch: the canonical "pass its `model`, start it as
 # its `agent_type`, and put the cost line ..." phrase lives once, between markers in
-# skills/somi-dispatch/SKILL.md, and every copy in commands/*.md and agents/somi.md must match it
+# skills/somi-dispatch/SKILL.md, and every copy in skills/flow-*/SKILL.md and the dispatcher and runner agents must match it
 # (whitespace and blockquote markers aside); every command that names the cost line names it through
 # that phrase; the three agents that trim at `low` carry the same requested-tier disclosure; and no
 # dispatch text calls somi_agent to stand in for an agent. Proven red on mutated copies.
@@ -26,7 +26,7 @@ const m = /<!-- dispatch-line:start -->\n([\s\S]*?)\n<!-- dispatch-line:end -->/
 if (!m) { console.log('skills/somi-dispatch/SKILL.md: no dispatch-line markers'); process.exit(0); }
 const canon = norm(m[1]).trim();
 const COST = 'requested cost: <tier> (not enforced: no mapped model)';
-const files = [...fs.readdirSync(path.join(root, 'commands')).filter((f) => f.endsWith('.md')).map((f) => `commands/${f}`), 'agents/somi.md'];
+const files = [...fs.readdirSync(path.join(root, 'skills')).filter((d) => d.startsWith('flow-')).map((d) => `skills/${d}/SKILL.md`), 'agents/somi.md', 'agents/somi-flow.md'];
 for (const f of files) {
   const t = norm(read(f));
   const costLines = t.split(COST).length - 1;
@@ -52,9 +52,9 @@ red() { # $1 = label, $2 = mutation run inside a copy
   (cd "$TMP/r" && eval "$2")
   if [ -n "$(gate "$TMP/r")" ]; then ok "red proof: $1"; else bad "red proof: $1 (not caught)"; fi
 }
-red "a command whose copy drifted (agent_type dropped)" "sed -i 's/, start it as its \`agent_type\`,/,/' commands/plan.md"
+red "a command whose copy drifted (agent_type dropped)" "sed -i 's/, start it as its \`agent_type\`,/,/' skills/flow-plan/SKILL.md"
 red "the canonical phrase edited in the skill only" "sed -i 's/start it as its \`agent_type\`, and put/start it as its \`agent_type\` and put/' skills/somi-dispatch/SKILL.md"
-red "a command that hands agent text to somi_agent" "printf 'call somi_agent({name: \"somi-coder\"}) and start a general-purpose agent\n' >> commands/code.md"
+red "a command that hands agent text to somi_agent" "printf 'call somi_agent({name: \"somi-coder\"}) and start a general-purpose agent\n' >> skills/flow-code/SKILL.md"
 red "a missing requested-low disclosure" "sed -i 's/requested, not enforced: the host chose the model/requested/' agents/somi-planner.md"
 
 echo "dispatch-line-gate tests: $pass ok, $fail failed"

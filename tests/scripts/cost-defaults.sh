@@ -40,6 +40,8 @@ somi-atlas:high
 somi-coder:medium
 somi-designer:high
 somi-discovery-analyst:high
+somi-flow:medium
+somi-general:medium
 somi-impact:medium
 somi-incident:medium
 somi-plan-reviewer:high

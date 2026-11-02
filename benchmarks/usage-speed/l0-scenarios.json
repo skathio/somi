@@ -68,8 +68,16 @@
           "name": "plan"
         },
         {
+          "kind": "skill",
+          "name": "flow-plan"
+        },
+        {
           "kind": "agent",
           "name": "somi-planner"
+        },
+        {
+          "kind": "skill",
+          "name": "role-planner"
         }
       ]
     },
@@ -91,12 +99,24 @@
           "name": "code-loop"
         },
         {
+          "kind": "skill",
+          "name": "flow-code-loop"
+        },
+        {
           "kind": "agent",
           "name": "somi-coder"
         },
         {
+          "kind": "skill",
+          "name": "role-coder"
+        },
+        {
           "kind": "agent",
           "name": "somi-reviewer"
+        },
+        {
+          "kind": "skill",
+          "name": "role-reviewer"
         }
       ]
     },
@@ -116,6 +136,10 @@
         {
           "kind": "command",
           "name": "ship-loop"
+        },
+        {
+          "kind": "skill",
+          "name": "flow-ship-loop"
         },
         {
           "kind": "skill",
@@ -145,8 +169,16 @@
           "name": "review"
         },
         {
+          "kind": "skill",
+          "name": "flow-review"
+        },
+        {
           "kind": "agent",
           "name": "somi-reviewer"
+        },
+        {
+          "kind": "skill",
+          "name": "role-reviewer"
         }
       ]
     },
@@ -161,6 +193,10 @@
         {
           "kind": "agent",
           "name": "somi-coder"
+        },
+        {
+          "kind": "skill",
+          "name": "role-coder"
         }
       ]
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// dispatch-reference-gate.mjs — asserts that every commands/*.md file which starts a real agent
+// dispatch-reference-gate.mjs — asserts that every workflow procedure (skills/flow-*/SKILL.md) that starts a real agent
 // (a `Task` call naming one of the files under agents/) references skills/somi-dispatch/SKILL.md
 // somewhere in its own text -- every entry path that starts an agent resolves it through the same
 // dispatch procedure, not just the front door. "Starts an agent" is DERIVED from the real
@@ -64,12 +64,21 @@ export function agentNamesFrom(agentsDir) {
     .filter((n) => n !== 'somi');
 }
 
+// The procedures that start agents: `flow-<name>/SKILL.md` under a skills/ directory (where every
+// workflow's procedure lives), plus any plain `*.md` directly in the directory (a commands/-shaped
+// tree, which the fixtures use).
+export function procedureFiles(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const flat = entries.filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => e.name);
+  const flows = entries
+    .filter((e) => e.isDirectory() && e.name.startsWith('flow-') && fs.existsSync(path.join(dir, e.name, 'SKILL.md')))
+    .map((e) => path.join(e.name, 'SKILL.md'));
+  return [...flat, ...flows].sort();
+}
+
 export function scan(commandsDir, agentsDir) {
   const agentNames = agentNamesFrom(agentsDir);
-  const files = fs
-    .readdirSync(commandsDir)
-    .filter((f) => f.endsWith('.md'))
-    .sort();
+  const files = procedureFiles(commandsDir);
 
   const checked = [];
   const missing = [];

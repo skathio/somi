@@ -203,6 +203,17 @@ after2="$(node "$LOOP" check-diff --slug untracked --iteration 1.1 | jq .diff_li
 check "check-diff: untracked .somi files stay excluded (F-220)" \
   "$([[ "$after2" == "$after" ]]; echo $?)"
 
+printf 'a\nb\nc\nd\n' > "src/é	tab.txt"      # untracked, non-ASCII and a tab in the name: git quotes it unless asked not to
+out="$(node "$LOOP" check-diff --slug untracked --iteration 1.1)"
+check "check-diff: an untracked file with a non-ASCII and tab name is counted and named, unquoted" \
+  "$([[ "$(jq -r .diff_lines <<<"$out")" == "$((after2 + 4))" ]] && jq -e '.out_of_scope | index("src/é\ttab.txt") != null' <<<"$out" >/dev/null; echo $?)"
+rm -f "src/é	tab.txt"
+
+echo '*.dat -diff' > .gitattributes; seq 1 5000 > src/x.dat   # untracked, and a -diff attribute makes git print it as binary
+check "check-diff: an untracked 5000-line file hidden by a -diff attribute is counted (5001 with the attributes file)" \
+  "$([[ "$(node "$LOOP" check-diff --slug untracked --iteration 1.1 | jq .diff_lines)" == "$((after2 + 5001))" ]]; echo $?)"
+rm -f .gitattributes src/x.dat
+
 # --- somi-loop: record/finish/resume (session-death recovery) -------------------
 node "$LOOP" record-pass --slug demo --iteration 1.1 --verdict request-changes --blockers 0 --majors 2 >/dev/null
 out="$(node "$LOOP" resume --slug demo --iteration 1.1)"

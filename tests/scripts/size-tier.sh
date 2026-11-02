@@ -521,9 +521,9 @@ drift_red "threshold row removed from the skill" skill "s.replace('| \`TRIVIAL_M
 drift_red "threshold sentence pasted into the section" skill "s.replace('### Thresholds','Not security-sensitive: touches no auth, crypto, secrets, PII, or untrusted-input boundary.\n\n### Thresholds')"
 drift_red "threshold label pasted into the section" skill "s.replace('### Thresholds','Cheap to reverse.\n\n### Thresholds')"
 
-# ---- text guard: commands/ship-loop.md points at the rubric and holds no copy of it ----
+# ---- text guard: skills/flow-ship-loop/SKILL.md points at the rubric and holds no copy of it ----
 echo "== size tier: ship-loop text guard =="
-SHIPGUARD="$ROOT/tests/scripts/lib/ship-loop-sizing-guard.mjs"; SHIP="$ROOT/commands/ship-loop.md"
+SHIPGUARD="$ROOT/tests/scripts/lib/ship-loop-sizing-guard.mjs"; SHIP="$ROOT/skills/flow-ship-loop/SKILL.md"
 if d="$(node "$SHIPGUARD" "$SHIP" "$SKILL" 2>&1)"; then ok "ship-loop and skill agree: $d"; else bad "ship-loop text guard failed: $d"; fi
 ship_red() { # $1 = label, $2 = node expression over `s` (ship-loop.md) returning the mutated text
   node -e "const fs=require('fs');const s=fs.readFileSync(process.argv[1],'utf8');const t=($2);if(t===s){process.exit(3)}fs.writeFileSync(process.argv[2],t)" "$SHIP" "$TMP/ship.md" || { bad "ship-loop mutation '$1' did not apply"; return; }
@@ -543,7 +543,7 @@ ship_red "trivial-threshold label pasted" "s.replace('### Stage 0','Cheap to rev
 
 # ---- text guard: /code and /code-loop accept a brief-only item only with the CLI's tier record ----
 echo "== size tier: brief-only text guard =="
-BRIEFGUARD="$ROOT/tests/scripts/lib/brief-only-guard.mjs"; CODE="$ROOT/commands/code.md"; LOOP="$ROOT/commands/code-loop.md"
+BRIEFGUARD="$ROOT/tests/scripts/lib/brief-only-guard.mjs"; CODE="$ROOT/skills/flow-code/SKILL.md"; LOOP="$ROOT/skills/flow-code-loop/SKILL.md"
 if d="$(node "$BRIEFGUARD" "$CODE" "$LOOP" 2>&1)"; then ok "brief-only rule: $d"; else bad "brief-only text guard failed: $d"; fi
 brief_red() { # $1 = label, $2 = which file (code|loop), $3 = node expression over `s`
   local src="$CODE" a="$TMP/code.md" b="$LOOP"; [ "$2" = loop ] && { src="$LOOP"; a="$CODE"; b="$TMP/loop.md"; }
