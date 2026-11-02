@@ -6,7 +6,7 @@ export function Measured() {
       id="measured"
       kicker="Measured, not claimed"
       title="5.0 has to earn the default"
-      lede={<Rich text="SoMi 4.x measured about 7x the cost and time of a bare agent on tasks both solved. The 5.0 recording has not run, so this page claims no result for it." />}
+      lede={<Rich text="SoMi 4.1 measured 3x to 7x the cost and 2x to 6x the time of a bare agent on tasks both solved. The 5.0 recording has not run, so this page claims no result for it." />}
     >
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <Card title="The registered rule">

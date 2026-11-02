@@ -1,4 +1,4 @@
-# Migrating from 4.x to 5.0
+# Migrating from 4.1 to 5.0
 
 5.0 is a breaking rebuild. The `4.x` branch stays available for at least one minor cycle.
 
@@ -14,7 +14,7 @@
 
 ## Agents
 
-The agents are now `somi-coder`, `somi-reviewer` and `somi-security-reviewer`. The `somi` front door is gone, so `@somi` routing on Copilot no longer exists. Use `/task`, or just ask.
+The agents are now `somi-coder`, `somi-reviewer` and `somi-security-reviewer`. The `somi` front door and its `somi-flow` and `somi-general` runners are gone, so `@somi` routing on Copilot no longer exists. Use `/task`, or just ask.
 
 ## State
 
@@ -42,7 +42,7 @@ Copy your test commands into a committed `somi.check.json`. See [the architectur
 
 ## MCP
 
-There is one tool now, `somi_step`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config` and `somi_tier` are gone.
+There is one tool now, `somi_step`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
 
 ## Hooks
 

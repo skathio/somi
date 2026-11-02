@@ -38,6 +38,14 @@ test('every hook registered on Claude Code exists', () => {
   for (const c of commands) assert.ok(fs.existsSync(path.join(REPO, c.split('${CLAUDE_PLUGIN_ROOT}/')[1])), c);
 });
 
+test('the write guards are registered for every file-writing tool', () => {
+  const entries = json('hooks/hooks.json').hooks.PreToolUse;
+  for (const guard of ['block-secret-writes', 'guard-protected-paths']) {
+    const entry = entries.find((e) => e.hooks.some((h) => h.command.includes(`/${guard}.mjs`)));
+    for (const tool of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']) assert.ok(entry.matcher.split('|').includes(tool), `${guard} misses ${tool}`);
+  }
+});
+
 test('version files agree', () => {
   const version = read('VERSION').trim();
   for (const f of ['package.json', '.claude-plugin/plugin.json', '.copilot-extension/extension.json']) assert.equal(json(f).version, version, f);

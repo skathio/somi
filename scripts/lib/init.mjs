@@ -25,8 +25,8 @@ export function copilotHooks(pluginRoot) {
       PreToolUse: [
         entry(pluginRoot, 'pre-tool/block-dangerous-bash.mjs', 'Bash'),
         entry(pluginRoot, 'pre-tool/gate-dep-install.mjs', 'Bash'),
-        entry(pluginRoot, 'pre-tool/block-secret-writes.mjs', 'Write|Edit'),
-        entry(pluginRoot, 'pre-tool/guard-protected-paths.mjs', 'Write|Edit'),
+        entry(pluginRoot, 'pre-tool/block-secret-writes.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
+        entry(pluginRoot, 'pre-tool/guard-protected-paths.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
       ],
       PostToolUse: [entry(pluginRoot, 'post-tool/audit-log.mjs', '*')],
     },

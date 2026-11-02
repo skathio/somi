@@ -6,13 +6,13 @@ A small kernel for coding agents on Claude Code and GitHub Copilot CLI. The agen
 
 ## Why it is this small
 
-SoMi 4.x measured about 7x the cost and time of a bare agent on tasks both solved, and none of its cost-saving changes showed a conclusive saving. Orchestration bookkeeping was the largest cost. 5.0 removes that work instead of optimising it. [The architecture document](docs/ARCHITECTURE.md) gives the reasoning.
+SoMi 4.1 measured 3x to 7x the cost and 2x to 6x the time of a bare agent on tasks both solved, and its cost saving against the previous build was inconclusive. Orchestration bookkeeping was the largest cost. 5.0 removes that work instead of optimising it. [The architecture document](docs/ARCHITECTURE.md) gives the reasoning.
 
-| | 4.x | 5.0 |
+| | 4.1 | 5.0 |
 |---|---|---|
 | Commands | 25 | 5 |
-| Agents | 17 | 3 |
-| Skills | 15 | 8 |
+| Agents | 19 | 3 |
+| Skills | 47 | 8 |
 | Rules loaded automatically | about 200 lines, reinjected per turn | a digest under 150 lines, once per session |
 | When a review runs | sized before coding, per 400-line slice | after coding, from signals in the real diff |
 | State | hand-edited markdown | one journal written by the tools |
@@ -60,7 +60,7 @@ A review runs when the change spans modules, moves a public API or schema, weake
 
 Add a `somi.check.json` to set your fast and full test commands and map source paths to tests. Without one, `somi check` still runs lint and the gates, in under 60 seconds.
 
-## Upgrading from 4.x
+## Upgrading from 4.1
 
 This is a breaking release. See [the migration guide](docs/MIGRATING-TO-5.md).
 
