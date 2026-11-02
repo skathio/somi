@@ -12,7 +12,7 @@ import { detectHost } from '../../scripts/lib/tiers.mjs';
 import { updateNotice } from '../../scripts/lib/update-notice.mjs';
 
 runHook(() => {
-  readPayload();
+  const payload = readPayload();
   const root = pluginRoot();
   if (root === null) return;
   const host = detectHost();
@@ -30,6 +30,8 @@ runHook(() => {
   } catch { /* a bad state file must not stop a session starting */ }
   const notice = updateNotice();
   if (notice) parts.push(notice);
+  // Copilot CLI gives an MCP server no project root, so the tool takes it from the session.
+  if (host === 'copilot' && payload?.cwd) parts.push(`Pass project_dir "${payload.cwd}" on every somi_step call.`);
   const context = parts.join('\n\n');
   // Copilot CLI reads the top-level field and Claude Code the nested one. Each ignores the other's.
   process.stdout.write(`${JSON.stringify({ additionalContext: context, hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } })}\n`);

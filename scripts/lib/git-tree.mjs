@@ -13,6 +13,19 @@ const MAX_OUTPUT = 32 * 1024 * 1024;
 
 const git = (root, args, opts = {}) => execFileSync('git', [...SAFE, ...args], { cwd: root, encoding: 'utf8', maxBuffer: MAX_OUTPUT, stdio: ['ignore', 'pipe', 'pipe'], ...opts });
 
+export function isClean(root) {
+  return execFileSync('git', ['status', '--porcelain', '--', '.', ':(exclude).somi'], { cwd: root, encoding: 'utf8' }).trim() === '';
+}
+
+// Everything except SoMi's own folder, in one commit, with a message that never passes through a shell.
+export function commitAll(root, message) {
+  execFileSync('git', ['add', '-A'], { cwd: root, stdio: 'ignore' });
+  execFileSync('git', ['reset', '-q', '--', '.somi'], { cwd: root, stdio: 'ignore' });
+  if (execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: root, encoding: 'utf8' }).trim() === '') return false;
+  execFileSync('git', ['commit', '-q', '-m', message], { cwd: root, stdio: 'ignore' });
+  return true;
+}
+
 export function repoRoot(cwd) {
   return git(cwd, ['rev-parse', '--show-toplevel']).trim();
 }

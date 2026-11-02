@@ -48,11 +48,39 @@ test('a clean small change is checked, committed and finished with no review', (
   const second = done(ctx, {});
   assert.equal(second.next, 'run');
   assert.equal(second.then, 'close');
-  assert.match(second.run, /git commit/);
+  assert.match(second.run, /somi\.mjs" commit/);
   const end = closeMilestone(ctx);
   assert.equal(end.next, 'done');
   assert.equal(deriveCursor(events(ctx)).route, null);
   assert.deepEqual(journalProblems(events(ctx)), []);
+});
+
+test('a worker that finishes its own step leaves the coordinator one call to end the route', (t) => {
+  const dir = makeRepo(t);
+  const ctx = makeCtx(dir);
+  route(ctx, { request: 'Change the constant' });
+  writeFiles(dir, SMALL);
+  const finished = somi(dir, ['finish']);
+  assert.equal(finished.status, 0, finished.stderr);
+  assert.equal(finished.json.committed, true);
+  assert.equal(done(ctx, {}).next, 'done');
+  assert.equal(deriveCursor(events(ctx)).route, null);
+});
+
+test('a worker that changes nothing ends the route with nothing to check', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  route(ctx, { request: 'Change the constant' });
+  assert.equal(done(ctx, {}).outcome, 'no-change');
+});
+
+test('a finish that needs a review tells the worker and commits nothing', (t) => {
+  const dir = makeRepo(t);
+  const ctx = makeCtx(dir);
+  route(ctx, { request: 'Run a command' });
+  writeFiles(dir, SINK);
+  const finished = somi(dir, ['finish']);
+  assert.equal(finished.json.next, 'review');
+  assert.equal(done(ctx, {}).next, 'review');
 });
 
 test('failing checks restart one tier up, once, and then ask', (t) => {

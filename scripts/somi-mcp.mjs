@@ -62,29 +62,30 @@ const TOOL = {
     type: 'object',
     properties: {
       action: { type: 'string', enum: ['route', 'done', 'after-review', 'decide', 'close', 'status', 'resume', 'abandon', 'ledger', 'expertise', 'open', 'after-code'] },
-      request: { type: 'string', description: 'route: what the maintainer asked for, or a ticket\'s text' },
-      ticket: { type: 'object', description: 'route: ticket fields when there is one, such as type and labels' },
-      hint: { type: 'string', description: 'route: a route name, from a command or from choices' },
-      status: { type: 'string', enum: ['ok', 'too-big', 'blocked'], description: 'done: how the agent finished' },
-      summary: { type: 'string', description: 'done: what the agent reported' },
-      milestones: { type: 'array', items: { type: 'string' }, description: 'done: the parts, when too-big' },
-      keep: { type: 'array', items: { type: 'string' }, description: 'done: the finding ids a critic confirmed' },
-      kind: { type: 'string', enum: ['decision', 'constraint', 'pointer'], description: 'ledger: what this entry is' },
-      title: { type: 'string', description: 'open: what this milestone delivers' },
-      ask: { type: 'string', description: 'open: a question for the maintainer, only when the request names an expensive-to-reverse choice' },
-      follow_up: { type: 'string', description: 'open: the area, when this continues earlier work there' },
-      release_candidate: { type: 'boolean', description: 'open: review this milestone whatever the signals say' },
-      reviews: { type: 'array', description: 'after-review: each reviewer\'s JSON, one entry per dispatched reviewer', items: { type: 'object' } },
-      text: { type: 'string', description: 'decide: the maintainer\'s own words; ledger: the entry' },
-      then: { type: 'string', enum: ['continue', 'close', 'abort'], description: 'decide: what the maintainer chose' },
+      request: { type: 'string' },
+      project_dir: { type: 'string', description: 'Absolute path of the project, when the host does not supply it.' },
+      ticket: { type: 'object' },
+      hint: { type: 'string' },
+      status: { type: 'string', enum: ['ok', 'too-big', 'blocked'] },
+      summary: { type: 'string' },
+      milestones: { type: 'array', items: { type: 'string' } },
+      keep: { type: 'array', items: { type: 'string' } },
+      kind: { type: 'string', enum: ['decision', 'constraint', 'pointer'] },
+      title: { type: 'string' },
+      ask: { type: 'string' },
+      follow_up: { type: 'string' },
+      release_candidate: { type: 'boolean' },
+      reviews: { type: 'array', items: { type: 'object' } },
+      text: { type: 'string' },
+      then: { type: 'string', enum: ['continue', 'close', 'abort'] },
     },
     required: ['action'],
   },
 };
 
-async function context(env = process.env) {
-  const resolved = await resolveProjectRoot({ listRoots: listClientRoots });
-  if (!resolved.ok) throw new TransitionError(resolved.message);
+async function context(projectDir, env = process.env) {
+  const resolved = await resolveProjectRoot({ projectDirArg: projectDir, listRoots: listClientRoots });
+  if (!resolved.ok) throw new TransitionError(`${resolved.message}. Call again with project_dir set to your working directory.`);
   const root = repoRoot(resolved.root);
   let layers = [];
   let config = {};
@@ -101,7 +102,7 @@ const textResult = (value, isError = false) => ({ content: [{ type: 'text', text
 async function callStep(args) {
   const a = args !== null && typeof args === 'object' ? args : {};
   try {
-    const ctx = await context();
+    const ctx = await context(typeof a.project_dir === 'string' ? a.project_dir : undefined);
     switch (a.action) {
       case 'open': return textResult(open(ctx, { title: a.title, ask: a.ask, followUp: a.follow_up, releaseCandidate: a.release_candidate === true }));
       case 'after-code': return textResult(afterCode(ctx));

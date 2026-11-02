@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { SCHEMA_VERSION, appendEvent, deriveCursor, readEvents, writeCursor } from './journal.mjs';
+import { isClean } from './git-tree.mjs';
 import { readLedger, addToLedger } from './ledger.mjs';
 import { TransitionError, afterCode, afterReview, close as kernelClose, decide as kernelDecide, open as kernelOpen } from './kernel.mjs';
 import { isBlocking } from './policy.mjs';
@@ -18,7 +19,6 @@ import { renderStatus } from './views.mjs';
 import { WORKER, WORKFLOWS, libraryPath, workerPrompt } from './workflows.mjs';
 
 const MAX_REQUEST = 8192;
-const STILL_FAILING_AFTER = 3;
 const SECOND_FIX = 2;
 const CLI = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'somi.mjs');
 const somiCommand = (args) => `node ${JSON.stringify(CLI)} ${args}`;
@@ -26,8 +26,8 @@ const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !=
 const shellQuote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
 
 const HOW = Object.freeze({
-  spawn: 'Start spawn.agent with spawn.model if one is given, passing spawn.prompt unchanged. Do nothing else. When it reports, call somi_step with action "done", status "ok" (or "too-big" with milestones, or "blocked") and its summary.',
-  review: 'Start each listed reviewer as a fresh agent with its model, giving it only card.diff and card.prompt. Then call somi_step with action "after-review" and every reviewer\'s JSON.',
+  spawn: 'Start spawn.agent with spawn.model if one is given, passing spawn.prompt unchanged, in the foreground, and wait for it. Do nothing else. When it reports, call somi_step with action "done", status "ok" (or "too-big" with milestones, or "blocked") and its summary. Say nothing in between.',
+  review: 'Start each listed reviewer as a fresh agent with its model, in the foreground, giving it only card.diff and card.prompt. Then call somi_step with action "after-review" and every reviewer\'s JSON.',
   critic: 'Start spawn.agent with spawn.model, passing spawn.prompt unchanged. Then call somi_step with action "done", status "ok" and keep set to the ids it confirmed.',
   run: 'Run this one shell command, then call somi_step with the action in `then`.',
   ask: 'Show the maintainer the question and end your turn. When they answer, call somi_step with action "decide", their words as text, and then set to continue, close or abort.',
@@ -55,7 +55,7 @@ function spawnWorker(ctx, c, { note, request, tier = c.tier } = {}) {
   const opening = events.filter((e) => e.type === 'open').length <= 1 && !note;
   const prompt = workerPrompt({
     role: wf.role, request: request ?? lastRoute(events)?.request, ledger: readLedger(ctx.root, ctx.env), skills: wf.skills ?? [], note,
-    shards: opening ? start.usable : [],
+    shards: opening ? start.usable : [], cli: somiCommand('').trim(), kind: wf.kind === 'plan' ? 'plan' : wf.kind,
   });
   return clean({
     route: c.route, milestone: c.milestone, next: 'spawn', how: HOW.spawn,
@@ -65,11 +65,21 @@ function spawnWorker(ctx, c, { note, request, tier = c.tier } = {}) {
 }
 
 function closeStep(ctx, c) {
+  if (isClean(ctx.root)) return closeMilestone(ctx);
   const title = c.title ?? firstLine(lastRoute(readEvents(ctx.root, ctx.env))?.request);
-  return {
-    route: c.route, milestone: c.milestone, next: 'run', how: HOW.run, then: 'close',
-    run: `git add -A -- . ':(exclude).somi' && (git diff --cached --quiet || git commit -q -m ${shellQuote(title)})`,
-  };
+  return { route: c.route, milestone: c.milestone, next: 'run', how: HOW.run, then: 'close', run: somiCommand(`commit -m ${shellQuote(title)}`) };
+}
+
+// The cheap worker ends its own step. This is what `somi finish` runs inside the sandbox: the checks, then the signals, then a commit
+// when nothing else is due. Every turn the coordinator does not take costs the session's model, not the worker's.
+export function finishWork(ctx, { runChecks, commit }) {
+  const c = deriveCursor(readEvents(ctx.root, ctx.env));
+  if (c.milestone === null) return { ok: true, note: 'no milestone is open' };
+  const result = runChecks();
+  if (!result.ok) return { ok: false, failed: result.failed, gates: result.gates };
+  const r = afterCode(ctx);
+  if (r.next === 'close') { commit(c.title); return { ok: true, committed: true }; }
+  return { ok: true, next: r.next };
 }
 
 function finish(ctx, outcome, summary) {
@@ -108,11 +118,12 @@ function afterFailedCheck(ctx, c, failed) {
   const events = readEvents(ctx.root, ctx.env);
   const fails = events.filter((e) => e.type === 'check' && e.milestone === c.milestone && !e.ok).length;
   const note = `The checks failed:\n${JSON.stringify(failed ?? [])}\nFix what they report.`;
-  if (fails >= STILL_FAILING_AFTER) {
-    record(ctx, { key: `halt:${c.milestone}:${fails}`, type: 'halt', milestone: c.milestone, next: 'ask', stop: 'still-failing', question: `The checks have failed ${fails} times, and a stronger model has already tried. Continue, or stop here?` });
-    return { route: c.route, milestone: c.milestone, next: 'ask', how: HOW.ask, question: `The checks have failed ${fails} times, and a stronger model has already tried. Continue, or stop here?`, stop: 'still-failing' };
-  }
   const up = fails >= 2 && !c.escalated ? nextTier(ctx.config, c.tier) : null;
+  if (fails >= 2 && !up) {
+    const question = `The checks have failed ${fails} times, and ${c.escalated ? 'a stronger model has already tried' : 'there is no stronger tier to try'}. Continue, or stop here?`;
+    record(ctx, { key: `halt:${c.milestone}:${fails}`, type: 'halt', milestone: c.milestone, next: 'ask', stop: 'still-failing', question });
+    return { route: c.route, milestone: c.milestone, next: 'ask', how: HOW.ask, question, stop: 'still-failing' };
+  }
   if (up) {
     record(ctx, { key: `escalate:${c.seq + 1}`, type: 'escalate', from: c.tier, tier: up, reason: 'checks failed twice' });
     return spawnWorker(ctx, deriveCursor(readEvents(ctx.root, ctx.env)), { note: `An earlier attempt left its work in the tree, and it may be wrong. Judge it fresh. ${note}` });
@@ -207,9 +218,16 @@ export function done(ctx, { status = 'ok', summary, milestones, keep } = {}) {
   }
   const r = afterCode(ctx);
   if (r.check?.ok === false) return afterFailedCheck(ctx, c, r.check.failed);
+  if (r.refused === 'check-required' && isClean(ctx.root)) return closeStepOrFinish(ctx, c);
   const mapped = fromKernel(ctx, r);
   if (mapped) return mapped;
   return spawnWorker(ctx, c, { note: 'Continue the work.' });
+}
+
+// A worker that changed nothing has nothing to check or commit.
+function closeStepOrFinish(ctx, c) {
+  record(ctx, { key: `close:${c.milestone}`, type: 'close', milestone: c.milestone, outcome: 'no-change' });
+  return finish(ctx, 'no-change');
 }
 
 function afterCritic(ctx, c, keep) {

@@ -7,6 +7,8 @@
 //   somi step decide --text T --then continue|close|abort
 //   somi step close | status
 //   somi check [--full]
+//   somi finish                                  a worker ends its step: checks, signals, and a commit when nothing else is due
+//   somi commit -m MESSAGE
 //   somi slot <step> <plugin:component> [--mode read|write] [--project] | somi slot --list | --remove | --confirm
 //   somi ledger --kind decision|constraint --text T
 //   somi status | pr | migrate
@@ -23,7 +25,8 @@ import { fileURLToPath } from 'node:url';
 import { checkBase, runCheck } from './lib/check.mjs';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
 import { runDoctor } from './lib/doctor.mjs';
-import { repoRoot } from './lib/git-tree.mjs';
+import { finishWork } from './lib/engine.mjs';
+import { commitAll, repoRoot } from './lib/git-tree.mjs';
 import { writeCopilotHooks } from './lib/init.mjs';
 import { StateError, readEvents } from './lib/journal.mjs';
 import { TransitionError, afterCode, afterReview, close, decide, open, recordCheck, status } from './lib/kernel.mjs';
@@ -136,6 +139,16 @@ function main(argv) {
       print(result);
       return result.ok ? 0 : 1;
     }
+    case 'finish': {
+      const result = finishWork(ctx, { runChecks: () => checkAndRecord(ctx), commit: (title) => commitAll(ctx.root, title ?? 'SoMi work') });
+      print(result);
+      return result.ok ? 0 : 1;
+    }
+    case 'commit': {
+      const { values } = parseArgs({ args, options: { message: { type: 'string', short: 'm' } } });
+      print({ committed: commitAll(ctx.root, values.message ?? 'SoMi work') });
+      return 0;
+    }
     case 'status':
       process.stdout.write(renderStatus(readEvents(ctx.root, ctx.env)));
       return 0;
@@ -170,7 +183,7 @@ function main(argv) {
       return result.written ? 0 : 1;
     }
     default:
-      throw new TransitionError('somi takes step, check, status, pr, plan, slot, ledger, migrate, doctor or init');
+      throw new TransitionError('somi takes step, check, finish, commit, status, pr, plan, slot, ledger, migrate, doctor or init');
   }
 }
 
