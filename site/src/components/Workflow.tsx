@@ -14,8 +14,8 @@ export function Workflow() {
     <Section
       id="workflow"
       kicker="Workflow"
-      title="Do the work, then look at what changed"
-      lede={<Rich text="There is no pre-code sizing, brief or plan unless you ask for one. One milestone is one feature, built and tested together, with no line cap." />}
+      title="Any request or ticket, routed for you"
+      lede={<Rich text="A thin coordinator asks a step engine what to do next, and workers run on the cheapest tier that fits. Small work stays small, and large work gets milestones with fresh context." />}
     >
       <ol className="mt-10 grid gap-4 lg:grid-cols-5">
         {STAGES.map((s, i) => (

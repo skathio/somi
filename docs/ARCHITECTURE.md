@@ -1,31 +1,42 @@
 # Architecture
 
-SoMi 5.0 is a bare-first default lane plus a thin state machine that writes all state as a side effect.
+SoMi 5.0 keeps what SoMi is for, routing any request to the right workflow, and takes the cost out. A thin coordinator asks a step engine what to do next, and workers do the work on the tier the route calls for.
 
 ## The loop
 
 ```text
-intent
-  -> ask once, only if the request names an expensive-to-reverse choice
-  -> code in the main thread
-  -> somi step after-code: runs the fast gate, reads the real diff, computes signals
-  -> no signal: commit and close
+request or ticket
+  -> somi_step route: rules decide a clear request; otherwise the coordinator picks from a short table
+  -> small and clear: one low-tier worker codes, then runs `somi finish`
+       `somi finish`: runs the fast gate, reads the real diff, computes signals, commits if nothing else is due
   -> signal: one fresh reviewer, plus a security reviewer on a trust boundary
-  -> Blocker or confirmed boundary Major: fix, then re-review the fix diff only
-  -> anything else: logged, then commit and close
-  -> full suite before push
+  -> Blocker, or a boundary Major a critic confirms: fix, then re-review the fix diff only
+  -> anything else: logged
+  -> checks fail twice: restart one tier up with the working tree and a short summary, once
+  -> too big for one sitting: a plan the maintainer approves, then a fresh worker per milestone
 ```
 
-A milestone is one feature, built and tested together. There is no line cap on it and there are no slices.
+The coordinator's prompt holds no procedure. Each answer from the engine names one `next` action and says `how` to carry it out, so what it reads is what it needs at that moment. A worker ends its own step because every turn the coordinator does not take costs the session's model and not the worker's.
+
+Routing classifies what the work is, never how big it will be, because model size forecasts ran 2 to 8 times too high. Rules alone scored 41% on fresh phrasings, so anything they cannot place goes to the coordinator, for one extra turn and no extra agent.
+
+A route starts at its lightest form and only observed evidence raises it. Escalation restarts instead of continuing, because a strong model continuing a cheap model's run recovers less of the quality gap than starting clean.
+
+## Workflows and the library
+
+`scripts/lib/workflows.mjs` says what each route runs: its kind, tier, role brief and skills. Role briefs are in `library/roles/`, expertise in `library/skills/`, and review lenses in `library/lenses/`. A host lists only commands and `somi-expertise`, at most 15 entries and 8,000 characters, and a test holds that, because hosts silently drop descriptions past a budget. Nothing in the library costs anything until it is used.
+
+An addition has to earn its place with a paired test: at least 15 points on 15 tasks, no regression on control tasks, and at most double the tokens. Existing items get one model generation before the same test applies.
 
 ## State
 
 The tools write everything under `.somi/state/`. The protected-path hook denies a model's writes there.
 
-- **`journal.jsonl`:** append-only, one event per transition: `open`, `check`, `after-code`, `after-review`, `decide`, `close`, `migrate`.
+- **`journal.jsonl`:** append-only, one event per transition: `route`, `plan`, `open`, `check`, `after-code`, `after-review`, `critic`, `escalate`, `halt`, `decide`, `close`, `finish`, `migrate`.
+- **`ledger.md`:** decisions, constraints and the current step, at most 40 lines and 6 KB. Compaction drops rules and scope limits first, and what gets re-injected survives, so this comes back at every session start and at the top of every brief. It is the only state re-injected.
 - **`state.json`:** a cursor derived from the journal. It can always be rebuilt.
 
-`somi status` and `somi pr` render every view on demand. There are no progress, diary or decision files.
+`.somi/plan.md` holds an approved plan, at most 200 lines and 16 KB. `somi status` and `somi pr` render every other view on demand. There are no progress or diary files, because an oversized state file is its own failure: one 4.x plan reached about 300,000 tokens of state.
 
 A retried transition appends nothing and returns its earlier answer. Killing the process at any transition and resuming leaves a byte-identical journal, and `tests/kernel.test.mjs` proves it at each write point. SoMi assumes one agent per working tree, with no parallel writers: parallel work belongs in separate worktrees, which each have their own state.
 
@@ -98,14 +109,37 @@ Hook denials exit 2, which both CLIs treat as a deny. Hook output carries both h
 
 ## Tiers
 
-Two tiers only, `work` and `review`, set per host:
+Low, medium and high, mapped to models per environment in config. Claude Code has defaults. Copilot has none, because its models vary by plan, and an unmapped tier inherits the session's model and says so. A `ceiling` caps every tier.
 
-```json
-{ "tiers": { "claude": { "work": "sonnet", "review": "opus" } } }
-```
+| Role | Tier |
+|---|---|
+| Small implementation, tests, first review | low |
+| Real issues, planning | medium |
+| Design, security review, critic, escalated retries | high |
+| Coordinator | the session's model |
 
-Set them in `~/.config/somi/config.json` or `.somi/config.json`. The journal records the model each reviewer was told to run.
+A plugin cannot change the coordinator's model, so that is where a session's cost concentrates, and the coordinator is kept to a few turns for that reason.
+
+The `apply-tier` hook sets a subagent's model at every level, because a tier that depends on an agent's cooperation gets skipped, and a nested worker otherwise falls back to the session's model. It rewrites and never denies, because a denied agent on Copilot does the work inline instead. `keep-work-delegated` denies main-thread edits during a code workflow on Claude Code only, because a denied agent on Copilot gives up. Both are cost controls and not security boundaries: a shell command can still write.
+
+Only billing proves a tier. On a Copilot account using automatic model selection, a live run reported a worker on a cheaper model and billed all of it to the session's. The benchmark therefore reads spend per model from each result.
+
+## Shards
+
+`somi slot <step> <plugin:component>` inspects an installed plugin and writes a binding to config. There is no typed contract, because a model consumes the output and tolerates drift a schema would reject, and SoMi's own check handles what matters:
+
+| State | Read shard | Write shard |
+|---|---|---|
+| Unchanged | Runs | Asks, then runs |
+| Plugin updated | Runs, and says so | Held until confirmed |
+| Component gone | Skipped with a notice | Skipped with a notice |
+| Committed in a project, unconfirmed | Skipped until `somi slot --confirm` | Same |
+
+Shard output reaches a worker as data under a plan already fixed. SoMi never installs a plugin for you.
 
 ## Left out on purpose
 
-Discovery and requirements documents, design briefs, pre-code sizing, panel review, parallel worktree orchestration, the dispatcher chain, diary and progress files, per-iteration line caps, and memory banks are all out. Each can return as an opt-in plugin only after it shows a paired benchmark gain. They remain on the `4.x` branch.
+- **Size forecasts before coding.** They were wrong too often to route on.
+- **A dashboard and parallel work items.** Deferred, not rejected.
+- **Generated context files.** Studies show they raise cost and lower success.
+- **Skills that restate what a current model knows.** Most software-engineering skills measured no effect, and the harm came from templates.

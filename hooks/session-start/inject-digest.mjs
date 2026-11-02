@@ -30,6 +30,8 @@ runHook(() => {
   } catch { /* a bad state file must not stop a session starting */ }
   const notice = updateNotice();
   if (notice) parts.push(notice);
+  // Claude Code names the active agent here. Copilot CLI does not, so nothing can be said about it there.
+  if (host === 'claude' && !payload?.agent_type) parts.push('SoMi is not the active agent in this session, so plain prompts are not routed and tiers apply only under `/somi` and SoMi commands. Say so once if the user asks SoMi for work.');
   // Copilot CLI gives an MCP server no project root, so the tool takes it from the session.
   if (host === 'copilot' && payload?.cwd) parts.push(`Pass project_dir "${payload.cwd}" on every somi_step call.`);
   const context = parts.join('\n\n');

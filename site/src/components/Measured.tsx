@@ -10,10 +10,10 @@ export function Measured() {
     >
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <Card title="The registered rule">
-          <Bullets items={['**Primary:** tokens per solved task against bare, on the same tasks and model.', '**Ships if:** that is at most 1.5x bare, the lower 95% bound is at or above -5 points on hidden tests passed and -20 points on tasks solved, and the A/A interval contains zero.']} />
+          <Bullets items={['**Primary:** dollars per solved task against bare, routed, on the same tasks and model.', '**Ships if:** that is at most 1.5x bare, the lower 95% bound is at or above -5 points on hidden tests passed and -20 points on tasks solved, and the A/A interval contains zero.']} />
         </Card>
         <Card title="Why it can be trusted">
-          <Bullets items={['**Off-ceiling tasks:** bare solves 1 or 2 of 3, so an arm has room to move.', '**Registered first:** the task set is committed before the first paid main draw.']} />
+          <Bullets items={['**A mixed task set:** some a bare agent sometimes solves, some it narrowly misses, and some it always solves, so a change shows either way.', '**Registered first:** the task set is committed before the first paid main draw.']} />
         </Card>
       </div>
     </Section>

@@ -9,7 +9,7 @@
   "bin": {
     "somi": "scripts/somi.mjs"
   },
-  "description": "SoMi: a small kernel for coding agents. Bare-first by default, one reviewer only when the real diff calls for it, state written by tools, and the OS sandbox as the security boundary.",
+  "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it routes the work to the right workflow, on workers on the cheapest model that can do it.",
   "keywords": [
     "workflow",
     "code-review",

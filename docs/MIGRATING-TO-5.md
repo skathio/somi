@@ -4,17 +4,29 @@
 
 ## Commands
 
+Every 4.x command name still works and routes to the matching workflow. `/somi` is the way in for anything else.
+
 | 4.x | 5.0 |
 |---|---|
-| `/code`, `/code-loop`, `/ship-loop`, `/debug`, `/refactor`, `/incident`, `/upgrade` | `/task` |
-| `/plan`, `/plan-loop`, `/design`, `/discover`, `/refactor-design` | `/plan`, opt-in, one file |
-| `/review`, `/review-panel`, `/security-review`, `/architecture-review` | `/review` |
+| `/code`, `/code-loop`, `/task` | `/code` |
+| `/ship-loop`, `/plan`, `/plan-loop`, `/code-parallel` | `/plan`: milestones with fresh context |
+| `/refactor`, `/refactor-design` | `/refactor` |
+| `/review`, `/review-panel`, `/architecture-review`, `/test-strategy` | `/review` |
+| `/security-review` | `/security-review` |
 | `/ship`, `/pr`, `/release-readiness` | `/ship` |
-| `/atlas`, `/adopt`, `/impact`, `/test-strategy`, `/code-parallel`, `/somi-config` | Removed |
+| `/atlas`, `/adopt`, `/impact` | Routed; old names still work |
+| `/discover`, `/design` | Routed, and `/design` |
+| `/debug`, `/upgrade`, `/incident`, `/somi-config` | Same names |
+
+New: `/a11y-check`, plus `perf` and `migrate` workflows reached through `/somi`.
 
 ## Agents
 
-The agents are now `somi-coder`, `somi-reviewer` and `somi-security-reviewer`. The `somi` front door and its `somi-flow` and `somi-general` runners are gone, so `@somi` routing on Copilot no longer exists. Use `/task`, or just ask.
+The agents are `somi`, `somi-worker`, `somi-reviewer` and `somi-security-reviewer`. The other 4.x specialists are now role briefs the step engine gives to a worker. Make `somi:somi` the active agent to route plain prompts.
+
+## Skills
+
+Expertise is loaded by workflows when needed, or through `somi-expertise`. `clean-code`, `solid-principles`, `reasoning-craft` and the general `observability` skill are gone, because the evidence shows they add nothing a current model lacks. API design, requirements and process guidance moved into role briefs and review lenses.
 
 ## State
 
@@ -28,13 +40,13 @@ It copies open findings and recorded decisions into the journal and changes no o
 
 ## Config
 
-Per-agent `cost.*` settings no longer apply. There are two tiers, set per host:
+Per-agent `cost.*` settings no longer apply. Tiers are set per host, and `ceiling` caps them:
 
 ```json
-{ "tiers": { "claude": { "work": "sonnet", "review": "opus" } } }
+{ "tiers": { "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "ceiling": "high" } }
 ```
 
-The old `sizing.sensitive_paths` and `sizing.module_containers` keys are now `signals.sensitive_paths` and `signals.module_containers`. `.somi/rules/99-overrides.md` is no longer read: put project rules in your `CLAUDE.md` or `AGENTS.md`, which each host loads itself.
+Copilot has no default map, so set yours if you want tiers enforced there. The old `sizing.sensitive_paths` and `sizing.module_containers` keys are now `signals.sensitive_paths` and `signals.module_containers`. `.somi/rules/99-overrides.md` is no longer read: put project rules in your `CLAUDE.md` or `AGENTS.md`.
 
 ## Tests and gates
 
@@ -42,12 +54,8 @@ Copy your test commands into a committed `somi.check.json`. See [the architectur
 
 ## MCP
 
-There is one tool now, `somi_step`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
+There is one tool, `somi_step`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
 
 ## Hooks
 
-Rules arrive once at session start, not on every prompt. The hooks for cost lowering, lint on write, default config and repo-instruction detection are gone. The dangerous-shell, dependency-install, secret-write, protected-path and audit hooks stay.
-
-## Copilot CLI
-
-The plugin brings the hooks. `somi init --host copilot` writes `.github/hooks/somi.json` for a repository that wants them without the plugin.
+Rules arrive at session start and after compaction, not on every prompt. The dangerous-shell, dependency-install, secret-write, protected-path and audit hooks stay. New hooks apply tiers to subagents, keep edits with workers during a workflow on Claude Code, keep reviewers read-only, and ask before tier config changes.

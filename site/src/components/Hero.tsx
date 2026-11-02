@@ -21,7 +21,7 @@ export function Hero() {
               A small kernel for coding agents · {FACTS.version}
             </p>
             <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
-              So<span className="text-accent">Mi</span>: bare-first, reviewed when the diff calls for it.
+              So<span className="text-accent">Mi</span>: say what you want, and it runs the right workflow.
             </h1>
             <p className="mt-5 max-w-3xl text-lg text-muted sm:text-xl">
               A plugin for Claude Code and GitHub Copilot CLI. The agent codes in the main thread. A deterministic check runs before each commit, and a fresh reviewer runs only when the real diff calls for one. Tools write all state, and the OS sandbox is the security boundary.

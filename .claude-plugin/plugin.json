@@ -2,13 +2,28 @@
   "name": "somi",
   "version": "5.0.0-rc.1",
   "displayName": "SoMi",
-  "description": "A small kernel for coding agents: bare-first by default, one reviewer only when the real diff calls for it, state written by tools, and the OS sandbox as the security boundary.",
-  "keywords": ["workflow", "review", "security", "sandbox", "claude-code", "copilot"],
-  "author": { "name": "Skathi", "url": "https://github.com/skathio/somi" },
+  "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it routes the work to the right workflow, on workers on the cheapest model that can do it.",
+  "keywords": [
+    "workflow",
+    "review",
+    "security",
+    "sandbox",
+    "claude-code",
+    "copilot"
+  ],
+  "author": {
+    "name": "Skathi",
+    "url": "https://github.com/skathio/somi"
+  },
   "homepage": "https://github.com/skathio/somi",
   "repository": "https://github.com/skathio/somi",
   "license": "MIT",
   "mcpServers": {
-    "somi": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs"] }
+    "somi": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs"
+      ]
+    }
   }
 }

@@ -285,6 +285,40 @@
       "boundary": true,
       "why": "HTML escaping, prototype keys and re-expansion in a small template engine, keeping plain text unescaped",
       "stratum": "security"
+    },
+    {
+      "id": "N31-download-name",
+      "dir": "tests/evals/ab/N31-download-name",
+      "boundary": true,
+      "why": "a customer-chosen file name reaching a response header, with unprompted injection and encoding traps",
+      "stratum": "security"
+    },
+    {
+      "id": "N32-retry-after",
+      "dir": "tests/evals/ab/N32-retry-after",
+      "why": "a retrying client whose server speaks both forms of a header, with shared budget across attempts",
+      "stratum": "multi-file"
+    },
+    {
+      "id": "N33-text-limit",
+      "dir": "tests/evals/ab/N33-text-limit",
+      "why": "a limit that cuts characters apart, blamed on the database, with the same mistake in more than one place",
+      "stratum": "misleading-bug"
+    },
+    {
+      "id": "L1-shop-platform",
+      "dir": "tests/evals/ab/L1-shop-platform",
+      "why": "six connected milestones with decisions set early that later ones must honour",
+      "stratum": "multi-file",
+      "large": true
+    },
+    {
+      "id": "L2-task-tracker",
+      "dir": "tests/evals/ab/L2-task-tracker",
+      "boundary": true,
+      "why": "a later milestone must reach back into everything built earlier, under permission rules set at the start",
+      "stratum": "multi-file",
+      "large": true
     }
   ]
 }

@@ -33,8 +33,8 @@ export function Install() {
           <Comment># recommended sandbox settings</Comment>
           {'\nsomi doctor                                             '}
           <Comment># run inside an agent session</Comment>
-          {'\n/task Add per-team rate limiting to the webhook endpoint '}
-          <Comment># code, check, review if needed</Comment>
+          {'\n/somi Add per-team rate limiting to the webhook endpoint '}
+          <Comment># routed for you</Comment>
         </Term>
       </Card>
     </Section>

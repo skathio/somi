@@ -7,7 +7,10 @@ export const HOOKS: Record<string, string> = {
   'guard-protected-paths': '**Protected paths:** `.git/`, `node_modules/`, SoMi state.',
   'gate-dep-install': '**Dependency installs** need your acknowledgement.',
   'audit-log': '**Audit log** of every tool call in `.somi/audit.log`.',
-  'inject-digest': '**Rules digest** once per session, with a loud warning when the sandbox is off.',
+  'inject-digest': '**Rules digest and decision ledger** at session start and after compaction, with a loud warning when the sandbox is off.',
+  'apply-tier': '**Model tiers** set on every subagent, so they do not depend on an agent remembering.',
+  'keep-work-delegated': '**Edits stay with workers** during a workflow on Claude Code, and reviewers stay read-only.',
+  'guard-tier-config': '**Tier changes** ask you first.',
 };
 
 export const HOOK_EVENTS: Record<string, string> = {

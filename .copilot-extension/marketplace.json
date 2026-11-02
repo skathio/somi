@@ -10,7 +10,7 @@
     {
       "name": "somi",
       "source": "github:skathio/somi",
-      "description": "A small kernel for coding agents: bare-first by default, one reviewer only when the real diff calls for it, and the OS sandbox as the security boundary.",
+      "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it routes the work to the right workflow, on workers on the cheapest model that can do it.",
       "version": "5.0.0-rc.1",
       "tags": [
         "workflow",

@@ -35,6 +35,6 @@ Priorities, in order: security, correctness, maintainability, convenience. When 
 - An unattended run stops and reports. It never answers its own question.
 - End with what you skipped or did not check, and any risk the maintainer must know.
 
-## SoMi state
+## SoMi
 
-All state is written by the `somi` CLI or the `somi_step` tool, each once per transition. Never edit a state file. If a flow seems to need a hand edit, the CLI is wrong: say so.
+All state is written by the `somi` CLI or the `somi_step` tool. Never edit a state file, and if a flow seems to need a hand edit, the CLI is wrong. A workflow runs when the user asks through `/somi` or a SoMi command, or when `somi` is the active agent. Each `somi_step` answer has a `next` and a `how`: do what `how` says until `next` is `done`. A worker inside a workflow does the work itself and does not route it again. Decisions that must outlast this session go in the ledger, with `somi_step` action `ledger`.
