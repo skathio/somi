@@ -5,11 +5,7 @@ description: Use before answering a non-trivial question, when reviewing your ow
 
 # Reasoning craft — parses, detectors, and voice calibration
 
-The compressed always-on version is the "Reasoning craft" bullet in the Always-on digest section of
-`rules/CLAUDE.md` (mirrored in `AGENTS.md`) — that's the load-bearing floor every agent carries on
-every turn. `rules/50-collaboration.md` is the other always-on floor this skill builds on top of:
-directness, matching the answer to the question, options-with-pros-cons already live there. This
-skill adds **operational depth** the digest bullet can't afford: full definitions, before/after
+The always-on floor is [`rules/digest.md`](../../rules/digest.md). This skill adds **operational depth** the digest bullet can't afford: full definitions, before/after
 example pairs, a worked trace, and when-not-to-apply guidance. Where a section here would just
 restate the digest bullet or `50`, it points instead of repeating.
 

@@ -2,34 +2,13 @@
 # workflow (work item hashira-v2, iteration 6.2).
 #
 # v1 context: somi previously hand-rolled its own `ci` job (inside
-# publish.yml): `validate.sh` + `npm publish --dry-run`, and deliberately
+# publish.yml): `npm test` + `npm publish --dry-run`, and deliberately
 # DECLINED the npm CI reusable workflow (`npm-publish-redesign`'s stated
 # non-goal). v2 revisits that call — see decisions.md D5/Q3.
 #
-# ## The validate.sh-vs-reusable-CI comparison (the phase file's required
-#    enumeration; do not weaken this to a vague "looks equivalent" claim)
-#
-# `npm-package-ci.yml`'s `test` job runs `inputs.test_command` (default
-# `"npm test"`) via the library's `run-tests-js` composite action. somi's
-# own `package.json` already declares `"test": "bash scripts/validate.sh"`.
-# Leaving `test_command` at its default therefore runs `validate.sh`
-# UNCHANGED entry point — the literal same script, just invoked from the
-# reusable workflow's `test` job instead of somi's old hand-rolled `ci` job.
-# (The checks INSIDE validate.sh changed with the node-runtime-port work item:
-# JSON validity now uses `node -e JSON.parse` not jq, and source syntax uses
-# `node --check` over the ported .mjs not ShellCheck/`bash -n` over .sh — the
-# retired .sh sources no longer exist. No CI tooling install needed; `node`
-# comes from setup-node.) What validate.sh covers:
-#   - JSON validity (node JSON.parse)           -> covered
-#   - node --check over the ported .mjs sources -> covered (replaces shellcheck)
-#   - agent/command/skill frontmatter presence  -> covered, unchanged
-#   - cost-tiering field assertions             -> covered, unchanged
-#   - new-artifact existence (BRIEF.md.tmpl…)   -> covered, unchanged
-#   - coverage/lcov.info stub                   -> covered, unchanged; now
-#     actually consumed by `coverage-report` (a capability somi never had)
 # `lint` (commitlint, D11, non-blocking) and `scan-suite` (CodeQL/OSV/
 # Gitleaks/dependency-review/actionlint) are pure net-new capabilities — they
-# don't replace or approximate anything `validate.sh` did.
+# don't replace or approximate anything `npm test` did.
 #
 # The ONE real gap: `npm publish --dry-run` (the old hand-rolled `ci` job's
 # publishability gate — asserts pack/`files`-allowlist/publishConfig; it
@@ -94,7 +73,7 @@ jobs:
   # Preserves the old hand-rolled `ci` job's publishability gate (D10
   # consumer-composition pattern — same shape as rogue's 4 custom jobs
   # alongside its shared CI call). `npm-package-ci.yml` has no equivalent
-  # job; this is the one real gap the validate.sh-vs-reusable-CI comparison
+  # job; this is the one real gap the reusable-CI comparison
   # found (see the top-of-file comment).
   #
   # No `needs:` — deliberately independent/parallel, not sequenced after the

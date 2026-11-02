@@ -1,0 +1,70 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { makeRepo } from './helpers.mjs';
+import { runDoctor, sandboxSettings, settingsWarnings } from '../scripts/lib/doctor.mjs';
+import { copilotHooks, writeCopilotHooks } from '../scripts/lib/init.mjs';
+
+const results = (touch, curl) => (cmd) => (cmd === 'touch' ? touch : curl);
+const doctor = (exec, over = {}) => runDoctor({ root: '/nowhere', host: 'claude', platform: 'linux', home: '/nowhere-home', env: {}, exec, removeFile: () => {}, ...over });
+const blocked = { status: 1 };
+const allowed = { status: 0 };
+const missing = { status: null, error: { code: 'ENOENT' } };
+
+test('PASS only when both probes are blocked', () => {
+  assert.equal(doctor(results(blocked, blocked)).verdict, 'PASS');
+  assert.equal(doctor(results(allowed, blocked)).verdict, 'FAIL');
+  assert.equal(doctor(results(blocked, allowed)).verdict, 'FAIL');
+  assert.equal(doctor(results(allowed, allowed)).verdict, 'FAIL');
+});
+
+test('a probe that could not run is not a pass', () => {
+  assert.equal(doctor(results(blocked, missing)).verdict, 'FAIL');
+  assert.equal(doctor(results(missing, blocked)).verdict, 'FAIL');
+});
+
+test('a home-write probe that succeeded is cleaned up', () => {
+  const removed = [];
+  doctor(results(allowed, blocked), { removeFile: (p) => removed.push(p) });
+  assert.equal(removed.length, 1);
+  assert.match(removed[0], /\.somi-sandbox-probe-/);
+});
+
+test('native Windows fails with the WSL2 remedy and runs no probe', () => {
+  const r = doctor(() => assert.fail('no probe on native Windows'), { platform: 'win32' });
+  assert.equal(r.verdict, 'FAIL');
+  assert.match(r.remedy, /WSL2/);
+});
+
+test('darwin uses the same probes', () => {
+  assert.equal(doctor(results(blocked, blocked), { platform: 'darwin' }).verdict, 'PASS');
+});
+
+test('settings warn about strictness on each host', () => {
+  assert.deepEqual(settingsWarnings('claude', { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false }), []);
+  assert.equal(settingsWarnings('claude', { enabled: true }).length, 2);
+  assert.match(settingsWarnings('claude', null)[0], /not enabled/);
+  assert.ok(settingsWarnings('copilot', { enabled: true }).some((w) => /public preview/.test(w)));
+});
+
+test('project settings merge over user settings on Claude Code', (t) => {
+  const dir = makeRepo(t);
+  const home = path.join(dir, 'home');
+  fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude/settings.json'), JSON.stringify({ sandbox: { enabled: true } }));
+  fs.mkdirSync(path.join(dir, '.claude'));
+  fs.writeFileSync(path.join(dir, '.claude/settings.json'), JSON.stringify({ sandbox: { failIfUnavailable: true } }));
+  assert.deepEqual(sandboxSettings({ host: 'claude', root: dir, home, env: {} }), { enabled: true, failIfUnavailable: true });
+});
+
+test('the Copilot hook file points at the plugin with absolute, quoted paths', (t) => {
+  const hooks = copilotHooks("/opt/so'mi");
+  assert.equal(hooks.version, 1);
+  const bash = hooks.hooks.PreToolUse.find((e) => e.matcher === 'Bash');
+  assert.match(bash.bash, /^SOMI_HOST=copilot node '\/opt\/so'\\''mi\/hooks\/pre-tool\/block-dangerous-bash\.mjs'$/);
+  const dir = makeRepo(t);
+  assert.equal(writeCopilotHooks(dir, '/opt/somi').written, true);
+  assert.equal(writeCopilotHooks(dir, '/opt/somi').written, true, 'the same file again is fine');
+  assert.equal(writeCopilotHooks(dir, '/elsewhere').written, false, 'a different file is not overwritten');
+});

@@ -12,9 +12,14 @@
         "source": "url",
         "url": "https://github.com/skathio/somi.git"
       },
-      "description": "Multi-agent engineering workflow: discover/design → plan → code → review. Each agent has a default cost tier and a per-session ceiling caps it; SOLID, OWASP and clean-code guardrails.",
-      "version": "4.0.1",
-      "tags": ["workflow", "agents", "review", "security"],
+      "description": "A small kernel for coding agents: bare-first by default, one reviewer only when the real diff calls for it, and the OS sandbox as the security boundary.",
+      "version": "5.0.0-rc.1",
+      "tags": [
+        "workflow",
+        "agents",
+        "review",
+        "security"
+      ],
       "homepage": "https://github.com/skathio/somi"
     }
   ]

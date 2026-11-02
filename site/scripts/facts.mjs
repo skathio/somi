@@ -1,5 +1,5 @@
 // facts.mjs -- writes src/generated/facts.json: everything the overview page states that the repo itself
-// already knows (release list, counts, hook registrations, the agent tier table, the shipped tier→model map).
+// already knows (release list, counts, hook registrations).
 // Read from the source of each fact rather than copied, so the page cannot drift from the code; the
 // hand-written content in src/content/ is checked against this file by the site's tests.
 //
@@ -45,21 +45,13 @@ async function main() {
   const releases = parseReleases(fs.readFileSync(at('CHANGELOG.md'), 'utf8'));
   if (!releases.length) throw new Error('facts: no release headings found in CHANGELOG.md');
 
-  const { AGENT_DEFAULT_TIERS, DEFAULT_CEILING_TIER } = await import(pathToFileURL(at('scripts', 'lib', 'cost-defaults.mjs')).href);
-  const { HOST_MODELS, MAX_MODEL_CANDIDATES } = await import(pathToFileURL(at('scripts', 'lib', 'cost-model.mjs')).href);
-
-  const agents = stems('agents', '.md');
   const facts = {
     version: releases[0].version,
     releases,
     commands: stems('commands', '.md'),
-    agents,
+    agents: stems('agents', '.md'),
     skills: fs.readdirSync(at('skills')).filter((d) => fs.existsSync(at('skills', d, 'SKILL.md'))).sort(),
     hooks: hookFacts(),
-    agentDefaults: { ...AGENT_DEFAULT_TIERS },
-    defaultCeiling: DEFAULT_CEILING_TIER,
-    claudeCodeModels: { ...HOST_MODELS['claude-code'] },
-    maxModelCandidates: MAX_MODEL_CANDIDATES,
   };
 
   const out = path.join(site, 'src', 'generated', 'facts.json');

@@ -1,7 +1,5 @@
-// mcp-project-root.mjs — resolves the CONSUMING project's root for scripts/somi-mcp.mjs's
-// `somi_resolve` tool. An MCP server is launched once, at session start, from the plugin's own
-// location, so scripts/somi-dispatch.mjs's own projectRoot() (CLAUDE_PROJECT_DIR, else this
-// PROCESS's cwd) is unsafe to reuse: neither host's docs confirm the server's launch-time cwd is
+// mcp-project-root.mjs — resolves the CONSUMING project's root for scripts/somi-mcp.mjs. An MCP server is launched once, at session start, from the plugin's own
+// location, so this PROCESS's cwd is unsafe to use: neither host's docs confirm the server's launch-time cwd is
 // the user's project rather than the plugin's own install dir. No cwd fallback here — that would
 // risk silently resolving to SoMi's own repo, the exact failure this module exists to rule out.
 //
@@ -34,7 +32,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EXIT_USAGE, EXIT_PROJECT_ENV } from './dispatch-resolver.mjs';
+const EXIT_USAGE = 64;
+const EXIT_PROJECT_ENV = 67;
 
 // Structural check only (absolute, exists, a directory) — shared by `project_dir` and every
 // `roots/list` candidate so the two can't drift on what counts as usable. Returns a reason, not a
@@ -52,6 +51,9 @@ function validateDir(dir) {
   if (!st.isDirectory()) return { ok: false, reason: 'not-a-directory' };
   return { ok: true, dir };
 }
+
+// A model's text echoed in an error: bounded, as install-text.mjs bounds a name.
+const echo = (v) => JSON.stringify(v)?.slice(0, 60);
 
 function realpathOrNull(dir) {
   try {
@@ -99,9 +101,16 @@ async function hostRoot({ listRoots }) {
  * @param {string} [opts.projectDirArg] - the tool call's own `project_dir` argument, if given.
  * @param {() => Promise<string[]|undefined>} [opts.listRoots] - calls the client's `roots/list`
  *   and returns the raw URI strings, or `undefined` when the client never declared `roots`.
- * @returns {Promise<{ok: true, root: string, source: string} | {ok: false, code: number, message: string}>}
+ * @returns {Promise<{ok: true, root: string, source: string, hosted: boolean} | {ok: false, code: number, message: string, hosted?: boolean}>}
+ *   `hosted`: whether the HOST supplied a root at all (true even when it was ambiguous or refused project_dir); undefined
+ *   when the answer failed before the lookup (a malformed project_dir), so a caller asks the host only once.
  */
-export async function resolveProjectRoot({ projectDirArg, listRoots }) {
+export async function resolveProjectRoot(opts) {
+  const seen = { hosted: undefined };
+  return { ...(await resolveWith(opts, seen)), hosted: seen.hosted };
+}
+
+async function resolveWith({ projectDirArg, listRoots }, seen) {
   // Validated FIRST regardless of whether a host root exists -- a malformed value is 64 either
   // way, and the bounding check below needs a real, fs-verified directory to compare against.
   let projectDir; // undefined (not given), or the validated absolute path
@@ -109,10 +118,10 @@ export async function resolveProjectRoot({ projectDirArg, listRoots }) {
     const v = validateDir(projectDirArg);
     if (!v.ok) {
       const reason = {
-        empty: `project_dir requires a non-empty string, got ${JSON.stringify(projectDirArg)}`,
-        'not-absolute': `project_dir must be an absolute path, got ${JSON.stringify(projectDirArg)}`,
-        missing: `project_dir ${JSON.stringify(projectDirArg)} does not exist`,
-        'not-a-directory': `project_dir ${JSON.stringify(projectDirArg)} is not a directory`,
+        empty: `project_dir requires a non-empty string, got ${echo(projectDirArg)}`,
+        'not-absolute': `project_dir must be an absolute path, got ${echo(projectDirArg)}`,
+        missing: `project_dir ${echo(projectDirArg)} does not exist`,
+        'not-a-directory': `project_dir ${echo(projectDirArg)} is not a directory`,
       }[v.reason];
       return { ok: false, code: EXIT_USAGE, message: reason };
     }
@@ -120,6 +129,7 @@ export async function resolveProjectRoot({ projectDirArg, listRoots }) {
   }
 
   const host = await hostRoot({ listRoots });
+  seen.hosted = host !== undefined;
 
   if (!host) {
     // Host supplies nothing: project_dir alone decides.
@@ -175,7 +185,7 @@ export async function resolveProjectRoot({ projectDirArg, listRoots }) {
       ok: false,
       code: EXIT_USAGE,
       message:
-        `project_dir "${projectDir}" is outside the host-supplied root -- refusing (project_dir ` +
+        `project_dir ${echo(projectDir)} is outside the host-supplied root -- refusing (project_dir ` +
         `may only select a directory inside the host's own root, never override it)`,
     };
   }

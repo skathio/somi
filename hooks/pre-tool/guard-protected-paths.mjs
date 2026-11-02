@@ -32,7 +32,7 @@
 //
 // --- lockfile-gate precedence reconciliation ------------------------------------------------
 // Precedence: SOMI_ALLOW_LOCKFILES (env, session override, even "0") > .somi/config.json's
-// `lockfiles.allow_edit` (committed project policy) > default deny. scripts/somi-check.mjs's
+// `lockfiles.allow_edit` (committed project policy) > default deny. the lockfile check's
 // lockfilesAllowed() already solved this exact precedence problem,
 // including the jq-text string-vs-boolean subtlety: bash's `somi::config` shells out to
 // `jq -r`, so a config author writing `"allow_edit": "true"` (a JSON STRING) produces the
@@ -41,7 +41,7 @@
 // reads (returns '' for null/undefined/false, else the string itself or JSON.stringify(cur) for
 // a non-string scalar), so `config('.lockfiles.allow_edit') === 'true'` below reproduces the
 // SAME text comparison bash performs, without re-implementing a config reader the way
-// somi-check.mjs (which predates common.mjs) had to. Env-side fall-through matches too: bash's
+// older hooks had to. Env-side fall-through matches too: bash's
 // `${SOMI_ALLOW_LOCKFILES:-}` treats unset AND explicitly-empty (`SOMI_ALLOW_LOCKFILES=""`)
 // identically (falls through to the config check); the `env !== undefined && env !== ''` guard
 // below reproduces that, matching lockfilesAllowed()'s own env branch.
@@ -78,9 +78,8 @@ const PROTECTED_GLOBS = [
   // SOMI plugin install — never let an agent rewrite the ruleset under itself.
   '*/.claude/plugins/somi/*',
 
-  // The sizing CLI's records (scripts/somi-tier.mjs): they gate the brief-only path, so only the
-  // CLI writes them, never an agent's Write/Edit.
-  '*/.somi/somi-state/tier/*',
+  // SoMi's journal and cursor: only the CLI writes them. If a flow ever needs a hand edit, the CLI is wrong.
+  '*/.somi/state/*',
 
   // Vendored deps & build outputs.
   '*/node_modules/*',

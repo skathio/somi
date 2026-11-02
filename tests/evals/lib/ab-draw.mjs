@@ -11,7 +11,7 @@
 //   DEVIATION from the experiment plan (section 2: the bare arm must have no .somi/): BOTH workspaces carry the same
 //   .somi/config.json so they are byte-identical apart from the plugin; the bare arm has no plugin to read it, so it only
 //   sits there as an inert file. Recorded here because a plan that says "no .somi" would otherwise be silently contradicted.
-// Arms differ in ONE thing: the SoMi arm gets `--plugin-dir <packed plugin>` and a `/somi:ship-loop ` prefix on the same
+// Arms differ in ONE thing: the SoMi arm gets `--plugin-dir <packed plugin>` and a command prefix on the same
 //   task text. The plugin is the npm package of the repository extracted read-only (buildPlugin), never the checkout.
 // Environment (childEnv): an allowlist of six variables; the token is a parameter, never read from process.env. The sixth,
 //   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0, makes `claude --print` wait for background work without its own 600 s ceiling
@@ -39,7 +39,7 @@ export const RESUME_PROMPT = 'Approved. Continue to completion without further q
 const AUTH_STDERR = /\b401\b|not logged in|invalid (api key|authentication)|authentication[_ ]error|oauth token.{0,40}(expired|revoked)/i;
 const TERMINAL_QUESTION = /\?[\s"'*_)\]`]*$/;
 const CHECKPOINT_MENU = /\bapprove\b[^\n]{0,120}\brevise\b[^\n]{0,120}\babort\b/i;
-// ship-loop's Stage -1 gate laid out as a list: "Reply to continue:" with `approve` and `abort` on later lines, as newer models lay it out.
+// A plugin arm's gate laid out as a list: "Reply to continue:" with `approve` and `abort` on later lines, as newer models lay it out.
 const GATE_MENU = /\b(reply|respond|answer)\b[\s\S]{0,120}?\bapprove\b[\s\S]{0,400}?\babort\b/i;
 const EXPLICIT_REQUEST = /\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\bneeds? your (verdict|decision|approval|input)\b|\b(shall|should|may) I\b[^.]*\?/i;
 
@@ -51,7 +51,6 @@ export function taskText(task) {
   const where = list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0];
   return `Implement the following in this repository.\n${task.statements.join('\n')}\nDeclared scope: you may change files under ${where} only.`;
 }
-export const armPrompt = (arm, text) => (arm === 'somi' ? `/somi:ship-loop ${text}` : text);
 
 /** Whole-dollar-cent budget rounded DOWN, so the cap is never above what was asked. */
 const usd = (x) => (Math.floor(x * 100) / 100).toFixed(2);
@@ -236,80 +235,6 @@ export async function runDraw({ model, arm, prompt, budget, timeoutMs, claude, e
     }
   } finally { await sweepProcesses(`CLAUDE_CONFIG_DIR=${env.CLAUDE_CONFIG_DIR}`); sink.end(); }
   return { ...run, models: [...run.models].sort(), text: sink.state.text, leaks: [...sink.state.leaks].sort(), capped: sink.state.capped, limit: sink.state.limit, reset: sink.state.reset, wallMs: Date.now() - started, stderr: redactToken(run.stderr, token) };
-}
-
-// ---- the tier a SoMi draw chose ------------------------------------------------------------------------------------
-// The sizing step records its tier in the workspace at .somi/somi-state/tier/<slug>.json (written by scripts/somi-tier.mjs
-// with --record; the slug is the run's own). That file is written by the candidate's side of the run, so it is untrusted:
-// every directory on the way must be a real directory, the file is opened without following a link, must be a regular file of
-// at most 64 KiB, and only a `tier` that is exactly small, trivial or full is accepted. Anything else is 'unknown'; no content
-// of the file is ever returned. When no usable record exists the CLI's own result line in the stream ("effective") is the
-// fallback; it is equally untrusted and is reported as such through tierSource.
-export const TIERS = Object.freeze(['small', 'trivial', 'full']);
-const TIER_FILE = /^[a-z0-9][a-z0-9-]{0,63}\.json$/;
-const TIER_MAX_BYTES = 64 * 1024;
-const TIER_MAX_FILES = 16;
-const STREAM_TIER_MAX = 16 * 1024 * 1024;
-const EFFECTIVE = /"effective":\s*"(small|trivial|full)"/;
-
-function recordTier(file) {
-  let fd = null;
-  try {
-    fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
-    const st = fs.fstatSync(fd);
-    if (!st.isFile() || st.size > TIER_MAX_BYTES) return null;
-    const v = JSON.parse(fs.readFileSync(fd, 'utf8'));
-    if (v === null || typeof v !== 'object' || Array.isArray(v) || typeof v.tier !== 'string' || !TIERS.includes(v.tier)) return null;
-    return { tier: v.tier, computed: typeof v.computed_tier === 'string' && TIERS.includes(v.computed_tier) ? v.computed_tier : null };
-  } catch { return null; } finally { if (fd !== null) try { fs.closeSync(fd); } catch { /* read-only handle */ } }
-}
-/**
- * The workspace's tier records -> null when there are none (no tier directory, or no entry with a record's name: only then may the
- * stream be consulted), otherwise {tier, computedTier}. The tier is 'unknown' unless EVERY entry named like a record (at most
- * 16; more are decoys) is a valid record and they all agree; a link or file where a directory belongs is not "absent" either.
- */
-export function tierFromRecords(ws) {
-  const unknown = { tier: 'unknown', computedTier: null };
-  try {
-    let dir = ws;
-    for (const part of ['.somi', 'somi-state', 'tier']) {
-      dir = path.join(dir, part);
-      let st; try { st = fs.lstatSync(dir); } catch (e) { if (e?.code === 'ENOENT') return null; return unknown; }
-      if (!st.isDirectory()) return unknown;
-    }
-    const names = fs.readdirSync(dir).filter((n) => TIER_FILE.test(n)).sort();
-    if (names.length === 0) return null;
-    if (names.length > TIER_MAX_FILES) return unknown;
-    const recs = names.map((n) => recordTier(path.join(dir, n)));
-    if (recs.some((r) => r === null) || new Set(recs.map((r) => r.tier)).size !== 1) return unknown;
-    const computed = new Set(recs.map((r) => r.computed));
-    return { tier: recs[0].tier, computedTier: computed.size === 1 ? [...computed][0] : null };
-  } catch { return unknown; }
-}
-/** The last "effective" tier of a tool result in the (redacted) stream file, or null. */
-export function tierFromStream(streamFile) {
-  try {
-    if (fs.statSync(streamFile).size > STREAM_TIER_MAX) return null;
-    let tier = null;
-    for (const raw of fs.readFileSync(streamFile, 'utf8').split('\n')) {
-      if (!raw.includes('effective')) continue;
-      let ev; try { ev = JSON.parse(raw); } catch { continue; }
-      if (ev?.type !== 'user' || !Array.isArray(ev.message?.content)) continue;
-      for (const b of ev.message.content) {
-        if (b?.type !== 'tool_result') continue;
-        const text = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map((x) => (typeof x?.text === 'string' ? x.text : '')).join('\n') : '';
-        for (const line of text.split('\n')) { const m = EFFECTIVE.exec(line.slice(0, 4096)); if (m) tier = m[1]; }
-      }
-    }
-    return tier;
-  } catch { return null; }
-}
-/** -> {tier: small|trivial|full|unknown, tierSource: file|stream|none, computedTier}. Never throws; the stream only when there are no records. */
-export function resolveTier({ ws, streamFile }) {
-  const rec = tierFromRecords(ws);
-  if (rec !== null) return { tier: rec.tier, tierSource: 'file', computedTier: rec.computedTier };
-  const s = tierFromStream(streamFile);
-  return s === null ? { tier: 'unknown', tierSource: 'none', computedTier: null } : { tier: s, tierSource: 'stream', computedTier: null };
 }
 
 /** Facts -> {outcome, reason} in the compareArms vocabulary; the first matching rule wins. */

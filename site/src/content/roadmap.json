@@ -1,5 +1,5 @@
 {
-  "intro": "The first release in May 2026 had three workflows and human gates. Today SoMi has {commands} commands, cost tiers enforced at dispatch, and loops whose limits are enforced by tested scripts.",
+  "intro": "The first release in May 2026 had three workflows and human gates. 4.x grew to measure itself, and the measurements said most of the ceremony was pure cost. The 5.0 release candidate keeps the parts that pay, with {commands} commands.",
   "eras": [
     {
       "label": "Where it started",
@@ -108,5 +108,5 @@
       ]
     }
   ],
-  "open": "These are known gaps, not commitments: `/code-parallel` is not yet measured (there is no parallel-eligible fixture), human effort and escaped defects are not measured, VS Code Copilot Chat is not a supported dispatch host, and a live check of a mapped model on Copilot CLI is still pending."
+  "open": "5.0 is a release candidate. It ships as the default only if the pre-registered benchmark passes, and that recording has not run. The candidate task pool is smaller than the benchmark needs."
 }

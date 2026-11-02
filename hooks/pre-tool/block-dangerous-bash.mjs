@@ -284,6 +284,20 @@ Bash-side twin of the Write/Edit secret guard — do not work around either sile
   }
 }
 
+// SoMi's journal and cursor are written only by the CLI. A tripwire, not a boundary: it catches the honest mistake.
+const STATE_PATH = String.raw`[^ \t\n\r\f\v]*\.somi/state(/|\s|$)`;
+const STATE_WRITE_PATTERNS = [
+  new RegExp(String.raw`(>|>>)\s*${STATE_PATH}`),
+  new RegExp(String.raw`(^|[\s|;&])tee\s+(-[a-zA-Z]+\s+)*${STATE_PATH}`),
+  new RegExp(String.raw`(^|[\s|;&])(sed\s+[^|;&]*-i|cp|mv|rm|truncate)\s[^|;&]*${STATE_PATH}`),
+];
+
+function checkStateWrites(payload, c) {
+  if (STATE_WRITE_PATTERNS.some((p) => p.test(c))) {
+    denyPretool(payload, 'somi refused this command: only the somi CLI writes to the SoMi state folder. If a flow seems to need a hand edit, the CLI is wrong: say so to the human.');
+  }
+}
+
 // Force-push without a verifiable target (block-dangerous-bash.sh:133-164). The
 // protected-branch patterns above only fire when the branch is named in the command —
 // but `git push -f`, `git push -f origin`, and `git push -f origin HEAD` push the
@@ -364,6 +378,7 @@ function main() {
   checkDangerous(payload, cmd);
   checkDangerous(payload, cmdStripped);
   checkSecretWrites(payload, cmdStripped);
+  checkStateWrites(payload, cmdStripped);
   checkBareForcePush(payload, cmdStripped);
 }
 

@@ -96,7 +96,7 @@ hand; the one thing you **do** update by hand is the set of version files above 
    move the `CHANGELOG.md` `[Unreleased]` entry under a dated `[X.Y.Z]` heading.
    [Conventional Commits](https://www.conventionalcommits.org/) style is still a reasonable
    convention for commit hygiene, but **no commit message is parsed to decide whether or how to
-   release** — a bare push to `main` only runs the `ci` gate (`scripts/validate.sh` +
+   release** — a bare push to `main` only runs the `ci` gate (`npm test` +
    `npm publish --dry-run`); it never triggers a publish.
 2. **To cut a release**, a maintainer runs `publish.yml` via `workflow_dispatch` and sets the
    `bump` input to one of `patch`, `minor`, or `major`:

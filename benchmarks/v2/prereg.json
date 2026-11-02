@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "question": "Is the 5.0 default lane non-inferior to a bare agent, at no more than 1.5 times the tokens per solved task?",
+  "primary": "paired per-task difference in success rate, somi5 minus bare; success means the hidden acceptance tests pass; each rate is over k draws; standard error clustered by task",
+  "k": 3,
+  "tasks_wanted": 20,
+  "rule": {
+    "non_inferiority_margin": -0.05,
+    "max_token_ratio": 1.5,
+    "confidence": 0.95,
+    "escalated_lane_claim": "needs a positive lower bound on the hard subset"
+  },
+  "noise_floor": "A/A, bare versus bare, same tasks and k; its interval must contain zero; re-run whenever the model pin changes",
+  "secondary": [
+    "pass^3",
+    "pass@1",
+    "weighted tokens per solved task",
+    "wall time per solved task",
+    "main-thread turns",
+    "4.1 against 5.0, reported the same way"
+  ],
+  "tiers": {
+    "main_sweep": "the work tier",
+    "review_lens": "the review tier",
+    "confirmatory": "top-tier bare on the 6 hardest tasks, 18 draws"
+  },
+  "stops": {
+    "chunk_draws": 24,
+    "window_share": 0.6,
+    "abandon_after_exhaustions": 2
+  },
+  "task_set_sha256": null
+}

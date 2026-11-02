@@ -1,87 +1,28 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-hooks.json",
-  "description": "somi deterministic guardrails: dangerous-bash / secret-writes / protected-paths / dep-install gates, lint surfacing, audit logging, workflow context injection, repo-instruction detection, default cost config, cost-lowering confirmation.",
+  "description": "SoMi tripwires: dangerous shell commands, dependency installs, secret and protected-path writes, an audit log, and the rules digest once per session. They catch honest mistakes. The OS sandbox is the security boundary.",
   "hooks": {
     "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start/detect-repo-instructions.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start/ensure-default-config.mjs"
-          }
-        ]
-      }
+      { "hooks": [ { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start/inject-digest.mjs" } ] }
     ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-dangerous-bash.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/gate-dep-install.mjs"
-          }
+          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-dangerous-bash.mjs" },
+          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/gate-dep-install.mjs" }
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|mcp__.*somi_config|mcp__.*somi_resolve",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-cost-lowering.mjs"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-secret-writes.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-protected-paths.mjs"
-          }
+          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-secret-writes.mjs" },
+          { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-protected-paths.mjs" }
         ]
       }
     ],
     "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool/lint-changed-files.mjs"
-          }
-        ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool/audit-log.mjs"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/user-prompt-submit/inject-workflow-context.mjs"
-          }
-        ]
-      }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool/audit-log.mjs" } ] }
     ]
   }
 }

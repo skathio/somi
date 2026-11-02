@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### 5.0.0 release candidate: a bare-first kernel
+
+**Breaking.** A ground-up rebuild. It ships as the default only if the pre-registered benchmark passes, and that recording has not run. See `docs/MIGRATING-TO-5.md`. The 4.x line stays on the `4.x` branch.
+
+#### Changed
+
+- **The default lane is bare-first.** `/task` codes in the main thread, runs a fast gate, and reads the real diff. A clean small change gets no review.
+- **Reviews run once per feature.** One reviewer, plus a security reviewer on a real trust boundary. Only a Blocker or a Major confirmed on a boundary re-loops, at most twice, and the second pass reads only the fix diff. Minor and Nit findings are logged.
+- **State is one journal written by the tools.** Status and pull request text are rendered from it. Resuming after a kill at any transition leaves a byte-identical journal.
+- **Gates moved left.** `somi check` runs before each commit within 60 seconds, and the full suite runs before push.
+- **The OS sandbox is the security boundary on both hosts.** `somi doctor` proves it with the vendor probes, and `profiles/` holds recommended settings. Hooks are tripwires, and the policy-file guard is frozen as a review signal.
+- **Rules arrive once per session,** as a digest under 150 lines.
+- **Two cost tiers,** `work` and `review`, set per host.
+- **One MCP tool,** `somi_step`, which never runs project commands.
+- **Hook denials exit 2,** and hook output carries both hosts' fields, so hooks behave the same on Copilot CLI and Claude Code. `somi init --host copilot` writes a repository hook file for use without the plugin.
+
+#### Removed
+
+- 20 commands, 14 agents, 7 skills, the design and planning templates, pre-code sizing, panel review, parallel orchestration, the dispatcher, and the diary, progress and decision files.
+
+#### Added
+
+- `benchmarks/v2`: paired arms, an A/A floor, clustered paired standard errors, pass^k and tokens per solved task, with a mechanical release rule.
+- `somi migrate` imports open findings and decisions from a 4.x tree.
+
 ## [4.0.1] — 2026-10-27 — fix: one global config for every project, merged with each repo's; config reads follow junctions and symlinks
 
 ### Fixed

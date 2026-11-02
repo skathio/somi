@@ -1,0 +1,71 @@
+{
+  "note": "Pilot pool. The registered set keeps tasks where bare solves 1 or 2 of 3. Target pool is about 40, with at least 4 trust-boundary tasks.",
+  "tasks": [
+    {
+      "id": "H1-csv-export",
+      "dir": "tests/evals/ab/H1-csv-export",
+      "boundary": true,
+      "why": "CSV formula injection from customer names"
+    },
+    {
+      "id": "H2-ledger-migration",
+      "dir": "tests/evals/ab/H2-ledger-migration"
+    },
+    {
+      "id": "H4-static-files",
+      "dir": "tests/evals/ab/H4-static-files",
+      "boundary": true,
+      "why": "paths a user names, reaching the filesystem"
+    },
+    {
+      "id": "H5-pricing-refactor",
+      "dir": "tests/evals/ab/H5-pricing-refactor"
+    },
+    {
+      "id": "H6-recurrence-bug",
+      "dir": "tests/evals/ab/H6-recurrence-bug"
+    },
+    {
+      "id": "H7-wikilinks",
+      "dir": "tests/evals/ab/H7-wikilinks",
+      "boundary": true,
+      "why": "link text reaching rendered HTML"
+    },
+    {
+      "id": "T1-proration",
+      "dir": "tests/evals/ab/T1-proration"
+    },
+    {
+      "id": "M01-bracket-seeding",
+      "dir": "tests/evals/ab-micro/M01-bracket-seeding"
+    },
+    {
+      "id": "M02-swiss-pairing",
+      "dir": "tests/evals/ab-micro/M02-swiss-pairing"
+    },
+    {
+      "id": "M03-rank-aggregation",
+      "dir": "tests/evals/ab-micro/M03-rank-aggregation"
+    },
+    {
+      "id": "M04-stable-order",
+      "dir": "tests/evals/ab-micro/M04-stable-order"
+    },
+    {
+      "id": "M05-round-robin",
+      "dir": "tests/evals/ab-micro/M05-round-robin"
+    },
+    {
+      "id": "M06-recurrence",
+      "dir": "tests/evals/ab-micro/M06-recurrence"
+    },
+    {
+      "id": "M07-apportionment",
+      "dir": "tests/evals/ab-micro/M07-apportionment"
+    },
+    {
+      "id": "M08-line-breaks",
+      "dir": "tests/evals/ab-micro/M08-line-breaks"
+    }
+  ]
+}

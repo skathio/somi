@@ -1,25 +1,20 @@
 {
   "name": "@skathio/somi",
-  "version": "4.0.1",
+  "version": "5.0.0-rc.1",
   "scripts": {
-    "test": "bash scripts/validate.sh",
-    "eval:behavioral": "node tests/evals/run.mjs",
-    "eval:convergence": "node tests/evals/convergence.mjs"
+    "test": "node --test --test-reporter=spec tests/*.test.mjs",
+    "bench": "node benchmarks/v2/bench.mjs",
+    "mutate": "node tests/mutate.mjs"
   },
   "bin": {
-    "somi-check": "scripts/somi-check.mjs"
+    "somi": "scripts/somi.mjs"
   },
-  "description": "SoMi — multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
+  "description": "SoMi: a small kernel for coding agents. Bare-first by default, one reviewer only when the real diff calls for it, state written by tools, and the OS sandbox as the security boundary.",
   "keywords": [
     "workflow",
-    "agents",
-    "planning",
     "code-review",
     "security",
-    "owasp",
-    "solid",
-    "clean-code",
-    "engineering",
+    "sandbox",
     "claude-code",
     "copilot"
   ],
@@ -45,13 +40,10 @@
     "skills/",
     "rules/",
     "hooks/",
-    "templates/",
-    "examples/",
+    "profiles/",
     "scripts/",
-    "tests/",
     ".claude-plugin/",
     ".copilot-extension/",
-    ".claude/",
     "mcp.json",
     "VERSION",
     "LICENSE"

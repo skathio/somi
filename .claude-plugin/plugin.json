@@ -1,30 +1,14 @@
 {
   "name": "somi",
-  "version": "4.0.1",
+  "version": "5.0.0-rc.1",
   "displayName": "SoMi",
-  "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
-  "keywords": [
-    "workflow",
-    "agents",
-    "planning",
-    "code-review",
-    "security",
-    "owasp",
-    "solid",
-    "clean-code",
-    "engineering"
-  ],
-  "author": {
-    "name": "Skathi",
-    "url": "https://github.com/skathio/somi"
-  },
+  "description": "A small kernel for coding agents: bare-first by default, one reviewer only when the real diff calls for it, state written by tools, and the OS sandbox as the security boundary.",
+  "keywords": ["workflow", "review", "security", "sandbox", "claude-code", "copilot"],
+  "author": { "name": "Skathi", "url": "https://github.com/skathio/somi" },
   "homepage": "https://github.com/skathio/somi",
   "repository": "https://github.com/skathio/somi",
   "license": "MIT",
   "mcpServers": {
-    "somi": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs"]
-    }
+    "somi": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs"] }
   }
 }

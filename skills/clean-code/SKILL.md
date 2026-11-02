@@ -5,7 +5,7 @@ description: Use when naming things, structuring functions, deciding whether to 
 
 # Clean code — pragmatic rules
 
-The principles are in [`rules/20-clean-code.md`](../../rules/20-clean-code.md) — that's the
+The principles are in [`rules/digest.md`](../../rules/digest.md) — that's the
 always-on floor. This skill adds **operational depth**: decision tables (parameter counts,
 function length), before/after example pairs (early returns, boolean naming), and
 when-not-to-apply guidance. When a section restates the rule verbatim, replace with a pointer
@@ -104,7 +104,7 @@ non-obvious**:
 
 ## Errors
 
-Canonical rules: [`rules/20-clean-code.md`](../../rules/20-clean-code.md) §Errors. Operational
+Canonical rules: [`rules/digest.md`](../../rules/digest.md). Operational
 expansion specific to this skill:
 
 - **Preserve cause idiomatically.** `raise ProcessingError("step 3") from e` (Python),
@@ -115,7 +115,7 @@ expansion specific to this skill:
 
 ## Structure
 
-Canonical rules: [`rules/20-clean-code.md`](../../rules/20-clean-code.md) §Structure. Operational
+Canonical rules: [`rules/digest.md`](../../rules/digest.md). Operational
 addition specific to this skill:
 
 - **No `utils.py` / `helpers.ts` / `common.go`** grab-bag modules. They become SRP graveyards.
@@ -123,7 +123,7 @@ addition specific to this skill:
 
 ## Diff hygiene
 
-See [`rules/20-clean-code.md`](../../rules/20-clean-code.md) §Diff hygiene for the canonical
+See [`rules/digest.md`](../../rules/digest.md)
 list. Operational note: hooks (`hooks/pre-tool/guard-protected-paths.mjs`) enforce some of these
 mechanically (e.g., no lockfile hand-edits, no writes inside `.git/`). When a hook fires, the
 rule is being enforced — don't work around the hook.

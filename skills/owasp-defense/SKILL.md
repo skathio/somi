@@ -5,7 +5,7 @@ description: Use when the work touches authentication, authorization, cryptograp
 
 # OWASP defense — practical checks
 
-The defenses are in [`rules/30-security-owasp.md`](../../rules/30-security-owasp.md) — that's
+The defenses are in [`rules/digest.md`](../../rules/digest.md) — that's
 the always-on floor (one-liner per OWASP category). This skill adds **operational depth**: the
 trust-boundary→sink walk, common bug patterns to spot on sight, per-category code-level checks
 that go beyond the rule's one-liner. When a section restates the rule verbatim, replace with a

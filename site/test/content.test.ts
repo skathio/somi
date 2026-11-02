@@ -29,9 +29,6 @@ describe('content matches the repo', () => {
     expect(last.version).toBe(FACTS.version);
   });
 
-  it('has a default tier for every specialist agent', () => {
-    expect(sorted(Object.keys(FACTS.agentDefaults))).toEqual(sorted(FACTS.agents.filter((a) => a !== 'somi')));
-  });
 });
 
 describe('fact helpers', () => {

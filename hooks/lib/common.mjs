@@ -54,7 +54,7 @@ export class HookExit extends Error {
 // The standard wrapper every hook should use at its top level,
 // so denyPretool()'s early-exit contract works without each hook file
 // re-declaring the same try/catch boilerplate (the somi-loop.mjs/
-// somi-findings.mjs/somi-check.mjs precedent, centralized here since EVERY
+// same precedent as the CLI, centralized here since EVERY
 // hook that calls denyPretool needs exactly this).
 export function runHook(main) {
   try {
@@ -87,11 +87,11 @@ export function projectRoot() {
 
 // plugin_root() — the directory containing SoMi's OWN shipped content (rules/, skills/, etc.),
 // as distinct from projectRoot() above (the CONSUMING project's root). A hook needs this to read
-// rules/CLAUDE.md's digest regardless of whether SoMi is running as an installed plugin, a
+// rules/digest.md's digest regardless of whether SoMi is running as an installed plugin, a
 // vendored copy, or this repo's own dev/test checkout.
 //
 // Resolution order, EACH candidate existence-validated, not merely presence-checked — accepted
-// only if `<candidate>/rules/CLAUDE.md` is actually readable, else the search continues to the
+// only if `<candidate>/rules/digest.md` is actually readable, else the search continues to the
 // next candidate:
 //   (a) CLAUDE_PLUGIN_ROOT — Claude Code's documented, confirmed-exported plugin-install path.
 //   (b) SOMI_VENDOR_ROOT — a vendored-install convention, set via `.claude/settings.json`'s `env`
@@ -99,7 +99,7 @@ export function projectRoot() {
 //       (`${CLAUDE_PROJECT_DIR}/.claude/plugins/somi`) that does not exist here — a
 //       presence-only chain would accept this branch, find nothing inside it, and never reach
 //       (c), silently delivering an empty digest in this repo's own dogfooding sessions while
-//       appearing to work everywhere validate.sh's checks pass. Existence-validation is exactly
+//       appearing to work everywhere the test suite passes. Existence-validation is exactly
 //       what prevents that.
 //   (c) import.meta.url, walked up two levels — this file lives at
 //       `<plugin-root>/hooks/lib/common.mjs`, the same relative-import pattern every hook port
@@ -125,7 +125,7 @@ export function pluginRoot() {
 
   for (const candidate of candidates) {
     try {
-      if (fs.statSync(path.join(candidate, 'rules', 'CLAUDE.md')).isFile()) return candidate;
+      if (fs.statSync(path.join(candidate, 'rules', 'digest.md')).isFile()) return candidate;
     } catch {
       // ENOENT, EACCES, or a non-file at that path — not a usable candidate; try the next one.
     }
@@ -301,6 +301,12 @@ export function audit(payload, kind, detail) {
   fs.appendFileSync(log, `${timestamp}\t${kind}\t${tool || 'unknown'}\t${detail}\n`);
 }
 
+// Copilot CLI reads these fields at the top level and Claude Code under hookSpecificOutput. Each ignores the other's, so one output
+// serves both and no hook has to guess its host.
+function preToolOutput(decision, reason) {
+  return { permissionDecision: decision, permissionDecisionReason: reason, hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: decision, permissionDecisionReason: reason } };
+}
+
 // Deny a PreToolUse tool call. Use this for block-* hooks. Emits the modern
 // hookSpecificOutput.permissionDecision schema, writes the DENY audit line,
 // then throws HookExit(0) — yes, exit 0: from the harness's point of view a
@@ -309,28 +315,18 @@ export function audit(payload, kind, detail) {
 // with runHook() at the hook's top level so the throw is caught correctly
 // and doesn't propagate as an uncaught exception.
 export function denyPretool(payload, reason) {
-  console.log(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'deny',
-      permissionDecisionReason: reason,
-    },
-  }));
+  console.log(JSON.stringify(preToolOutput('deny', reason)));
+  // Exit 2 denies on Claude Code and Copilot CLI alike, whatever each makes of the JSON body. Claude Code reads the reason from stderr.
+  console.error(reason);
   audit(payload, 'DENY', reason);
-  throw new HookExit(0);
+  throw new HookExit(2);
 }
 
 // Ask the user about a PreToolUse tool call instead of deciding it: the harness shows `reason` and
 // lets the user allow or deny. Same shape and flow as denyPretool, with permissionDecision 'ask' and an
 // ASK audit line (a failed audit write never changes the answer). Throws HookExit(0).
 export function askPretool(payload, reason) {
-  console.log(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'ask',
-      permissionDecisionReason: reason,
-    },
-  }));
+  console.log(JSON.stringify(preToolOutput('ask', reason)));
   try { audit(payload, 'ASK', reason); } catch { /* the question has been asked; auditing is best effort */ }
   throw new HookExit(0);
 }
@@ -352,7 +348,7 @@ export function contextOutput(event, context) {
 //
 // somi::matches_any / somi::matches_any_nocase equivalents. Thin wrappers:
 // hooks own their actual pattern lists (as RegExp literals — see
-// scripts/somi-check.mjs's SECRET_PATTERNS for the established idiom); this
+// block-secret-writes.mjs's SECRET_PATTERNS for the established idiom); this
 // lib only owns the "does this string match any of these patterns" shape —
 // it is deliberately not a pattern-list registry or a translation layer.
 //

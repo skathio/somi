@@ -5,7 +5,7 @@ description: Use when designing a new module, naming a class, deciding what a fu
 
 # SOLID — design questions
 
-The principles are in [`rules/10-solid.md`](../../rules/10-solid.md) — that's the always-on floor.
+The principles are in [`rules/digest.md`](../../rules/digest.md) — that's the always-on floor.
 This skill adds **operational depth**: before/after example pairs, decision rules, anti-patterns.
 Don't restate the rule's prose here; link to it when the principle itself is the answer.
 
@@ -120,7 +120,7 @@ just extra indirection.
 
 ## Meta-rules
 
-See [`rules/10-solid.md`](../../rules/10-solid.md) §Meta-rules for the canonical statements
+See [`rules/digest.md`](../../rules/digest.md)-rules for the canonical statements
 (YAGNI > SOLID for hypothetical variation; three-is-the-magic-number; refactor-under-green).
 Operational additions specific to this skill:
 
@@ -139,5 +139,5 @@ SOLID is a response to real change pressure. If there's no pressure, the princip
 ## When to escalate
 
 If you spot a SOLID violation that's deeper than this skill can fix — for example, the dependency
-direction is wrong throughout a layer — escalate to [`somi-architecture-reviewer`](../../agents/somi-architecture-reviewer.md)
+direction is wrong throughout a layer — raise it with the maintainer
 rather than patching locally.

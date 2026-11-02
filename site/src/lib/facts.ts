@@ -1,5 +1,4 @@
 import raw from '../generated/facts.json';
-import type { Tier } from './resolver';
 
 export interface Release {
   version: string;
@@ -14,10 +13,6 @@ export interface Facts {
   agents: string[];
   skills: string[];
   hooks: { name: string; event: string }[];
-  agentDefaults: Record<string, Tier>;
-  defaultCeiling: Tier;
-  claudeCodeModels: Record<Tier, string>;
-  maxModelCandidates: number;
 }
 
 /** Generated from the repo by scripts/facts.mjs; see that file for where each field comes from. */
