@@ -293,34 +293,6 @@
       "stratum": "misleading-bug"
     },
     {
-      "id": "N09-webhook-retry",
-      "dir": "tests/evals/ab/N09-webhook-retry",
-      "boundary": true,
-      "why": "a signature fixed at enqueue time goes stale once retries wait",
-      "stratum": "planted-trap"
-    },
-    {
-      "id": "N10-bundle-extract",
-      "dir": "tests/evals/ab/N10-bundle-extract",
-      "boundary": true,
-      "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
-      "stratum": "security"
-    },
-    {
-      "id": "N11-password-reset",
-      "dir": "tests/evals/ab/N11-password-reset",
-      "boundary": true,
-      "why": "a reset flow whose hard parts are what the ticket does not spell out",
-      "stratum": "security"
-    },
-    {
-      "id": "N12-safe-redirect",
-      "dir": "tests/evals/ab/N12-safe-redirect",
-      "boundary": true,
-      "why": "open redirects through URL forms that a simple prefix check misses",
-      "stratum": "security"
-    },
-    {
       "id": "N37-org-isolation",
       "dir": "tests/evals/ab/N37-org-isolation",
       "boundary": true,
@@ -358,6 +330,34 @@
       "dir": "tests/evals/ab/N39-hide-email",
       "boundary": true,
       "why": "a privacy rule that has to hold across many code paths, including indirect ways of learning the value",
+      "stratum": "security"
+    },
+    {
+      "id": "N09-webhook-retry",
+      "dir": "tests/evals/ab/N09-webhook-retry",
+      "boundary": true,
+      "why": "a signature fixed at enqueue time goes stale once retries wait",
+      "stratum": "planted-trap"
+    },
+    {
+      "id": "N10-bundle-extract",
+      "dir": "tests/evals/ab/N10-bundle-extract",
+      "boundary": true,
+      "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
+      "stratum": "security"
+    },
+    {
+      "id": "N11-password-reset",
+      "dir": "tests/evals/ab/N11-password-reset",
+      "boundary": true,
+      "why": "a reset flow whose hard parts are what the ticket does not spell out",
+      "stratum": "security"
+    },
+    {
+      "id": "N12-safe-redirect",
+      "dir": "tests/evals/ab/N12-safe-redirect",
+      "boundary": true,
+      "why": "open redirects through URL forms that a simple prefix check misses",
       "stratum": "security"
     }
   ]

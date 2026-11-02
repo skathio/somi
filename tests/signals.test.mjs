@@ -73,6 +73,10 @@ test('the real diff covers tracked and untracked files, and leaves SoMi state ou
   assert.deepEqual(rows.map((r) => r.file).sort(), ['src/app.js', 'src/new.js']);
   writeFiles(dir, { '.somi/state/journal.jsonl': '{}\n{}\n' });
   assert.equal(snapshotTree(dir), tree, 'writing the journal must not change the tree');
+  writeFiles(dir, { '.somi/audit.log': 'one call\n' });
+  assert.equal(snapshotTree(dir), tree, 'a tool call writing the audit log must not change the tree, or no check would ever stay current');
+  writeFiles(dir, { '.somi/config.json': '{}\n' });
+  assert.notEqual(snapshotTree(dir), tree, 'a change to project policy stays visible to the diff');
 });
 
 test('a same-size edit right after a commit still changes the tree', (t) => {

@@ -51,7 +51,8 @@ export function snapshotTree(root) {
       fs.utimesSync(index, st.atime, st.mtime);
     }
     git(root, ['add', '-A', '--', '.'], { env });
-    git(root, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', '.somi/state'], { env });
+    // The audit log grows on every tool call, so in a repository that does not ignore it, keeping it would make every tree new.
+    git(root, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', '.somi/state', '.somi/audit.log'], { env });
     return git(root, ['write-tree'], { env }).trim();
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
