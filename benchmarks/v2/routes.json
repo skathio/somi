@@ -1,0 +1,890 @@
+{
+ "note": "Labelled by the rule author before any scoring, so treat the score as an upper bound. Real tickets from outside this project have not been scored. A later reader should add some.",
+ "items": [
+  {
+   "text": "Add a dark mode toggle to the settings page",
+   "route": "build"
+  },
+  {
+   "text": "Let users export their invoices as PDF",
+   "route": "build"
+  },
+  {
+   "text": "Add a created_at column to the users API response",
+   "route": "build"
+  },
+  {
+   "text": "Support filtering orders by status",
+   "route": "build"
+  },
+  {
+   "text": "Add a retry button to the upload dialog",
+   "route": "build"
+  },
+  {
+   "text": "Show the build number in the footer",
+   "route": "build"
+  },
+  {
+   "text": "Implement password strength hints on signup",
+   "route": "build"
+  },
+  {
+   "text": "Add a CSV import for contacts",
+   "route": "build"
+  },
+  {
+   "text": "Add pagination to the audit log",
+   "route": "build"
+  },
+  {
+   "text": "Make the sidebar collapsible",
+   "route": "build"
+  },
+  {
+   "text": "Add a health endpoint to the worker service",
+   "route": "build"
+  },
+  {
+   "text": "Send a welcome email after registration",
+   "route": "build"
+  },
+  {
+   "text": "Add an --output flag to the CLI",
+   "route": "build"
+  },
+  {
+   "text": "Add support for SAML login",
+   "route": "build"
+  },
+  {
+   "text": "Allow admins to deactivate a user",
+   "route": "build"
+  },
+  {
+   "text": "Add a tooltip explaining the quota bar",
+   "route": "build"
+  },
+  {
+   "text": "Store the last login time for each account",
+   "route": "build"
+  },
+  {
+   "text": "Add sorting to the customers table",
+   "route": "build"
+  },
+  {
+   "text": "Create a webhook for payment events",
+   "route": "build"
+  },
+  {
+   "text": "Add a config option for the request timeout",
+   "route": "build"
+  },
+  {
+   "text": "Support YAML as well as JSON config files",
+   "route": "build"
+  },
+  {
+   "text": "Show a banner when the trial ends",
+   "route": "build"
+  },
+  {
+   "text": "Add tests for the proration helper",
+   "route": "build"
+  },
+  {
+   "text": "Add an API endpoint to list teams",
+   "route": "build"
+  },
+  {
+   "text": "Write a script that seeds the demo database",
+   "route": "build"
+  },
+  {
+   "text": "Add a copy-to-clipboard button on the share dialog",
+   "route": "build"
+  },
+  {
+   "text": "Translate the checkout page to German",
+   "route": "build"
+  },
+  {
+   "text": "Fix the crash when uploading an empty file",
+   "route": "debug"
+  },
+  {
+   "text": "Login fails for users with a plus sign in their email",
+   "route": "debug"
+  },
+  {
+   "text": "The totals are off by a cent on some invoices",
+   "route": "debug"
+  },
+  {
+   "text": "Users get signed out at random",
+   "route": "debug"
+  },
+  {
+   "text": "Getting a 500 on the orders endpoint since yesterday",
+   "route": "debug"
+  },
+  {
+   "text": "The nightly job fails with a null pointer",
+   "route": "debug"
+  },
+  {
+   "text": "Tests are flaky on CI in the payments module",
+   "route": "debug"
+  },
+  {
+   "text": "Search returns no results for accented names",
+   "route": "debug"
+  },
+  {
+   "text": "Why is the webhook firing twice? It charges customers twice, please fix",
+   "route": "debug"
+  },
+  {
+   "text": "Stack trace in the worker when the queue is empty",
+   "route": "debug"
+  },
+  {
+   "text": "The date picker shows the wrong month in Safari",
+   "route": "debug"
+  },
+  {
+   "text": "Regression: dark mode no longer saves",
+   "route": "debug"
+  },
+  {
+   "text": "Button does nothing when clicked on mobile, not working",
+   "route": "debug"
+  },
+  {
+   "text": "Fix the memory corruption error in the parser",
+   "route": "debug"
+  },
+  {
+   "text": "Emails are not being sent after the deploy, fix it",
+   "route": "debug"
+  },
+  {
+   "text": "The app crashes on launch on Android 14",
+   "route": "debug"
+  },
+  {
+   "text": "CSV export has broken quoting for names with commas",
+   "route": "debug"
+  },
+  {
+   "text": "The retry logic throws an exception after the third attempt",
+   "route": "debug"
+  },
+  {
+   "text": "Fix bug in discount calculation",
+   "route": "debug"
+  },
+  {
+   "text": "Permissions check fails for team admins",
+   "route": "debug"
+  },
+  {
+   "text": "Import fails with a schema error on old files",
+   "route": "debug"
+  },
+  {
+   "text": "Fix the failing test in checkout.test.js",
+   "route": "debug"
+  },
+  {
+   "text": "Timezone bug: reports lose orders at month end",
+   "route": "debug"
+  },
+  {
+   "text": "Refactor the auth module into smaller files",
+   "route": "refactor"
+  },
+  {
+   "text": "Clean up the duplicate date helpers",
+   "route": "refactor"
+  },
+  {
+   "text": "Extract the pricing rules into their own module",
+   "route": "refactor"
+  },
+  {
+   "text": "Rename userId to accountId across the codebase",
+   "route": "refactor"
+  },
+  {
+   "text": "Simplify the nested conditionals in the state machine",
+   "route": "refactor"
+  },
+  {
+   "text": "Untangle the circular import between orders and billing",
+   "route": "refactor"
+  },
+  {
+   "text": "Decouple the mailer from the user service",
+   "route": "refactor"
+  },
+  {
+   "text": "Deduplicate the two CSV writers",
+   "route": "refactor"
+  },
+  {
+   "text": "Tidy up the logging helpers",
+   "route": "refactor"
+  },
+  {
+   "text": "Replace the giant switch in the router with a table",
+   "route": "refactor"
+  },
+  {
+   "text": "Split the 2000 line controller into smaller modules, keep behaviour the same",
+   "route": "refactor"
+  },
+  {
+   "text": "Move the shared types out of the API package and clean up the imports",
+   "route": "refactor"
+  },
+  {
+   "text": "Upgrade React to v19",
+   "route": "upgrade"
+  },
+  {
+   "text": "Bump lodash to the latest version",
+   "route": "upgrade"
+  },
+  {
+   "text": "Update the Node version to 24 and fix what breaks",
+   "route": "upgrade"
+  },
+  {
+   "text": "Upgrade the Postgres driver",
+   "route": "upgrade"
+  },
+  {
+   "text": "Dependabot opened a major bump for express, take it",
+   "route": "upgrade"
+  },
+  {
+   "text": "Upgrade Next.js and migrate the deprecated APIs",
+   "route": "upgrade"
+  },
+  {
+   "text": "Bump all dev dependencies",
+   "route": "upgrade"
+  },
+  {
+   "text": "Update the AWS SDK to version 3",
+   "route": "upgrade"
+  },
+  {
+   "text": "Upgrade TypeScript",
+   "route": "upgrade"
+  },
+  {
+   "text": "Migrate the users table to UUID primary keys",
+   "route": "migrate"
+  },
+  {
+   "text": "Add a schema change for soft deletes with a backfill",
+   "route": "migrate"
+  },
+  {
+   "text": "Move sessions from Redis to Postgres",
+   "route": "migrate"
+  },
+  {
+   "text": "Backfill the new currency column",
+   "route": "migrate"
+  },
+  {
+   "text": "Migrate from MySQL to Postgres",
+   "route": "migrate"
+  },
+  {
+   "text": "Write the migration that splits name into first and last",
+   "route": "migrate"
+  },
+  {
+   "text": "Move file storage from local disk to S3",
+   "route": "migrate"
+  },
+  {
+   "text": "The dashboard is too slow, it takes 8 seconds to load",
+   "route": "perf"
+  },
+  {
+   "text": "Speed up the search endpoint",
+   "route": "perf"
+  },
+  {
+   "text": "Reduce the latency of the checkout API",
+   "route": "perf"
+  },
+  {
+   "text": "Optimize the report generation",
+   "route": "perf"
+  },
+  {
+   "text": "Find the memory leak in the worker",
+   "route": "perf"
+  },
+  {
+   "text": "There is an N+1 on the orders page",
+   "route": "perf"
+  },
+  {
+   "text": "Improve throughput of the event consumer",
+   "route": "perf"
+  },
+  {
+   "text": "Profile the import job and make it faster",
+   "route": "perf"
+  },
+  {
+   "text": "Our bundle hurts performance on mobile",
+   "route": "perf"
+  },
+  {
+   "text": "Production is down",
+   "route": "incident"
+  },
+  {
+   "text": "The site is down for all EU users",
+   "route": "incident"
+  },
+  {
+   "text": "Sev1: payments are failing in prod",
+   "route": "incident"
+  },
+  {
+   "text": "Outage: the API returns 503 everywhere",
+   "route": "incident"
+  },
+  {
+   "text": "Production database is on fire, connections are exhausted",
+   "route": "incident"
+  },
+  {
+   "text": "Prod is broken since the last deploy, need a mitigation now",
+   "route": "incident"
+  },
+  {
+   "text": "Incident: login service is down",
+   "route": "incident"
+  },
+  {
+   "text": "Make the checkout form accessible",
+   "route": "accessibility"
+  },
+  {
+   "text": "Fix the screen reader issues in the nav",
+   "route": "accessibility"
+  },
+  {
+   "text": "Audit the dialog for WCAG",
+   "route": "accessibility"
+  },
+  {
+   "text": "The menu needs ARIA roles and keyboard support for accessibility",
+   "route": "accessibility"
+  },
+  {
+   "text": "a11y pass on the settings page",
+   "route": "accessibility"
+  },
+  {
+   "text": "Our contrast fails accessibility checks on the buttons",
+   "route": "accessibility"
+  },
+  {
+   "text": "Plan the move to multi-tenancy",
+   "route": "plan"
+  },
+  {
+   "text": "Break this down into milestones: a billing system with plans, invoices and dunning",
+   "route": "plan"
+  },
+  {
+   "text": "Give me a roadmap for the mobile app",
+   "route": "plan"
+  },
+  {
+   "text": "Plan out the rewrite of the reporting module",
+   "route": "plan"
+  },
+  {
+   "text": "Epic: self-serve onboarding, break it down",
+   "route": "plan"
+  },
+  {
+   "text": "Plan for rolling out SSO to all customers",
+   "route": "plan"
+  },
+  {
+   "text": "Design the permissions model for teams",
+   "route": "design"
+  },
+  {
+   "text": "How should we structure the plugin system?",
+   "route": "design"
+  },
+  {
+   "text": "Should we use a queue or a cron job? Show me the tradeoffs",
+   "route": "design"
+  },
+  {
+   "text": "Write an ADR for the storage engine choice",
+   "route": "design"
+  },
+  {
+   "text": "RFC for the public API versioning",
+   "route": "design"
+  },
+  {
+   "text": "Which approach should we take for offline sync",
+   "route": "design"
+  },
+  {
+   "text": "Options for handling multi-region writes",
+   "route": "design"
+  },
+  {
+   "text": "Architecture for the new notifications service",
+   "route": "design"
+  },
+  {
+   "text": "I have an idea for a product that tracks freelancer invoices",
+   "route": "discover"
+  },
+  {
+   "text": "Market research for a developer analytics tool",
+   "route": "discover"
+  },
+  {
+   "text": "Greenfield idea: a CI tool for data pipelines",
+   "route": "discover"
+  },
+  {
+   "text": "Who are the competitors of our scheduling feature",
+   "route": "discover"
+  },
+  {
+   "text": "New product: an AI meeting notes tool, is it worth building",
+   "route": "discover"
+  },
+  {
+   "text": "Map the codebase for me",
+   "route": "atlas"
+  },
+  {
+   "text": "Give me a codebase overview before I start",
+   "route": "atlas"
+  },
+  {
+   "text": "Onboard me to this repository",
+   "route": "atlas"
+  },
+  {
+   "text": "What is the blast radius of changing the session store",
+   "route": "atlas"
+  },
+  {
+   "text": "Show the impact of removing the legacy API",
+   "route": "atlas"
+  },
+  {
+   "text": "Build an atlas of this repo",
+   "route": "atlas"
+  },
+  {
+   "text": "What does the retry helper do?",
+   "route": "answer"
+  },
+  {
+   "text": "Where is the rate limit configured?",
+   "route": "answer"
+  },
+  {
+   "text": "How does the billing webhook get its secret?",
+   "route": "answer"
+  },
+  {
+   "text": "Why do we have two user tables?",
+   "route": "answer"
+  },
+  {
+   "text": "Does this service use Redis?",
+   "route": "answer"
+  },
+  {
+   "text": "Explain the deploy process",
+   "route": "answer"
+  },
+  {
+   "text": "Which file defines the routes?",
+   "route": "answer"
+  },
+  {
+   "text": "How many tests are there?",
+   "route": "answer"
+  },
+  {
+   "text": "What is the difference between plan and tier here?",
+   "route": "answer"
+  },
+  {
+   "text": "Can the worker run without a queue?",
+   "route": "answer"
+  },
+  {
+   "text": "List the environment variables the API reads",
+   "route": "answer"
+  },
+  {
+   "text": "Who calls the mailer?",
+   "route": "answer"
+  },
+  {
+   "text": "Review PR #482",
+   "route": "review"
+  },
+  {
+   "text": "Please review my changes",
+   "route": "review"
+  },
+  {
+   "text": "Review this diff before I merge",
+   "route": "review"
+  },
+  {
+   "text": "Code review the new billing module",
+   "route": "review"
+  },
+  {
+   "text": "Is this okay to merge?",
+   "route": "review"
+  },
+  {
+   "text": "Audit the new helper for correctness",
+   "route": "review"
+  },
+  {
+   "text": "Can you review the migration script",
+   "route": "review"
+  },
+  {
+   "text": "Critique this implementation",
+   "route": "review"
+  },
+  {
+   "text": "Do a security review of the upload endpoint",
+   "route": "security-review"
+  },
+  {
+   "text": "Audit the auth flow for vulnerabilities",
+   "route": "security-review"
+  },
+  {
+   "text": "Check the webhook handler for security problems",
+   "route": "security-review"
+  },
+  {
+   "text": "Review the password reset for security",
+   "route": "security-review"
+  },
+  {
+   "text": "Pentest review of the admin API",
+   "route": "security-review"
+  },
+  {
+   "text": "Assess the threat model of the new SSO flow",
+   "route": "security-review"
+  },
+  {
+   "text": "Look at this code for OWASP problems, a security check please",
+   "route": "security-review"
+  },
+  {
+   "text": "Open a PR for this",
+   "route": "ship"
+  },
+  {
+   "text": "Prepare the release notes",
+   "route": "ship"
+  },
+  {
+   "text": "Ship it",
+   "route": "ship"
+  },
+  {
+   "text": "Cut a release for 2.4.0",
+   "route": "ship"
+  },
+  {
+   "text": "Prepare a pull request with what we have",
+   "route": "ship"
+  },
+  {
+   "text": "Ready to merge, open the pull request",
+   "route": "ship"
+  },
+  {
+   "text": "status",
+   "route": "status"
+  },
+  {
+   "text": "What's in flight",
+   "route": "status"
+  },
+  {
+   "text": "What is open right now",
+   "route": "status"
+  },
+  {
+   "text": "Continue where we left off",
+   "route": "resume"
+  },
+  {
+   "text": "Resume the billing work",
+   "route": "resume"
+  },
+  {
+   "text": "Pick up the last task",
+   "route": "resume"
+  },
+  {
+   "text": "Carry on",
+   "route": "resume"
+  },
+  {
+   "text": "Show the somi config",
+   "route": "config"
+  },
+  {
+   "text": "What model does each somi tier use",
+   "route": "config"
+  },
+  {
+   "text": "Change the tier map for this project",
+   "route": "config"
+  },
+  {
+   "text": "Checkout total wrong for EUR",
+   "ticket": {
+    "type": "Bug"
+   },
+   "route": "debug"
+  },
+  {
+   "text": "Export button missing on Safari",
+   "ticket": {
+    "type": "Bug"
+   },
+   "route": "debug"
+  },
+  {
+   "text": "As a user I want to reset my password",
+   "ticket": {
+    "type": "Story"
+   },
+   "route": "build"
+  },
+  {
+   "text": "As an admin I want an audit log",
+   "ticket": {
+    "type": "Story"
+   },
+   "route": "build"
+  },
+  {
+   "text": "Add a metrics endpoint",
+   "ticket": {
+    "type": "Task"
+   },
+   "route": "build"
+  },
+  {
+   "text": "Saved searches",
+   "ticket": {
+    "type": "Feature"
+   },
+   "route": "build"
+  },
+  {
+   "text": "Faster sidebar animation",
+   "ticket": {
+    "type": "Improvement"
+   },
+   "route": "build"
+  },
+  {
+   "text": "Self-serve billing",
+   "ticket": {
+    "type": "Epic"
+   },
+   "route": "plan"
+  },
+  {
+   "text": "Enterprise SSO rollout",
+   "ticket": {
+    "type": "Epic"
+   },
+   "route": "plan"
+  },
+  {
+   "text": "Compare queue providers",
+   "ticket": {
+    "type": "Spike"
+   },
+   "route": "design"
+  },
+  {
+   "text": "Evaluate vector stores",
+   "ticket": {
+    "type": "Spike"
+   },
+   "route": "design"
+  },
+  {
+   "text": "API returning 500s",
+   "ticket": {
+    "type": "Incident"
+   },
+   "route": "incident"
+  },
+  {
+   "text": "Wrong VAT on invoices",
+   "ticket": {
+    "type": "Defect"
+   },
+   "route": "debug"
+  },
+  {
+   "text": "Rotate the deploy key",
+   "ticket": {
+    "type": "Task"
+   },
+   "route": "build"
+  },
+  {
+   "text": "Login loop on mobile",
+   "ticket": {
+    "type": "Bug"
+   },
+   "route": "debug"
+  },
+  {
+   "text": "The rate limiter lets bursts through after a restart",
+   "route": "debug"
+  },
+  {
+   "text": "Customers in Japan see prices with decimals",
+   "route": "debug"
+  },
+  {
+   "text": "The cost tier isn't applied on Copilot, it bills the session model",
+   "route": "debug"
+  },
+  {
+   "text": "Hook denies a legitimate write in the plans folder",
+   "route": "debug"
+  },
+  {
+   "text": "Stop the reviewer looping forever on the same finding",
+   "route": "debug"
+  },
+  {
+   "text": "Add a way to connect a Jira plugin into the workflow steps",
+   "route": "build"
+  },
+  {
+   "text": "Make the benchmark report spend per model",
+   "route": "build"
+  },
+  {
+   "text": "Add a notice when a newer version exists",
+   "route": "build"
+  },
+  {
+   "text": "Support a per-project ceiling on model tier",
+   "route": "build"
+  },
+  {
+   "text": "Teach the importer to accept gzip files",
+   "route": "build"
+  },
+  {
+   "text": "Write the changelog entry for the router work",
+   "route": "build"
+  },
+  {
+   "text": "Make the journal parser smaller and clearer without changing what it does",
+   "route": "refactor"
+  },
+  {
+   "text": "Merge the two config readers into one",
+   "route": "refactor"
+  },
+  {
+   "text": "Turn the nested callbacks in the worker into async functions, same behaviour",
+   "route": "refactor"
+  },
+  {
+   "text": "Replace moment with date-fns across the app",
+   "route": "upgrade"
+  },
+  {
+   "text": "We are on an end-of-life Python, move us to 3.13",
+   "route": "upgrade"
+  },
+  {
+   "text": "Rename the tenants table and keep old readers working during the deploy",
+   "route": "migrate"
+  },
+  {
+   "text": "Convert the prices column from float to integer cents for every row",
+   "route": "migrate"
+  },
+  {
+   "text": "Cold start takes 40 seconds, get it under 10",
+   "route": "perf"
+  },
+  {
+   "text": "Page weight doubled last release, bring it down",
+   "route": "perf"
+  },
+  {
+   "text": "Everything is returning 502 and customers are calling",
+   "route": "incident"
+  },
+  {
+   "text": "Rollback or patch now, checkout is completely broken in production",
+   "route": "incident"
+  },
+  {
+   "text": "What would you change first in this codebase?",
+   "route": "answer"
+  },
+  {
+   "text": "Is the audit log append-only?",
+   "route": "answer"
+  },
+  {
+   "text": "Does anything still read the old config format?",
+   "route": "answer"
+  },
+  {
+   "text": "Take a look at the session handling for anything an attacker could abuse, a security audit",
+   "route": "security-review"
+  },
+  {
+   "text": "Is the new SQL safe from injection? Security review please",
+   "route": "security-review"
+  }
+ ]
+}

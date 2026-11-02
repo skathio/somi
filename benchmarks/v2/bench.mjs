@@ -2,17 +2,18 @@
 // bench.mjs: benchmark v2. Is SoMi worth it against a bare agent on the same model, is 5.0 better than 4.1, and which parts pay? See
 // docs/BENCHMARK.md for the design. A paid run needs --go. The test suite proves this driver with a stub agent and spends nothing.
 //
-//   bench.mjs plan   --phase pilot|aa|main|ablation|confirm [--pilot DIR] [--seed N]    the draws and timeout, spends nothing
+//   bench.mjs plan   --phase pilot|aa|trial|baseline|candidate|ablation|large [--pilot DIR] [--seed N]    the draws and timeout, spends nothing
+//   bench.mjs routes                                                                     scores the router on the labelled set, spends nothing
 //   bench.mjs admit                                                                      every live task's admission and mutants, spends nothing
 //   bench.mjs power  [--pilot DIR]                                                       draws per arm for each effect, spends nothing
 //   bench.mjs run    --phase ... --out DIR --model ID --go --budget-total USD [--chunk 24] [--budget-draw USD] [--window-tokens N]
-//                    [--review-model ID] [--plugin-41 DIR] [--env-file FILE] [--timeout-min N] [--quiet-wait-min 90]
+//                    [--worker-model ID] [--plugin-41 DIR] [--env-file FILE] [--timeout-min N] [--quiet-wait-min 90]
 //                    [--claude PATH --no-sandbox --tasks ID,ID]   a stub agent, for proving the harness without spending anything
 //   bench.mjs record takes what run takes: runs chunks to the end or a stop, then writes the record and the report skeleton
 //   bench.mjs select --pilot DIR[,DIR] [--allow-short]                                      writes task-set.json from a pilot
 //   bench.mjs prereg                                                                  binds task-set.json into prereg.json
 //   bench.mjs report --out DIR [--write DIR]                                          prints the report, or writes the record
-//   bench.mjs decide --aa DIR --main DIR                                              the release rule; exit 0 only when it ships
+//   bench.mjs decide --aa DIR --baseline DIR --candidate DIR                                              the release rule; exit 0 only when it ships
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -27,7 +28,7 @@ import { inspectDraw } from '../../tests/evals/lib/ab-stream.mjs';
 import { lstatManifest } from '../../tests/evals/lib/manifest.mjs';
 import { scoreHidden } from '../../tests/evals/lib/score-hidden.mjs';
 import { taskHash } from '../../tests/evals/lib/task-store.mjs';
-import { armSummary, callRatio, costDrawsPerArm, crossesInterim, pairedDifference, testShare, evaluateAa, evaluateRelease, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, passDrawsPerArm, selectTasks, weightedTokens } from './stats.mjs';
+import { armSummary, costDrawsPerArm, evaluateAa, evaluateRelease, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, passDrawsPerArm, selectTasks, weightedTokens } from './stats.mjs';
 import { adherence, agentSplit, labelDraw, scopeCheck } from './telemetry.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -48,26 +49,33 @@ const MAX_FAILED_NAMES = 20;
 export const PHASE_ARMS = Object.freeze({
   pilot: ['bare'],
   aa: ['bare-a', 'bare-b'],
-  main: ['bare', 'somi5', 'somi41'],
+  trial: ['somi5', 'somi41'],
+  baseline: ['bare', 'somi41'],
+  candidate: ['somi5', 'bare-check'],
   ablation: ['bare'],
-  confirm: ['bare'],
+  large: ['bare', 'somi5', 'somi41'],
 });
 
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
 const isBare = (arm) => arm.startsWith('bare');
-export const armPrompt = (arm, text) => (isBare(arm) ? text : arm === 'somi41' ? `/somi:ship-loop ${text}` : `/somi:task ${text}`);
+// Every arm gets the same plain request. The SoMi arms go through their own front door, so routing is what gets measured, not a flow
+// the benchmark picked for them.
+export const armPrompt = (arm, text) => text;
 const engineArm = (arm) => (isBare(arm) ? 'bare' : 'somi');
 export const armsFor = (phase, cells = readJson(ABLATIONS).cells) => (phase === 'ablation' ? [...PHASE_ARMS.ablation, ...Object.keys(cells)] : PHASE_ARMS[phase]);
 
-const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, ablation: reg.ablation_k, confirm: reg.confirm_k })[phase] ?? reg.k;
+const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, trial: reg.trial_k, ablation: reg.ablation_k, large: reg.large_k })[phase] ?? reg.k;
+const armKFor = (phase, reg) => (phase === 'candidate' ? reg.arm_k : {});
+const LARGE_SETTINGS = Object.freeze({ autoCompactWindow: 120000 });
 export const liveCandidates = (tasks) => tasks.filter((t) => !t.retired);
 function tasksFor(phase, only) {
-  if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all); }
+  if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all).filter((t) => !t.large); }
+  if (phase === 'large') return readJson(CANDIDATES).tasks.filter((t) => t.large);
   if (!fs.existsSync(TASK_SET)) throw new Error('no task-set.json yet: run the pilot, then select');
   const set = readJson(TASK_SET);
-  return phase === 'confirm' ? set.tasks.filter((t) => set.hardest.includes(t.id)) : set.tasks;
+  return phase === 'trial' ? set.tasks.filter((t) => set.hardest.includes(t.id)).slice(0, 2) : set.tasks;
 }
 
 // Every arm of a task runs in the same round, in a seeded order, so drift over a long recording falls on all arms alike.
@@ -129,11 +137,13 @@ export function findLeaks(value, at = 'record', hostname = os.hostname()) {
 // Result events come in runs within one CLI call, where usage is cumulative: the last of a run is the call's total.
 export function streamUsage(file) {
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
+  const spend = {};
   const models = new Set();
   let turns = 0;
   let pending = null;
   const flush = () => {
-    for (const m of Object.values(pending ?? {})) {
+    for (const [name, m] of Object.entries(pending ?? {})) {
+      spend[name] = (spend[name] ?? 0) + (m?.costUSD ?? 0);
       totals.input += m?.inputTokens ?? 0;
       totals.output += m?.outputTokens ?? 0;
       totals.cacheRead += m?.cacheReadInputTokens ?? 0;
@@ -142,7 +152,7 @@ export function streamUsage(file) {
     pending = null;
   };
   let text = '';
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return { tokens: totals, models: [], turns }; }
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return { tokens: totals, models: [], turns, spend }; }
   for (const raw of text.split('\n')) {
     if (raw.trim() === '') continue;
     let ev;
@@ -156,7 +166,7 @@ export function streamUsage(file) {
     } else flush();
   }
   flush();
-  return { tokens: totals, models: [...models].sort(), turns };
+  return { tokens: totals, models: [...models].sort(), turns, spend };
 }
 
 // The packed plugin is locked read-only, so it has to be unlocked before it can be removed.
@@ -235,29 +245,31 @@ async function run(args, session = { windowWeighted: 0 }) {
   if (!args.go) throw new Error('a run spends real usage: pass --go once the maintainer has agreed the budget');
   if (!args.model || !/^[A-Za-z0-9][A-Za-z0-9._:[\]-]*$/.test(args.model)) throw new Error('--model is required');
   if (!stub && !isFullModelId(args.model)) throw new Error('--model must be a full model id, not an alias: an alias can move between recordings');
-  const pins = [args.model, ...(args['review-model'] ? [args['review-model']] : [])];
+  const pins = [args.model, ...(args['worker-model'] ? [args['worker-model']] : [])];
+  const alias = (id) => /haiku/.test(id) ? 'haiku' : /sonnet/.test(id) ? 'sonnet' : id;
+  if ([args.model, args['worker-model']].some((m) => /opus/i.test(m ?? ''))) throw new Error('benchmarks never run on opus: the top model of any recording is sonnet');
   if (args.tasks && !stub && phase !== 'pilot') throw new Error('--tasks is for a pilot or a stub: a paid recording runs its whole plan');
   if (!args.out) throw new Error('--out is required');
   const budgetTotal = Number(args['budget-total']);
   if (!(budgetTotal > 0)) throw new Error('--budget-total is required');
   const budgetDraw = Number(args['budget-draw'] ?? 3);
   const chunk = Math.min(Number(args.chunk ?? MAX_CHUNK), MAX_CHUNK);
-  if (phase === 'main' || phase === 'ablation') {
+  if (['baseline', 'candidate', 'ablation', 'large'].includes(phase)) {
     const problem = preregProblem();
     if (problem) throw new Error(problem);
-    if (phase === 'main' && !args['plugin-41']) throw new Error('main needs --plugin-41, a packed 4.1 release candidate');
-    if (!args['review-model'] || !isFullModelId(args['review-model'])) throw new Error('--review-model is required: the registered lane keeps the security reviewer on the review tier, named by its full id');
   }
+  if (PHASE_ARMS[phase].includes('somi41') && !args['plugin-41']) throw new Error(`${phase} needs --plugin-41, a packed 4.1 release`);
+  if (phase !== 'pilot' && phase !== 'aa' && !stub && (!args['worker-model'] || !isFullModelId(args['worker-model']))) throw new Error('--worker-model is required: the low tier, by its full id');
   if (phase !== 'pilot' && !args['timeout-min']) throw new Error('--timeout-min is required: take it from `bench.mjs plan --pilot DIR`, not from a guess');
   if (process.env.CLAUDE_CODE_OAUTH_TOKEN !== undefined) throw new Error('CLAUDE_CODE_OAUTH_TOKEN is in the environment; the scorer must run without it');
 
   const out = path.resolve(args.out);
   fs.mkdirSync(out, { recursive: true, mode: 0o700 });
   const only = args.tasks ? args.tasks.split(',') : null;
-  const plan = buildPlan(phase, tasksFor(phase, only), Number(args.seed ?? 1), drawsFor(phase, prereg), phase === 'main' ? prereg.arm_k : {});
+  const plan = buildPlan(phase, tasksFor(phase, only), Number(args.seed ?? 1), drawsFor(phase, prereg), armKFor(phase, prereg));
   const resultsFile = path.join(out, 'results.jsonl');
   const planFile = path.join(out, 'plan.json');
-  const planText = JSON.stringify({ phase, model: args.model, review_model: args['review-model'] ?? null, rule: ruleHash(), host: hostFingerprint(), draws: plan.map((d) => d.id) });
+  const planText = JSON.stringify({ phase, model: args.model, worker_model: args['worker-model'] ?? null, rule: ruleHash(), host: hostFingerprint(), draws: plan.map((d) => d.id) });
   if (fs.existsSync(planFile) && fs.readFileSync(planFile, 'utf8') !== planText) throw new Error('--out holds a different plan');
   fs.writeFileSync(planFile, planText);
 
@@ -322,17 +334,17 @@ async function run(args, session = { windowWeighted: 0 }) {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-v2-draw-'));
     console.log(`start ${d.id}`);
     try {
-      const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config: { cost: { ceiling: 'medium' }, tiers: { claude: { work: args.model, review: args['review-model'] ?? args.model } } } });
+      const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config: { cost: { ceiling: 'medium' }, tiers: { claude: { low: alias(args['worker-model'] ?? args.model), medium: alias(args.model), high: alias(args.model) } } } });
       const result = await runDraw({
         model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
-        claude, env: childEnv({ token: env.token, tmp }), cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
+        settings: phase === 'large' ? LARGE_SETTINGS : undefined, maxResumes: 6, claude, env: childEnv({ token: env.token, tmp }), cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
       });
       if (interrupted) { stop = 'interrupted'; break; }
       const after = lstatManifest(ws);
       result.leaks = [...new Set([...result.leaks, ...inspectDraw({ ws, cfg: path.join(tmp, 'cfg'), after, drawDir, token: env.token, canary: t.task.canary, absAb: path.dirname(dir) })])];
       const cls = classify({ run: result, arm: engineArm(d.arm), budget: budgetDraw });
       const usage = streamUsage(path.join(drawDir, 'stream.jsonl'));
-      const measured = { cost: result.cost, wall_ms: result.wallMs ?? 0, turns: usage.turns, tokens: usage.tokens, weighted: weightedTokens(usage.tokens), models: usage.models };
+      const measured = { cost: result.cost, wall_ms: result.wallMs ?? 0, turns: usage.turns, tokens: usage.tokens, weighted: weightedTokens(usage.tokens), models: usage.models, spend: usage.spend };
       spent += measured.cost;
       session.windowWeighted += measured.weighted;
       ran++;
@@ -388,7 +400,7 @@ export function pilotRows(dirs, read = completed) {
 
 // A comparison across recordings means nothing unless both ran on the same model, the same host and the same rule.
 export function comparableRecordings(aaDir, mainDir) {
-  const meta = (d) => { const { model, review_model: review, rule, host } = readJson(path.join(d, 'plan.json')); return JSON.stringify({ model, review, rule, host }); };
+  const meta = (d) => { const { model, rule, host } = readJson(path.join(d, 'plan.json')); return JSON.stringify({ model, rule, host }); };
   return meta(aaDir) === meta(mainDir) ? null : 'the A/A and main recordings differ in model, rule or host, so they cannot be compared';
 }
 
@@ -402,9 +414,9 @@ export function renderReport(dir) {
   const k = drawsFor(planned.phase, reg);
   const arms = [...new Set(rows.map((r) => r.arm))].sort();
   const base = arms.includes('bare') ? 'bare' : arms[0];
-  const out = [`# Benchmark record: ${planned.phase}`, '', `- Model: ${planned.model}${planned.review_model ? `, review ${planned.review_model}` : ''}`, `- Rule hash: ${planned.rule}`, `- Host: ${JSON.stringify(planned.host)}`, `- Draws recorded: ${rows.length} of ${planned.draws.length}. Dollars are the CLI's estimate.`, '', '## Arms', '', '| Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |', '|---|---|---|---|---|---|---|---|---|'];
+  const out = [`# Benchmark record: ${planned.phase}`, '', `- Session model: ${planned.model}${planned.worker_model ? `, low tier ${planned.worker_model}` : ''}`, `- Rule hash: ${planned.rule}`, `- Host: ${JSON.stringify(planned.host)}`, `- Draws recorded: ${rows.length} of ${planned.draws.length}. Dollars are the CLI's estimate.`, '', '## Arms', '', '| Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |', '|---|---|---|---|---|---|---|---|---|'];
   for (const arm of arms) {
-    const a = armSummary(rows, arm, planned.phase === 'main' ? reg.arm_k[arm] ?? k : k);
+    const a = armSummary(rows, arm, planned.phase === 'candidate' ? reg.arm_k[arm] ?? k : k);
     out.push(`| ${arm} | ${a.draws} | ${a.solved} | ${fmt(a.pass_at_1)} | ${fmt(a.pass_all_k)} | ${fmt(a.weighted_per_solved, 0)} | ${fmt(a.cost_per_solved, 3)} | ${a.wall_ms_per_solved === null ? 'n/a' : fmt(a.wall_ms_per_solved / 60000, 1)} | ${JSON.stringify(a.labels)} |`);
   }
   const others = arms.filter((a) => a !== base);
@@ -416,17 +428,7 @@ export function renderReport(dir) {
     const aa = evaluateAa(rows, k);
     out.push('', '## Noise floor', '', `A/A difference ${fmt(aa.mean)} (95% ${fmt(aa.lower)} to ${fmt(aa.upper)}), ${aa.contains_zero ? 'contains zero' : 'EXCLUDES ZERO'}. Tokens: ${ratioCell(logRatio(rows, 'bare-a', 'bare-b'))}.`);
   }
-  if (planned.phase === 'main') {
-    const solved = pairedDifference(rows, 'somi5', base, k);
-    const share = pairedDifference(rows, 'somi5', base, k, testShare);
-    const vs41 = logRatio(rows, 'somi5', 'somi41');
-    out.push('', '## Registered figures', '', `Solved rate, 5.0 minus bare: ${fmt(solved.mean)} (95% ${fmt(solved.lower)} to ${fmt(solved.upper)}), margin ${reg.rule.solved_rate_margin}.`, `Hidden-test share, 5.0 minus bare: ${fmt(share.mean)} (95% ${fmt(share.lower)} to ${fmt(share.upper)}), margin ${reg.rule.test_share_margin}.`, `5.0 against 4.1, tokens: ${ratioCell(vs41)}, called ${callRatio(vs41, reg.rule.min_effect_release)} at a ${reg.rule.min_effect_release * 100}% minimum effect.`);
-  }
-  if (planned.phase === 'main' || planned.phase === 'ablation') {
-    const look = logRatio(rows, 'somi5', base);
-    if (look.se !== null) out.push('', `Interim boundary at z ${reg.interim.z}: tokens ${crossesInterim(Math.log(look.ratio), look.se, reg.interim.z) ? 'crossed' : 'not crossed'}. It is registered for the look at ${reg.interim.at_share * 100}% of the draws only.`);
-  }
-  out.push('', '## Protocol and per-agent tokens', '', '| Arm | Routes | Opened, closed | Mean passes | Gates | Findings | Mean weighted per agent | Split coverage |', '|---|---|---|---|---|---|---|---|');
+  out.push('', '## Protocol and spend', '', '| Arm | Routed to | Tool or CLI | Closed | Mean passes | Gates | Escalated | Inline writes | Findings | Mean dollars per model | Mean weighted per agent | Split coverage |', '|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const arm of arms) {
     const list = rows.filter((r) => r.arm === arm && r.adherence);
     const count = (f) => list.reduce((acc, r) => { for (const key of f(r)) acc[key] = (acc[key] ?? 0) + 1; return acc; }, {});
@@ -435,7 +437,9 @@ export function renderReport(dir) {
     const findings = {};
     for (const r of list) for (const [s, n] of Object.entries(r.adherence.findings)) findings[s] = (findings[s] ?? 0) + n;
     const cover = list.map((r) => r.split_coverage).filter((c) => c !== null);
-    out.push(`| ${arm} | ${JSON.stringify(count((r) => [r.adherence.route]))} | ${list.filter((r) => r.adherence.opened).length}, ${list.filter((r) => r.adherence.closed).length} | ${fmt(list.reduce((s, r) => s + r.adherence.passes, 0) / (list.length || 1))} | ${JSON.stringify(count((r) => r.adherence.gates))} | ${JSON.stringify(findings)} | ${JSON.stringify(Object.fromEntries(Object.entries(perAgent).map(([n, w]) => [n, Math.round(w)])))} | ${fmt(cover.length ? Math.min(...cover) : null)} |`);
+    const spend = {};
+    for (const r of list) for (const [m, usd] of Object.entries(r.spend ?? {})) spend[m] = (spend[m] ?? 0) + usd / list.length;
+    out.push(`| ${arm} | ${JSON.stringify(count((r) => (r.adherence.routed ? [r.adherence.routed] : [])))} | ${JSON.stringify(count((r) => [r.adherence.route]))} | ${list.filter((r) => r.adherence.closed).length} | ${fmt(list.reduce((s, r) => s + r.adherence.passes, 0) / (list.length || 1))} | ${JSON.stringify(count((r) => r.adherence.gates))} | ${list.filter((r) => r.adherence.escalated).length} | ${list.reduce((s, r) => s + (r.adherence.inline_writes ?? 0), 0)} | ${JSON.stringify(findings)} | ${JSON.stringify(Object.fromEntries(Object.entries(spend).map(([m, v]) => [m, +v.toFixed(4)])))} | ${JSON.stringify(Object.fromEntries(Object.entries(perAgent).map(([n, w]) => [n, Math.round(w)])))} | ${fmt(cover.length ? Math.min(...cover) : null)} |`);
   }
   out.push('', '## Reading', '', 'To be written by a person: read 10 transcripts first, then say what the figures mean. An inconclusive result is published as inconclusive, with every figure.', '');
   return out.join('\n');
@@ -489,15 +493,15 @@ async function main(argv) {
     options: {
       phase: { type: 'string' }, out: { type: 'string' }, model: { type: 'string' }, seed: { type: 'string' }, go: { type: 'boolean' }, chunk: { type: 'string' },
       'budget-total': { type: 'string' }, 'budget-draw': { type: 'string' }, 'window-tokens': { type: 'string' }, 'plugin-41': { type: 'string' }, 'env-file': { type: 'string' },
-      'timeout-min': { type: 'string' }, 'review-model': { type: 'string' }, tasks: { type: 'string' }, write: { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
+      'timeout-min': { type: 'string' }, 'worker-model': { type: 'string' }, baseline: { type: 'string' }, candidate: { type: 'string' }, tasks: { type: 'string' }, write: { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
     },
   });
   if (command === 'plan' || command === 'run' || command === 'record') {
-    if (!Object.hasOwn(PHASE_ARMS, args.phase ?? '')) throw new Error('--phase takes pilot, aa, main, ablation or confirm');
+    if (!Object.hasOwn(PHASE_ARMS, args.phase ?? '')) throw new Error(`--phase takes ${Object.keys(PHASE_ARMS).join(', ')}`);
     if (command === 'run') return (await run(args)).stop ? 1 : 0;
     if (command === 'record') return record(args);
     const prereg = readJson(PREREG);
-    const plan = buildPlan(args.phase, tasksFor(args.phase), Number(args.seed ?? 1), drawsFor(args.phase, prereg), args.phase === 'main' ? prereg.arm_k : {});
+    const plan = buildPlan(args.phase, tasksFor(args.phase), Number(args.seed ?? 1), drawsFor(args.phase, prereg), armKFor(args.phase, prereg));
     console.log(`${plan.length} draws across ${new Set(plan.map((d) => d.task)).size} tasks; chunks of at most ${MAX_CHUNK}; no spend`);
     if (args.pilot) console.log(`timeout from the pilot: ${JSON.stringify(timeoutFromPilot(completed(args.pilot)))} minutes`);
     plan.forEach((d) => console.log(`  ${d.id}`));
@@ -528,11 +532,14 @@ async function main(argv) {
     return 0;
   }
   if (command === 'decide') {
-    if (!args.aa || !args.main) throw new Error('--aa and --main are required');
-    const problem = preregProblem() ?? comparableRecordings(args.aa, args.main);
+    if (!args.aa || !args.baseline || !args.candidate) throw new Error('--aa, --baseline and --candidate are required');
+    const problem = preregProblem() ?? comparableRecordings(args.aa, args.baseline) ?? comparableRecordings(args.baseline, args.candidate);
     if (problem) throw new Error(problem);
     const reg = readJson(PREREG);
-    const verdict = evaluateRelease({ aa: completed(args.aa), main: completed(args.main), rule: { ...reg.rule, min_tasks: reg.tasks_wanted, k: reg.k, aa_k: reg.aa_k } });
+    const [base, cand] = [completed(args.baseline), completed(args.candidate)];
+    const verdict = evaluateRelease({ aa: completed(args.aa), main: [...base, ...cand], rule: { ...reg.rule, min_tasks: reg.tasks_wanted, k: reg.k, aa_k: reg.aa_k } });
+    verdict.against_41 = { dollars: logRatio([...base, ...cand], 'somi5', 'somi41', 'cost'), tokens: logRatio([...base, ...cand], 'somi5', 'somi41') };
+    verdict.bare_drift = logRatio([...cand, ...base], 'bare-check', 'bare', 'cost');
     console.log(JSON.stringify(verdict, null, 2));
     return verdict.ships ? 0 : 1;
   }
@@ -547,11 +554,16 @@ async function main(argv) {
     }
     return refused ? 1 : 0;
   }
+  if (command === 'routes') {
+    const { scoreRouter } = await import('./routing-score.mjs');
+    console.log(JSON.stringify(scoreRouter(readJson(path.join(HERE, 'routes.json')).items), null, 1));
+    return 0;
+  }
   if (command === 'power') {
     console.log(renderPower(args.pilot ? readResults(args.pilot) : []));
     return 0;
   }
-  throw new Error('bench takes plan, admit, power, run, record, select, prereg, report or decide');
+  throw new Error('bench takes plan, admit, routes, power, run, record, select, prereg, report or decide');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

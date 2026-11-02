@@ -11,9 +11,9 @@ import { adherence, agentSplit, journalFacts, labelDraw, scopeCheck } from '../b
 
 // Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
 function drawsFor(arm, solvedCounts, { weighted = 100, missed = 1 } = {}) {
-  return solvedCounts.flatMap((solved, i) => [1, 2, 3].map((draw) => ({ task: `t${i}`, arm, draw, solved: draw <= solved, label: 'finished', green: draw <= solved ? 10 : 10 - missed, total: 10, weighted, cost: 0.1, wall_ms: 1000, turns: 5 })));
+  return solvedCounts.flatMap((solved, i) => [1, 2, 3].map((draw) => ({ task: `t${i}`, arm, draw, solved: draw <= solved, label: 'finished', green: draw <= solved ? 10 : 10 - missed, total: 10, weighted, cost: weighted / 1000, wall_ms: 1000, turns: 5 })));
 }
-const RULE = { min_tasks: 20, k: 3, aa_k: 3, max_token_ratio: 1.5, test_share_margin: -0.05, solved_rate_margin: -0.2 };
+const RULE = { min_tasks: 20, k: 3, aa_k: 3, max_cost_ratio: 1.5, test_share_margin: -0.05, solved_rate_margin: -0.2 };
 const twenty = (values) => Array.from({ length: 20 }, (_, i) => values[i % values.length]);
 
 test('the paired difference matches a hand calculation', () => {
@@ -63,13 +63,13 @@ const bareRows = drawsFor('bare', twenty([1, 2]), { weighted: 100 });
 test('the release rule ships a non-inferior, affordable lane', () => {
   const v = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 140 })] });
   assert.equal(v.ships, true, v.reasons.join('; '));
-  assert.ok(Math.abs(v.token_ratio - 1.4) < 1e-9);
+  assert.ok(Math.abs(v.cost_ratio - 1.4) < 1e-9);
 });
 
 test('the release rule refuses each failure, and says which', () => {
   const costly = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 151 })] });
   assert.equal(costly.ships, false);
-  assert.match(costly.reasons.join(), /tokens per solved/);
+  assert.match(costly.reasons.join(), /dollars per solved/);
 
   const worse = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([0, 0]), { weighted: 100 })] });
   assert.equal(worse.ships, false);
@@ -118,29 +118,41 @@ test('a paid recording cannot run part of its plan, and only a pilot can', () =>
   assert.match(r.stderr, /--tasks is for a pilot or a stub/);
 });
 
-test('the main plan gives 4.1 fewer draws, in the same rounds', () => {
-  const plan = buildPlan('main', [{ id: 't', dir: 'd' }], 1, 6, { somi41: 3 });
+test('the candidate plan re-checks bare with one draw', () => {
+  const plan = buildPlan('candidate', [{ id: 't', dir: 'd' }], 1, 6, { 'bare-check': 1 });
   const count = (arm) => plan.filter((d) => d.arm === arm).length;
-  assert.deepEqual([count('bare'), count('somi5'), count('somi41')], [6, 6, 3]);
-  assert.ok(plan.filter((d) => d.arm === 'somi41').every((d) => d.draw <= 3));
+  assert.deepEqual([count('somi5'), count('bare-check')], [6, 1]);
+});
+
+test('a benchmark never runs on opus', () => {
+  for (const flags of [['--model', 'claude-opus-5-5'], ['--model', 'claude-sonnet-5-5', '--worker-model', 'claude-opus-5-5']]) {
+    const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'pilot', '--out', 'x', ...flags, '--budget-total', '1', '--go'], { encoding: 'utf8' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /never run on opus/);
+  }
+  assert.equal(servedAsPinned(['claude-opus-5-5'], ['claude-sonnet-5-5', 'claude-haiku-5-5']), false);
+});
+
+test('the router clears a floor on the labelled set', async () => {
+  const { scoreRouter } = await import('../benchmarks/v2/routing-score.mjs');
+  const { items } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/routes.json'), 'utf8'));
+  assert.ok(items.length >= 200, `${items.length} items`);
+  assert.ok(scoreRouter(items).accuracy >= 0.8);
 });
 
 test('plans are paired, seeded and repeatable', () => {
   const tasks = [{ id: 'a', dir: 'x/a' }, { id: 'b', dir: 'x/b' }];
-  const plan = buildPlan('main', tasks, 7);
-  assert.equal(plan.length, 2 * 3 * 3);
-  assert.deepEqual(plan, buildPlan('main', tasks, 7));
-  assert.notDeepEqual(plan.map((d) => d.id), buildPlan('main', tasks, 8).map((d) => d.id));
+  const plan = buildPlan('baseline', tasks, 7);
+  assert.equal(plan.length, 2 * 3 * 2);
+  assert.deepEqual(plan, buildPlan('baseline', tasks, 7));
+  assert.notDeepEqual(plan.map((d) => d.id), buildPlan('baseline', tasks, 8).map((d) => d.id));
   assert.equal(buildPlan('aa', tasks).length, 12);
-  const round = plan.slice(0, 3).map((d) => d.task);
+  const round = plan.slice(0, 2).map((d) => d.task);
   assert.equal(new Set(round).size, 1, 'all arms of a task run in the same round');
 });
 
-test('each arm gets the same task text, with only the front door added', () => {
-  assert.equal(armPrompt('bare', 'do it'), 'do it');
-  assert.equal(armPrompt('bare-a', 'do it'), 'do it');
-  assert.equal(armPrompt('somi5', 'do it'), '/somi:task do it');
-  assert.equal(armPrompt('somi41', 'do it'), '/somi:ship-loop do it');
+test('each arm gets the same plain request, so the routing is what gets measured', () => {
+  for (const arm of ['bare', 'bare-a', 'somi5', 'somi41', 'abl-review-off']) assert.equal(armPrompt(arm, 'do it'), 'do it');
 });
 
 test('a recording counts the machine as quiet only under half its cores', () => {
@@ -197,9 +209,9 @@ test('a paid run refuses without --go, and the registration is sealed in the fil
   const prereg = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/prereg.json'), 'utf8'));
   assert.equal(prereg.rule.test_share_margin, -0.05);
   assert.equal(prereg.rule.solved_rate_margin, -0.2);
-  assert.equal(prereg.rule.max_token_ratio, 1.5);
+  assert.equal(prereg.rule.max_cost_ratio, 1.5);
   assert.equal(prereg.k, 6);
-  assert.equal(prereg.arm_k.somi41, 3);
+  assert.equal(prereg.arm_k['bare-check'], 1);
   assert.ok(Object.values(prereg.decisions).every((v) => typeof v === 'string'));
 });
 
@@ -347,7 +359,6 @@ test('every ablation patch still matches the shipped file exactly once', () => {
   const { patches, cells } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8'));
   for (const [name, { file, find }] of Object.entries(patches)) assert.equal(fs.readFileSync(path.join(REPO, file), 'utf8').split(find).length, 2, name);
   for (const [cell, list] of Object.entries(cells)) for (const name of list) assert.ok(patches[name], `${cell}: ${name}`);
-  assert.equal(armPrompt('abl-review-off', 'do it'), '/somi:task do it');
   assert.ok(armsFor('ablation').includes('bare') && armsFor('ablation').includes('somi5'));
   assert.deepEqual(armsFor('pilot'), ['bare']);
 });

@@ -12,7 +12,7 @@ import { isClean } from './git-tree.mjs';
 import { readLedger, addToLedger } from './ledger.mjs';
 import { TransitionError, afterCode, afterReview, close as kernelClose, decide as kernelDecide, open as kernelOpen } from './kernel.mjs';
 import { isBlocking } from './policy.mjs';
-import { classify } from './routes.mjs';
+import { WHEN, classify } from './routes.mjs';
 import { shardsFor } from './shards.mjs';
 import { nextTier, resolveSpawn } from './tiers.mjs';
 import { renderStatus } from './views.mjs';
@@ -135,7 +135,7 @@ export function route(ctx, { request, ticket, hint }) {
   if (typeof request !== 'string' || request.trim() === '') throw new TransitionError('route needs the request');
   const c = deriveCursor(readEvents(ctx.root, ctx.env));
   const chosen = classify({ request, ticket, hint });
-  if (chosen.via === 'choose') return { next: 'choose', how: HOW.choose, choices: chosen.choices };
+  if (chosen.via === 'choose') return { next: 'choose', how: HOW.choose, choices: Object.fromEntries(chosen.choices.map((r) => [r, WHEN[r]])) };
   if (chosen.route === 'status') return { next: 'report', how: HOW.report, status: renderStatus(readEvents(ctx.root, ctx.env)) };
   if (chosen.route === 'config') {
     return { next: 'report', how: HOW.report, tiers: Object.fromEntries(['low', 'medium', 'high'].map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host };

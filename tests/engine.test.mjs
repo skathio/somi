@@ -76,7 +76,7 @@ test('a worker that changes nothing ends the route with nothing to check', (t) =
 test('a finish that needs a review tells the worker and commits nothing', (t) => {
   const dir = makeRepo(t);
   const ctx = makeCtx(dir);
-  route(ctx, { request: 'Run a command' });
+  route(ctx, { request: 'Add a command runner' });
   writeFiles(dir, SINK);
   const finished = somi(dir, ['finish']);
   assert.equal(finished.json.next, 'review');
@@ -107,7 +107,7 @@ test('failing checks restart one tier up, once, and then ask', (t) => {
 
 test('a sink in the diff gets the low reviewer and the high security reviewer', (t) => {
   const ctx = makeCtx(makeRepo(t));
-  route(ctx, { request: 'Run a command' });
+  route(ctx, { request: 'Add a command runner' });
   writeFiles(ctx.root, SINK);
   check(ctx);
   const r = done(ctx, {});
@@ -119,7 +119,7 @@ const finding = (over = {}) => ({ id: 'r1', severity: 'Major', boundary: true, f
 const review = (agent, findings) => ({ agent, verdict: findings.length ? 'request-changes' : 'approve', tests_run: [], findings });
 function atReview(t) {
   const ctx = makeCtx(makeRepo(t));
-  route(ctx, { request: 'Run a command' });
+  route(ctx, { request: 'Add a command runner' });
   writeFiles(ctx.root, SINK);
   check(ctx);
   done(ctx, {});
@@ -211,9 +211,17 @@ test('conflicting signals go to the coordinator to choose, and a hint settles it
   const ctx = makeCtx(makeRepo(t));
   const r = route(ctx, { request: 'The report is too slow, fix it' });
   assert.equal(r.next, 'choose');
-  assert.deepEqual(r.choices, ['perf', 'debug']);
+  assert.deepEqual(Object.keys(r.choices), ['perf', 'debug']);
   assert.equal(route(ctx, { request: 'The report is too slow, fix it', hint: 'perf' }).route, 'perf');
 });
+
+test('a request no rule fits goes to the coordinator with the whole short table', () => {
+  const c = classify({ request: 'Everything is returning 502 and customers are calling' });
+  assert.equal(c.via, 'choose');
+  assert.ok(c.choices.includes('incident') && c.choices.includes('debug'));
+});
+
+test('a bare ticket key starts as build', () => assert.equal(classify({ request: 'PROJ-123' }).route, 'build'));
 
 test('the router reads ticket types before text', () => {
   assert.equal(classify({ request: 'Add a thing', ticket: { type: 'Bug' } }).route, 'debug');

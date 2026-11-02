@@ -80,22 +80,23 @@ export function evaluateAa(rows, k = K_DRAWS) {
 
 // The release rule, evaluated mechanically. `ships` is true only when every condition holds, and `reasons` names each one that did not.
 export function evaluateRelease({ aa, main, candidate = 'somi5', baseline = 'bare', rule }) {
-  const { min_tasks: minTasks, solved_rate_margin: solvedMargin, test_share_margin: shareMargin, max_token_ratio: maxRatio, k, aa_k: aaK } = rule;
+  const { min_tasks: minTasks, solved_rate_margin: solvedMargin, test_share_margin: shareMargin, max_cost_ratio: maxRatio, k, aa_k: aaK } = rule;
   const reasons = [];
   const floor = evaluateAa(aa, aaK);
   const solved = pairedDifference(main, candidate, baseline, k);
   const share = pairedDifference(main, candidate, baseline, k, testShare);
   const cand = armSummary(main, candidate, k);
   const base = armSummary(main, baseline, k);
-  const ratio = cand.weighted_per_solved !== null && base.weighted_per_solved ? cand.weighted_per_solved / base.weighted_per_solved : null;
+  const ratio = cand.cost_per_solved !== null && base.cost_per_solved ? cand.cost_per_solved / base.cost_per_solved : null;
+  const tokenRatio = cand.weighted_per_solved !== null && base.weighted_per_solved ? cand.weighted_per_solved / base.weighted_per_solved : null;
   if (!floor.contains_zero) reasons.push('the A/A interval is missing or excludes zero, so the instrument is not trusted');
   if (cand.abandoned || base.abandoned) reasons.push('an arm was abandoned: no valid score');
   if (solved.n < minTasks) reasons.push(`only ${solved.n} tasks paired; the registration needs ${minTasks}`);
   if (solved.unpaired.length > 0) reasons.push(`${solved.unpaired.length} tasks have incomplete draws`);
   if (solved.lower === null || solved.lower < solvedMargin) reasons.push('the lower bound of the solved-rate difference is below its margin');
   if (share.lower === null || share.lower < shareMargin) reasons.push('the lower bound of the hidden-test share difference is below its margin');
-  if (ratio === null || ratio > maxRatio) reasons.push('weighted tokens per solved task are over the allowed ratio to bare');
-  return { ships: reasons.length === 0, reasons, aa: floor, token_ratio: ratio, solved, test_share: share, arms: { [candidate]: cand, [baseline]: base } };
+  if (ratio === null || ratio > maxRatio) reasons.push('dollars per solved task are over the allowed ratio to bare');
+  return { ships: reasons.length === 0, reasons, aa: floor, cost_ratio: ratio, token_ratio: tokenRatio, solved, test_share: share, arms: { [candidate]: cand, [baseline]: base } };
 }
 
 // The set is mixed on purpose. Tasks in the band show change either way, tasks a bare agent always misses leave room for a review to help,

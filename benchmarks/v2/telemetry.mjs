@@ -54,6 +54,8 @@ export function journalFacts(journalText) {
   const findings = {};
   for (const review of reviews) for (const f of review.findings ?? []) findings[f.severity] = (findings[f.severity] ?? 0) + 1;
   return {
+    routed: events.find((e) => e?.type === 'route')?.route ?? null,
+    escalated: events.some((e) => e?.type === 'escalate'),
     opened: events.some((e) => e?.type === 'open'),
     closed: events.some((e) => e?.type === 'close'),
     passes: reviews.length,
@@ -71,17 +73,19 @@ export function adherence(streamText, journalText) {
   let tool = 0;
   let cli = 0;
   const agents = [];
+  let inlineWrites = 0;
   for (const ev of parseLines(streamText)) {
     if (ev?.type !== 'assistant' || ev.parent_tool_use_id) continue;
     for (const block of ev.message?.content ?? []) {
       if (block?.type !== 'tool_use') continue;
+      if (/^(Write|Edit|MultiEdit|NotebookEdit)$/.test(block.name)) inlineWrites++;
       if (STEP_TOOL.test(block.name)) tool++;
       else if (block.name === 'Bash' && STEP_CLI.test(block.input?.command ?? '')) cli++;
       else if (AGENT_TOOL.test(block.name)) agents.push({ type: block.input?.subagent_type ?? 'general', model: block.input?.model ?? null });
     }
   }
   const route = tool > 0 && cli > 0 ? 'mixed' : tool > 0 ? 'tool' : cli > 0 ? 'cli' : 'none';
-  return { route, steps: tool + cli, agents, ...journalFacts(journalText) };
+  return { route, steps: tool + cli, agents, inline_writes: inlineWrites, ...journalFacts(journalText) };
 }
 
 // A stopped loop is not a solved task, whatever the tests say. A closing question after finished work is not a stop, so it needs the
