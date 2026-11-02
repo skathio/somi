@@ -30,7 +30,7 @@ export function Guardrails() {
         </div>
         <div className="rounded-xl border border-line bg-surface p-5 text-muted shadow-sm">
           <h3 className="mb-1 text-lg font-semibold text-ink">The ruleset</h3>
-          <p>A digest under 150 lines arrives once per session. Your project rules stay in your own CLAUDE.md or AGENTS.md.</p>
+          <p>A short digest arrives at session start and after compaction. Your project rules stay in your own CLAUDE.md or AGENTS.md.</p>
           <div className="mt-3 overflow-x-auto rounded-lg border border-line">
             <table className="w-full text-left text-sm">
               <thead className="bg-surface-2 text-xs uppercase tracking-wider">

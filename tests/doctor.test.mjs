@@ -3,10 +3,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { makeRepo } from './helpers.mjs';
-import { runDoctor, sandboxSettings, settingsWarnings } from '../scripts/lib/doctor.mjs';
+import { runDoctor, sandboxSettings, settingsWarnings, tierWarnings } from '../scripts/lib/doctor.mjs';
 import { copilotHooks, writeCopilotHooks } from '../scripts/lib/init.mjs';
 
 const results = (touch, curl) => (cmd) => (cmd === 'touch' ? touch : curl);
+test('a tier with no model is named, on the host that has no defaults', () => {
+  assert.deepEqual(tierWarnings({}, 'claude'), []);
+  assert.match(tierWarnings({}, 'copilot')[0], /low, medium, high on copilot/);
+  assert.deepEqual(tierWarnings({ tiers: { copilot: { low: 'a', medium: 'b', high: 'c' } } }, 'copilot'), []);
+});
+
 const doctor = (exec, over = {}) => runDoctor({ root: '/nowhere', host: 'claude', platform: 'linux', home: '/nowhere-home', env: {}, exec, removeFile: () => {}, ...over });
 const blocked = { status: 1 };
 const allowed = { status: 0 };

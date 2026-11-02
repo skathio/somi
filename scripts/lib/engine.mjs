@@ -26,7 +26,7 @@ const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !=
 const shellQuote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
 
 const HOW = Object.freeze({
-  spawn: 'Start spawn.agent with spawn.model if one is given, passing spawn.prompt unchanged, in the foreground, and wait for it. Do nothing else. When it reports, call somi_step with action "done", status "ok" (or "too-big" with milestones, or "blocked") and its summary. Say nothing in between.',
+  spawn: 'Start spawn.agent with spawn.model if one is given, passing spawn.prompt unchanged, in the foreground, and wait for it. If the host needs a name for it, give a short one. Do nothing else. When it reports, call somi_step with action "done", status "ok" (or "too-big" with milestones, or "blocked") and its summary. Say nothing in between.',
   review: 'Start each listed reviewer as a fresh agent with its model, in the foreground, giving it only card.diff and card.prompt. Then call somi_step with action "after-review" and every reviewer\'s JSON.',
   critic: 'Start spawn.agent with spawn.model, passing spawn.prompt unchanged. Then call somi_step with action "done", status "ok" and keep set to the ids it confirmed.',
   run: 'Run this one shell command, then call somi_step with the action in `then`.',

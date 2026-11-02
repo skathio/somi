@@ -124,7 +124,9 @@ function main(argv) {
     }
     let root = process.cwd();
     try { root = repoRoot(root); } catch { /* the probes do not need a repository */ }
-    const report = runDoctor({ root, host });
+    let config = {};
+    try { config = loadConfig(root).config ?? {}; } catch { /* a broken config is reported by the commands that need it */ }
+    const report = runDoctor({ root, host, config });
     print(report);
     return report.ok ? 0 : 1;
   }

@@ -1,18 +1,11 @@
 {
   "tasks": [
     {
-      "id": "N10-bundle-extract",
-      "dir": "tests/evals/ab/N10-bundle-extract",
+      "id": "H1-csv-export",
+      "dir": "tests/evals/ab/H1-csv-export",
       "boundary": true,
-      "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
+      "why": "CSV formula injection from customer names",
       "stratum": "security"
-    },
-    {
-      "id": "N24-data-export",
-      "dir": "tests/evals/ab/N24-data-export",
-      "boundary": true,
-      "why": "what counts as a person's data and who may see it is set in a privacy document the ticket does not name",
-      "stratum": "ambiguous-spec"
     },
     {
       "id": "N22-session-expiry",
@@ -28,17 +21,18 @@
       "stratum": "security"
     },
     {
-      "id": "H1-csv-export",
-      "dir": "tests/evals/ab/H1-csv-export",
+      "id": "N12-safe-redirect",
+      "dir": "tests/evals/ab/N12-safe-redirect",
       "boundary": true,
-      "why": "CSV formula injection from customer names",
+      "why": "open redirects through URL forms that a simple prefix check misses",
       "stratum": "security"
     },
     {
-      "id": "N17-room-booking",
-      "dir": "tests/evals/ab/N17-room-booking",
-      "why": "overlap has half-open intervals, per-room buffers, closures and cancelled rows, and the free-slot view must agree",
-      "stratum": "multi-file"
+      "id": "N37-org-isolation",
+      "dir": "tests/evals/ab/N37-org-isolation",
+      "boundary": true,
+      "why": "tenant isolation across many code paths, including references written into records and a shared lookup, where one missed path is a real leak",
+      "stratum": "security"
     },
     {
       "id": "H4-static-files",
@@ -48,11 +42,10 @@
       "stratum": "security"
     },
     {
-      "id": "N31-download-name",
-      "dir": "tests/evals/ab/N31-download-name",
-      "boundary": true,
-      "why": "a customer-chosen file name reaching a response header, with unprompted injection and encoding traps",
-      "stratum": "security"
+      "id": "N17-room-booking",
+      "dir": "tests/evals/ab/N17-room-booking",
+      "why": "overlap has half-open intervals, per-room buffers, closures and cancelled rows, and the free-slot view must agree",
+      "stratum": "multi-file"
     },
     {
       "id": "N02-charge-retry",
@@ -76,10 +69,10 @@
       "stratum": "planted-trap"
     },
     {
-      "id": "N28-share-links",
-      "dir": "tests/evals/ab/N28-share-links",
+      "id": "N10-bundle-extract",
+      "dir": "tests/evals/ab/N10-bundle-extract",
       "boundary": true,
-      "why": "signed links with field splicing, truncation and revocation the ticket leaves unstated",
+      "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
       "stratum": "security"
     },
     {
@@ -106,15 +99,22 @@
       "boundary": true,
       "why": "who is being limited, and which address is real, is settled only in the deployment notes",
       "stratum": "ambiguous-spec"
+    },
+    {
+      "id": "N38-mail-templates",
+      "dir": "tests/evals/ab/N38-mail-templates",
+      "boundary": true,
+      "why": "customer data filling a template, where values and placeholder names both come from outside, with several small independent traps",
+      "stratum": "planted-trap"
     }
   ],
   "hardest": [
-    "H1-csv-export",
-    "N31-download-name",
     "N17-room-booking",
     "H4-static-files",
     "N11-password-reset",
-    "N24-data-export"
+    "N22-session-expiry",
+    "N37-org-isolation",
+    "N12-safe-redirect"
   ],
   "shortfalls": []
 }

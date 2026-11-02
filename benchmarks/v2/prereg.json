@@ -10,7 +10,7 @@
     "ablation_set": "review, digest and planning factorial, one draw per task and cell, plus always-on review",
     "minimum_effect": "25% for a release, 30% for a part",
     "budget_per_recording": "set for each run, which gets its own go-ahead",
-    "task_mix": "mixed: 4 in the band, 4 near-miss floor tasks and 8 ceiling tasks, because the claim is cost with quality held"
+    "task_mix": "mixed: 5 in the band, 2 near-miss floor tasks and 9 ceiling tasks, because the claim is cost with quality held. The design wanted 4, 4 and 8. After an independent fairness review removed unfair tests, six more hard tasks were written and probed, and the session model solved nearly all of them, so only 2 fair floor tasks exist. Fixed before any draw on the set."
   },
   "question": "Does routing through the 5.0 coordinator cost no more than 1.5 times a bare agent per solved task, without losing quality?",
   "primary": "dollars per solved task, somi5 over bare, on the same tasks and model, from each result's billing; tokens, time and window share are reported beside it",
@@ -23,9 +23,9 @@
   },
   "tasks_wanted": 16,
   "mix": {
-    "band": 4,
-    "floor": 4,
-    "ceiling": 8
+    "band": 5,
+    "floor": 2,
+    "ceiling": 9
   },
   "min_boundary": 4,
   "rule": {
@@ -66,7 +66,7 @@
     "window_share": 0.6,
     "abandon_after_exhaustions": 2
   },
-  "task_set_sha256": null,
+  "task_set_sha256": "845cc72dcdbced70c8a73aa2abce482f12f3615fdd213792f5ca838ee91db2e2",
   "trial_k": 2,
   "large_k": 3
 }

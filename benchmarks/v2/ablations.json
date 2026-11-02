@@ -20,6 +20,21 @@
       "file": "library/roles/build.md",
       "find": "You build one small, clear change.",
       "replace": "First write a short plan with a test or command that proves each milestone, and pipe it to `somi plan`. Then build it. You build one small, clear change."
+    },
+    "one-thread-route": {
+      "file": "scripts/lib/routes.mjs",
+      "find": "export function classify({ request = '', ticket, hint } = {}) {",
+      "replace": "export function classify({ request = '', ticket, hint } = {}) {\n  if (request) return { route: 'build', via: 'rule' };"
+    },
+    "one-thread-brief": {
+      "file": "library/roles/build.md",
+      "find": "You build one small, clear change.",
+      "replace": "You build this whole request yourself in one thread, however long it is. Never report it as too big."
+    },
+    "one-thread-no-split": {
+      "file": "scripts/lib/engine.mjs",
+      "find": "if (status === 'too-big' && wf.kind === 'code') {",
+      "replace": "if (false) {"
     }
   },
   "cells": {
@@ -53,5 +68,13 @@
     "abl-review-always": [
       "review-always"
     ]
-  }
+  },
+  "large_cells": {
+    "somi5-one-thread": [
+      "one-thread-route",
+      "one-thread-brief",
+      "one-thread-no-split"
+    ]
+  },
+  "large_note": "The large phase asks whether fresh context per milestone pays. This arm routes the whole request to one worker with the ledger, and is measured only in that phase."
 }

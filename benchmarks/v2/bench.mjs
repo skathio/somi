@@ -53,7 +53,7 @@ export const PHASE_ARMS = Object.freeze({
   baseline: ['bare', 'somi41'],
   candidate: ['somi5', 'bare-check'],
   ablation: ['bare'],
-  large: ['bare', 'somi5', 'somi41'],
+  large: ['bare', 'somi5', 'somi5-one-thread', 'somi41'],
 });
 
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -283,7 +283,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   const pluginOf = (arm) => {
     if (isBare(arm)) return null;
     if (arm === 'somi41') return path.resolve(args['plugin-41']);
-    if (!plugins.has(arm)) plugins.set(arm, buildPlugin({ repoRoot: REPO, runTmp, dirName: `plugin-${arm}`, patches: (ablations.cells[arm] ?? []).map((name) => ablations.patches[name]) }));
+    if (!plugins.has(arm)) plugins.set(arm, buildPlugin({ repoRoot: REPO, runTmp, dirName: `plugin-${arm}`, patches: (ablations.cells[arm] ?? ablations.large_cells[arm] ?? []).map((name) => ablations.patches[name]) }));
     return plugins.get(arm);
   };
   const env = readEnvFile(path.resolve(args['env-file'] ?? path.join(REPO, '.somi/eval.env')));

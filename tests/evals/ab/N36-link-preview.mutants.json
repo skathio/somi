@@ -1,0 +1,20 @@
+[
+ {
+  "name": "redirect-unchecked",
+  "file": "src/preview.mjs",
+  "find": "const address = await pick(next, deps);",
+  "replace": "const address = hop === 0 ? await pick(next, deps) : (await deps.resolve(next.hostname.replace(/^\\[|\\]$/g, '')))[0];"
+ },
+ {
+  "name": "first-address-only",
+  "file": "src/preview.mjs",
+  "find": "if (!addresses.length || addresses.some(isInternal))",
+  "replace": "if (!addresses.length || isInternal(addresses[0]))"
+ },
+ {
+  "name": "cgnat-allowed",
+  "file": "src/preview.mjs",
+  "find": "(a === 100 && b >= 64 && b <= 127) ||",
+  "replace": ""
+ }
+]

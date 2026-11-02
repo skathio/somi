@@ -6,31 +6,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
-### 5.0.0 release candidate: a bare-first kernel
+### 5.0.0 release candidate: routing that costs less
 
-**Breaking.** A ground-up rebuild. It ships as the default only if the pre-registered benchmark passes, and that recording has not run. See `docs/MIGRATING-TO-5.md`. The 4.x line stays on the `4.x` branch, which holds 4.1.0.
+**Breaking.** A ground-up rebuild of how SoMi runs, keeping what it is for: pass any request or ticket and it runs the right workflow. It ships as the default only if the pre-registered benchmark passes, and that result is reported in `docs/BENCHMARK.md`. See `docs/MIGRATING-TO-5.md`. The 4.x line stays on the `4.x` branch.
 
 #### Changed
 
-- **Benchmark v2:** each draw now gets an outcome label, protocol fields and a per-agent token split. A stopped loop no longer counts as solved. A recording is pinned to a full model id, and one command runs it and writes the record. Parts can be measured on and off without any switch in the shipped plugin. The whole pipeline runs free with a stub agent in the test suite.
-- **The default lane is bare-first.** `/task` codes in the main thread, runs a fast gate, and reads the real diff. A clean small change gets no review.
-- **Reviews run once per feature.** One reviewer, plus a security reviewer on a real trust boundary. Only a Blocker or a Major confirmed on a boundary re-loops, at most twice, and the second pass reads only the fix diff. Minor and Nit findings are logged.
-- **State is one journal written by the tools.** Status and pull request text are rendered from it. Resuming after a kill at any transition leaves a byte-identical journal.
-- **Gates moved left.** `somi check` runs before each commit within 60 seconds, and the full suite runs before push.
-- **The OS sandbox is the security boundary on both hosts.** `somi doctor` proves it with the vendor probes, and `profiles/` holds recommended settings. Hooks are tripwires, and the policy-file guard is frozen as a review signal.
-- **Rules arrive once per session,** as a digest under 150 lines.
-- **Two cost tiers,** `work` and `review`, set per host.
+- **A thin coordinator on a step engine routes every request.** The procedure lives in the engine and arrives one step at a time, so it does not sit in the coordinator's context. Rules place a clear request, and the coordinator chooses from a short table when they cannot.
+- **Work runs on subagents, and a hook sets their tier.** Low, medium and high map to models per environment in config, at every nesting level. On Claude Code, edits during a workflow stay with workers. Copilot CLI has no default map, and nothing is denied there because a denied agent does the work inline.
+- **Workers end their own step** with `somi finish`, because each coordinator turn is billed at the session's model.
+- **Reviews follow the real diff.** No forecast decides a review. Only a Blocker, or a Major a critic confirms on a trust boundary, re-loops, at most twice, and the second pass reads only the fix diff.
+- **Failing checks restart a tier up,** once, with the working tree and a short summary.
+- **Large work gets milestones with fresh context,** from one plan you approve, instead of a document chain.
+- **State is one journal and a small ledger, both written by the tools.** The ledger comes back after every compaction and at the top of every brief.
+- **The OS sandbox is the security boundary on both hosts.** `somi doctor` proves it with vendor probes, and now also warns about tiers with no model. Hooks are tripwires, and the policy-file guard is frozen as a review signal.
+- **Rules arrive at session start and after compaction,** as a short digest.
 - **One MCP tool,** `somi_step`, which never runs project commands.
-- **Hook denials exit 2,** and hook output carries both hosts' fields, so hooks behave the same on Copilot CLI and Claude Code. `somi init --host copilot` writes a repository hook file for use without the plugin.
-
-#### Removed
-
-- Against 4.1: 20 commands, 16 agents, 39 skills, the `somi_loop` tool, the design and planning templates, pre-code sizing, panel review, parallel orchestration, the dispatcher, and the diary, progress and decision files.
+- **Hook denials exit 2,** and hook output carries both hosts' fields, so hooks behave the same on both.
+- **Benchmark v2:** a mixed task set, every arm given the same plain request through its real entry point, dollars per solved task from billing, spend per model, and a mechanical release rule.
 
 #### Added
 
-- `benchmarks/v2`: paired arms, an A/A floor, clustered paired standard errors, pass^k and tokens per solved task, with a mechanical release rule.
+- **Shards:** `somi slot <step> <plugin:component>` connects another plugin's skill, agent or tool to a named step. Shards keep working when a plugin updates, and anything that writes outward confirms first.
+- **Six expertise skills, loaded when work calls for them:** secure coding, threat modeling, a testing checklist, CI and infrastructure gotchas, performance method, and accessibility.
+- **`/a11y-check`, plus `perf` and `migrate` workflows** reached through routing.
+- **An update notice** that tells you a newer version exists, and never updates anything.
 - `somi migrate` imports open findings and decisions from a 4.x tree.
+
+#### Removed
+
+- `clean-code`, `solid-principles`, `reasoning-craft` and the general `observability` skill, as the evidence shows they add nothing a current model lacks.
+- Pre-code sizing, the design and planning document chain, parallel orchestration, and the diary and progress files. Older command names still work as aliases.
 
 ### Changes on main before the 5.0 rebuild
 

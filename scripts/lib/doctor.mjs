@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { resolveSpawn } from './tiers.mjs';
 
 const WSL_REMEDY = 'Native Windows has no OS sandbox for agents. Run the agent inside WSL2 and run this again there.';
 
@@ -44,7 +45,13 @@ export function settingsWarnings(host, s) {
 
 const defaultExec = (cmd, args) => spawnSync(cmd, args, { encoding: 'utf8', timeout: 20000 });
 
-export function runDoctor({ root, host, platform = process.platform, env = process.env, home = os.homedir(), exec = defaultExec, removeFile = fs.rmSync, pid = process.pid }) {
+// A tier with no model runs on the session's, so its spend is not where the config says. Worth saying, not failing over.
+export function tierWarnings(config, host) {
+  const unmapped = ['low', 'medium', 'high'].filter((t) => !resolveSpawn(config, host, t).enforced);
+  return unmapped.length ? [`no model is set for tier ${unmapped.join(', ')} on ${host}, so those workers run on the session's model; set them under tiers.${host} in config`] : [];
+}
+
+export function runDoctor({ root, host, config = {}, platform = process.platform, env = process.env, home = os.homedir(), exec = defaultExec, removeFile = fs.rmSync, pid = process.pid }) {
   if (platform === 'win32') return { ok: false, verdict: 'FAIL', host, remedy: WSL_REMEDY, probes: [], warnings: [] };
   const probePath = path.join(home, `.somi-sandbox-probe-${pid}`);
   const touch = exec('touch', [probePath]);
@@ -58,7 +65,7 @@ export function runDoctor({ root, host, platform = process.platform, env = proce
   const ok = probes.every((p) => p.blocked);
   return {
     ok, verdict: ok ? 'PASS' : 'FAIL', host, probes,
-    warnings: settingsWarnings(host, sandboxSettings({ host, root, home, env })),
+    warnings: [...settingsWarnings(host, sandboxSettings({ host, root, home, env })), ...tierWarnings(config, host)],
     remedy: ok ? undefined : 'Enable the sandbox (see `somi doctor --profile`), then run this from inside an agent session. Typing it at a `!` prompt usually bypasses the sandbox.',
   };
 }

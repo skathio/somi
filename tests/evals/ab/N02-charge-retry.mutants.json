@@ -1,11 +1,5 @@
 [
  {
-  "name": "no-inflight-sharing",
-  "file": "src/payments.mjs",
-  "find": "const running = inflight.get(order.id);\n  if (running) return running;",
-  "replace": ""
- },
- {
   "name": "key-changes-each-try",
   "file": "src/payments.mjs",
   "find": "idempotencyKey: `order-${order.id}`",

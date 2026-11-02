@@ -2,11 +2,11 @@
 
 5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** `bench.mjs run` refuses without `--go`, and the test suite spends nothing.
 
-**Status:** the free work is built and tested, and the design decisions below are recorded. No task set is bound yet, so no A/A or main run can start.
+**Status:** the task set is bound in `prereg.json`, and results are reported below as they finish.
 
 ## The questions
 
-1. **Is SoMi worth it?** Cost per solved task and quality per task, against a bare agent on the same model, on tasks where a bare agent sometimes fails.
+1. **Is SoMi worth it?** Dollars per solved task and quality per task, against a bare agent on the same model, on a mix of tasks a bare agent sometimes fails, narrowly misses and always solves.
 2. **Is 5.0 better than 4.1?** The same measurement on the same tasks.
 3. **Which parts pay?** Each part measured on and off, not argued.
 
@@ -45,6 +45,8 @@ Six kinds are wanted: multi-file features, bugs with a misleading symptom, secur
 **A fair trap is not the same as admission.** Admission cannot catch a hidden test that demands one valid answer over another, because the reference solutions were written alongside the tests. The first probe of the second pool found several, each failing identically on every draw. So a person or an independent reviewer reads the hidden tests before registration.
 
 A pilot's 1-or-2-of-3 is noisy: a task whose true rate is 50% qualifies 75% of the time, and one at 90% still qualifies 27% of the time. So the bare arm is always re-drawn in the recording, and pilot draws are never reused.
+
+**The registered mix** is 5 tasks in the band, 2 near-miss floor tasks and 9 ceiling tasks. The design wanted 4, 4 and 8. An independent reviewer removed unfair tests, which moved some tasks up, and six more hard tasks were then written and probed. The session model solved nearly all of them, so a fair floor task is now rare at this model. Dropping floor tasks does not favour SoMi, because a bare agent's zero on a floor task is where a workflow would gain most.
 
 ## Grading
 
@@ -116,17 +118,20 @@ The medium tier was faster and used fewer tokens per draw than the low tier, on 
 ```bash
 # Free: every live task's admission and its mutants. Takes about a minute, so it is not in the fast gate.
 node benchmarks/v2/bench.mjs admit
+node benchmarks/v2/bench.mjs routes   # scores the router on the labelled set
 
-# Paid. Each needs its own go-ahead.
-node benchmarks/v2/bench.mjs record --phase pilot --model <full-id> --out .somi/bench/pilot --budget-total <usd> --go
+# Paid. Each needs the maintainer's go-ahead with a budget.
+node benchmarks/v2/bench.mjs record --phase pilot --model <id> --out .somi/bench/pilot --budget-total <usd> --go
 node benchmarks/v2/bench.mjs select --pilot .somi/bench/pilot
 node benchmarks/v2/bench.mjs prereg   # refuses while a decision is open; commit prereg.json and task-set.json after it
 node benchmarks/v2/bench.mjs plan --phase aa --pilot .somi/bench/pilot   # prints the draws and the timeout from the pilot
-node benchmarks/v2/bench.mjs record --phase aa --model <full-id> --timeout-min <n> --out .somi/bench/aa --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase main --model <full-id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/main --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase ablation --model <full-id> --timeout-min <n> --out .somi/bench/ablation --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase confirm --model <top-tier-id> --timeout-min <n> --out .somi/bench/confirm --budget-total <usd> --go
-node benchmarks/v2/bench.mjs decide --aa .somi/bench/aa --main .somi/bench/main
+node benchmarks/v2/bench.mjs record --phase aa --model <id> --timeout-min <n> --out .somi/bench/aa --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase trial --model <id> --worker-model <id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/trial --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase baseline --model <id> --worker-model <id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/baseline --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase candidate --model <id> --worker-model <id> --timeout-min <n> --out .somi/bench/candidate --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase ablation --model <id> --worker-model <id> --timeout-min <n> --out .somi/bench/ablation --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase large --model <id> --worker-model <id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/large --budget-total <usd> --go
+node benchmarks/v2/bench.mjs decide --aa .somi/bench/aa --baseline .somi/bench/baseline --candidate .somi/bench/candidate
 ```
 
 `record` prints the worst case first, runs chunks of at most 24 draws one at a time, and writes the record and report skeleton to `benchmarks/v2/records/` once the plan finishes. A person writes the reading after reading 10 transcripts. Run the same command again to resume after a stop.
@@ -156,7 +161,7 @@ cut -c1-200 .somi/state/journal.jsonl
 
 `benchmarks/v2/prereg.json` is the pre-registration, and `prereg` refuses while any of its `decisions` is empty. The maintainer accepted each recommendation below. Each is cheap to reverse until a main draw exists.
 
-**The ship rule:** tokens per solved task at most 1.5x bare, the lower 95% bound at or above -5 points on hidden tests passed and -20 points on solved rate, the A/A interval containing zero, and every task paired with no arm abandoned. A draw that did not finish scores zero on hidden tests passed. This replaces the earlier rule of -5 points on solved rate, which a lane equal to bare would pass 8% of the time.
+**The ship rule:** dollars per solved task at most 1.5x bare, the lower 95% bound at or above -5 points on hidden tests passed and -20 points on solved rate, the A/A interval containing zero, and every task paired with no arm abandoned. A draw that did not finish scores zero on hidden tests passed. This replaces the earlier rule of -5 points on solved rate, which a lane equal to bare would pass 8% of the time.
 
 | Decision | Options | Recommendation accepted | Reversing it |
 |---|---|---|---|
@@ -169,16 +174,7 @@ cut -c1-200 .somi/state/journal.jsonl
 | **Minimum effect** | 20%, 25% or 30% on cost | 25% for a release, 30% for a part | Free before registration |
 | **Budget per release** | Set per run | A figure per step, from the table below | Any time |
 
-### Projected size
 
-Using the two hard tasks' 1.1 minutes and $0.15 per bare draw at the medium tier, and a workflow arm at 1.5x to 7x. 5.0's real figure is unmeasured, so a small pilot comes first. Harder new tasks may cost more.
+## Large work
 
-| Step | Draws | Hours | CLI dollars |
-|---|---|---|---|
-| New-task probe, 30 tasks by 3 | 90 | 1.7 | about 14 |
-| A/A, 16 tasks by 3, two arms | 96 | 1.8 | about 15 |
-| Small workflow pilot, 4 tasks by 3 on 5.0 | 12 | 0.3 to 1.5 | about 3 to 13 |
-| Main, 16 by 6 on bare and 5.0, 16 by 3 on 4.1 | 240 | 7 to 20 | about 60 to 165 |
-| Ablations, 10 arms by 16 tasks | 160 | 4 to 19 | about 35 to 155 |
-
-Prefer tasks written for SoMi over public issues, to avoid contamination.
+The `large` phase asks whether fresh context per milestone pays. Two multi-milestone projects set binding decisions early, and hidden tests check that later milestones honour them. Arms are bare, the milestone lane, one worker in one thread with the ledger, and 4.1, with auto-compaction set low so it actually happens. It is a pilot, reported apart from the release rule.

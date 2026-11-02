@@ -96,32 +96,6 @@
       "retired": "the ceiling at this model, with plenty of newer tasks there"
     },
     {
-      "id": "N01-invoice-cents",
-      "dir": "tests/evals/ab/N01-invoice-cents",
-      "why": "a blamed formatter hides per-line float tax and a duplicated code path",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N02-charge-retry",
-      "dir": "tests/evals/ab/N02-charge-retry",
-      "boundary": true,
-      "why": "money moved twice: the blamed retry count is not the cause",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N03-business-day",
-      "dir": "tests/evals/ab/N03-business-day",
-      "why": "a month-end symptom whose cause is calendar days in the wrong zone, in more than one report",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N04-account-delete",
-      "dir": "tests/evals/ab/N04-account-delete",
-      "boundary": true,
-      "why": "\"delete\" is decided by a policy document the ticket does not mention",
-      "stratum": "ambiguous-spec"
-    },
-    {
       "id": "N05-rate-limit",
       "dir": "tests/evals/ab/N05-rate-limit",
       "boundary": true,
@@ -147,32 +121,45 @@
       "stratum": "planted-trap"
     },
     {
-      "id": "N09-webhook-retry",
-      "dir": "tests/evals/ab/N09-webhook-retry",
-      "boundary": true,
-      "why": "a signature fixed at enqueue time goes stale once retries wait",
-      "stratum": "planted-trap"
+      "id": "L1-shop-platform",
+      "dir": "tests/evals/ab/L1-shop-platform",
+      "why": "six connected milestones with decisions set early that later ones must honour",
+      "stratum": "multi-file",
+      "large": true
     },
     {
-      "id": "N10-bundle-extract",
-      "dir": "tests/evals/ab/N10-bundle-extract",
+      "id": "L2-task-tracker",
+      "dir": "tests/evals/ab/L2-task-tracker",
       "boundary": true,
-      "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
-      "stratum": "security"
+      "why": "a later milestone must reach back into everything built earlier, under permission rules set at the start",
+      "stratum": "multi-file",
+      "large": true
     },
     {
-      "id": "N11-password-reset",
-      "dir": "tests/evals/ab/N11-password-reset",
-      "boundary": true,
-      "why": "a reset flow whose hard parts are what the ticket does not spell out",
-      "stratum": "security"
+      "id": "N01-invoice-cents",
+      "dir": "tests/evals/ab/N01-invoice-cents",
+      "why": "a blamed formatter hides per-line float tax and a duplicated code path",
+      "stratum": "misleading-bug"
     },
     {
-      "id": "N12-safe-redirect",
-      "dir": "tests/evals/ab/N12-safe-redirect",
+      "id": "N02-charge-retry",
+      "dir": "tests/evals/ab/N02-charge-retry",
       "boundary": true,
-      "why": "open redirects through URL forms that a simple prefix check misses",
-      "stratum": "security"
+      "why": "money moved twice: the blamed retry count is not the cause",
+      "stratum": "misleading-bug"
+    },
+    {
+      "id": "N03-business-day",
+      "dir": "tests/evals/ab/N03-business-day",
+      "why": "a month-end symptom whose cause is calendar days in the wrong zone, in more than one report",
+      "stratum": "misleading-bug"
+    },
+    {
+      "id": "N04-account-delete",
+      "dir": "tests/evals/ab/N04-account-delete",
+      "boundary": true,
+      "why": "\"delete\" is decided by a policy document the ticket does not mention",
+      "stratum": "ambiguous-spec"
     },
     {
       "id": "N13-order-refunds",
@@ -306,19 +293,72 @@
       "stratum": "misleading-bug"
     },
     {
-      "id": "L1-shop-platform",
-      "dir": "tests/evals/ab/L1-shop-platform",
-      "why": "six connected milestones with decisions set early that later ones must honour",
-      "stratum": "multi-file",
-      "large": true
+      "id": "N09-webhook-retry",
+      "dir": "tests/evals/ab/N09-webhook-retry",
+      "boundary": true,
+      "why": "a signature fixed at enqueue time goes stale once retries wait",
+      "stratum": "planted-trap"
     },
     {
-      "id": "L2-task-tracker",
-      "dir": "tests/evals/ab/L2-task-tracker",
+      "id": "N10-bundle-extract",
+      "dir": "tests/evals/ab/N10-bundle-extract",
       "boundary": true,
-      "why": "a later milestone must reach back into everything built earlier, under permission rules set at the start",
-      "stratum": "multi-file",
-      "large": true
+      "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
+      "stratum": "security"
+    },
+    {
+      "id": "N11-password-reset",
+      "dir": "tests/evals/ab/N11-password-reset",
+      "boundary": true,
+      "why": "a reset flow whose hard parts are what the ticket does not spell out",
+      "stratum": "security"
+    },
+    {
+      "id": "N12-safe-redirect",
+      "dir": "tests/evals/ab/N12-safe-redirect",
+      "boundary": true,
+      "why": "open redirects through URL forms that a simple prefix check misses",
+      "stratum": "security"
+    },
+    {
+      "id": "N37-org-isolation",
+      "dir": "tests/evals/ab/N37-org-isolation",
+      "boundary": true,
+      "why": "tenant isolation across many code paths, including references written into records and a shared lookup, where one missed path is a real leak",
+      "stratum": "security"
+    },
+    {
+      "id": "N38-mail-templates",
+      "dir": "tests/evals/ab/N38-mail-templates",
+      "boundary": true,
+      "why": "customer data filling a template, where values and placeholder names both come from outside, with several small independent traps",
+      "stratum": "planted-trap"
+    },
+    {
+      "id": "N34-digest-schedule",
+      "dir": "tests/evals/ab/N34-digest-schedule",
+      "why": "local-time scheduling across clock changes, half-hour changes and a skipped day, with the rule stated and the arithmetic easy to get wrong",
+      "stratum": "misleading-bug"
+    },
+    {
+      "id": "N35-plugin-versions",
+      "dir": "tests/evals/ab/N35-plugin-versions",
+      "why": "a well-known standard with many edge rules, to be reimplemented exactly because no dependency is allowed",
+      "stratum": "multi-file"
+    },
+    {
+      "id": "N36-link-preview",
+      "dir": "tests/evals/ab/N36-link-preview",
+      "boundary": true,
+      "why": "server-side fetching of customer URLs, where the rule is stated and the address arithmetic is where it goes wrong",
+      "stratum": "security"
+    },
+    {
+      "id": "N39-hide-email",
+      "dir": "tests/evals/ab/N39-hide-email",
+      "boundary": true,
+      "why": "a privacy rule that has to hold across many code paths, including indirect ways of learning the value",
+      "stratum": "security"
     }
   ]
 }
