@@ -3,12 +3,12 @@
   "patches": {
     "review-off": {
       "file": "scripts/lib/kernel.mjs",
-      "find": "const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || signals.review.length + signals.security.length > 0 || c.release_candidate);",
+      "find": "const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || c.reviewed_tree || signals.review.length + signals.security.length > 0 || c.release_candidate);",
       "replace": "const wantsReview = false;"
     },
     "review-always": {
       "file": "scripts/lib/kernel.mjs",
-      "find": "const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || signals.review.length + signals.security.length > 0 || c.release_candidate);",
+      "find": "const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || c.reviewed_tree || signals.review.length + signals.security.length > 0 || c.release_candidate);",
       "replace": "const wantsReview = c.reviewed_tree !== tree;"
     },
     "digest-off": {
@@ -33,7 +33,7 @@
     },
     "one-thread-no-split": {
       "file": "scripts/lib/engine.mjs",
-      "find": "if (status === 'too-big' && wf.kind === 'code') {",
+      "find": "if (status === 'too-big' && kindOf(c) === 'code') {",
       "replace": "if (false) {"
     }
   },

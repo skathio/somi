@@ -64,6 +64,14 @@ test('project settings merge over user settings on Claude Code', (t) => {
   assert.deepEqual(sandboxSettings({ host: 'claude', root: dir, home, env: {} }), { enabled: true, failIfUnavailable: true });
 });
 
+test('the Copilot hook file carries every hook the plugin registers', () => {
+  const listed = JSON.stringify(copilotHooks('/opt/somi'));
+  const registered = JSON.parse(fs.readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8'));
+  const names = JSON.stringify(registered).match(/[\w-]+\.mjs/g);
+  assert.ok(names.length > 5);
+  for (const name of names) assert.ok(listed.includes(name), name);
+});
+
 test('the Copilot hook file points at the plugin with absolute, quoted paths', (t) => {
   const hooks = copilotHooks("/opt/so'mi");
   assert.equal(hooks.version, 1);

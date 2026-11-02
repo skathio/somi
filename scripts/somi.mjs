@@ -26,7 +26,7 @@ import { checkBase, runCheck } from './lib/check.mjs';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
 import { runDoctor } from './lib/doctor.mjs';
 import { finishWork } from './lib/engine.mjs';
-import { commitAll, repoRoot } from './lib/git-tree.mjs';
+import { commitAll, repoRoot, stateIsTracked } from './lib/git-tree.mjs';
 import { writeCopilotHooks } from './lib/init.mjs';
 import { StateError, readEvents } from './lib/journal.mjs';
 import { TransitionError, afterCode, afterReview, close, decide, open, recordCheck, status } from './lib/kernel.mjs';
@@ -41,6 +41,7 @@ const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 export function makeContext(cwd = process.cwd(), env = process.env) {
   const root = repoRoot(cwd);
+  if (!env.SOMI_STATE_DIR && stateIsTracked(root)) throw new StateError('.somi/state is committed to this repository, so SoMi will not trust it. Stop tracking it with `git rm -r --cached .somi/state`.');
   let layers = [];
   let config = {};
   try {

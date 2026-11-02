@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const SCHEMA_VERSION = 1;
-export const EVENT_TYPES = Object.freeze(['open', 'check', 'after-code', 'after-review', 'decide', 'close', 'migrate', 'route', 'plan', 'escalate', 'halt', 'critic', 'finish']);
+export const EVENT_TYPES = Object.freeze(['open', 'check', 'after-code', 'after-review', 'decide', 'close', 'migrate', 'route', 'plan', 'escalate', 'halt', 'critic', 'finish', 'nudge']);
 export const NEXT_ACTIONS = Object.freeze(['open', 'code', 'fix', 'review', 'close', 'ask']);
 export const STOP_REASONS = Object.freeze(['intent-gate', 'area-follow-up', 'max-passes', 'recurring-finding', 'still-failing', 'worker-blocked']);
 
@@ -122,7 +122,7 @@ export function deriveCursor(events) {
         c = { ...IDLE, seq: e.seq, route: e.route, tier: e.tier };
         break;
       case 'plan':
-        c.lane = { milestones: e.milestones, index: c.lane?.index ?? 0 };
+        c.lane = { milestones: e.milestones, index: e.index ?? c.lane?.index ?? 0 };
         c.awaiting = e.approved ? null : e.awaiting ?? null;
         break;
       case 'escalate':
@@ -137,7 +137,7 @@ export function deriveCursor(events) {
       case 'finish':
         c = { ...IDLE, seq: e.seq };
         break;
-      default: // check and migrate carry facts and move no cursor
+      default: // check, nudge and migrate carry facts and move no cursor
     }
   }
   return c;
@@ -157,6 +157,7 @@ const REQUIRED = {
   halt: ['milestone', 'next'],
   critic: [],
   finish: ['outcome'],
+  nudge: ['milestone'],
 };
 
 // What the artefact gate runs: a journal that fails here means a writer broke the documented shape.

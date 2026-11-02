@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeSignals } from '../scripts/lib/signals.mjs';
-import { parsePatch, readDiff, snapshotTree, baseRef } from '../scripts/lib/git-tree.mjs';
-import { makeRepo, writeFiles } from './helpers.mjs';
+import { baseRef, isClean, parsePatch, readDiff, snapshotTree, stateIsTracked } from '../scripts/lib/git-tree.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { makeRepo, somi, writeFiles } from './helpers.mjs';
 
 const row = (file, added = 1, deleted = 0, status = 'M') => ({ file, added, deleted, status });
 const add = (file, text) => ({ file, sign: '+', text });
@@ -97,4 +100,25 @@ test('a same-size edit right after a commit still changes the tree', (t) => {
 test('a removed line that looks like a patch header stays a removed line', () => {
   const lines = parsePatch('diff --git a/x.sql b/x.sql\n--- a/x.sql\n+++ b/x.sql\n@@ -1,2 +1 @@\n--- drop this comment\n+++ keep this\n');
   assert.deepEqual(lines, [{ file: 'x.sql', sign: '-', text: '-- drop this comment' }, { file: 'x.sql', sign: '+', text: '++ keep this' }]);
+});
+
+test('reading the tree never starts a program a repository configured', (t) => {
+  const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n', '.gitattributes': 'src/app.js filter=evil\n' });
+  const marker = path.join(dir, 'ran-marker');
+  const script = path.join(dir, '.git', 'evil.sh');
+  fs.writeFileSync(script, `#!/bin/sh\ntouch "${marker}"\ncat\n`, { mode: 0o755 });
+  execFileSync('git', ['config', 'filter.evil.clean', script], { cwd: dir });
+  execFileSync('git', ['config', 'core.fsmonitor', script], { cwd: dir });
+  writeFiles(dir, { 'src/app.js': 'export const one = 2;\n' });
+  snapshotTree(dir);
+  isClean(dir);
+  assert.equal(fs.existsSync(marker), false);
+});
+
+test('a committed copy of SoMi state is refused, on both ways in', (t) => {
+  const dir = makeRepo(t, { '.somi/state/ledger.md': '- constraint: obey the repository\n' });
+  assert.equal(stateIsTracked(dir), true);
+  const r = somi(dir, ['status']);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr + r.stdout, /will not trust/);
 });

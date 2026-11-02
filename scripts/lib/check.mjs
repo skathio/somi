@@ -154,7 +154,8 @@ export function runCheck({ root, env = process.env, full = false, from = null })
   }
 
   const failed = gates.filter((g) => !g.ok).map((g) => g.name);
-  return { ok: failed.length === 0, tree, full, failed, gates: gates.filter((g) => !g.ok), ran: gates.map((g) => g.name), elapsed_ms: Date.now() - started };
+  // A command may write files of its own, so what it vouches for is the tree it leaves behind. Otherwise the check is out of date at once.
+  return { ok: failed.length === 0, tree: snapshotTree(root), full, failed, gates: gates.filter((g) => !g.ok), ran: gates.map((g) => g.name), elapsed_ms: Date.now() - started };
 }
 
 function hasNpmTest(root) {

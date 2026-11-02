@@ -14,8 +14,13 @@ import { globalConfigPath } from './config-files.mjs';
 
 export const SHARD_STEPS = Object.freeze(['work-item.start', 'plan.approved', 'pr.open', 'review.done']);
 const MODES = Object.freeze(['read', 'write']);
+const KINDS = Object.freeze(['skill', 'agent', 'command', 'tool']);
 const REF = /^([A-Za-z0-9._-]+):([A-Za-z0-9._-]+)$/;
 export class ShardError extends Error {}
+
+// Config is repository content, and these fields reach a worker's brief and session context, so only the exact shape is believed.
+const isBinding = (b) => b !== null && typeof b === 'object' && SHARD_STEPS.includes(b.step) && typeof b.ref === 'string' && REF.test(b.ref) && MODES.includes(b.mode) && KINDS.includes(b.kind);
+const asList = (v) => (Array.isArray(v) ? v : []);
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
 
@@ -98,7 +103,7 @@ export function slot({ root, step, ref, mode = 'read', project = false, env = pr
   const file = configFile(root, env, project);
   const config = readJson(file);
   const binding = { step, ref, kind: found.kind, mode, version: found.version, sha256: sha(found.text), bound_at: now };
-  config.shards = [...(Array.isArray(config.shards) ? config.shards : []).filter((b) => !(b.step === step && b.ref === ref)), binding];
+  config.shards = [...asList(config.shards).filter((b) => !(b?.step === step && b?.ref === ref)), binding];
   writeJson(file, config);
   return { slotted: ref, step, kind: found.kind, mode, version: found.version, scope: project ? 'project' : 'global' };
 }
@@ -106,21 +111,29 @@ export function slot({ root, step, ref, mode = 'read', project = false, env = pr
 export function unslot({ root, step, ref, project = false, env = process.env }) {
   const file = configFile(root, env, project);
   const config = readJson(file);
-  const before = Array.isArray(config.shards) ? config.shards : [];
-  config.shards = before.filter((b) => !(b.step === step && b.ref === ref));
+  const before = asList(config.shards);
+  config.shards = before.filter((b) => !(b?.step === step && b?.ref === ref));
   writeJson(file, config);
   return { removed: before.length - config.shards.length };
 }
 
 // A committed project binding runs another plugin because someone edited a file, so it needs one confirmation per project and binding.
-const confirmKey = (root, b) => sha(`${path.resolve(root)}|${b.step}|${b.ref}|${b.mode}`);
-export function confirmProjectShards({ root, env = process.env }) {
-  const project = readJson(configFile(root, env, true));
+const confirmKey = (root, b) => sha(`${path.resolve(root)}|${b.step}|${b.ref}|${b.mode}|${b.kind}`);
+// Confirming accepts the plugin as it is now: a project binding is allowed to run, and a changed one is pinned to its current content.
+export function confirmProjectShards({ root, env = process.env, home = os.homedir() }) {
+  const projectFile = configFile(root, env, true);
+  const project = readJson(projectFile);
   const file = configFile(root, env, false);
   const global = readJson(file);
-  const keys = (Array.isArray(project.shards) ? project.shards : []).map((b) => confirmKey(root, b));
-  global.shard_confirmations = [...new Set([...(global.shard_confirmations ?? []), ...keys])];
-  writeJson(file, global);
+  const refresh = (b) => {
+    if (!isBinding(b)) return b;
+    const found = locate(b.ref, env, home);
+    return found ? { ...b, kind: found.kind, version: found.version, sha256: sha(found.text) } : b;
+  };
+  const pinned = asList(project.shards).map(refresh);
+  if (pinned.length > 0 && JSON.stringify(pinned) !== JSON.stringify(project.shards)) writeJson(projectFile, { ...project, shards: pinned });
+  const keys = pinned.filter(isBinding).map((b) => confirmKey(root, b));
+  writeJson(file, { ...global, shards: asList(global.shards).map(refresh), shard_confirmations: [...new Set([...asList(global.shard_confirmations), ...keys])] });
   return { confirmed: keys.length };
 }
 
@@ -128,8 +141,9 @@ export function confirmProjectShards({ root, env = process.env }) {
 export function listShards({ root, env = process.env, home = os.homedir() }) {
   const global = readJson(configFile(root, env, false));
   const project = readJson(configFile(root, env, true));
-  const confirmed = new Set(global.shard_confirmations ?? []);
+  const confirmed = new Set(asList(global.shard_confirmations));
   const inspect = (b, scope) => {
+    if (!isBinding(b)) return { step: SHARD_STEPS.includes(b?.step) ? b.step : 'unknown', ref: '(invalid binding)', mode: 'read', scope, state: 'invalid' };
     if (scope === 'project' && !confirmed.has(confirmKey(root, b))) return { ...b, scope, state: 'unconfirmed' };
     let found = null;
     try { found = locate(b.ref, env, home); } catch { /* an unusable name counts as stale */ }
@@ -137,8 +151,8 @@ export function listShards({ root, env = process.env, home = os.homedir() }) {
     return { ...b, scope, state: sha(found.text) === b.sha256 ? 'ok' : 'changed', current_version: found.version };
   };
   return [
-    ...(Array.isArray(global.shards) ? global.shards : []).map((b) => inspect(b, 'global')),
-    ...(Array.isArray(project.shards) ? project.shards : []).map((b) => inspect(b, 'project')),
+    ...asList(global.shards).map((b) => inspect(b, 'global')),
+    ...asList(project.shards).map((b) => inspect(b, 'project')),
   ];
 }
 
@@ -147,6 +161,6 @@ export function shardsFor({ root, step, env = process.env, home = os.homedir() }
   return {
     usable: here.filter((b) => b.state === 'ok' || (b.state === 'changed' && b.mode === 'read')),
     held: here.filter((b) => b.state === 'changed' && b.mode === 'write'),
-    skipped: here.filter((b) => b.state === 'stale' || b.state === 'unconfirmed'),
+    skipped: here.filter((b) => b.state === 'stale' || b.state === 'unconfirmed' || b.state === 'invalid'),
   };
 }

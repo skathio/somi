@@ -17,6 +17,11 @@ export function readLedger(root, env = process.env) {
   try { return fs.readFileSync(file(root, env), 'utf8').trim(); } catch (e) { if (e.code === 'ENOENT') return ''; throw e; }
 }
 
+// The ledger belongs to one route. Left in place, old decisions would reach later briefs as if they still bound the work.
+export function clearLedger(root, env = process.env) {
+  fs.rmSync(file(root, env), { force: true });
+}
+
 export function addToLedger(root, { kind, text }, env = process.env) {
   if (!KINDS.includes(kind)) throw new StateError(`a ledger entry is one of: ${KINDS.join(', ')}`);
   const line = oneLine(text);

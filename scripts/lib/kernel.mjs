@@ -55,7 +55,8 @@ export function open(ctx, { title, ask, followUp, releaseCandidate = false }) {
 }
 
 function reviewersFor(ctx, security) {
-  const seat = (agent, wanted) => { const { tier, model } = resolveSpawn(ctx.config, ctx.host, wanted); return clean({ agent, tier, model }); };
+  // Who reviews is review policy, so a committed project config cannot lower it. Only the user's own config can.
+  const seat = (agent, wanted) => { const { tier, model } = resolveSpawn(ctx.configLayers?.[0] ?? {}, ctx.host, wanted); return clean({ agent, tier, model }); };
   return [seat('somi-reviewer', 'low'), ...(security ? [seat('somi-security-reviewer', 'high')] : [])];
 }
 
@@ -78,7 +79,7 @@ export function afterCode(ctx, { runCheck, recheck = false } = {}) {
   if (c.next === 'fix' && c.reviewed_tree === tree) return { milestone: c.milestone, next: 'fix', refused: 'nothing-changed', findings: lastOf(events, (e) => e.type === 'after-review' && e.milestone === c.milestone)?.findings.filter(isBlocking).map((f) => clean({ id: f.id, file: f.file, line: f.line, claim: f.claim })) };
 
   const latestForTree = lastOf(events, (e) => e.type === 'after-code' && e.milestone === c.milestone && e.tree === tree);
-  if (latestForTree && c.tree === tree && c.next !== 'code' && !recheck) return afterCodeResponse(latestForTree);
+  if (latestForTree && c.tree === tree && c.next === latestForTree.next && !recheck) return afterCodeResponse(latestForTree);
 
   const checkFor = () => lastOf(events, (e) => e.type === 'check' && e.tree === tree);
   if (runCheck && (recheck || !checkFor()?.ok)) {
@@ -94,7 +95,7 @@ export function afterCode(ctx, { runCheck, recheck = false } = {}) {
   const whole = readDiff(ctx.root, c.base, tree);
   // Routing reads the whole milestone, so a boundary touched before a fix keeps its lens. The reviewer reads only the fix diff.
   const signals = computeSignals(whole, ctx.configLayers);
-  const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || signals.review.length + signals.security.length > 0 || c.release_candidate);
+  const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || c.reviewed_tree || signals.review.length + signals.security.length > 0 || c.release_candidate);
   const attempt = events.filter((e) => e.type === 'after-code' && e.milestone === c.milestone).length + 1;
   const base = {
     key: `after-code:${c.milestone}:${attempt}`, type: 'after-code', milestone: c.milestone, pass: c.pass, tree, from,
@@ -152,7 +153,7 @@ export function decide(ctx, { text, then }) {
     throw new TransitionError('nothing is waiting for the maintainer');
   }
   const grantsPass = then === 'continue' && (c.stop === 'max-passes' || c.stop === 'recurring-finding');
-  const next = then !== 'continue' ? 'close' : grantsPass ? 'fix' : 'code';
+  const next = then !== 'continue' ? 'close' : grantsPass || c.blocking?.length > 0 ? 'fix' : 'code';
   const e = record(ctx, events, {
     key: `decide:${c.milestone}:${decisions.length + 1}`, type: 'decide', milestone: c.milestone, text, then, answered: c.stop, next, grants_pass: grantsPass || undefined,
   });
@@ -178,10 +179,13 @@ export function close(ctx) {
 export function recordCheck(ctx, { tree, ok, failed, full = false }) {
   const events = readEvents(ctx.root, ctx.env);
   const c = deriveCursor(events);
-  if (c.milestone === null) return;
-  const forTree = events.filter((e) => e.type === 'check' && e.milestone === c.milestone && e.tree === tree);
+  if (c.milestone === null && !c.route) return;
+  // A route with no milestone, such as a release check, still has to record its result.
+  const owner = c.milestone ?? 'route';
+  const routeSeq = lastOf(events, (e) => e.type === 'route')?.seq ?? 0;
+  const forTree = events.filter((e) => e.type === 'check' && e.milestone === owner && e.tree === tree && e.seq > routeSeq);
   if (forTree.at(-1)?.ok === ok && Boolean(forTree.at(-1)?.full) === full) return;
-  record(ctx, events, { key: `check:${c.milestone}:${tree}:${forTree.length + 1}`, type: 'check', milestone: c.milestone, tree, ok, failed, full: full || undefined });
+  record(ctx, events, { key: `check:${owner}:${routeSeq}:${tree}:${forTree.length + 1}`, type: 'check', milestone: owner, tree, ok, failed, full: full || undefined });
 }
 
 export function status(ctx) {

@@ -18,11 +18,13 @@ runHook(() => {
   if (root === null) return;
   const c = deriveCursor(readEvents(root));
   if (!c.route) return;
-  let config = {};
-  try { ({ config } = loadConfig(root)); } catch { return; }
-  const wanted = tierForAgent(args.subagent_type ?? args.agent_type) ?? c.tier;
+  let loaded;
+  try { loaded = loadConfig(root); } catch { return; }
+  const reviewerTier = tierForAgent(args.subagent_type ?? args.agent_type);
+  const wanted = reviewerTier ?? c.tier;
   if (!wanted) return;
-  const { model } = resolveSpawn(config, detectHost(), wanted);
+  // Who reviews is review policy, so a committed project config cannot lower it. Only the user's own config can.
+  const { model } = resolveSpawn(reviewerTier ? loaded.global.config ?? {} : loaded.config, detectHost(), wanted);
   if (!model || args.model === model) return;
   const updated = { ...args, model };
   process.stdout.write(JSON.stringify({ modifiedArgs: updated, permissionDecision: 'allow', hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', updatedInput: updated } }));

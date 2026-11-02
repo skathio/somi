@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pluginRoot, projectRoot, readPayload, runHook } from '../lib/common.mjs';
 import { sandboxSettings, settingsWarnings } from '../../scripts/lib/doctor.mjs';
+import { stateIsTracked } from '../../scripts/lib/git-tree.mjs';
 import { readLedger } from '../../scripts/lib/ledger.mjs';
 import { listShards } from '../../scripts/lib/shards.mjs';
 import { detectHost } from '../../scripts/lib/tiers.mjs';
@@ -23,7 +24,7 @@ runHook(() => {
   // Compaction drops rules and scope limits first. This hook fires on compaction too, so the ledger comes back every time.
   try {
     const project = projectRoot();
-    const ledger = project ? readLedger(project) : '';
+    const ledger = project && (process.env.SOMI_STATE_DIR || !stateIsTracked(project)) ? readLedger(project) : '';
     if (ledger) parts.push(`Decisions and limits for the open work:\n${ledger}`);
     const held = project ? listShards({ root: project }).filter((b) => b.state !== 'ok') : [];
     if (held.length > 0) parts.push(`Connected steps needing attention: ${held.map((b) => `${b.ref} (${b.state})`).join(', ')}. See \`somi slot --list\`.`);

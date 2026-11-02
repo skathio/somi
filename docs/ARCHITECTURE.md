@@ -45,7 +45,7 @@ A retried transition appends nothing and returns its earlier answer. Killing the
 | Rule | Value |
 |---|---|
 | Review at all | Only if a signal fired, or the milestone is a release candidate |
-| Reviewers | One at the work tier, plus a security reviewer at the review tier on a boundary |
+| Reviewers | One on the low tier, plus a security reviewer on the high tier on a boundary. A project's config cannot lower these |
 | What re-loops | A Blocker, or a Major with a boundary flag, a line and evidence |
 | What never re-loops | Minor, Nit, unconfirmed Major, approve-with-comments |
 | Passes | Two, the second scoped to the fix diff. A third needs the maintainer |

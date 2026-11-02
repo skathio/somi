@@ -79,10 +79,14 @@ export function runHook(main) {
 // here as the ONE copy every hook imports, rather than re-duplicating the
 // `.includes('${')` check per file. (Note: scripts/*.mjs — a separate module
 // graph — still carry their own copy; unifying those is a follow-up.)
+// A host can start in a subfolder of a repository. State and the audit log belong to the repository, so walk up to it.
 export function projectRoot() {
   let base = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   if (base.includes('${')) base = process.cwd();
-  return base;
+  for (let d = path.resolve(base); ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, '.git'))) return d;
+    if (path.dirname(d) === d) return base;
+  }
 }
 
 // plugin_root() — the directory containing SoMi's OWN shipped content (rules/, skills/, etc.),

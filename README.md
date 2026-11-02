@@ -24,7 +24,7 @@ The procedure lives in the step engine, so the coordinator stays small and only 
 | Long work | Plan and progress files read by hand | A small ledger put back after every compaction, and fresh context per milestone |
 | Model tiers | A lookup the agent could skip | Applied by a hook, and proven from billing |
 | Listed entries | 91 | 15, with a hidden library behind them |
-| Other plugins | No way in | Shards: `somi slot pr.open <plugin>` |
+| Other plugins | No way in | Shards: `somi slot pr.open <plugin:component>` |
 
 ## Install
 

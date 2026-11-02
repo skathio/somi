@@ -12,8 +12,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
-import { repoRoot } from './lib/git-tree.mjs';
+import { repoRoot, stateIsTracked } from './lib/git-tree.mjs';
 import { StateError } from './lib/journal.mjs';
+import { ShardError } from './lib/shards.mjs';
 import { abandon, closeMilestone, decide, done, resume, reviewed, route } from './lib/engine.mjs';
 import { TransitionError, afterCode, open, status } from './lib/kernel.mjs';
 import { addToLedger } from './lib/ledger.mjs';
@@ -87,6 +88,7 @@ async function context(projectDir, env = process.env) {
   const resolved = await resolveProjectRoot({ projectDirArg: projectDir, listRoots: listClientRoots });
   if (!resolved.ok) throw new TransitionError(`${resolved.message}. Call again with project_dir set to your working directory.`);
   const root = repoRoot(resolved.root);
+  if (!env.SOMI_STATE_DIR && stateIsTracked(root)) throw new StateError('.somi/state is committed to this repository, so SoMi will not trust it. Stop tracking it with `git rm -r --cached .somi/state`.');
   let layers = [];
   let config = {};
   try {
@@ -119,7 +121,7 @@ async function callStep(args) {
       default: return textResult('action must be route, done, after-review, decide, close, status, resume, abandon, ledger, expertise, open or after-code', true);
     }
   } catch (e) {
-    const expected = e instanceof TransitionError || e instanceof ReviewInputError || e instanceof StateError;
+    const expected = e instanceof TransitionError || e instanceof ReviewInputError || e instanceof StateError || e instanceof ShardError;
     if (!expected) process.stderr.write(`somi-mcp: ${e.stack ?? e}\n`);
     return textResult(expected ? e.message : 'somi_step failed; see the server log', true);
   }

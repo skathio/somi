@@ -13,14 +13,28 @@ const MAX_OUTPUT = 32 * 1024 * 1024;
 
 const git = (root, args, opts = {}) => execFileSync('git', [...SAFE, ...args], { cwd: root, encoding: 'utf8', maxBuffer: MAX_OUTPUT, stdio: ['ignore', 'pipe', 'pipe'], ...opts });
 
-export function isClean(root) {
-  return execFileSync('git', ['status', '--porcelain', '--', '.', ':(exclude).somi'], { cwd: root, encoding: 'utf8' }).trim() === '';
+// A repository's config can name programs git runs while reading files, and the MCP server runs outside the sandbox, so reading the tree
+// must never start one. Files already in the index keep their cached stat, so switching filters off does not make them look changed.
+function noFilters(root) {
+  let names = [];
+  try { names = git(root, ['config', '--name-only', '--get-regexp', '^filter\\.']).split('\n'); } catch { /* git exits 1 when there are none */ }
+  const drivers = new Set(names.map((n) => /^filter\.(.+)\.[^.]+$/.exec(n)?.[1]).filter(Boolean));
+  return [...drivers].flatMap((d) => ['-c', `filter.${d}.clean=`, '-c', `filter.${d}.smudge=`, '-c', `filter.${d}.process=`, '-c', `filter.${d}.required=false`]);
 }
+
+export function isClean(root) {
+  return git(root, [...noFilters(root), 'status', '--porcelain', '--', '.', ':(glob,exclude)**/.somi/**']).trim() === '';
+}
+
+export const stateIsTracked = (root) => git(root, ['ls-files', '--cached', '--', ':(glob)**/.somi/state/**']).trim() !== '';
+
+// The tree of a commit or tree id, for telling "nothing changed" apart from "changed and already committed".
+export const treeOf = (root, ref) => git(root, ['rev-parse', '--verify', `${ref}^{tree}`]).trim();
 
 // Everything except SoMi's own folder, in one commit, with a message that never passes through a shell.
 export function commitAll(root, message) {
   execFileSync('git', ['add', '-A'], { cwd: root, stdio: 'ignore' });
-  execFileSync('git', ['reset', '-q', '--', '.somi'], { cwd: root, stdio: 'ignore' });
+  execFileSync('git', ['reset', '-q', '--', ':(glob)**/.somi/**'], { cwd: root, stdio: 'ignore' });
   if (execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: root, encoding: 'utf8' }).trim() === '') return false;
   execFileSync('git', ['commit', '-q', '-m', message], { cwd: root, stdio: 'ignore' });
   return true;
@@ -50,10 +64,11 @@ export function snapshotTree(root) {
       const st = fs.statSync(real);
       fs.utimesSync(index, st.atime, st.mtime);
     }
-    git(root, ['add', '-A', '--', '.'], { env });
+    const off = noFilters(root);
+    git(root, [...off, 'add', '-A', '--', '.'], { env });
     // The audit log grows on every tool call, so in a repository that does not ignore it, keeping it would make every tree new.
-    git(root, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', '.somi/state', '.somi/audit.log'], { env });
-    return git(root, ['write-tree'], { env }).trim();
+    git(root, [...off, 'rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', ':(glob)**/.somi/state/**', ':(glob)**/.somi/audit.log'], { env });
+    return git(root, [...off, 'write-tree'], { env }).trim();
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -95,4 +110,8 @@ export function readDiff(root, from, to) {
   }
 }
 
-export const reviewDiffCommand = (from, to) => `git diff --no-ext-diff --no-textconv ${from} ${to}`;
+// This string reaches an agent as a command, and its ids come from a state file, so anything but an object id is refused.
+export function reviewDiffCommand(from, to) {
+  if (!OBJECT_ID.test(String(from)) || !OBJECT_ID.test(String(to))) throw new Error('the journal holds something that is not an object id');
+  return `git diff --no-ext-diff --no-textconv ${from} ${to}`;
+}

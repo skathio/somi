@@ -47,6 +47,7 @@ test('one tool, moving the same state machine, and never running project command
 
   assert.equal(somi(dir, ['check']).status, 0);
   assert.equal(JSON.parse((await step(rpc, { action: 'after-code' })).text).next, 'close');
+  assert.equal(somi(dir, ['commit', '--message=via mcp']).status, 0);
   assert.equal(JSON.parse((await step(rpc, { action: 'close' })).text).outcome, 'done');
   assert.equal(JSON.parse((await step(rpc, { action: 'status' })).text).next, 'open');
 });
