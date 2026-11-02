@@ -79,6 +79,15 @@ test('the digest arrives once at session start, on each host', () => {
   assert.match(claude.out.additionalContext, /SoMi rules/, 'Copilot CLI reads the top-level field');
 });
 
+test('session start says when SoMi is not the active agent, and only then', () => {
+  const hook = 'session-start/inject-digest.mjs';
+  const said = (payload) => /not the active agent/.test(runHook(hook, payload).out.hookSpecificOutput.additionalContext);
+  assert.equal(said({ hook_event_name: 'SessionStart' }), true);
+  assert.equal(said({ hook_event_name: 'SessionStart', agent_type: 'other' }), true);
+  assert.equal(said({ hook_event_name: 'SessionStart', agent_type: 'somi:somi' }), false);
+  assert.equal(said({ hook_event_name: 'SessionStart', agent_type: 'somi' }), false);
+});
+
 test('session start warns loudly when the sandbox is off, and not when it is on', () => {
   const hook = 'session-start/inject-digest.mjs';
   assert.match(runHook(hook, {}).out.hookSpecificOutput.additionalContext, /WARNING: the OS sandbox/);

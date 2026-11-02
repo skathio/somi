@@ -22,7 +22,8 @@ const SINK = [
   /\b(pickle\.loads?|yaml\.load|unserialize|Marshal\.load|ObjectInputStream|deserialize\w*)\b/,
   /\bnew\s+RegExp\s*\(|\bre\.compile\s*\(/,
 ];
-const SECRETS = /\b(password|passwd|secret|credential|private[_-]?key|api[_-]?key|(auth|access|bearer|refresh|id)[_-]?token)\b/i;
+// No word boundaries: hashPassword and resetToken are the same thing as password and token, and a false alarm here costs one review.
+const SECRETS = /password|passwd|secret|credential|private[_-]?key|api[_-]?key|(auth|access|bearer|refresh|reset|session|id)[_-]?token/i;
 const NETWORK = /\b(fetch|axios|XMLHttpRequest|WebSocket|urllib\w*|requests\.(get|post|put|delete)|https?\.(request|get)|net\.(connect|createConnection))\b/;
 const REPO_CONTENT = /\.gitmodules|\.git\/|core\.hooksPath|\bgit\s+(config|submodule|clone)\b|\.mcp\.json/;
 const WEAKENS_TEST = /\.(skip|only|todo)\s*\(|\bx(it|describe|test)\s*\(|@(Ignore|Disabled)\b|pytest\.mark\.skip/;

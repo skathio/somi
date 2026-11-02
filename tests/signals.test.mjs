@@ -79,6 +79,12 @@ test('the real diff covers tracked and untracked files, and leaves SoMi state ou
   assert.notEqual(snapshotTree(dir), tree, 'a change to project policy stays visible to the diff');
 });
 
+test('credential code is caught in the way JavaScript names it', () => {
+  const added = (text) => computeSignals({ rows: [{ file: 'src/reset.mjs', added: 1, deleted: 0, status: 'A' }], lines: [{ file: 'src/reset.mjs', sign: '+', text }] }).security;
+  for (const text of ['user.hash = hashPassword(newPassword);', 'const resetToken = make();', 'clientSecret: value', 'store.session_token = x']) assert.deepEqual(added(text), ['secrets'], text);
+  assert.deepEqual(added('const total = a + b;'), []);
+});
+
 test('a same-size edit right after a commit still changes the tree', (t) => {
   for (let i = 0; i < 10; i++) {
     const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n' });
