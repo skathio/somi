@@ -68,5 +68,6 @@
   },
   "task_set_sha256": "845cc72dcdbced70c8a73aa2abce482f12f3615fdd213792f5ca838ee91db2e2",
   "trial_k": 2,
-  "large_k": 3
+  "large_k": 3,
+  "tight_k": 2
 }

@@ -36,8 +36,9 @@ const TICKET_TYPES = Object.freeze({ bug: 'debug', defect: 'debug', incident: 'i
 export const ROUTE_NAMES = Object.freeze([...new Set([...FIRST, ...KINDS].map(([r]) => r)), 'answer', 'build']);
 
 // What the coordinator reads when it has to choose. Short, because it is read on the session's model.
+const LONG_REQUEST = 600;
 export const WHEN = Object.freeze({
-  build: 'a new or changed feature, or anything small and clear, even a long list of small steps',
+  build: 'a new or changed feature, or anything clear, even a long ticket of many steps: the worker splits it if it proves too big',
   debug: 'something behaves wrongly, and the cause is not known',
   refactor: 'change structure and keep behaviour',
   upgrade: 'move a dependency or runtime to another version',
@@ -45,7 +46,7 @@ export const WHEN = Object.freeze({
   perf: 'make something faster or smaller',
   incident: 'production is hurting right now',
   accessibility: 'make an interface usable by everyone',
-  plan: 'will not fit one worker in one pass, or its order needs approving first',
+  plan: 'the maintainer asks to see a plan first, or the order of the work needs approving',
   design: 'settle an expensive-to-reverse choice',
   discover: 'test a new product idea',
   atlas: 'map the code or a change\'s blast radius',
@@ -61,6 +62,8 @@ export function classify({ request = '', ticket, hint } = {}) {
   if (Object.hasOwn(TICKET_TYPES, type)) return { route: TICKET_TYPES[type], via: 'ticket' };
   const text = String(request);
   for (const [route, re] of FIRST) if (re.test(text)) return { route, via: 'rule' };
+  // A long ticket contains words like "fails" and "milestone" without being about them, so its words decide nothing.
+  if (text.length > LONG_REQUEST) return { route: null, via: 'choose', choices: Object.keys(WHEN) };
   const matched = KINDS.filter(([, re]) => re.test(text)).map(([route]) => route);
   // A request opening with a question word is asking something, unless it clearly names work to do.
   if (matched.length === 0) {

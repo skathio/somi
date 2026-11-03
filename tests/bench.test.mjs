@@ -495,3 +495,14 @@ test('a recording pins the tiers in the user layer too, because reviewers read o
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), config);
   assert.equal(resolveSpawn(JSON.parse(fs.readFileSync(file, 'utf8')), 'claude', 'high').model, 'sonnet');
 });
+
+test('the lane arm asks for a plan first, the tight phase has a small window, and compactions are counted', (t) => {
+  assert.match(armPrompt('somi5-lane', 'do it'), /plan first[\s\S]*do it/);
+  assert.equal(armPrompt('somi5', 'do it'), 'do it');
+  assert.deepEqual(armsFor('tight'), ['bare', 'somi5', 'somi5-lane']);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-usage-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'stream.jsonl');
+  fs.writeFileSync(file, `${JSON.stringify({ type: 'system', subtype: 'compact_boundary' })}\n${JSON.stringify({ type: 'result', num_turns: 2, modelUsage: {} })}\n`);
+  assert.equal(streamUsage(file).compactions, 1);
+});

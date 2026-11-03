@@ -53,7 +53,8 @@ export const PHASE_ARMS = Object.freeze({
   baseline: ['bare', 'somi41'],
   candidate: ['somi5', 'bare-check'],
   ablation: ['bare'],
-  large: ['bare', 'somi5', 'somi5-one-thread', 'somi41'],
+  large: ['bare', 'somi5', 'somi5-lane', 'somi41'],
+  tight: ['bare', 'somi5', 'somi5-lane'],
 });
 
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -61,18 +62,20 @@ export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
 const isBare = (arm) => arm.startsWith('bare');
 // Every arm gets the same plain request. The SoMi arms go through their own front door, so routing is what gets measured, not a flow
-// the benchmark picked for them.
-export const armPrompt = (arm, text) => text;
+// the benchmark picked for them. The one exception asks for a plan, as a maintainer can, because that is how the milestone lane is reached.
+export const armPrompt = (arm, text) => (arm === 'somi5-lane' ? `Show me a plan first, then build it.\n${text}` : text);
 const engineArm = (arm) => (isBare(arm) ? 'bare' : 'somi');
 export const armsFor = (phase, cells = readJson(ABLATIONS).cells) => (phase === 'ablation' ? [...PHASE_ARMS.ablation, ...Object.keys(cells)] : PHASE_ARMS[phase]);
 
-const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, trial: reg.trial_k, ablation: reg.ablation_k, large: reg.large_k })[phase] ?? reg.k;
+const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, trial: reg.trial_k, ablation: reg.ablation_k, large: reg.large_k, tight: reg.tight_k })[phase] ?? reg.k;
 const armKFor = (phase, reg) => (phase === 'candidate' ? reg.arm_k : {});
-const LARGE_SETTINGS = Object.freeze({ autoCompactWindow: 120000 });
+// The large phase runs on a window a long session can really fill. The tight phase makes the window small enough that every arm compacts,
+// because no task we can write offline fills a large one: a model scripts uniform work and finishes short work in one pass.
+const WINDOW_SETTINGS = Object.freeze({ large: { autoCompactWindow: 120000 }, tight: { autoCompactWindow: 30000 } });
 export const liveCandidates = (tasks) => tasks.filter((t) => !t.retired);
 function tasksFor(phase, only) {
   if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all).filter((t) => !t.large); }
-  if (phase === 'large') return readJson(CANDIDATES).tasks.filter((t) => t.large);
+  if (phase === 'large' || phase === 'tight') return readJson(CANDIDATES).tasks.filter((t) => t.large);
   if (!fs.existsSync(TASK_SET)) throw new Error('no task-set.json yet: run the pilot, then select');
   const set = readJson(TASK_SET);
   return phase === 'trial' ? set.tasks.filter((t) => set.hardest.includes(t.id)).slice(0, 2) : set.tasks;
@@ -140,6 +143,7 @@ export function streamUsage(file) {
   const spend = {};
   const models = new Set();
   let turns = 0;
+  let compactions = 0;
   let pending = null;
   const flush = () => {
     for (const [name, m] of Object.entries(pending ?? {})) {
@@ -152,11 +156,12 @@ export function streamUsage(file) {
     pending = null;
   };
   let text = '';
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return { tokens: totals, models: [], turns, spend }; }
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return { tokens: totals, models: [], turns, spend, compactions }; }
   for (const raw of text.split('\n')) {
     if (raw.trim() === '') continue;
     let ev;
     try { ev = JSON.parse(raw); } catch { continue; }
+    if (ev?.type === 'system' && ev.subtype === 'compact_boundary') compactions++;
     if (ev?.type === 'result') {
       turns += Number.isFinite(ev.num_turns) ? ev.num_turns : 0;
       if (ev.modelUsage && typeof ev.modelUsage === 'object') {
@@ -166,7 +171,7 @@ export function streamUsage(file) {
     } else flush();
   }
   flush();
-  return { tokens: totals, models: [...models].sort(), turns, spend };
+  return { tokens: totals, models: [...models].sort(), turns, spend, compactions };
 }
 
 // The packed plugin is locked read-only, so it has to be unlocked before it can be removed.
@@ -254,7 +259,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   if (!(budgetTotal > 0)) throw new Error('--budget-total is required');
   const budgetDraw = Number(args['budget-draw'] ?? 3);
   const chunk = Math.min(Number(args.chunk ?? MAX_CHUNK), MAX_CHUNK);
-  if (['baseline', 'candidate', 'ablation', 'large'].includes(phase)) {
+  if (['baseline', 'candidate', 'ablation', 'large', 'tight'].includes(phase)) {
     const problem = preregProblem();
     if (problem) throw new Error(problem);
   }
@@ -338,14 +343,14 @@ async function run(args, session = { windowWeighted: 0 }) {
       const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config, globalConfig: config });
       const result = await runDraw({
         model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
-        settings: phase === 'large' ? LARGE_SETTINGS : undefined, maxResumes: 6, claude, env: childEnv({ token: env.token, tmp }), cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
+        settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude, env: childEnv({ token: env.token, tmp }), cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
       });
       if (interrupted) { stop = 'interrupted'; break; }
       const after = lstatManifest(ws);
       result.leaks = [...new Set([...result.leaks, ...inspectDraw({ ws, cfg: path.join(tmp, 'cfg'), after, drawDir, token: env.token, canary: t.task.canary, absAb: path.dirname(dir) })])];
       const cls = classify({ run: result, arm: engineArm(d.arm), budget: budgetDraw });
       const usage = streamUsage(path.join(drawDir, 'stream.jsonl'));
-      const measured = { cost: result.cost, wall_ms: result.wallMs ?? 0, turns: usage.turns, tokens: usage.tokens, weighted: weightedTokens(usage.tokens), models: usage.models, spend: usage.spend };
+      const measured = { cost: result.cost, wall_ms: result.wallMs ?? 0, turns: usage.turns, tokens: usage.tokens, weighted: weightedTokens(usage.tokens), models: usage.models, spend: usage.spend, compactions: usage.compactions };
       spent += measured.cost;
       session.windowWeighted += measured.weighted;
       ran++;

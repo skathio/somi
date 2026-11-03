@@ -1,26 +1,26 @@
 {
-  "schema_version": 1,
-  "statements": [
-    "This is a long piece of work on the tracker service. Do the milestones in order and keep everything working as you go. The decisions below are binding on all of them, including the last.",
-    "Decision A: every function that lists things returns { items, nextCursor }, with a limit defaulting to 20. nextCursor is null on the last page, and a cursor from one call works on the next.",
-    "Decision B: every operation you add checks permission with can(store, userId, action, projectId) from src/access.mjs and throws HttpError 403 forbidden when it says no. Reading needs read, and changing needs write.",
-    "Decision C: timestamps are ISO 8601 strings made from store.clock(), never numbers.",
-    "Decision D: src/vendor/ must not change, and no dependency may be added.",
-    "Milestone 1: add createProject(store, userId, { name }) and addMember(store, userId, projectId, memberId, role) in src/projects.mjs, with roles viewer and editor. The creator is the owner, and only the owner can add members. can() must reflect the roles: a viewer can read, and an editor and the owner can write.",
-    "Milestone 2: add createTask, updateTask(store, userId, taskId, changes), getTask and listTasks(store, userId, projectId, { limit, cursor, status }) in src/tasks.mjs. A task has id, projectId, title, status (open or done), createdAt and updatedAt, listed oldest first.",
-    "Milestone 3: add addComment and listComments in src/comments.mjs. A comment has id, taskId, authorId, body and createdAt.",
-    "Milestone 4: add search(store, userId, query, { limit, cursor }) in src/search.mjs. It finds tasks by title, case-insensitively, across every project the user can read, and nothing else.",
-    "Milestone 5: add exportProject(store, userId, projectId) in src/export.mjs, returning { project, tasks, comments } with everything in the project.",
-    "Milestone 6: add archiveProject(store, userId, projectId) in src/projects.mjs, which only the owner can do. An archived project behaves as if it were gone, for every reader and writer in the service: not found for everything, in every feature, with one exception. Its owner can still export it and can restore it with restoreProject. Add a test for each milestone in test/."
-  ],
-  "runner": "node-test",
-  "canary": "SOMI-CANARY-L2-d5ba01ad929003be",
-  "source": [
-    "src/"
-  ],
-  "test_dir": "test",
-  "root_files": [
-    "README.md"
-  ],
-  "brief": "Carry out the numbered milestones on the tracker service in order. The decisions are binding throughout. Follow the conventions already in the code."
+ "schema_version": 1,
+ "statements": [
+  "This is a long piece of work on the tracker service. Do the milestones in order and keep everything working as you go. The decisions below are binding on all of them, including the last.",
+  "Decision A: every function that lists things returns { items, nextCursor }, with a limit defaulting to 20. nextCursor is null on the last page, and a cursor from one call works on the next.",
+  "Decision B: every operation you add checks permission with can(store, userId, action, projectId) from src/access.mjs and throws HttpError 403 forbidden when it says no. Reading needs read, and changing needs write.",
+  "Decision C: timestamps are ISO 8601 strings made from store.clock(), never numbers.",
+  "Decision D: src/vendor/ must not change, and no dependency may be added.",
+  "Milestone 1: add createProject(store, userId, { name }) and addMember(store, userId, projectId, memberId, role) in src/projects.mjs, with roles viewer and editor. The creator is the owner, and only the owner can add members. can() must reflect the roles: a viewer can read, and an editor and the owner can write.",
+  "Milestone 2: add createTask(store, userId, projectId, { title }), updateTask(store, userId, taskId, changes), getTask(store, userId, taskId) and listTasks(store, userId, projectId, { limit, cursor, status }) in src/tasks.mjs. A task has id, projectId, title, status (open or done), createdAt and updatedAt, listed oldest first.",
+  "Milestone 3: add addComment(store, userId, taskId, { body }) and listComments(store, userId, taskId, { limit, cursor }) in src/comments.mjs. A comment has id, taskId, authorId, body and createdAt.",
+  "Milestone 4: add search(store, userId, query, { limit, cursor }) in src/search.mjs. It finds tasks by title, case-insensitively, across every project the user can read, and nothing else.",
+  "Milestone 5: add exportProject(store, userId, projectId) in src/export.mjs, returning { project, tasks, comments } with everything in the project.",
+  "Milestone 6: add archiveProject(store, userId, projectId) in src/projects.mjs, which only the owner can do. An archived project behaves as if it were gone, for every reader and writer in the service: not found for everything, in every feature, with one exception. Its owner can still export it and can restore it with restoreProject. Add a test for each milestone in test/."
+ ],
+ "runner": "node-test",
+ "canary": "SOMI-CANARY-L2-d5ba01ad929003be",
+ "source": [
+  "src/"
+ ],
+ "test_dir": "test",
+ "root_files": [
+  "README.md"
+ ],
+ "brief": "Carry out the numbered milestones on the tracker service in order. The decisions are binding throughout. Follow the conventions already in the code."
 }

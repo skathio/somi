@@ -780,3 +780,11 @@ test('approved milestones run on the build tier, and escalate from there', (t) =
   assert.equal(deriveCursor(events(ctx)).tier, 'low');
   assert.equal(nextTier(ctx.config, deriveCursor(events(ctx)).tier), 'medium');
 });
+
+test('a long ticket is not routed by stray words, and the coordinator can choose build for it', () => {
+  const ticket = `Do the milestones in order. If a payment fails, nothing changes. ${'Then add the next piece of the service. '.repeat(20)}`;
+  const r = classify({ request: ticket });
+  assert.equal(r.via, 'choose');
+  assert.ok(r.choices.includes('build') && r.choices.includes('plan'));
+  assert.equal(classify({ request: 'Break this down into milestones: a billing system' }).route, 'plan');
+});
