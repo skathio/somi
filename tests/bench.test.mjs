@@ -1,4 +1,4 @@
-import { RESUME_PROMPT, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
+import { RESUME_PROMPT, engineWaiting, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
 import { globalConfigPath } from '../scripts/lib/config-files.mjs';
 import { resolveSpawn } from '../scripts/lib/tiers.mjs';
 import { test } from 'node:test';
@@ -511,4 +511,17 @@ test('every compaction window is one the host accepts, because it ignores any ot
   for (const { autoCompactWindow } of Object.values(WINDOW_SETTINGS)) assert.ok(autoCompactWindow >= 100000 && autoCompactWindow <= 1000000, String(autoCompactWindow));
   const pct = Number(WINDOW_ENV.tight.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE);
   assert.ok(pct > 0 && pct < 100);
+});
+
+test('a draw whose engine is waiting counts as paused, whatever its last sentence says', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-wait-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  assert.equal(engineWaiting(dir), false, 'a bare arm has no engine');
+  fs.mkdirSync(path.join(dir, '.somi', 'state'), { recursive: true });
+  const state = path.join(dir, '.somi', 'state', 'state.json');
+  fs.writeFileSync(state, JSON.stringify({ awaiting: 'plan-approval' }));
+  assert.equal(looksPaused('The plan is written, so I am stopping here until you say to continue.'), false);
+  assert.equal(engineWaiting(dir), true);
+  fs.writeFileSync(state, JSON.stringify({ awaiting: null }));
+  assert.equal(engineWaiting(dir), false);
 });

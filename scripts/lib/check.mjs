@@ -128,7 +128,8 @@ export function runCheck({ root, env = process.env, full = false, from = null })
   const plan = loadPlan(root);
   const tree = snapshotTree(root);
   const diff = readDiff(root, from ?? baseRef(root), tree);
-  const excluded = (f) => plan.gate_exclude.some((e) => f === e || (e.endsWith('/') && f.startsWith(e)));
+  // SoMi's own folder is never committed, so nothing in it ships and the gates have nothing to protect there.
+  const excluded = (f) => /(^|\/)\.somi\//.test(f) || plan.gate_exclude.some((e) => f === e || (e.endsWith('/') && f.startsWith(e)));
   const files = diff.rows.filter((r) => !r.status.startsWith('D')).map((r) => r.file);
   const added = diff.lines.filter((l) => l.sign === '+' && !excluded(l.file));
 

@@ -143,3 +143,11 @@ test('the mutation tool flips operators on changed code lines only', () => {
   assert.ok(GUARDED.test('hooks/pre-tool/block-secret-writes.mjs'));
   assert.equal(GUARDED.test('scripts/lib/views.mjs'), false);
 });
+
+test("SoMi's own plan is not scanned, and the same line in shipped code still fails", (t) => {
+  const dir = makeRepo(t);
+  writeFiles(dir, { '.somi/plan.md': 'Option A, chosen in D7 of the plan (D7).\n' });
+  assert.equal(somi(dir, ['check']).status, 0);
+  writeFiles(dir, { 'src/app.js': 'export const one = 1;\n// Chosen in D7 of the plan.\n' });
+  assert.deepEqual(failedGates(somi(dir, ['check'])), ['planning-ids']);
+});

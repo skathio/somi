@@ -19,7 +19,8 @@ import { nextTier, resolveSpawn } from './tiers.mjs';
 import { renderStatus } from './views.mjs';
 import { WORKER, WORKFLOWS, libraryPath, workerPrompt } from './workflows.mjs';
 
-const MAX_REQUEST = 8192;
+// A cut ticket loses its late decisions without anyone seeing it happen, so a request is kept whole or refused.
+const MAX_REQUEST = 65536;
 const SECOND_FIX = 2;
 const MAX_PASSING_CHECKS = 3;
 const MAX_CODE_ROUNDS = 8;
@@ -208,6 +209,7 @@ function afterFailedCheck(ctx, c, failed) {
 
 export function route(ctx, { request, ticket, hint }) {
   if (typeof request !== 'string' || request.trim() === '') throw new TransitionError('route needs the request');
+  if (request.length > MAX_REQUEST) throw new TransitionError(`this request is ${request.length} characters and the limit is ${MAX_REQUEST}: save it to a file in the project and route a request that names the file`);
   const c = deriveCursor(readEvents(ctx.root, ctx.env));
   const chosen = classify({ request, ticket, hint });
   if (chosen.via === 'choose') return { next: 'choose', how: HOW.choose, choices: Object.fromEntries(chosen.choices.map((r) => [r, WHEN[r]])) };
@@ -220,7 +222,7 @@ export function route(ctx, { request, ticket, hint }) {
   }
   if (chosen.route === 'resume') return resume(ctx);
   const wf = WORKFLOWS[chosen.route];
-  record(ctx, { key: `route:${c.seq + 1}`, type: 'route', route: chosen.route, via: chosen.via, tier: wf.tier, request: request.slice(0, MAX_REQUEST) });
+  record(ctx, { key: `route:${c.seq + 1}`, type: 'route', route: chosen.route, via: chosen.via, tier: wf.tier, request });
   const now = deriveCursor(readEvents(ctx.root, ctx.env));
   if (wf.kind === 'command') return { route: chosen.route, next: 'run', how: HOW.run, then: 'done', run: `${somiCommand('check --full')} && ${somiCommand('pr')}` };
   if (wf.kind === 'code') {

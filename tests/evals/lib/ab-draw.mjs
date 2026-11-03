@@ -224,6 +224,11 @@ export function runClaude({ command, args, env, cwd, sink, timeoutMs, kills, fdT
 }
 
 /** All turns of one draw -> the facts classify() needs. The token is only ever handed to the child and the sink. */
+/** Only the engine knows it is waiting, and its coordinator words that differently each time. A bare or older arm has no such state. */
+export function engineWaiting(cwd) {
+  try { return Boolean(JSON.parse(fs.readFileSync(path.join(cwd, '.somi', 'state', 'state.json'), 'utf8')).awaiting); } catch { return false; }
+}
+
 export async function runDraw({ settings, model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
   const sink = createSink(path.join(drawDir, 'stream.jsonl'), { token, canary, task, absAb, ownTmp, maxBytes });
   const run = { arm, cost: 0, turns: 0, resumes: 0, models: new Set(), exhausted: false, error: null, timedOut: false, stderr: '', result: null };
@@ -242,7 +247,7 @@ export async function runDraw({ settings, model, arm, prompt, budget, timeoutMs,
       run.turns += sink.state.turns;
       for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
       session = typeof res.session_id === 'string' ? res.session_id : null;
-      if (sink.state.limit || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= maxResumes) break;
+      if (sink.state.limit || res.subtype !== 'success' || session === null || !(looksPaused(sink.state.text) || engineWaiting(cwd)) || run.resumes >= maxResumes) break;
       if (budget - run.cost < MIN_REMAINING_USD) { run.exhausted = true; break; }
       run.resumes++; text = RESUME_PROMPT;
     }

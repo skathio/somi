@@ -803,3 +803,14 @@ test('a long brief reaches the worker from a file, whole, and the coordinator do
   assert.equal(fs.readdirSync(path.dirname(file)).filter((f) => f.endsWith('.tmp')).length, 0);
   assert.match(fs.readFileSync(resume(ctx) && file, 'utf8'), /whole cents/, 'a resumed step still finds its brief');
 });
+
+test('a long ticket is kept whole, and one past the limit is refused and not cut', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  const ticket = `Add billing.\n${'A milestone of the ticket.\n'.repeat(1000)}Last milestone: void twice fails with already_void.`;
+  route(ctx, { request: ticket, hint: 'plan' });
+  const opened = readEvents(ctx.root, ctx.env).filter((e) => e.type === 'route').at(-1);
+  assert.equal(opened.request, ticket);
+  const other = makeCtx(makeRepo(t));
+  assert.throws(() => route(other, { request: 'x'.repeat(70000), hint: 'build' }), /save it to a file/);
+  assert.equal(readEvents(other.root, other.env).filter((e) => e.type === 'route').length, 0);
+});
