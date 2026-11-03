@@ -23,6 +23,7 @@ const MAX_REQUEST = 8192;
 const SECOND_FIX = 2;
 const MAX_PASSING_CHECKS = 3;
 const MAX_CODE_ROUNDS = 8;
+const MAX_LOGGED = 10;
 const THEN = Object.freeze(['continue', 'close', 'abort']);
 const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'somi.mjs');
 const somiCommand = (args) => `node ${JSON.stringify(CLI)} ${args}`;
@@ -31,13 +32,14 @@ const shellQuote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
 
 const HOW = Object.freeze({
   spawn: 'Start spawn.agent with spawn.model if one is given, passing spawn.prompt unchanged, in the foreground, and wait for it. If the host needs a name for it, give a short one. Do nothing else. When it reports, call somi_step with action "done", status "ok" (or "too-big" with milestones, or "blocked") and its summary. Say nothing in between.',
-  review: 'Start each listed reviewer as a fresh agent with its model, in the foreground, giving it only card.diff and card.prompt. Then call somi_step with action "after-review" and every reviewer\'s JSON.',
+  review: 'Start each listed reviewer as a fresh agent with its model, in the foreground, giving it only card.diff and card.prompt. Then call somi_step with action "after-review" and every reviewer\'s JSON unchanged, with every field.',
   critic: 'Start spawn.agent with spawn.model, passing spawn.prompt unchanged. Then call somi_step with action "done", status "ok" and keep set to the ids it confirmed.',
   run: 'Run this one shell command, then call somi_step with the action in `then`.',
+  commit: 'Run this one shell command, then call somi_step with the action in `then`. Findings the engine did not send back stay logged: do not act on them.',
   ask: 'Show the maintainer the question and end your turn. When they answer, call somi_step with action "decide", their words as text, and then set to continue, close or abort.',
   choose: 'Pick the route that best fits the request from choices, then call somi_step with action "route", the same request, and hint set to it.',
   report: 'Relay this to the maintainer briefly. Add nothing of your own.',
-  done: 'Tell the maintainer the outcome in one or two sentences, from summary, and pass on any notice, confirm or connected field from this or earlier steps. The work is finished.',
+  done: 'Tell the maintainer the outcome in one or two sentences, from summary, and pass on any logged, notice, confirm or connected field from this or earlier steps. The work is finished.',
 });
 
 function record(ctx, body) {
@@ -116,7 +118,7 @@ function closeStep(ctx, c) {
   if (changedSinceCheck(ctx, c)) return recheck(ctx, c);
   if (isClean(ctx.root)) return closeMilestone(ctx);
   const title = c.title ?? firstLine(lastRoute(readEvents(ctx.root, ctx.env))?.request);
-  return { route: c.route, milestone: c.milestone, next: 'run', how: HOW.run, then: 'close', run: somiCommand(`commit --message=${shellQuote(title)}`) };
+  return { route: c.route, milestone: c.milestone, next: 'run', how: HOW.commit, then: 'close', run: somiCommand(`commit --message=${shellQuote(title)}`) };
 }
 
 // The cheap worker ends its own step. This is what `somi finish` runs inside the sandbox: the checks, then the signals, then a commit
@@ -133,9 +135,14 @@ export function finishWork(ctx, { runChecks, commit }) {
 
 function finish(ctx, outcome, summary) {
   const c = deriveCursor(readEvents(ctx.root, ctx.env));
+  const events = readEvents(ctx.root, ctx.env);
+  const routeSeq = lastRoute(events)?.seq ?? 0;
+  // A Major that does not re-loop is still a defect someone should hear about, so it is reported rather than left in the journal.
+  const logged = events.filter((e) => e.type === 'after-review' && e.seq > routeSeq).flatMap((e) => e.findings.filter((f) => f.severity === 'Major' && !isBlocking(f)))
+    .slice(0, MAX_LOGGED).map(({ file, line, claim }) => clean({ file, line, claim }));
   record(ctx, { key: `finish:${c.seq + 1}`, type: 'finish', route: c.route, outcome });
   clearLedger(ctx.root, ctx.env);
-  return clean({ next: 'done', how: HOW.done, route: c.route, outcome, summary });
+  return clean({ next: 'done', how: HOW.done, route: c.route, outcome, summary, logged: logged.length ? logged : undefined });
 }
 
 function startMilestone(ctx, c, { shardStep } = {}) {
@@ -312,7 +319,13 @@ function afterCritic(ctx, c, keep) {
   // A critic that gave no answer cleared nothing, so a missing answer keeps every finding.
   const confirmed = Array.isArray(keep) ? new Set(keep) : null;
   // A critic can only remove a finding from what re-loops. It stays in the record as a logged note, and Blockers are not its to clear.
-  const reviews = held.reviews.map((rv) => ({ ...rv, findings: (rv.findings ?? []).map((f) => (confirmed && f.severity === 'Major' && f.boundary && !confirmed.has(f.id) ? { ...f, boundary: false, disputed: true } : f)) }));
+  // One it kept is confirmed, even if the coordinator shortened the reviewer's JSON on the way here and lost the line or the evidence.
+  const judged = (f) => {
+    if (!(f.severity === 'Major' && f.boundary)) return f;
+    if (confirmed && !confirmed.has(f.id)) return { ...f, boundary: false, disputed: true };
+    return confirmed ? { ...f, line: f.line ?? 1, evidence: f.evidence ?? 'The critic confirmed this against the code.' } : f;
+  };
+  const reviews = held.reviews.map((rv) => ({ ...rv, findings: (rv.findings ?? []).map(judged) }));
   record(ctx, { key: `critic-done:${c.seq + 1}`, type: 'critic', reviews: undefined, done: true });
   return reviewedStep(ctx, reviews);
 }
@@ -382,7 +395,7 @@ export function decide(ctx, { text, then }) {
   const c = deriveCursor(readEvents(ctx.root, ctx.env));
   if (c.awaiting === 'plan-approval') {
     if (then !== 'continue') return finish(ctx, 'stopped');
-    record(ctx, { key: `plan-approved:${c.seq + 1}`, type: 'plan', milestones: c.lane.milestones, index: c.lane.index, approved: true, text });
+    record(ctx, { key: `plan-approved:${c.seq + 1}`, type: 'plan', milestones: c.lane.milestones, index: c.lane.index, approved: true, tier: WORKFLOWS.build.tier, text });
     noteInLedger(ctx, { kind: 'decision', text: `plan approved with ${c.lane.milestones.length} milestones. The maintainer said: ${text}` });
     return startMilestone(ctx, deriveCursor(readEvents(ctx.root, ctx.env)), { shardStep: 'plan.approved' });
   }

@@ -1,3 +1,6 @@
+import { RESUME_PROMPT, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
+import { globalConfigPath } from '../scripts/lib/config-files.mjs';
+import { resolveSpawn } from '../scripts/lib/tiers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -475,4 +478,20 @@ test('plan prints the draws and spends nothing', () => {
   const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'plan', '--phase', 'pilot'], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /draws across \d+ tasks; chunks of at most 24; no spend/);
+});
+
+test('a planner asking for choices counts as paused, and a finished report does not', () => {
+  assert.equal(looksPaused('The planner needs five design decisions from you. Reply with a choice for each question, or "take the recommendations".'), true);
+  assert.equal(looksPaused('All six milestones are in, and the full suite passes. I made the decisions you listed binding.'), false);
+  assert.match(RESUME_PROMPT, /recommended option/);
+});
+
+test('a recording pins the tiers in the user layer too, because reviewers read only that', (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-bench-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const config = { tiers: { claude: { low: 'haiku', medium: 'sonnet', high: 'sonnet' } } };
+  prepareWorkspace({ taskDir: path.join(REPO, 'tests/evals/ab/L1-shop-platform'), tmp, config, globalConfig: config });
+  const file = globalConfigPath({ HOME: tmp }, 'linux', tmp);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), config);
+  assert.equal(resolveSpawn(JSON.parse(fs.readFileSync(file, 'utf8')), 'claude', 'high').model, 'sonnet');
 });

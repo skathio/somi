@@ -124,6 +124,7 @@ export function deriveCursor(events) {
       case 'plan':
         c.lane = { milestones: e.milestones, index: e.index ?? c.lane?.index ?? 0 };
         c.awaiting = e.approved ? null : e.awaiting ?? null;
+        if (e.tier) c.tier = e.tier;
         break;
       case 'escalate':
         Object.assign(c, { tier: e.tier, escalated: true });

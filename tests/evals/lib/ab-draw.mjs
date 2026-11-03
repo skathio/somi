@@ -35,13 +35,13 @@ export const MAX_RESUMES = 4;
 const STDERR_CAP = 1024 * 1024;
 const MIN_REMAINING_USD = 0.1;
 const SETUP_MS = 20000;
-export const RESUME_PROMPT = 'Approved. Continue to completion without further questions.';
+export const RESUME_PROMPT = 'Approved. Take your recommended option on every open question, and continue to completion without further questions.';
 const AUTH_STDERR = /\b401\b|not logged in|invalid (api key|authentication)|authentication[_ ]error|oauth token.{0,40}(expired|revoked)/i;
 const TERMINAL_QUESTION = /\?[\s"'*_)\]`]*$/;
 const CHECKPOINT_MENU = /\bapprove\b[^\n]{0,120}\brevise\b[^\n]{0,120}\babort\b/i;
 // A plugin arm's gate laid out as a list: "Reply to continue:" with `approve` and `abort` on later lines, as newer models lay it out.
 const GATE_MENU = /\b(reply|respond|answer)\b[\s\S]{0,120}?\bapprove\b[\s\S]{0,400}?\babort\b/i;
-const EXPLICIT_REQUEST = /\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\bneeds? your (verdict|decision|approval|input)\b|\b(shall|should|may) I\b[^.]*\?/i;
+const EXPLICIT_REQUEST = /\b(reply|respond|answer) with (a|your|one|the)\b|\btake the recommendations?\b|\bneeds? [^.\n]{0,40}\b(decisions?|answers?) from you\b|\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\bneeds? your (verdict|decision|approval|input)\b|\b(shall|should|may) I\b[^.]*\?/i;
 
 // ---- command line and environment ----------------------------------------------------------------------------
 
@@ -137,7 +137,7 @@ export const probeSandbox = (spec) => spawnSync('bwrap', sandboxArgs({ ...spec, 
 const PATH_ONLY = (home) => ({ PATH: process.env.PATH ?? '', HOME: home });
 /** Fresh directories under `tmp` (made by the caller with mkdtemp) -> {ws, before}; throws an Error naming the step that failed. */
 /** `cost` is the already-validated `cost` block of the workspace's .somi/config.json (plain data; the caller validates it). */
-export function prepareWorkspace({ taskDir, tmp, config = { cost: { ceiling: 'medium' } } }) {
+export function prepareWorkspace({ taskDir, tmp, config = { cost: { ceiling: 'medium' } }, globalConfig }) {
   const ws = path.join(tmp, 'ws');
   fs.mkdirSync(ws, { mode: 0o700 });
   fs.mkdirSync(path.join(tmp, 'cfg'), { mode: 0o700 });
@@ -158,6 +158,11 @@ export function prepareWorkspace({ taskDir, tmp, config = { cost: { ceiling: 'me
   }
   fs.mkdirSync(path.join(ws, '.somi'), { recursive: true });
   fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify(config)}\n`);
+  // Reviewers read only the user's own config, so a recording pins their model there. childEnv makes tmp the home directory.
+  if (globalConfig) {
+    fs.mkdirSync(path.join(tmp, '.config', 'somi'), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(tmp, '.config', 'somi', 'config.json'), `${JSON.stringify(globalConfig)}\n`);
+  }
   const git = (...a) => { const r = spawnSync('git', a, { cwd: ws, env: { ...PATH_ONLY(tmp), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore', timeout: SETUP_MS }); if (r.error || r.status !== 0) throw new Error(`git ${a[0]} failed`); };
   git('init', '-q', '-b', 'main', '--template=');
   git('config', 'user.name', 'somi-ab');

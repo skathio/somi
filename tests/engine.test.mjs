@@ -746,3 +746,37 @@ test('the tier hook keeps a project config from lowering a reviewer, but not fro
   assert.equal(run('somi:somi-security-reviewer').hookSpecificOutput.updatedInput.model, 'opus');
   assert.equal(run('somi:somi-worker').hookSpecificOutput.updatedInput.model, 'cheap-one');
 });
+
+test('a critic\'s confirmation re-loops even when the coordinator lost the reviewer\'s evidence on the way', (t) => {
+  const ctx = atReview(t);
+  const { evidence, line, ...shortened } = finding();
+  reviewed(ctx, { reviews: [review('somi-reviewer', []), review('somi-security-reviewer', [shortened])] });
+  const fix = done(ctx, { keep: ['r1'] });
+  assert.equal(fix.next, 'spawn');
+  assert.equal(fix.spawn.agent, 'somi:somi-worker');
+  assert.match(fix.spawn.prompt, /shell injection/);
+});
+
+test('the commit step says logged findings are not for acting on', (t) => {
+  const ctx = atReview(t);
+  const close = reviewed(ctx, { reviews: [review('somi-reviewer', []), review('somi-security-reviewer', [finding({ boundary: false })])] });
+  assert.equal(close.then, 'close');
+  assert.match(close.how, /do not act on them/);
+});
+
+test('a Major that did not re-loop is reported when the route finishes', (t) => {
+  const ctx = atReview(t);
+  reviewed(ctx, { reviews: [review('somi-reviewer', []), review('somi-security-reviewer', [finding({ boundary: false, claim: 'a free order cannot be refunded' })])] });
+  commitAll(ctx.root, 'done');
+  const end = closeMilestone(ctx);
+  assert.equal(end.next, 'done');
+  assert.deepEqual(end.logged, [{ file: 'src/app.js', line: 2, claim: 'a free order cannot be refunded' }]);
+});
+
+test('approved milestones run on the build tier, and escalate from there', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  const first = approvedPlan(ctx);
+  assert.equal(first.spawn.tier, 'low');
+  assert.equal(deriveCursor(events(ctx)).tier, 'low');
+  assert.equal(nextTier(ctx.config, deriveCursor(events(ctx)).tier), 'medium');
+});

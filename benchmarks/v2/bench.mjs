@@ -334,7 +334,8 @@ async function run(args, session = { windowWeighted: 0 }) {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-v2-draw-'));
     console.log(`start ${d.id}`);
     try {
-      const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config: { cost: { ceiling: 'medium' }, tiers: { claude: { low: alias(args['worker-model'] ?? args.model), medium: alias(args.model), high: alias(args.model) } } } });
+      const config = { cost: { ceiling: 'medium' }, tiers: { claude: { low: alias(args['worker-model'] ?? args.model), medium: alias(args.model), high: alias(args.model) } } };
+      const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config, globalConfig: config });
       const result = await runDraw({
         model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
         settings: phase === 'large' ? LARGE_SETTINGS : undefined, maxResumes: 6, claude, env: childEnv({ token: env.token, tmp }), cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),

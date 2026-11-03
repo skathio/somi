@@ -37,7 +37,7 @@ export const ROUTE_NAMES = Object.freeze([...new Set([...FIRST, ...KINDS].map(([
 
 // What the coordinator reads when it has to choose. Short, because it is read on the session's model.
 export const WHEN = Object.freeze({
-  build: 'a new or changed feature, or anything small and clear',
+  build: 'a new or changed feature, or anything small and clear, even a long list of small steps',
   debug: 'something behaves wrongly, and the cause is not known',
   refactor: 'change structure and keep behaviour',
   upgrade: 'move a dependency or runtime to another version',
@@ -45,7 +45,7 @@ export const WHEN = Object.freeze({
   perf: 'make something faster or smaller',
   incident: 'production is hurting right now',
   accessibility: 'make an interface usable by everyone',
-  plan: 'too big for one sitting',
+  plan: 'will not fit one worker in one pass, or its order needs approving first',
   design: 'settle an expensive-to-reverse choice',
   discover: 'test a new product idea',
   atlas: 'map the code or a change\'s blast radius',
