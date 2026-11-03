@@ -39,6 +39,8 @@ const PREREG = path.join(HERE, 'prereg.json');
 const ABLATIONS = path.join(HERE, 'ablations.json');
 const MAX_CHUNK = 24;
 const WINDOW_STOP_SHARE = 0.6;
+// The host reports the account's real usage with every call. A recording stops short of the limit, because the maintainer's own work shares it.
+const HOST_STOP_SHARE = 0.9;
 const ABANDON_AFTER = 2;
 const QUIET_LOAD_SHARE = 0.5;
 const QUIET_WAIT_MIN = 90;
@@ -141,6 +143,25 @@ export function findLeaks(value, at = 'record', hostname = os.hostname()) {
 }
 
 // Result events come in runs within one CLI call, where usage is cumulative: the last of a run is the call's total.
+/** The last usage the host reported in a stream, or null: { five_hour: {utilization, resetsAt}, seven_day: {...} }. */
+export function hostWindows(file) {
+  let found = null;
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.includes('rate_limit_info')) continue;
+    try { found = JSON.parse(line).rate_limit_info?.unifiedWindows ?? found; } catch { /* a cut line says nothing */ }
+  }
+  return found;
+}
+
+/** Which of the host's windows is near its limit now: { name, resetsAt } or null. A window past its reset no longer counts. */
+export function hostStop(windows, nowMs = Date.now()) {
+  for (const name of ['seven_day', 'five_hour']) {
+    const w = windows?.[name];
+    if (w && w.utilization >= HOST_STOP_SHARE && w.resetsAt * 1000 > nowMs) return { name, resetsAt: w.resetsAt };
+  }
+  return null;
+}
+
 export function streamUsage(file) {
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
   const spend = {};
@@ -324,6 +345,8 @@ async function run(args, session = { windowWeighted: 0 }) {
     }
     if (interrupted || ran >= chunk) break;
     if (spent + budgetDraw > budgetTotal) { stop = 'budget'; console.log(`budget stop: spent $${spent.toFixed(2)} of $${budgetTotal}`); break; }
+    const near = hostStop(session.hostWindows);
+    if (near) { stop = near.name === 'seven_day' ? 'week' : 'window'; console.log(`host window stop: ${near.name} is at ${HOST_STOP_SHARE * 100}% or more; resets=${near.resetsAt}`); break; }
     const windowTokens = Number(args['window-tokens']);
     if (windowTokens > 0 && session.windowWeighted >= windowTokens * WINDOW_STOP_SHARE) { stop = 'window'; console.log('window stop: this session used 60% of the stated window; run it again in the next window'); break; }
 
@@ -356,6 +379,7 @@ async function run(args, session = { windowWeighted: 0 }) {
       const measured = { cost: result.cost, wall_ms: result.wallMs ?? 0, turns: usage.turns, tokens: usage.tokens, weighted: weightedTokens(usage.tokens), models: usage.models, spend: usage.spend, compactions: usage.compactions };
       spent += measured.cost;
       session.windowWeighted += measured.weighted;
+      session.hostWindows = hostWindows(path.join(drawDir, 'stream.jsonl')) ?? session.hostWindows;
       ran++;
       let row;
       if (cls.outcome === 'invalid' && /^(account-limit|bg-wait-ceiling|auth|spawn-error|no-result)/.test(cls.reason)) {

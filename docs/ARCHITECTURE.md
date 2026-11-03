@@ -13,7 +13,7 @@ request or ticket
   -> Blocker, or a boundary Major a critic confirms: fix, then re-review the fix diff only
   -> anything else: logged
   -> checks fail twice: restart one tier up with the working tree and a short summary, once
-  -> too big for one sitting: a plan the maintainer approves, then a fresh worker per milestone
+  -> too big for one sitting: the worker splits it, the maintainer approves the parts, and each gets a fresh worker
 ```
 
 The coordinator's prompt holds no procedure. Each answer from the engine names one `next` action and says `how` to carry it out, so what it reads is what it needs at that moment. A worker ends its own step because every turn the coordinator does not take costs the session's model and not the worker's.

@@ -9,7 +9,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { REPO, makeRepo, writeFiles } from './helpers.mjs';
 import { armSummary, callRatio, testShare, costDrawsPerArm, evaluateAa, evaluateRelease, holm, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, pairedDifference, passDrawsPerArm, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
-import { WINDOW_ENV, WINDOW_SETTINGS, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
+import { WINDOW_ENV, WINDOW_SETTINGS, hostStop, hostWindows, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
 import { adherence, agentSplit, journalFacts, labelDraw, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
 
 // Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
@@ -527,4 +527,21 @@ test('a draw whose engine is waiting counts as paused, whatever its last sentenc
   fs.writeFileSync(state, JSON.stringify({ awaiting: null, next: null }));
   assert.equal(engineWaiting(dir), false);
   assert.equal(looksPaused('**How would you like to proceed?**\n- `approve` (recommended): run the loop.\n- `revise <notes>`: send it back.\n- `abort`: stop here.'), true, 'a menu across lines is a pause');
+});
+
+test("a recording stops on the host's reported usage, and a window past its reset no longer counts", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-host-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'stream.jsonl');
+  const event = (five, week) => JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { unifiedWindows: { five_hour: { utilization: five, resetsAt: 2000 }, seven_day: { utilization: week, resetsAt: 9000 } } } });
+  fs.writeFileSync(file, `${event(0.2, 0.3)}\n{"cut\n${event(0.95, 0.4)}\n`);
+  const windows = hostWindows(file);
+  assert.equal(windows.five_hour.utilization, 0.95, 'the last report wins');
+  assert.deepEqual(hostStop(windows, 1000 * 1000), { name: 'five_hour', resetsAt: 2000 });
+  assert.equal(hostStop(windows, 3000 * 1000), null, 'it has reset');
+  assert.equal(hostStop(null), null);
+  assert.equal(hostStop({ five_hour: { utilization: 0.89, resetsAt: 2000 } }, 0), null);
+  assert.equal(hostStop({ five_hour: { utilization: 0.95, resetsAt: 2000 }, seven_day: { utilization: 0.91, resetsAt: 9000 } }, 0).name, 'seven_day');
+  fs.writeFileSync(file, '{"type":"result"}\n');
+  assert.equal(hostWindows(file), null);
 });

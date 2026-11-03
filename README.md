@@ -11,7 +11,7 @@ your request or ticket
   -> a thin coordinator asks the step engine what the work is
   -> small and clear: one low-tier worker builds it, checks it and commits it
   -> the diff calls for it: a fresh reviewer, and a security reviewer on a trust boundary
-  -> too big for one sitting: a plan you approve, then a fresh worker per milestone
+  -> too big for one sitting: the worker splits it, you approve the parts, and each gets a fresh worker
   -> failing twice: a clean restart one tier up, with the working tree and not the old transcript
 ```
 

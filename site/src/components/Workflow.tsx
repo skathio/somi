@@ -3,7 +3,7 @@ import { Card, Rich, Section } from './ui';
 
 const STAGES = [
   { step: 'Ask once', text: 'Only if the request itself names an expensive-to-reverse choice: schema, public API, storage, auth model.' },
-  { step: 'Code', text: 'In the main thread, the way a bare agent would.' },
+  { step: 'Code', text: 'A fresh worker at the cheapest tier that fits, not the main thread.' },
   { step: 'Check', text: '`somi check` in under 60 seconds: lint, gates, affected tests.' },
   { step: 'Read the diff', text: 'Signals come from what actually changed, not from a forecast.' },
   { step: 'Review or close', text: 'No signal, no review. A signal gets one fresh reviewer.' },

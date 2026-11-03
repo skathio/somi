@@ -142,6 +142,8 @@ node benchmarks/v2/bench.mjs decide --aa .somi/bench/aa --baseline .somi/bench/b
 
 **Ablations** are find-and-replace edits on the arm's private plugin copy, listed in `benchmarks/v2/ablations.json`. The shipped plugin has no off switch, so no project config can lower a review. A patch that stops matching stops the recording.
 
+A recording stops when the host reports either usage window at 90% or more, because the maintainer's own work shares those limits. It prints when that window resets, and running the same command again resumes. `--window-tokens` remains as a second limit on what one run may use.
+
 ## Host smoke
 
 Before a release, run one small task on each host in a throwaway repository, then compare the two journals. They must have the same event types and fields. This spends a little usage on each host.
@@ -177,4 +179,29 @@ cut -c1-200 .somi/state/journal.jsonl
 
 ## Large work
 
-The `large` phase asks whether fresh context per milestone pays. Two multi-milestone projects set binding decisions early, and hidden tests check that later milestones honour them. Arms are bare, the milestone lane, one worker in one thread with the ledger, and 4.1, with auto-compaction set low so it actually happens. It is a pilot, reported apart from the release rule.
+The `large` phase asks whether fresh context per milestone pays. Three projects set binding decisions early, and hidden tests check that later milestones honour them. The arms are bare, 5.0 as a plain request, 5.0 asked for a plan first (the milestone lane), and 4.1. It is a pilot, reported apart from the release rule.
+
+First draw per arm, at a 120,000-token window, after the fixes below:
+
+| Task | Bare | 5.0 | Lane | 4.1 |
+|---|---|---|---|---|
+| L2, task tracker, 23 tests | 23, $0.14, 1 min | 23, $0.14, 3 min | 23, $0.75, 8 min | 2, $3.68, 13 min |
+| L1, shop, 21 tests | 21, $0.15, 1 min | 21, $0.57, 7 min | 21, $0.83, 9 min | 2, $1.40, 7 min (not a fair reading) |
+| L3, fleet back office, 323 tests | 323, $0.30, 1 min | 323, $1.39, 24 min | 323, $4.20, 52 min | 10, $3.42, 8 min |
+
+The 4.1 L1 draw sat at its plan checkpoint because the bench failed to answer it, a bug fixed since. The other two 4.1 draws stopped at its own limits, such as its 400-line diff cap.
+
+What these draws support, and what they do not:
+
+- **Long tickets start on one worker.** Plain 5.0 scored the same as the lane at about a third of the cost on L3, because the worker splits only what proves too big.
+- **The lane has not earned its cost in this measure.** No hidden test failed for a bare agent in these draws. The lane's reviewers did find a real bug that the hidden tests miss (a negative quantity that mints stock), which this score does not reward. Asking for a plan first is the maintainer's choice, not the default.
+- **Rot was not demonstrated.** Bare never reached compaction at the natural window, because a model scripts uniform work. Forced to compact, it kept every decision on L1 and L2 through up to four compactions, and on L3 through one. These are tasks we can write offline, not a real project, so this is no proof that rot cannot happen on one.
+
+**How compaction was forced.** The host accepts a window from 100,000 to 1,000,000 tokens and ignores other values, so an earlier run at 30,000 never compacted. The `tight` phase sets the lowest legal window and lowers the point of compaction with `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`. At 30% the host ended sessions as thrashing, because a session starts at about 20,000 tokens, so those scores measure the host's limit. At 50%, the lane and plain 5.0 each finished L1 and L2 at full score with up to one compaction. Both stopped blocked on L3, where a low-tier worker built the wrong milestone in one draw and overwrote files in the other. Neither report describes a lost decision, though both come from the coordinator's own summary. In these two draws the bench did not yet answer a blocked worker, a bug fixed since, so they may have gone further. A 50,000-token point is also below the 100,000 window the host's settings allow.
+
+**What the large runs found in 5.0 itself,** all fixed:
+
+- The engine cut every request at 8,192 characters without saying so, which lost the late milestones of a long ticket. It now keeps the whole request and refuses one over 64 KiB.
+- The coordinator repeated each worker's brief in its context and reworded it. A brief over 2,000 characters now goes to a file. On L3 the lane's peak context fell from 344,000 to 87,000 tokens and its cost from $7.76 to $4.20.
+- `somi finish` scanned SoMi's own `.somi/plan.md` for planning ids and blocked on it. The gates now skip that folder, which is never committed.
+- A critic's confirmation did not bind when a coordinator dropped a finding's evidence.
