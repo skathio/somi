@@ -540,7 +540,7 @@ test("a recording stops on the host's reported usage, and a window past its rese
   assert.deepEqual(hostStop(windows, 1000 * 1000), { name: 'five_hour', resetsAt: 2000 });
   assert.equal(hostStop(windows, 3000 * 1000), null, 'it has reset');
   assert.equal(hostStop(null), null);
-  assert.equal(hostStop({ five_hour: { utilization: 0.89, resetsAt: 2000 } }, 0), null);
+  assert.equal(hostStop({ five_hour: { utilization: 0.84, resetsAt: 2000 } }, 0), null);
   assert.equal(hostStop({ five_hour: { utilization: 0.95, resetsAt: 2000 }, seven_day: { utilization: 0.91, resetsAt: 9000 } }, 0).name, 'seven_day');
   fs.writeFileSync(file, '{"type":"result"}\n');
   assert.equal(hostWindows(file), null);

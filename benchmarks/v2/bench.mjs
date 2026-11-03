@@ -40,7 +40,7 @@ const ABLATIONS = path.join(HERE, 'ablations.json');
 const MAX_CHUNK = 24;
 const WINDOW_STOP_SHARE = 0.6;
 // The host reports the account's real usage with every call. A recording stops short of the limit, because the maintainer's own work shares it.
-const HOST_STOP_SHARE = 0.9;
+const HOST_STOP_SHARE = 0.85;
 const ABANDON_AFTER = 2;
 const QUIET_LOAD_SHARE = 0.5;
 const QUIET_WAIT_MIN = 90;

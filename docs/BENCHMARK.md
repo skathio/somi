@@ -142,7 +142,7 @@ node benchmarks/v2/bench.mjs decide --aa .somi/bench/aa --baseline .somi/bench/b
 
 **Ablations** are find-and-replace edits on the arm's private plugin copy, listed in `benchmarks/v2/ablations.json`. The shipped plugin has no off switch, so no project config can lower a review. A patch that stops matching stops the recording.
 
-A recording stops when the host reports either usage window at 90% or more, because the maintainer's own work shares those limits. It prints when that window resets, and running the same command again resumes. `--window-tokens` remains as a second limit on what one run may use.
+A recording stops when the host reports either usage window at 85% or more, because the maintainer's own work shares those limits. It prints when that window resets, and running the same command again resumes. `--window-tokens` remains as a second limit on what one run may use.
 
 ## Host smoke
 
