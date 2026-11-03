@@ -522,6 +522,9 @@ test('a draw whose engine is waiting counts as paused, whatever its last sentenc
   fs.writeFileSync(state, JSON.stringify({ awaiting: 'plan-approval' }));
   assert.equal(looksPaused('The plan is written, so I am stopping here until you say to continue.'), false);
   assert.equal(engineWaiting(dir), true);
-  fs.writeFileSync(state, JSON.stringify({ awaiting: null }));
+  fs.writeFileSync(state, JSON.stringify({ awaiting: null, next: 'ask', stop: 'worker-blocked' }));
+  assert.equal(engineWaiting(dir), true, 'a blocked worker is waiting too');
+  fs.writeFileSync(state, JSON.stringify({ awaiting: null, next: null }));
   assert.equal(engineWaiting(dir), false);
+  assert.equal(looksPaused('**How would you like to proceed?**\n- `approve` (recommended): run the loop.\n- `revise <notes>`: send it back.\n- `abort`: stop here.'), true, 'a menu across lines is a pause');
 });

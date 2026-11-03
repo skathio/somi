@@ -38,7 +38,7 @@ const SETUP_MS = 20000;
 export const RESUME_PROMPT = 'Approved. Take your recommended option on every open question, and continue to completion without further questions.';
 const AUTH_STDERR = /\b401\b|not logged in|invalid (api key|authentication)|authentication[_ ]error|oauth token.{0,40}(expired|revoked)/i;
 const TERMINAL_QUESTION = /\?[\s"'*_)\]`]*$/;
-const CHECKPOINT_MENU = /\bapprove\b[^\n]{0,120}\brevise\b[^\n]{0,120}\babort\b/i;
+const CHECKPOINT_MENU = /\bapprove\b[\s\S]{0,240}\brevise\b[\s\S]{0,240}\babort\b/i;
 // A plugin arm's gate laid out as a list: "Reply to continue:" with `approve` and `abort` on later lines, as newer models lay it out.
 const GATE_MENU = /\b(reply|respond|answer)\b[\s\S]{0,120}?\bapprove\b[\s\S]{0,400}?\babort\b/i;
 const EXPLICIT_REQUEST = /\b(reply|respond|answer) with (a|your|one|the)\b|\btake the recommendations?\b|\bneeds? [^.\n]{0,40}\b(decisions?|answers?) from you\b|\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\bneeds? your (verdict|decision|approval|input)\b|\b(shall|should|may) I\b[^.]*\?/i;
@@ -226,7 +226,7 @@ export function runClaude({ command, args, env, cwd, sink, timeoutMs, kills, fdT
 /** All turns of one draw -> the facts classify() needs. The token is only ever handed to the child and the sink. */
 /** Only the engine knows it is waiting, and its coordinator words that differently each time. A bare or older arm has no such state. */
 export function engineWaiting(cwd) {
-  try { return Boolean(JSON.parse(fs.readFileSync(path.join(cwd, '.somi', 'state', 'state.json'), 'utf8')).awaiting); } catch { return false; }
+  try { const { awaiting, next } = JSON.parse(fs.readFileSync(path.join(cwd, '.somi', 'state', 'state.json'), 'utf8')); return Boolean(awaiting) || next === 'ask'; } catch { return false; }
 }
 
 export async function runDraw({ settings, model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
