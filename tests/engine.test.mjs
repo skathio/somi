@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO, makeRepo, somi, writeFiles } from './helpers.mjs';
 import { abandon, closeMilestone, decide, done, parseMilestones, resume, reviewed, route } from '../scripts/lib/engine.mjs';
-import { deriveCursor, journalProblems, readEvents } from '../scripts/lib/journal.mjs';
+import { deriveCursor, journalProblems, readEvents, statePaths } from '../scripts/lib/journal.mjs';
 import { addToLedger, readLedger, MAX_LINES } from '../scripts/lib/ledger.mjs';
 import { recordCheck } from '../scripts/lib/kernel.mjs';
 import { classify } from '../scripts/lib/routes.mjs';
@@ -787,4 +787,19 @@ test('a long ticket is not routed by stray words, and the coordinator can choose
   assert.equal(r.via, 'choose');
   assert.ok(r.choices.includes('build') && r.choices.includes('plan'));
   assert.equal(classify({ request: 'Break this down into milestones: a billing system' }).route, 'plan');
+});
+
+test('a long brief reaches the worker from a file, whole, and the coordinator does not carry it', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  const ticket = `Add the billing rules. Decision A: money is whole cents.\n${'Another line of the ticket.\n'.repeat(120)}`;
+  const r = route(ctx, { request: ticket, hint: 'build' });
+  assert.ok(r.spawn.prompt.length < 300, 'the coordinator holds a pointer and not the brief');
+  const file = JSON.parse(r.spawn.prompt.match(/"[^"]+"/)[0]);
+  assert.equal(path.dirname(file), statePaths(ctx.root, ctx.env).dir);
+  const brief = fs.readFileSync(file, 'utf8');
+  assert.match(brief, /> Decision A|Decision A: money is whole cents/);
+  assert.equal(brief.split('Another line of the ticket.').length - 1, 120);
+  assert.match(brief, /somi finish/);
+  assert.equal(fs.readdirSync(path.dirname(file)).filter((f) => f.endsWith('.tmp')).length, 0);
+  assert.match(fs.readFileSync(resume(ctx) && file, 'utf8'), /whole cents/, 'a resumed step still finds its brief');
 });

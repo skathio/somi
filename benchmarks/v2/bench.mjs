@@ -71,7 +71,9 @@ const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, trial: reg
 const armKFor = (phase, reg) => (phase === 'candidate' ? reg.arm_k : {});
 // The large phase runs on a window a long session can really fill. The tight phase makes the window small enough that every arm compacts,
 // because no task we can write offline fills a large one: a model scripts uniform work and finishes short work in one pass.
-const WINDOW_SETTINGS = Object.freeze({ large: { autoCompactWindow: 120000 }, tight: { autoCompactWindow: 30000 } });
+// The host takes a window from 100000 to 1000000 and ignores anything else, so the tight phase lowers the point of compaction with its percentage instead.
+export const WINDOW_SETTINGS = Object.freeze({ large: { autoCompactWindow: 120000 }, tight: { autoCompactWindow: 100000 } });
+export const WINDOW_ENV = Object.freeze({ tight: { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '30' } });
 export const liveCandidates = (tasks) => tasks.filter((t) => !t.retired);
 function tasksFor(phase, only) {
   if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all).filter((t) => !t.large); }
@@ -343,7 +345,7 @@ async function run(args, session = { windowWeighted: 0 }) {
       const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config, globalConfig: config });
       const result = await runDraw({
         model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
-        settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude, env: childEnv({ token: env.token, tmp }), cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
+        settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude, env: { ...childEnv({ token: env.token, tmp }), ...WINDOW_ENV[phase] }, cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
       });
       if (interrupted) { stop = 'interrupted'; break; }
       const after = lstatManifest(ws);

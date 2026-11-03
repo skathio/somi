@@ -9,7 +9,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { REPO, makeRepo, writeFiles } from './helpers.mjs';
 import { armSummary, callRatio, testShare, costDrawsPerArm, evaluateAa, evaluateRelease, holm, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, pairedDifference, passDrawsPerArm, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
-import { pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
+import { WINDOW_ENV, WINDOW_SETTINGS, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
 import { adherence, agentSplit, journalFacts, labelDraw, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
 
 // Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
@@ -505,4 +505,10 @@ test('the lane arm asks for a plan first, the tight phase has a small window, an
   const file = path.join(dir, 'stream.jsonl');
   fs.writeFileSync(file, `${JSON.stringify({ type: 'system', subtype: 'compact_boundary' })}\n${JSON.stringify({ type: 'result', num_turns: 2, modelUsage: {} })}\n`);
   assert.equal(streamUsage(file).compactions, 1);
+});
+
+test('every compaction window is one the host accepts, because it ignores any other', () => {
+  for (const { autoCompactWindow } of Object.values(WINDOW_SETTINGS)) assert.ok(autoCompactWindow >= 100000 && autoCompactWindow <= 1000000, String(autoCompactWindow));
+  const pct = Number(WINDOW_ENV.tight.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE);
+  assert.ok(pct > 0 && pct < 100);
 });

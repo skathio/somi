@@ -11,7 +11,7 @@
     "Milestone 3: add coupons in src/coupons.mjs. addCoupon(store, { code, percent, expiresAt }) saves one. placeOrder gains an optional coupon code, and the discount rounds down to whole cents. An unknown or expired coupon fails the order with code bad_coupon. A coupon works up to and including expiresAt.",
     "Milestone 4: add refundOrder(store, orderId, amount) in src/refunds.mjs. Partial refunds are allowed, up to the amount paid across all refunds; beyond that fails with refund_too_large. Refunds return stock only when an order is fully refunded. Status becomes partially_refunded or refunded.",
     "Milestone 5: add reserveStock(store, sku, qty, customerId) and placeOrder's use of it in src/inventory.mjs. A reservation holds stock for 15 minutes from store.clock(), in milliseconds. Other customers cannot take reserved stock, and an order by the same customer uses their reservation first. An expired reservation holds nothing.",
-    "Milestone 6: add monthlyStatement(store, year, month) in src/statements.mjs, returning { orders, gross, refunds, net } for orders placed in that UTC month, with refunds counted in the month they happen. Add a test for each milestone in test/, and describe the decisions in the README."
+    "Milestone 6: add monthlyStatement(store, year, month) in src/statements.mjs, returning { orders, gross, refunds, net }. orders is how many orders were placed in that UTC month, gross is their total, and refunds are counted in the month they happen. Add a test for each milestone in test/, and describe the decisions in the README."
   ],
   "runner": "node-test",
   "canary": "SOMI-CANARY-L1-60349bdfbf51ffa8",

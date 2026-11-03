@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SCHEMA_VERSION, appendEvent, deriveCursor, readEvents, writeCursor } from './journal.mjs';
+import { SCHEMA_VERSION, appendEvent, deriveCursor, readEvents, statePaths, writeCursor } from './journal.mjs';
 import { isClean, reviewDiffCommand, snapshotTree, treeOf } from './git-tree.mjs';
 import { readLedger, addToLedger, clearLedger } from './ledger.mjs';
 import { TransitionError, afterCode, afterReview, close as kernelClose, decide as kernelDecide, open as kernelOpen } from './kernel.mjs';
@@ -28,6 +28,8 @@ const THEN = Object.freeze(['continue', 'close', 'abort']);
 const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'somi.mjs');
 const somiCommand = (args) => `node ${JSON.stringify(CLI)} ${args}`;
 const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null));
+// A long brief goes to a file, so the coordinator does not carry each one for the rest of the session or get the chance to reword it.
+const INLINE_BRIEF = 2000;
 const shellQuote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
 
 const HOW = Object.freeze({
@@ -83,6 +85,17 @@ function withShards(ctx, step, answer) {
 
 const firstLine = (text) => String(text ?? '').split('\n').map((l) => l.trim()).find(Boolean)?.slice(0, 80) || 'Requested work';
 
+function briefFor(ctx, prompt) {
+  if (prompt.length <= INLINE_BRIEF) return prompt;
+  const { dir } = statePaths(ctx.root, ctx.env);
+  const file = path.join(dir, 'brief.md');
+  const scratch = `${file}.${process.pid}.tmp`;
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(scratch, prompt, { mode: 0o600 });
+  fs.renameSync(scratch, file);
+  return `Your whole brief is in ${JSON.stringify(file)}. Read that file first and follow it. Report what it asks you to report.`;
+}
+
 function spawnWorker(ctx, c, { note, request, tier = c.tier, shardStep } = {}) {
   const events = readEvents(ctx.root, ctx.env);
   const routed = WORKFLOWS[c.route];
@@ -100,7 +113,7 @@ function spawnWorker(ctx, c, { note, request, tier = c.tier, shardStep } = {}) {
   });
   return clean({
     route: c.route, milestone: c.milestone, next: 'spawn', how: HOW.spawn, ...shards.extra,
-    spawn: clean({ agent: wf.agent ?? WORKER, tier: actual, model, enforced: enforced ? undefined : false, prompt }),
+    spawn: clean({ agent: wf.agent ?? WORKER, tier: actual, model, enforced: enforced ? undefined : false, prompt: briefFor(ctx, prompt) }),
   });
 }
 
