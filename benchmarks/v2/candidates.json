@@ -136,6 +136,14 @@
       "large": true
     },
     {
+      "id": "L3-fleet-backoffice",
+      "dir": "tests/evals/ab/L3-fleet-backoffice",
+      "boundary": true,
+      "why": "forty domains to move to binding decisions, then one change reaching back into all of them: big enough to fill a context window",
+      "stratum": "multi-file",
+      "large": true
+    },
+    {
       "id": "N01-invoice-cents",
       "dir": "tests/evals/ab/N01-invoice-cents",
       "why": "a blamed formatter hides per-line float tax and a duplicated code path",
