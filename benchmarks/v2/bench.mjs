@@ -362,6 +362,8 @@ async function run(args, session = { windowWeighted: 0 }) {
     const t = admitted.get(dir);
     const drawDir = path.join(out, d.id);
     fs.mkdirSync(drawDir, { recursive: true, mode: 0o700 });
+    // A draw lost to a stop runs again, and its stream is appended to, so what it spent would count twice.
+    fs.rmSync(path.join(drawDir, 'stream.jsonl'), { force: true });
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-v2-draw-'));
     console.log(`start ${d.id}`);
     try {
@@ -433,7 +435,7 @@ export function pilotRows(dirs, read = completed) {
 
 // A comparison across recordings means nothing unless both ran on the same model, the same host and the same rule.
 export function comparableRecordings(aaDir, mainDir) {
-  const meta = (d) => { const { model, rule, host } = readJson(path.join(d, 'plan.json')); return JSON.stringify({ model, rule, host }); };
+  const meta = (d) => { const { model, worker_model, rule, host } = readJson(path.join(d, 'plan.json')); return JSON.stringify({ model, worker_model, rule, host }); };
   return meta(aaDir) === meta(mainDir) ? null : 'the A/A and main recordings differ in model, rule or host, so they cannot be compared';
 }
 

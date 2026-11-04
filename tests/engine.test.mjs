@@ -814,3 +814,106 @@ test('a long ticket is kept whole, and one past the limit is refused and not cut
   assert.throws(() => route(other, { request: 'x'.repeat(70000), hint: 'build' }), /save it to a file/);
   assert.equal(readEvents(other.root, other.env).filter((e) => e.type === 'route').length, 0);
 });
+
+test('a request for new work is built even when it names an error, and "a plan first" asks for a plan', () => {
+  assert.equal(classify({ request: 'Add a retry for the usual error when a charge fails' }).route, 'build');
+  assert.equal(classify({ request: 'The charge retry fails with the usual error' }).route, 'debug');
+  assert.equal(classify({ request: 'Show me a plan first, then build it' }).route, 'plan');
+});
+
+test('a long ticket that mentions an incident or a security review deep inside is not routed by those words', () => {
+  const body = `\n${'Then add the next piece of the service.\n'.repeat(20)}`;
+  assert.equal(classify({ request: `Add a billing page.${body}Log an incident if it fails. The security review will check it.` }).via, 'choose');
+  assert.equal(classify({ request: `Production is down: payments fail.${body}` }).route, 'incident');
+});
+
+test('choosing a route for a ticket keeps the ticket whole, however the coordinator sends it back', (t) => {
+  const ticket = `Do these in order. Decision A: money is whole cents.\n${'Then add the next piece of the service.\n'.repeat(30)}`;
+  const omitted = makeCtx(makeRepo(t));
+  assert.equal(route(omitted, { request: ticket }).next, 'choose');
+  assert.match(route(omitted, { hint: 'build' }).spawn.prompt, /brief/);
+  assert.equal(events(omitted).find((e) => e.type === 'route').request, ticket);
+  assert.deepEqual(journalProblems(events(omitted)), []);
+
+  const shortened = makeCtx(makeRepo(t));
+  route(shortened, { request: ticket });
+  route(shortened, { request: 'Build the service.', hint: 'build' });
+  assert.equal(events(shortened).find((e) => e.type === 'route').request, ticket);
+
+  // A short request to choose about is not held against a different one sent next.
+  const other = makeCtx(makeRepo(t));
+  assert.equal(route(other, { request: 'Sort out the thing with the widget' }).next, 'choose');
+  route(other, { request: 'Rename the widget', hint: 'refactor' });
+  assert.equal(events(other).find((e) => e.type === 'route').request, 'Rename the widget');
+
+  assert.throws(() => route(makeCtx(makeRepo(t)), { hint: 'build' }), /needs the request/);
+});
+
+test('a link planted at the brief\'s scratch name is not followed, and the brief goes when the work does', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  const { dir } = statePaths(ctx.root, ctx.env);
+  const victim = path.join(ctx.root, 'victim.txt');
+  fs.writeFileSync(victim, 'untouched\n');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.symlinkSync(victim, path.join(dir, `brief.md.${process.pid}.tmp`));
+  route(ctx, { request: `Add the billing rules.\n${'Another line of the ticket.\n'.repeat(120)}`, hint: 'build' });
+  assert.equal(fs.readFileSync(victim, 'utf8'), 'untouched\n');
+  const brief = path.join(dir, 'brief.md');
+  assert.equal(fs.lstatSync(brief).isSymbolicLink(), false);
+  assert.match(fs.readFileSync(brief, 'utf8'), /billing rules/);
+  abandon(ctx);
+  assert.equal(fs.existsSync(brief), false);
+});
+
+test('too-big is no way out of a fix, or past the checks on work a worker committed', (t) => {
+  const fixing = atReview(t);
+  reviewed(fixing, { reviews: [review('somi-reviewer', [{ ...finding(), severity: 'Blocker' }]), review('somi-security-reviewer', [])] });
+  const r = done(fixing, { status: 'too-big', milestones: ['a', 'b'] });
+  assert.equal(r.next, 'ask');
+  assert.equal(events(fixing).some((e) => e.type === 'plan'), false);
+
+  const committed = makeCtx(makeRepo(t));
+  route(committed, { request: 'Add a command runner' });
+  writeFiles(committed.root, SINK);
+  commitAll(committed.root, 'worker commit');
+  const s = done(committed, { status: 'too-big', milestones: ['a', 'b'] });
+  assert.equal(s.next, 'ask');
+  assert.match(s.question, /committed/);
+
+  // Work left uncommitted still reaches the checks and review of the milestone that follows, so splitting from there stays allowed.
+  const partial = makeCtx(makeRepo(t));
+  route(partial, { request: 'Add a command runner' });
+  writeFiles(partial.root, SMALL);
+  assert.deepEqual(done(partial, { status: 'too-big', milestones: ['a', 'b'] }).milestones, ['a', 'b']);
+});
+
+test('a finding with no id can still be confirmed, and one no critic answered still re-loops without its evidence', (t) => {
+  const { id, ...noId } = finding();
+  const ctx = atReview(t);
+  const sent = reviewed(ctx, { reviews: [review('somi-reviewer', []), review('somi-security-reviewer', [noId])] });
+  assert.match(sent.spawn.prompt, /somi-security-reviewer-1/);
+  assert.match(done(ctx, { keep: ['somi-security-reviewer-1'] }).spawn.prompt, /shell injection/);
+
+  const { evidence, line, ...bare } = finding();
+  const silent = atReview(t);
+  reviewed(silent, { reviews: [review('somi-reviewer', []), review('somi-security-reviewer', [bare])] });
+  assert.match(done(silent, {}).spawn?.prompt ?? '', /shell injection/);
+});
+
+test('approving a split keeps the route\'s tier, and only a plan\'s own milestones drop to the builder\'s', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  route(ctx, { request: 'Add the invoice ledger', hint: 'migrate' });
+  const tier = deriveCursor(events(ctx)).tier;
+  assert.notEqual(tier, 'low');
+  done(ctx, { status: 'too-big', milestones: ['a', 'b'] });
+  assert.equal(decide(ctx, { text: 'yes', then: 'continue' }).spawn.tier, tier);
+  const planned = makeCtx(makeRepo(t));
+  route(planned, { request: 'Plan the invoices', hint: 'plan' });
+  writeFiles(planned.root, { '.somi/plan.md': 'Milestone 1: a\nMilestone 2: b\n' });
+  done(planned, {});
+  assert.equal(decide(planned, { text: 'yes', then: 'continue' }).spawn.tier, 'low');
+});
+
+test('an agent that does the work is told to do it itself, because a host may let it start others', () => {
+  for (const f of ['somi-worker', 'somi-reviewer', 'somi-security-reviewer']) assert.match(fs.readFileSync(path.join(REPO, 'agents', `${f}.md`), 'utf8'), /do not call `somi_step`, start another agent/, f);
+});

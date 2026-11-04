@@ -21,7 +21,7 @@
 //   namespace dies with the leader. The repository, ~/.claude, ~/.ssh and other draws' directories are not visible. The
 //   network stays shared (the model needs it).
 // Pauses: a SoMi turn that ends in a question or an approval request is answered once per resume (at most MAX_RESUMES),
-//   with `--resume <session>` and the remaining budget; see looksPaused. The bare arm is never resumed.
+//   with `--resume <session>` and the remaining budget; see looksPaused. Every arm is resumed by the same rule.
 // Process control: detached child (own group), stdin closed, ONE deadline for all turns of a draw, output cap; the group
 //   is killed when the leader exits and the draw's leftovers are swept by their environment (ab-stream.mjs).
 

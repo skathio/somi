@@ -209,8 +209,8 @@ function main() {
   }
 
   denyPretool(payload, `somi refused this command: it would add a new dependency (\`${m[0]}\`).
-Adding a dep is a decision — record it in \`.somi/plans/<slug>/decisions.md\` (or surface it in
-the iteration summary for the human) and re-run with \`SOMI_ALLOW_DEP_INSTALL=1\` in the
+Adding a dep is a decision — record it in the plan (or surface it in
+your summary for the human) and re-run with \`SOMI_ALLOW_DEP_INSTALL=1\` in the
 environment for this session, or have the human run the install themselves. Projects can also
 allowlist package-name prefixes in \`.somi/config.json\` under \`dep_install.allow\`.
 Lockfile-respecting reinstalls (bare \`npm install\` / \`pip install -r requirements.txt\`-less,

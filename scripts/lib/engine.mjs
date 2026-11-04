@@ -9,11 +9,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCHEMA_VERSION, appendEvent, deriveCursor, readEvents, statePaths, writeCursor } from './journal.mjs';
-import { isClean, reviewDiffCommand, snapshotTree, treeOf } from './git-tree.mjs';
+import { baseRef, isClean, reviewDiffCommand, snapshotTree, treeOf } from './git-tree.mjs';
 import { readLedger, addToLedger, clearLedger } from './ledger.mjs';
 import { TransitionError, afterCode, afterReview, close as kernelClose, decide as kernelDecide, open as kernelOpen } from './kernel.mjs';
 import { isBlocking } from './policy.mjs';
-import { WHEN, classify } from './routes.mjs';
+import { LONG_REQUEST, WHEN, classify } from './routes.mjs';
 import { shardsFor } from './shards.mjs';
 import { nextTier, resolveSpawn } from './tiers.mjs';
 import { renderStatus } from './views.mjs';
@@ -40,7 +40,7 @@ const HOW = Object.freeze({
   run: 'Run this one shell command, then call somi_step with the action in `then`.',
   commit: 'Run this one shell command, then call somi_step with the action in `then`. Findings the engine did not send back stay logged: do not act on them.',
   ask: 'Show the maintainer the question and end your turn. When they answer, call somi_step with action "decide", their words as text, and then set to continue, close or abort.',
-  choose: 'Pick the route that best fits the request from choices, then call somi_step with action "route", the same request, and hint set to it.',
+  choose: 'Pick the route that best fits the request from choices, then call somi_step with action "route" and hint set to it. Leave out the request: the engine kept it.',
   report: 'Relay this to the maintainer briefly. Add nothing of your own.',
   done: 'Tell the maintainer the outcome in one or two sentences, from summary, and pass on any logged, notice, confirm or connected field from this or earlier steps. The work is finished.',
 });
@@ -92,7 +92,9 @@ function briefFor(ctx, prompt) {
   const file = path.join(dir, 'brief.md');
   const scratch = `${file}.${process.pid}.tmp`;
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(scratch, prompt, { mode: 0o600 });
+  // A worker can write here, and this server runs outside the sandbox, so a link left at this name must not be followed.
+  fs.rmSync(scratch, { force: true });
+  fs.writeFileSync(scratch, prompt, { mode: 0o600, flag: 'wx' });
   fs.renameSync(scratch, file);
   return `Your whole brief is in ${JSON.stringify(file)}. Read that file first and follow it. Report what it asks you to report.`;
 }
@@ -156,6 +158,7 @@ function finish(ctx, outcome, summary) {
     .slice(0, MAX_LOGGED).map(({ file, line, claim }) => clean({ file, line, claim }));
   record(ctx, { key: `finish:${c.seq + 1}`, type: 'finish', route: c.route, outcome });
   clearLedger(ctx.root, ctx.env);
+  fs.rmSync(path.join(statePaths(ctx.root, ctx.env).dir, 'brief.md'), { force: true });
   return clean({ next: 'done', how: HOW.done, route: c.route, outcome, summary, logged: logged.length ? logged : undefined });
 }
 
@@ -207,11 +210,17 @@ function afterFailedCheck(ctx, c, failed) {
   return spawnWorker(ctx, c, { note });
 }
 
-export function route(ctx, { request, ticket, hint }) {
+export function route(ctx, { request: given, ticket, hint }) {
+  // Choosing needs no words back, and a coordinator that sends them back may shorten a ticket and lose its decisions. Only a request
+  // that is new work, not a shorter copy of the long one it was asked about, replaces what was kept.
+  const last = readEvents(ctx.root, ctx.env).at(-1);
+  const kept = last?.type === 'choose' && hint ? last.request : null;
+  const request = kept && (!given || (kept.length > LONG_REQUEST && given.length < kept.length)) ? kept : given;
   if (typeof request !== 'string' || request.trim() === '') throw new TransitionError('route needs the request');
   if (request.length > MAX_REQUEST) throw new TransitionError(`this request is ${request.length} characters and the limit is ${MAX_REQUEST}: save it to a file in the project and route a request that names the file`);
   const c = deriveCursor(readEvents(ctx.root, ctx.env));
   const chosen = classify({ request, ticket, hint });
+  if (chosen.via === 'choose' && !c.route) record(ctx, { key: `choose:${c.seq + 1}`, type: 'choose', request });
   if (chosen.via === 'choose') return { next: 'choose', how: HOW.choose, choices: Object.fromEntries(chosen.choices.map((r) => [r, WHEN[r]])) };
   if (chosen.route === 'status') return { next: 'report', how: HOW.report, status: renderStatus(readEvents(ctx.root, ctx.env)) };
   if (chosen.route === 'config') {
@@ -280,6 +289,8 @@ export function done(ctx, { status = 'ok', summary, milestones, keep } = {}) {
   if (c.awaiting === 'plan-approval') return resume(ctx);
   if (status === 'blocked') return halt(ctx, c, String(summary ?? 'The worker could not continue.').slice(0, 800));
   if (status === 'too-big' && kindOf(c) === 'code') {
+    // A split starts clean milestones, so it must not be a way out of open findings, or past the checks on work already committed.
+    if (c.milestone && (c.next !== 'code' || baseRef(ctx.root) !== c.base)) return halt(ctx, c, `The worker asked to split this, but ${c.next === 'code' ? 'it has already committed work that was not checked' : 'there is work here still to finish'}. Continue, or stop?`);
     const parts = splitParts(milestones, summary);
     if (parts.length <= 1) return halt(ctx, c, `The worker says this is too big, but gave no parts to split it into:\n${String(summary ?? '').slice(0, 600)}\nContinue, or stop?`);
     // The parts replace the milestone that was too big, and the milestones after it still follow.
@@ -338,7 +349,7 @@ function afterCritic(ctx, c, keep) {
   const judged = (f) => {
     if (!(f.severity === 'Major' && f.boundary)) return f;
     if (confirmed && !confirmed.has(f.id)) return { ...f, boundary: false, disputed: true };
-    return confirmed ? { ...f, line: f.line ?? 1, evidence: f.evidence ?? 'The critic confirmed this against the code.' } : f;
+    return { ...f, line: f.line ?? 1, evidence: f.evidence ?? (confirmed ? 'The critic confirmed this against the code.' : 'No critic answered, so this stands.') };
   };
   const reviews = held.reviews.map((rv) => ({ ...rv, findings: (rv.findings ?? []).map(judged) }));
   record(ctx, { key: `critic-done:${c.seq + 1}`, type: 'critic', reviews: undefined, done: true });
@@ -366,7 +377,8 @@ function reviewedStep(ctx, reviews) {
 export function reviewed(ctx, { reviews }) {
   const events = readEvents(ctx.root, ctx.env);
   const c = deriveCursor(events);
-  const list = Array.isArray(reviews) ? reviews : [];
+  // The critic answers by id, so a finding without one could never be kept.
+  const list = (Array.isArray(reviews) ? reviews : []).map((rv, n) => (Array.isArray(rv?.findings) ? { ...rv, findings: rv.findings.map((f, i) => (f && typeof f === 'object' && !f.id ? { ...f, id: `${rv.agent ?? `reviewer-${n + 1}`}-${i + 1}` } : f)) } : rv));
   const disputable = list.flatMap((rv) => rv?.findings ?? []).filter((f) => f?.severity === 'Major' && f?.boundary);
   const blockers = list.flatMap((rv) => rv?.findings ?? []).filter((f) => f?.severity === 'Blocker');
   const done2 = events.some((e) => e.type === 'critic' && e.done && e.seq > (events.filter((x) => x.type === 'after-code' && x.milestone === c.milestone).at(-1)?.seq ?? 0));
@@ -410,7 +422,7 @@ export function decide(ctx, { text, then }) {
   const c = deriveCursor(readEvents(ctx.root, ctx.env));
   if (c.awaiting === 'plan-approval') {
     if (then !== 'continue') return finish(ctx, 'stopped');
-    record(ctx, { key: `plan-approved:${c.seq + 1}`, type: 'plan', milestones: c.lane.milestones, index: c.lane.index, approved: true, tier: WORKFLOWS.build.tier, text });
+    record(ctx, { key: `plan-approved:${c.seq + 1}`, type: 'plan', milestones: c.lane.milestones, index: c.lane.index, approved: true, tier: c.route === 'plan' ? WORKFLOWS.build.tier : undefined, text });
     noteInLedger(ctx, { kind: 'decision', text: `plan approved with ${c.lane.milestones.length} milestones. The maintainer said: ${text}` });
     return startMilestone(ctx, deriveCursor(readEvents(ctx.root, ctx.env)), { shardStep: 'plan.approved' });
   }

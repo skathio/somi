@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const SCHEMA_VERSION = 1;
-export const EVENT_TYPES = Object.freeze(['open', 'check', 'after-code', 'after-review', 'decide', 'close', 'migrate', 'route', 'plan', 'escalate', 'halt', 'critic', 'finish', 'nudge']);
+export const EVENT_TYPES = Object.freeze(['open', 'check', 'after-code', 'after-review', 'decide', 'close', 'migrate', 'route', 'plan', 'escalate', 'halt', 'critic', 'choose', 'finish', 'nudge']);
 export const NEXT_ACTIONS = Object.freeze(['open', 'code', 'fix', 'review', 'close', 'ask']);
 export const STOP_REASONS = Object.freeze(['intent-gate', 'area-follow-up', 'max-passes', 'recurring-finding', 'still-failing', 'worker-blocked']);
 
@@ -157,6 +157,7 @@ const REQUIRED = {
   escalate: ['tier'],
   halt: ['milestone', 'next'],
   critic: [],
+  choose: ['request'],
   finish: ['outcome'],
   nudge: ['milestone'],
 };

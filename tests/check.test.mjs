@@ -145,9 +145,18 @@ test('the mutation tool flips operators on changed code lines only', () => {
 });
 
 test("SoMi's own plan is not scanned, and the same line in shipped code still fails", (t) => {
-  const dir = makeRepo(t);
+  const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n' });
   writeFiles(dir, { '.somi/plan.md': 'Option A, chosen in D7 of the plan (D7).\n' });
   assert.equal(somi(dir, ['check']).status, 0);
   writeFiles(dir, { 'src/app.js': 'export const one = 1;\n// Chosen in D7 of the plan.\n' });
   assert.deepEqual(failedGates(somi(dir, ['check'])), ['planning-ids']);
+});
+
+test('a project\'s committed files under .somi are scanned, and only the working plan is not', (t) => {
+  const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n' });
+  writeFiles(dir, { '.somi/rules/team.md': 'Option A, chosen in D7 of the plan (D7).\n' });
+  assert.deepEqual(failedGates(somi(dir, ['check'])), ['planning-ids']);
+  const nested = makeRepo(t, { 'src/app.js': 'export const one = 1;\n' });
+  writeFiles(nested, { 'pkg/.somi/plan.md': 'Option A, chosen in D7 of the plan (D7).\n' });
+  assert.deepEqual(failedGates(somi(nested, ['check'])), ['planning-ids']);
 });

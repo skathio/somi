@@ -25,7 +25,7 @@ const KINDS = [
   ['discover', /\b(new product|greenfield|product idea|idea for a|competitors?|market research)\b/i],
   ['design', /\b(design|architecture|how should we|adr|trade-?offs?|rfc|which approach|options for)\b/i],
   ['atlas', /\b(map (the|this)|codebase overview|onboard\w*|atlas|blast radius|impact of)\b/i],
-  ['plan', /\b(plan (for|this|out|the)|roadmap|break (this|it) down|milestones?|epic)\b/i],
+  ['plan', /\b(plan (for|this|out|the|first)|roadmap|break (this|it) down|milestones?|epic)\b/i],
 ];
 
 const NEW_WORK = /^\s*(please )?(add|implement|create|support|allow|let|show|make|write|build|send|store|translate|change|enable)\b/i;
@@ -36,7 +36,7 @@ const TICKET_TYPES = Object.freeze({ bug: 'debug', defect: 'debug', incident: 'i
 export const ROUTE_NAMES = Object.freeze([...new Set([...FIRST, ...KINDS].map(([r]) => r)), 'answer', 'build']);
 
 // What the coordinator reads when it has to choose. Short, because it is read on the session's model.
-const LONG_REQUEST = 600;
+export const LONG_REQUEST = 600;
 export const WHEN = Object.freeze({
   build: 'a new or changed feature, or anything clear, even a long ticket of many steps: the worker splits it if it proves too big',
   debug: 'something behaves wrongly, and the cause is not known',
@@ -61,10 +61,14 @@ export function classify({ request = '', ticket, hint } = {}) {
   const type = String(ticket?.type ?? '').trim().toLowerCase();
   if (Object.hasOwn(TICKET_TYPES, type)) return { route: TICKET_TYPES[type], via: 'ticket' };
   const text = String(request);
-  for (const [route, re] of FIRST) if (re.test(text)) return { route, via: 'rule' };
-  // A long ticket contains words like "fails" and "milestone" without being about them, so its words decide nothing.
-  if (text.length > LONG_REQUEST) return { route: null, via: 'choose', choices: Object.keys(WHEN) };
-  const matched = KINDS.filter(([, re]) => re.test(text)).map(([route]) => route);
+  // A long ticket contains words like "fails", "incident" and "milestone" without being about them, so only its opening line can decide.
+  const long = text.length > LONG_REQUEST;
+  const opening = long ? text.split('\n').find((l) => l.trim() !== '').slice(0, 200) : text;
+  for (const [route, re] of FIRST) if (re.test(opening)) return { route, via: 'rule' };
+  if (long) return { route: null, via: 'choose', choices: Object.keys(WHEN) };
+  // "Add retries for the usual error" asks for new behaviour: there is no bug to reproduce.
+  const newWork = NEW_WORK.test(text);
+  const matched = KINDS.filter(([route, re]) => re.test(text) && !(route === 'debug' && newWork)).map(([route]) => route);
   // A request opening with a question word is asking something, unless it clearly names work to do.
   if (matched.length === 0) {
     if (ANSWER.test(text)) return { route: 'answer', via: 'rule' };

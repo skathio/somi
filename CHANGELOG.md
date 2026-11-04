@@ -18,7 +18,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 - **Reviews follow the real diff.** No forecast decides a review. Only a Blocker, or a Major a critic confirms on a trust boundary, re-loops, at most twice, and the second pass reads only the fix diff.
 - **Failing checks restart a tier up,** once, with the working tree and a short summary.
 - **Large work gets milestones with fresh context,** from one plan you approve, instead of a document chain. A long ticket starts on one worker, which splits only what proves too big. Asking to see a plan first takes the milestone route directly.
-- **A long ticket stays whole.** A request up to 64 KiB is kept in full, and a longer one is refused and not cut. A long brief reaches the worker from a file, so the coordinator neither carries nor rewords it.
+- **A long ticket stays whole.** A request up to 64 KiB is kept in full, and a longer one is refused and not cut. Choosing a route needs no words back from the coordinator, so it cannot shorten one. A long brief reaches the worker from a file, so the coordinator neither carries nor rewords it.
 - **State is one journal and a small ledger, both written by the tools.** The ledger comes back after every compaction and at the top of every brief.
 - **The OS sandbox is the security boundary on both hosts.** `somi doctor` proves it with vendor probes, and now also warns about tiers with no model. Hooks are tripwires, and the policy-file guard is frozen as a review signal.
 - **Rules arrive at session start and after compaction,** as a short digest.
