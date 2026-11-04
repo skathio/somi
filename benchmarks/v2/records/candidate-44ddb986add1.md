@@ -29,4 +29,18 @@ Ratios are per draw, blocked by task, with a 90% interval.
 
 ## Reading
 
-To be written by a person: read 10 transcripts first, then say what the figures mean. An inconclusive result is published as inconclusive, with every figure.
+5.0 does not pass the release rule. `bench.mjs decide` returned `ships: false` for three reasons, and all three stand:
+
+- Solved rate: 70 of 96 against bare's 73. The mean difference is -0.031, but the lower bound of -0.2035 is just past the -0.2 margin.
+- Hidden-test share: the mean difference is -0.050 and the lower bound of -0.156 is past the -0.05 margin.
+- Dollars per solved task: 1.789 times bare against a limit of 1.5.
+
+Against 4.1 it is a large improvement: 0.088 times the dollars per draw (0.063 to 0.125) and 0.227 times the tokens (0.168 to 0.307), with more tasks solved. Bare did not drift between recordings (0.989, 0.928 to 1.054). Across the 96 draws there were no inline writes.
+
+Where the shortfall comes from, from the transcripts:
+
+- Cost: the 48 draws where a reviewer ran cost $0.232 each, the 48 where none ran $0.076. Those groups differ in task, so read the ablation record for the clean comparison.
+- Quality: the low-tier worker. In N10, Haiku wrote `async function extractBundle` beside a synchronous sibling in 5 of 6 draws, and the hidden tests call it synchronously, so those draws score 1 of 15. Bare wrote it synchronously in all six. In N11, bare's Sonnet hashed the reset token without being asked, while Haiku stored it in plain text, and the Haiku reviewer rated that Minor, so nothing re-looped. In the same task the security reviewer did find the surviving sessions and older tokens, and they were fixed, so review is doing real work there.
+- Haiku is only about 9% of 5.0's spend, so the low tier saves little.
+
+Two defects seen while reading, not yet fixed because the code is frozen for this recording: the commit subject can be just "Implement the following in this repository.", taken from the ticket's first line, and workers report "not committed" as if it were a problem, because the commit happens later at close.

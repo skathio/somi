@@ -114,5 +114,5 @@
       ]
     }
   ],
-  "open": "5.0 is a release candidate. It ships as the default only if the pre-registered benchmark passes, and that recording has not run. The candidate task pool is smaller than the benchmark needs."
+  "open": "5.0 is a release candidate. It ships as the default only if the pre-registered benchmark passes, and the first candidate did not: 1.79x bare in dollars per solved task against a limit of 1.5x, with both quality checks short."
 }

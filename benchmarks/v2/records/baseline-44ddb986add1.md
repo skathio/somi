@@ -29,4 +29,10 @@ Ratios are per draw, blocked by task, with a 90% interval.
 
 ## Reading
 
-To be written by a person: read 10 transcripts first, then say what the figures mean. An inconclusive result is published as inconclusive, with every figure.
+Bare solved 73 of 96 at $0.118 per solved task and half a minute per draw. 4.1 solved 63 of 96 at $3.162 per solved task and 6.4 minutes per draw. Per draw, 4.1 cost 16.69 times bare in dollars (12.55 to 22.21), 19.42 times in tokens and 8.53 times in wall time. On these tasks 4.1's extra process did not buy more hidden tests passed.
+
+The two invalid draws are 4.1 on N37, timed out at 30 minutes and $3.98 between them. I read draw 3: not hung. It hit the code loop's diff cap, which counted the earlier iteration's uncommitted changes, and the coordinator kept dispatching the flow again. 4.1 also failed N37's organisation isolation tests in the draws that did finish, so the timeout did not change the outcome for that task.
+
+N02.somi41.2 was lost in flight at a pause and rerun. Its cost is correct; its weighted and spend fields were inflated by an append bug that has since been fixed.
+
+Limits: these are 16 small tasks scored by hidden tests. A process can catch problems these tests do not check, so this does not measure all of what 4.1's review does.

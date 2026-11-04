@@ -53,4 +53,17 @@ Ratios are per draw, blocked by task, with a 90% interval.
 
 ## Reading
 
-To be written by a person: read 10 transcripts first, then say what the figures mean. An inconclusive result is published as inconclusive, with every figure.
+One draw per task and cell, so this reads main effects across 64 draws a side, not single cells. Across the eight factorial cells:
+
+| Part | With: solved, share, $ per draw | Without: solved, share, $ per draw |
+|---|---|---|
+| Review on signals | 44/64, 0.913, $0.128 | 46/64, 0.916, $0.076 |
+| Digest | 44/64, 0.911, $0.103 | 46/64, 0.918, $0.100 |
+| Planning step | 43/64, 0.911, $0.102 | 47/64, 0.918, $0.102 |
+
+- Review costs 68% more per draw and 33% more minutes, and shows no gain on the hidden tests. This is the clean version of the cost split in the candidate record.
+- Always-on review solved 10 of 16 at $0.153 per draw, so more review did not raise the score.
+- The digest and the planning step cost little and show no gain. A gap of 2 to 4 draws out of 64 is well inside the noise floor, so this does not show that they harm either.
+- Review off alone solved 13 of 16 at 0.89 times bare's dollars (0.79 to 1.02). That is a single cell and it did not go through the release rule.
+
+Reading this fairly: the hidden tests only see what they were written to check. Reviewers reported real problems the tests do not reward, such as a rollback that deletes overwritten files in N10 and a non-atomic idempotency key in N02. So this says review does not pay on these tests. It does not say review finds nothing. Most misses across the factorial, 24 of 38, are N10, N11 and H4, in every cell. Bare also fails H4 but mostly solves N10 and N11, which points at the worker rather than at any of these parts.

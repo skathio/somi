@@ -2,7 +2,40 @@
 
 5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** `bench.mjs run` refuses without `--go`, and the test suite spends nothing.
 
-**Status:** the task set is bound in `prereg.json`, and results are reported below as they finish.
+**Status:** the first 5.0 candidate does not pass the release rule. See [Results](#results). 5.0 stays a release candidate.
+
+## Results
+
+Sixteen tasks, a Sonnet session, a Haiku low tier, recorded with dollars from billing. Records are in `benchmarks/v2/records/`, each with a written reading.
+
+| Arm | Draws | Solved | Dollars per solved | Minutes per draw |
+|---|---|---|---|---|
+| Bare | 96 | 73 | $0.118 | 0.5 |
+| 4.1 | 96 | 63 | $3.162 | 6.4 |
+| 5.0 candidate | 96 | 70 | $0.211 | 2.3 |
+
+**Release rule: does not ship.** All three failing checks are in the record:
+
+| Check | Limit | Result |
+|---|---|---|
+| Dollars per solved against bare | at most 1.5x | 1.79x |
+| Solved rate against bare, lower 95% bound | at least -20 points | -20.35 (mean -3.1) |
+| Hidden tests passed against bare, lower 95% bound | at least -5 points | -15.6 (mean -5.0) |
+| A/A interval contains zero | yes | yes (-15.2 to 6.8 points) |
+
+**Against 4.1,** per draw: 0.088x the dollars (0.063 to 0.125), 0.227x the tokens (0.168 to 0.307), and more tasks solved. 4.1 cost 16.69x bare in dollars (12.55 to 22.21). Bare did not drift between recordings (0.989, 0.928 to 1.054). The candidate had no inline writes in 96 draws.
+
+**Which parts pay,** from the registered ablation, 64 draws a side, one draw per task and cell:
+
+| Part | With: solved, share, dollars per draw | Without: solved, share, dollars per draw |
+|---|---|---|
+| Review on signals | 44, 0.913, $0.128 | 46, 0.916, $0.076 |
+| Digest | 44, 0.911, $0.103 | 46, 0.918, $0.100 |
+| Planning step | 43, 0.911, $0.102 | 47, 0.918, $0.102 |
+
+Differences of a few draws are inside the noise floor. Review shows no gain on these tests for 68% more dollars, though reviewers did report real problems that the hidden tests do not check.
+
+**What the worker model does,** from an [exploratory ablation](../benchmarks/v2/records/exploratory/ablation-sonnet-worker-44ddb986add1.md) with the low tier mapped to Sonnet, chosen after seeing the candidate result and outside the release decision. Across 128 draws each, solved stays at 90. Hidden-test share rises from 0.915 to 0.978 (bare 0.983), and dollars per draw from $0.102 to $0.168 (bare $0.090). Failed safety tests fall from 103 to 48, and boundary tests from 41 to 1.
 
 ## The questions
 
@@ -181,7 +214,7 @@ cut -c1-200 .somi/state/journal.jsonl
 
 The `large` phase asks whether fresh context per milestone pays. Three projects set binding decisions early, and hidden tests check that later milestones honour them. The arms are bare, 5.0 as a plain request, 5.0 asked for a plan first (the milestone lane), and 4.1. It is a pilot, reported apart from the release rule.
 
-First draw per arm, at a 120,000-token window, after the fixes below:
+First draw per arm, at a 120,000-token window, after the fixes below. These are 12 of the 36 registered draws, so they are a first reading only:
 
 | Task | Bare | 5.0 | Lane | 4.1 |
 |---|---|---|---|---|
