@@ -62,7 +62,7 @@ console.log('== validation: refused with 64 naming the field, before any path or
   const r = repo(); const before = tree(r.root);
   const cases = [
     ['slug', { step: 'open', slug: '../x' }], ['slug', { step: 'open', slug: 'a/b' }], ['iteration', { step: 'open', iteration: '../1.1' }], ['iteration', { step: 'open', iteration: '1.1/../x' }],
-    ['iteration', { step: 'open', iteration: '1.1.1' }], ['iteration', { step: 'open', iteration: `1.${'9'.repeat(300)}` }], ...['/etc/x', '-rf', '~/x', 'a/../b', 'a\\b', '..'].map((f) => ['files', { step: 'open', files: [f] }]), ['iteration', { step: 'open', iteration: undefined }], ['iteration', { step: 'open', loop: 'plan', slug: 'pl' }],
+    ['iteration', { step: 'open', iteration: '1.1.1' }], ['iteration', { step: 'open', iteration: `1.${'9'.repeat(300)}` }], ...['/etc/x', '-rf', '~/x', 'a/../b', 'a\\b', '..', 'a.js,b.js'].map((f) => ['files', { step: 'open', files: [f] }]), ['iteration', { step: 'open', iteration: undefined }], ['iteration', { step: 'open', loop: 'plan', slug: 'pl' }],
     ['verdict', { step: 'open', verdict: 'approve' }], ['agent', { step: 'open', agent: 'somi-coder' }], ['review_mode', { step: 'open', review_mode: 'panel' }],
     ['diff_cap', { step: 'open', loop: 'plan', slug: 'pl', iteration: undefined, diff_cap: 5 }], ['loop', { step: 'open', loop: 'x' }],
     ['max_passes', { step: 'open', max_passes: '1,0' }], ['max_passes', { step: 'open', max_passes: -1 }], ['diff_cap', { step: 'open', diff_cap: 1.5 }], ['files', { step: 'open', files: ['a\n.js'] }],

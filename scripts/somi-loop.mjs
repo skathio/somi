@@ -8,12 +8,13 @@
 //
 // Subcommands (each prints one JSON object): run-start, init, resume, stats, pass, check-diff, review-scope,
 // record-dispatch, record-pass, finish, and `step <open|after-code|after-review|close|status>`: the composite steps of
-// lib/loop-step.mjs, arguments as `--flag value` (--findings and --fixed as JSON text, --reviewers comma-separated), the
+// lib/loop-step.mjs, arguments as `--flag value` (--findings and --fixed as JSON text or @<file> holding it, --reviewers comma-separated), the
 // response on stdout as one JSON line, its `exit` as the exit code, nothing on stderr: the response carries every refusal
 // (a bad flag included, exit 64), and an internal error (70) goes to <state dir>/step-errors.log, never to the stderr a model reads.
 //
 // Tested by tests/scripts/run.sh (wired into scripts/validate.sh / CI).
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -57,6 +58,16 @@ const COMMANDS = {
   'record-dispatch': { handler: recordDispatch }, 'record-pass': { handler: recordPass }, finish: { handler: finish },
 };
 const STEP_FLAGS = ['slug', 'loop', 'iteration', 'files', 'host', 'max-passes', 'diff-cap', 'agent', 'review-mode', 'review-scope', 'reviewers', 'verdict', 'blockers', 'majors', 'findings', 'review', 'fixed', 'status'];
+// `--findings` and `--fixed` take JSON text, or `@<file>` naming a UTF-8 file that holds it: Windows PowerShell 5.1 strips
+// the double quotes inside an argument it passes to node, so JSON typed on its command line never arrives intact.
+function jsonArg(key, value) {
+  let text = value;
+  if (value.startsWith('@')) {
+    try { text = fs.readFileSync(value.slice(1), 'utf8').replace(/^\uFEFF/, ''); } catch (e) { die(`--${key}: cannot read ${cut(value.slice(1), 80)} (${e.code ?? 'error'})`); }
+  }
+  try { return JSON.parse(text); } catch { return die(`--${key} expects JSON text, or @<file> holding it (from PowerShell, which strips the quotes in an argument, write the JSON to a file and pass --${key} @<file>)`); }
+}
+
 // The step's arguments from `--flag value` pairs, as runStep takes them. A flag it does not know, a repeated one or one without a value is a usage error (echoed cut and cleaned).
 function stepArgs(argv) {
   const args = { step: argv[0] };
@@ -66,7 +77,7 @@ function stepArgs(argv) {
     if (Object.hasOwn(args, key.replaceAll('-', '_'))) die(`repeated argument: ${cut(argv[i], 40)}`);
     args[key.replaceAll('-', '_')] = argv[i + 1];
   }
-  for (const k of ['findings', 'fixed']) if (args[k] !== undefined) { try { args[k] = JSON.parse(args[k]); } catch { die(`--${k} expects JSON text`); } }
+  for (const k of ['findings', 'fixed']) if (args[k] !== undefined) args[k] = jsonArg(k, args[k]);
   if (args.reviewers !== undefined) args.reviewers = args.reviewers.split(',');
   return args;
 }

@@ -228,7 +228,7 @@ variable, use the run card's `install_root` line or the root you know; never sea
 ```text
 node scripts/somi-loop.mjs resume --slug <slug> --iteration <N>.<M>    # a running state: continue from its pass and baseline
     # exit 64 (no state, or a finished one): init, but after a gate stop or a finished state in this run ask the user first
-node scripts/somi-loop.mjs init --slug <slug> --loop code --iteration <N>.<M> --files "<the iteration's paths>"
+node scripts/somi-loop.mjs init --slug <slug> --loop code --iteration <N>.<M> --files "<the iteration's paths, space-separated>"
     # captures BASELINE_SHA once; refuses a running state unless --force (only after the user said yes to a restart),
     # a finished one is overwritten. RUN_ID = the state's `started`
 node scripts/somi-card.mjs --slug <slug> --iteration <N>.<M> --host <host>    # the run card, pasted unchanged first

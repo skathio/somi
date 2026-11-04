@@ -74,6 +74,7 @@ export const init = guarded(({ env, root, stateDir, now = nowIso }, args) => {
     'Major',
   );
   if (!SEVERITIES.includes(sevFloor)) throw usageError(`severity_floor: ${sevFloor} must be one of ${SEVERITIES.join('|')}`);
+  if (args.files.includes(',')) throw usageError('--files: a path holds a comma: separate the paths with spaces, not commas');
   const diffCap = plan ? 0 : resolveInitCap(env, config, 'code', 'diff_cap_lines', args.diffCap); // plan loops have no diff cap
 
   if (!plan) refuseSubmodules(root); // a repository the diff gate cannot measure is refused before any coder pass

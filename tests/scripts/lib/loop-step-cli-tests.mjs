@@ -137,5 +137,20 @@ console.log('== usage errors: the same JSON refusal on stdout, 64, stderr empty,
   check('nothing was written by any refusal', tree(r.root), before);
   check('the header comment lists exit 70 and the step subcommand', ['70 internal error', 'step <open|after-code|after-review|close|status>'].map((t) => readFileSync(CLI, 'utf8').includes(t)), [true, true]);
 }
+console.log('== --findings @<file> (PowerShell strips the quotes in an argument), and a comma-joined --files ==');
+{
+  const r = repo(); step(r, 'open', '--files', 'a.js'); r.file('a.js', EDIT); step(r, 'after-code', '--agent', 'somi-coder');
+  const ff = path.join(tmp, 'findings.json'); writeFileSync(ff, `\uFEFF${FINDING}`); // outside the repo: a file in it would change the tree after-code gated
+  const viaFile = step(r, 'after-review', '--reviewers', 'somi-reviewer', '--verdict', 'request-changes', '--blockers', '0', '--majors', '1', '--review', 'r1.md', '--findings', `@${ff}`);
+  check('after-review reads its findings from @<file> (a BOM is dropped) as it reads JSON text', [viaFile.code, viaFile.json?.ok, viaFile.json?.error], [0, true, undefined]);
+  const missing = step(r, 'after-review', '--findings', '@nope.json');
+  check('a missing @<file> is refused 64 naming the flag and the file', [missing.code, missing.json?.error?.startsWith('--findings: cannot read nope.json')], [64, true]);
+  check('findings that are not JSON: the refusal says to use @<file> from PowerShell', step(r, 'after-review', '--findings', '[x').json?.error?.includes('--findings @<file>'), true);
+  const c = repo(); const before = tree(c.root);
+  const viaStep = step(c, 'open', '--files', 'a.js,b.js');
+  check('step open refuses a comma-joined --files with 64 naming files, before any state is written', [viaStep.code, viaStep.json?.error?.startsWith('files: a path holds a comma'), tree(c.root)], [64, true, before]);
+  const viaInit = prim(c, 'init', '--files', 'a.js,b.js');
+  check('init refuses a comma-joined --files with 64, and writes no state', [viaInit.code, viaInit.err.includes('separate the paths with spaces'), existsSync(c.sf)], [64, true, false]);
+}
 console.log(`loop step cli tests: ${pass} ok, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
