@@ -1,278 +1,112 @@
 # SoMi
 
-> An opinionated, reusable multi-agent engineering workflow system for Claude Code and GitHub Copilot.
+Tell SoMi what you want, in plain words or as a ticket, and it runs the right workflow for you on Claude Code and GitHub Copilot CLI. It routes the work, hands it to workers on the cheapest model that can do it, and adds process only when the real work calls for it.
 
-[![npm](https://img.shields.io/npm/v/@skathio/somi?logo=npm)](https://www.npmjs.com/package/@skathio/somi)
+> **Status: 5.0 release candidate.** 5.0 ships as the default only if the [pre-registered benchmark](docs/BENCHMARK.md) says so. The 4.x line stays on the `4.x` branch.
 
-**Overview page:** <https://skathio.github.io/somi/>: the roadmap, the workflow and the cost system on
-one page.
+## How it works
 
-The latest published version is on [npm](https://www.npmjs.com/package/@skathio/somi) and in the
-[GitHub Releases](https://github.com/skathio/somi/releases); see [CHANGELOG.md](CHANGELOG.md) for
-release notes.
+```text
+your request or ticket
+  -> a thin coordinator asks the step engine what the work is
+  -> small and clear: one low-tier worker builds it, checks it and commits it
+  -> the diff calls for it: a fresh reviewer, and a security reviewer on a trust boundary
+  -> too big for one sitting: the worker splits it, you approve the parts, and each gets a fresh worker
+  -> failing twice: a clean restart one tier up, with the working tree and not the old transcript
+```
 
-SoMi gives engineering teams a shared, version-controlled "operating system" for working with Claude:
-three first-class build workflows — **plan → code → review** — plus an upstream **discovery** workflow
-that turns a raw product idea into a research-grounded requirements & design foundation. All backed by
-specialised subagents, deterministic guardrail hooks, composable skills, and a global ruleset that
-enforces SOLID, clean code, and OWASP defenses.
+The procedure lives in the step engine, so the coordinator stays small and only about 15 entries are ever listed. The library behind it can grow without costing anything on work that does not use it.
 
-It is designed to be:
-
-- **Reusable** across many repositories and teams
-- **Installable** as a Claude Code plugin (via marketplace or npm) or as a GitHub Copilot chat extension
-- **Opinionated but extensible** — strong defaults, clean overrides
-- **Deterministic where possible** (hooks) and **judgment-heavy where needed** (agents)
-
----
-
-## The workflows
-
-| Command       | Agent cost | Agent           | Purpose                                                                                  |
-|---------------|--------|---------------------|------------------------------------------------------------------------------------------|
-| `/discover`   | high   | `somi-discovery-analyst` | Research the competition, then author the requirements & design foundation (BRD/SRS/FRD/SDD/TDD) + a `brief.md` for a new product |
-| `/design`     | high   | `somi-designer`          | Settle a brownfield feature's architecture against the codebase; compile the `brief.md` the cheap tier executes against |
-| `/plan`       | medium | `somi-planner`           | Sequence the design (brief) into phases, risks, slices, DoD, test & rollout strategy     |
-| `/code`       | medium | `somi-coder`             | Execute against an approved plan + brief with senior-level design judgment               |
-| `/debug`      | medium | `somi-coder` | Reproduce first, isolate under a bounded hypothesis budget, fix under `/code-loop` (a `cost: high` hatch is available if isolation escalates), keep the repro test as the regression guard; writes a one-page `rca.md` |
-| `/review`     | high | `somi-reviewer` | Strict, skeptical, **fresh-context** review of code / plans / designs with severity-graded findings |
-| `/ship`       | per agent | planner+coder+reviewer | Full plan → code → review pipeline (optionally preceded by a `high`-tier front-load), gated at every stage |
-
-**Cost tiers in practice.** Default tiers belong to **agents**, not commands —
-a tier sizes an agent instance being spawned, and a command has none, running on
-whatever model the session is already using — so the tier above is the tier of the agent that
-command Tasks (the table is `scripts/lib/cost-defaults.mjs`; `cost.agents` overrides it). The **`cost: high`** tier front-loads expensive reasoning — research, design,
-decisions, complexity mapping, fresh-eyes review — into a dense, bounded `brief.md`. The
-**`cost: medium`** tier executes against that brief *without re-researching*, so the high-volume
-work (plan detail, iterative coding) runs cheaply. `/discover` (new product) and `/design`
-(brownfield feature) are the high-cost front-loads that feed `/plan`; `/ship-loop` runs the whole
-pipeline continuously, gating once at the brief handoff (before planning consumes the brief). Supporting agents invoked by
-handoff, at whichever default tier the table gives them: `somi-security-reviewer`,
-`somi-architecture-reviewer`, `somi-test-strategist`, `somi-refactor-designer` — see
-[`docs/AGENTS.md`](docs/AGENTS.md#cost-tiering) for the exact shape per agent.
-
----
+| | 4.1 | 5.0 |
+|---|---|---|
+| Where a workflow's procedure lives | In the coordinator's context | In the step engine, returned one step at a time |
+| When a review runs | Sized before coding | After coding, from signals in the real diff |
+| Long work | Plan and progress files read by hand | A small ledger put back after every compaction, and fresh context per milestone |
+| Model tiers | A lookup the agent could skip | Applied by a hook, and proven from billing |
+| Listed entries | 91 | 15, with a hidden library behind them |
+| Other plugins | No way in | Shards: `somi slot pr.open <plugin:component>` |
 
 ## Install
 
-> **Runtime**: a current Node (LTS) on `PATH` — no `bash`, no `jq` required. Both Claude Code and
-> GitHub Copilot already bundle Node, so most installs need nothing extra; the Node runtime itself
-> is Windows-native (no bash/jq to install). The path guards' Windows coverage is tested on Linux
-> only: see [`docs/HOOKS.md`](docs/HOOKS.md).
-
-### Option 1 — Claude Code plugin (marketplace)
+On Claude Code:
 
 ```text
-# Add the SoMi marketplace and install the plugin:
 /plugin marketplace add https://github.com/skathio/somi
 /plugin install somi@somi
 ```
 
-Updates flow through `/plugin update somi`.
-
-### Option 2 — npm (Claude Code)
+On GitHub Copilot CLI:
 
 ```bash
-npm install -g @skathio/somi
-```
-
-Then in Claude Code: `/plugin install somi`.
-
-### Option 3 — GitHub Copilot (extension marketplace)
-
-SoMi is also a GitHub Copilot extension, installable the same way as the Claude Code plugin:
-
-```text
 copilot plugin marketplace add https://github.com/skathio/somi
 copilot plugin install somi@somi
 ```
 
-Once installed, use `@somi` in GitHub Copilot chat:
+## Use
 
-```text
-@somi /plan  Add per-team rate limiting to the public webhook endpoint
-@somi /code  rate-limiting-webhooks phase 1, iteration 1
-@somi /review  rate-limiting-webhooks
+Give a request to `/somi`, or make the coordinator your active agent and just talk to it:
+
+```bash
+claude --agent somi:somi      # or set "agent": "somi:somi" in a project's .claude/settings.json
+copilot --agent somi:somi
 ```
 
-> On GitHub Copilot, select the **`somi`** agent as your session persona: a dispatcher that hands
-> each request to the `somi-flow` runner for the matching workflow (or to `somi-general` when none
-> fits), so you don't need to know which command to type. See
-> [`docs/PLUGIN.md`](docs/PLUGIN.md#github-copilot-extension).
+Outside the active agent, plain prompts are not routed, and SoMi says so at session start. Direct commands such as `/debug` or `/review` skip the routing question.
 
-> **Parity caveat — Copilot is not feature-equivalent to Claude Code.** Three things do **not** carry
-> over, because they depend on Claude Code host capabilities Copilot doesn't expose:
->
-> - **Of Copilot's surfaces, the guardrail hooks run on Copilot CLI only.** Copilot CLI (checked live on 1.0.103) runs
->   SoMi's hooks: SessionStart, the PreToolUse blocks for dangerous bash, secret-writes and protected
->   paths, and the audit log; an `ask` verdict becomes a refusal where it cannot prompt. Other Copilot
->   surfaces (VS Code Chat) are unverified, so don't count on the hard stops there.
-> - **Multi-agent orchestration degrades to sequential.** The loops (`/code-loop`, `/plan-loop`,
->   `/ship`) and the parallel commands (`/review-panel`, `/code-parallel`) drive Claude Code
->   sub-agents via the Task tool. Where the host can't spawn sub-agents concurrently, these run
->   **one lens / one iteration at a time** — same result, no parallelism.
-> - **Per-call model binding is not confirmed on every host.** The cost tiers themselves (the
->   `low`/`medium`/`high` axis, the session ceiling, the dispatch resolver) are host-agnostic — every
->   agent's tier comes from one default table plus `cost.agents`, resolved the same way everywhere it's
->   dispatched, whether that's through the `somi` front door or a command typed directly (both
->   follow [`skills/somi-dispatch`](skills/somi-dispatch/SKILL.md), the one canonical resolve-then-
->   start procedure), including on Copilot. What varies is only whether a *concrete model* can be
->   bound per `Task` call:
->   confirmed on Claude Code and on VS Code's Copilot; undocumented on Copilot CLI, where the
->   host's default model applies, because agents no longer declare a frontmatter `model:`. Where a model can't be
->   bound per call, the dispatcher still names the tier it selected and says plainly that its model
->   pick could not be applied — the tier decision itself is the same everywhere.
-> - **Agents start as the type the host registered.** Claude Code and Copilot CLI both register
->   SoMi's agents as `somi:somi-<name>`, and every dispatch starts that real agent. VS Code Copilot
->   Chat is not a supported dispatch host: if it refuses the type, SoMi stops and says so instead of
->   running a stand-in. See [Agent dispatch](docs/PLUGIN.md#agent-dispatch).
->
-> The commands, agents, skills, rules, and templates are shared; **enforcement and concurrency are
-> Claude Code features**; cost tiering is shared, with per-call model binding confirmed on Claude
-> Code and VS Code and falling back to the host's default model elsewhere. Treat Copilot as
-> the portable subset, not a drop-in equal. See [`docs/HOOKS.md`](docs/HOOKS.md) and
-> [`docs/PLUGIN.md`](docs/PLUGIN.md).
+| Command | What it does |
+|---|---|
+| `/somi <anything>` | Routes it. This is the default. |
+| `/code`, `/debug`, `/refactor` | Build a change, fix a bug from a failing test, or change structure under green tests. |
+| `/plan`, `/design` | Split large work into milestones, or settle an expensive choice. |
+| `/review`, `/security-review` | Judge changes, with a stronger model on security. |
+| `/upgrade`, `/incident`, `/a11y-check` | Move a dependency, restore production, or build interface against a checklist. |
+| `/ship`, `/status`, `/somi-config` | Full suite and PR text, open work, and which model each tier uses. |
 
----
+Older command names still work and route to the same workflows.
 
-## What's in the box
+## Set your tiers
 
-```
-.claude-plugin/   Plugin + marketplace manifests (Claude Code plugin distribution)
-agents/           Subagent definitions (planner, coder, reviewer, + support)
-commands/         Slash-command entrypoints (/plan, /code, /review, /ship, /debug, ...)
-skills/           On-demand expert knowledge packs (OWASP, SOLID, test strategy, ...)
-rules/            Global ruleset composed into CLAUDE.md
-hooks/            Deterministic guardrails (block dangerous bash, secret writes, ...)
-scripts/          Runtime tooling: somi-loop (resumable loop state & caps), somi-findings
-                  (the findings ledger), somi-check (portable working-tree guard, npm bin)
-templates/        Artifact templates (BRIEF [design→execution handoff], ATLAS [repo map], DESIGN, RCA,
-                  CONTEXT, SPEC, DECISIONS, PHASE, PROGRESS, DIARY, REVIEW, ADR, DOD;
-                  R&D: RD-README, RESEARCH, BRD, SRS, FRD, SDD, TDD)
-tests/            Behavioral fixtures for hooks + end-to-end tests for the runtime scripts
-.copilot-extension/ Copilot extension + marketplace manifests (mirrors .claude-plugin/)
-examples/         Worked examples + a minimal consuming project
-docs/             Full documentation
-site/             The overview page (GitHub Pages; not in the npm package)
+Workers run on low, medium and high tiers. You choose the models for each environment in `~/.config/somi/config.json` or a project's `.somi/config.json`:
+
+```json
+{ "tiers": { "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }
 ```
 
-When you use SoMi in a project, workflows write their artifacts into a `.somi/` directory
-at the project root. Discovery foundations live under `.somi/rd/<slug>/` (research report, BRD, SRS,
-FRD, SDD, TDD); plans live under `.somi/plans/<slug>/` (context, spec, decisions, progress, diary,
-phases — or a one-page `rca.md` for `/debug` items); reviews live under `.somi/reviews/<slug>/`
-(including the machine-readable findings ledger, `findings.json`); the repo-wide map lives at
-`.somi/atlas.md` (from `/atlas`); optional committed policy lives at `.somi/config.json`, merged over
-your [global config](docs/USAGE.md#the-global-config) —
-separate directories, no clutter. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the full layout.
+Claude Code has those defaults. Copilot has none, because its models vary by plan: a tier with no model inherits the session's, and SoMi says it is not enforced. On a Copilot account using automatic model selection, a worker's model may be reported but not billed, so check your billing.
 
----
+## Connect other plugins with shards
 
-## Quick start (after install)
+A shard slots another plugin's skill, agent or tool into a named step: `work-item.start`, `plan.approved`, `pr.open` or `review.done`.
 
-For a **brand-new product**, start one step earlier with discovery:
-
-```text
-> /discover  A self-hosted alternative to Calendly for clinics, with HIPAA-aware
-            scheduling, SMS reminders, and no per-seat pricing.
-
-# Claude proposes a slug ("clinic-scheduler"), researches competitors and real user
-# complaints (cited), pauses on each crossroads (persona, scope, build-vs-integrate,
-# expensive-to-reverse architecture), and writes a traceable requirements & design set
-# to .somi/rd/clinic-scheduler/ (research report, BRD, SRS, FRD, SDD, TDD). Then run
-# /plan clinic-scheduler — the planner consumes that foundation.
+```bash
+somi slot work-item.start jira:fetch-ticket
+somi slot pr.open github:open-pr --mode write
+somi slot --list
 ```
 
-For a **design-heavy feature on an existing repo**, front-load the design (default `high`) so
-planning and coding run cheaply against it:
+A shard keeps working when its plugin updates, and tells you it changed. What it returns is treated as data, never as instructions. Anything that writes outward asks first, and a changed write shard stays held until you confirm.
 
-```text
-> /design  Add per-team rate limiting to the public webhook endpoint, sharing budget
-          across replicas, with an emergency kill switch.
+## Turn on the sandbox
 
-# Claude reads the codebase, ingests the repo's own CLAUDE.md/AGENTS.md once,
-# resolves the expensive-to-reverse calls with you (storage backend, where the limiter
-# lives), maps the complexity hotspots, and compiles .somi/plans/rate-limiting-webhooks/
-# brief.md — the dense design→execution handoff. Then /plan rate-limiting-webhooks sequences it
-# into phases at the cheaper (cost: medium) tier, /code-loop implements against the brief.
+Hooks catch honest mistakes. They are not a security boundary. Print the recommended settings, merge them into your host's settings, then run the doctor from inside an agent session:
+
+```bash
+somi doctor --profile
+somi doctor
 ```
 
-For an **incremental change** with a settled design (the daily loop), start at planning:
+`doctor` passes only when writing to your home directory and reaching the network directly both fail inside the agent's shell. See [the trust model](docs/ARCHITECTURE.md#trust-model).
 
-```text
-> /plan  Add per-team rate limiting to the public webhook ingestion endpoint
-        with audit logging and an emergency kill switch.
+## Upgrading from 4.1
 
-# Claude proposes a slug ("rate-limiting-webhooks"), reads the repo, drafts context.md,
-# then pauses inline on each architectural decision — presenting options with concrete
-# pros/cons, plus "Other" and "Discover" escape hatches. You decide. Verified decisions
-# land in decisions.md; the spec, phases, progress, and diary fill in. Review the
-# artifacts at .somi/plans/rate-limiting-webhooks/, edit if needed, approve.
+This is a breaking release. See [the migration guide](docs/MIGRATING-TO-5.md).
 
-> /code  rate-limiting-webhooks phase 1, iteration 1
+## Docs
 
-# Claude implements with senior-engineer judgment, writes tests, updates docs, and
-# keeps the plan in sync — if implementation reveals the plan needs to change, it
-# updates spec/decisions/phases in place and appends a diary entry.
+- [Architecture and trust model](docs/ARCHITECTURE.md)
+- [Benchmark and release decision](docs/BENCHMARK.md)
+- [Migrating from 4.x](docs/MIGRATING-TO-5.md)
+- [Versioning](docs/VERSIONING.md)
+- [Changelog](CHANGELOG.md)
 
-> /review  rate-limiting-webhooks
-
-# Claude returns severity-graded findings (written under reviews/), rejects weak
-# solutions, flags plan-vs-code divergence.
-```
-
-For the all-in-one pipeline: `/ship <problem statement>`.
-
-**Lost?** On GitHub Copilot, select the `somi` agent — bare `@somi` renders a status dashboard of
-everything in flight (with a next action per item), and `@somi <what you want to do>` routes to
-the right command. When a work item is ready to merge, `/pr <slug>` turns its artifacts into the
-pull-request description. To see or change which cost tier each agent runs at, `/somi-config` shows the
-settings and asks before each change; lowering a tier needs your explicit confirmation.
-
----
-
-## Why a shared OS, not per-project setups
-
-- **Consistency** — every repo gets the same review bar, the same security posture, the same plan shape.
-- **Upgrade once** — update the plugin; every project benefits.
-- **Override locally** — projects keep their own `CLAUDE.md` and `.somi/rules/99-overrides.md`; SoMi never silently overrides them.
-- **Auditable** — hooks log denied actions; reviewers can see what the system blocked vs. what humans approved.
-
----
-
-## Documentation
-
-- [Installation](docs/INSTALL.md) — Claude Code plugin, npm, or Copilot extension
-- [Usage](docs/USAGE.md) — running each workflow with examples
-- [Workflows](docs/WORKFLOWS.md) — plan / code / review semantics and handoffs
-- [Agents](docs/AGENTS.md) — full agent catalogue, escalation rules
-- [Hooks](docs/HOOKS.md) — guardrails and how to add your own
-- [Skills](docs/SKILLS.md) — on-demand expertise packs
-- [Rules](docs/RULES.md) — global ruleset philosophy and conflict resolution
-- [Commands](docs/COMMANDS.md) — slash-command reference
-- [Extending](docs/EXTENDING.md) — adding workflows, agents, skills
-- [Versioning](docs/VERSIONING.md) — SemVer policy, breaking-change rules
-- [Governance](docs/GOVERNANCE.md) — how teams adopt updates safely
-- [Plugin distribution](docs/PLUGIN.md) — marketplace and VS Code setup
-- [Architecture](docs/architecture.md) — how the pieces fit together
-
----
-
-## Versioning
-
-SoMi follows [Semantic Versioning](https://semver.org/). Releases are **automated from
-[Conventional Commits](https://www.conventionalcommits.org/)**: merging to `main` runs the publish
-workflow, which derives the next version, publishes to npm (with a signed provenance attestation via
-OIDC trusted publishing), pushes the `v<version>` git tag, and creates the matching GitHub Release.
-
-The **published git tags and the npm registry are the source of truth** for the released version —
-the in-repo `VERSION` / `package.json` are not committed back on each release, so don't rely on them
-for "what's published." Check the [npm page](https://www.npmjs.com/package/@skathio/somi) or
-[Releases](https://github.com/skathio/somi/releases) instead.
-
-See [docs/VERSIONING.md](docs/VERSIONING.md) for the breaking-change policy and migration guide template.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+MIT licensed.

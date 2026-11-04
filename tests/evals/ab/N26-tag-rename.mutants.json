@@ -1,0 +1,20 @@
+[
+ {
+  "name": "counts-from-helper",
+  "file": "src/tags.mjs",
+  "find": "store.tagCounts[user] = recount(store, user);",
+  "replace": "store.tagCounts[user][key] = (store.tagCounts[user][key] ?? 0) + changed;"
+ },
+ {
+  "name": "all-users",
+  "file": "src/tags.mjs",
+  "find": "const mine = store.notes.filter((n) => n.owner === user);",
+  "replace": "const mine = store.notes;"
+ },
+ {
+  "name": "merge-duplicates",
+  "file": "src/tags.mjs",
+  "find": "note.tags = [...new Set(note.tags.map((t) => (t === source ? key : t)))];",
+  "replace": "note.tags = note.tags.map((t) => (t === source ? key : t));"
+ }
+]

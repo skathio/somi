@@ -2,34 +2,22 @@
 
 ## Summary
 
-<One paragraph: what this PR changes, and what kind of change it is (rule / agent / skill / hook /
-command / docs / tooling).>
+<What this changes and why. `somi pr` prints a draft from the journal.>
 
 ## Type of change
 
-- [ ] **MAJOR** — breaking change (rename, removal, schema change)
-- [ ] **MINOR** — additive (new agent / skill / hook / command)
-- [ ] **PATCH** — fix or clarification (no surface change)
-- [ ] **DOCS** — documentation only
-
-Per [VERSIONING.md](../docs/VERSIONING.md). The right `VERSION` bump and `CHANGELOG.md` entry depend
-on this choice.
+- [ ] **MAJOR:** breaking change
+- [ ] **MINOR:** additive
+- [ ] **PATCH:** fix with no surface change
+- [ ] **DOCS:** documentation only
 
 ## Checklist
 
-- [ ] CI passes (frontmatter, TypeScript compile, ShellCheck).
-- [ ] All new/changed agents, skills, and commands have proper frontmatter.
-- [ ] All new/changed hook scripts are executable and have `#!/usr/bin/env bash` + `set -euo pipefail`.
-- [ ] `CHANGELOG.md` updated under `[Unreleased]`.
-- [ ] Docs updated where the change is user-visible.
-- [ ] For breaking changes: migration notes included.
+- [ ] `npm test` passes.
+- [ ] `CHANGELOG.md` is updated under `[Unreleased]`.
+- [ ] No size limit in `tests/surface.test.mjs` was raised, or the raise is justified by a paired benchmark gain.
+- [ ] For breaking changes, migration notes are included.
 
 ## Test plan
 
-- [ ] (If hook/command/agent change) Manually invoked the affected component in a real Claude Code
-      session and observed expected behavior.
-- [ ] (If Copilot extension change) Tested `@somi /<command>` in GitHub Copilot chat.
-
-## Related issues
-
-Closes #<...>
+<What you ran, and what you did not.>

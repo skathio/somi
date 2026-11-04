@@ -1,0 +1,8 @@
+{
+  "name": "n35-plugin-versions",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "The month-end totals in src/totals.mjs come out differently from run to run, and the top-regions list sometimes changes too. Someone suspects float rounding and wants to switch to a decimal library.",
+    "Find the real causes and make the same input always give the same, correct answer. Do not add a dependency.",
+    "Keep every function's name, arguments and return shape as they are today.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N23-a087c4c53cbe8bd5",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Make the month-end totals deterministic and correct, as the numbered statements describe. Follow the conventions already in the code and change only what the ticket needs."
+}

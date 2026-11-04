@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Customers pick a local time for their daily digest, but it goes out at the wrong hour for most of them. nextRun(after, { time, zone }) in src/schedule.mjs returns the first run strictly after `after`, as epoch milliseconds, for a time like '09:00' in an IANA zone like 'Europe/London'. Right now it ignores the zone.",
+    "Fix it so a digest goes out at that wall-clock time every day, in any zone, including across clock changes.",
+    "When the clocks go forward past that time, the digest for that day goes out at the first moment after the skipped period. When the clocks go back and that time happens twice, it goes out only at the first, and never a second time that day.",
+    "An unknown zone throws HttpError 400 with code invalid_zone. A time that is not HH:MM on a 24-hour clock throws HttpError 400 with code invalid_time. Add no dependency."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N34-3e68521e8d65af8a",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Make the digest schedule follow each customer's local time across clock changes, as the ticket describes."
+}

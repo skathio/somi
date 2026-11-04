@@ -7,7 +7,7 @@
 // A denied name (path-safety's deny list) is a hit on the built-in `deny_list` name in the sensitive and boundary
 // lists whatever the config says, so the floor it carries survives a refusal elsewhere.
 //
-// Config only adds: `sizing.sensitive_paths` globs are appended to the built-ins and `sizing.module_containers`
+// Config only adds: `signals.sensitive_paths` globs are appended to the built-ins and `signals.module_containers`
 // names are unioned with BUILTIN_CONTAINERS. Neither can remove a built-in, there is no map from directories to a
 // shared module key, and a key that fails its shape check adds nothing (the defaults still apply). That keeps every
 // fact one-sided: no config can lower a hit list or the module count. `classifyPaths` takes the config layers
@@ -140,7 +140,7 @@ const layersOf = (l) => (field(field(l, 'global'), 'config') !== undefined && fi
 function additions(layers) {
   const out = { sensitive: [], containers: [], refused: [] };
   for (const layer of layers) {
-    const sizing = field(layer, 'sizing');
+    const sizing = field(layer, 'signals');
     const globs = field(sizing, 'sensitive_paths') ?? [];
     const names = field(sizing, 'module_containers') ?? [];
     if (bounded(globs, validGlob)) out.sensitive.push(...globs.map(compile)); else out.refused.push('sensitive_paths');

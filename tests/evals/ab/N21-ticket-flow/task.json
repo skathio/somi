@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "The nested conditions in transition in src/tickets.mjs are hard to change. Replace them with a table exported as transitions from src/flow.mjs, keyed by status then action, so that a new action is one entry.",
+    "Then add the action reopen: a closed ticket becomes open again, by anyone who may close it, and its assignee is cleared. It emits ticket.reopened.",
+    "Every other answer, error and event stays exactly as it is today.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N21-e85d75c8892a58f2",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Turn the ticket workflow into a transition table and add reopen, as the numbered statements describe. Nothing else may change. Follow the conventions already in the code."
+}

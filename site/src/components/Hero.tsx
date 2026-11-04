@@ -5,12 +5,12 @@ export function Hero() {
   const months = monthsSpanned(FACTS.releases);
   const stats = [
     { n: FACTS.commands.length, label: 'slash commands' },
-    { n: FACTS.agents.length, label: `agents (${FACTS.agents.length - 1} specialists + front door)` },
+    { n: FACTS.agents.length, label: 'agents' },
     { n: FACTS.skills.length, label: 'skills' },
     { n: FACTS.hooks.length, label: 'guardrail hooks' },
     { n: FACTS.releases.length, label: `releases in ${months} month${months === 1 ? '' : 's'}` },
   ];
-  const pills = ['Zero-dependency Node runtime', 'Linux · macOS · Windows', 'MIT'];
+  const pills = ['Zero-dependency Node runtime', 'Linux · macOS · WSL2', 'MIT'];
 
   return (
     <section id="top" aria-label="Introduction" className="border-b border-line px-4 pb-16 pt-16 sm:pb-20 sm:pt-24">
@@ -18,14 +18,13 @@ export function Hero() {
         <div className="flex flex-col-reverse gap-6 md:flex-row md:items-center md:justify-between md:gap-10">
           <div className="min-w-0">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent">
-              Multi-agent engineering workflow · {FACTS.version}
+              A small kernel for coding agents · {FACTS.version}
             </p>
             <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
-              So<span className="text-accent">Mi</span>: plan, code, review, with guardrails and a cost cap.
+              So<span className="text-accent">Mi</span>: say what you want, and it runs the right workflow.
             </h1>
             <p className="mt-5 max-w-3xl text-lg text-muted sm:text-xl">
-              A plugin for Claude Code and GitHub Copilot. Engineering work is split between specialist agents with a clear
-              handoff at each step. Deterministic hooks block dangerous actions. Every agent runs at a cost tier you control.
+              A plugin for Claude Code and GitHub Copilot CLI. The agent codes in the main thread. A deterministic check runs before each commit, and a fresh reviewer runs only when the real diff calls for one. Tools write all state, and the OS sandbox is the security boundary.
             </p>
           </div>
           <img

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "People get signed out at random while they are working. Someone proposes raising sessionMinutes in src/config.mjs.",
+    "Find the real cause and make sessions behave the way the README says. Do not change the values in src/config.mjs.",
+    "Keep every function's name, arguments and return shape as they are today.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N22-8feb28bf341f76ae",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Fix people being signed out at random, as the numbered statements describe. The README says how sessions should behave. Follow the conventions already in the code and change only what the ticket needs."
+}

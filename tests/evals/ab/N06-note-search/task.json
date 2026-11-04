@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "People can't find their notes. Add a search parameter q to listNotes.",
+    "Make it behave the way this service's other lists and text features behave.",
+    "Everything that exists today keeps working exactly as it does now.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N06-b8d05f258c6d1e16",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add search to the notes list, as the numbered statements describe. Follow the conventions already in the code and repository and change only what the ticket needs."
+}

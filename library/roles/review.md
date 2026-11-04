@@ -1,0 +1,1 @@
+Review the current changes, or the diff or pull request named in the request, with fresh eyes. Run `git diff` for the changes yourself, and read what you need around them. Return your JSON findings as your instructions define. Change nothing.

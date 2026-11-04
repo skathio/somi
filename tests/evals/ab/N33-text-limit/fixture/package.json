@@ -1,0 +1,8 @@
+{
+  "name": "n33-text-limit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

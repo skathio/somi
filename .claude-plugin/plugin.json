@@ -1,18 +1,15 @@
 {
   "name": "somi",
-  "version": "4.1.0",
+  "version": "5.0.0-rc.1",
   "displayName": "SoMi",
-  "description": "Multi-agent engineering workflow system: plan, code, review — with SOLID/OWASP guardrails, deterministic hooks, and a global ruleset.",
+  "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it routes the work to the right workflow, on workers on the cheapest model that can do it.",
   "keywords": [
     "workflow",
-    "agents",
-    "planning",
-    "code-review",
+    "review",
     "security",
-    "owasp",
-    "solid",
-    "clean-code",
-    "engineering"
+    "sandbox",
+    "claude-code",
+    "copilot"
   ],
   "author": {
     "name": "Skathi",
@@ -24,7 +21,9 @@
   "mcpServers": {
     "somi": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs"]
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/somi-mcp.mjs"
+      ]
     }
   }
 }

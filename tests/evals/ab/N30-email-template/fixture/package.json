@@ -1,0 +1,8 @@
+{
+  "name": "n30-email-template",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

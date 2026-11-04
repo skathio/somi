@@ -6,6 +6,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### 5.0.0 release candidate: routing that costs less
+
+**Breaking.** A ground-up rebuild of how SoMi runs, keeping what it is for: pass any request or ticket and it runs the right workflow. It ships as the default only if the pre-registered benchmark passes, and that result is reported in `docs/BENCHMARK.md`. See `docs/MIGRATING-TO-5.md`. The 4.x line stays on the `4.x` branch.
+
+#### Changed
+
+- **A thin coordinator on a step engine routes every request.** The procedure lives in the engine and arrives one step at a time, so it does not sit in the coordinator's context. Rules place a clear request, and the coordinator chooses from a short table when they cannot.
+- **Work runs on subagents, and a hook sets their tier.** Low, medium and high map to models per environment in config, at every nesting level. On Claude Code, edits during a workflow stay with workers. Copilot CLI has no default map, and nothing is denied there because a denied agent does the work inline.
+- **Workers end their own step** with `somi finish`, because each coordinator turn is billed at the session's model.
+- **Reviews follow the real diff.** No forecast decides a review. Only a Blocker, or a Major a critic confirms on a trust boundary, re-loops, at most twice, and the second pass reads only the fix diff.
+- **Failing checks restart a tier up,** once, with the working tree and a short summary.
+- **Large work gets milestones with fresh context,** from one plan you approve, instead of a document chain. A long ticket starts on one worker, which splits only what proves too big. Asking to see a plan first takes the milestone route directly.
+- **A long ticket stays whole.** A request up to 64 KiB is kept in full, and a longer one is refused and not cut. Choosing a route needs no words back from the coordinator, so it cannot shorten one. A long brief reaches the worker from a file, so the coordinator neither carries nor rewords it.
+- **State is one journal and a small ledger, both written by the tools.** The ledger comes back after every compaction and at the top of every brief.
+- **The OS sandbox is the security boundary on both hosts.** `somi doctor` proves it with vendor probes, and now also warns about tiers with no model. Hooks are tripwires, and the policy-file guard is frozen as a review signal.
+- **Rules arrive at session start and after compaction,** as a short digest.
+- **One MCP tool,** `somi_step`, which never runs project commands.
+- **Hook denials exit 2,** and hook output carries both hosts' fields, so hooks behave the same on both.
+- **Benchmark v2:** a mixed task set, every arm given the same plain request through its real entry point, dollars per solved task from billing, spend per model, and a mechanical release rule.
+
+#### Added
+
+- **Shards:** `somi slot <step> <plugin:component>` connects another plugin's skill, agent or tool to a named step. Shards keep working when a plugin updates, and anything that writes outward confirms first.
+- **Six expertise skills, loaded when work calls for them:** secure coding, threat modeling, a testing checklist, CI and infrastructure gotchas, performance method, and accessibility.
+- **`/a11y-check`, plus `perf` and `migrate` workflows** reached through routing.
+- **An update notice** that tells you a newer version exists, and never updates anything.
+- `somi migrate` imports open findings and decisions from a 4.x tree.
+
+#### Removed
+
+- `clean-code`, `solid-principles`, `reasoning-craft` and the general `observability` skill, as the evidence shows they add nothing a current model lacks.
+- Pre-code sizing, the design and planning document chain, parallel orchestration, and the diary and progress files. Older command names still work as aliases.
+
+### Changes on main before the 5.0 rebuild
+
 ### Added
 
 - **A bundled `somi_loop` MCP tool runs a bounded-loop transition in one call, and `/code-loop` and `/plan-loop` now run

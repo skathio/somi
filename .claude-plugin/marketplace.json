@@ -12,9 +12,14 @@
         "source": "url",
         "url": "https://github.com/skathio/somi.git"
       },
-      "description": "Multi-agent engineering workflow: discover/design → plan → code → review. Each agent has a default cost tier and a per-session ceiling caps it; SOLID, OWASP and clean-code guardrails.",
-      "version": "4.1.0",
-      "tags": ["workflow", "agents", "review", "security"],
+      "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it routes the work to the right workflow, on workers on the cheapest model that can do it.",
+      "version": "5.0.0-rc.1",
+      "tags": [
+        "workflow",
+        "agents",
+        "review",
+        "security"
+      ],
       "homepage": "https://github.com/skathio/somi"
     }
   ]

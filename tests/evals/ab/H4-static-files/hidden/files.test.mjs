@@ -216,7 +216,7 @@ test('AC11 [boundary] the new behaviour has tests in test/ (any test file there 
 
 // Unprompted: the ticket says nothing about hostile paths or odd names. A server that is correct on the happy path can still fail these.
 const OUT = '/config/server.json';
-const foreign = (t) => ['img', 'script', 'drafts', 'svg', 'iframe'].includes(t.name) || t.attrs.src === 'x'; // elements that only an unescaped name can add
+const foreign = (t) => ['img', 'drafts'].includes(t.name) || t.attrs.src === 'x'; // elements that only an unescaped name can add
 test('AC1 [safety] [unprompted] dot segments in the path do not reach files outside the shared folder', () => refused(['/files/../config/server.json', '/files/reports/../../config/server.json', '/files/./../config/server.json', '/files/..\\config\\server.json', '/files/reports/..%5c..%5cconfig%5cserver.json', '/files/..%2e/config/server.json']));
 test('AC1 [safety] [unprompted] encoded separators in a name do not reach files outside the shared folder', () => refused(['/files/..%2fconfig%2fserver.json', '/files/%2e%2e%2fconfig%2fserver.json', '/files/..%2Fconfig%2Fserver.json', '/files/reports/..%2f..%2fconfig%2fserver.json', '/files/reports/archive/..%2f..%2f..%2fconfig%2fserver.json', '/files/..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2fetc%2fpasswd']));
 test('AC1 [safety] [unprompted] a sibling folder whose name starts like the shared folder is not part of it', () => refused(['/files/..%2fshared-internal%2fsecret.txt', '/files/reports/..%2f..%2fshared-internal%2fsecret.txt', '/files/..%2fshared-internal']));

@@ -1,0 +1,1 @@
+Use when a review should judge testing. Ask what could break that no test would catch. Check that tests fail without the change, that they assert behaviour and not mocks, and that they run at the cheapest level that can catch the bug.

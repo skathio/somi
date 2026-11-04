@@ -2,8 +2,7 @@
 // scripts/check-links.mjs — fail the build on a relative markdown link whose target doesn't exist.
 //
 // WHY A SEPARATE SCRIPT
-// A ~120-line walker inside a `validate.sh` heredoc would be unreadable and untestable, and the
-// repo already has the pattern of validate.sh invoking a focused Node script (generate-digest.mjs).
+// A focused Node script, so the walker stays readable and testable.
 //
 // WHAT IT WALKS
 // Every git-tracked `*.md`, minus `CHANGELOG.md` (generated release history). `.somi/` needs no filter: it is

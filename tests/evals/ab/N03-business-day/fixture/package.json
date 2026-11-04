@@ -1,0 +1,8 @@
+{
+  "name": "n03-business-day",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

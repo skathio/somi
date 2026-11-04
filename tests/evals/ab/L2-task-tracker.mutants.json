@@ -1,0 +1,20 @@
+[
+ {
+  "name": "search-ignores-archive",
+  "file": "src/core.mjs",
+  "find": "const visible = (store, p) => !p.archived;",
+  "replace": "const visible = () => true;"
+ },
+ {
+  "name": "viewer-can-write",
+  "file": "src/access.mjs",
+  "find": "if (action === 'write') return role === 'owner' || role === 'editor';",
+  "replace": "if (action === 'write') return Boolean(role);"
+ },
+ {
+  "name": "no-next-cursor",
+  "file": "src/core.mjs",
+  "find": "nextCursor: rest.length > limit ? String(start + limit) : null",
+  "replace": "nextCursor: null"
+ }
+]

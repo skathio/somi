@@ -1,0 +1,10 @@
+Open: Pick the storage
+Next: ask, after 0 review passes
+Stopped: intent-gate
+Question: Files or a table?
+
+Closed:
+- Add the export: done at ebe9ed63
+
+Logged findings, not looped:
+- Minor src/app.js:3: Name the command.

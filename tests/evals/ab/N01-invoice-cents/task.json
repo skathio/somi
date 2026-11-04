@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Finance says the totals on our documents disagree with their ledger by a cent every so often. One person thinks src/format.mjs is at fault because it calls toFixed.",
+    "Find the real cause and make the totals agree with the ledger rule written down in the README.",
+    "Keep every function's name, arguments and return shape as they are today.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N01-df51963559cd8805",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Fix the one-cent disagreement between our document totals and the ledger, as the numbered statements describe. The README holds the ledger rule. Follow the conventions already in the code and change only what the ticket needs."
+}

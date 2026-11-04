@@ -1,0 +1,20 @@
+[
+ {
+  "name": "expiry-inclusive",
+  "file": "src/links.mjs",
+  "find": "if (now >= exp) throw bad();",
+  "replace": "if (now > exp) throw bad();"
+ },
+ {
+  "name": "revoke-forgotten",
+  "file": "src/links.mjs",
+  "find": "if (generation(deps, id) !== gen) throw bad();",
+  "replace": ""
+ },
+ {
+  "name": "length-crash",
+  "file": "src/links.mjs",
+  "find": "if (given.length !== want.length) throw bad();",
+  "replace": ""
+ }
+]

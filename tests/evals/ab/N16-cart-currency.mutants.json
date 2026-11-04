@@ -1,0 +1,20 @@
+[
+ {
+  "name": "format-two-decimals",
+  "file": "src/format.mjs",
+  "find": "const digits = minorDigits(currency);",
+  "replace": "const digits = 2;"
+ },
+ {
+  "name": "round-total-only",
+  "file": "src/cart.mjs",
+  "find": "total += roundHalfAway(exact);",
+  "replace": "total += exact;"
+ },
+ {
+  "name": "round-half-up-negative",
+  "file": "src/cart.mjs",
+  "find": "const roundHalfAway = (x) => Math.sign(x) * Math.round(Math.abs(x) + 1e-9);",
+  "replace": "const roundHalfAway = (x) => Math.round(x + 1e-9);"
+ }
+]

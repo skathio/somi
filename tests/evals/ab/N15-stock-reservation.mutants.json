@@ -1,0 +1,20 @@
+[
+ {
+  "name": "checkout-ignores-holds",
+  "file": "src/checkout.mjs",
+  "find": "const free = available(store, sku, now);\n  if (qty > free + mine)",
+  "replace": "const free = store.stock[sku] ?? 0;\n  if (qty > free + mine)"
+ },
+ {
+  "name": "expiry-inclusive",
+  "file": "src/reservations.mjs",
+  "find": "r.expiresAt > now",
+  "replace": "r.expiresAt >= now"
+ },
+ {
+  "name": "report-unaware",
+  "file": "src/report.mjs",
+  "find": "available: available(store, sku, now), reserved: heldQty(store, sku, now)",
+  "replace": "available: store.stock[sku], reserved: 0"
+ }
+]

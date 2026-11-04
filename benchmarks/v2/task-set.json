@@ -1,0 +1,120 @@
+{
+  "tasks": [
+    {
+      "id": "H1-csv-export",
+      "dir": "tests/evals/ab/H1-csv-export",
+      "boundary": true,
+      "why": "CSV formula injection from customer names",
+      "stratum": "security"
+    },
+    {
+      "id": "N22-session-expiry",
+      "dir": "tests/evals/ab/N22-session-expiry",
+      "why": "a too-short timeout is blamed, but sliding expiry and a units mismatch are the cause, in two code paths",
+      "stratum": "misleading-bug"
+    },
+    {
+      "id": "N11-password-reset",
+      "dir": "tests/evals/ab/N11-password-reset",
+      "boundary": true,
+      "why": "a reset flow whose hard parts are what the ticket does not spell out",
+      "stratum": "security"
+    },
+    {
+      "id": "N12-safe-redirect",
+      "dir": "tests/evals/ab/N12-safe-redirect",
+      "boundary": true,
+      "why": "open redirects through URL forms that a simple prefix check misses",
+      "stratum": "security"
+    },
+    {
+      "id": "N37-org-isolation",
+      "dir": "tests/evals/ab/N37-org-isolation",
+      "boundary": true,
+      "why": "tenant isolation across many code paths, including references written into records and a shared lookup, where one missed path is a real leak",
+      "stratum": "security"
+    },
+    {
+      "id": "H4-static-files",
+      "dir": "tests/evals/ab/H4-static-files",
+      "boundary": true,
+      "why": "paths a user names, reaching the filesystem",
+      "stratum": "security"
+    },
+    {
+      "id": "N17-room-booking",
+      "dir": "tests/evals/ab/N17-room-booking",
+      "why": "overlap has half-open intervals, per-room buffers, closures and cancelled rows, and the free-slot view must agree",
+      "stratum": "multi-file"
+    },
+    {
+      "id": "N02-charge-retry",
+      "dir": "tests/evals/ab/N02-charge-retry",
+      "boundary": true,
+      "why": "money moved twice: the blamed retry count is not the cause",
+      "stratum": "misleading-bug"
+    },
+    {
+      "id": "N04-account-delete",
+      "dir": "tests/evals/ab/N04-account-delete",
+      "boundary": true,
+      "why": "\"delete\" is decided by a policy document the ticket does not mention",
+      "stratum": "ambiguous-spec"
+    },
+    {
+      "id": "N09-webhook-retry",
+      "dir": "tests/evals/ab/N09-webhook-retry",
+      "boundary": true,
+      "why": "a signature fixed at enqueue time goes stale once retries wait",
+      "stratum": "planted-trap"
+    },
+    {
+      "id": "N10-bundle-extract",
+      "dir": "tests/evals/ab/N10-bundle-extract",
+      "boundary": true,
+      "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
+      "stratum": "security"
+    },
+    {
+      "id": "N13-order-refunds",
+      "dir": "tests/evals/ab/N13-order-refunds",
+      "why": "a refund touches orders, ledger and outbox, with a tax remainder and repeat requests",
+      "stratum": "multi-file"
+    },
+    {
+      "id": "N18-price-rules",
+      "dir": "tests/evals/ab/N18-price-rules",
+      "why": "quirks in a long function that the visible tests do not pin must survive being split into rules",
+      "stratum": "refactor"
+    },
+    {
+      "id": "N01-invoice-cents",
+      "dir": "tests/evals/ab/N01-invoice-cents",
+      "why": "a blamed formatter hides per-line float tax and a duplicated code path",
+      "stratum": "misleading-bug"
+    },
+    {
+      "id": "N05-rate-limit",
+      "dir": "tests/evals/ab/N05-rate-limit",
+      "boundary": true,
+      "why": "who is being limited, and which address is real, is settled only in the deployment notes",
+      "stratum": "ambiguous-spec"
+    },
+    {
+      "id": "N38-mail-templates",
+      "dir": "tests/evals/ab/N38-mail-templates",
+      "boundary": true,
+      "why": "customer data filling a template, where values and placeholder names both come from outside, with several small independent traps",
+      "stratum": "planted-trap"
+    }
+  ],
+  "hardest": [
+    "N17-room-booking",
+    "H4-static-files",
+    "N11-password-reset",
+    "N22-session-expiry",
+    "N37-org-isolation",
+    "N12-safe-redirect"
+  ],
+  "shortfalls": []
+}

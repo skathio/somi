@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Plugins declare which host versions they run on, using npm-style version ranges such as '^1.2.0' or '>=1.5 <3 || 4.x'. canInstall(plugin, hostVersion) in src/plugins.mjs only looks at the major version, so it lets broken combinations through and blocks good ones.",
+    "Add satisfies(version, range) to src/semver.mjs, and use it in canInstall. It must answer exactly as `semver.satisfies(version, range)` from npm's semver package does with default options, for the whole range syntax.",
+    "An invalid version or range returns false and does not throw. This repository ships with no dependencies, so write it yourself and add none."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N35-e5bc70e2ce383791",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add a version range matcher that agrees with npm's semver, and use it when deciding whether a plugin can be installed."
+}

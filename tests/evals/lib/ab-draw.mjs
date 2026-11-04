@@ -11,7 +11,7 @@
 //   DEVIATION from the experiment plan (section 2: the bare arm must have no .somi/): BOTH workspaces carry the same
 //   .somi/config.json so they are byte-identical apart from the plugin; the bare arm has no plugin to read it, so it only
 //   sits there as an inert file. Recorded here because a plan that says "no .somi" would otherwise be silently contradicted.
-// Arms differ in ONE thing: the SoMi arm gets `--plugin-dir <packed plugin>` and a `/somi:ship-loop ` prefix on the same
+// Arms differ in ONE thing: the SoMi arm gets `--plugin-dir <packed plugin>` and a command prefix on the same
 //   task text. The plugin is the npm package of the repository extracted read-only (buildPlugin), never the checkout.
 // Environment (childEnv): an allowlist of six variables; the token is a parameter, never read from process.env. The sixth,
 //   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0, makes `claude --print` wait for background work without its own 600 s ceiling
@@ -21,7 +21,7 @@
 //   namespace dies with the leader. The repository, ~/.claude, ~/.ssh and other draws' directories are not visible. The
 //   network stays shared (the model needs it).
 // Pauses: a SoMi turn that ends in a question or an approval request is answered once per resume (at most MAX_RESUMES),
-//   with `--resume <session>` and the remaining budget; see looksPaused. The bare arm is never resumed.
+//   with `--resume <session>` and the remaining budget; see looksPaused. Every arm is resumed by the same rule.
 // Process control: detached child (own group), stdin closed, ONE deadline for all turns of a draw, output cap; the group
 //   is killed when the leader exits and the draw's leftovers are swept by their environment (ab-stream.mjs).
 
@@ -35,13 +35,13 @@ export const MAX_RESUMES = 4;
 const STDERR_CAP = 1024 * 1024;
 const MIN_REMAINING_USD = 0.1;
 const SETUP_MS = 20000;
-export const RESUME_PROMPT = 'Approved. Continue to completion without further questions.';
+export const RESUME_PROMPT = 'Approved. Take your recommended option on every open question, and continue to completion without further questions.';
 const AUTH_STDERR = /\b401\b|not logged in|invalid (api key|authentication)|authentication[_ ]error|oauth token.{0,40}(expired|revoked)/i;
 const TERMINAL_QUESTION = /\?[\s"'*_)\]`]*$/;
-const CHECKPOINT_MENU = /\bapprove\b[^\n]{0,120}\brevise\b[^\n]{0,120}\babort\b/i;
-// ship-loop's Stage -1 gate laid out as a list: "Reply to continue:" with `approve` and `abort` on later lines, as newer models lay it out.
+const CHECKPOINT_MENU = /\bapprove\b[\s\S]{0,240}\brevise\b[\s\S]{0,240}\babort\b/i;
+// A plugin arm's gate laid out as a list: "Reply to continue:" with `approve` and `abort` on later lines, as newer models lay it out.
 const GATE_MENU = /\b(reply|respond|answer)\b[\s\S]{0,120}?\bapprove\b[\s\S]{0,400}?\babort\b/i;
-const EXPLICIT_REQUEST = /\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\bneeds? your (verdict|decision|approval|input)\b|\b(shall|should|may) I\b[^.]*\?/i;
+const EXPLICIT_REQUEST = /\b(reply|respond|answer) with (a|your|one|the)\b|\btake the recommendations?\b|\bneeds? [^.\n]{0,40}\b(decisions?|answers?) from you\b|\b(reply|respond|answer)\b[^\n]{0,20}\bapprove\b|\b(awaiting|waiting for) (your )?(approval|confirmation)\b|\bneeds? your (verdict|decision|approval|input)\b|\b(shall|should|may) I\b[^.]*\?/i;
 
 // ---- command line and environment ----------------------------------------------------------------------------
 
@@ -51,15 +51,14 @@ export function taskText(task) {
   const where = list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0];
   return `Implement the following in this repository.\n${task.statements.join('\n')}\nDeclared scope: you may change files under ${where} only.`;
 }
-export const armPrompt = (arm, text) => (arm === 'somi' ? `/somi:ship-loop ${text}` : text);
 
 /** Whole-dollar-cent budget rounded DOWN, so the cap is never above what was asked. */
 const usd = (x) => (Math.floor(x * 100) / 100).toFixed(2);
 // The web tools are disabled for both arms (a shell can still reach the network). The list is one comma-separated value:
 // the flag is variadic, and every flag after it is an option, so nothing can be swallowed.
-export function claudeArgv({ arm, prompt, budget, plugin, resume, model }) {
+export function claudeArgv({ arm, prompt, budget, plugin, resume, model, settings }) {
   return ['--print', prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--max-budget-usd', usd(budget),
-    '--permission-mode', 'bypassPermissions', '--disallowed-tools', 'WebFetch,WebSearch', ...(arm === 'somi' ? ['--plugin-dir', plugin] : []), ...(resume ? ['--resume', resume] : [])];
+    '--permission-mode', 'bypassPermissions', '--disallowed-tools', 'WebFetch,WebSearch', ...(arm === 'somi' ? ['--plugin-dir', plugin, '--agent', 'somi:somi'] : []), ...(settings ? ['--settings', JSON.stringify(settings)] : []), ...(resume ? ['--resume', resume] : [])];
 }
 
 /** The only variables the claude child sees. HOME and the config directory are fresh per draw. */
@@ -138,7 +137,7 @@ export const probeSandbox = (spec) => spawnSync('bwrap', sandboxArgs({ ...spec, 
 const PATH_ONLY = (home) => ({ PATH: process.env.PATH ?? '', HOME: home });
 /** Fresh directories under `tmp` (made by the caller with mkdtemp) -> {ws, before}; throws an Error naming the step that failed. */
 /** `cost` is the already-validated `cost` block of the workspace's .somi/config.json (plain data; the caller validates it). */
-export function prepareWorkspace({ taskDir, tmp, cost = { ceiling: 'medium' } }) {
+export function prepareWorkspace({ taskDir, tmp, config = { cost: { ceiling: 'medium' } }, globalConfig }) {
   const ws = path.join(tmp, 'ws');
   fs.mkdirSync(ws, { mode: 0o700 });
   fs.mkdirSync(path.join(tmp, 'cfg'), { mode: 0o700 });
@@ -158,7 +157,12 @@ export function prepareWorkspace({ taskDir, tmp, cost = { ceiling: 'medium' } })
     if (r.error || r.status !== 0) throw new Error('the task setup failed');
   }
   fs.mkdirSync(path.join(ws, '.somi'), { recursive: true });
-  fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify({ cost })}\n`);
+  fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify(config)}\n`);
+  // Reviewers read only the user's own config, so a recording pins their model there. childEnv makes tmp the home directory.
+  if (globalConfig) {
+    fs.mkdirSync(path.join(tmp, '.config', 'somi'), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(tmp, '.config', 'somi', 'config.json'), `${JSON.stringify(globalConfig)}\n`);
+  }
   const git = (...a) => { const r = spawnSync('git', a, { cwd: ws, env: { ...PATH_ONLY(tmp), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore', timeout: SETUP_MS }); if (r.error || r.status !== 0) throw new Error(`git ${a[0]} failed`); };
   git('init', '-q', '-b', 'main', '--template=');
   git('config', 'user.name', 'somi-ab');
@@ -172,17 +176,25 @@ export function prepareWorkspace({ taskDir, tmp, cost = { ceiling: 'medium' } })
 }
 
 /** `npm pack` the repository into `runTmp` and extract it read-only -> the plugin directory. Throws on any doubt. */
-export function buildPlugin({ repoRoot, runTmp }) {
+export function buildPlugin({ repoRoot, runTmp, dirName = 'plugin', patches = [] }) {
   const env = { PATH: process.env.PATH ?? '', HOME: runTmp, npm_config_cache: path.join(runTmp, 'npm-cache'), npm_config_update_notifier: 'false' };
   const pack = spawnSync('npm', ['pack', '--ignore-scripts', '--silent', '--pack-destination', runTmp], { cwd: repoRoot, env, encoding: 'utf8', timeout: 120000 });
   const name = (pack.stdout ?? '').trim().split('\n').pop();
   if (pack.status !== 0 || !/^[A-Za-z0-9._@-]+\.tgz$/.test(name)) throw new Error('npm pack failed');
-  const dest = path.join(runTmp, 'plugin');
+  const dest = path.join(runTmp, dirName);
   fs.mkdirSync(dest, { mode: 0o700 });
   const tar = spawnSync('tar', ['-xzf', path.join(runTmp, name), '-C', dest, '--strip-components=1', '--no-same-owner'], { stdio: 'ignore', timeout: 60000 });
   if (tar.status !== 0) throw new Error('extracting the package failed');
   const m = lstatManifest(dest);
   if (!m?.ok || m.files.some(([p]) => p.startsWith('tests/evals/') || p.startsWith('.somi/') || p.includes('/manual/'))) throw new Error('the packed plugin holds files that must not ship');
+  // An ablation edits this private copy only, so the shipped plugin has no switch for turning a part off. A patch that no longer
+  // matches exactly once stops the recording instead of quietly measuring the full plugin.
+  for (const { file, find, replace } of patches) {
+    const target = path.join(dest, file);
+    const text = fs.readFileSync(target, 'utf8');
+    if (text.split(find).length !== 2) throw new Error(`the ablation patch for ${file} does not match exactly once`);
+    fs.writeFileSync(target, text.replace(find, () => replace));
+  }
   const lock = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) lock(p); else fs.chmodSync(p, fs.statSync(p).mode & 0o111 ? 0o500 : 0o400); } fs.chmodSync(d, 0o500); };
   lock(dest);
   return dest;
@@ -212,7 +224,12 @@ export function runClaude({ command, args, env, cwd, sink, timeoutMs, kills, fdT
 }
 
 /** All turns of one draw -> the facts classify() needs. The token is only ever handed to the child and the sink. */
-export async function runDraw({ model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
+/** Only the engine knows it is waiting, and its coordinator words that differently each time. A bare or older arm has no such state. */
+export function engineWaiting(cwd) {
+  try { const { awaiting, next } = JSON.parse(fs.readFileSync(path.join(cwd, '.somi', 'state', 'state.json'), 'utf8')); return Boolean(awaiting) || next === 'ask'; } catch { return false; }
+}
+
+export async function runDraw({ settings, model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
   const sink = createSink(path.join(drawDir, 'stream.jsonl'), { token, canary, task, absAb, ownTmp, maxBytes });
   const run = { arm, cost: 0, turns: 0, resumes: 0, models: new Set(), exhausted: false, error: null, timedOut: false, stderr: '', result: null };
   const deadline = Date.now() + timeoutMs; const started = Date.now();
@@ -220,7 +237,7 @@ export async function runDraw({ model, arm, prompt, budget, timeoutMs, claude, e
   try {
     for (;;) {
       sink.turn();
-      const argv = claudeArgv({ model, arm, prompt: text, budget: budget - run.cost, plugin, resume: session });
+      const argv = claudeArgv({ model, arm, prompt: text, budget: budget - run.cost, plugin, resume: session, settings });
       const launch = sandbox ? { command: 'bwrap', args: sandboxArgs({ ...sandbox, rw: [ownTmp] }, claude, argv) } : { command: claude, args: argv };
       const r = await runClaude({ ...launch, env, cwd, sink, timeoutMs: deadline - Date.now(), kills, fdToken: tokenFd ? token : null });
       run.stderr += r.stderr; run.error = r.error; run.timedOut = r.timedOut;
@@ -230,86 +247,12 @@ export async function runDraw({ model, arm, prompt, budget, timeoutMs, claude, e
       run.turns += sink.state.turns;
       for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
       session = typeof res.session_id === 'string' ? res.session_id : null;
-      if (sink.state.limit || arm !== 'somi' || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= maxResumes) break;
+      if (sink.state.limit || res.subtype !== 'success' || session === null || !(looksPaused(sink.state.text) || engineWaiting(cwd)) || run.resumes >= maxResumes) break;
       if (budget - run.cost < MIN_REMAINING_USD) { run.exhausted = true; break; }
       run.resumes++; text = RESUME_PROMPT;
     }
   } finally { await sweepProcesses(`CLAUDE_CONFIG_DIR=${env.CLAUDE_CONFIG_DIR}`); sink.end(); }
   return { ...run, models: [...run.models].sort(), text: sink.state.text, leaks: [...sink.state.leaks].sort(), capped: sink.state.capped, limit: sink.state.limit, reset: sink.state.reset, wallMs: Date.now() - started, stderr: redactToken(run.stderr, token) };
-}
-
-// ---- the tier a SoMi draw chose ------------------------------------------------------------------------------------
-// The sizing step records its tier in the workspace at .somi/somi-state/tier/<slug>.json (written by scripts/somi-tier.mjs
-// with --record; the slug is the run's own). That file is written by the candidate's side of the run, so it is untrusted:
-// every directory on the way must be a real directory, the file is opened without following a link, must be a regular file of
-// at most 64 KiB, and only a `tier` that is exactly small, trivial or full is accepted. Anything else is 'unknown'; no content
-// of the file is ever returned. When no usable record exists the CLI's own result line in the stream ("effective") is the
-// fallback; it is equally untrusted and is reported as such through tierSource.
-export const TIERS = Object.freeze(['small', 'trivial', 'full']);
-const TIER_FILE = /^[a-z0-9][a-z0-9-]{0,63}\.json$/;
-const TIER_MAX_BYTES = 64 * 1024;
-const TIER_MAX_FILES = 16;
-const STREAM_TIER_MAX = 16 * 1024 * 1024;
-const EFFECTIVE = /"effective":\s*"(small|trivial|full)"/;
-
-function recordTier(file) {
-  let fd = null;
-  try {
-    fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
-    const st = fs.fstatSync(fd);
-    if (!st.isFile() || st.size > TIER_MAX_BYTES) return null;
-    const v = JSON.parse(fs.readFileSync(fd, 'utf8'));
-    if (v === null || typeof v !== 'object' || Array.isArray(v) || typeof v.tier !== 'string' || !TIERS.includes(v.tier)) return null;
-    return { tier: v.tier, computed: typeof v.computed_tier === 'string' && TIERS.includes(v.computed_tier) ? v.computed_tier : null };
-  } catch { return null; } finally { if (fd !== null) try { fs.closeSync(fd); } catch { /* read-only handle */ } }
-}
-/**
- * The workspace's tier records -> null when there are none (no tier directory, or no entry with a record's name: only then may the
- * stream be consulted), otherwise {tier, computedTier}. The tier is 'unknown' unless EVERY entry named like a record (at most
- * 16; more are decoys) is a valid record and they all agree; a link or file where a directory belongs is not "absent" either.
- */
-export function tierFromRecords(ws) {
-  const unknown = { tier: 'unknown', computedTier: null };
-  try {
-    let dir = ws;
-    for (const part of ['.somi', 'somi-state', 'tier']) {
-      dir = path.join(dir, part);
-      let st; try { st = fs.lstatSync(dir); } catch (e) { if (e?.code === 'ENOENT') return null; return unknown; }
-      if (!st.isDirectory()) return unknown;
-    }
-    const names = fs.readdirSync(dir).filter((n) => TIER_FILE.test(n)).sort();
-    if (names.length === 0) return null;
-    if (names.length > TIER_MAX_FILES) return unknown;
-    const recs = names.map((n) => recordTier(path.join(dir, n)));
-    if (recs.some((r) => r === null) || new Set(recs.map((r) => r.tier)).size !== 1) return unknown;
-    const computed = new Set(recs.map((r) => r.computed));
-    return { tier: recs[0].tier, computedTier: computed.size === 1 ? [...computed][0] : null };
-  } catch { return unknown; }
-}
-/** The last "effective" tier of a tool result in the (redacted) stream file, or null. */
-export function tierFromStream(streamFile) {
-  try {
-    if (fs.statSync(streamFile).size > STREAM_TIER_MAX) return null;
-    let tier = null;
-    for (const raw of fs.readFileSync(streamFile, 'utf8').split('\n')) {
-      if (!raw.includes('effective')) continue;
-      let ev; try { ev = JSON.parse(raw); } catch { continue; }
-      if (ev?.type !== 'user' || !Array.isArray(ev.message?.content)) continue;
-      for (const b of ev.message.content) {
-        if (b?.type !== 'tool_result') continue;
-        const text = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map((x) => (typeof x?.text === 'string' ? x.text : '')).join('\n') : '';
-        for (const line of text.split('\n')) { const m = EFFECTIVE.exec(line.slice(0, 4096)); if (m) tier = m[1]; }
-      }
-    }
-    return tier;
-  } catch { return null; }
-}
-/** -> {tier: small|trivial|full|unknown, tierSource: file|stream|none, computedTier}. Never throws; the stream only when there are no records. */
-export function resolveTier({ ws, streamFile }) {
-  const rec = tierFromRecords(ws);
-  if (rec !== null) return { tier: rec.tier, tierSource: 'file', computedTier: rec.computedTier };
-  const s = tierFromStream(streamFile);
-  return s === null ? { tier: 'unknown', tierSource: 'none', computedTier: null } : { tier: s, tierSource: 'stream', computedTier: null };
 }
 
 /** Facts -> {outcome, reason} in the compareArms vocabulary; the first matching rule wins. */
@@ -327,7 +270,7 @@ export function classify({ run, arm, budget }) {
   if (!r) return inv(AUTH_STDERR.test(run.stderr) ? 'auth' : 'no-result');
   if (r.is_error && (AUTH_STDERR.test(run.stderr) || /please run \/login/i.test(String(r.result ?? '')))) return inv('auth');
   if (r.subtype === 'error_max_budget_usd' || run.cost > budget || run.exhausted) return { outcome: 'over-budget', reason: 'budget exhausted' };
-  if (arm === 'somi' && r.subtype === 'success' && looksPaused(run.text)) return { outcome: 'paused', reason: `still waiting after ${run.resumes} resume(s)` };
+  if (r.subtype === 'success' && looksPaused(run.text)) return { outcome: 'paused', reason: `still waiting after ${run.resumes} resume(s)` };
   return { outcome: 'scored', reason: r.subtype === 'success' ? '' : String(r.subtype ?? 'no-subtype').slice(0, 40) };
 }
 

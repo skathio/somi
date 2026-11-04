@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "seq": 9,
+  "milestone": "m2",
+  "title": "Pick the storage",
+  "next": "ask",
+  "pass": 0,
+  "base": "ebe9ed6350a3558ad9a26e0f403f0095d61fae59",
+  "tree": null,
+  "reviewed_tree": null,
+  "stop": "intent-gate",
+  "question": "Files or a table?",
+  "release_candidate": false,
+  "reviewers": [],
+  "blocking": [],
+  "extra_passes": 0,
+  "follow_up": null,
+  "route": null,
+  "tier": null,
+  "escalated": false,
+  "lane": null,
+  "awaiting": null
+}

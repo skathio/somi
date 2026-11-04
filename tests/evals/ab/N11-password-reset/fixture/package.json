@@ -1,0 +1,8 @@
+{
+  "name": "n11-password-reset",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

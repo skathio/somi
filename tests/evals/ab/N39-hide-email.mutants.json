@@ -1,0 +1,20 @@
+[
+ {
+  "name": "search-by-email",
+  "file": "src/users.mjs",
+  "find": "const hay = viewer.admin ? `${u.name} ${u.email}` : u.name;",
+  "replace": "const hay = `${u.name} ${u.email}`;"
+ },
+ {
+  "name": "name-fallback",
+  "file": "src/names.mjs",
+  "find": "return user.name || (viewer.admin ? user.email : `Customer ${user.id}`);",
+  "replace": "return user.name || user.email;"
+ },
+ {
+  "name": "audit-unmasked",
+  "file": "src/audit.mjs",
+  "find": "detail: viewer.admin ? e.detail : maskEmails(e.detail),",
+  "replace": "detail: e.detail,"
+ }
+]

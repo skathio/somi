@@ -1,0 +1,20 @@
+[
+ {
+  "name": "second-occurrence",
+  "file": "src/schedule.mjs",
+  "find": "return found[0];",
+  "replace": "return found.at(-1);"
+ },
+ {
+  "name": "not-strict",
+  "file": "src/schedule.mjs",
+  "find": "if (run > after) return run;",
+  "replace": "if (run >= after) return run;"
+ },
+ {
+  "name": "gap-ignored",
+  "file": "src/schedule.mjs",
+  "find": "return firstAfterGap(zone, wanted);",
+  "replace": "return wanted;"
+ }
+]

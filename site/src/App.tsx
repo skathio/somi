@@ -3,7 +3,6 @@ import { Header, type NavItem } from './components/Header';
 import { Hero } from './components/Hero';
 import { Roadmap } from './components/Roadmap';
 import { Workflow } from './components/Workflow';
-import { Cost } from './components/Cost';
 import { Guardrails } from './components/Guardrails';
 import { Loops } from './components/Loops';
 import { Measured } from './components/Measured';
@@ -14,9 +13,8 @@ import { toggleTheme, useActiveSection, useKeyboard } from './lib/navigation';
 export const NAV: NavItem[] = [
   { id: 'roadmap', label: 'Roadmap' },
   { id: 'workflow', label: 'Workflow' },
-  { id: 'cost', label: 'Cost system' },
   { id: 'guardrails', label: 'Guardrails' },
-  { id: 'loops', label: 'Loops' },
+  { id: 'loops', label: 'Review' },
   { id: 'measured', label: 'Measured' },
   { id: 'install', label: 'Install' },
 ];
@@ -36,7 +34,6 @@ export function App() {
         <Hero />
         <Roadmap />
         <Workflow />
-        <Cost />
         <Guardrails />
         <Loops />
         <Measured />
@@ -47,7 +44,7 @@ export function App() {
           Built from SoMi's CHANGELOG, docs and source at {FACTS.version}.{' '}
           <a className="text-accent" href="https://github.com/skathio/somi">github.com/skathio/somi</a> ·{' '}
           <a className="text-accent" href="https://github.com/skathio/somi/blob/main/CHANGELOG.md">CHANGELOG</a> ·{' '}
-          <a className="text-accent" href="https://github.com/skathio/somi/blob/main/docs/USAGE-BENCHMARK.md">Usage benchmark</a>
+          <a className="text-accent" href="https://github.com/skathio/somi/blob/main/docs/BENCHMARK.md">Usage benchmark</a>
         </div>
       </footer>
       <div aria-hidden="true" className="hint fixed bottom-4 right-4 hidden rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-muted shadow-sm lg:block">

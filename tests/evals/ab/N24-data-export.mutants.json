@@ -1,0 +1,26 @@
+[
+ {
+  "name": "staff-notes-leak",
+  "file": "src/export.mjs",
+  "find": "const { passwordHash, staffNotes, ...profile } = user;",
+  "replace": "const { passwordHash, ...profile } = user;"
+ },
+ {
+  "name": "no-audit",
+  "file": "src/export.mjs",
+  "find": "store.audit.push({ type: 'data.exported', userId, by: requester.id, at: now });",
+  "replace": ""
+ },
+ {
+  "name": "limit-binds-admin",
+  "file": "src/export.mjs",
+  "find": "if (!requester.admin && recent)",
+  "replace": "if (recent)"
+ },
+ {
+  "name": "agent-names-leak",
+  "file": "src/export.mjs",
+  "find": "const { assignee, ...rest } = t;\n    return rest;",
+  "replace": "return t;"
+ }
+]

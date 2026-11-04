@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "importOrders and importRefunds in src/import.mjs are nearly the same. Extract what they share into importRows(rows, options) in src/rows.mjs, which both call, so a third import is short.",
+    "Then add importCredits(rows) to src/import.mjs. It treats a row the way importRefunds does, except that a row whose amount is zero or negative is skipped.",
+    "Everything importOrders and importRefunds return today stays exactly the same.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N20-7a7f1e4433d0a5f1",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Unify the two import functions and add importCredits, as the numbered statements describe. Nothing about the existing imports may change. Follow the conventions already in the code."
+}

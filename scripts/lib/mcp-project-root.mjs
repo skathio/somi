@@ -1,7 +1,5 @@
-// mcp-project-root.mjs — resolves the CONSUMING project's root for scripts/somi-mcp.mjs's
-// `somi_resolve` tool. An MCP server is launched once, at session start, from the plugin's own
-// location, so scripts/somi-dispatch.mjs's own projectRoot() (CLAUDE_PROJECT_DIR, else this
-// PROCESS's cwd) is unsafe to reuse: neither host's docs confirm the server's launch-time cwd is
+// mcp-project-root.mjs — resolves the CONSUMING project's root for scripts/somi-mcp.mjs. An MCP server is launched once, at session start, from the plugin's own
+// location, so this PROCESS's cwd is unsafe to use: neither host's docs confirm the server's launch-time cwd is
 // the user's project rather than the plugin's own install dir. No cwd fallback here — that would
 // risk silently resolving to SoMi's own repo, the exact failure this module exists to rule out.
 //
@@ -34,7 +32,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EXIT_USAGE, EXIT_PROJECT_ENV } from './dispatch-resolver.mjs';
+const EXIT_USAGE = 64;
+const EXIT_PROJECT_ENV = 67;
 
 // Structural check only (absolute, exists, a directory) — shared by `project_dir` and every
 // `roots/list` candidate so the two can't drift on what counts as usable. Returns a reason, not a

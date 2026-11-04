@@ -1,0 +1,1 @@
+Review the current changes, or the code named in the request, for security. Run `git diff` for the changes yourself, and trace untrusted input to each sink. Read the secure-coding skill listed below. Return your JSON findings as your instructions define. Change nothing.

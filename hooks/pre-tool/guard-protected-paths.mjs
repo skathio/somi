@@ -32,7 +32,7 @@
 //
 // --- lockfile-gate precedence reconciliation ------------------------------------------------
 // Precedence: SOMI_ALLOW_LOCKFILES (env, session override, even "0") > .somi/config.json's
-// `lockfiles.allow_edit` (committed project policy) > default deny. scripts/somi-check.mjs's
+// `lockfiles.allow_edit` (committed project policy) > default deny. the lockfile check's
 // lockfilesAllowed() already solved this exact precedence problem,
 // including the jq-text string-vs-boolean subtlety: bash's `somi::config` shells out to
 // `jq -r`, so a config author writing `"allow_edit": "true"` (a JSON STRING) produces the
@@ -41,7 +41,7 @@
 // reads (returns '' for null/undefined/false, else the string itself or JSON.stringify(cur) for
 // a non-string scalar), so `config('.lockfiles.allow_edit') === 'true'` below reproduces the
 // SAME text comparison bash performs, without re-implementing a config reader the way
-// somi-check.mjs (which predates common.mjs) had to. Env-side fall-through matches too: bash's
+// older hooks had to. Env-side fall-through matches too: bash's
 // `${SOMI_ALLOW_LOCKFILES:-}` treats unset AND explicitly-empty (`SOMI_ALLOW_LOCKFILES=""`)
 // identically (falls through to the config check); the `env !== undefined && env !== ''` guard
 // below reproduces that, matching lockfilesAllowed()'s own env branch.
@@ -56,8 +56,8 @@
 //   2. A path is absolute if it starts with `/` or a drive letter (`C:/`); anything else is
 //      joined to projectRoot() (also slash-converted). The test is a literal one, deliberately
 //      not `path.isAbsolute()`, so the result does not depend on the platform running the hook.
-//   3. path.posix.normalize() then collapses `..`, `.` and `//`, so `.somi/plans/../somi-state/
-//      loop/x` cannot hide from a glob. A drive-letter path is normalized as it stands: posix
+//   3. path.posix.normalize() then collapses `..`, `.` and `//`, so a path that climbs back
+//      into a protected folder cannot hide from a glob. A drive-letter path is normalized as it stands: posix
 //      resolve() would take it for a relative path and prefix the current directory.
 //   4. Climbing past a drive root (`a:/../.git/config`) leaves a relative result, which no `*/`-led
 //      glob matches; a result that is neither `/`-led nor drive-led gets a leading `/`.
@@ -76,14 +76,8 @@ const PROTECTED_GLOBS = [
   // SOMI plugin install — never let an agent rewrite the ruleset under itself.
   '*/.claude/plugins/somi/*',
 
-  // The sizing CLI's records (scripts/somi-tier.mjs): they gate the brief-only path, so only the
-  // CLI writes them, never an agent's Write/Edit.
-  '*/.somi/somi-state/tier/*',
-
-  // The loop's state and the run budget's (scripts/somi-loop.mjs, scripts/lib/run-budget.mjs): the loop's
-  // scripts write them from node, which no hook sees, so only an agent's Write/Edit is refused.
-  '*/.somi/somi-state/loop/*',
-  '*/.somi/somi-state/run/*',
+  // SoMi's journal and cursor: only the CLI writes them. If a flow ever needs a hand edit, the CLI is wrong.
+  '*/.somi/state/*',
 
   // Vendored deps & build outputs.
   '*/node_modules/*',
@@ -120,7 +114,7 @@ function globToRegExp(glob, flags) {
 // The globs naming a directory the agent must not even replace with a file (`.git` is a worktree's pointer file).
 // A trailing-slash retest checks the path itself, not just paths under it; the vendored-output globs are left
 // out, since a file named `build` or `vendor` anywhere is ordinary.
-const OWN_PATH_GLOBS = new Set(['*/.git/*', '*/.claude/plugins/somi/*', '*/.somi/somi-state/tier/*', '*/.somi/somi-state/loop/*', '*/.somi/somi-state/run/*']);
+const OWN_PATH_GLOBS = new Set(['*/.git/*', '*/.claude/plugins/somi/*', '*/.somi/state/*']);
 const CASE_FOLDED = /\/\.(git|somi|claude)\//;
 
 const PROTECTED_PATTERNS = PROTECTED_GLOBS.map((glob) => ({ glob, re: globToRegExp(glob, CASE_FOLDED.test(glob) ? 'i' : ''), own: OWN_PATH_GLOBS.has(glob) }));
@@ -147,8 +141,7 @@ const slashes = (p) => p.replace(/\\/g, '/');
 
 // Where to send the agent instead, for the paths that tooling writes through a CLI.
 function nextStep(glob) {
-  if (glob.includes('/somi-state/tier/')) return 'Tier records are written by `node scripts/somi-tier.mjs`; change them through it.';
-  if (glob.includes('/somi-state/')) return 'Loop and run state are written by the loop CLI (`node scripts/somi-loop.mjs`, or `somi-loop.mjs step`); change them through that.';
+  if (glob.includes('/.somi/state/')) return 'SoMi state is written only by the `somi` CLI and the `somi_step` tool; if a flow seems to need a hand edit, the CLI is wrong.';
   return '';
 }
 
@@ -162,7 +155,7 @@ function checkPath(payload, tool, target) {
 
   for (const { glob, re, own } of PROTECTED_PATTERNS) {
     // The trailing-slash form catches a write at a protected directory's own path (`.git` as a worktree's
-    // pointer file, `.somi/somi-state/loop`), which the globs' `/*` would otherwise need a child for.
+    // pointer file, the state folder), which the globs' `/*` would otherwise need a child for.
     if (re.test(pathInput) || (own && re.test(`${pathInput}/`))) {
       const next = nextStep(glob);
       denyPretool(payload, `somi refused to ${tool} \`${pathInput}\`: this path matches a protected glob (\`${glob}\`).

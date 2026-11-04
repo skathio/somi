@@ -1,0 +1,14 @@
+[
+ {
+  "name": "interpolate-after-merge",
+  "file": "src/interpolate.mjs",
+  "find": "for (const { key, value, literal } of entries) out[key] = literal ? value : fill(value, out, env);",
+  "replace": "for (const { key, value } of entries) out[key] = value; for (const { key, literal } of entries) if (!literal) out[key] = fill(out[key], out, env);"
+ },
+ {
+  "name": "hash-without-space",
+  "file": "src/parse.mjs",
+  "find": "const cut = value.search(/\\s#/);",
+  "replace": "const cut = value.indexOf('#');"
+ }
+]

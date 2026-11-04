@@ -23,18 +23,18 @@ export function Install() {
         <Card title="GitHub Copilot CLI">
           <Term>{'copilot plugin marketplace add https://github.com/skathio/somi\ncopilot plugin install somi@somi'}</Term>
           <p className="mt-3">
-            Then select the <code>somi</code> agent, or type <code>@somi</code> followed by what you want to do.
+            The plugin brings its tripwire hooks on this host too.
           </p>
         </Card>
       </div>
       <Card title="First steps" className="mt-4">
         <Term>
-          {'/ship-loop  Add per-team rate limiting to the webhook endpoint   '}
-          <Comment># sized, one gate</Comment>
-          {'\n/design ...  then  /plan-loop  then  /code-loop                  '}
-          <Comment># step by step</Comment>
-          {'\n/somi-config                                                     '}
-          <Comment># see and change tiers</Comment>
+          {'somi doctor --profile                                   '}
+          <Comment># recommended sandbox settings</Comment>
+          {'\nsomi doctor                                             '}
+          <Comment># run inside an agent session</Comment>
+          {'\n/somi Add per-team rate limiting to the webhook endpoint '}
+          <Comment># routed for you</Comment>
         </Term>
       </Card>
     </Section>
