@@ -460,6 +460,12 @@ diary entries and the iteration's progress row; anything it could not write come
 `unwritten` for the orchestrator. It needs a project root from the host and only tightens a cap;
 without a root (or without MCP) the flow's Host fallback runs the CLI subcommands above one by one.
 
+On Windows, the plan files the loop reads (`progress.md`, `diary.md`, the phase files) may be saved with CRLF line
+endings or a UTF-8 BOM, as Windows PowerShell 5.1's `Set-Content` writes them; they are read as LF and written back as
+LF. `--files` takes space-separated paths, and a path with a comma is refused. From PowerShell 5.1, which strips the
+double quotes inside an argument it passes to `node`, give `somi-loop.mjs step after-review` its findings as a file:
+`--findings @findings.json` (the same for `--fixed`).
+
 The model keeps the judgment — what a finding *is*, what to do when a gate fires; the scripts own
 the counting. On hosts without a shell, the loops fall back to the old judgment-enforced
 tracking and say so in the summary.

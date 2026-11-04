@@ -75,7 +75,7 @@ export async function callLoopStep(args, { resolveRoot, env, installRoot }) {
   const write = step !== 'status';
   const found = await resolveRoot(projectDir);
   if (!found.ok && (found.hosted !== false || !write)) return refuse(step, found.code, found.message);
-  if (write && found.hosted !== true) return refuse(step, EXIT_PROJECT_ENV, 'no host project root; run the loop through the CLI (node scripts/somi-loop.mjs step <name> ...)'); // fails closed on a result that does not say
+  if (write && found.hosted !== true) return refuse(step, EXIT_PROJECT_ENV, 'no host project root: the host set no CLAUDE_PROJECT_DIR and answered no MCP roots/list, and a project_dir alone never authorizes a write; run the loop through the CLI from the project directory (node <somi install>/scripts/somi-loop.mjs step <name> ...)'); // fails closed on a result that does not say
   const stateDir = path.join(found.root, '.somi', 'somi-state', 'loop');
   const walked = write ? plainDir(found.root, ['.somi', 'somi-state', 'loop']) : {};
   if (walked.reason && walked.reason !== 'missing') return refuse(step, EXIT_USAGE, `.somi/somi-state/loop is ${walked.reason}`); // a link there would take the state file outside the project

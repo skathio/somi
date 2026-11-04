@@ -367,5 +367,18 @@ console.log('== the writers in sequence on a progress.md a plan opened: Last act
   check('on the fixture progress.md the writers (markIteration twice, then setLastActivity) run clean: Last activity lands under Status, 0/1 becomes 1/1, row 1.1 is done', [results.flatMap((x) => x.unwritten), after.includes('`in-progress`\n\n**Last activity**: 2026-10-29 — loop done for iteration 1.1\n\n## Phase progress'), after.includes('| in-progress | 1/1 |'), /\| 1\.1 \| Reject an expired token \| done +\| approve +\|/.test(after)], [[], true, true, true]);
 }
 
+console.log('== a plan file saved with CRLF or a UTF-8 BOM (Windows, PowerShell 5.1) reads as LF and is written back as LF ==');
+{
+  const crlf = (t) => t.replaceAll('\n', '\r\n');
+  const c = fresh({ progress: crlf(PROGRESS), diary: crlf(diaryOf(2)) });
+  check('a CRLF progress.md: the row is found and marked as on LF, nothing unwritten', markIteration(c.plan, '2.1', { status: 'done', reviewed: 'approve', now: NOW }).unwritten, []);
+  check('the CRLF progress.md was written back as LF with the row done', [read(path.join(c.dir, 'progress.md')).includes('\r'), /\| 2\.1 +\| Writers +\| done +\|/.test(read(path.join(c.dir, 'progress.md')))], [false, true]);
+  check('a CRLF diary takes an entry and is written back as LF', [appendDiary(c.plan, note({ title: 'crlf entry' })).unwritten, read(path.join(c.dir, 'diary.md')).includes('\r')], [[], false]);
+  const b = fresh({ progress: `\uFEFF${crlf(PROGRESS)}` });
+  check('a progress.md with a UTF-8 BOM and CRLF is in template shape, and loses the BOM when written', [markIteration(b.plan, '2.1', { status: 'done', now: NOW }).unwritten, read(path.join(b.dir, 'progress.md')).startsWith('# Progress')], [[], true]);
+  const lone = fresh({ progress: PROGRESS.replace('Started', 'Sta\rrted') });
+  check('a lone CR (no LF after it) is still refused as not-template-shape, nothing written', [markIteration(lone.plan, '2.1', { status: 'done', now: NOW }).unwritten[0]?.reason, read(path.join(lone.dir, 'progress.md')).includes('Sta\rrted')], ['not-template-shape', true]);
+}
+
 console.log(`loop notes tests: ${pass} ok, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -68,6 +68,8 @@ function intArg(v, field) {
 function checkFiles(files, from = '') {
   const list = typeof files === 'string' ? files.split(/\s+/).filter(Boolean) : files;
   if (!Array.isArray(list) || list.length > 200 || list.some((f) => typeof f !== 'string' || !/^[^\s\p{Cc}]{1,200}$/u.test(f) || /^[-~/]|\\|(^|\/)\.\.(\/|$)/.test(f))) throw bad('files', `expected up to 200 relative paths without whitespace, control characters, a backslash, a .. segment or a leading - or ~${from}`);
+  // A comma is refused: `a.js,b.js` is two paths a caller joined the wrong way, and taken as one it records a scope that matches nothing.
+  if (list.some((f) => f.includes(','))) throw bad('files', `a path holds a comma: separate the paths with spaces (a list of strings in the tool), not commas${from}`);
   return list;
 }
 

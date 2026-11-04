@@ -69,6 +69,10 @@ function planDir({ root, slug }) {
 }
 
 // -> { text, mode } | { reason }. A symlink, a non-file (refused before open: a FIFO would block it) and an oversized file are refused.
+// The text is read as LF: a leading UTF-8 BOM is dropped and every CRLF becomes LF, so a plan file saved by an editor or a
+// shell that writes CRLF (Set-Content in Windows PowerShell 5.1) reads like the template; a writer saves it back as LF. A
+// lone CR is kept, and the shape checks still refuse it.
+const asLf = (text) => text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 export function readPlanFile(file) {
   try {
     const l = fs.lstatSync(file);
@@ -77,7 +81,7 @@ export function readPlanFile(file) {
     try {
       const st = fs.fstatSync(fd);
       if (!st.isFile() || st.size > MAX_FILE) return { reason: st.isFile() ? 'too-large' : 'not-a-regular-file' };
-      return { text: fs.readFileSync(fd, 'utf8'), mode: st.mode & 0o777 };
+      return { text: asLf(fs.readFileSync(fd, 'utf8')), mode: st.mode & 0o777 };
     } finally { fs.closeSync(fd); }
   } catch (e) { return { reason: e.code === 'ENOENT' ? 'missing' : 'unreadable' }; }
 }
