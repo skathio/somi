@@ -252,6 +252,22 @@ test('the base is where the branch left the default branch, and can be named', (
   assert.throws(() => reviewPlan(ctx, { base: '--output=/tmp/x' }), /cannot find the base/);
 });
 
+test('a review without the security reviewer does not cover a change that needs one, whatever the record says', (t) => {
+  const dir = makeRepo(t);
+  branch(dir);
+  const ctx = makeCtx(dir);
+  writeFiles(dir, SINK);
+  const tree = snapshotTree(dir);
+  writeFiles(dir, { '.somi/state/reviews.jsonl': `${JSON.stringify({ base: 'x', tree, verdicts: [{ agent: 'somi-reviewer', verdict: 'approve' }], findings: [], blocking: [] })}\n` });
+  assert.equal(prGate(ctx).reason, 'not-reviewed');
+});
+
+test('a reviewer the user asked for alone is enough when nothing calls for another', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  writeFiles(ctx.root, SMALL);
+  assert.equal(recordReviews(ctx, { reviews: [review('somi-security-reviewer')] }).verdict, 'clear');
+});
+
 test('a state file holding something that is not an object id is not trusted', (t) => {
   const dir = makeRepo(t);
   branch(dir);
