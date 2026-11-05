@@ -16,7 +16,7 @@
   ],
   "map": {
     "scripts/somi.mjs": [
-      "tests/kernel.test.mjs",
+      "tests/reviews.test.mjs",
       "tests/check.test.mjs"
     ],
     "scripts/somi-mcp.mjs": [
@@ -28,21 +28,15 @@
     "scripts/check-frontmatter.mjs": [
       "tests/surface.test.mjs"
     ],
-    "scripts/lib/journal.mjs": [
-      "tests/kernel.test.mjs"
-    ],
-    "scripts/lib/kernel.mjs": [
-      "tests/kernel.test.mjs"
-    ],
     "scripts/lib/policy.mjs": [
-      "tests/kernel.test.mjs"
+      "tests/reviews.test.mjs"
     ],
     "scripts/lib/tiers.mjs": [
-      "tests/engine.test.mjs",
-      "tests/kernel.test.mjs"
+      "tests/advisor.test.mjs",
+      "tests/reviews.test.mjs"
     ],
     "scripts/lib/git-tree.mjs": [
-      "tests/kernel.test.mjs",
+      "tests/reviews.test.mjs",
       "tests/signals.test.mjs"
     ],
     "scripts/lib/signals.mjs": [
@@ -70,7 +64,7 @@
       "tests/goldens.test.mjs"
     ],
     "scripts/lib/migrate.mjs": [
-      "tests/kernel.test.mjs"
+      "tests/reviews.test.mjs"
     ],
     "scripts/lib/config-files.mjs": [
       "tests/signals.test.mjs"
@@ -80,7 +74,7 @@
     ],
     "hooks/": [
       "tests/hooks.test.mjs",
-      "tests/engine.test.mjs"
+      "tests/advisor.test.mjs"
     ],
     "agents/": [
       "tests/surface.test.mjs"
@@ -97,27 +91,39 @@
     "benchmarks/v2/": [
       "tests/bench.test.mjs"
     ],
-    "scripts/lib/engine.mjs": [
-      "tests/engine.test.mjs"
-    ],
     "scripts/lib/routes.mjs": [
-      "tests/engine.test.mjs"
+      "tests/advisor.test.mjs"
     ],
     "scripts/lib/workflows.mjs": [
-      "tests/engine.test.mjs"
+      "tests/advisor.test.mjs"
     ],
     "scripts/lib/ledger.mjs": [
-      "tests/engine.test.mjs"
+      "tests/advisor.test.mjs"
     ],
     "scripts/lib/shards.mjs": [
-      "tests/engine.test.mjs"
+      "tests/advisor.test.mjs"
     ],
     "scripts/lib/update-notice.mjs": [
-      "tests/engine.test.mjs"
+      "tests/advisor.test.mjs"
     ],
     "library/": [
-      "tests/engine.test.mjs",
+      "tests/advisor.test.mjs",
       "tests/surface.test.mjs"
+    ],
+    "scripts/lib/advisor.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/reviews.mjs": [
+      "tests/reviews.test.mjs"
+    ],
+    "scripts/lib/plan.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/setup.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/state.mjs": [
+      "tests/reviews.test.mjs"
     ]
   }
 }

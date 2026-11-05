@@ -1,4 +1,4 @@
-import { RESUME_PROMPT, engineWaiting, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
+import { RESUME_PROMPT, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
 import { globalConfigPath } from '../scripts/lib/config-files.mjs';
 import { resolveSpawn } from '../scripts/lib/tiers.mjs';
 import { test } from 'node:test';
@@ -10,7 +10,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { REPO, makeRepo, writeFiles } from './helpers.mjs';
 import { armSummary, callRatio, testShare, costDrawsPerArm, evaluateAa, evaluateRelease, holm, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, pairedDifference, passDrawsPerArm, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
 import { WINDOW_ENV, WINDOW_SETTINGS, hostStop, hostWindows, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
-import { adherence, agentSplit, journalFacts, labelDraw, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
+import { adherence, agentSplit, labelDraw, reviewFacts, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
 
 // Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
 function drawsFor(arm, solvedCounts, { weighted = 100, missed = 1 } = {}) {
@@ -278,23 +278,21 @@ test('the per-agent split joins the stream to the final figures in the transcrip
   assert.equal(agentSplit(stream, [], 100).coverage, 0);
 });
 
-test('adherence reads the route, the agents and the journal', () => {
+test('adherence reads the route, the agents and the review record', () => {
   const step = (name, input) => line({ type: 'assistant', parent_tool_use_id: null, message: { id: name, content: [{ type: 'tool_use', id: name, name, input }] } });
-  const journal = [
-    line({ type: 'open', milestone: 'm', next: 'code' }),
-    line({ type: 'after-code', signals: ['large-diff'], security: ['sink'], facts: { lines: 400 }, next: 'review' }),
-    line({ type: 'after-review', pass: 1, findings: [{ severity: 'Major' }, { severity: 'Minor' }], next: 'ask', stop: 'max-passes' }),
-  ].join('\n');
-  const a = adherence([step('mcp__somi__somi_step', {}), step('Bash', { command: 'node "x/somi.mjs" step after-code' }), step('Agent', { subagent_type: 'somi-reviewer', model: 'r' })].join('\n'), journal);
+  const answer = line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'mcp__somi__somi_route', content: [{ type: 'text', text: '{"route":"debug","tier":"medium"}' }] }] } });
+  const reviews = line({ pass: 1, findings: [{ severity: 'Major' }, { severity: 'Minor' }], blocking: ['x'] });
+  const a = adherence([step('mcp__somi__somi_route', {}), answer, step('Bash', { command: 'node "x/somi.mjs" review --record' }), step('Agent', { subagent_type: 'somi-reviewer', model: 'r' })].join('\n'), reviews);
   assert.equal(a.route, 'mixed');
+  assert.equal(a.routed, 'debug');
   assert.deepEqual(a.agents, [{ type: 'somi-reviewer', model: 'r' }]);
   assert.equal(a.passes, 1);
   assert.deepEqual(a.findings, { Major: 1, Minor: 1 });
-  assert.deepEqual(a.gates, ['max-passes']);
+  assert.deepEqual(a.gates, ['open-blocking']);
   assert.equal(a.next, 'ask');
-  assert.deepEqual(a.signals, ['large-diff']);
   assert.equal(adherence('', '').route, 'none');
-  assert.equal(journalFacts('not json\n').opened, false);
+  assert.equal(reviewFacts('not json\n').passes, 0);
+  assert.equal(reviewFacts(line({ pass: 2, findings: [], blocking: [] })).next, null);
 });
 
 test('every draw gets one label, and a stopped loop is never finished', () => {
@@ -410,7 +408,7 @@ function stubAgent(dir, { journal = null } = {}) {
     "const fs = require('node:fs');",
     // The reference solution carries the task's canary, and the leak guard rightly refuses a silent copy, so the stub writes it without.
     `for (const f of fs.readdirSync(${JSON.stringify(oracle)}, { recursive: true, withFileTypes: true })) { if (!f.isFile()) continue; const from = require('node:path').join(f.parentPath, f.name); const to = require('node:path').relative(${JSON.stringify(oracle)}, from); fs.mkdirSync(require('node:path').dirname(to), { recursive: true }); fs.writeFileSync(to, fs.readFileSync(from, 'utf8').replace(/SOMI-CANARY-[A-Za-z0-9-]+/g, '')); }`,
-    ...(journal ? [`fs.mkdirSync('.somi/state', { recursive: true }); fs.writeFileSync('.somi/state/journal.jsonl', ${JSON.stringify(journal)});`] : []),
+    ...(journal ? [`fs.mkdirSync('.somi/state', { recursive: true }); fs.writeFileSync('.somi/state/reviews.jsonl', ${JSON.stringify(journal)});`] : []),
     `for (const e of ${JSON.stringify(events)}) console.log(JSON.stringify(e));`,
   ].join('\n');
   fs.writeFileSync(file, body, { mode: 0o755 });
@@ -465,12 +463,12 @@ test('the smoke runs the whole pipeline with a stub agent, and a stopped loop do
   }
 
   const gated = path.join(dir, 'gated');
-  const journal = `${JSON.stringify({ type: 'after-review', pass: 2, findings: [], next: 'ask', stop: 'recurring-finding' })}\n`;
+  const journal = `${JSON.stringify({ pass: 2, findings: [], blocking: ['open'] })}\n`;
   assert.equal(bench(['run', ...common, '--claude', stubAgent(dir, { journal }), '--out', gated]).status, 0);
   for (const row of fs.readFileSync(path.join(gated, 'results.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))) {
     assert.equal(row.green, row.total, 'the hidden suite passes');
     assert.equal(row.solved, false, 'but the loop stopped');
-    assert.equal(row.gate, 'recurring-finding');
+    assert.equal(row.gate, 'open-blocking');
   }
 });
 
@@ -513,19 +511,7 @@ test('every compaction window is one the host accepts, because it ignores any ot
   assert.ok(pct > 0 && pct < 100);
 });
 
-test('a draw whose engine is waiting counts as paused, whatever its last sentence says', (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-wait-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  assert.equal(engineWaiting(dir), false, 'a bare arm has no engine');
-  fs.mkdirSync(path.join(dir, '.somi', 'state'), { recursive: true });
-  const state = path.join(dir, '.somi', 'state', 'state.json');
-  fs.writeFileSync(state, JSON.stringify({ awaiting: 'plan-approval' }));
-  assert.equal(looksPaused('The plan is written, so I am stopping here until you say to continue.'), false);
-  assert.equal(engineWaiting(dir), true);
-  fs.writeFileSync(state, JSON.stringify({ awaiting: null, next: 'ask', stop: 'worker-blocked' }));
-  assert.equal(engineWaiting(dir), true, 'a blocked worker is waiting too');
-  fs.writeFileSync(state, JSON.stringify({ awaiting: null, next: null }));
-  assert.equal(engineWaiting(dir), false);
+test('a menu of choices counts as paused', () => {
   assert.equal(looksPaused('**How would you like to proceed?**\n- `approve` (recommended): run the loop.\n- `revise <notes>`: send it back.\n- `abort`: stop here.'), true, 'a menu across lines is a pause');
 });
 
@@ -546,12 +532,3 @@ test("a recording stops on the host's reported usage, and a window past its rese
   assert.equal(hostWindows(file), null);
 });
 
-test('the light phase comes in by the slash command, on a pinned plugin, with one arm for each part', () => {
-  const { patches, light_cells: cells } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8'));
-  for (const list of Object.values(cells)) for (const name of list) assert.ok(patches[name], name);
-  assert.deepEqual(armsFor('light'), ['somi5', 'somi5-pin', 'bare-check']);
-  assert.equal(armPrompt('somi5', 'Do it', 'light'), '/somi:somi Do it');
-  assert.equal(armPrompt('bare-check', 'Do it', 'light'), 'Do it');
-  assert.equal(armPrompt('somi5', 'Do it', 'candidate'), 'Do it');
-  assert.equal(buildPlan('light', [{ id: 't', dir: 'd' }], 1, 6, { 'bare-check': 1 }).length, 13);
-});

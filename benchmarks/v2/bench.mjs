@@ -54,7 +54,6 @@ export const PHASE_ARMS = Object.freeze({
   trial: ['somi5', 'somi41'],
   baseline: ['bare', 'somi41'],
   candidate: ['somi5', 'bare-check'],
-  light: ['somi5', 'somi5-pin', 'bare-check'],
   ablation: ['bare'],
   large: ['bare', 'somi5', 'somi5-lane', 'somi41'],
   tight: ['bare', 'somi5', 'somi5-lane'],
@@ -66,13 +65,12 @@ export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 const isBare = (arm) => arm.startsWith('bare');
 // Every arm gets the same plain request. The SoMi arms go through their own front door, so routing is what gets measured, not a flow
 // the benchmark picked for them. The one exception asks for a plan, as a maintainer can, because that is how the milestone lane is reached.
-// The light phase comes in through the slash command, because only a command the user typed can pin the main thread's model.
-export const armPrompt = (arm, text, phase) => (phase === 'light' && !isBare(arm) ? `/somi:somi ${text}` : arm === 'somi5-lane' ? `Show me a plan first, then build it.\n${text}` : text);
+export const armPrompt = (arm, text) => (arm === 'somi5-lane' ? `Show me a plan first, then build it.\n${text}` : text);
 const engineArm = (arm) => (isBare(arm) ? 'bare' : 'somi');
 export const armsFor = (phase, cells = readJson(ABLATIONS).cells) => (phase === 'ablation' ? [...PHASE_ARMS.ablation, ...Object.keys(cells)] : PHASE_ARMS[phase]);
 
 const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, trial: reg.trial_k, ablation: reg.ablation_k, large: reg.large_k, tight: reg.tight_k })[phase] ?? reg.k;
-const armKFor = (phase, reg) => (phase === 'candidate' || phase === 'light' ? reg.arm_k : {});
+const armKFor = (phase, reg) => (phase === 'candidate' ? reg.arm_k : {});
 // The large phase runs on a window a long session can really fill. The tight phase makes the window small enough that every arm compacts,
 // because no task we can write offline fills a large one: a model scripts uniform work and finishes short work in one pass.
 // The host takes a window from 100000 to 1000000 and ignores anything else, so the tight phase lowers the point of compaction with its percentage instead.
@@ -285,7 +283,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   if (!(budgetTotal > 0)) throw new Error('--budget-total is required');
   const budgetDraw = Number(args['budget-draw'] ?? 3);
   const chunk = Math.min(Number(args.chunk ?? MAX_CHUNK), MAX_CHUNK);
-  if (['baseline', 'candidate', 'light', 'ablation', 'large', 'tight'].includes(phase)) {
+  if (['baseline', 'candidate', 'ablation', 'large', 'tight'].includes(phase)) {
     const problem = preregProblem();
     if (problem) throw new Error(problem);
   }
@@ -314,7 +312,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   const pluginOf = (arm) => {
     if (isBare(arm)) return null;
     if (arm === 'somi41') return path.resolve(args['plugin-41']);
-    if (!plugins.has(arm)) plugins.set(arm, buildPlugin({ repoRoot: REPO, runTmp, dirName: `plugin-${arm}`, patches: ((phase === 'light' ? ablations.light_cells[arm] : null) ?? ablations.cells[arm] ?? ablations.large_cells[arm] ?? []).map((name) => ablations.patches[name]) }));
+    if (!plugins.has(arm)) plugins.set(arm, buildPlugin({ repoRoot: REPO, runTmp, dirName: `plugin-${arm}`, patches: (ablations.cells[arm] ?? ablations.large_cells[arm] ?? []).map((name) => ablations.patches[name]) }));
     return plugins.get(arm);
   };
   const env = readEnvFile(path.resolve(args['env-file'] ?? path.join(REPO, '.somi/eval.env')));
@@ -372,7 +370,7 @@ async function run(args, session = { windowWeighted: 0 }) {
       const config = { cost: { ceiling: 'medium' }, tiers: { claude: { low: alias(args['worker-model'] ?? args.model), medium: alias(args.model), high: alias(args.model) } } };
       const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config, globalConfig: config });
       const result = await runDraw({
-        model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task), phase), slash: phase === 'light', budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
+        model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
         settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude, env: { ...childEnv({ token: env.token, tmp }), ...WINDOW_ENV[phase] }, cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
       });
       if (interrupted) { stop = 'interrupted'; break; }
@@ -399,7 +397,7 @@ async function run(args, session = { windowWeighted: 0 }) {
       if (!sc.ok) throw new Error(`the scorer failed on ${d.id}: ${sc.reason}`);
       const halt = foldScore(scratch, sc);
       const streamText = readOr(path.join(drawDir, 'stream.jsonl'));
-      const adh = adherence(streamText, readOr(path.join(ws, '.somi/state/journal.jsonl')));
+      const adh = adherence(streamText, readOr(path.join(ws, '.somi/state/reviews.jsonl')));
       const scope = scopeCheck(before.files, after?.ok ? after.files : before.files, t.task);
       const { label, gate } = labelDraw({ outcome: scratch.outcome, reason: scratch.reason, facts: adh, paused: looksPaused(result.text), changed: scope.touched.length + scope.added.length > 0 || gitChanged(ws) });
       const solved = label === 'finished' && scope.touched.length === 0 && scratch.outcome === 'scored' && sc.total > 0 && scratch.green === sc.total && !Object.values(scratch.flags ?? {}).some(Boolean);
@@ -453,7 +451,7 @@ export function renderReport(dir) {
   const base = arms.includes('bare') ? 'bare' : arms[0];
   const out = [`# Benchmark record: ${planned.phase}`, '', `- Session model: ${planned.model}${planned.worker_model ? `, low tier ${planned.worker_model}` : ''}`, `- Rule hash: ${planned.rule}`, `- Host: ${JSON.stringify(planned.host)}`, `- Draws recorded: ${rows.length} of ${planned.draws.length}. Dollars are the CLI's estimate.`, '', '## Arms', '', '| Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |', '|---|---|---|---|---|---|---|---|---|'];
   for (const arm of arms) {
-    const a = armSummary(rows, arm, planned.phase === 'candidate' || planned.phase === 'light' ? reg.arm_k[arm] ?? k : k);
+    const a = armSummary(rows, arm, planned.phase === 'candidate' ? reg.arm_k[arm] ?? k : k);
     out.push(`| ${arm} | ${a.draws} | ${a.solved} | ${fmt(a.pass_at_1)} | ${fmt(a.pass_all_k)} | ${fmt(a.weighted_per_solved, 0)} | ${fmt(a.cost_per_solved, 3)} | ${a.wall_ms_per_solved === null ? 'n/a' : fmt(a.wall_ms_per_solved / 60000, 1)} | ${JSON.stringify(a.labels)} |`);
   }
   const others = arms.filter((a) => a !== base);
@@ -465,7 +463,7 @@ export function renderReport(dir) {
     const aa = evaluateAa(rows, k);
     out.push('', '## Noise floor', '', `A/A difference ${fmt(aa.mean)} (95% ${fmt(aa.lower)} to ${fmt(aa.upper)}), ${aa.contains_zero ? 'contains zero' : 'EXCLUDES ZERO'}. Tokens: ${ratioCell(logRatio(rows, 'bare-a', 'bare-b'))}.`);
   }
-  out.push('', '## Protocol and spend', '', '| Arm | Routed to | Tool or CLI | Closed | Mean passes | Gates | Escalated | Inline writes | Findings | Mean dollars per model | Mean weighted per agent | Split coverage |', '|---|---|---|---|---|---|---|---|---|---|---|---|');
+  out.push('', '## Protocol and spend', '', '| Arm | Routed to | Tool or CLI | Mean passes | Gates | Escalated | Inline writes | Findings | Mean dollars per model | Mean weighted per agent | Split coverage |', '|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const arm of arms) {
     const list = rows.filter((r) => r.arm === arm && r.adherence);
     const count = (f) => list.reduce((acc, r) => { for (const key of f(r)) acc[key] = (acc[key] ?? 0) + 1; return acc; }, {});
@@ -476,7 +474,7 @@ export function renderReport(dir) {
     const cover = list.map((r) => r.split_coverage).filter((c) => c !== null);
     const spend = {};
     for (const r of list) for (const [m, usd] of Object.entries(r.spend ?? {})) spend[m] = (spend[m] ?? 0) + usd / list.length;
-    out.push(`| ${arm} | ${JSON.stringify(count((r) => (r.adherence.routed ? [r.adherence.routed] : [])))} | ${JSON.stringify(count((r) => [r.adherence.route]))} | ${list.filter((r) => r.adherence.closed).length} | ${fmt(list.reduce((s, r) => s + r.adherence.passes, 0) / (list.length || 1))} | ${JSON.stringify(count((r) => r.adherence.gates))} | ${list.filter((r) => r.adherence.escalated).length} | ${list.reduce((s, r) => s + (r.adherence.inline_writes ?? 0), 0)} | ${JSON.stringify(findings)} | ${JSON.stringify(Object.fromEntries(Object.entries(spend).map(([m, v]) => [m, +v.toFixed(4)])))} | ${JSON.stringify(Object.fromEntries(Object.entries(perAgent).map(([n, w]) => [n, Math.round(w)])))} | ${fmt(cover.length ? Math.min(...cover) : null)} |`);
+    out.push(`| ${arm} | ${JSON.stringify(count((r) => (r.adherence.routed ? [r.adherence.routed] : [])))} | ${JSON.stringify(count((r) => [r.adherence.route]))} | ${fmt(list.reduce((s, r) => s + r.adherence.passes, 0) / (list.length || 1))} | ${JSON.stringify(count((r) => r.adherence.gates))} | ${list.filter((r) => r.adherence.escalated).length} | ${list.reduce((s, r) => s + (r.adherence.inline_writes ?? 0), 0)} | ${JSON.stringify(findings)} | ${JSON.stringify(Object.fromEntries(Object.entries(spend).map(([m, v]) => [m, +v.toFixed(4)])))} | ${JSON.stringify(Object.fromEntries(Object.entries(perAgent).map(([n, w]) => [n, Math.round(w)])))} | ${fmt(cover.length ? Math.min(...cover) : null)} |`);
   }
   out.push('', '## Reading', '', 'To be written by a person: read 10 transcripts first, then say what the figures mean. An inconclusive result is published as inconclusive, with every figure.', '');
   return out.join('\n');

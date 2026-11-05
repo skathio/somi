@@ -56,9 +56,9 @@ export function taskText(task) {
 const usd = (x) => (Math.floor(x * 100) / 100).toFixed(2);
 // The web tools are disabled for both arms (a shell can still reach the network). The list is one comma-separated value:
 // the flag is variadic, and every flag after it is an option, so nothing can be swallowed.
-export function claudeArgv({ arm, prompt, budget, plugin, resume, model, settings, slash = false }) {
+export function claudeArgv({ arm, prompt, budget, plugin, resume, model, settings }) {
   return ['--print', prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--max-budget-usd', usd(budget),
-    '--permission-mode', 'bypassPermissions', '--disallowed-tools', 'WebFetch,WebSearch', ...(arm === 'somi' ? ['--plugin-dir', plugin, ...(slash ? [] : ['--agent', 'somi:somi'])] : []), ...(settings ? ['--settings', JSON.stringify(settings)] : []), ...(resume ? ['--resume', resume] : [])];
+    '--permission-mode', 'bypassPermissions', '--disallowed-tools', 'WebFetch,WebSearch', ...(arm === 'somi' ? ['--plugin-dir', plugin, '--agent', 'somi:somi'] : []), ...(settings ? ['--settings', JSON.stringify(settings)] : []), ...(resume ? ['--resume', resume] : [])];
 }
 
 /** The only variables the claude child sees. HOME and the config directory are fresh per draw. */
@@ -224,12 +224,7 @@ export function runClaude({ command, args, env, cwd, sink, timeoutMs, kills, fdT
 }
 
 /** All turns of one draw -> the facts classify() needs. The token is only ever handed to the child and the sink. */
-/** Only the engine knows it is waiting, and its coordinator words that differently each time. A bare or older arm has no such state. */
-export function engineWaiting(cwd) {
-  try { const { awaiting, next } = JSON.parse(fs.readFileSync(path.join(cwd, '.somi', 'state', 'state.json'), 'utf8')); return Boolean(awaiting) || next === 'ask'; } catch { return false; }
-}
-
-export async function runDraw({ slash, settings, model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
+export async function runDraw({ settings, model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
   const sink = createSink(path.join(drawDir, 'stream.jsonl'), { token, canary, task, absAb, ownTmp, maxBytes });
   const run = { arm, cost: 0, turns: 0, resumes: 0, models: new Set(), exhausted: false, error: null, timedOut: false, stderr: '', result: null };
   const deadline = Date.now() + timeoutMs; const started = Date.now();
@@ -237,7 +232,7 @@ export async function runDraw({ slash, settings, model, arm, prompt, budget, tim
   try {
     for (;;) {
       sink.turn();
-      const argv = claudeArgv({ model, arm, prompt: text, budget: budget - run.cost, plugin, resume: session, settings, slash });
+      const argv = claudeArgv({ model, arm, prompt: text, budget: budget - run.cost, plugin, resume: session, settings });
       const launch = sandbox ? { command: 'bwrap', args: sandboxArgs({ ...sandbox, rw: [ownTmp] }, claude, argv) } : { command: claude, args: argv };
       const r = await runClaude({ ...launch, env, cwd, sink, timeoutMs: deadline - Date.now(), kills, fdToken: tokenFd ? token : null });
       run.stderr += r.stderr; run.error = r.error; run.timedOut = r.timedOut;
@@ -247,7 +242,7 @@ export async function runDraw({ slash, settings, model, arm, prompt, budget, tim
       run.turns += sink.state.turns;
       for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
       session = typeof res.session_id === 'string' ? res.session_id : null;
-      if (sink.state.limit || res.subtype !== 'success' || session === null || !(looksPaused(sink.state.text) || engineWaiting(cwd)) || run.resumes >= maxResumes) break;
+      if (sink.state.limit || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= maxResumes) break;
       if (budget - run.cost < MIN_REMAINING_USD) { run.exhausted = true; break; }
       run.resumes++; text = RESUME_PROMPT;
     }

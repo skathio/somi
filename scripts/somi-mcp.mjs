@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-// somi-mcp.mjs: a zero-dependency stdio MCP server with one tool, somi_step. It moves the state machine and reports status, and it
-// returns no procedure text.
+// somi-mcp.mjs: a zero-dependency stdio MCP server with three tools. They give advice and keep a small record, and none of them holds up the
+// conversation: a question, a follow-up or a change of mind never needs to go through here.
 //
-// MCP servers run outside the OS sandbox on Claude Code, so this path never executes project commands. It reads git and the journal.
-// `somi check` must have run in the sandboxed shell first; otherwise after-code refuses with `check-required`.
+// MCP servers run outside the OS sandbox on Claude Code, so this path never executes project commands. It only reads git and SoMi's own files.
 //
 // Framing is newline-delimited JSON-RPC 2.0. Nothing but JSON-RPC reaches stdout; diagnostics go to stderr.
 
@@ -12,15 +11,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
+import { advise, shardAdvice } from './lib/advisor.mjs';
 import { repoRoot, stateIsTracked } from './lib/git-tree.mjs';
-import { StateError } from './lib/journal.mjs';
-import { ShardError } from './lib/shards.mjs';
-import { abandon, closeMilestone, decide, done, resume, reviewed, route } from './lib/engine.mjs';
-import { TransitionError, afterCode, open, status } from './lib/kernel.mjs';
 import { addToLedger } from './lib/ledger.mjs';
-import { expertiseIndex } from './lib/workflows.mjs';
 import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
+import { recordReviews, reviewPlan } from './lib/reviews.mjs';
+import { ShardError } from './lib/shards.mjs';
+import { StateError } from './lib/state.mjs';
 import { detectHost } from './lib/tiers.mjs';
 
 const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(['2024-11-05', '2025-06-18']);
@@ -56,37 +54,54 @@ async function listClientRoots() {
   return (Array.isArray(result?.roots) ? result.roots : []).map((r) => r?.uri).filter((u) => typeof u === 'string');
 }
 
-const TOOL = {
-  name: 'somi_step',
-  description: 'SoMi\'s step engine. Pass a request to action "route"; every answer names the next action and how to carry it out.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      action: { type: 'string', enum: ['route', 'done', 'after-review', 'decide', 'close', 'status', 'resume', 'abandon', 'ledger', 'expertise', 'open', 'after-code'] },
-      request: { type: 'string' },
-      project_dir: { type: 'string', description: 'Absolute path of the project, when the host does not supply it.' },
-      ticket: { type: 'object' },
-      hint: { type: 'string' },
-      status: { type: 'string', enum: ['ok', 'too-big', 'blocked'] },
-      summary: { type: 'string' },
-      milestones: { type: 'array', items: { type: 'string' } },
-      keep: { type: 'array', items: { type: 'string' } },
-      kind: { type: 'string', enum: ['decision', 'constraint', 'pointer'] },
-      title: { type: 'string' },
-      ask: { type: 'string' },
-      follow_up: { type: 'string' },
-      release_candidate: { type: 'boolean' },
-      reviews: { type: 'array', items: { type: 'object' } },
-      text: { type: 'string' },
-      then: { type: 'string', enum: ['continue', 'close', 'abort'] },
+const PROJECT_DIR = { type: 'string', description: 'Absolute path of the project, when the host does not supply it.' };
+const TOOLS = [
+  {
+    name: 'somi_route',
+    description: 'Ask once when the user wants work done: a change, a bug, a plan, a review, a release or a ticket. Says which workflow fits, at which tier, and whether to do it here or hand it to a stronger worker. Keeps no state and refuses nothing.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        request: { type: 'string', description: 'The work: what the user wants, plus anything from the conversation it depends on, so that it reads on its own.' },
+        hint: { type: 'string', description: 'A route name, when the user or an earlier answer named one.' },
+        sensitive: { type: 'boolean', description: 'True if the work touches money, accounts, sign-in or untrusted input, even if the request does not say so.' },
+        ticket: { type: 'object' },
+        project_dir: PROJECT_DIR,
+      },
     },
-    required: ['action'],
   },
-};
+  {
+    name: 'somi_review',
+    description: 'Call when a change is ready. With no reviews, reads the diff and says which reviewers it needs, if any. With reviews, records what they returned and says what blocks the change from leaving.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        reviews: { type: 'array', items: { type: 'object' }, description: 'An array with every reviewer\'s JSON object, unchanged.' },
+        tree: { type: 'string', description: 'The tree from the answer that listed the reviewers.' },
+        always: { type: 'boolean', description: 'Review even if nothing in the diff calls for it.' },
+        security: { type: 'boolean', description: 'Include the security reviewer even if nothing in the diff calls for it.' },
+        base: { type: 'string', description: 'What to compare against, when it is not the default branch.' },
+        project_dir: PROJECT_DIR,
+      },
+    },
+  },
+  {
+    name: 'somi_note',
+    description: 'Record a decision or limit that must survive compaction and reach later workers. For lasting ones only: the ledger is small on purpose.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { kind: { type: 'string', enum: ['decision', 'constraint', 'pointer'] }, text: { type: 'string' }, project_dir: PROJECT_DIR },
+      required: ['kind', 'text'],
+    },
+  },
+];
 
 async function context(projectDir, env = process.env) {
   const resolved = await resolveProjectRoot({ projectDirArg: projectDir, listRoots: listClientRoots });
-  if (!resolved.ok) throw new TransitionError(`${resolved.message}. Call again with project_dir set to your working directory.`);
+  if (!resolved.ok) throw new StateError(`${resolved.message}. Call again with project_dir set to your working directory.`);
   const root = repoRoot(resolved.root);
   if (!env.SOMI_STATE_DIR && stateIsTracked(root)) throw new StateError('.somi/state is committed to this repository, so SoMi will not trust it. Stop tracking it with `git rm -r --cached .somi/state`.');
   let layers = [];
@@ -101,29 +116,33 @@ async function context(projectDir, env = process.env) {
 
 const textResult = (value, isError = false) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }], ...(isError ? { isError: true } : {}) });
 
-async function callStep(args) {
+async function callTool(name, args) {
   const a = args !== null && typeof args === 'object' ? args : {};
   try {
+    // Some hosts send what a model made up without checking it against the schema, and a field nobody reads would pass for a clean answer.
+    const known = Object.keys(TOOLS.find((t) => t.name === name).inputSchema.properties);
+    const unknown = Object.keys(a).filter((k) => !known.includes(k));
+    if (unknown.length > 0) return textResult(`${name} has no field ${unknown.join(', ')}. It takes ${known.join(', ')}. Call it again with those.`, true);
+    if (name === 'somi_route' && typeof a.request !== 'string' && typeof a.hint !== 'string') return textResult('somi_route needs request set to the work. Call it again with that.', true);
     const ctx = await context(typeof a.project_dir === 'string' ? a.project_dir : undefined);
-    switch (a.action) {
-      case 'open': return textResult(open(ctx, { title: a.title, ask: a.ask, followUp: a.follow_up, releaseCandidate: a.release_candidate === true }));
-      case 'after-code': return textResult(afterCode(ctx));
-      case 'route': return textResult(route(ctx, { request: a.request, ticket: a.ticket, hint: a.hint }));
-      case 'done': return textResult(done(ctx, { status: a.status, summary: a.summary, milestones: a.milestones, keep: a.keep }));
-      case 'resume': return textResult(resume(ctx));
-      case 'abandon': return textResult(abandon(ctx));
-      case 'ledger': return textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env));
-      case 'expertise': return textResult(expertiseIndex());
-      case 'after-review': return textResult(reviewed(ctx, { reviews: a.reviews }));
-      case 'decide': return textResult(decide(ctx, { text: a.text, then: a.then }));
-      case 'close': return textResult(closeMilestone(ctx));
-      case 'status': return textResult(status(ctx));
-      default: return textResult('action must be route, done, after-review, decide, close, status, resume, abandon, ledger, expertise, open or after-code', true);
+    switch (name) {
+      case 'somi_route': return textResult(advise(ctx, { request: typeof a.request === 'string' ? a.request : undefined, hint: a.hint, ticket: a.ticket, sensitive: a.sensitive }));
+      case 'somi_note': return textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env));
+      default: {
+        const options = { base: a.base, always: a.always === true, security: a.security === true };
+        // A model may send the array as text. The content is what matters, and it is validated either way.
+        if (typeof a.reviews === 'string') { try { a.reviews = JSON.parse(a.reviews); } catch { return textResult('reviews is not valid JSON. Send an array with every reviewer\'s JSON object.', true); } }
+        if (!a.reviews) {
+          const plan = reviewPlan(ctx, options);
+          return textResult({ ...plan, advice: plan.needed ? 'Start each reviewer as a fresh agent on its model, giving it only diff and prompt. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.' : 'No review is needed for this change. Carry on.' });
+        }
+        return textResult({ ...recordReviews(ctx, { ...options, reviews: a.reviews, tree: a.tree }), ...shardAdvice(ctx, 'review.done') });
+      }
     }
   } catch (e) {
-    const expected = e instanceof TransitionError || e instanceof ReviewInputError || e instanceof StateError || e instanceof ShardError;
+    const expected = e instanceof ReviewInputError || e instanceof StateError || e instanceof ShardError;
     if (!expected) process.stderr.write(`somi-mcp: ${e.stack ?? e}\n`);
-    return textResult(expected ? e.message : 'somi_step failed; see the server log', true);
+    return textResult(expected ? e.message : `${name} failed; see the server log`, true);
   }
 }
 
@@ -138,10 +157,10 @@ async function handleRequest(id, method, params) {
       });
       return;
     case 'ping': respond(id, {}); return;
-    case 'tools/list': respond(id, { tools: [TOOL] }); return;
+    case 'tools/list': respond(id, { tools: TOOLS }); return;
     case 'tools/call':
-      if (params?.name !== TOOL.name) { respondError(id, -32602, `Unknown tool: ${params?.name}`); return; }
-      respond(id, await callStep(params.arguments));
+      if (!TOOLS.some((t) => t.name === params?.name)) { respondError(id, -32602, `Unknown tool: ${params?.name}`); return; }
+      respond(id, await callTool(params.name, params.arguments));
       return;
     default: respondError(id, -32601, `Method not found: ${method}`);
   }

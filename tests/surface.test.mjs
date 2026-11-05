@@ -1,5 +1,5 @@
 // What a host lists must stay small, because hosts silently drop descriptions past a budget and an unlisted tool is not picked. The
-// library behind the step engine has no limit. Raising a limit here is a deliberate decision, in plain sight in the diff.
+// library behind the tools has no limit. Raising a limit here is a deliberate decision, in plain sight in the diff.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,14 +22,17 @@ test('a host lists at most 15 entries and 8,000 characters', () => {
   assert.ok(chars <= 8000, `${chars} characters`);
   for (const [name, d] of listed()) assert.ok(d.length > 0 && d.length <= 200, `${name}: ${d.length} characters`);
 });
-test('four agents, and shared files name no tools and no models', () => {
-  assert.deepEqual(list('agents').sort(), ['somi-reviewer.md', 'somi-security-reviewer.md', 'somi-worker.md', 'somi.md']);
+test('the main agent, three workers and two reviewers, and shared files name no tools and no models', () => {
+  assert.deepEqual(list('agents').sort(), ['somi-reviewer.md', 'somi-security-reviewer.md', 'somi-worker-high.md', 'somi-worker-low.md', 'somi-worker-medium.md', 'somi.md']);
+  const body = (t) => read(`agents/somi-worker-${t}.md`).replace(/^---[\s\S]*?---\n/, '');
+  assert.equal(body('low'), body('medium'));
+  assert.equal(body('low'), body('high'));
   for (const f of [...list('agents').map((a) => `agents/${a}`), ...list('commands').map((c) => `commands/${c}`), ...list('skills').map((s) => `skills/${s}/SKILL.md`)]) {
     const front = /^---\n([\s\S]*?)\n---/.exec(read(f))[1];
     assert.doesNotMatch(front, /^(tools|disallowedTools|model):/m, f);
   }
 });
-test('expertise stays behind the engine, focused and free of version templates', () => {
+test('expertise stays behind the tools, focused and free of version templates', () => {
   assert.deepEqual(list('skills'), ['somi-expertise']);
   for (const f of list('library/skills')) assert.ok(read(`library/skills/${f}`).split('\n').length < 100, f);
 });

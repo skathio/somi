@@ -1,16 +1,20 @@
 ## Summary
 
-- Add the export (done, ebe9ed63)
+- Add the ledger
+- Add invoices
 
 ## Review
 
-- Add the export, pass 1: somi-reviewer: approve-with-comments, somi-security-reviewer: request-changes
-- Add the export, pass 2: somi-reviewer: approve, somi-security-reviewer: approve
+- somi-reviewer: approve-with-comments
 
 ## Open findings
 
-- Minor src/app.js:3: Name the command.
+- Minor src/a.js:3: The name is unclear.
+
+## Decisions
+
+- money is whole cents
 
 ## Checks
 
-Full suite: not recorded.
+Full suite: passed.

@@ -284,7 +284,7 @@ Bash-side twin of the Write/Edit secret guard — do not work around either sile
   }
 }
 
-// SoMi's journal and cursor are written only by the CLI. A tripwire, not a boundary: it catches the honest mistake.
+// SoMi's review record and check result are written only by the CLI. A tripwire, not a boundary: it catches the honest mistake.
 const STATE_PATH = String.raw`[^ \t\n\r\f\v]*\.somi/state(/|\s|$)`;
 const STATE_WRITE_PATTERNS = [
   new RegExp(String.raw`(>|>>)\s*${STATE_PATH}`),

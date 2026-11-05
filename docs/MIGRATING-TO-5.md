@@ -1,6 +1,6 @@
 # Migrating from 4.1 to 5.0
 
-5.0 is a breaking rebuild. The `4.x` branch stays available for at least one minor cycle.
+5.0 is a breaking rebuild. The `4.x` branch stays available for at least one minor cycle. Remove a 4.x install before you install 5.0: if both load, both sets of hooks and skills run, and its old instructions call tools that no longer exist.
 
 ## Commands
 
@@ -22,7 +22,7 @@ New: `/a11y-check`, plus `perf` and `migrate` workflows reached through `/somi`.
 
 ## Agents
 
-The agents are `somi`, `somi-worker`, `somi-reviewer` and `somi-security-reviewer`. The other 4.x specialists are now role briefs the step engine gives to a worker. Make `somi:somi` the active agent to route plain prompts.
+The agents are `somi`, three workers named for their tier (`somi-worker-low`, `-medium`, `-high`), `somi-reviewer` and `somi-security-reviewer`. The other 4.x specialists are now role text that `somi_route` returns. Run `somi setup` and start with `--agent somi-main`, or make `somi:somi` the active agent to route plain prompts.
 
 ## Skills
 
@@ -36,7 +36,7 @@ Existing `.somi/plans/*` and `.somi/reviews/*` folders are no longer read or wri
 somi migrate
 ```
 
-It copies open findings and recorded decisions into the journal and changes no old file. `somi status` then shows them.
+It copies open findings to a record of their own and recorded decisions to the ledger, and changes no old file. `somi status` then shows them.
 
 ## Config
 
@@ -54,7 +54,7 @@ Copy your test commands into a committed `somi.check.json`. See [the architectur
 
 ## MCP
 
-There is one tool, `somi_step`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
+There are three tools: `somi_route`, `somi_review` and `somi_note`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
 
 ## Hooks
 

@@ -1,7 +1,7 @@
 {
   "name": "somi",
   "displayName": "SoMi",
-  "version": "5.0.0-rc.1",
+  "version": "5.0.0-rc.2",
   "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it routes the work to the right workflow, on workers on the cheapest model that can do it.",
   "keywords": [
     "workflow",
@@ -63,7 +63,7 @@
     },
     {
       "name": "ship",
-      "description": "Run the full suite, then write the pull request text from the journal."
+      "description": "Run the full suite, then write the pull request text."
     },
     {
       "name": "somi-config",

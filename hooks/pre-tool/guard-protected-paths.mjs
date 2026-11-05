@@ -76,7 +76,7 @@ const PROTECTED_GLOBS = [
   // SOMI plugin install — never let an agent rewrite the ruleset under itself.
   '*/.claude/plugins/somi/*',
 
-  // SoMi's journal and cursor: only the CLI writes them. If a flow ever needs a hand edit, the CLI is wrong.
+  // SoMi's review record and check result: only the CLI writes them. If a flow ever needs a hand edit, the CLI is wrong.
   '*/.somi/state/*',
 
   // Vendored deps & build outputs.
@@ -141,7 +141,7 @@ const slashes = (p) => p.replace(/\\/g, '/');
 
 // Where to send the agent instead, for the paths that tooling writes through a CLI.
 function nextStep(glob) {
-  if (glob.includes('/.somi/state/')) return 'SoMi state is written only by the `somi` CLI and the `somi_step` tool; if a flow seems to need a hand edit, the CLI is wrong.';
+  if (glob.includes('/.somi/state/')) return 'SoMi state is written only by the `somi` CLI and the SoMi tools; if a flow seems to need a hand edit, the CLI is wrong.';
   return '';
 }
 

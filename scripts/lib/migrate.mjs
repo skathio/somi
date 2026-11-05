@@ -1,10 +1,11 @@
-// migrate.mjs: imports what is still open from a 4.x `.somi/` tree into the journal: open findings and recorded decisions. Old files
+// migrate.mjs: imports what is still open from a 4.x `.somi/` tree: open findings to a record of their own, decisions to the ledger. Old files
 // are only read, never changed, and 5.0 does not read them again afterwards. Those files may come from a cloned repository, so links,
 // odd slugs and oversized files are skipped rather than followed.
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { SCHEMA_VERSION, appendEvent, deriveCursor, readEvents, writeCursor } from './journal.mjs';
+import { addToLedger } from './ledger.mjs';
+import { statePaths, writeStateFile } from './state.mjs';
 import { SEVERITIES } from './policy.mjs';
 
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
@@ -46,23 +47,27 @@ function recordedDecisions(root, slug) {
   return [...text.matchAll(/^## (D\d+[a-z]?)\s*[—-]\s*(.+)$/gm)].slice(0, MAX_ITEMS).map((m) => `${slug}: ${m[2].slice(0, MAX_TEXT)}`);
 }
 
+export const readMigrated = (root, env = process.env) => {
+  try { return fs.readFileSync(path.join(statePaths(root, env).dir, 'migrated.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+};
+
 export function migrate({ root, env = process.env, now }) {
   const somi = path.join(root, '.somi');
   try { if (fs.lstatSync(somi).isSymbolicLink()) return { imported: [], skipped: ['.somi is a link'] }; } catch { return { imported: [], skipped: [] }; }
   const slugs = [...new Set([...listSlugs(path.join(somi, 'plans')), ...listSlugs(path.join(somi, 'reviews'))])].sort();
+  const done = new Set(readMigrated(root, env).map((m) => m.slug));
   const imported = [];
-  let events = readEvents(root, env);
+  const skipped = [];
   for (const slug of slugs) {
-    const key = `migrate:${slug}`;
-    if (events.some((e) => e.key === key)) continue;
+    if (done.has(slug)) continue;
     const findings = openFindings(root, slug);
     const decisions = recordedDecisions(root, slug);
     if (findings.length + decisions.length === 0) continue;
-    const event = { v: SCHEMA_VERSION, seq: events.length + 1, ts: now(), key, type: 'migrate', slug, findings, decisions };
-    appendEvent(root, event, env);
-    events = [...events, event];
-    imported.push({ slug, findings: findings.length, decisions: decisions.length });
+    // A full ledger must not lose a decision without anyone seeing, so the record keeps them all and the answer says which did not fit.
+    let noted = 0;
+    for (const text of decisions) { try { addToLedger(root, { kind: 'decision', text }, env); noted += 1; } catch { skipped.push(`${slug}: ${text}`); } }
+    writeStateFile(root, path.join(statePaths(root, env).dir, 'migrated.jsonl'), `${JSON.stringify({ at: now(), slug, findings, decisions })}\n`, env, 'a');
+    imported.push({ slug, findings: findings.length, decisions: noted });
   }
-  if (imported.length > 0) writeCursor(root, deriveCursor(events), env);
-  return { imported, skipped: [] };
+  return { imported, skipped };
 }

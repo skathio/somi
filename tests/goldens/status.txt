@@ -1,10 +1,13 @@
-Open: Pick the storage
-Next: ask, after 0 review passes
-Stopped: intent-gate
-Question: Files or a table?
+Plan: 1 of 3 milestones done
+Next: invoices
 
-Closed:
-- Add the export: done at ebe9ed63
+Last review: somi-reviewer: approve-with-comments
 
-Logged findings, not looped:
-- Minor src/app.js:3: Name the command.
+Logged findings:
+- Minor src/a.js:3: The name is unclear.
+
+Decisions and limits:
+- decision: money is whole cents
+- constraint: no new dependencies
+
+Last check: passed (full suite)

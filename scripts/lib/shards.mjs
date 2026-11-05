@@ -1,5 +1,5 @@
 // shards.mjs: another plugin's skill, agent or tool slotted into a named workflow step. `somi slot` inspects the plugin and writes a
-// binding to config, and the engine reads bindings at each step. There is no typed contract, because a model consumes the output and
+// binding to config, and the named step reads its bindings when it is reached. There is no typed contract, because a model consumes the output and
 // tolerates drift a schema would reject. The check is about what is safe:
 //   - a read binding that changed keeps working and says so, because it has to survive that plugin updating;
 //   - a missing component is stale, and is skipped with a notice;

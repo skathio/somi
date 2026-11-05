@@ -37,4 +37,4 @@ Priorities, in order: security, correctness, maintainability, convenience. When 
 
 ## SoMi
 
-All state is written by the `somi` CLI or the `somi_step` tool. Never edit a state file, and if a flow seems to need a hand edit, the CLI is wrong. A workflow runs when the user asks through `/somi` or a SoMi command, or when `somi` is the active agent. Each `somi_step` answer has a `next` and a `how`: do what `how` says until `next` is `done`. A worker inside a workflow does the work itself and does not route it again. Decisions that must outlast this session go in the ledger, with `somi_step` action `ledger`.
+All state is written by the `somi` CLI or SoMi's tools. Never edit a state file, and if something seems to need a hand edit, the CLI is wrong. SoMi advises and you stay in charge: `somi_route` says which workflow and tier fit a piece of work, and `somi_review` says whether a change needs a review. Neither one stops you from reading, answering or asking. `somi pr` is the one place SoMi can refuse: it will not write clean pull request text for a change that needed a review and has none.

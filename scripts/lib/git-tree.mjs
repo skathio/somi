@@ -1,6 +1,6 @@
 // git-tree.mjs: the working tree as git objects. Tracked, staged and untracked files go into a throwaway index and become a tree
 // id, so "what changed" is a content hash, a re-run on an unchanged tree is recognisable, and a reviewer can read an exact diff.
-// Nothing here touches the real index. SoMi's own state is left out so writing the journal never changes the tree.
+// Nothing here touches the real index. SoMi's own state is left out so writing a record never changes the tree.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -50,6 +50,31 @@ export function headSha(root) {
 
 export function baseRef(root) {
   return headSha(root) ?? git(root, ['hash-object', '-t', 'tree', '--stdin'], { stdio: ['pipe', 'pipe', 'pipe'], input: '' }).trim();
+}
+
+// Where this line of work left the shared history. A branch compares against the default branch. On the default branch itself it
+// compares against its upstream. With neither, only what is not committed yet counts.
+export function workBase(root) {
+  const quiet = (args) => { try { return git(root, args, { stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; } };
+  const head = headSha(root);
+  if (head === null) return baseRef(root);
+  for (const ref of ['origin/HEAD', 'origin/main', 'main', 'origin/master', 'master']) {
+    const shared = quiet(['merge-base', head, ref]);
+    if (shared && shared !== head) return shared;
+    if (shared) break;
+  }
+  const upstream = quiet(['merge-base', head, '@{upstream}']);
+  return upstream ?? head;
+}
+
+// Subjects of the commits since a base, oldest first, with hostile control characters left for the renderer to strip.
+export function commitSubjects(root, from) {
+  if (!OBJECT_ID.test(String(from))) throw new Error('a recorded revision is not an object id');
+  try { return git(root, ['log', '--reverse', '--format=%s', `${from}..HEAD`]).split('\n').filter(Boolean); } catch { return []; }
+}
+
+export function resolveRef(root, ref) {
+  return git(root, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`]).trim();
 }
 
 export function snapshotTree(root) {
@@ -112,6 +137,6 @@ export function readDiff(root, from, to) {
 
 // This string reaches an agent as a command, and its ids come from a state file, so anything but an object id is refused.
 export function reviewDiffCommand(from, to) {
-  if (!OBJECT_ID.test(String(from)) || !OBJECT_ID.test(String(to))) throw new Error('the journal holds something that is not an object id');
+  if (!OBJECT_ID.test(String(from)) || !OBJECT_ID.test(String(to))) throw new Error('a recorded revision is not an object id');
   return `git diff --no-ext-diff --no-textconv ${from} ${to}`;
 }

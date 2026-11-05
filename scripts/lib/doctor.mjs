@@ -51,6 +51,20 @@ export function tierWarnings(config, host) {
   return unmapped.length ? [`no model is set for tier ${unmapped.join(', ')} on ${host}, so those workers run on the session's model; set them under tiers.${host} in config`] : [];
 }
 
+// Under Auto, Copilot CLI gives every subagent the model Auto chose and ignores the agent's own, so tiers do nothing there.
+export function autoWarnings(host, { home = os.homedir(), env = process.env } = {}) {
+  if (host !== 'copilot') return [];
+  const model = env.COPILOT_MODEL || readJson(path.join(env.COPILOT_HOME || path.join(home, '.copilot'), 'settings.json'))?.model;
+  return String(model ?? '').toLowerCase() === 'auto' ? ['the session model is Auto, so Copilot CLI ignores the model on every subagent and tiers do nothing; start with `somi setup`'] : [];
+}
+
+// A plugin's hooks can fail to load without any error. The audit hook runs on every tool call, so a log with nothing recent means none of them ran.
+export function hookWarnings(root, { now = Date.now(), env = process.env } = {}) {
+  const log = env.SOMI_AUDIT_LOG || path.join(root, '.somi', 'audit.log');
+  try { if (now - fs.statSync(log).mtimeMs < 3600000) return []; } catch { /* no log is the same answer as an old one */ }
+  return ['no hook has logged a tool call here in the last hour, so the tripwire hooks may not be running on this host; run this from inside an agent session, and on Copilot CLI try `somi init --host copilot`'];
+}
+
 export function runDoctor({ root, host, config = {}, platform = process.platform, env = process.env, home = os.homedir(), exec = defaultExec, removeFile = fs.rmSync, pid = process.pid }) {
   if (platform === 'win32') return { ok: false, verdict: 'FAIL', host, remedy: WSL_REMEDY, probes: [], warnings: [] };
   const probePath = path.join(home, `.somi-sandbox-probe-${pid}`);
@@ -65,7 +79,7 @@ export function runDoctor({ root, host, config = {}, platform = process.platform
   const ok = probes.every((p) => p.blocked);
   return {
     ok, verdict: ok ? 'PASS' : 'FAIL', host, probes,
-    warnings: [...settingsWarnings(host, sandboxSettings({ host, root, home, env })), ...tierWarnings(config, host)],
+    warnings: [...settingsWarnings(host, sandboxSettings({ host, root, home, env })), ...tierWarnings(config, host), ...autoWarnings(host, { home, env }), ...hookWarnings(root, { env })],
     remedy: ok ? undefined : 'Enable the sandbox (see `somi doctor --profile`), then run this from inside an agent session. Typing it at a `!` prompt usually bypasses the sandbox.',
   };
 }

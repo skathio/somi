@@ -1,29 +1,30 @@
 # SoMi
 
-Tell SoMi what you want, in plain words or as a ticket, and it runs the right workflow for you on Claude Code and GitHub Copilot CLI. It routes the work, hands it to workers on the cheapest model that can do it, and adds process only when the real work calls for it.
+Tell SoMi what you want, in plain words or as a ticket, and it picks the right workflow and keeps the cost down, on Claude Code and GitHub Copilot CLI. You keep talking to your agent the whole time: it can read, answer and change its mind, and SoMi advises instead of taking over.
 
-> **Status: 5.0 release candidate.** 5.0 ships as the default only if the [pre-registered benchmark](docs/BENCHMARK.md) says so, and neither candidate has passed. The second passes both quality checks but costs 2.35x bare in dollars per solved task against a limit of 1.5x. It costs 0.113x what 4.1 costs per draw. The 4.x line stays on the `4.x` branch.
+> **Status: 5.0 release candidate.** This design replaces an earlier step engine that proved too restrictive in real use. It has not been through the [benchmark](docs/BENCHMARK.md) yet, and those results describe the earlier design.
 
 ## How it works
 
 ```text
-your request or ticket
-  -> a thin coordinator asks the step engine what the work is
-  -> small and clear: one low-tier worker builds it, checks it and commits it
-  -> the diff calls for it: a fresh reviewer, and a security reviewer on a trust boundary
-  -> too big for one sitting: the worker splits it, you approve the parts, and each gets a fresh worker
-  -> failing twice: a clean restart one tier up, with the working tree and not the old transcript
+you talk to one agent, on the model you chose for it
+  -> a question, a follow-up, a change of mind: it just answers
+  -> work to do: it asks somi_route once, and gets the workflow, the tier and what to do
+  -> within its tier: it does the work here, where the context already is
+  -> needs a stronger model: it writes a brief with what the conversation decided, and hands that one piece to a worker
+  -> the change is ready: somi_review reads the diff and says if a review is due
+  -> `somi pr`: refuses clean text for a change that needed a review and has none
 ```
 
-The procedure lives in the step engine, so the coordinator stays small and only about 15 entries are ever listed. The library behind it can grow without costing anything on work that does not use it.
+SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses your next request. Most of the saving comes from the model the conversation runs on, because the main thread re-sends everything on every turn. Handing small work to a worker costs more than it saves, so SoMi only delegates what needs a stronger model.
 
 | | 4.1 | 5.0 |
 |---|---|---|
-| Where a workflow's procedure lives | In the coordinator's context | In the step engine, returned one step at a time |
-| When a review runs | Sized before coding | After coding, from signals in the real diff |
-| Long work | Plan and progress files read by hand | A small ledger put back after every compaction, and fresh context per milestone |
-| Model tiers | A lookup the agent could skip | Applied by a hook, and proven from billing |
-| Listed entries | 91 | 15, with a hidden library behind them |
+| Who is in charge | A workflow's procedure | Your agent, with SoMi advising |
+| When a review runs | Sized before coding | Decided from signals in the real diff, and checked at `somi pr` |
+| Long work | Plan and progress files read by hand | One plan file, a small ledger put back after every compaction, and fresh context per milestone |
+| Model tiers | A lookup the agent could skip | The session agent's model, and a hook for workers and reviewers |
+| Listed entries | 91 | 15, with a library behind them |
 | Other plugins | No way in | Shards: `somi slot pr.open <plugin:component>` |
 
 ## Install
@@ -44,35 +45,39 @@ copilot plugin install somi@somi
 
 ## Use
 
-Give a request to `/somi`, or make the coordinator your active agent and just talk to it:
+Set your models, then start with SoMi as the session's agent:
 
 ```bash
-claude --agent somi:somi      # or set "agent": "somi:somi" in a project's .claude/settings.json
-copilot --agent somi:somi
+somi setup                    # writes the agent to your own agent folder, on the model for its tier
+copilot --agent somi-main     # or: claude --agent somi-main
 ```
 
-Outside the active agent, plain prompts are not routed, and SoMi says so at session start. Direct commands such as `/debug` or `/review` skip the routing question.
+Then just talk to it. On Claude Code, passing `--model` as well overrides the agent's model. Without `somi setup`, use `--agent somi:somi`, which runs on your session's model, or give a request to `/somi`. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start.
 
 | Command | What it does |
 |---|---|
-| `/somi <anything>` | Routes it. This is the default. |
+| `/somi <anything>` | Asks which workflow fits. This is the default. |
 | `/code`, `/debug`, `/refactor` | Build a change, fix a bug from a failing test, or change structure under green tests. |
 | `/plan`, `/design` | Split large work into milestones, or settle an expensive choice. |
 | `/review`, `/security-review` | Judge changes, with a stronger model on security. |
 | `/upgrade`, `/incident`, `/a11y-check` | Move a dependency, restore production, or build interface against a checklist. |
-| `/ship`, `/status`, `/somi-config` | Full suite and PR text, open work, and which model each tier uses. |
+| `/ship`, `/status`, `/somi-config` | Full suite and PR text, open plan and findings, and which model each tier uses. |
 
-Older command names still work and route to the same workflows.
+Older command names still work.
 
 ## Set your tiers
 
-Workers run on low, medium and high tiers. You choose the models for each environment in `~/.config/somi/config.json` or a project's `.somi/config.json`:
+You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, and work above it goes to a worker:
 
 ```json
-{ "tiers": { "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }
+{ "tiers": { "main": "low", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }
 ```
 
-Claude Code has those defaults. Copilot has none, because its models vary by plan: a tier with no model inherits the session's, and SoMi says it is not enforced. On a Copilot account using automatic model selection, a worker's model may be reported but not billed, so check your billing.
+Claude Code has those defaults. Copilot has none, because its models vary by plan, so a tier with no model runs on the session's. Three things to know on Copilot CLI:
+
+- **Auto:** with the session model on Auto, every subagent gets the model Auto chose, so tiers do nothing. `somi setup` avoids this, and `somi doctor` warns about it.
+- **A model your plan cannot use:** it falls back to the session's model without an error.
+- **VS Code:** it refuses a subagent above the main model's cost tier, so there the main agent needs to run on the strongest tier you want to use.
 
 ## Connect other plugins with shards
 
@@ -99,7 +104,7 @@ somi doctor
 
 ## Upgrading from 4.1
 
-This is a breaking release. See [the migration guide](docs/MIGRATING-TO-5.md).
+This is a breaking release. See [the migration guide](docs/MIGRATING-TO-5.md). Remove a 4.x install first: if both load, both sets of hooks and skills run.
 
 ## Docs
 

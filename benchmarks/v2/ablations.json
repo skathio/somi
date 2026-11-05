@@ -2,14 +2,14 @@
   "note": "Each arm is the packed plugin with these edits applied to its private copy. The shipped plugin has no switch for turning a part off, so a project's config can never do it. Sizing is gone in 5.0, so it has no factor. Escalation is the choice between signal-fired and always-on review.",
   "patches": {
     "review-off": {
-      "file": "scripts/lib/kernel.mjs",
-      "find": "const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || c.reviewed_tree || signals.review.length + signals.security.length > 0 || c.release_candidate);",
-      "replace": "const wantsReview = false;"
+      "file": "scripts/lib/reviews.mjs",
+      "find": "const empty = signals.facts.files === 0;",
+      "replace": "const empty = true;"
     },
     "review-always": {
-      "file": "scripts/lib/kernel.mjs",
-      "find": "const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || c.reviewed_tree || signals.review.length + signals.security.length > 0 || c.release_candidate);",
-      "replace": "const wantsReview = c.reviewed_tree !== tree;"
+      "file": "scripts/lib/reviews.mjs",
+      "find": "if (!empty && (fired.length > 0 || always || security)) agents.push(REVIEWER);",
+      "replace": "if (!empty) agents.push(REVIEWER);"
     },
     "digest-off": {
       "file": "hooks/session-start/inject-digest.mjs",
@@ -21,15 +21,15 @@
       "find": "You build one small, clear change.",
       "replace": "First write a short plan with a test or command that proves each milestone, and pipe it to `somi plan`. Then build it. You build one small, clear change."
     },
-    "pin-front-door": {
-      "file": "commands/somi.md",
-      "find": "argument-hint: \"<what you want, or a ticket>\"",
-      "replace": "argument-hint: \"<what you want, or a ticket>\"\nmodel: haiku"
-    },
     "tested-fixes-off": {
-      "file": "scripts/lib/engine.mjs",
-      "find": "const TESTED_FIXES = true;",
-      "replace": "const TESTED_FIXES = false;"
+      "file": "scripts/lib/reviews.mjs",
+      "find": "const gaps = decision.next === 'close' && pass === 1 ? testableGaps(findings) : [];",
+      "replace": "const gaps = [];"
+    },
+    "cheap-main": {
+      "file": "agents/somi.md",
+      "find": "name: somi\n",
+      "replace": "name: somi\nmodel: haiku\n"
     }
   },
   "cells": {
@@ -65,14 +65,5 @@
     ]
   },
   "large_cells": {},
-  "large_note": "The large phases ask whether fresh context per milestone pays. The plain arm routes a long ticket to one worker, which can split it, and the lane arm asks for a plan first, the way a maintainer can.",
-  "light_cells": {
-    "somi5": [
-      "pin-front-door"
-    ],
-    "somi5-pin": [
-      "pin-front-door",
-      "tested-fixes-off"
-    ]
-  }
+  "large_note": "The large phases ask whether fresh context per milestone pays. The plain arm routes a long ticket to one worker, which can split it, and the lane arm asks for a plan first, the way a maintainer can."
 }

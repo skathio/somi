@@ -3,8 +3,8 @@ description: "Restore a broken production service first, then record the follow-
 argument-hint: "<what is broken>"
 ---
 
-Call `somi_step` with action `route`, hint `incident`, and this request, word for word:
+Call `somi_route` with hint `incident` and `request` set to this, plus anything from the conversation it depends on:
 
 $ARGUMENTS
 
-Each answer has a `next` field and a `how` field. Do exactly what `how` says and nothing else until `next` is `done`.
+Then follow what it returns. You stay in the conversation, and you can read, ask and answer throughout.

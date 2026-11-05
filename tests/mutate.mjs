@@ -13,7 +13,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { readDiff, snapshotTree } from '../scripts/lib/git-tree.mjs';
 
-export const GUARDED = /^(scripts\/lib\/(path-safety|path-facts|journal|policy|signals)\.mjs|hooks\/(pre-tool\/[^/]+|lib\/common)\.mjs)$/;
+export const GUARDED = /^(scripts\/lib\/(path-safety|path-facts|reviews|policy|signals)\.mjs|hooks\/(pre-tool\/[^/]+|lib\/common)\.mjs)$/;
 const MUTATIONS = [[/===/, '!=='], [/!==/, '==='], [/&&/, '||'], [/\|\|/, '&&'], [/\btrue\b/, 'false'], [/\bfalse\b/, 'true'], [/>=/, '<'], [/<=/, '>'], [/\breturn null\b/, 'return undefined']];
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 

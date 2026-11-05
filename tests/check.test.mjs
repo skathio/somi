@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { journalPath, makeRepo, somi, writeFiles } from './helpers.mjs';
+import { makeRepo, somi, writeFiles } from './helpers.mjs';
 import { modelNameProblems, pipefailProblems, planningIdProblems } from '../scripts/lib/gates.mjs';
 import { selectTests } from '../scripts/lib/check.mjs';
 import { GUARDED, candidates, mutateLine } from './mutate.mjs';
@@ -42,11 +42,9 @@ test('replay: a stale golden fails', (t) => {
   assert.deepEqual(failedGates(r), ['tests']);
 });
 
-test('replay: an undocumented stop status in the journal fails', (t) => {
+test('a corrupt review record fails the artefact gate', (t) => {
   const dir = makeRepo(t);
-  somi(dir, ['step', 'open', '--title', 'x']);
-  const text = fs.readFileSync(journalPath(dir), 'utf8');
-  fs.writeFileSync(journalPath(dir), text.replace('"next":"code"', '"next":"code","stop":"stuck"'));
+  writeFiles(dir, { '.somi/state/reviews.jsonl': 'not json\n' });
   const r = somi(dir, ['check']);
   assert.equal(r.status, 1);
   assert.ok(failedGates(r).includes('artefacts'));
@@ -124,14 +122,11 @@ test('gates: a marked pipe passes, a script without pipefail fails', () => {
   assert.deepEqual(pipefailProblems('a.sh', 'set -euo pipefail\n# ls | head\n'), []);
 });
 
-test('the check result joins the journal once per tree and result', (t) => {
+test('the last check is kept for the pull request text', (t) => {
   const dir = makeRepo(t);
-  somi(dir, ['step', 'open', '--title', 'x']);
   writeFiles(dir, { 'src/app.js': 'export const one = 2;\n' });
   somi(dir, ['check']);
-  somi(dir, ['check']);
-  const lines = fs.readFileSync(path.join(dir, '.somi/state/journal.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-  assert.equal(lines.filter((e) => e.type === 'check').length, 1);
+  assert.match(somi(dir, ['status']).stdout, /Last check: passed/);
 });
 
 test('the mutation tool flips operators on changed code lines only', () => {

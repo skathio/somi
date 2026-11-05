@@ -13,7 +13,7 @@ import os from 'node:os';
 import vm from 'node:vm';
 import { spawnSync } from 'node:child_process';
 import { readDiff, baseRef, snapshotTree } from './git-tree.mjs';
-import { NEXT_ACTIONS, deriveCursor, journalProblems, readEvents, statePaths } from './journal.mjs';
+import { readReviews } from './reviews.mjs';
 import { conflictMarkerProblems, modelNameProblems, pipefailProblems, planningIdProblems } from './gates.mjs';
 
 const DEFAULT_BUDGET_S = 60;
@@ -85,14 +85,7 @@ function lintGate(root, files) {
 
 function artefactGate(root, env) {
   const failures = [];
-  try {
-    failures.push(...journalProblems(readEvents(root, env)));
-    const { state } = statePaths(root, env);
-    if (fs.existsSync(state)) {
-      const cursor = JSON.parse(fs.readFileSync(state, 'utf8'));
-      if (!NEXT_ACTIONS.includes(cursor.next)) failures.push('state.json has an undocumented next status');
-    }
-  } catch (e) { failures.push(e.message); }
+  try { readReviews(root, env); } catch (e) { failures.push(e.message); }
   return gate('artefacts', failures);
 }
 
@@ -163,5 +156,3 @@ function hasNpmTest(root) {
   try { return typeof JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts?.test === 'string'; } catch { return false; }
 }
 
-// The base a check compares against: the open milestone's start, or HEAD.
-export const checkBase = (root, env) => deriveCursor(readEvents(root, env)).base;

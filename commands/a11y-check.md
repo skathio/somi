@@ -3,8 +3,8 @@ description: "Build or fix interface against an accessibility checklist and chec
 argument-hint: "<the interface>"
 ---
 
-Call `somi_step` with action `route`, hint `accessibility`, and this request, word for word:
+Call `somi_route` with hint `accessibility` and `request` set to this, plus anything from the conversation it depends on:
 
 $ARGUMENTS
 
-Each answer has a `next` field and a `how` field. Do exactly what `how` says and nothing else until `next` is `done`.
+Then follow what it returns. You stay in the conversation, and you can read, ask and answer throughout.

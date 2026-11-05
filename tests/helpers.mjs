@@ -39,6 +39,3 @@ export function somi(dir, args, { input, env = {} } = {}) {
   return { status: r.status, signal: r.signal, stdout: r.stdout, stderr: r.stderr, json };
 }
 
-export const journalPath = (dir) => path.join(dir, '.somi', 'state', 'journal.jsonl');
-export const journalText = (dir) => fs.readFileSync(journalPath(dir), 'utf8');
-export const journal = (dir) => journalText(dir).split('\n').filter(Boolean).map((l) => JSON.parse(l));

@@ -1,4 +1,4 @@
-// telemetry.mjs: what one draw did, as pure functions over its stream, transcripts and journal. A record carries these fields so
+// telemetry.mjs: what one draw did, as pure functions over its stream, transcripts and review record. A record carries these fields so
 // nobody has to rebuild them from transcripts by hand. None of them enters the analysis as a covariate: passes and protocol
 // adherence are effects of the arm, and adjusting for them would bias the comparison.
 
@@ -9,8 +9,9 @@ const parseLines = (text) => String(text ?? '').split('\n').flatMap((line) => {
   try { return [JSON.parse(line)]; } catch { return []; }
 });
 
-const STEP_TOOL = /somi_step$/;
-const STEP_CLI = /\bsomi(?:\.mjs)?["']?\s+step\b/;
+const STEP_TOOL = /somi_(route|review|note)$/;
+const STEP_CLI = /\bsomi(?:\.mjs)?["']?\s+(route|review)\b/;
+const ROUTE_TOOL = /somi_route$/;
 const AGENT_TOOL = /^(?:Agent|Task)$/;
 
 // The stream names who sent each message, but its usage figures are mid-stream placeholders. Transcripts hold the final figures for
@@ -47,34 +48,37 @@ export function agentSplit(streamText, transcriptTexts, total) {
   return { agents, coverage: total > 0 ? Math.min(1, accounted / total) : null };
 }
 
-export function journalFacts(journalText) {
-  const events = parseLines(journalText);
-  const reviews = events.filter((e) => e?.type === 'after-review');
-  const lastCode = events.filter((e) => e?.type === 'after-code').pop();
+// A draw that ends with a blocking finding still open has not delivered what a maintainer could ship.
+export function reviewFacts(reviewsText) {
+  const reviews = parseLines(reviewsText);
   const findings = {};
-  for (const review of reviews) for (const f of review.findings ?? []) findings[f.severity] = (findings[f.severity] ?? 0) + 1;
-  return {
-    routed: events.find((e) => e?.type === 'route')?.route ?? null,
-    escalated: events.some((e) => e?.type === 'escalate'),
-    opened: events.some((e) => e?.type === 'open'),
-    closed: events.some((e) => e?.type === 'close'),
-    passes: reviews.length,
-    gates: [...new Set(events.map((e) => e?.stop).filter(Boolean))],
-    next: events.filter((e) => e?.next).pop()?.next ?? null,
-    stop: events.filter((e) => e?.next).pop()?.stop ?? null,
-    signals: lastCode?.signals ?? [],
-    security: lastCode?.security ?? [],
-    facts: lastCode?.facts ?? null,
-    findings,
-  };
+  for (const review of reviews) for (const f of review?.findings ?? []) findings[f.severity] = (findings[f.severity] ?? 0) + 1;
+  const open = (reviews.at(-1)?.blocking ?? []).length > 0;
+  return { passes: reviews.length, gates: open ? ['open-blocking'] : [], next: open ? 'ask' : null, stop: open ? 'open-blocking' : null, findings };
 }
 
-export function adherence(streamText, journalText) {
+// The route an answer named, read from the tool's own result rather than from what the agent said about it.
+function routedTo(events) {
+  const ids = new Set();
+  for (const ev of events) {
+    for (const block of ev?.message?.content ?? []) {
+      if (block?.type === 'tool_use' && ROUTE_TOOL.test(block.name)) ids.add(block.id);
+      if (block?.type === 'tool_result' && ids.has(block.tool_use_id)) {
+        const text = typeof block.content === 'string' ? block.content : block.content?.[0]?.text;
+        try { const { route } = JSON.parse(text); if (route) return route; } catch { /* not an answer with a route */ }
+      }
+    }
+  }
+  return null;
+}
+
+export function adherence(streamText, reviewsText) {
   let tool = 0;
   let cli = 0;
   const agents = [];
   let inlineWrites = 0;
-  for (const ev of parseLines(streamText)) {
+  const events = parseLines(streamText);
+  for (const ev of events) {
     if (ev?.type !== 'assistant' || ev.parent_tool_use_id) continue;
     for (const block of ev.message?.content ?? []) {
       if (block?.type !== 'tool_use') continue;
@@ -85,7 +89,7 @@ export function adherence(streamText, journalText) {
     }
   }
   const route = tool > 0 && cli > 0 ? 'mixed' : tool > 0 ? 'tool' : cli > 0 ? 'cli' : 'none';
-  return { route, steps: tool + cli, agents, inline_writes: inlineWrites, ...journalFacts(journalText) };
+  return { route, steps: tool + cli, agents, inline_writes: inlineWrites, routed: routedTo(events), ...reviewFacts(reviewsText) };
 }
 
 // A stopped loop is not a solved task, whatever the tests say. A closing question after finished work is not a stop, so it needs the

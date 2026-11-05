@@ -28,7 +28,7 @@ export function copilotHooks(pluginRoot) {
         entry(pluginRoot, 'pre-tool/block-secret-writes.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
         entry(pluginRoot, 'pre-tool/guard-protected-paths.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
         entry(pluginRoot, 'pre-tool/guard-tier-config.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
-        entry(pluginRoot, 'pre-tool/keep-work-delegated.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
+        entry(pluginRoot, 'pre-tool/reviewers-read-only.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
         entry(pluginRoot, 'pre-tool/apply-tier.mjs', 'Agent|Task|task'),
       ],
       PostToolUse: [entry(pluginRoot, 'post-tool/audit-log.mjs', '*')],

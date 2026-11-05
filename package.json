@@ -1,6 +1,6 @@
 {
   "name": "@skathio/somi",
-  "version": "5.0.0-rc.1",
+  "version": "5.0.0-rc.2",
   "scripts": {
     "test": "node --test --test-reporter=spec tests/*.test.mjs",
     "bench": "node benchmarks/v2/bench.mjs",

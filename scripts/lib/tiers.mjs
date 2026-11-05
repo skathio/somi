@@ -1,5 +1,4 @@
-// tiers.mjs: low, medium and high, set per environment in config. Pure: it names a model and the kernel records the name in the
-// journal. No shared file carries a model name, because names differ per host and go stale, so this table is the one place Claude
+// tiers.mjs: low, medium and high, set per environment in config. Pure: it names a model. No shared file carries a model name, because names differ per host and go stale, so this table is the one place Claude
 // Code's aliases appear. Copilot ships no map: its models vary by plan, so the user sets them in config. A tier with no model is not
 // enforced, the worker inherits the session's model, and the response says so.
 
@@ -35,8 +34,8 @@ export function resolveSpawn(config, host, wanted) {
   return { tier, model, enforced: model !== null };
 }
 
-export function nextTier(config, tier) {
-  const at = TIERS.indexOf(tier);
-  const up = TIERS[Math.min(at + 1, TIERS.length - 1)];
-  return capped(config, up) === tier ? null : capped(config, up);
+// The tier the conversation itself runs on. Cheap by default: work above it goes to a stronger worker, and a ceiling can lower it.
+export function mainTier(config) {
+  const chosen = plain(config?.tiers) ? config.tiers.main : undefined;
+  return capped(config, TIERS.includes(chosen) ? chosen : 'low');
 }
