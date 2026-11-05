@@ -1,0 +1,1600 @@
+{
+ "schema": 2,
+ "plan": {
+  "phase": "tight",
+  "model": "claude-sonnet-5-5",
+  "worker_model": "claude-haiku-5-5",
+  "rule": "44ddb986add1733649ad1c5ffd01b0d0782b6b6c997d1f3ebc0c9ecf059034d3",
+  "host": {
+   "cpu": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
+   "cores": 8,
+   "memGb": 15,
+   "os": "6.8.0-147-generic",
+   "node": "v26.2.0"
+  },
+  "draws": [
+   "L2-task-tracker.bare.1",
+   "L2-task-tracker.somi5-lane.1",
+   "L2-task-tracker.somi5.1",
+   "L1-shop-platform.bare.1",
+   "L1-shop-platform.somi5-lane.1",
+   "L1-shop-platform.somi5.1",
+   "L3-fleet-backoffice.bare.1",
+   "L3-fleet-backoffice.somi5-lane.1",
+   "L3-fleet-backoffice.somi5.1",
+   "L2-task-tracker.somi5.2",
+   "L2-task-tracker.somi5-lane.2",
+   "L2-task-tracker.bare.2",
+   "L1-shop-platform.somi5.2",
+   "L1-shop-platform.somi5-lane.2",
+   "L1-shop-platform.bare.2",
+   "L3-fleet-backoffice.somi5.2",
+   "L3-fleet-backoffice.somi5-lane.2",
+   "L3-fleet-backoffice.bare.2"
+  ]
+ },
+ "rows": [
+  {
+   "schema": 2,
+   "draw": "L2-task-tracker.bare.1",
+   "task": "L2-task-tracker",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 23,
+   "total": 23,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 60955.2,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.1332767,
+   "wall_ms": 44643,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 6968,
+    "cacheRead": 90727,
+    "cacheCreation": 13626
+   },
+   "weighted": 60955.2,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1332767
+   },
+   "compactions": 0
+  },
+  {
+   "schema": 2,
+   "draw": "L2-task-tracker.somi5-lane.1",
+   "task": "L2-task-tracker",
+   "arm": "somi5-lane",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 23,
+   "total": 23,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 9,
+    "agents": [
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     }
+    ],
+    "inline_writes": 21,
+    "routed": "plan",
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "somi:somi-worker-medium": {
+     "weighted": 8014.5,
+     "messages": 1,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 40509.15,
+     "messages": 1,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.06299243212985124,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.17852385499999998,
+   "wall_ms": 423662,
+   "turns": 65,
+   "tokens": {
+    "input": 11261,
+    "output": 82479,
+    "cacheRead": 1396882,
+    "cacheCreation": 165572
+   },
+   "weighted": 770309.2,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.083529955,
+    "claude-sonnet-5-5": 0.0949939
+   },
+   "compactions": 5
+  },
+  {
+   "schema": 2,
+   "draw": "L2-task-tracker.somi5.1",
+   "task": "L2-task-tracker",
+   "arm": "somi5",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 23,
+   "total": 23,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 7,
+    "agents": [
+     {
+      "type": "somi:somi-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-reviewer",
+      "model": "haiku"
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": "sonnet"
+     }
+    ],
+    "inline_writes": 30,
+    "routed": null,
+    "passes": 2,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {
+     "Major": 1,
+     "Minor": 5,
+     "Nit": 2
+    }
+   },
+   "agents": {
+    "somi:somi-security-reviewer": {
+     "weighted": 28244.85,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 61412.65,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+     ]
+    },
+    "somi:somi-reviewer": {
+     "weighted": 111116.29999999999,
+     "messages": 9,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.19974546043332417,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.22073799500000002,
+   "wall_ms": 540646,
+   "turns": 68,
+   "tokens": {
+    "input": 14808,
+    "output": 111526,
+    "cacheRead": 1370515,
+    "cacheCreation": 236527
+   },
+   "weighted": 1005148.25,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.10580319500000003,
+    "claude-sonnet-5-5": 0.11493479999999999
+   },
+   "compactions": 6
+  },
+  {
+   "schema": 2,
+   "draw": "L1-shop-platform.bare.1",
+   "task": "L1-shop-platform",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 21,
+   "total": 21,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 74376.29999999999,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999998,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0,
+   "cost": 0.16390580000000002,
+   "wall_ms": 55698,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 8841,
+    "cacheRead": 95638,
+    "cacheCreation": 16478
+   },
+   "weighted": 74376.3,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.16390580000000002
+   },
+   "compactions": 0
+  },
+  {
+   "schema": 2,
+   "draw": "L1-shop-platform.somi5-lane.1",
+   "task": "L1-shop-platform",
+   "arm": "somi5-lane",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 21,
+   "total": 21,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 10,
+    "agents": [
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     }
+    ],
+    "inline_writes": 4,
+    "routed": "plan",
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "somi:somi-worker-medium": {
+     "weighted": 146533.94999999998,
+     "messages": 15,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 61157.7,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 366700.65,
+     "messages": 31,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.44928461768154987,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.875243395,
+   "wall_ms": 376900,
+   "turns": 48,
+   "tokens": {
+    "input": 12412,
+    "output": 127134,
+    "cacheRead": 2342265,
+    "cacheCreation": 316921
+   },
+   "weighted": 1278459.75,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.10014859500000002,
+    "claude-sonnet-5-5": 0.7750948
+   },
+   "compactions": 3
+  },
+  {
+   "schema": 2,
+   "draw": "L1-shop-platform.somi5.1",
+   "task": "L1-shop-platform",
+   "arm": "somi5",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 21,
+   "total": 21,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 2,
+    "agents": [],
+    "inline_writes": 26,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 487020.79999999993,
+     "messages": 25,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.7429976983311031,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.07401424000000002,
+   "wall_ms": 374245,
+   "turns": 54,
+   "tokens": {
+    "input": 11482,
+    "output": 83796,
+    "cacheRead": 760114,
+    "cacheCreation": 119206
+   },
+   "weighted": 655480.9,
+   "models": [
+    "claude-haiku-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.07401424000000002
+   },
+   "compactions": 4
+  },
+  {
+   "schema": 2,
+   "draw": "L3-fleet-backoffice.bare.1",
+   "task": "L3-fleet-backoffice",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 323,
+   "total": 323,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 131210.6,
+     "messages": 10,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.59346123681442,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.6,
+   "cost": 0.4986258000000001,
+   "wall_ms": 134264,
+   "turns": 12,
+   "tokens": {
+    "input": 14599,
+    "output": 20771,
+    "cacheRead": 261398,
+    "cacheCreation": 61200
+   },
+   "weighted": 221093.8,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.4986258000000001
+   },
+   "compactions": 2
+  },
+  {
+   "schema": 2,
+   "draw": "L3-fleet-backoffice.somi5-lane.1",
+   "task": "L3-fleet-backoffice",
+   "arm": "somi5-lane",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 323,
+   "total": 323,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 7,
+    "agents": [
+     {
+      "type": "somi:somi-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": null
+     }
+    ],
+    "inline_writes": 4,
+    "routed": "plan",
+    "passes": 1,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {
+     "Nit": 1
+    }
+   },
+   "agents": {
+    "somi:somi-security-reviewer": {
+     "weighted": 69278.8,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 33740.350000000006,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+     ]
+    },
+    "somi:somi-reviewer": {
+     "weighted": 330022.65,
+     "messages": 29,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.1918742624437224,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.40209995500000006,
+   "wall_ms": 987900,
+   "turns": 87,
+   "tokens": {
+    "input": 94254,
+    "output": 219653,
+    "cacheRead": 3405238,
+    "cacheCreation": 579089
+   },
+   "weighted": 2256904.05,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.24464445499999993,
+    "claude-sonnet-5-5": 0.15745550000000003
+   },
+   "compactions": 11
+  },
+  {
+   "schema": 2,
+   "draw": "L3-fleet-backoffice.somi5.1",
+   "task": "L3-fleet-backoffice",
+   "arm": "somi5",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 323,
+   "total": 323,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 4,
+    "agents": [
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": null
+     }
+    ],
+    "inline_writes": 1,
+    "routed": "build",
+    "passes": 1,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {
+     "Nit": 2
+    }
+   },
+   "agents": {
+    "somi:somi-worker-medium": {
+     "weighted": 423465.44999999995,
+     "messages": 22,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 66781.3,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+     ]
+    },
+    "somi:somi-reviewer": {
+     "weighted": 118864.89999999998,
+     "messages": 13,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    },
+    "somi:somi-security-reviewer": {
+     "weighted": 31666.75,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 265653.15,
+     "messages": 24,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.8023404351651342,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 1.2607564999999998,
+   "wall_ms": 624331,
+   "turns": 28,
+   "tokens": {
+    "input": 34053,
+    "output": 103348,
+    "cacheRead": 1757701,
+    "cacheCreation": 322537
+   },
+   "weighted": 1129734.35,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.05479789999999999,
+    "claude-sonnet-5-5": 1.2059585999999998
+   },
+   "compactions": 2
+  },
+  {
+   "schema": 2,
+   "draw": "L2-task-tracker.somi5.2",
+   "task": "L2-task-tracker",
+   "arm": "somi5",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 23,
+   "total": 23,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 2,
+    "agents": [],
+    "inline_writes": 21,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 427160.6499999999,
+     "messages": 32,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.806496082318512,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.7,
+   "cost": 0.06075847500000002,
+   "wall_ms": 265793,
+   "turns": 48,
+   "tokens": {
+    "input": 6835,
+    "output": 56527,
+    "cacheRead": 1030625,
+    "cacheCreation": 109694
+   },
+   "weighted": 529650,
+   "models": [
+    "claude-haiku-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.06075847500000002
+   },
+   "compactions": 3
+  },
+  {
+   "schema": 2,
+   "draw": "L2-task-tracker.somi5-lane.2",
+   "task": "L2-task-tracker",
+   "arm": "somi5-lane",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 21,
+   "total": 23,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 2,
+    "agents": [],
+    "inline_writes": 18,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 299054.75000000006,
+     "messages": 13,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.7872406908391306,
+   "failed": [
+    "AC10 [functional] an export holds the project, tasks and comments",
+    "AC11 [late] the owner can still export it, and nobody else"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.041803940000000005,
+   "wall_ms": 218433,
+   "turns": 31,
+   "tokens": {
+    "input": 5643,
+    "output": 50852,
+    "cacheRead": 346754,
+    "cacheCreation": 68239
+   },
+   "weighted": 379877.15,
+   "models": [
+    "claude-haiku-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.041803940000000005
+   },
+   "compactions": 2
+  },
+  {
+   "schema": 2,
+   "draw": "L2-task-tracker.bare.2",
+   "task": "L2-task-tracker",
+   "arm": "bare",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 23,
+   "total": 23,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 58346.8,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.12757179999999999,
+   "wall_ms": 42980,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 6539,
+    "cacheRead": 90418,
+    "cacheCreation": 13280
+   },
+   "weighted": 58346.8,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.12757179999999999
+   },
+   "compactions": 0
+  },
+  {
+   "schema": 2,
+   "draw": "L1-shop-platform.somi5.2",
+   "task": "L1-shop-platform",
+   "arm": "somi5",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 21,
+   "total": 21,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 3,
+    "agents": [
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     }
+    ],
+    "inline_writes": 0,
+    "routed": "build",
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "somi:somi-worker-medium": {
+     "weighted": 88829.5,
+     "messages": 8,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 10446.85,
+     "messages": 1,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 78548.79999999999,
+     "messages": 8,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0,
+   "cost": 0.19151107999999997,
+   "wall_ms": 112712,
+   "turns": 8,
+   "tokens": {
+    "input": 34,
+    "output": 17417,
+    "cacheRead": 338174,
+    "cacheCreation": 45511
+   },
+   "weighted": 177825.15,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.00936298,
+    "claude-sonnet-5-5": 0.18214809999999998
+   },
+   "compactions": 0
+  },
+  {
+   "schema": 2,
+   "draw": "L1-shop-platform.somi5-lane.2",
+   "task": "L1-shop-platform",
+   "arm": "somi5-lane",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 19,
+   "total": 21,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 9,
+    "agents": [
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     }
+    ],
+    "inline_writes": 4,
+    "routed": "plan",
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "somi:somi-worker-medium": {
+     "weighted": 222768.94999999998,
+     "messages": 25,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 74698.5,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 370134.6,
+     "messages": 37,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.7663902515826698,
+   "failed": [
+    "AC9 [boundary] spending part of a reservation leaves the rest held",
+    "AC10 [functional] a statement counts orders in the month and refunds when they happen"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.68880365,
+   "wall_ms": 424923,
+   "turns": 48,
+   "tokens": {
+    "input": 6789,
+    "output": 84579,
+    "cacheRead": 1761816,
+    "cacheCreation": 212187
+   },
+   "weighted": 871099.35,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.06205105,
+    "claude-sonnet-5-5": 0.6267526000000001
+   },
+   "compactions": 3
+  },
+  {
+   "schema": 2,
+   "draw": "L1-shop-platform.bare.2",
+   "task": "L1-shop-platform",
+   "arm": "bare",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 21,
+   "total": 21,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 77352.85,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.1672796,
+   "wall_ms": 58306,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 8881,
+    "cacheRead": 122496,
+    "cacheCreation": 16549
+   },
+   "weighted": 77352.85,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1672796
+   },
+   "compactions": 0
+  },
+  {
+   "schema": 2,
+   "draw": "L3-fleet-backoffice.somi5.2",
+   "task": "L3-fleet-backoffice",
+   "arm": "somi5",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 323,
+   "total": 323,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 4,
+    "agents": [
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     },
+     {
+      "type": "somi:somi-reviewer",
+      "model": null
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": null
+     }
+    ],
+    "inline_writes": 0,
+    "routed": "build",
+    "passes": 1,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {
+     "Minor": 1,
+     "Nit": 1
+    }
+   },
+   "agents": {
+    "somi:somi-worker-medium": {
+     "weighted": 144208.9,
+     "messages": 11,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 19526.9,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+     ]
+    },
+    "somi:somi-reviewer": {
+     "weighted": 129068.34999999999,
+     "messages": 13,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    },
+    "somi:somi-security-reviewer": {
+     "weighted": 30905.25,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 144171.19999999998,
+     "messages": 14,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.8409919227096557,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.45276630000000007,
+   "wall_ms": 305247,
+   "turns": 16,
+   "tokens": {
+    "input": 8528,
+    "output": 48477,
+    "cacheRead": 1122120,
+    "cacheCreation": 154575
+   },
+   "weighted": 556343.75,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.0358478,
+    "claude-sonnet-5-5": 0.4169185
+   },
+   "compactions": 1
+  },
+  {
+   "schema": 2,
+   "draw": "L3-fleet-backoffice.somi5-lane.2",
+   "task": "L3-fleet-backoffice",
+   "arm": "somi5-lane",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 16,
+   "total": 323,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 5,
+    "agents": [
+     {
+      "type": "somi:somi-worker-medium",
+      "model": null
+     }
+    ],
+    "inline_writes": 14,
+    "routed": "plan",
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "somi:somi-worker-medium": {
+     "weighted": 69066.4,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 26077.05,
+     "messages": 1,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 302255.85000000003,
+     "messages": 24,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.5270582346661294,
+   "failed": [
+    "M01 fuel [functional] voiding twice fails with already_void",
+    "M02 trips [functional] voiding twice fails with already_void",
+    "M03 tolls [functional] an entry is priced in whole cents",
+    "M03 tolls [boundary] its pricing rule still holds past the threshold, in cents",
+    "M03 tolls [decision] bad input fails as a value, including a fractional rate",
+    "M03 tolls [decision] another tenant's entry is not found, and stays as it was",
+    "M03 tolls [decision] adding and voiding are both in the audit log",
+    "M03 tolls [functional] the total counts one tenant and no void entries, as an integer",
+    "M03 tolls [functional] the report prints dollars, for one tenant",
+    "M03 tolls [functional] voiding twice fails with already_void",
+    "M04 parking [functional] an entry is priced in whole cents",
+    "M04 parking [boundary] its pricing rule still holds past the threshold, in cents",
+    "M04 parking [decision] bad input fails as a value, including a fractional rate",
+    "M04 parking [decision] another tenant's entry is not found, and stays as it was",
+    "M04 parking [decision] adding and voiding are both in the audit log",
+    "M04 parking [functional] the total counts one tenant and no void entries, as an integer",
+    "M04 parking [functional] the report prints dollars, for one tenant",
+    "M04 parking [functional] voiding twice fails with already_void",
+    "M05 tires [functional] an entry is priced in whole cents",
+    "M05 tires [boundary] its pricing rule still holds past the threshold, in cents"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.4226259149999999,
+   "wall_ms": 288474,
+   "turns": 44,
+   "tokens": {
+    "input": 17872,
+    "output": 82788,
+    "cacheRead": 1168668,
+    "cacheCreation": 164253
+   },
+   "weighted": 753995.05,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-haiku-5-5": 0.06478251500000001,
+    "claude-sonnet-5-5": 0.3578434
+   },
+   "compactions": 2
+  },
+  {
+   "schema": 2,
+   "draw": "L3-fleet-backoffice.bare.2",
+   "task": "L3-fleet-backoffice",
+   "arm": "bare",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 323,
+   "total": 323,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 117856.7,
+     "messages": 9,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.7491872082841347,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.3510375,
+   "wall_ms": 121797,
+   "turns": 11,
+   "tokens": {
+    "input": 9339,
+    "output": 14844,
+    "cacheRead": 233900,
+    "cacheCreation": 40291
+   },
+   "weighted": 157312.75,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.3510375
+   },
+   "compactions": 1
+  }
+ ]
+}

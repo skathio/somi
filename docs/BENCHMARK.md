@@ -54,6 +54,18 @@ Differences of a few draws are inside the noise floor. Review shows no gain on t
 
 The cheap command takes dollars per solved from 2.35x bare to about 1x, with quality level. Small work on Haiku costs about a fifth of bare on N01 and N18. Review still shows no gain on the hidden tests and is 63% of the dollars. Tested fixes raised N10 and N11 but show no overall gain, and SoMi still loses to bare on both. In 6 of 192 draws a follow-up reply led to code committed on the main thread with no SoMi review, which has to be fixed before this ships.
 
+## The advice design
+
+Exploratory, on the design that replaced the step engine, recorded on 1085bce. Records: [16 tasks](../benchmarks/v2/records/exploratory/advice-candidate-44ddb986add1.md), [small context](../benchmarks/v2/records/exploratory/advice-tight-44ddb986add1.md), [large tasks](../benchmarks/v2/records/exploratory/advice-large-44ddb986add1.md).
+
+| On 16 tasks | Solved | Dollars per solved | Against bare | Hidden tests against bare |
+|---|---|---|---|---|
+| Bare | 73 | $0.118 | | |
+| Cheap `/somi` on the step engine | 77 | $0.114 | 0.97x | +0.0 (-1.5 to +1.5) |
+| Advice design | 78 | $0.188 | **1.60x** | **-5.7 (-15.4 to +4.0)** |
+
+It does not pass the release rule. The agent takes twice the turns, acts on non-blocking review comments and runs reviewers again, and routes some small work to the medium tier. On large tasks and with the context squeezed it lost nothing, and it was cheaper than the step engine.
+
 ## The questions
 
 1. **Is SoMi worth it?** Dollars per solved task and quality per task, against a bare agent on the same model, on a mix of tasks a bare agent sometimes fails, narrowly misses and always solves.
