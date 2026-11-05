@@ -2,7 +2,7 @@
 
 5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** `bench.mjs run` refuses without `--go`, and the test suite spends nothing.
 
-**Status:** the first 5.0 candidate does not pass the release rule. See [Results](#results). 5.0 stays a release candidate.
+**Status:** neither 5.0 candidate passes the release rule. The second passes both quality checks and misses on cost. See [Results](#results). 5.0 stays a release candidate.
 
 ## Results
 
@@ -12,20 +12,23 @@ Sixteen tasks, a Sonnet session, a Haiku low tier, recorded with dollars from bi
 |---|---|---|---|---|
 | Bare | 96 | 73 | $0.118 | 0.5 |
 | 4.1 | 96 | 63 | $3.162 | 6.4 |
-| 5.0 candidate | 96 | 70 | $0.211 | 2.3 |
+| 5.0 first candidate | 96 | 70 | $0.211 | 2.3 |
+| 5.0 second candidate | 96 | 71 | $0.277 | 1.6 |
 
-**Release rule: does not ship.** All three failing checks are in the record:
+**Release rule: neither ships.** The checks, with failures in bold:
 
-| Check | Limit | Result |
-|---|---|---|
-| Dollars per solved against bare | at most 1.5x | 1.79x |
-| Solved rate against bare, lower 95% bound | at least -20 points | -20.35 (mean -3.1) |
-| Hidden tests passed against bare, lower 95% bound | at least -5 points | -15.6 (mean -5.0) |
-| A/A interval contains zero | yes | yes (-15.2 to 6.8 points) |
+| Check | Limit | First candidate | Second candidate |
+|---|---|---|---|
+| Dollars per solved against bare | at most 1.5x | **1.79x** | **2.35x** |
+| Solved rate against bare, lower 95% bound | at least -20 points | **-20.35** (mean -3.1) | -18.3 (mean -2.1) |
+| Hidden tests passed against bare, lower 95% bound | at least -5 points | **-15.6** (mean -5.0) | -1.9 (mean -0.4) |
+| A/A interval contains zero | yes | yes (-15.2 to 6.8 points) | yes, same recording |
 
-**Against 4.1,** per draw: 0.088x the dollars (0.063 to 0.125), 0.227x the tokens (0.168 to 0.307), and more tasks solved. 4.1 cost 16.69x bare in dollars (12.55 to 22.21). Bare did not drift between recordings (0.989, 0.928 to 1.054). The candidate had no inline writes in 96 draws.
+**The second candidate** gives sensitive work a stronger worker and no longer starts a review on three size and shape signals, which it still records. It was designed after reading how the first failed on these tasks, so its two quality passes are weaker evidence than a first look. Its [record](../benchmarks/v2/records/candidate2-44ddb986add1.md) has the full reading. In N10 and N11, 9 of the 10 unsolved draws had a reviewer naming the missed gap and rating it Minor or Nit, which does not re-loop. The coordinator alone uses more tokens per draw than bare uses for the whole task.
 
-**Which parts pay,** from the registered ablation, 64 draws a side, one draw per task and cell:
+**Against 4.1,** per draw, the first candidate: 0.088x the dollars (0.063 to 0.125), 0.227x the tokens (0.168 to 0.307). The second: 0.113x the dollars (0.083 to 0.153), 0.158x the tokens (0.108 to 0.230). Both solved more tasks. 4.1 cost 16.69x bare in dollars (12.55 to 22.21). Bare did not drift between recordings (0.989, 0.928 to 1.054, then 0.976, 0.936 to 1.017). Neither candidate had an inline write in 96 draws.
+
+**Which parts pay,** from the registered ablation on the first candidate, 64 draws a side, one draw per task and cell:
 
 | Part | With: solved, share, dollars per draw | Without: solved, share, dollars per draw |
 |---|---|---|

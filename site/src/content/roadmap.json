@@ -114,5 +114,5 @@
       ]
     }
   ],
-  "open": "5.0 is a release candidate. It ships as the default only if the pre-registered benchmark passes, and the first candidate did not: 1.79x bare in dollars per solved task against a limit of 1.5x, with both quality checks short."
+  "open": "5.0 is a release candidate. It ships as the default only if the pre-registered benchmark passes, and neither candidate has. The second passes both quality checks but costs 2.35x bare in dollars per solved task against a limit of 1.5x."
 }

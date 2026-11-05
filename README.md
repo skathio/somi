@@ -2,7 +2,7 @@
 
 Tell SoMi what you want, in plain words or as a ticket, and it runs the right workflow for you on Claude Code and GitHub Copilot CLI. It routes the work, hands it to workers on the cheapest model that can do it, and adds process only when the real work calls for it.
 
-> **Status: 5.0 release candidate.** 5.0 ships as the default only if the [pre-registered benchmark](docs/BENCHMARK.md) says so, and the first candidate did not pass: 1.79x bare in dollars per solved task against a limit of 1.5x, with both quality checks short. It costs 0.088x what 4.1 costs per draw. The 4.x line stays on the `4.x` branch.
+> **Status: 5.0 release candidate.** 5.0 ships as the default only if the [pre-registered benchmark](docs/BENCHMARK.md) says so, and neither candidate has passed. The second passes both quality checks but costs 2.35x bare in dollars per solved task against a limit of 1.5x. It costs 0.113x what 4.1 costs per draw. The 4.x line stays on the `4.x` branch.
 
 ## How it works
 

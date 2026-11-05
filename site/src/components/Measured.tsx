@@ -6,7 +6,7 @@ export function Measured() {
       id="measured"
       kicker="Measured, not claimed"
       title="5.0 has to earn the default"
-      lede={<Rich text="The first 5.0 candidate did not pass its release rule: 1.79x bare in dollars per solved task against a limit of 1.5x, with both quality checks short. It costs 0.088x what 4.1 costs per draw, and 4.1 costs 16.69x bare. 5.0 stays a release candidate." />}
+      lede={<Rich text="Neither 5.0 candidate has passed its release rule. The second passes both quality checks but costs 2.35x bare in dollars per solved task against a limit of 1.5x. It costs 0.113x what 4.1 costs per draw, and 4.1 costs 16.69x bare. 5.0 stays a release candidate." />}
     >
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <Card title="The registered rule">
