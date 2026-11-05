@@ -2,7 +2,7 @@
 
 5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** `bench.mjs run` refuses without `--go`, and the test suite spends nothing.
 
-**Status:** neither 5.0 candidate passes the release rule. The second passes both quality checks and misses on cost. See [Results](#results). 5.0 stays a release candidate.
+**Status:** neither 5.0 candidate passes the release rule. The second passes both quality checks and misses on cost. See [Results](#results). 5.0 stays a release candidate. An exploratory run with a cheap `/somi` command came in at about 1x bare with quality level, which is not a release pass: see [The light phase](#the-light-phase).
 
 ## Results
 
@@ -43,6 +43,16 @@ Differences of a few draws are inside the noise floor. Review shows no gain on t
 ## The light phase
 
 `--phase light` is exploratory and tests each part on its own. Both SoMi arms come in through `/somi` with that command pinned to the cheap model, because a command the user types is the only way found to pin the main thread: the same setting on a skill the model loads did not change the model in a live check. `somi5` also has tested fixes, and `somi5-pin` does not. The pin is applied by the bench for now, and a shipped version needs a way to carry it on Claude alone, since shared files name no models. These draws use the same 16 tasks, so they can stop an idea cheaply but cannot prove one.
+
+**Result.** Recorded on a4312b5, 96 draws an arm, [full reading](../benchmarks/v2/records/exploratory/light-44ddb986add1.md). This is a third look at the same tasks and the pin is not shipped, so it is not a release pass.
+
+| Arm | Solved | Dollars per solved | Against bare | Solved rate against bare | Time against bare |
+|---|---|---|---|---|---|
+| Bare | 73 | $0.118 | | | |
+| `somi5`, cheap command and tested fixes | 75 | $0.131 | 1.11x | +2.1 (-9.6 to +13.7) | 2.97x |
+| `somi5-pin`, cheap command only | 77 | $0.114 | 0.97x | +4.2 (-11.2 to +19.5) | 2.91x |
+
+The cheap command takes dollars per solved from 2.35x bare to about 1x, with quality level. Small work on Haiku costs about a fifth of bare on N01 and N18. Review still shows no gain on the hidden tests and is 63% of the dollars. Tested fixes raised N10 and N11 but show no overall gain, and SoMi still loses to bare on both. In 6 of 192 draws a follow-up reply led to code committed on the main thread with no SoMi review, which has to be fixed before this ships.
 
 ## The questions
 
