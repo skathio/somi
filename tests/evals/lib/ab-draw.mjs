@@ -54,10 +54,11 @@ export function taskText(task) {
 
 /** Whole-dollar-cent budget rounded DOWN, so the cap is never above what was asked. */
 const usd = (x) => (Math.floor(x * 100) / 100).toFixed(2);
+// With no model, the session runs on its agent's own, as `somi setup` leaves it: --model would override that.
 // The web tools are disabled for both arms (a shell can still reach the network). The list is one comma-separated value:
 // the flag is variadic, and every flag after it is an option, so nothing can be swallowed.
 export function claudeArgv({ arm, prompt, budget, plugin, resume, model, settings }) {
-  return ['--print', prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--max-budget-usd', usd(budget),
+  return ['--print', prompt, '--output-format', 'stream-json', '--verbose', ...(model ? ['--model', model] : []), '--max-budget-usd', usd(budget),
     '--permission-mode', 'bypassPermissions', '--disallowed-tools', 'WebFetch,WebSearch', ...(arm === 'somi' ? ['--plugin-dir', plugin, '--agent', 'somi:somi'] : []), ...(settings ? ['--settings', JSON.stringify(settings)] : []), ...(resume ? ['--resume', resume] : [])];
 }
 

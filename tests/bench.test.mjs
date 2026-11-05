@@ -1,4 +1,4 @@
-import { RESUME_PROMPT, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
+import { RESUME_PROMPT, claudeArgv, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
 import { globalConfigPath } from '../scripts/lib/config-files.mjs';
 import { resolveSpawn } from '../scripts/lib/tiers.mjs';
 import { test } from 'node:test';
@@ -293,6 +293,15 @@ test('adherence reads the route, the agents and the review record', () => {
   assert.equal(adherence('', '').route, 'none');
   assert.equal(reviewFacts('not json\n').passes, 0);
   assert.equal(reviewFacts(line({ pass: 2, findings: [], blocking: [] })).next, null);
+});
+
+test('a SoMi arm runs on its agent\'s model, because --model would override it, and a bare arm is pinned', () => {
+  assert.equal(claudeArgv({ arm: 'somi', prompt: 'x', budget: 1, plugin: 'p', model: null }).includes('--model'), false);
+  const bare = claudeArgv({ arm: 'bare', prompt: 'x', budget: 1, model: 'm' });
+  assert.equal(bare[bare.indexOf('--model') + 1], 'm');
+  const { every_somi_arm: always, patches } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8'));
+  assert.deepEqual(always, ['cheap-main']);
+  assert.match(patches['cheap-main'].replace, /model: haiku/);
 });
 
 test('every draw gets one label, and a stopped loop is never finished', () => {

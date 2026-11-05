@@ -2,7 +2,7 @@
 
 5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** `bench.mjs run` refuses without `--go`, and the test suite spends nothing.
 
-**Status:** the results below describe an earlier design, a step engine that real use on Copilot found too restrictive and that lost context on sequential requests. This benchmark could not see that: each draw is one prompt and an "Approved", on one host. The current design has not been recorded yet, and needs multi-turn sessions and a Copilot arm first. Neither earlier candidate passes the release rule. The second passes both quality checks and misses on cost. See [Results](#results). 5.0 stays a release candidate. An exploratory run with a cheap `/somi` command came in at about 1x bare with quality level, which is not a release pass: see [The light phase](#the-light-phase).
+**Status:** the results below describe an earlier design, a step engine that real use on Copilot found too restrictive and that lost context on sequential requests. This benchmark could not see that: each draw is one prompt and an "Approved", on one host. The current design has not been recorded yet. Benchmarks run on Claude Code only, because there is no budget for Copilot runs, so Copilot is checked by hand. Neither earlier candidate passes the release rule. The second passes both quality checks and misses on cost. See [Results](#results). 5.0 stays a release candidate. An exploratory run with a cheap `/somi` command came in at about 1x bare with quality level, which is not a release pass: see [The light phase](#the-light-phase).
 
 ## Results
 

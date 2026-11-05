@@ -278,6 +278,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   const alias = (id) => /haiku/.test(id) ? 'haiku' : /sonnet/.test(id) ? 'sonnet' : id;
   if ([args.model, args['worker-model']].some((m) => /opus/i.test(m ?? ''))) throw new Error('benchmarks never run on opus: the top model of any recording is sonnet');
   if (args.tasks && !stub && phase !== 'pilot') throw new Error('--tasks is for a pilot or a stub: a paid recording runs its whole plan');
+  if ((args.arms || args.k) && phase !== 'large') throw new Error('--arms and --k are for an exploratory look at the large tasks: a registered recording runs its whole plan');
   if (!args.out) throw new Error('--out is required');
   const budgetTotal = Number(args['budget-total']);
   if (!(budgetTotal > 0)) throw new Error('--budget-total is required');
@@ -287,7 +288,9 @@ async function run(args, session = { windowWeighted: 0 }) {
     const problem = preregProblem();
     if (problem) throw new Error(problem);
   }
-  if (PHASE_ARMS[phase].includes('somi41') && !args['plugin-41']) throw new Error(`${phase} needs --plugin-41, a packed 4.1 release`);
+  const wanted = args.arms ? args.arms.split(',') : null;
+  if (wanted?.some((a) => !PHASE_ARMS[phase].includes(a))) throw new Error(`--arms takes ${PHASE_ARMS[phase].join(', ')}`);
+  if ((wanted ?? PHASE_ARMS[phase]).includes('somi41') && !args['plugin-41']) throw new Error(`${phase} needs --plugin-41, a packed 4.1 release`);
   if (phase !== 'pilot' && phase !== 'aa' && !stub && (!args['worker-model'] || !isFullModelId(args['worker-model']))) throw new Error('--worker-model is required: the low tier, by its full id');
   if (phase !== 'pilot' && !args['timeout-min']) throw new Error('--timeout-min is required: take it from `bench.mjs plan --pilot DIR`, not from a guess');
   if (process.env.CLAUDE_CODE_OAUTH_TOKEN !== undefined) throw new Error('CLAUDE_CODE_OAUTH_TOKEN is in the environment; the scorer must run without it');
@@ -295,7 +298,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   const out = path.resolve(args.out);
   fs.mkdirSync(out, { recursive: true, mode: 0o700 });
   const only = args.tasks ? args.tasks.split(',') : null;
-  const plan = buildPlan(phase, tasksFor(phase, only), Number(args.seed ?? 1), drawsFor(phase, prereg), armKFor(phase, prereg));
+  const plan = buildPlan(phase, tasksFor(phase, only), Number(args.seed ?? 1), args.k ? Number(args.k) : drawsFor(phase, prereg), armKFor(phase, prereg)).filter((d) => !wanted || wanted.includes(d.arm));
   const resultsFile = path.join(out, 'results.jsonl');
   const planFile = path.join(out, 'plan.json');
   const planText = JSON.stringify({ phase, model: args.model, worker_model: args['worker-model'] ?? null, rule: ruleHash(), host: hostFingerprint(), draws: plan.map((d) => d.id) });
@@ -312,7 +315,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   const pluginOf = (arm) => {
     if (isBare(arm)) return null;
     if (arm === 'somi41') return path.resolve(args['plugin-41']);
-    if (!plugins.has(arm)) plugins.set(arm, buildPlugin({ repoRoot: REPO, runTmp, dirName: `plugin-${arm}`, patches: (ablations.cells[arm] ?? ablations.large_cells[arm] ?? []).map((name) => ablations.patches[name]) }));
+    if (!plugins.has(arm)) plugins.set(arm, buildPlugin({ repoRoot: REPO, runTmp, dirName: `plugin-${arm}`, patches: [...ablations.every_somi_arm, ...(ablations.cells[arm] ?? ablations.large_cells[arm] ?? [])].map((name) => ablations.patches[name]) }));
     return plugins.get(arm);
   };
   const env = readEnvFile(path.resolve(args['env-file'] ?? path.join(REPO, '.somi/eval.env')));
@@ -370,7 +373,7 @@ async function run(args, session = { windowWeighted: 0 }) {
       const config = { cost: { ceiling: 'medium' }, tiers: { claude: { low: alias(args['worker-model'] ?? args.model), medium: alias(args.model), high: alias(args.model) } } };
       const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config, globalConfig: config });
       const result = await runDraw({
-        model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
+        model: engineArm(d.arm) === 'somi' && d.arm !== 'somi41' ? null : args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
         settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude, env: { ...childEnv({ token: env.token, tmp }), ...WINDOW_ENV[phase] }, cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
       });
       if (interrupted) { stop = 'interrupted'; break; }
@@ -528,7 +531,7 @@ async function main(argv) {
     options: {
       phase: { type: 'string' }, out: { type: 'string' }, model: { type: 'string' }, seed: { type: 'string' }, go: { type: 'boolean' }, chunk: { type: 'string' },
       'budget-total': { type: 'string' }, 'budget-draw': { type: 'string' }, 'window-tokens': { type: 'string' }, 'plugin-41': { type: 'string' }, 'env-file': { type: 'string' },
-      'timeout-min': { type: 'string' }, 'worker-model': { type: 'string' }, baseline: { type: 'string' }, candidate: { type: 'string' }, tasks: { type: 'string' }, write: { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
+      'timeout-min': { type: 'string' }, 'worker-model': { type: 'string' }, arms: { type: 'string' }, k: { type: 'string' }, baseline: { type: 'string' }, candidate: { type: 'string' }, tasks: { type: 'string' }, write: { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
     },
   });
   if (command === 'plan' || command === 'run' || command === 'record') {
