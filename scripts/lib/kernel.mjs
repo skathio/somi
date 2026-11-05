@@ -6,7 +6,7 @@
 
 import { SCHEMA_VERSION, appendEvent, deriveCursor, readEvents, writeCursor } from './journal.mjs';
 import { MAX_PASSES, decideAfterReview, isBlocking, parseReviews } from './policy.mjs';
-import { computeSignals } from './signals.mjs';
+import { computeSignals, RECORDED_ONLY } from './signals.mjs';
 import { baseRef, headSha, readDiff, reviewDiffCommand, snapshotTree } from './git-tree.mjs';
 import { resolveSpawn } from './tiers.mjs';
 
@@ -94,12 +94,13 @@ export function afterCode(ctx, { runCheck, recheck = false } = {}) {
   const from = c.reviewed_tree ?? c.base;
   const whole = readDiff(ctx.root, c.base, tree);
   // Routing reads the whole milestone, so a boundary touched before a fix keeps its lens. The reviewer reads only the fix diff.
-  const signals = computeSignals(whole, ctx.configLayers);
+  const computed = computeSignals(whole, ctx.configLayers);
+  const signals = { ...computed, review: computed.review.filter((s) => !RECORDED_ONLY.includes(s)) };
   const wantsReview = c.reviewed_tree !== tree && (c.next === 'fix' || c.reviewed_tree || signals.review.length + signals.security.length > 0 || c.release_candidate);
   const attempt = events.filter((e) => e.type === 'after-code' && e.milestone === c.milestone).length + 1;
   const base = {
     key: `after-code:${c.milestone}:${attempt}`, type: 'after-code', milestone: c.milestone, pass: c.pass, tree, from,
-    signals: signals.review, security: signals.security, facts: signals.facts, reviewers: [],
+    signals: computed.review, security: signals.security, facts: signals.facts, reviewers: [],
   };
   if (!wantsReview) return afterCodeResponse(record(ctx, events, { ...base, next: 'close' }));
   if (c.pass >= MAX_PASSES + c.extra_passes) {

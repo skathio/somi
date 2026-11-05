@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO, makeRepo, somi, writeFiles } from './helpers.mjs';
-import { abandon, closeMilestone, decide, done, parseMilestones, resume, reviewed, route } from '../scripts/lib/engine.mjs';
+import { abandon, closeMilestone, decide, done, finishWork, parseMilestones, resume, reviewed, route } from '../scripts/lib/engine.mjs';
 import { deriveCursor, journalProblems, readEvents, statePaths } from '../scripts/lib/journal.mjs';
 import { addToLedger, readLedger, MAX_LINES } from '../scripts/lib/ledger.mjs';
 import { recordCheck } from '../scripts/lib/kernel.mjs';
@@ -187,8 +187,8 @@ test('a plan is approved, then each milestone gets fresh context, and a review a
 
 test('work a worker finds too big splits into milestones, on observed evidence', (t) => {
   const ctx = makeCtx(makeRepo(t));
-  route(ctx, { request: 'Add billing' });
-  const r = done(ctx, { status: 'too-big', milestones: ['ledger', 'invoices'] });
+  route(ctx, { request: 'Add search' });
+  const r = done(ctx, { status: 'too-big', milestones: ['index', 'results'] });
   assert.equal(r.next, 'ask');
   assert.equal(decide(ctx, { text: 'Go', then: 'continue' }).spawn.tier, 'low');
 });
@@ -773,12 +773,58 @@ test('a Major that did not re-loop is reported when the route finishes', (t) => 
   assert.deepEqual(end.logged, [{ file: 'src/app.js', line: 2, claim: 'a free order cannot be refunded' }]);
 });
 
-test('approved milestones run on the build tier, and escalate from there', (t) => {
+test('approved milestones run on the tier the request earns, and escalate from there', (t) => {
   const ctx = makeCtx(makeRepo(t));
   const first = approvedPlan(ctx);
-  assert.equal(first.spawn.tier, 'low');
-  assert.equal(deriveCursor(events(ctx)).tier, 'low');
-  assert.equal(nextTier(ctx.config, deriveCursor(events(ctx)).tier), 'medium');
+  assert.equal(first.spawn.tier, 'medium');
+  assert.equal(deriveCursor(events(ctx)).tier, 'medium');
+  assert.equal(nextTier(ctx.config, deriveCursor(events(ctx)).tier), 'high');
+  const plain = makeCtx(makeRepo(t));
+  route(plain, { request: 'Build search', hint: 'plan' });
+  writeFiles(plain.root, { '.somi/plan.md': 'Milestone 1: index\nProof: npm test\n' });
+  done(plain, {});
+  assert.equal(decide(plain, { text: 'Approved', then: 'continue' }).spawn.tier, 'low');
+});
+
+test('work on money, accounts or untrusted input gets a stronger worker from the start, and a ceiling still caps it', (t) => {
+  for (const request of ['Add a refund button', 'Let people reset their password', 'Accept customer uploads', 'Add a redirect after sign in']) {
+    assert.equal(route(makeCtx(makeRepo(t)), { request, hint: 'build' }).spawn.tier, 'medium', request);
+  }
+  assert.equal(route(makeCtx(makeRepo(t)), { request: 'Add a greeting to the home page' }).spawn.tier, 'low');
+  assert.equal(route(makeCtx(makeRepo(t)), { request: 'Why do accounts expire?' }).spawn.tier, 'low');
+  assert.equal(route(makeCtx(makeRepo(t), { tiers: { ceiling: 'low' } }), { request: 'Add a refund button', hint: 'build' }).spawn.tier, 'low');
+});
+
+test('a changed interface or a large diff alone is recorded and does not start a review', (t) => {
+  const ctx = makeCtx(makeRepo(t, { 'src/app.js': 'export function old() {}\n' }));
+  route(ctx, { request: 'Change the app' });
+  writeFiles(ctx.root, { 'src/app.js': 'export function other() {}\n' });
+  check(ctx);
+  assert.equal(done(ctx, {}).then, 'close');
+  assert.deepEqual(events(ctx).filter((e) => e.type === 'after-code').at(-1).signals, ['public-api']);
+});
+
+test('weakened tests and security signals still start a review', (t) => {
+  const weakened = makeCtx(makeRepo(t, { 'test/a.test.js': 'test("x", () => assert(true));\n' }));
+  route(weakened, { request: 'Change the app' });
+  writeFiles(weakened.root, { 'test/a.test.js': '// nothing here\n' });
+  check(weakened);
+  assert.equal(done(weakened, {}).next, 'review');
+  const sink = makeCtx(makeRepo(t));
+  route(sink, { request: 'Change the app' });
+  writeFiles(sink.root, SINK);
+  check(sink);
+  assert.equal(done(sink, {}).next, 'review');
+});
+
+test('a worker told a review is due hears the commit comes later, and a preamble is not the commit subject', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  route(ctx, { request: 'Implement the following in this repository.\nCustomers upload a list of files.' });
+  assert.equal(deriveCursor(events(ctx)).title, 'Customers upload a list of files.');
+  writeFiles(ctx.root, SINK);
+  const r = finishWork(ctx, { runChecks: () => { check(ctx); return { ok: true }; }, commit: () => assert.fail('a review is due') });
+  assert.equal(r.next, 'review');
+  assert.match(r.note, /Not committed yet/);
 });
 
 test('a long ticket is not routed by stray words, and the coordinator can choose build for it', () => {

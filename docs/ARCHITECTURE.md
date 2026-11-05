@@ -59,7 +59,7 @@ These are constants in `scripts/lib/policy.mjs`. A committed project config is u
 
 `scripts/lib/signals.mjs` reads the actual diff, and only raises.
 
-- **Review signals:** `multi-module`, `public-api`, `schema`, `tests-weakened`, `dependency`, `goldens-moved`, `large-diff`, `unreadable-diff`.
+- **Review signals:** `schema`, `tests-weakened`, `dependency`, `goldens-moved`, `unreadable-diff`. `multi-module`, `public-api` and `large-diff` are recorded but do not start a review.
 - **Security signals:** `sink`, `secrets`, `network`, `repo-content`, `policy-file`, `sensitive-path`, `unreadable-diff`.
 
 These signals are patterns over file names and added lines, so they over-fire by design and they cannot prove a taint path. They route attention and do not make anything safe.

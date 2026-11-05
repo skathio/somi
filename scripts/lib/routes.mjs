@@ -56,6 +56,11 @@ export const WHEN = Object.freeze({
   ship: 'prepare a release or pull request',
 });
 
+// Work that moves money, touches accounts or takes untrusted input goes to a stronger worker from the start. The cheap tier lost on exactly
+// this work, and fixing it later cost more than doing it well. Over-firing costs one better worker; it only ever raises a tier.
+const SENSITIVE_WORK = /\b(payments?|payouts?|charg(e|es|ed|ing)|refunds?|billing|checkout|credit cards?|wallets?)\b|\b(passwords?|log ?ins?|sign(ed|ing)? ?(in|out|up)|sessions?|auth\w*|tokens?|permissions?|admins?|accounts?|personal data|tenants?|organi[sz]ations?|gdpr)\b|\b(uploads?|redirects?|webhooks?|untrusted|user[- ]supplied|archives?|zip|file ?paths?|static files|html|sql|injection|deserializ\w*|saniti[sz]\w*|xss|csrf|ssrf)\b/i;
+export const sensitiveWork = (text) => SENSITIVE_WORK.test(String(text ?? ''));
+
 export function classify({ request = '', ticket, hint } = {}) {
   if (typeof hint === 'string' && ROUTE_NAMES.includes(hint)) return { route: hint, via: 'hint' };
   const type = String(ticket?.type ?? '').trim().toLowerCase();

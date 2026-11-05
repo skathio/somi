@@ -7,6 +7,8 @@ import { denyListed, foldName, trimDots } from './path-safety.mjs';
 
 export const LARGE_DIFF_LINES = 300;
 export const REVIEW_SIGNALS = Object.freeze(['multi-module', 'public-api', 'schema', 'tests-weakened', 'dependency', 'goldens-moved', 'large-diff', 'unreadable-diff']);
+// Recorded, but they do not start a review on their own: review on these cost 68% more per task and showed no gain on hidden tests.
+export const RECORDED_ONLY = Object.freeze(['multi-module', 'public-api', 'large-diff']);
 export const SECURITY_SIGNALS = Object.freeze(['sink', 'secrets', 'network', 'repo-content', 'policy-file', 'sensitive-path', 'unreadable-diff']);
 
 const DOC = /\.(md|mdx|txt|rst|adoc)$/i;
