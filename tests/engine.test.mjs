@@ -1037,3 +1037,18 @@ test('a worker asked to fix who changed nothing is told what is still open', (t)
   assert.match(r.note, /still open/);
   assert.match(JSON.stringify(r.findings), /broken/);
 });
+
+test('a SoMi agent stays in the foreground on Claude Code, and others and Copilot are left alone', (t) => {
+  const dir = makeRepo(t);
+  route(makeCtx(dir), { request: 'Add a thing' });
+  const worker = runHook('apply-tier.mjs', { tool_name: 'Agent', tool_input: { subagent_type: 'somi:somi-worker', model: 'haiku', run_in_background: true } }, { dir });
+  assert.equal(worker.out.hookSpecificOutput.updatedInput.run_in_background, false);
+  const unset = runHook('apply-tier.mjs', { tool_name: 'Agent', tool_input: { subagent_type: 'somi:somi-reviewer' } }, { dir });
+  assert.equal(unset.out.hookSpecificOutput.updatedInput.run_in_background, false);
+  const already = runHook('apply-tier.mjs', { tool_name: 'Agent', tool_input: { subagent_type: 'somi:somi-worker', model: 'haiku', run_in_background: false } }, { dir });
+  assert.equal(already.out, null);
+  const other = runHook('apply-tier.mjs', { tool_name: 'Agent', tool_input: { subagent_type: 'general-purpose', model: 'haiku', run_in_background: true } }, { dir });
+  assert.equal(other.out, null);
+  const copilot = runHook('apply-tier.mjs', { tool_name: 'task', tool_input: { agent_type: 'somi:somi-worker' } }, { dir, hookEnv: { SOMI_HOST: 'copilot' } });
+  assert.equal(copilot.out?.hookSpecificOutput?.updatedInput?.run_in_background, undefined);
+});
