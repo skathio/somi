@@ -20,6 +20,16 @@
       "file": "library/roles/build.md",
       "find": "You build one small, clear change.",
       "replace": "First write a short plan with a test or command that proves each milestone, and pipe it to `somi plan`. Then build it. You build one small, clear change."
+    },
+    "pin-front-door": {
+      "file": "commands/somi.md",
+      "find": "argument-hint: \"<what you want, or a ticket>\"",
+      "replace": "argument-hint: \"<what you want, or a ticket>\"\nmodel: haiku"
+    },
+    "tested-fixes-off": {
+      "file": "scripts/lib/engine.mjs",
+      "find": "const TESTED_FIXES = true;",
+      "replace": "const TESTED_FIXES = false;"
     }
   },
   "cells": {
@@ -55,5 +65,14 @@
     ]
   },
   "large_cells": {},
-  "large_note": "The large phases ask whether fresh context per milestone pays. The plain arm routes a long ticket to one worker, which can split it, and the lane arm asks for a plan first, the way a maintainer can."
+  "large_note": "The large phases ask whether fresh context per milestone pays. The plain arm routes a long ticket to one worker, which can split it, and the lane arm asks for a plan first, the way a maintainer can.",
+  "light_cells": {
+    "somi5": [
+      "pin-front-door"
+    ],
+    "somi5-pin": [
+      "pin-front-door",
+      "tested-fixes-off"
+    ]
+  }
 }

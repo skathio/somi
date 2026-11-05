@@ -18,6 +18,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 - **Reviews follow the real diff.** No forecast decides a review. Only a Blocker, or a Major a critic confirms on a trust boundary, re-loops, at most twice, and the second pass reads only the fix diff.
 - **Work on money, accounts or untrusted input gets a stronger worker from the start,** chosen from the words of the request. It only raises a tier, and a ceiling still caps it.
 - **A changed interface, a large diff or several modules no longer start a review on their own.** They are still recorded. Security signals, weakened tests, schema and dependency changes, moved goldens, an unreadable diff and milestone close all still do.
+- **A security finding below the bar gets one fix if a failing test proves it.** Severity ratings miss real gaps, so the test decides, and the fix goes through review like any other change.
 - **Failing checks restart a tier up,** once, with the working tree and a short summary.
 - **Large work gets milestones with fresh context,** from one plan you approve, instead of a document chain. A long ticket starts on one worker, which splits only what proves too big. Asking to see a plan first takes the milestone route directly.
 - **A long ticket stays whole.** A request up to 64 KiB is kept in full, and a longer one is refused and not cut. Choosing a route needs no words back from the coordinator, so it cannot shorten one. A long brief reaches the worker from a file, so the coordinator neither carries nor rewords it.

@@ -545,3 +545,13 @@ test("a recording stops on the host's reported usage, and a window past its rese
   fs.writeFileSync(file, '{"type":"result"}\n');
   assert.equal(hostWindows(file), null);
 });
+
+test('the light phase comes in by the slash command, on a pinned plugin, with one arm for each part', () => {
+  const { patches, light_cells: cells } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8'));
+  for (const list of Object.values(cells)) for (const name of list) assert.ok(patches[name], name);
+  assert.deepEqual(armsFor('light'), ['somi5', 'somi5-pin', 'bare-check']);
+  assert.equal(armPrompt('somi5', 'Do it', 'light'), '/somi:somi Do it');
+  assert.equal(armPrompt('bare-check', 'Do it', 'light'), 'Do it');
+  assert.equal(armPrompt('somi5', 'Do it', 'candidate'), 'Do it');
+  assert.equal(buildPlan('light', [{ id: 't', dir: 'd' }], 1, 6, { 'bare-check': 1 }).length, 13);
+});

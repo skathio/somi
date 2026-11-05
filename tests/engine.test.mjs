@@ -759,7 +759,7 @@ test('a critic\'s confirmation re-loops even when the coordinator lost the revie
 
 test('the commit step says logged findings are not for acting on', (t) => {
   const ctx = atReview(t);
-  const close = reviewed(ctx, { reviews: [review('somi-reviewer', []), review('somi-security-reviewer', [finding({ boundary: false })])] });
+  const close = reviewed(ctx, { reviews: [review('somi-reviewer', [finding({ boundary: false })]), review('somi-security-reviewer', [])] });
   assert.equal(close.then, 'close');
   assert.match(close.how, /do not act on them/);
 });
@@ -962,4 +962,78 @@ test('approving a split keeps the route\'s tier, and only a plan\'s own mileston
 
 test('an agent that does the work is told to do it itself, because a host may let it start others', () => {
   for (const f of ['somi-worker', 'somi-reviewer', 'somi-security-reviewer']) assert.match(fs.readFileSync(path.join(REPO, 'agents', `${f}.md`), 'utf8'), /do not call `somi_step`, start another agent/, f);
+});
+
+const SECURITY_MINOR = { id: 's1', severity: 'Minor', boundary: false, file: 'src/app.js', line: 1, claim: 'older tokens stay valid', evidence: 'use the first token after the second' };
+const toFirstReview = (ctx) => {
+  route(ctx, { request: 'Change the constant' });
+  writeFiles(ctx.root, SINK);
+  done(ctx, {});
+  check(ctx);
+  return done(ctx, {});
+};
+const securityReview = (findings) => [{ agent: 'somi-reviewer', verdict: 'approve', findings: [] }, { agent: 'somi-security-reviewer', verdict: 'approve-with-comments', findings }];
+
+test('a security finding below the bar gets one fix that a failing test must prove, and that fix is reviewed', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  assert.equal(toFirstReview(ctx).next, 'review');
+  const fix = reviewed(ctx, { reviews: securityReview([SECURITY_MINOR]) });
+  assert.equal(fix.next, 'spawn');
+  const brief = fs.existsSync(path.join(statePaths(ctx.root, ctx.env).dir, 'brief.md')) ? fs.readFileSync(path.join(statePaths(ctx.root, ctx.env).dir, 'brief.md'), 'utf8') : fix.spawn.prompt;
+  assert.match(brief, /a test that fails because of the gap/);
+  assert.match(brief, /older tokens stay valid/);
+  writeFiles(ctx.root, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (cmd) => exec(String(cmd));\n' });
+  done(ctx, {});
+  check(ctx);
+  const again = done(ctx, {});
+  assert.equal(again.next, 'review', 'the fix does not skip review');
+  const after = reviewed(ctx, { reviews: securityReview([SECURITY_MINOR]) });
+  assert.equal(after.next, 'run', 'one chance only');
+  assert.equal(events(ctx).filter((e) => e.type === 'tested-fix').length, 1);
+  assert.deepEqual(journalProblems(events(ctx)), []);
+});
+
+test('a fix pass that proves nothing changes nothing and the work still closes', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  toFirstReview(ctx);
+  reviewed(ctx, { reviews: securityReview([SECURITY_MINOR]) });
+  const end = done(ctx, {});
+  assert.equal(end.next, 'run');
+  assert.equal(end.then, 'close');
+});
+
+test('a plain reviewer\'s Minor, a Nit, and a finding that asks to remove a check do not start a fix', (t) => {
+  for (const reviews of [
+    [{ agent: 'somi-reviewer', verdict: 'approve-with-comments', findings: [{ ...SECURITY_MINOR }] }, { agent: 'somi-security-reviewer', verdict: 'approve', findings: [] }],
+    securityReview([{ ...SECURITY_MINOR, severity: 'Nit' }]),
+    securityReview([{ ...SECURITY_MINOR, claim: 'remove the validation here, it is not needed' }]),
+  ]) {
+    const ctx = makeCtx(makeRepo(t));
+    toFirstReview(ctx);
+    const r = reviewed(ctx, { reviews });
+    assert.equal(r.next, 'run');
+    assert.equal(r.then, 'close');
+  }
+});
+
+test('over-long evidence is cut to the limit instead of costing the whole review', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  toFirstReview(ctx);
+  reviewed(ctx, { reviews: securityReview([{ ...SECURITY_MINOR, evidence: 'x'.repeat(900) }]) });
+  const saved = events(ctx).filter((e) => e.type === 'after-review').at(-1).findings[0];
+  assert.equal(saved.evidence.length, 400);
+  const bad = makeCtx(makeRepo(t));
+  toFirstReview(bad);
+  assert.throws(() => reviewed(bad, { reviews: securityReview([{ ...SECURITY_MINOR, evidence: 7 }]) }), /unusable evidence/);
+});
+
+test('a worker asked to fix who changed nothing is told what is still open', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  toFirstReview(ctx);
+  const blocker = { id: 'b1', severity: 'Blocker', file: 'src/app.js', line: 1, claim: 'broken', evidence: 'x' };
+  assert.equal(reviewed(ctx, { reviews: securityReview([blocker]) }).next, 'spawn');
+  const r = finishWork(ctx, { runChecks: () => ({ ok: true }), commit: () => assert.fail('nothing to commit') });
+  assert.equal(r.ok, false);
+  assert.match(r.note, /still open/);
+  assert.match(JSON.stringify(r.findings), /broken/);
 });

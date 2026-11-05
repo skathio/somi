@@ -40,6 +40,10 @@ Differences of a few draws are inside the noise floor. Review shows no gain on t
 
 **What the worker model does,** from an [exploratory ablation](../benchmarks/v2/records/exploratory/ablation-sonnet-worker-44ddb986add1.md) with the low tier mapped to Sonnet, chosen after seeing the candidate result and outside the release decision. Across 128 draws each, solved stays at 90. Hidden-test share rises from 0.915 to 0.978 (bare 0.983), and dollars per draw from $0.102 to $0.168 (bare $0.090). Failed safety tests fall from 103 to 48, and boundary tests from 41 to 1.
 
+## The light phase
+
+`--phase light` is exploratory and tests each part on its own. Both SoMi arms come in through `/somi` with that command pinned to the cheap model, because a command the user types is the only way found to pin the main thread: the same setting on a skill the model loads did not change the model in a live check. `somi5` also has tested fixes, and `somi5-pin` does not. The pin is applied by the bench for now, and a shipped version needs a way to carry it on Claude alone, since shared files name no models. These draws use the same 16 tasks, so they can stop an idea cheaply but cannot prove one.
+
 ## The questions
 
 1. **Is SoMi worth it?** Dollars per solved task and quality per task, against a bare agent on the same model, on a mix of tasks a bare agent sometimes fails, narrowly misses and always solves.

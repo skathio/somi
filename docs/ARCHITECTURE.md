@@ -48,6 +48,7 @@ A retried transition appends nothing and returns its earlier answer. Killing the
 | Reviewers | One on the low tier, plus a security reviewer on the high tier on a boundary. A project's config cannot lower these |
 | What re-loops | A Blocker, or a Major with a boundary flag, a line and evidence |
 | What never re-loops | Minor, Nit, unconfirmed Major, approve-with-comments |
+| Tested fix | The security reviewer's Minor and unconfirmed Major findings get one fix while a pass is left, and only what a failing test proves is fixed. A critic's rejection or a finding that asks to remove a check rules it out |
 | Passes | Two, the second scoped to the fix diff. A third needs the maintainer |
 | Circuit breaker | The same blocking fingerprint in two consecutive passes stops and asks |
 | Relay check | A finding that suggests removing a check, flag, validation or test is marked `needs_verification` |

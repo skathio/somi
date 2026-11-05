@@ -29,7 +29,9 @@ function normalizeFinding(raw, agent, i) {
   if (!SEVERITIES.includes(raw.severity)) throw new ReviewInputError(`${where} has an unknown severity`);
   if (!safeFile(raw.file)) throw new ReviewInputError(`${where} has an unusable file path`);
   if (!isText(raw.claim, 400)) throw new ReviewInputError(`${where} needs a claim of at most 400 characters`);
-  if (raw.evidence !== undefined && raw.evidence !== null && !isText(raw.evidence, 400)) throw new ReviewInputError(`${where} has unusable evidence`);
+  // Long evidence is kept to the limit. Refusing it would throw away the whole report and pay for the review again.
+  const evidence = typeof raw.evidence === 'string' ? raw.evidence.slice(0, 400) : raw.evidence;
+  if (evidence !== undefined && evidence !== null && !isText(evidence, 400)) throw new ReviewInputError(`${where} has unusable evidence`);
   if (raw.line !== undefined && raw.line !== null && !(Number.isInteger(raw.line) && raw.line > 0)) throw new ReviewInputError(`${where} has an unusable line`);
   const finding = {
     id: isText(raw.id, 32) && !CONTROL.test(raw.id) ? raw.id : `${agent}-${i + 1}`,
@@ -39,10 +41,10 @@ function normalizeFinding(raw, agent, i) {
     file: raw.file,
     line: raw.line ?? null,
     claim: raw.claim,
-    evidence: raw.evidence ?? null,
+    evidence: evidence ?? null,
   };
   finding.fingerprint = isText(raw.fingerprint, 64) && /^[\w.:-]+$/.test(raw.fingerprint) ? raw.fingerprint : deriveFingerprint(finding);
-  if (REMOVES_CHECK.test(`${raw.claim} ${raw.evidence ?? ''}`)) finding.needs_verification = true;
+  if (REMOVES_CHECK.test(`${raw.claim} ${evidence ?? ''}`)) finding.needs_verification = true;
   return finding;
 }
 
