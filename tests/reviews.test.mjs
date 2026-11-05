@@ -252,6 +252,28 @@ test('the base is where the branch left the default branch, and can be named', (
   assert.throws(() => reviewPlan(ctx, { base: '--output=/tmp/x' }), /cannot find the base/);
 });
 
+test('a clean review is not asked for again until something new fires, but a fix for a blocker is', (t) => {
+  const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n', 'src/other.js': 'export const two = 2;\n', '.gitignore': '.somi\n' });
+  branch(dir);
+  const ctx = makeCtx(dir);
+  writeFiles(dir, SINK);
+  recordReviews(ctx, { reviews: clean });
+  writeFiles(dir, { 'src/other.js': 'export const two = 3;\n' });
+  const again = reviewPlan(ctx);
+  assert.equal(again.needed, false);
+  assert.equal(again.covered, true);
+  assert.equal(prGate(ctx).ok, true);
+  assert.equal(reviewPlan(ctx, { always: true }).needed, true, 'a user asking still gets one');
+  writeFiles(dir, { 'src/other.js': 'import fs from "node:fs";\nexport const two = () => fs.readFileSync(process.argv[2]);\n' });
+  assert.equal(reviewPlan(ctx).needed, true, 'a new signal needs a new look');
+  const other = makeCtx(makeRepo(t));
+  branch(other.root);
+  writeFiles(other.root, SINK);
+  recordReviews(other, { reviews: [review('somi-reviewer', [blocker]), review('somi-security-reviewer')] });
+  writeFiles(other.root, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = () => exec("ls");\n' });
+  assert.equal(reviewPlan(other).needed, true, 'the fix for a blocker is reviewed');
+});
+
 test('a review without the security reviewer does not cover a change that needs one, whatever the record says', (t) => {
   const dir = makeRepo(t);
   branch(dir);

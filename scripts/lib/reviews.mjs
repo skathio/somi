@@ -54,7 +54,11 @@ export function reviewPlan(ctx, { base, always = false, security = false } = {})
   const agents = [];
   if (!empty && (fired.length > 0 || always || security)) agents.push(REVIEWER);
   if (!empty && (signals.security.length > 0 || security)) agents.push(SECURITY_REVIEWER);
-  return { needed: agents.length > 0, reviewers: agents.map((a) => seat(ctx, a)), base: from, tree, signals: fired, diff: reviewDiffCommand(from, tree), prompt: REVIEWER_PROMPT };
+  // A clean review still vouches for a change until something new fires, so acting on its comments does not pay for it again. A user asking
+  // is the exception, and so is an open blocking finding, whose fix needs a look.
+  const covered = agents.length > 0 && !always && !security && coveringReview(ctx, tree, agents);
+  if (covered && (covered.findings ?? []).filter(isBlocking).length === 0) return { needed: false, covered: true, reviewers: [], required: agents, base: from, tree, signals: fired };
+  return { needed: agents.length > 0, reviewers: agents.map((a) => seat(ctx, a)), required: agents, base: from, tree, signals: fired, diff: reviewDiffCommand(from, tree), prompt: REVIEWER_PROMPT };
 }
 
 // Hosts hand reviewers the absolute path of the working copy, and a report is not worth paying for twice over that.
@@ -83,7 +87,7 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
   const tree = OBJECT_ID.test(String(reviewed)) ? reviewed : plan.tree;
   const list = normalized(ctx, reviews);
   const named = list.map((r) => r?.agent).filter((a) => Object.hasOwn(TIERS, a));
-  const dispatched = [...new Set([...plan.reviewers.map((r) => bare(r.agent)), ...named])].map((agent) => ({ agent }));
+  const dispatched = [...new Set([...plan.required, ...named])].map((agent) => ({ agent }));
   const { findings, verdicts } = parseReviews(list, dispatched);
   const earlier = readReviews(ctx.root, ctx.env).filter((r) => r.base === plan.base);
   const pass = earlier.length + 1;
@@ -114,12 +118,12 @@ function covers(ctx, record, tree, needed) {
   try { return triggers(signalsFor(ctx, record.tree, tree)).length === 0; } catch { return false; }
 }
 
+const coveringReview = (ctx, tree, needed) => [...readReviews(ctx.root, ctx.env)].reverse().find((r) => covers(ctx, r, tree, needed)) ?? null;
+
 // The review gate. Findings are taken from the newest review that covers the tree, so a clean re-review clears an earlier blocker.
 export function prGate(ctx, { base } = {}) {
   const plan = reviewPlan(ctx, { base });
-  const records = readReviews(ctx.root, ctx.env);
-  const needed = plan.reviewers.map((r) => bare(r.agent));
-  const covering = [...records].reverse().find((r) => covers(ctx, r, plan.tree, needed));
+  const covering = coveringReview(ctx, plan.tree, plan.required);
   if (!plan.needed && !covering) return { ok: true, plan, review: null };
   if (!covering) return { ok: false, reason: 'not-reviewed', signals: plan.signals, plan, review: null };
   const blocking = (covering.findings ?? []).filter(isBlocking);

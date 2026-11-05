@@ -134,7 +134,7 @@ async function callTool(name, args) {
         if (typeof a.reviews === 'string') { try { a.reviews = JSON.parse(a.reviews); } catch { return textResult('reviews is not valid JSON. Send an array with every reviewer\'s JSON object.', true); } }
         if (!a.reviews) {
           const plan = reviewPlan(ctx, options);
-          return textResult({ ...plan, advice: plan.needed ? 'Start each reviewer as a fresh agent on its model, giving it only diff and prompt. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.' : 'No review is needed for this change. Carry on.' });
+          return textResult({ ...plan, advice: plan.covered ? 'An earlier review still covers this change, and nothing since calls for another. Do not run the reviewers again. Carry on.' : plan.needed ? 'Start each reviewer as a fresh agent on its model, giving it only diff and prompt, and add nothing of your own. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.' : 'No review is needed for this change. Carry on.' });
         }
         return textResult({ ...recordReviews(ctx, { ...options, reviews: a.reviews, tree: a.tree }), ...shardAdvice(ctx, 'review.done') });
       }
