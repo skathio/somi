@@ -84,8 +84,8 @@ Defects behind some of these, to fix before any further recording:
 
 ## What this does not show
 
-- Only `/somi` typed by the user gets the pin. A prompt with no command stays on the session model, so it should cost about what the second candidate cost. That was not measured here.
-- Copilot was not tested, and I found no equivalent pin there.
+- Only `/somi` typed by the user gets the pin. A prompt with no command stays on the session model, so it should cost about what the second candidate cost. That was not measured here. Correction after this run: a `model` on the agent passed to `--agent` also pins the main thread, and across follow-ups, so a typed command is not the only way. That route was not part of this run.
+- Copilot was not tested. Its documentation says a custom agent's `model` applies when that agent is the session agent, which would be the equivalent pin. On the account used for live checks only Auto was available, so that is not confirmed.
 - Routing went to `build` in 188 of 192 draws, so these tasks do not test routing.
 - Sessions on a stronger model than Sonnet would save more from the pin, but the bench never runs on the top model.
 - The run cost $20.00 and took 5 hours 45 minutes, under my estimate of $31 and about the 6 hours I expected. An earlier attempt stopped after 9 draws and $1.25 because Haiku started workers in the background, which ended the pinned turn. That was fixed in a4312b5 and those draws are not counted.

@@ -42,7 +42,7 @@ Differences of a few draws are inside the noise floor. Review shows no gain on t
 
 ## The light phase
 
-`--phase light` is exploratory and tests each part on its own. Both SoMi arms come in through `/somi` with that command pinned to the cheap model, because a command the user types is the only way found to pin the main thread: the same setting on a skill the model loads did not change the model in a live check. `somi5` also has tested fixes, and `somi5-pin` does not. The pin is applied by the bench for now, and a shipped version needs a way to carry it on Claude alone, since shared files name no models. These draws use the same 16 tasks, so they can stop an idea cheaply but cannot prove one.
+`--phase light` is exploratory and tests each part on its own. Both SoMi arms come in through `/somi` with that command pinned to the cheap model, because that was the first way found to pin the main thread: the same setting on a skill the model loads did not change the model in a live check. A later live check on CLI 2.1.316 found that a `model` on the agent passed to `--agent` keeps the main thread on that model across follow-ups, unless `--model` is also given. This run did not test that. `somi5` also has tested fixes, and `somi5-pin` does not. The pin is applied by the bench for now, and a shipped version needs a way to carry it on Claude alone, since shared files name no models. These draws use the same 16 tasks, so they can stop an idea cheaply but cannot prove one.
 
 **Result.** Recorded on a4312b5, 96 draws an arm, [full reading](../benchmarks/v2/records/exploratory/light-44ddb986add1.md). This is a third look at the same tasks and the pin is not shipped, so it is not a release pass.
 
