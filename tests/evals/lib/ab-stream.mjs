@@ -7,7 +7,7 @@
 //   Not covered: reversed or re-encoded forms (base64, hex), and fragments shorter than 12 characters.
 // Sink (createSink): stdout goes to disk line by line, redacted. The scan flags the task canary, the token, a
 //   `sk-ant-` prefix and, in assistant and user events only (what the agent did and saw), the repository's
-//   tests/evals/ab path, the task's hidden and oracle paths, another draw's temp directory and the env file name.
+//   tests/fixtures/ab path, the task's hidden and oracle paths, another draw's temp directory and the env file name.
 // Inspection (inspectDraw, run after the child is gone): the canary in any file of the after manifest (a silent copy of
 //   the oracle), the canary, the repository path and the token in the session transcripts under cfg/projects (then
 //   deleted, a redacted copy kept when small), and the token redacted in place in every regular file of the workspace and
@@ -62,7 +62,7 @@ export function createSink(file, { token, canary, task, absAb, ownTmp, maxBytes 
   const s = { bytes: 0, capped: false, leaks: new Set(), result: null, turns: 0, text: '', limit: false, reset: null };
   const limitText = (t) => { if (typeof t === 'string' && LIMIT_TEXT.test(t)) { s.limit = true; s.reset ??= RESET_TEXT.exec(t)?.[0].replace(/^resets /i, '').trim() ?? null; } };
   let pending = '';
-  const paths = [['ab-path', 'tests/evals/ab'], ['task-hidden', `${task}/hidden`], ['task-oracle', `${task}/oracle`], ['eval-env', '.somi/eval.env']];
+  const paths = [['ab-path', 'tests/fixtures/ab'], ['task-hidden', `${task}/hidden`], ['task-oracle', `${task}/oracle`], ['eval-env', '.somi/eval.env']];
   if (absAb) paths.push(['ab-path', absAb]);
   function line(raw) {
     const ev = parse(raw);

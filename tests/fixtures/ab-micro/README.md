@@ -2,8 +2,8 @@
 
 This directory is the corpus root of the micro-task suite: many small tasks with a high chance of failure, each costing a
 few tenths of a dollar to draw. A task is a directory `<ID>/` plus a sibling `<ID>.mutants.json`, with the same layout as
-`tests/evals/ab/` (`task.json`, `fixture/`, `hidden/`, `oracle/`, `oracle2/`). The template and a worked example are in
-`tests/evals/ab-micro-template/` (outside this root, so it is never run as a task): copy `EXAMPLE/` and
+`tests/fixtures/ab/` (`task.json`, `fixture/`, `hidden/`, `oracle/`, `oracle2/`). The template and a worked example are in
+`tests/fixtures/ab-micro-template/` (outside this root, so it is never run as a task): copy `EXAMPLE/` and
 `EXAMPLE.mutants.json`, then change the names. No real task is committed yet.
 
 **Tier.** The test tier for this suite is the low tier. Every result it produces is a low-tier result: it says what the
@@ -72,4 +72,4 @@ mid-experiment.
   for a low-tier model, with paired tasks and an exact sign test.
 - It cannot show anything about planning, design, security review or multi-file work; tasks avoid those on purpose.
 - A null result on these tasks says the loop adds little here, not that it adds little elsewhere.
-- The larger H1 task and its relatives are a separate corpus (`tests/evals/ab/`) and are not mixed into these results.
+- The larger H1 task and its relatives are a separate corpus (`tests/fixtures/ab/`) and are not mixed into these results.

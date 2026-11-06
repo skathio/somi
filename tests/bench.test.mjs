@@ -440,7 +440,7 @@ test('registration refuses while a decision is open', (t) => {
 // The free smoke: the whole pipeline on one small real task with a stub agent. It plans, runs, scores with the real scorer, labels,
 // reports and writes the record. It spends nothing.
 function stubAgent(dir, { journal = null } = {}) {
-  const oracle = path.join(REPO, 'tests/evals/ab/T1-proration/oracle');
+  const oracle = path.join(REPO, 'tests/fixtures/ab/T1-proration/oracle');
   const events = [
     { type: 'system', subtype: 'init', session_id: 's' },
     { type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', model: 'stub-1', content: [{ type: 'text', text: 'Done.' }], usage: { output_tokens: 1 } } },
@@ -532,7 +532,7 @@ test('a recording pins the tiers in the user layer too, because reviewers read o
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-bench-'));
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   const config = { tiers: { claude: { low: 'haiku', medium: 'sonnet', high: 'sonnet' } } };
-  prepareWorkspace({ taskDir: path.join(REPO, 'tests/evals/ab/L1-shop-platform'), tmp, config, globalConfig: config });
+  prepareWorkspace({ taskDir: path.join(REPO, 'tests/fixtures/ab/L1-shop-platform'), tmp, config, globalConfig: config });
   const file = globalConfigPath({ HOME: tmp }, 'linux', tmp);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), config);
   assert.equal(resolveSpawn(JSON.parse(fs.readFileSync(file, 'utf8')), 'claude', 'high').model, 'sonnet');
@@ -607,7 +607,7 @@ test('a task\'s follow-up messages are sent in order on the same session, after 
 });
 
 test('a task may carry scripted follow-ups, and they are held to the same text rules', () => {
-  const base = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/evals/ab/T1-proration/task.json'), 'utf8'));
+  const base = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/fixtures/ab/T1-proration/task.json'), 'utf8'));
   assert.deepEqual(validateTaskJson(base).task.turns, []);
   assert.deepEqual(validateTaskJson({ ...base, turns: ['Now the second part.'] }).task.turns, ['Now the second part.']);
   assert.equal(validateTaskJson({ ...base, turns: [] }).ok, false);

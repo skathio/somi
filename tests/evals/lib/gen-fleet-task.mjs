@@ -1,6 +1,6 @@
 // Writes the L3 large task: a service of forty domains in dollars, and a ticket that moves every one of them to binding decisions, then
 // reaches back into all of them at the end. It is big enough to fill a context window, which the smaller large tasks are not.
-// Run: node tests/evals/lib/gen-fleet-task.mjs tests/evals/ab/L3-fleet-backoffice
+// Run: node tests/evals/lib/gen-fleet-task.mjs tests/fixtures/ab/L3-fleet-backoffice
 import fs from 'node:fs';
 import path from 'node:path';
 

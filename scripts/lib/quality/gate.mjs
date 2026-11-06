@@ -12,8 +12,9 @@ import { cssRules } from './css.mjs';
 import { unitsOf, topLevelCognitive } from './metrics.mjs';
 import { languageOf, parseSource } from './parse.mjs';
 
-// Code that is not the product: dependencies, build output, and docs, examples and playgrounds, which are written to be read once.
-const SKIPPED = /(^|\/)(node_modules|vendor|dist|build|coverage|\.next|\.somi|docs?|examples?|demos?|playgrounds?)\//;
+// Code that is not the product: dependencies, build output, test data, and docs, examples and playgrounds, which are written to be
+// read once.
+const SKIPPED = /(^|\/)(node_modules|vendor|dist|build|coverage|\.next|\.somi|fixtures?|__fixtures__|testdata|test-data|docs?|examples?|demos?|playgrounds?)\//;
 const MINIFIED = /\.min\.(js|css)$/;
 const GENERATED = /@generated\b|Code generated .* DO NOT EDIT/;
 const SUPPRESSION = /eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|NOSONAR|#\s*noqa|\/\/\s*nolint|@SuppressWarnings|#\s*type:\s*ignore|istanbul ignore|c8 ignore|stylelint-disable/;
