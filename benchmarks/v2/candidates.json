@@ -375,6 +375,14 @@
    "why": "a feature built over four messages: binding decisions stated once at the start, then one rule reversed late, both checked at the end",
    "stratum": "multi-turn",
    "release_large": true
+  },
+  {
+   "id": "M04-flag-rollout",
+   "dir": "tests/evals/ab/M04-flag-rollout",
+   "boundary": false,
+   "why": "flag rollout built over four messages: exact bucketing stated once at the start, a precedence rule reversed at the end",
+   "stratum": "multi-turn",
+   "release_large": true
   }
  ]
 }
