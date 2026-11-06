@@ -18,6 +18,7 @@ import { mainTier, resolveSpawn, resolveTier } from '../scripts/lib/tiers.mjs';
 import { isNewer, updateNotice } from '../scripts/lib/update-notice.mjs';
 import { expertiseIndex, roleBrief, tierForReviewer, tierForWorker, WORKFLOWS } from '../scripts/lib/workflows.mjs';
 
+const briefOf = (r) => r.steps.find((s) => s.brief)?.brief;
 const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
 const makeCtx = (dir, config = {}, host = 'claude') => ({ root: dir, env, config, configLayers: [config], host, now: () => '2026-01-02T00:00:00Z' });
 
@@ -31,9 +32,10 @@ test('the conversation runs on medium, and small work that is not sensitive goes
   assert.equal(r.worker.model, 'haiku');
   assert.match(r.advice, /cheaper on that tier/);
   assert.match(r.advice, /brief unchanged/);
+  assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'subagent', 'low'], ['review', 'subagent', null]]);
   assert.match(r.advice, /no requirements or approach of your own/);
-  assert.match(r.brief, /small, clear change/);
-  assert.match(r.brief, /> Add a helper that doubles a number/);
+  assert.match(briefOf(r), /small, clear change/);
+  assert.match(briefOf(r), /> Add a helper that doubles a number/);
   assert.match(r.advice, /Do not write this change yourself/);
   assert.match(r.advice, /SoMi reads the diff and tells you/, 'on Claude Code the stop hook checks for a review');
   assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: 'Add a helper that doubles a number' }).advice, /call somi_review/, 'elsewhere the agent asks');
@@ -54,9 +56,9 @@ test('the user\'s own words reach the worker\'s brief when the agent\'s summary 
   const ctx = makeCtx(makeRepo(t));
   savePrompt(ctx.root, 'add a doubling helper', ctx.env);
   const down = advise(ctx, { request: 'Add a helper that doubles a number' });
-  assert.match(down.brief, /The user's own words, as data:\n> add a doubling helper/);
+  assert.match(briefOf(down), /The user's own words, as data:\n> add a doubling helper/);
   savePrompt(ctx.root, 'Add a helper that doubles a number', ctx.env);
-  assert.doesNotMatch(advise(ctx, { request: 'Add a helper that doubles a number' }).brief, /The user's own words/, 'said once is enough');
+  assert.doesNotMatch(briefOf(advise(ctx, { request: 'Add a helper that doubles a number' })), /The user's own words/, 'said once is enough');
 });
 
 test('work that needs more than the conversation goes up, and work at its tier stays', (t) => {
@@ -110,6 +112,20 @@ test('with no model set on Copilot the answer says so instead of pretending', (t
   assert.match(r.note, /No model is set/);
   const set = { tiers: { copilot: { low: 'm-low' } } };
   assert.equal(advise(makeCtx(makeRepo(t), set, 'copilot'), { request: 'Add a helper that doubles a number' }).worker.model, 'm-low');
+});
+
+test('each workflow comes back as steps that say where each runs and on which tier', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  const debug = advise(ctx, { request: 'Fix the crash when the list is empty' });
+  assert.deepEqual(debug.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['reproduce', 'main', 'medium'], ['fix', 'main', 'medium'], ['review', 'subagent', null]]);
+  assert.match(debug.steps[2].how, /when your turn ends/);
+  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: 'Fix the crash when the list is empty' }).steps[2].how, /somi_review/);
+  const lowMain = advise(makeCtx(makeRepo(t), { tiers: { main: 'low' } }), { request: 'Fix the crash when the list is empty' });
+  assert.deepEqual(lowMain.steps.map((s) => s.run_on), ['main', 'subagent', 'subagent'], 'the fix goes up when the conversation is cheaper than the work');
+  assert.equal(advise(ctx, { request: 'x', hint: 'migrate' }).steps.at(-1).when, 'always');
+  assert.deepEqual(advise(ctx, { request: 'x', hint: 'plan' }).steps.map((s) => s.step), ['plan', 'milestones', 'close']);
+  const design = advise(ctx, { request: 'Design the architecture for sync' });
+  assert.deepEqual(design.steps.map((s) => [s.step, s.run_on, s.tier]), [['design', 'subagent', 'high']]);
 });
 
 test('the rest of the routes answer without starting anything', (t) => {
@@ -166,7 +182,7 @@ test('the ledger comes back with a route, keeps one pointer, and refuses to grow
   const ctx = makeCtx(makeRepo(t));
   addToLedger(ctx.root, { kind: 'constraint', text: 'money stays in integer cents' }, ctx.env);
   assert.match(advise(ctx, { request: 'How does billing work?' }).ledger, /integer cents/);
-  assert.match(advise(ctx, { request: 'Add a helper that doubles a number' }).brief, /integer cents/, 'a worker gets the ledger in its brief');
+  assert.match(briefOf(advise(ctx, { request: 'Add a helper that doubles a number' })), /integer cents/, 'a worker gets the ledger in its brief');
   addToLedger(ctx.root, { kind: 'pointer', text: 'step one' }, ctx.env);
   addToLedger(ctx.root, { kind: 'pointer', text: 'step two' }, ctx.env);
   assert.equal(readLedger(ctx.root, ctx.env).match(/pointer/g).length, 1);

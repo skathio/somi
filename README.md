@@ -9,7 +9,7 @@ Tell SoMi what you want, in plain words or as a ticket, and it picks the right w
 ```text
 you talk to one agent, on the medium tier, the same as a bare agent
   -> a question, a follow-up, a change of mind: it just answers
-  -> work to do: it asks somi_route once, and gets the workflow, the tier and a ready-made brief
+  -> work to do: it asks somi_route once, and gets the workflow's steps: each one's tier, whether it runs here or on a subagent, and its brief
   -> code work: it goes down to a worker on the low tier, unless you said it is security-sensitive
   -> the diff touches a security sink: the review and every fix stay here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier

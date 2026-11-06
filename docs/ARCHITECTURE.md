@@ -8,6 +8,7 @@ SoMi 5.0 keeps what SoMi is for, picking the right workflow for any request, and
 the user talks to one agent, on the tier set by tiers.main: medium by default, the same as a bare agent
   -> a question, a follow-up, a change of mind: the agent carries on, with no tool call needed
   -> work to do: somi_route, once, with the request written to read on its own
+       it returns the workflow as steps, each with where it runs, main or a subagent, and on which tier
        rules decide a clear request; with no rule to go on, it is new work and goes to build
   -> code below the conversation's tier: down to a low worker, with a brief somi_route built
   -> the user said it is security-sensitive, or it is at the conversation's tier: done here
@@ -21,6 +22,8 @@ the user talks to one agent, on the tier set by tiers.main: medium by default, t
 An earlier version made the agent a coordinator on a step engine: it could not read or answer, and each answer named the one thing it could do next. That was too restrictive in real use, and it lost context on sequential requests, because a new request was refused while work was open and a worker saw only the latest message. No benchmark caught it, because each draw was one prompt and an "Approved".
 
 SoMi's founding comparison is a bare agent on the same tier: both hold the conversation on medium and do the whole job, and SoMi saves by moving what is cheaper down to low. In the first candidate's ablation, a medium coordinator with low workers and no review cost 0.89 times bare per draw (0.79 to 1.02). The cheap tier lost on money, accounts and untrusted input. Matching those words in a request kept 11 of 16 benchmark tasks on medium, so whether work is risky is read from the code instead: the diff's security signals call in the security reviewer, and any fix they lead to stays on medium. That follows the rule to raise a tier only on observed evidence, and it carries a known risk: a low worker's build can miss a safety case that review does not catch. The user can still say up front that work is sensitive.
+
+Each workflow comes back as a short list of steps. A debug is reproduce, fix and review; a plan is plan, milestones and close. Each step says whether it runs on the main thread or on a subagent, and on which tier. That is SoMi 3.x's per-step dispatch, but computed for each request and kept nowhere, so it never stands between the user and the next message.
 
 What a model would otherwise work out the same way every time is done by the tools. The worker's and the reviewers' briefs are built by them, so a model passing them on cannot reword the ticket or add an approach of its own. With no rule to go on, a request goes to `build` without a turn spent choosing. The diff decides the reviewers, a clean review is not asked for again while it still covers the change, and the plan file and pull request text have tools of their own.
 

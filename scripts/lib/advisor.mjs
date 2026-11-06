@@ -61,13 +61,35 @@ const afterChange = (host) => (host === 'claude'
   ? 'You do not need to ask whether a review is due: when your turn ends, SoMi reads the diff and tells you. Commit only if the user asked you to.'
   : 'When the change is ready, call somi_review. It reads the diff and says whether a review is needed. Any later change on this work goes the same way. Commit only if the user asked you to.');
 const HERE = 'Do this yourself, in this conversation, following role. Read, edit and ask the user whatever the work needs.';
-const delegate = (agent, model, why) => `Start ${agent}${model ? ` on model ${model}` : ''} now, in the foreground, with brief unchanged, ${why}. Do not write this change yourself: that spends the conversation's tier on work a worker does for less, and on Claude Code SoMi holds back your edits until the worker starts. Below the brief, under "From the conversation:", you may add facts the user or earlier turns settled that it needs: files, decisions, what was already tried. Add no requirements or approach of your own. When it reports, check the result against what the user asked and carry on the conversation. If the host refuses that model, tell the user why, and do it here.`;
+const delegate = (agent, model, why) => `Start ${agent}${model ? ` on model ${model}` : ''} now, in the foreground, with its step's brief unchanged, ${why}. Do not write this change yourself: that spends the conversation's tier on work a worker does for less, and on Claude Code SoMi holds back your edits until the worker starts. Below the brief, under "From the conversation:", you may add facts the user or earlier turns settled that it needs: files, decisions, what was already tried. Add no requirements or approach of your own. When it reports, check the result against what the user asked and carry on the conversation. If the host refuses that model, tell the user why, and do it here.`;
 const DOWN = 'because this work is cheaper on that tier';
 const UP = 'because it needs a stronger model than this conversation';
 const unmapped = (host) => `No model is set for this tier on ${host}, so a worker would run on the session's model. The user can set one under tiers.${host} in config.`;
 
 function planAdvice(start) {
   return `${start} The plan is saved with somi_plan. Show it to the user and wait for their approval. Then build the milestones in order. Call somi_route for each one, so it gets a fresh worker or a fresh turn with the plan and ledger in its brief, and long work does not rot the context. After each milestone, call somi_review and mark it done with somi_plan. Record lasting decisions with somi_note. When all are done, close the plan with somi_plan.`;
+}
+
+// A workflow as its steps, each saying where it runs and on which tier, worked out fresh for every request and kept nowhere. The agent runs
+// them in order. Only a step on a subagent holds the main thread's edits back, and review happens only where the diff calls for it.
+const REVIEW_STEP = (host, always) => ({ step: 'review', run_on: 'subagent', agents: ['somi:somi-reviewer', 'somi:somi-security-reviewer'], when: always ? 'always' : 'the diff signals it', how: host === 'claude' && !always ? 'SoMi checks when your turn ends and tells you' : 'call somi_review' });
+const FIRST_STEP = Object.freeze({ debug: 'reproduce', plan: 'plan', design: 'design', discover: 'research', atlas: 'map', answer: 'answer' });
+const WHAT = Object.freeze({
+  reproduce: 'Write a failing test that shows the bug, from the code and the report.',
+  fix: 'Fix the cause the failing test shows, and keep the test.',
+  build: 'Make the change, with tests that fail without it.',
+  plan: 'Write the milestones and save them with somi_plan. Wait for the user to approve them.',
+  milestones: 'For each milestone in order, call somi_route with it, run its steps, and mark it done with somi_plan.',
+  close: 'Close the plan with somi_plan when every milestone is done.',
+});
+
+export function workflowSteps({ route, kind, alwaysReview, host, work }) {
+  const main = { run_on: 'main', tier: work.mainTier };
+  const doWork = work.worker ? { run_on: 'subagent', agent: work.worker.agent, tier: work.tier, ...(work.worker.model ? { model: work.worker.model } : {}), brief: work.brief } : { run_on: 'main', tier: work.tier };
+  if (kind === 'plan') return [{ step: 'plan', ...main, do: WHAT.plan }, { step: 'milestones', run_on: 'main', tier: work.mainTier, do: WHAT.milestones }, { step: 'close', ...main, do: WHAT.close }];
+  if (kind === 'report') return [{ step: FIRST_STEP[route] ?? route, ...doWork }];
+  if (route === 'debug') return [{ step: 'reproduce', ...main, do: WHAT.reproduce }, { step: 'fix', ...doWork, do: WHAT.fix }, REVIEW_STEP(host, alwaysReview)];
+  return [{ step: route === 'build' ? 'build' : route, ...doWork, do: WHAT.build }, REVIEW_STEP(host, alwaysReview)];
 }
 
 export function advise(ctx, { request, ticket, hint, sensitive } = {}) {
@@ -101,16 +123,16 @@ export function advise(ctx, { request, ticket, hint, sensitive } = {}) {
   const worker = direction ? { agent: workerAgent(tier), ...(model ? { model } : {}) } : null;
   const start = worker ? delegate(worker.agent, worker.model, direction === 'up' ? UP : DOWN) : HERE;
   if (worker && wf.kind === 'code') markDelegation(ctx.root, { agent: worker.agent, tier }, ctx.env);
-  const steps = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
+  const advice = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
   return clean({
     route: chosen.route,
     tier,
+    steps: workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, host: ctx.host, work: { mainTier: main, tier, worker, brief: worker ? workerBrief({ role, request, said, ledger, skills }) : undefined } }),
     where: worker ? 'worker' : 'here',
     worker,
     sensitive: isSensitive || undefined,
-    advice: steps,
+    advice: `Run steps in order. ${advice}`,
     alternatives,
-    brief: worker ? workerBrief({ role, request, said, ledger, skills }) : undefined,
     role: worker ? undefined : role,
     skills: !worker && skills.length > 0 ? skills : undefined,
     ledger: worker ? undefined : ledger,

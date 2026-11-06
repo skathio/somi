@@ -29,6 +29,7 @@ function startServer(t, dir) {
   });
 }
 
+const briefOf = (r) => r.steps.find((s) => s.brief)?.brief;
 const call = async (rpc, name, args) => {
   const r = await rpc('tools/call', { name, arguments: args });
   return { error: r.result.isError === true, text: r.result.content[0].text };
@@ -90,7 +91,7 @@ test('a field the model made up is named back to it instead of being read as an 
   savePrompt(dir, 'Add password reset for accounts', { ...process.env, SOMI_GLOBAL_CONFIG: '' });
   const fromPrompt = JSON.parse((await call(rpc, 'somi_route', {})).text);
   assert.equal(fromPrompt.route, 'build', 'with no request, the user\'s own words stand in');
-  assert.match(fromPrompt.brief, /> Add password reset for accounts/);
+  assert.match(briefOf(fromPrompt), /> Add password reset for accounts/);
   assert.equal((await call(rpc, 'somi_route', { hint: 'config' })).error, false);
   assert.match((await call(rpc, 'somi_review', { description: 'reviewed' })).text, /no field description/);
 });
