@@ -86,10 +86,12 @@ Claude Code has those defaults. Copilot has none, because its models vary by pla
 
 ## Set your quality limits
 
-`somi quality` checks what a change touched against limits on complexity, nesting, length, parameters, copied code and suppressions. The defaults are in [ARCHITECTURE.md](docs/ARCHITECTURE.md#quality-gate). Set your own under `quality` in the same global file:
+`somi quality` checks what a change touched against limits on complexity, nesting, length, parameters, copied code and suppressions. The defaults are in [ARCHITECTURE.md](docs/ARCHITECTURE.md#quality-gate). It runs at two scopes. `somi quality --scope commit` scores what a commit adds to the last one. The default, `--scope pr`, scores the whole branch since it left the main branch, which is what goes into a pull request. Both scopes share every limit except how much one change may add to a file: 25 in a commit and 100 in a pull request.
+
+Set your own under `quality` in the same global file, and give either scope its own values under `quality.commit` or `quality.pr`:
 
 ```json
-{ "quality": { "function": { "cognitive": 15, "depth": 4, "lines": 60, "params": 4 }, "file": { "added_cognitive": 25 } } }
+{ "quality": { "function": { "cognitive": 15, "depth": 4, "lines": 60, "params": 4 }, "commit": { "file": { "added_cognitive": 25 } }, "pr": { "file": { "added_cognitive": 100 } } } }
 ```
 
 A project's `.somi/config.json` can only make a limit stricter: a looser value there is ignored, and `somi quality` says so. SoMi asks before an agent changes a limit.

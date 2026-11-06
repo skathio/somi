@@ -10,7 +10,7 @@ import { CLI, REPO } from './helpers.mjs';
 import { findClones, tokensOf } from '../scripts/lib/quality/clones.mjs';
 import { cssRules } from '../scripts/lib/quality/css.mjs';
 import { qualityGate } from '../scripts/lib/quality/gate.mjs';
-import { DEFAULT_LIMITS, loosens, resolveLimits } from '../scripts/lib/quality/limits.mjs';
+import { DEFAULT_LIMITS, limitsFor, resolveLimits } from '../scripts/lib/quality/limits.mjs';
 import { topLevelCognitive, unitsOf } from '../scripts/lib/quality/metrics.mjs';
 import { parseSource, verifiedFile } from '../scripts/lib/quality/parse.mjs';
 import { listFiles, snapshotTree } from '../scripts/lib/git-tree.mjs';
@@ -70,7 +70,7 @@ test('depth, lines, parameters and kind are measured per function', async () => 
 });
 
 test('limits come from the defaults, the user\'s file may set any, and a project may only tighten', () => {
-  assert.deepEqual(resolveLimits().limits, JSON.parse(JSON.stringify(DEFAULT_LIMITS)));
+  assert.deepEqual(resolveLimits({ scope: 'commit' }).limits, JSON.parse(JSON.stringify(DEFAULT_LIMITS)), 'a commit gets the calibrated defaults');
   const loose = resolveLimits({ global: { quality: { function: { cognitive: 25 } } } });
   assert.equal(loose.limits.function.cognitive, 25, 'the user may loosen their own');
   const project = resolveLimits({ global: { quality: { function: { cognitive: 25 } } }, project: { quality: { function: { cognitive: 30, depth: 3 } } } });
@@ -79,8 +79,24 @@ test('limits come from the defaults, the user\'s file may set any, and a project
   assert.match(project.ignored.find((x) => x.key === 'quality.function.cognitive').reason, /may only tighten/);
   const odd = resolveLimits({ project: { quality: { function: { cognitive: -1, made_up: 2 }, colours: {} } } });
   assert.deepEqual(odd.ignored.map((x) => x.key).sort(), ['quality.colours', 'quality.function.cognitive', 'quality.function.made_up']);
-  assert.equal(loosens(DEFAULT_LIMITS, { function: { cognitive: 20 } }), true);
-  assert.equal(loosens(DEFAULT_LIMITS, { function: { cognitive: 10 } }), false);
+});
+
+test('a commit and a pull request share every limit but how much one change may add, and either can override any', () => {
+  assert.equal(limitsFor('commit').file.added_cognitive, 25);
+  assert.equal(limitsFor('pr').file.added_cognitive, 100, 'a branch can add a new module');
+  assert.deepEqual({ ...limitsFor('pr'), file: null }, { ...limitsFor('commit'), file: null });
+  assert.throws(() => limitsFor('release'), /commit or pr/);
+  const global = { quality: { function: { cognitive: 20 }, pr: { function: { cognitive: 25 } }, commit: { file: { added_cognitive: 40 } } } };
+  assert.equal(resolveLimits({ global, scope: 'pr' }).limits.function.cognitive, 25, 'a scope overrides the shared value');
+  assert.equal(resolveLimits({ global, scope: 'commit' }).limits.function.cognitive, 20);
+  assert.equal(resolveLimits({ global, scope: 'commit' }).limits.file.added_cognitive, 40);
+  const project = { quality: { pr: { function: { depth: 3, cognitive: 40 } } } };
+  const pr = resolveLimits({ global, project, scope: 'pr' });
+  assert.equal(pr.limits.function.depth, 3, 'a project tightens one scope');
+  assert.equal(pr.limits.function.cognitive, 25);
+  assert.equal(pr.ignored[0].key, 'quality.pr.function.cognitive');
+  assert.equal(resolveLimits({ global, project, scope: 'commit' }).limits.function.depth, 4, 'and not the other');
+  assert.deepEqual(resolveLimits({ project: { quality: { pr: { colours: {} } } }, scope: 'pr' }).ignored.map((x) => x.key), ['quality.pr.colours']);
 });
 
 test('copied code is found even with its names changed, and short or different code is not', async () => {
@@ -195,6 +211,8 @@ test('somi quality reads the config, a benchmark ignores it, and it exits 1 on a
   r.write('src/a.js', PYRAMID('fresh'));
   r.write('.somi/config.json', JSON.stringify({ quality: { function: { depth: 9 } } }));
   const run = (args, env = {}) => spawnSync(process.execPath, [CLI, 'quality', ...args], { cwd: r.dir, encoding: 'utf8', env: { ...process.env, SOMI_GLOBAL_CONFIG: '', ...env } });
+  assert.equal(JSON.parse(run(['--scope', 'commit']).stdout).scope, 'commit');
+  assert.equal(run(['--scope', 'release']).status, 64);
   const project = run([]);
   assert.equal(project.status, 1);
   assert.match(JSON.parse(project.stdout).ignored_config[0].reason, /may only tighten/);
@@ -202,4 +220,19 @@ test('somi quality reads the config, a benchmark ignores it, and it exits 1 on a
   fs.writeFileSync(global, JSON.stringify({ quality: { function: { depth: 9, cognitive: 40 } } }));
   assert.equal(run([], { SOMI_GLOBAL_CONFIG: global }).status, 0, 'the user\'s own file may loosen');
   assert.equal(run(['--benchmark'], { SOMI_GLOBAL_CONFIG: global }).status, 1, 'a benchmark scores with the defaults');
+});
+
+test('the commit scope scores what a commit adds to the last one, and the pr scope the whole branch', async (t) => {
+  const r = repo(t);
+  r.write('src/a.js', 'export const a = 1;\n');
+  r.git('add', '-A'); r.git('commit', '-qm', 'base');
+  r.git('checkout', '-q', '-b', 'work');
+  r.write('src/b.js', PYRAMID('early'));
+  r.git('add', '-A'); r.git('commit', '-qm', 'first');
+  r.write('src/c.js', 'export const c = 3;\n');
+  const run = (scope) => JSON.parse(spawnSync(process.execPath, [CLI, 'quality', '--scope', scope], { cwd: r.dir, encoding: 'utf8', env: { ...process.env, SOMI_GLOBAL_CONFIG: '' } }).stdout);
+  assert.equal(run('commit').ok, true, 'the uncommitted change is clean');
+  assert.equal(run('pr').ok, false, 'the branch still holds the pyramid');
+  r.git('add', '-A'); r.git('commit', '-qm', 'second');
+  assert.equal(run('commit').ok, true, 'with nothing uncommitted, the last commit is what is scored');
 });

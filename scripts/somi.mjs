@@ -24,14 +24,14 @@ import { advise } from './lib/advisor.mjs';
 import { runCheck } from './lib/check.mjs';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
 import { runDoctor } from './lib/doctor.mjs';
-import { listFiles, repoRoot, resolveRef, snapshotTree, stateIsTracked, workBase } from './lib/git-tree.mjs';
+import { commitBase, listFiles, repoRoot, resolveRef, snapshotTree, stateIsTracked, workBase } from './lib/git-tree.mjs';
 import { writeCopilotExtension, writeCopilotHooks } from './lib/init.mjs';
 import { addToLedger, readLedger } from './lib/ledger.mjs';
 import { migrate } from './lib/migrate.mjs';
 import { lastCheck, migratedFindings, pullRequest } from './lib/pr.mjs';
 import { closePlan, markMilestoneDone, planStatus, savePlan } from './lib/plan.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
-import { DEFAULT_LIMITS, resolveLimits } from './lib/quality/limits.mjs';
+import { SCOPES, limitsFor, resolveLimits } from './lib/quality/limits.mjs';
 import { qualityGate } from './lib/quality/gate.mjs';
 import { readReviews, recordReviews, reviewPlan } from './lib/reviews.mjs';
 import { setupAgent } from './lib/setup.mjs';
@@ -86,15 +86,18 @@ function pr(ctx, args) {
   return 0;
 }
 
-// The quality gate on the work since this branch left the shared history, uncommitted files included, as the review check sees it.
-// --benchmark scores with the default limits and counts an agent's own exemptions as violations.
+// The quality gate. --scope pr, the default, scores the work since this branch left the shared history, uncommitted files included, as
+// the review check sees it. --scope commit scores what a commit adds to the last one. --benchmark scores with the default limits and
+// counts an agent's own exemptions as violations.
 async function quality(ctx, args) {
-  const { values } = parseArgs({ args, options: { from: { type: 'string' }, benchmark: { type: 'boolean' } } });
-  const from = values.from ? resolveRef(ctx.root, values.from) : workBase(ctx.root);
+  const { values } = parseArgs({ args, options: { from: { type: 'string' }, scope: { type: 'string' }, benchmark: { type: 'boolean' } } });
+  const scope = values.scope ?? 'pr';
+  if (!SCOPES.includes(scope)) throw new StateError(`quality takes --scope ${SCOPES.join(' or ')}`);
+  const from = values.from ? resolveRef(ctx.root, values.from) : scope === 'commit' ? commitBase(ctx.root) : workBase(ctx.root);
   const to = snapshotTree(ctx.root);
-  const { limits, ignored } = values.benchmark ? { limits: DEFAULT_LIMITS, ignored: [] } : resolveLimits({ global: ctx.configLayers[0], project: ctx.configLayers[1] });
+  const { limits, ignored } = values.benchmark ? { limits: limitsFor(scope), ignored: [] } : resolveLimits({ global: ctx.configLayers[0], project: ctx.configLayers[1], scope });
   const result = await qualityGate(ctx.root, { from, to, limits, now: ctx.now(), mode: values.benchmark ? 'benchmark' : 'project', repoFiles: listFiles(ctx.root, to) });
-  print({ ...result, from, to, ...(ignored.length ? { ignored_config: ignored } : {}) });
+  print({ ...result, scope, from, to, ...(ignored.length ? { ignored_config: ignored } : {}) });
   return result.ok ? 0 : 1;
 }
 

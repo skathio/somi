@@ -536,8 +536,9 @@ test('when a turn ends, a change that needs a review is sent back once, and one 
 test('the config route shows the quality limits, which project values were ignored, and where a change goes', (t) => {
   const ctx = { ...makeCtx(makeRepo(t)), configLayers: [{ quality: { function: { cognitive: 20 } } }, { quality: { function: { cognitive: 30, depth: 3 } } }] };
   const r = advise(ctx, { request: 'x', hint: 'config' });
-  assert.equal(r.quality.function.cognitive, 20, 'the user\'s own file loosened it');
-  assert.equal(r.quality.function.depth, 3, 'the project tightened it');
+  assert.equal(r.quality.pr.function.cognitive, 20, 'the user\'s own file loosened it');
+  assert.equal(r.quality.commit.function.depth, 3, 'the project tightened it');
+  assert.deepEqual([r.quality.commit.file.added_cognitive, r.quality.pr.file.added_cognitive], [25, 100], 'both scopes are shown');
   assert.equal(r.quality_ignored[0].key, 'quality.function.cognitive');
-  assert.match(r.advice, /never in the project's \.somi\/config\.json[\s\S]*looser than the current limit, ask the user/);
+  assert.match(r.advice, /quality\.commit or quality\.pr for one scope[\s\S]*never in the project's \.somi\/config\.json[\s\S]*looser than the current limit, ask the user/);
 });

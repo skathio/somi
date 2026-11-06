@@ -44,6 +44,15 @@ export function repoRoot(cwd) {
   return git(cwd, ['rev-parse', '--show-toplevel']).trim();
 }
 
+// What a commit adds to: the last commit when there is work not yet committed, as before a commit, or else the last commit's parent, so
+// the last commit itself is scored. With no parent it is the empty tree.
+export function commitBase(root) {
+  const head = headSha(root);
+  if (head === null) return baseRef(root);
+  if (!isClean(root)) return head;
+  try { return git(root, ['rev-parse', '--verify', '--quiet', 'HEAD^']).trim(); } catch { return git(root, ['hash-object', '-t', 'tree', '--stdin'], { stdio: ['pipe', 'pipe', 'pipe'], input: '' }).trim(); }
+}
+
 export function headSha(root) {
   try { return git(root, ['rev-parse', '--verify', '--quiet', 'HEAD']).trim(); } catch { return null; }
 }

@@ -33,7 +33,7 @@ import { armSummary, costDrawsPerArm, evaluateAa, evaluateRelease, logRatio, non
 import { adherence, agentSplit, labelDraw, scopeCheck } from './telemetry.mjs';
 import { listFiles, snapshotTree } from '../../scripts/lib/git-tree.mjs';
 import { qualityGate } from '../../scripts/lib/quality/gate.mjs';
-import { DEFAULT_LIMITS } from '../../scripts/lib/quality/limits.mjs';
+import { limitsFor } from '../../scripts/lib/quality/limits.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -507,13 +507,13 @@ export function rankArms(rows) {
 }
 
 // The quality gate on what a draw changed, from the workspace's first commit, so a draw that commits its own work is still measured.
-// It scores with the default limits in benchmark mode, where an agent's own exemptions count as violations. A gate that cannot run
-// fails the draw's quality rather than leaving it unscored.
+// It scores the whole draw as a pull request, with the default limits in benchmark mode, where an agent's own exemptions count as
+// violations. A gate that cannot run fails the draw's quality rather than leaving it unscored.
 export async function scoreQuality(ws) {
   try {
     const roots = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], { cwd: ws, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n');
     const to = snapshotTree(ws);
-    const r = await qualityGate(ws, { from: roots.at(-1), to, limits: DEFAULT_LIMITS, mode: 'benchmark', repoFiles: listFiles(ws, to) });
+    const r = await qualityGate(ws, { from: roots.at(-1), to, limits: limitsFor('pr'), mode: 'benchmark', repoFiles: listFiles(ws, to) });
     const rules = {};
     for (const v of r.violations) rules[v.rule] = (rules[v.rule] ?? 0) + 1;
     return { ok: r.ok, violations: r.violations.length, rules, scored: r.scored, unanalyzed: r.unanalyzed.length };
