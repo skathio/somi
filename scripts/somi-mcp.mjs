@@ -18,6 +18,7 @@ import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
 import { closePlan, markMilestoneDone, planStatus, savePlan } from './lib/plan.mjs';
 import { pullRequest } from './lib/pr.mjs';
+import { readPrompt } from './lib/prompt.mjs';
 import { recordReviews, reviewPlan } from './lib/reviews.mjs';
 import { ShardError } from './lib/shards.mjs';
 import { StateError } from './lib/state.mjs';
@@ -143,8 +144,13 @@ async function callTool(name, args) {
     const known = Object.keys(TOOLS.find((t) => t.name === name).inputSchema.properties);
     const unknown = Object.keys(a).filter((k) => !known.includes(k));
     if (unknown.length > 0) return textResult(`${name} has no field ${unknown.join(', ')}. It takes ${known.join(', ')}. Call it again with those.`, true);
-    if (name === 'somi_route' && typeof a.request !== 'string' && typeof a.hint !== 'string') return textResult('somi_route needs request set to the work. Call it again with that.', true);
     const ctx = await context(typeof a.project_dir === 'string' ? a.project_dir : undefined);
+    // A model can call a tool before it has loaded the tool's fields. The user's own words were kept as they arrived, so they stand in.
+    if (name === 'somi_route' && typeof a.request !== 'string' && typeof a.hint !== 'string') {
+      const said = readPrompt(ctx.root, ctx.env);
+      if (!said.trim()) return textResult('somi_route needs request set to the work. Call it again now, with request set to what the user asked for.', true);
+      a.request = said;
+    }
     switch (name) {
       case 'somi_route': return textResult(advise(ctx, { request: typeof a.request === 'string' ? a.request : undefined, hint: a.hint, ticket: a.ticket, sensitive: a.sensitive }));
       case 'somi_note': return textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env));

@@ -1,0 +1,570 @@
+{
+ "schema": 2,
+ "plan": {
+  "phase": "smoke",
+  "model": "claude-sonnet-5-5",
+  "worker_model": "claude-haiku-5-5",
+  "rule": "44ddb986add1733649ad1c5ffd01b0d0782b6b6c997d1f3ebc0c9ecf059034d3",
+  "host": {
+   "cpu": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
+   "cores": 8,
+   "memGb": 15,
+   "os": "6.8.0-147-generic",
+   "node": "v26.2.0"
+  },
+  "draws": [
+   "N01-invoice-cents.somi5.1",
+   "N01-invoice-cents.bare.1",
+   "N10-bundle-extract.somi5.1",
+   "N10-bundle-extract.bare.1",
+   "N05-rate-limit.somi5.1",
+   "N05-rate-limit.bare.1"
+  ]
+ },
+ "rows": [
+  {
+   "schema": 2,
+   "draw": "N01-invoice-cents.somi5.1",
+   "task": "N01-invoice-cents",
+   "arm": "somi5",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 10,
+   "total": 10,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 3,
+    "agents": [
+     {
+      "type": "somi:somi-reviewer",
+      "model": "haiku"
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": "sonnet"
+     }
+    ],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 1,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {
+     "Minor": 2,
+     "Major": 1,
+     "Nit": 1
+    }
+   },
+   "agents": {
+    "somi:somi-security-reviewer": {
+     "weighted": 15823.25,
+     "messages": 1,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 41379.75,
+     "messages": 2,
+     "models": [
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+     ]
+    },
+    "somi:somi-reviewer": {
+     "weighted": 16005.75,
+     "messages": 1,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 76600.45,
+     "messages": 8,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.9,
+   "cost": 0.23460740500000002,
+   "wall_ms": 72495,
+   "turns": 11,
+   "tokens": {
+    "input": 24,
+    "output": 11973,
+    "cacheRead": 166052,
+    "cacheCreation": 58652
+   },
+   "weighted": 149809.2,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.22988290000000003,
+    "claude-haiku-5-5": 0.004724505
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "oracle_pass": false,
+    "killed": 0,
+    "total": 2
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N01-invoice-cents.bare.1",
+   "task": "N01-invoice-cents",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 10,
+   "total": 10,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 33903.5,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.7,
+   "cost": 0.0729475,
+   "wall_ms": 29358,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2815,
+    "cacheRead": 84735,
+    "cacheCreation": 9076
+   },
+   "weighted": 33903.5,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0729475
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "oracle_pass": true,
+    "killed": 2,
+    "total": 2
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N10-bundle-extract.somi5.1",
+   "task": "N10-bundle-extract",
+   "arm": "somi5",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 3,
+    "agents": [
+     {
+      "type": "somi:somi-reviewer",
+      "model": "haiku"
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": "sonnet"
+     }
+    ],
+    "inline_writes": 1,
+    "routed": "build",
+    "passes": 1,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {
+     "Minor": 2,
+     "Nit": 2
+    }
+   },
+   "agents": {
+    "somi:somi-reviewer": {
+     "weighted": 27336.800000000003,
+     "messages": 2,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 29377.449999999997,
+     "messages": 2,
+     "models": [
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5"
+     ]
+    },
+    "somi:somi-security-reviewer": {
+     "weighted": 6635.5,
+     "messages": 1,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 81111.00000000001,
+     "messages": 10,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.21019489499999996,
+   "wall_ms": 86395,
+   "turns": 14,
+   "tokens": {
+    "input": 30,
+    "output": 13365,
+    "cacheRead": 270870,
+    "cacheCreation": 40415
+   },
+   "weighted": 144460.75,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.2058268,
+    "claude-haiku-5-5": 0.004368095
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "oracle_pass": false,
+    "killed": 0,
+    "total": 3
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N10-bundle-extract.bare.1",
+   "task": "N10-bundle-extract",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 42037.65000000001,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0908949,
+   "wall_ms": 33220,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 4138,
+    "cacheRead": 85389,
+    "cacheCreation": 10239
+   },
+   "weighted": 42037.65,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0908949
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "oracle_pass": false,
+    "killed": 0,
+    "total": 3
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N05-rate-limit.somi5.1",
+   "task": "N05-rate-limit",
+   "arm": "somi5",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 3,
+    "agents": [
+     {
+      "type": "somi:somi-reviewer",
+      "model": "haiku"
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": "sonnet"
+     }
+    ],
+    "inline_writes": 0,
+    "routed": "build",
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "somi:somi-reviewer": {
+     "weighted": 30126.85,
+     "messages": 3,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 15123.6,
+     "messages": 2,
+     "models": [
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5"
+     ]
+    },
+    "somi:somi-security-reviewer": {
+     "weighted": 13288.6,
+     "messages": 2,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 55861.5,
+     "messages": 8,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999999,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.15518001,
+   "wall_ms": 64575,
+   "turns": 13,
+   "tokens": {
+    "input": 30,
+    "output": 9676,
+    "cacheRead": 242993,
+    "cacheCreation": 33353
+   },
+   "weighted": 114400.55,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1511652,
+    "claude-haiku-5-5": 0.004014810000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "oracle_pass": true,
+    "killed": 3,
+    "total": 3
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N05-rate-limit.bare.1",
+   "task": "N05-rate-limit",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 34550.35,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.07454310000000001,
+   "wall_ms": 27638,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2903,
+    "cacheRead": 84491,
+    "cacheCreation": 9261
+   },
+   "weighted": 34550.35,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07454310000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "oracle_pass": true,
+    "killed": 3,
+    "total": 3
+   }
+  }
+ ]
+}

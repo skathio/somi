@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { REPO, makeRepo, somi, writeFiles } from './helpers.mjs';
+import { savePrompt } from '../scripts/lib/prompt.mjs';
 
 function startServer(t, dir) {
   const child = spawn(process.execPath, [path.join(REPO, 'scripts', 'somi-mcp.mjs')], {
@@ -83,6 +84,10 @@ test('a field the model made up is named back to it instead of being read as an 
   const none = await call(rpc, 'somi_route', {});
   assert.equal(none.error, true);
   assert.match(none.text, /needs request/);
+  savePrompt(dir, 'Add password reset for accounts', { ...process.env, SOMI_GLOBAL_CONFIG: '' });
+  const fromPrompt = JSON.parse((await call(rpc, 'somi_route', {})).text);
+  assert.equal(fromPrompt.route, 'build', 'with no request, the user\'s own words stand in');
+  assert.equal(fromPrompt.sensitive, true);
   assert.equal((await call(rpc, 'somi_route', { hint: 'config' })).error, false);
   assert.match((await call(rpc, 'somi_review', { description: 'reviewed' })).text, /no field description/);
 });
