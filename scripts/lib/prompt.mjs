@@ -14,8 +14,11 @@ const file = (root, env) => path.join(statePaths(root, env).dir, 'prompt.txt');
 const historyFile = (root, env) => path.join(statePaths(root, env).dir, 'prompts.json');
 const clip = (text, bytes) => Buffer.from(text).subarray(0, bytes).toString();
 
+// A host delivers some of its own notices as a new user turn, such as a background task finishing. Those are not the user's words.
+export const isHostNotice = (text) => /^\s*<(task-notification|system-reminder)>/.test(text);
+
 export function savePrompt(root, text, env = process.env, { session } = {}) {
-  if (typeof text !== 'string' || text.trim() === '') return false;
+  if (typeof text !== 'string' || text.trim() === '' || isHostNotice(text)) return false;
   const kept = clip(text, MAX_PROMPT_BYTES);
   writeStateFile(root, file(root, env), kept, env);
   // With no session id there is no telling one conversation from the next, so nothing is carried over.

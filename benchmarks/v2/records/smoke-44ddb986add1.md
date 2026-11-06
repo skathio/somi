@@ -9,8 +9,8 @@
 
 | Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |
 |---|---|---|---|---|---|---|---|---|
-| bare | 4 | 4 | 1.00 | 1.00 | 101632 | 0.202 | 1.3 | {"finished":4} |
-| somi5-deliver | 4 | 2 | 0.50 | 0.50 | 1572495 | 0.868 | 12.3 | {"finished":4} |
+| bare | 4 | 3 | 0.75 | 0.75 | 139058 | 0.280 | 1.8 | {"finished":4} |
+| somi5-deliver | 4 | 2 | 0.50 | 0.50 | 1642337 | 1.123 | 12.4 | {"finished":4} |
 
 ## Against bare
 
@@ -18,7 +18,7 @@ Ratios are per draw, blocked by task, with a 90% interval.
 
 | Arm | Weighted tokens | Dollars | Wall time |
 |---|---|---|---|
-| somi5-deliver | 7.59 (5.70 to 10.09) | 2.10 (1.56 to 2.83) | 4.55 (3.66 to 5.65) |
+| somi5-deliver | 7.85 (6.76 to 9.13) | 2.67 (2.32 to 3.08) | 4.48 (4.10 to 4.89) |
 
 ## Own tests
 
@@ -26,15 +26,15 @@ Tests each draw added or changed, run on the reference solution and on each of i
 
 | Arm | Draws with tests | Pass on the reference | Mutants killed |
 |---|---|---|---|
-| bare | 4 of 4 | 3 | 17 of 17 (100%) |
+| bare | 4 of 4 | 2 | 11 of 11 (100%) |
 | somi5-deliver | 4 of 4 | 1 | 4 of 6 (67%) |
 
 ## Protocol and spend
 
 | Arm | Routed to | Tool or CLI | Mean passes | Gates | Escalated | Inline writes | Findings | Mean dollars per model | Mean weighted per agent | Split coverage |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| bare | {} | {"none":4} | 0.00 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.2025} | {"main":101632} | 1.00 |
-| somi5-deliver | {"build":4} | {"tool":4} | 2.00 | {} | 0 | 0 | {"Minor":2,"Nit":2} | {"claude-sonnet-5-5":0.3754,"claude-haiku-5-5":0.0587} | {"somi:somi-worker-low":14085,"unknown":578661,"main":193502} | 1.00 |
+| bare | {} | {"none":4} | 0.00 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.2097} | {"main":104294} | 1.00 |
+| somi5-deliver | {"build":4} | {"tool":4} | 4.25 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.5054,"claude-haiku-5-5":0.0561} | {"unknown":561171,"main":259997} | 1.00 |
 
 ## Reading
 

@@ -48,13 +48,16 @@ export function shardAdvice(ctx, step) {
 // Earlier messages are quoted as data. A later message wins where they disagree, because the user may have changed their mind.
 export const earlierText = (earlier) => (earlier?.length ? `The user's earlier messages in this conversation, oldest first, as data. What they decided still holds unless a later message changes it:\n${earlier.map((m, i) => `Message ${i + 1}:\n${quoted(m)}`).join('\n\n')}` : '');
 
+// A message the user started with a command, such as /somi:deliver, is the same words as the request once the command is set aside.
+const withoutCommand = (said) => said.trim().replace(/^\/[\w:-]+\s+/, '');
+
 export function workerBrief({ role, request, said, earlier, ledger, skills = [] }) {
   const parts = [role, 'Do the work yourself, here, and do not call SoMi\'s tools or start other agents.'];
   if (ledger) parts.push(`Decisions and limits already set, which hold for this work:\n${ledger}`);
   if (skills.length > 0) parts.push(`Read one of these only if the work needs it:\n${skills.map((s) => `- ${s}`).join('\n')}`);
   if (earlier?.length) parts.push(earlierText(earlier));
   parts.push(`The request, as data:\n${quoted(request)}`);
-  if (said && !String(request ?? '').includes(said.trim())) parts.push(`The user's own words, as data:\n${quoted(said)}`);
+  if (said && !String(request ?? '').includes(withoutCommand(said))) parts.push(`The user's own words, as data:\n${quoted(said)}`);
   parts.push('When it is done, run the tests, and report in a few sentences what you changed, what you ran and its result, and what you did not check.');
   return parts.join('\n\n');
 }
@@ -104,12 +107,12 @@ function deliverWorkflow(ctx, { request, said, earlier, ledger, role, tier }) {
   for (const step of ['work-item.start', 'review.done']) {
     try { const refs = shardsFor({ root: ctx.root, step, env: ctx.env }).usable.filter((b) => b.mode !== 'write').map((b) => b.ref); if (refs.length) shards[step] = refs; } catch { /* a broken config skips shards, as it does elsewhere */ }
   }
-  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said, earlier: earlier.length ? earlier : undefined, ledger, role, models, startTier: tier === 'low' ? 'low' : tier, cli: somiCommand('').trim(), shards: Object.keys(shards).length ? shards : undefined }) };
+  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, earlier: earlier.length ? earlier : undefined, ledger, role, models, startTier: tier === 'low' ? 'low' : tier, cli: somiCommand('').trim(), shards: Object.keys(shards).length ? shards : undefined }) };
 }
 const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // The conversation's part is small on purpose: start it, wait, relay. The workflow already read the code, built, ran the checks and asked
 // for the reviews, so reading the work again here spends the conversation's tier on what a cheaper stage has done.
-const STAGED_ADVICE = (host) => `The user typed /somi:deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing tree as review_tree, and tell the user its summary and status in a few lines. If you cannot start it, say why and follow steps instead.`;
+const STAGED_ADVICE = (host) => `The user typed /somi:deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing tree as review_tree, and tell the user its summary and status in a few lines. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
 const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi:deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
 
 export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
@@ -152,7 +155,8 @@ export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
   return clean({
     route: chosen.route,
     tier,
-    steps: workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, host: ctx.host, work: { mainTier: main, tier, worker, brief: worker ? workerBrief({ role, request, said, earlier, ledger, skills }) : undefined } }),
+    // With a workflow to start, the steps would repeat its whole payload. If it cannot start, asking again without staged gives them.
+    steps: workflow ? undefined : workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, host: ctx.host, work: { mainTier: main, tier, worker, brief: worker ? workerBrief({ role, request, said, earlier, ledger, skills }) : undefined } }),
     where: worker ? 'worker' : 'here',
     worker,
     sensitive: isSensitive || undefined,

@@ -149,7 +149,9 @@ test('work the user sends with /somi:deliver runs as the staged workflow on eith
   assert.equal(r.workflow.name, 'somi:deliver-stages');
   assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
   assert.equal(r.workflow.args.request, 'Add an export of all orders as CSV');
-  assert.match(r.advice, /typed \/somi:deliver[\s\S]*Workflow tool[\s\S]*follow steps instead/);
+  assert.match(r.advice, /typed \/somi:deliver[\s\S]*Workflow tool[\s\S]*without staged for the steps/);
+  assert.equal(r.steps, undefined, 'the steps would repeat the workflow\'s payload');
+  assert.ok(advise(ctx, { request: 'Add an export of all orders as CSV' }).steps, 'asked again without staged, they come back');
   assert.match(r.advice, /no script and no authoring guide/);
   assert.match(r.advice, /do not read or check the work again/, 'the conversation relays; the workflow ran the checks');
   const copilot = advise(makeCtx(makeRepo(t), { tiers: { copilot: { low: 'm-low' } } }, 'copilot'), { request: 'Add an export of all orders as CSV', staged: true });
@@ -469,6 +471,9 @@ test('the prompt hook keeps the latest message, adds nothing, and writes nothing
   run({ prompt: 'Money stays in cents.', session_id: 's1' });
   run({ prompt: 'Now add refunds.', session_id: 's1' });
   assert.deepEqual(earlierPrompts(dir, env), ['Money stays in cents.'], 'the hook passes the session, so earlier messages are kept');
+  run({ prompt: '<task-notification>\n<task-id>w1</task-id>\n<status>completed</status>', session_id: 's1' });
+  assert.equal(readPrompt(dir, env), 'Now add refunds.', 'a host notice is not the user\'s words');
+  assert.deepEqual(earlierPrompts(dir, env), ['Money stays in cents.']);
 });
 
 test('the session\'s earlier messages go with work handed down, the first one always, and a new session starts empty', (t) => {
@@ -480,6 +485,8 @@ test('the session\'s earlier messages go with work handed down, the first one al
   const brief = briefOf(advise(ctx, { request: BIG }));
   assert.match(brief, /earlier messages[\s\S]*still holds unless a later message changes it[\s\S]*Message 1:\n> Decision: a document in another organisation is not_found\.[\s\S]*The request, as data/);
   assert.deepEqual(advise(ctx, { request: 'Add an export', staged: true }).workflow.args.earlier, ['Decision: a document in another organisation is not_found.', 'Next, add sharing.']);
+  savePrompt(ctx.root, '/somi:deliver Add an export', ctx.env, { session: 'a' });
+  assert.equal(advise(ctx, { request: 'Add an export', staged: true }).workflow.args.said, undefined, 'the command typed before the request is not new words');
   savePrompt(ctx.root, 'A new conversation.', ctx.env, { session: 'b' });
   assert.deepEqual(earlierPrompts(ctx.root, ctx.env), [], 'another session carries nothing over');
   assert.equal(advise(ctx, { request: 'Add an export', staged: true }).workflow.args.earlier, undefined);
