@@ -32,7 +32,7 @@ const solvedValue = (r) => (r.solved ? 1 : 0);
 export const testShare = (r) => ((r.label ?? (r.outcome === 'scored' ? 'finished' : 'other')) === 'finished' && r.total > 0 ? r.green / r.total : 0);
 
 // Mean over tasks of (armA rate minus armB rate). Only tasks with k draws in both arms pair; the rest are reported as `unpaired`.
-export function pairedDifference(rows, armA, armB, k = K_DRAWS, value = solvedValue) {
+export function pairedDifference(rows, [armA, armB], { k = K_DRAWS, value = solvedValue } = {}) {
   const rate = (list) => list.reduce((s, r) => s + value(r), 0) / list.length;
   const a = byTask(armRows(rows, armA));
   const b = byTask(armRows(rows, armB));
@@ -74,7 +74,7 @@ export function armSummary(rows, arm, k = K_DRAWS) {
 
 // The A/A run is the noise floor. A bare-versus-bare interval that excludes zero means the instrument itself is biased.
 export function evaluateAa(rows, k = K_DRAWS) {
-  const diff = pairedDifference(rows, 'bare-a', 'bare-b', k);
+  const diff = pairedDifference(rows, ['bare-a', 'bare-b'], { k });
   return { ...diff, contains_zero: diff.lower !== null && diff.lower <= 0 && diff.upper >= 0 };
 }
 
@@ -83,8 +83,8 @@ export function evaluateRelease({ aa, main, candidate = 'somi5', baseline = 'bar
   const { min_tasks: minTasks, solved_rate_margin: solvedMargin, test_share_margin: shareMargin, max_cost_ratio: maxRatio, k, aa_k: aaK } = rule;
   const reasons = [];
   const floor = evaluateAa(aa, aaK);
-  const solved = pairedDifference(main, candidate, baseline, k);
-  const share = pairedDifference(main, candidate, baseline, k, testShare);
+  const solved = pairedDifference(main, [candidate, baseline], { k });
+  const share = pairedDifference(main, [candidate, baseline], { k, value: testShare });
   const cand = armSummary(main, candidate, k);
   const base = armSummary(main, baseline, k);
   const ratio = cand.cost_per_solved !== null && base.cost_per_solved ? cand.cost_per_solved / base.cost_per_solved : null;

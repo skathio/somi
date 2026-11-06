@@ -23,7 +23,7 @@ const twenty = (values) => Array.from({ length: 20 }, (_, i) => values[i % value
 
 test('the paired difference matches a hand calculation', () => {
   const rows = [...drawsFor('a', [3, 2, 1, 0]), ...drawsFor('b', [2, 2, 0, 0])];
-  const d = pairedDifference(rows, 'a', 'b');
+  const d = pairedDifference(rows, ['a', 'b']);
   assert.equal(d.n, 4);
   assert.ok(Math.abs(d.mean - 1 / 6) < 1e-9);
   // Differences 1/3, 0, 1/3, 0: sample sd = 1/(2*sqrt(3)*... ) computed directly below.
@@ -35,7 +35,7 @@ test('the paired difference matches a hand calculation', () => {
 
 test('tasks with missing draws do not pair, and are named', () => {
   const rows = [...drawsFor('a', [3, 2, 1]), ...drawsFor('b', [2, 2, 0]).filter((r) => !(r.task === 't2' && r.draw === 3))];
-  const d = pairedDifference(rows, 'a', 'b');
+  const d = pairedDifference(rows, ['a', 'b']);
   assert.equal(d.n, 2);
   assert.deepEqual(d.unpaired, ['t2']);
 });
@@ -124,7 +124,7 @@ test('a paid recording cannot run part of its plan, and only a pilot or a smoke 
 });
 
 test('the candidate plan re-checks bare with one draw', () => {
-  const plan = buildPlan('candidate', [{ id: 't', dir: 'd' }], 1, 6, { 'bare-check': 1 });
+  const plan = buildPlan('candidate', [{ id: 't', dir: 'd' }], { seed: 1, k: 6, armK: { 'bare-check': 1 } });
   const count = (arm) => plan.filter((d) => d.arm === arm).length;
   assert.deepEqual([count('somi5'), count('bare-check')], [6, 1]);
 });
@@ -147,10 +147,10 @@ test('the router clears a floor on the labelled set', async () => {
 
 test('plans are paired, seeded and repeatable', () => {
   const tasks = [{ id: 'a', dir: 'x/a' }, { id: 'b', dir: 'x/b' }];
-  const plan = buildPlan('baseline', tasks, 7);
+  const plan = buildPlan('baseline', tasks, { seed: 7 });
   assert.equal(plan.length, 2 * 3 * 2);
-  assert.deepEqual(plan, buildPlan('baseline', tasks, 7));
-  assert.notDeepEqual(plan.map((d) => d.id), buildPlan('baseline', tasks, 8).map((d) => d.id));
+  assert.deepEqual(plan, buildPlan('baseline', tasks, { seed: 7 }));
+  assert.notDeepEqual(plan.map((d) => d.id), buildPlan('baseline', tasks, { seed: 8 }).map((d) => d.id));
   assert.equal(buildPlan('aa', tasks).length, 12);
   const round = plan.slice(0, 2).map((d) => d.task);
   assert.equal(new Set(round).size, 1, 'all arms of a task run in the same round');

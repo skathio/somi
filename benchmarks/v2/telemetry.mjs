@@ -17,34 +17,41 @@ const AGENT_TOOL = /^(?:Agent|Task)$/;
 // The stream names who sent each message, but its usage figures are mid-stream placeholders. Transcripts hold the final figures for
 // each message, so the split joins the two by message id. `coverage` is the share of the draw's total the join accounts for: a
 // transcript too large to keep lowers it, and the report shows it rather than presenting a partial split as whole.
-export function agentSplit(streamText, transcriptTexts, total) {
+const toolUses = (ev) => (ev.message?.content ?? []).filter((b) => b?.type === 'tool_use');
+
+// Who sent each message in the stream: the main thread, or the kind of agent whose tool call it answers.
+function messageOwners(streamText) {
   const owner = new Map();
   const agentType = new Map();
-  for (const ev of parseLines(streamText)) {
-    if (ev?.type !== 'assistant' || !ev.message?.id) continue;
-    for (const block of ev.message.content ?? []) {
-      if (block?.type === 'tool_use' && AGENT_TOOL.test(block.name)) agentType.set(block.id, block.input?.subagent_type ?? 'general');
-    }
+  for (const ev of parseLines(streamText).filter((e) => e?.type === 'assistant' && e.message?.id)) {
+    for (const block of toolUses(ev).filter((b) => AGENT_TOOL.test(b.name))) agentType.set(block.id, block.input?.subagent_type ?? 'general');
     owner.set(ev.message.id, ev.parent_tool_use_id ? agentType.get(ev.parent_tool_use_id) ?? 'unknown' : 'main');
   }
+  return owner;
+}
+
+function finalUsage(transcriptTexts) {
   const final = new Map();
-  for (const text of transcriptTexts) {
-    for (const ev of parseLines(text)) {
-      if (ev?.type === 'assistant' && ev.message?.id && ev.message.usage) final.set(ev.message.id, { usage: ev.message.usage, model: ev.message.model, side: ev.isSidechain === true });
-    }
+  for (const ev of transcriptTexts.flatMap(parseLines)) {
+    if (ev?.type === 'assistant' && ev.message?.id && ev.message.usage) final.set(ev.message.id, { usage: ev.message.usage, model: ev.message.model, side: ev.isSidechain === true });
   }
+  return final;
+}
+
+function addMessage(agents, name, { usage, model }) {
+  const weighted = weightedTokens({ input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0, cacheRead: usage.cache_read_input_tokens ?? 0, cacheCreation: usage.cache_creation_input_tokens ?? 0 });
+  agents[name] ??= { weighted: 0, messages: 0, models: [] };
+  agents[name].weighted += weighted;
+  agents[name].messages += 1;
+  if (model && !agents[name].models.includes(model)) agents[name].models.push(model);
+  return weighted;
+}
+
+export function agentSplit(streamText, transcriptTexts, total) {
+  const owner = messageOwners(streamText);
   const agents = {};
   let accounted = 0;
-  for (const [id, { usage, model, side }] of final) {
-    const name = owner.get(id) ?? (side ? 'unknown' : 'main');
-    const tokens = { input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0, cacheRead: usage.cache_read_input_tokens ?? 0, cacheCreation: usage.cache_creation_input_tokens ?? 0 };
-    const weighted = weightedTokens(tokens);
-    agents[name] ??= { weighted: 0, messages: 0, models: [] };
-    agents[name].weighted += weighted;
-    agents[name].messages += 1;
-    if (model && !agents[name].models.includes(model)) agents[name].models.push(model);
-    accounted += weighted;
-  }
+  for (const [id, message] of finalUsage(transcriptTexts)) accounted += addMessage(agents, owner.get(id) ?? (message.side ? 'unknown' : 'main'), message);
   return { agents, coverage: total > 0 ? Math.min(1, accounted / total) : null };
 }
 
@@ -58,37 +65,41 @@ export function reviewFacts(reviewsText) {
 }
 
 // The route an answer named, read from the tool's own result rather than from what the agent said about it.
+function routeIn(block) {
+  const text = typeof block.content === 'string' ? block.content : block.content?.[0]?.text;
+  try { return JSON.parse(text).route ?? null; } catch { return null; }
+}
+
 function routedTo(events) {
   const ids = new Set();
-  for (const ev of events) {
-    for (const block of ev?.message?.content ?? []) {
-      if (block?.type === 'tool_use' && ROUTE_TOOL.test(block.name)) ids.add(block.id);
-      if (block?.type === 'tool_result' && ids.has(block.tool_use_id)) {
-        const text = typeof block.content === 'string' ? block.content : block.content?.[0]?.text;
-        try { const { route } = JSON.parse(text); if (route) return route; } catch { /* not an answer with a route */ }
-      }
-    }
+  for (const block of events.flatMap((ev) => ev?.message?.content ?? [])) {
+    if (block?.type === 'tool_use' && ROUTE_TOOL.test(block.name)) ids.add(block.id);
+    const route = block?.type === 'tool_result' && ids.has(block.tool_use_id) ? routeIn(block) : null;
+    if (route) return route;
   }
   return null;
 }
 
+// One main-thread tool call: a SoMi tool, the SoMi CLI, an agent, and whether it wrote a file itself.
+function countCall(counts, block) {
+  if (/^(Write|Edit|MultiEdit|NotebookEdit)$/.test(block.name)) counts.inlineWrites++;
+  if (STEP_TOOL.test(block.name)) counts.tool++;
+  else if (block.name === 'Bash' && STEP_CLI.test(block.input?.command ?? '')) counts.cli++;
+  else if (AGENT_TOOL.test(block.name)) counts.agents.push({ type: block.input?.subagent_type ?? 'general', model: block.input?.model ?? null });
+}
+
+function routeKind(tool, cli) {
+  if (tool > 0 && cli > 0) return 'mixed';
+  if (tool > 0) return 'tool';
+  return cli > 0 ? 'cli' : 'none';
+}
+
 export function adherence(streamText, reviewsText) {
-  let tool = 0;
-  let cli = 0;
-  const agents = [];
-  let inlineWrites = 0;
   const events = parseLines(streamText);
-  for (const ev of events) {
-    if (ev?.type !== 'assistant' || ev.parent_tool_use_id) continue;
-    for (const block of ev.message?.content ?? []) {
-      if (block?.type !== 'tool_use') continue;
-      if (/^(Write|Edit|MultiEdit|NotebookEdit)$/.test(block.name)) inlineWrites++;
-      if (STEP_TOOL.test(block.name)) tool++;
-      else if (block.name === 'Bash' && STEP_CLI.test(block.input?.command ?? '')) cli++;
-      else if (AGENT_TOOL.test(block.name)) agents.push({ type: block.input?.subagent_type ?? 'general', model: block.input?.model ?? null });
-    }
-  }
-  const route = tool > 0 && cli > 0 ? 'mixed' : tool > 0 ? 'tool' : cli > 0 ? 'cli' : 'none';
+  const counts = { tool: 0, cli: 0, agents: [], inlineWrites: 0 };
+  for (const ev of events.filter((e) => e?.type === 'assistant' && !e.parent_tool_use_id)) for (const block of toolUses(ev)) countCall(counts, block);
+  const { tool, cli, agents, inlineWrites } = counts;
+  const route = routeKind(tool, cli);
   return { route, steps: tool + cli, agents, inline_writes: inlineWrites, routed: routedTo(events), ...reviewFacts(reviewsText) };
 }
 
