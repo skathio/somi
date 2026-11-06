@@ -58,7 +58,7 @@ const usd = (x) => (Math.floor(x * 100) / 100).toFixed(2);
 // the flag is variadic, and every flag after it is an option, so nothing can be swallowed.
 export function claudeArgv({ arm, prompt, budget, plugin, resume, model, settings }) {
   return ['--print', prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--max-budget-usd', usd(budget),
-    '--permission-mode', 'bypassPermissions', '--disallowed-tools', 'WebFetch,WebSearch', ...(arm === 'somi' ? ['--plugin-dir', plugin, '--agent', 'somi:somi'] : []), ...(settings ? ['--settings', JSON.stringify(settings)] : []), ...(resume ? ['--resume', resume] : [])];
+    '--permission-mode', 'bypassPermissions', '--disallowed-tools', 'WebFetch,WebSearch', ...(arm === 'somi' ? ['--plugin-dir', plugin, '--agent', 'somi:somi'] : arm === 'somi-hooks' ? ['--plugin-dir', plugin] : []), ...(settings ? ['--settings', JSON.stringify(settings)] : []), ...(resume ? ['--resume', resume] : [])];
 }
 
 /** The only variables the claude child sees. HOME and the config directory are fresh per draw. */

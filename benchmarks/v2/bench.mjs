@@ -59,7 +59,7 @@ export const PHASE_ARMS = Object.freeze({
   large: ['bare', 'somi5', 'somi5-lane', 'somi41'],
   tight: ['bare', 'somi5', 'somi5-lane'],
   // A quick look, one draw per task and arm on tasks you name, to check a change works before anything is recorded for real.
-  smoke: ['bare', 'somi5'],
+  smoke: ['bare', 'somi5', 'somi5-hooks'],
 });
 
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -69,7 +69,8 @@ const isBare = (arm) => arm.startsWith('bare');
 // Every arm gets the same plain request. The SoMi arms go through their own front door, so routing is what gets measured, not a flow
 // the benchmark picked for them. The one exception asks for a plan, as a maintainer can, because that is how the milestone lane is reached.
 export const armPrompt = (arm, text) => (arm === 'somi5-lane' ? `Show me a plan first, then build it.\n${text}` : text);
-const engineArm = (arm) => (isBare(arm) ? 'bare' : 'somi');
+// The hooks arm is SoMi's small path: the plugin's hooks and an Explore agent on the low tier, with no SoMi agent and no routing call.
+const engineArm = (arm) => (isBare(arm) ? 'bare' : arm === 'somi5-hooks' ? 'somi-hooks' : 'somi');
 export const armsFor = (phase, cells = readJson(ABLATIONS).cells) => (phase === 'ablation' ? [...PHASE_ARMS.ablation, ...Object.keys(cells)] : PHASE_ARMS[phase]);
 
 const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, trial: reg.trial_k, ablation: reg.ablation_k, large: reg.large_k, tight: reg.tight_k, smoke: 1 })[phase] ?? reg.k;
@@ -282,7 +283,7 @@ async function run(args, session = { windowWeighted: 0 }) {
   const alias = (id) => /haiku/.test(id) ? 'haiku' : /sonnet/.test(id) ? 'sonnet' : id;
   if ([args.model, args['worker-model']].some((m) => /opus/i.test(m ?? ''))) throw new Error('benchmarks never run on opus: the top model of any recording is sonnet');
   if (args.tasks && !stub && phase !== 'pilot' && phase !== 'smoke') throw new Error('--tasks is for a pilot, a smoke or a stub: a paid recording runs its whole plan');
-  if ((args.arms || args.k) && phase !== 'large') throw new Error('--arms and --k are for an exploratory look at the large tasks: a registered recording runs its whole plan');
+  if ((args.arms || args.k) && phase !== 'large' && phase !== 'smoke') throw new Error('--arms and --k are for an exploratory look: a registered recording runs its whole plan');
   if (!args.out) throw new Error('--out is required');
   const budgetTotal = Number(args['budget-total']);
   if (!(budgetTotal > 0)) throw new Error('--budget-total is required');
@@ -376,6 +377,8 @@ async function run(args, session = { windowWeighted: 0 }) {
     try {
       const config = { cost: { ceiling: 'medium' }, tiers: { claude: { low: alias(args['worker-model'] ?? args.model), medium: alias(args.model), high: alias(args.model) } } };
       const { ws, before } = prepareWorkspace({ taskDir: dir, tmp, config, globalConfig: config });
+      // The small path's Explore runs on the low tier. It lives in the user's agent folder, so it is not a change in the workspace.
+      if (d.arm === 'somi5-hooks') { fs.mkdirSync(path.join(tmp, 'cfg', 'agents'), { recursive: true }); fs.writeFileSync(path.join(tmp, 'cfg', 'agents', 'Explore.md'), `---\nname: Explore\ndescription: Fast read-only search of the codebase.\nmodel: ${alias(args['worker-model'] ?? args.model)}\n---\nSearch the codebase and answer briefly. Do not edit anything.\n`); }
       const result = await runDraw({
         model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
         settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude, env: { ...childEnv({ token: env.token, tmp }), ...WINDOW_ENV[phase] }, cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),

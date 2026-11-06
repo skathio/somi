@@ -300,7 +300,10 @@ test('both arms run on the session model, and a smoke run takes named tasks only
   const argv = claudeArgv({ arm: 'somi', prompt: 'x', budget: 1, plugin: 'p', model: 'm' });
   assert.equal(argv[argv.indexOf('--model') + 1], 'm');
   assert.equal(JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8')).patches['cheap-main'], undefined);
-  assert.deepEqual(armsFor('smoke'), ['bare', 'somi5']);
+  assert.deepEqual(armsFor('smoke'), ['bare', 'somi5', 'somi5-hooks']);
+  const hooks = claudeArgv({ arm: 'somi-hooks', prompt: 'x', budget: 1, plugin: 'p', model: 'm' });
+  assert.equal(hooks.includes('--agent'), false, 'the small path runs with no SoMi agent');
+  assert.ok(hooks.includes('--plugin-dir'));
 });
 
 test('a draw\'s own tests are scored on the reference and on its mutants', (t) => {
