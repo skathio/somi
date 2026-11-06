@@ -9,8 +9,8 @@
 
 | Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |
 |---|---|---|---|---|---|---|---|---|
-| bare | 4 | 3 | 0.75 | 0.75 | 424761 | 0.865 | 1.9 | {"finished":4} |
-| somi5 | 4 | 2 | 0.50 | 0.50 | 1036968 | 1.830 | 3.7 | {"finished":4} |
+| bare | 4 | 4 | 1.00 | 1.00 | 328757 | 0.673 | 1.5 | {"finished":4} |
+| somi5 | 4 | 3 | 0.75 | 0.75 | 823806 | 1.088 | 3.3 | {"finished":4} |
 
 ## Against bare
 
@@ -18,7 +18,7 @@ Ratios are per draw, blocked by task, with a 90% interval.
 
 | Arm | Weighted tokens | Dollars | Wall time |
 |---|---|---|---|
-| somi5 | 1.50 (0.95 to 2.38) | 1.39 (1.15 to 1.68) | 1.23 (0.92 to 1.64) |
+| somi5 | 1.71 (0.83 to 3.54) | 1.20 (0.91 to 1.58) | 1.52 (0.81 to 2.86) |
 
 ## Own tests
 
@@ -26,15 +26,15 @@ Tests each draw added or changed, run on the reference solution and on each of i
 
 | Arm | Draws with tests | Pass on the reference | Mutants killed |
 |---|---|---|---|
-| bare | 4 of 4 | 2 | 11 of 11 (100%) |
-| somi5 | 4 of 4 | 1 | 6 of 6 (100%) |
+| bare | 4 of 4 | 3 | 17 of 17 (100%) |
+| somi5 | 4 of 4 | 2 | 11 of 11 (100%) |
 
 ## Protocol and spend
 
 | Arm | Routed to | Tool or CLI | Mean passes | Gates | Escalated | Inline writes | Findings | Mean dollars per model | Mean weighted per agent | Split coverage |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| bare | {} | {"none":4} | 0.00 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.6491} | {"main":104800} | 0.29 |
-| somi5 | {"build":4} | {"tool":4} | 0.25 | {} | 0 | 0 | {"Minor":1,"Nit":2} | {"claude-sonnet-5-5":0.9073,"claude-haiku-5-5":0.0079} | {"main":135600,"somi:somi-reviewer":13716,"unknown":8600,"somi:somi-security-reviewer":3967} | 0.29 |
+| bare | {} | {"none":4} | 0.00 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.6731} | {"main":107977} | 0.30 |
+| somi5 | {"build":4} | {"tool":4} | 0.00 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.7933,"claude-haiku-5-5":0.023} | {"somi:somi-worker-low":95871,"unknown":7264,"main":131274} | 0.30 |
 
 ## Reading
 

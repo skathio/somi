@@ -29,7 +29,6 @@ export function copilotHooks(pluginRoot) {
         entry(pluginRoot, 'pre-tool/guard-protected-paths.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
         entry(pluginRoot, 'pre-tool/guard-tier-config.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
         entry(pluginRoot, 'pre-tool/reviewers-read-only.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
-        entry(pluginRoot, 'pre-tool/keep-delegated.mjs', 'Write|Edit|MultiEdit|NotebookEdit'),
         entry(pluginRoot, 'pre-tool/apply-tier.mjs', 'Agent|Task|task'),
       ],
       UserPromptSubmit: [entry(pluginRoot, 'user-prompt/capture-prompt.mjs')],

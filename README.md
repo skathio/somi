@@ -10,14 +10,15 @@ Tell SoMi what you want, in plain words or as a ticket, and it picks the right w
 you talk to one agent, on the medium tier, the same as a bare agent
   -> a question, a follow-up, a change of mind: it just answers
   -> work to do: it asks somi_route once, and gets the workflow's steps: each one's tier, whether it runs here or on a subagent, and its brief
-  -> code work: it goes down to a worker on the low tier, unless you said it is security-sensitive
+  -> a small change: it does it, as a bare agent would
+  -> large work: it runs down on the low tier as a whole, unless you said it is security-sensitive
   -> the diff touches a security sink: the review and every fix stay here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier
   -> the change is ready: somi_review reads the diff and says if a review is due
   -> somi_pr: refuses clean text for a change that needed a review and has none
 ```
 
-SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses your next request. A bare agent runs everything on medium. SoMi runs the conversation there too and moves the work that is cheaper down to low, so you ask once and get the whole job, for less. The deterministic parts are done by SoMi's tools, not left to the model: which reviewers a diff needs, the briefs workers and reviewers get, the plan file and the pull request text.
+SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses your next request. A bare agent runs everything on medium. SoMi runs the conversation there too and moves large work down to low, a whole stage at a time, so you ask once and get the whole job, for less. A small change stays in the conversation, because handing it off costs more than doing it. The deterministic parts are done by SoMi's tools, not left to the model: which reviewers a diff needs, the briefs workers and reviewers get, the plan file and the pull request text.
 
 | | 4.1 | 5.0 |
 |---|---|---|
@@ -67,7 +68,7 @@ Older command names still work.
 
 ## Set your tiers
 
-You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code work below it goes down to a worker, and work above it goes up. When the diff shows security signals, the review and any fix stay on `main`:
+You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Large code work below it goes down a tier, small work stays in the conversation, and work above it goes up. When the diff shows security signals, the review and any fix stay on `main`:
 
 ```json
 { "tiers": { "main": "medium", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }

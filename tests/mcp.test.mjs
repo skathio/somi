@@ -42,7 +42,7 @@ test('five tools, which advise, record and never run project commands', async (t
   const { result } = await rpc('tools/list', {});
   assert.deepEqual(result.tools.map((x) => x.name), ['somi_route', 'somi_review', 'somi_note', 'somi_plan', 'somi_pr']);
 
-  assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Add a helper' })).text).where, 'worker');
+  assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Add a helper' })).text).where, 'here', 'a small change stays in the conversation');
   assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Now fix the crash in the parser' })).text).route, 'debug', 'another request while work is under way is simply answered');
 
   writeFiles(dir, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (c) => exec(c);\n' });
@@ -88,10 +88,12 @@ test('a field the model made up is named back to it instead of being read as an 
   const none = await call(rpc, 'somi_route', {});
   assert.equal(none.error, true);
   assert.match(none.text, /needs request/);
-  savePrompt(dir, 'Add password reset for accounts', { ...process.env, SOMI_GLOBAL_CONFIG: '' });
+  const long = `Add password reset for accounts. ${'The link expires after an hour and works once, and the old password stops working. '.repeat(9)}`;
+  savePrompt(dir, long, { ...process.env, SOMI_GLOBAL_CONFIG: '' });
   const fromPrompt = JSON.parse((await call(rpc, 'somi_route', {})).text);
   assert.equal(fromPrompt.route, 'build', 'with no request, the user\'s own words stand in');
-  assert.match(briefOf(fromPrompt), /> Add password reset for accounts/);
+  assert.equal(fromPrompt.where, 'worker');
+  assert.match(fromPrompt.workflow?.args.request ?? briefOf(fromPrompt), /Add password reset for accounts/, 'and they reach the work handed down');
   assert.equal((await call(rpc, 'somi_route', { hint: 'config' })).error, false);
   assert.match((await call(rpc, 'somi_review', { description: 'reviewed' })).text, /no field description/);
 });

@@ -132,9 +132,6 @@
       "tests/reviews.test.mjs",
       "tests/mcp.test.mjs"
     ],
-    "scripts/lib/delegation.mjs": [
-      "tests/advisor.test.mjs"
-    ],
     "workflows/": [
       "tests/workflows.test.mjs"
     ]

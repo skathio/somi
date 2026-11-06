@@ -44,10 +44,6 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/reviewers-read-only.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/keep-delegated.mjs"
           }
         ]
       },

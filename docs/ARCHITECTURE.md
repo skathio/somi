@@ -10,7 +10,9 @@ the user talks to one agent, on the tier set by tiers.main: medium by default, t
   -> work to do: somi_route, once, with the request written to read on its own
        it returns the workflow as steps, each with where it runs, main or a subagent, and on which tier
        rules decide a clear request; with no rule to go on, it is new work and goes to build
-  -> code below the conversation's tier: down to a low worker, with a brief somi_route built
+  -> a small piece of code work: done here, as a bare agent would
+  -> large code work below the conversation's tier: down a tier as a whole, as the deliver workflow
+       on Claude Code, or a low worker with a brief somi_route built where workflows are not available
   -> the user said it is security-sensitive, or it is at the conversation's tier: done here
   -> above it: up to a worker, with a brief somi_route built
   -> the change is ready: somi_review reads the real diff, computes signals, and names reviewers with their briefs
@@ -22,6 +24,8 @@ the user talks to one agent, on the tier set by tiers.main: medium by default, t
 An earlier version made the agent a coordinator on a step engine: it could not read or answer, and each answer named the one thing it could do next. That was too restrictive in real use, and it lost context on sequential requests, because a new request was refused while work was open and a worker saw only the latest message. No benchmark caught it, because each draw was one prompt and an "Approved".
 
 SoMi's founding comparison is a bare agent on the same tier: both hold the conversation on medium and do the whole job, and SoMi saves by moving what is cheaper down to low. In the first candidate's ablation, a medium coordinator with low workers and no review cost 0.89 times bare per draw (0.79 to 1.02). The cheap tier lost on money, accounts and untrusted input. Matching those words in a request kept 11 of 16 benchmark tasks on medium, so whether work is risky is read from the code instead: the diff's security signals call in the security reviewer, and any fix they lead to stays on medium. That follows the rule to raise a tier only on observed evidence, and it carries a known risk: a low worker's build can miss a safety case that review does not catch. The user can still say up front that work is sensitive.
+
+A small piece of work stays in the conversation. On four tasks built over four messages each, a follow-up cost the bare agent about two cents. Sending one to a low worker cost the main thread more than that in routing, briefing and checking, before the worker's own cost, so SoMi came out at 1.2 to 1.4 times bare. Asking the main agent to hand work down did not hold either: it often wrote the files itself. So only large work goes down, a whole stage at a time, where the work is worth more than the hand-off.
 
 Each workflow comes back as a short list of steps. A debug is reproduce, fix and review; a plan is plan, milestones and close. Each step says whether it runs on the main thread or on a subagent, and on which tier. That is SoMi 3.x's per-step dispatch, but computed for each request and kept nowhere, so it never stands between the user and the next message.
 
@@ -122,7 +126,8 @@ Low, medium and high, mapped to models per environment in config. Claude Code ha
 | Role | Tier |
 |---|---|
 | The conversation, work the user calls sensitive, and fixes after a security signal | `main`, medium by default |
-| Code work | low, on a worker |
+| Large code work | low, as a workflow or a worker |
+| Small code work | `main`, in the conversation |
 | Real issues, planning | medium |
 | Design, security review | high |
 | First review | low |
