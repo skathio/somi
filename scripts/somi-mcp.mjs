@@ -139,44 +139,67 @@ async function context(projectDir, env = process.env) {
 
 const textResult = (value, isError = false) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }], ...(isError ? { isError: true } : {}) });
 
+// Some hosts send what a model made up without checking it against the schema, and a field nobody reads would pass for a clean answer.
+function unknownFields(name, a) {
+  const known = Object.keys(TOOLS.find((t) => t.name === name).inputSchema.properties);
+  const unknown = Object.keys(a).filter((k) => !known.includes(k));
+  return unknown.length > 0 ? textResult(`${name} has no field ${unknown.join(', ')}. It takes ${known.join(', ')}. Call it again with those.`, true) : null;
+}
+
+// A model can call a tool before it has loaded the tool's fields. The user's own words were kept as they arrived, so they stand in.
+function userWordsStandIn(ctx, name, a) {
+  if (name !== 'somi_route' || typeof a.request === 'string' || typeof a.hint === 'string') return null;
+  const said = readPrompt(ctx.root, ctx.env);
+  if (!said.trim()) return textResult('somi_route needs request set to the work. Call it again now, with request set to what the user asked for.', true);
+  a.request = said;
+  return null;
+}
+
+function planTool(ctx, a) {
+  if (a.close === true) return textResult(closePlan(ctx.root, ctx.env));
+  if (Number.isInteger(a.done)) return textResult(markMilestoneDone(ctx.root, a.done));
+  if (typeof a.text === 'string') return textResult({ saved: savePlan(ctx.root, a.text), ...planStatus(ctx.root) });
+  return textResult(planStatus(ctx.root) ?? { plan: null, advice: 'No plan is open.' });
+}
+
+function prTool(ctx, a) {
+  const result = pullRequest(ctx, { base: a.base, unreviewed: a.unreviewed === true });
+  return textResult(result.ok ? { ...result, ...shardAdvice(ctx, 'pr.open') } : result, !result.ok);
+}
+
+function reviewAdvice(plan) {
+  if (plan.covered) return 'An earlier review still covers this change, and nothing since calls for another. Do not run the reviewers again. Carry on.';
+  if (plan.needed) return 'Start each listed reviewer as a fresh agent on its model, in the foreground, with its brief unchanged and nothing added. Start them together if the host allows it. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.';
+  return 'No review is needed for this change. Carry on.';
+}
+
+function reviewTool(ctx, a) {
+  const options = { base: a.base, always: a.always === true, security: a.security === true };
+  // A model may send the array as text. The content is what matters, and it is validated either way.
+  if (typeof a.reviews === 'string') { try { a.reviews = JSON.parse(a.reviews); } catch { return textResult('reviews is not valid JSON. Send an array with every reviewer\'s JSON object.', true); } }
+  if (a.reviews) return textResult({ ...recordReviews(ctx, { ...options, reviews: a.reviews, tree: a.tree }), ...shardAdvice(ctx, 'review.done') });
+  const plan = reviewPlan(ctx, options);
+  const security = plan.signals.some((s) => SECURITY_SIGNALS.includes(s)) ? { security: 'Security signals fired on this diff, so the review and any fix stay on this conversation\'s model.' } : {};
+  return textResult({ ...plan, ...security, advice: reviewAdvice(plan) });
+}
+
+const TOOL_HANDLERS = {
+  somi_route: (ctx, a) => textResult(advise(ctx, { request: typeof a.request === 'string' ? a.request : undefined, hint: a.hint, ticket: a.ticket, sensitive: a.sensitive, staged: a.staged })),
+  somi_note: (ctx, a) => textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env)),
+  somi_plan: planTool,
+  somi_pr: prTool,
+  somi_review: reviewTool,
+};
+
 async function callTool(name, args) {
   const a = args !== null && typeof args === 'object' ? args : {};
   try {
-    // Some hosts send what a model made up without checking it against the schema, and a field nobody reads would pass for a clean answer.
-    const known = Object.keys(TOOLS.find((t) => t.name === name).inputSchema.properties);
-    const unknown = Object.keys(a).filter((k) => !known.includes(k));
-    if (unknown.length > 0) return textResult(`${name} has no field ${unknown.join(', ')}. It takes ${known.join(', ')}. Call it again with those.`, true);
+    const refused = unknownFields(name, a);
+    if (refused) return refused;
     const ctx = await context(typeof a.project_dir === 'string' ? a.project_dir : undefined);
-    // A model can call a tool before it has loaded the tool's fields. The user's own words were kept as they arrived, so they stand in.
-    if (name === 'somi_route' && typeof a.request !== 'string' && typeof a.hint !== 'string') {
-      const said = readPrompt(ctx.root, ctx.env);
-      if (!said.trim()) return textResult('somi_route needs request set to the work. Call it again now, with request set to what the user asked for.', true);
-      a.request = said;
-    }
-    switch (name) {
-      case 'somi_route': return textResult(advise(ctx, { request: typeof a.request === 'string' ? a.request : undefined, hint: a.hint, ticket: a.ticket, sensitive: a.sensitive, staged: a.staged }));
-      case 'somi_note': return textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env));
-      case 'somi_plan': {
-        if (a.close === true) return textResult(closePlan(ctx.root, ctx.env));
-        if (Number.isInteger(a.done)) return textResult(markMilestoneDone(ctx.root, a.done));
-        if (typeof a.text === 'string') return textResult({ saved: savePlan(ctx.root, a.text), ...planStatus(ctx.root) });
-        return textResult(planStatus(ctx.root) ?? { plan: null, advice: 'No plan is open.' });
-      }
-      case 'somi_pr': {
-        const result = pullRequest(ctx, { base: a.base, unreviewed: a.unreviewed === true });
-        return textResult(result.ok ? { ...result, ...shardAdvice(ctx, 'pr.open') } : result, !result.ok);
-      }
-      default: {
-        const options = { base: a.base, always: a.always === true, security: a.security === true };
-        // A model may send the array as text. The content is what matters, and it is validated either way.
-        if (typeof a.reviews === 'string') { try { a.reviews = JSON.parse(a.reviews); } catch { return textResult('reviews is not valid JSON. Send an array with every reviewer\'s JSON object.', true); } }
-        if (!a.reviews) {
-          const plan = reviewPlan(ctx, options);
-          return textResult({ ...plan, ...(plan.signals.some((s) => SECURITY_SIGNALS.includes(s)) ? { security: 'Security signals fired on this diff, so the review and any fix stay on this conversation\'s model.' } : {}), advice: plan.covered ? 'An earlier review still covers this change, and nothing since calls for another. Do not run the reviewers again. Carry on.' : plan.needed ? 'Start each listed reviewer as a fresh agent on its model, in the foreground, with its brief unchanged and nothing added. Start them together if the host allows it. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.' : 'No review is needed for this change. Carry on.' });
-        }
-        return textResult({ ...recordReviews(ctx, { ...options, reviews: a.reviews, tree: a.tree }), ...shardAdvice(ctx, 'review.done') });
-      }
-    }
+    const missing = userWordsStandIn(ctx, name, a);
+    if (missing) return missing;
+    return (TOOL_HANDLERS[name] ?? reviewTool)(ctx, a);
   } catch (e) {
     const expected = e instanceof ReviewInputError || e instanceof StateError || e instanceof ShardError;
     if (!expected) process.stderr.write(`somi-mcp: ${e.stack ?? e}\n`);

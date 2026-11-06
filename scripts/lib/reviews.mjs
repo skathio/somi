@@ -8,7 +8,7 @@ import path from 'node:path';
 import { readDiff, resolveRef, reviewDiffCommand, snapshotTree, workBase } from './git-tree.mjs';
 import { ReviewInputError, decideAfterReview, isBlocking, parseReviews } from './policy.mjs';
 import { computeSignals, RECORDED_ONLY, SECURITY_SIGNALS } from './signals.mjs';
-import { StateError, statePaths, writeStateFile } from './state.mjs';
+import { StateError, appendStateFile, statePaths } from './state.mjs';
 import { resolveSpawn } from './tiers.mjs';
 
 const REVIEWER = 'somi-reviewer';
@@ -92,7 +92,7 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
   const blocking = findings.filter(isBlocking);
   const securityFired = plan.signals.some((s) => SECURITY_SIGNALS.includes(s));
   const record = { v: 1, at: ctx.now(), base: plan.base, tree, pass, verdicts, findings, blocking: blocking.map((f) => f.fingerprint) };
-  writeStateFile(ctx.root, statePaths(ctx.root, ctx.env).reviews, `${JSON.stringify(record)}\n`, ctx.env, 'a');
+  appendStateFile(ctx.root, statePaths(ctx.root, ctx.env).reviews, `${JSON.stringify(record)}\n`, ctx.env);
   const logged = findings.filter((f) => !isBlocking(f));
   return {
     verdict: decision.next === 'close' ? 'clear' : decision.next === 'fix' ? 'fix' : 'ask-user',

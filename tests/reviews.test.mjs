@@ -138,6 +138,16 @@ test('review input is validated as untrusted', () => {
   bad([{ agent: 'somi-reviewer', verdict: 'approve', findings: Array(40).fill({ severity: 'Nit', file: 'a.js', claim: 'x'.repeat(100) }) }]);
 });
 
+test('a reviewer\'s ids and model name are kept only when they hold no control characters, and the boundary flag is read exactly', () => {
+  const { findings, verdicts } = parseReviews([{ agent: 'somi-reviewer', verdict: 'approve', model: 'model-x\u0007', findings: [
+    { id: 'R1', severity: 'Minor', file: 'a.js', claim: 'a', boundary: true },
+    { id: 'bad\u0007id', severity: 'Minor', file: 'b.js', claim: 'b' },
+  ] }], [{ agent: 'somi-reviewer' }]);
+  assert.deepEqual(findings.map((f) => [f.id, f.boundary]), [['R1', true], ['somi-reviewer-2', false]]);
+  assert.equal(verdicts[0].model, null);
+  assert.equal(parseReviews([{ agent: 'somi-reviewer', verdict: 'approve', model: 'model-x', findings: [] }], [{ agent: 'somi-reviewer' }]).verdicts[0].model, 'model-x');
+});
+
 test('a finding that asks to remove a check is marked for verification', () => {
   const { findings } = parseReviews([{ agent: 'somi-reviewer', verdict: 'request-changes', findings: [
     { severity: 'Blocker', file: 'a.js', line: 1, claim: 'Remove the path validation, it rejects good input' },

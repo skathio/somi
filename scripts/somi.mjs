@@ -108,83 +108,83 @@ function plan(ctx, args) {
   return print({ saved: savePlan(ctx.root, fs.readFileSync(0, 'utf8')), ...planStatus(ctx.root) });
 }
 
+// The probes do not need a repository, and a broken config is reported by the commands that need it.
+function doctor(args) {
+  const { values } = parseArgs({ args, options: { host: { type: 'string' }, profile: { type: 'boolean' } } });
+  const host = values.host === 'claude' || values.host === 'copilot' ? values.host : detectHost();
+  if (values.profile) {
+    process.stdout.write(fs.readFileSync(path.join(PLUGIN_ROOT, 'profiles', `${host}.json`), 'utf8'));
+    return 0;
+  }
+  let root = process.cwd();
+  try { root = repoRoot(root); } catch { /* not in a repository */ }
+  let config = {};
+  try { config = loadConfig(root).config ?? {}; } catch { /* reported elsewhere */ }
+  const report = runDoctor({ root, host, config });
+  print(report);
+  return report.ok ? 0 : 1;
+}
+
+function slotCommand(ctx, args) {
+  const { values, positionals } = parseArgs({ args, allowPositionals: true, options: { mode: { type: 'string' }, project: { type: 'boolean' }, list: { type: 'boolean' }, remove: { type: 'boolean' }, confirm: { type: 'boolean' } } });
+  const [step, ref] = positionals;
+  if (values.list) print(listShards({ root: ctx.root, env: ctx.env }).map(({ step: s, ref: r, kind, mode, scope, state }) => ({ step: s, ref: r, kind, mode, scope, state })));
+  else if (values.confirm) print(confirmProjectShards({ root: ctx.root, env: ctx.env }));
+  else if (values.remove) print(unslot({ root: ctx.root, step, ref, project: values.project, env: ctx.env }));
+  else print(slot({ root: ctx.root, step, ref, mode: values.mode, project: values.project, env: ctx.env, now: ctx.now() }));
+  return 0;
+}
+
+function initCommand(ctx, args) {
+  const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
+  if (values.host !== 'copilot') throw new StateError('init takes --host copilot; the Claude Code plugin needs no setup');
+  const hooks = writeCopilotHooks(ctx.root, PLUGIN_ROOT);
+  const extension = writeCopilotExtension(ctx.root, PLUGIN_ROOT);
+  print({ hooks, extension, workflows: 'Copilot runs workflows in experimental mode: start it with --experimental, or turn it on with /experimental.' });
+  return hooks.written && extension.written ? 0 : 1;
+}
+
+const printed = (value, ok = true) => { print(value); return ok ? 0 : 1; };
+
+// Each command takes the project context and its own arguments, and returns the exit code.
+const COMMANDS = {
+  route: (ctx, args) => {
+    const { values, positionals } = parseArgs({ args, allowPositionals: true, options: { hint: { type: 'string' }, sensitive: { type: 'boolean' } } });
+    return printed(advise(ctx, { request: positionals.join(' '), hint: values.hint, sensitive: values.sensitive }));
+  },
+  review: (ctx, args) => { review(ctx, args); return 0; },
+  quality,
+  check: (ctx, args) => {
+    const { values } = parseArgs({ args, options: { full: { type: 'boolean' } } });
+    const result = checkAndRecord(ctx, { full: values.full });
+    return printed(result, result.ok);
+  },
+  status: (ctx) => {
+    process.stdout.write(renderStatus({ plan: planStatus(ctx.root), ledger: readLedger(ctx.root, ctx.env), reviews: readReviews(ctx.root, ctx.env), check: lastCheck(ctx.root, ctx.env), migrated: migratedFindings(ctx.root, ctx.env) }));
+    return 0;
+  },
+  pr,
+  plan: (ctx, args) => { plan(ctx, args); return 0; },
+  setup: (ctx, args) => {
+    const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
+    const result = setupAgent({ host: values.host === 'claude' || values.host === 'copilot' ? values.host : ctx.host, config: ctx.config, pluginRoot: PLUGIN_ROOT, env: ctx.env });
+    return printed(result, result.written);
+  },
+  slot: slotCommand,
+  ledger: (ctx, args) => {
+    const { values } = parseArgs({ args, options: { kind: { type: 'string' }, text: { type: 'string' } } });
+    return printed(addToLedger(ctx.root, { kind: values.kind, text: values.text }, ctx.env));
+  },
+  migrate: (ctx) => printed(migrate({ root: ctx.root, env: ctx.env, now: ctx.now })),
+  init: initCommand,
+};
+
 function main(argv) {
   const [command, ...args] = argv;
-  if (command === 'doctor') {
-    const { values } = parseArgs({ args, options: { host: { type: 'string' }, profile: { type: 'boolean' } } });
-    const host = values.host === 'claude' || values.host === 'copilot' ? values.host : detectHost();
-    if (values.profile) {
-      process.stdout.write(fs.readFileSync(path.join(PLUGIN_ROOT, 'profiles', `${host}.json`), 'utf8'));
-      return 0;
-    }
-    let root = process.cwd();
-    try { root = repoRoot(root); } catch { /* the probes do not need a repository */ }
-    let config = {};
-    try { config = loadConfig(root).config ?? {}; } catch { /* a broken config is reported by the commands that need it */ }
-    const report = runDoctor({ root, host, config });
-    print(report);
-    return report.ok ? 0 : 1;
-  }
-  const ctx = makeContext();
-  switch (command) {
-    case 'route': {
-      const { values, positionals } = parseArgs({ args, allowPositionals: true, options: { hint: { type: 'string' }, sensitive: { type: 'boolean' } } });
-      print(advise(ctx, { request: positionals.join(' '), hint: values.hint, sensitive: values.sensitive }));
-      return 0;
-    }
-    case 'review':
-      review(ctx, args);
-      return 0;
-    case 'quality':
-      return quality(ctx, args);
-    case 'check': {
-      const { values } = parseArgs({ args, options: { full: { type: 'boolean' } } });
-      const result = checkAndRecord(ctx, { full: values.full });
-      print(result);
-      return result.ok ? 0 : 1;
-    }
-    case 'status':
-      process.stdout.write(renderStatus({ plan: planStatus(ctx.root), ledger: readLedger(ctx.root, ctx.env), reviews: readReviews(ctx.root, ctx.env), check: lastCheck(ctx.root, ctx.env), migrated: migratedFindings(ctx.root, ctx.env) }));
-      return 0;
-    case 'pr':
-      return pr(ctx, args);
-    case 'plan':
-      plan(ctx, args);
-      return 0;
-    case 'setup': {
-      const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
-      const result = setupAgent({ host: values.host === 'claude' || values.host === 'copilot' ? values.host : ctx.host, config: ctx.config, pluginRoot: PLUGIN_ROOT, env: ctx.env });
-      print(result);
-      return result.written ? 0 : 1;
-    }
-    case 'slot': {
-      const { values, positionals } = parseArgs({ args, allowPositionals: true, options: { mode: { type: 'string' }, project: { type: 'boolean' }, list: { type: 'boolean' }, remove: { type: 'boolean' }, confirm: { type: 'boolean' } } });
-      if (values.list) { print(listShards({ root: ctx.root, env: ctx.env }).map(({ step, ref, kind, mode, scope, state }) => ({ step, ref, kind, mode, scope, state }))); return 0; }
-      if (values.confirm) { print(confirmProjectShards({ root: ctx.root, env: ctx.env })); return 0; }
-      const [step, ref] = positionals;
-      if (values.remove) { print(unslot({ root: ctx.root, step, ref, project: values.project, env: ctx.env })); return 0; }
-      print(slot({ root: ctx.root, step, ref, mode: values.mode, project: values.project, env: ctx.env, now: ctx.now() }));
-      return 0;
-    }
-    case 'ledger': {
-      const { values } = parseArgs({ args, options: { kind: { type: 'string' }, text: { type: 'string' } } });
-      print(addToLedger(ctx.root, { kind: values.kind, text: values.text }, ctx.env));
-      return 0;
-    }
-    case 'migrate':
-      print(migrate({ root: ctx.root, env: ctx.env, now: ctx.now }));
-      return 0;
-    case 'init': {
-      const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
-      if (values.host !== 'copilot') throw new StateError('init takes --host copilot; the Claude Code plugin needs no setup');
-      const hooks = writeCopilotHooks(ctx.root, PLUGIN_ROOT);
-      const extension = writeCopilotExtension(ctx.root, PLUGIN_ROOT);
-      print({ hooks, extension, workflows: 'Copilot runs workflows in experimental mode: start it with --experimental, or turn it on with /experimental.' });
-      return hooks.written && extension.written ? 0 : 1;
-    }
-    default:
-      throw new StateError('somi takes route, review, check, quality, status, pr, plan, setup, slot, ledger, migrate, doctor or init');
-  }
+  if (command === 'doctor') return doctor(args);
+  const run = Object.hasOwn(COMMANDS, command ?? '') ? COMMANDS[command] : null;
+  if (!run) throw new StateError('somi takes route, review, check, quality, status, pr, plan, setup, slot, ledger, migrate, doctor or init');
+  return run(makeContext(), args);
 }
 
 function fail(e) {

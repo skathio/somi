@@ -23,17 +23,25 @@ function deriveFingerprint(f) {
 // A suggestion to remove a safety net is what a confused or injected reviewer produces, so it reaches the coder flagged.
 const REMOVES_CHECK = /\b(remove|delete|drop|disable|skip|bypass|relax|weaken|loosen|turn off)\b[^.]{0,60}\b(check|validation|validate|guard|test|assert\w*|flag|sanitiz\w*|escap\w*|auth\w*|limit|gate|hook)\b/i;
 
-function normalizeFinding(raw, agent, i) {
-  const where = `${agent} finding ${i + 1}`;
+// Long text is kept to the limit. Refusing it would throw away the whole report and pay for the review again.
+const clip = (v) => (typeof v === 'string' ? v.slice(0, 400) : v);
+const present = (v) => v !== undefined && v !== null;
+
+// The checks a finding must pass, in this order: what it is, how bad, where, what it claims, then its optional evidence and line.
+function checkFinding(raw, where) {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new ReviewInputError(`${where} is not an object`);
   if (!SEVERITIES.includes(raw.severity)) throw new ReviewInputError(`${where} has an unknown severity`);
   if (!safeFile(raw.file)) throw new ReviewInputError(`${where} has an unusable file path`);
-  // Long text is kept to the limit. Refusing it would throw away the whole report and pay for the review again.
-  const claim = typeof raw.claim === 'string' ? raw.claim.slice(0, 400) : raw.claim;
+  const claim = clip(raw.claim);
   if (!isText(claim, 400)) throw new ReviewInputError(`${where} needs a claim`);
-  const evidence = typeof raw.evidence === 'string' ? raw.evidence.slice(0, 400) : raw.evidence;
-  if (evidence !== undefined && evidence !== null && !isText(evidence, 400)) throw new ReviewInputError(`${where} has unusable evidence`);
-  if (raw.line !== undefined && raw.line !== null && !(Number.isInteger(raw.line) && raw.line > 0)) throw new ReviewInputError(`${where} has an unusable line`);
+  const evidence = clip(raw.evidence);
+  if (present(evidence) && !isText(evidence, 400)) throw new ReviewInputError(`${where} has unusable evidence`);
+  if (present(raw.line) && !(Number.isInteger(raw.line) && raw.line > 0)) throw new ReviewInputError(`${where} has an unusable line`);
+  return { claim, evidence };
+}
+
+function normalizeFinding(raw, agent, i) {
+  const { claim, evidence } = checkFinding(raw, `${agent} finding ${i + 1}`);
   const finding = {
     id: isText(raw.id, 32) && !CONTROL.test(raw.id) ? raw.id : `${agent}-${i + 1}`,
     agent,
@@ -49,6 +57,20 @@ function normalizeFinding(raw, agent, i) {
   return finding;
 }
 
+// The checks one review must pass, in this order. The reviewer is counted as seen before its verdict is read, so a second report from it
+// is refused as a repeat, not read again.
+function checkReview(review, dispatched, seen) {
+  if (review === null || typeof review !== 'object') throw new ReviewInputError('a review is not an object');
+  if (Buffer.byteLength(JSON.stringify(review)) > MAX_REVIEW_BYTES) throw new ReviewInputError(`a review is over ${MAX_REVIEW_BYTES} bytes; return fewer, shorter findings`);
+  const { agent } = review;
+  if (!dispatched.some((d) => d.agent === agent)) throw new ReviewInputError('a review names a reviewer that was not dispatched');
+  if (seen.has(agent)) throw new ReviewInputError(`${agent} returned twice`);
+  seen.add(agent);
+  if (!VERDICTS.includes(review.verdict)) throw new ReviewInputError(`${agent} has an unknown verdict`);
+  if (!Array.isArray(review.findings)) throw new ReviewInputError(`${agent} has no findings array`);
+  return agent;
+}
+
 // `reviews` is what the reviewers returned: untrusted model output. Every dispatched reviewer must be present, because a
 // missing security review must not read as a clean one.
 export function parseReviews(reviews, dispatched) {
@@ -57,14 +79,7 @@ export function parseReviews(reviews, dispatched) {
   const findings = [];
   const verdicts = [];
   for (const review of reviews) {
-    if (review === null || typeof review !== 'object') throw new ReviewInputError('a review is not an object');
-    if (Buffer.byteLength(JSON.stringify(review)) > MAX_REVIEW_BYTES) throw new ReviewInputError(`a review is over ${MAX_REVIEW_BYTES} bytes; return fewer, shorter findings`);
-    const { agent } = review;
-    if (!dispatched.some((d) => d.agent === agent)) throw new ReviewInputError('a review names a reviewer that was not dispatched');
-    if (seen.has(agent)) throw new ReviewInputError(`${agent} returned twice`);
-    seen.add(agent);
-    if (!VERDICTS.includes(review.verdict)) throw new ReviewInputError(`${agent} has an unknown verdict`);
-    if (!Array.isArray(review.findings)) throw new ReviewInputError(`${agent} has no findings array`);
+    const agent = checkReview(review, dispatched, seen);
     verdicts.push({ agent, verdict: review.verdict, model: isText(review.model, 64) && !CONTROL.test(review.model) ? review.model : null });
     review.findings.forEach((f, i) => findings.push(normalizeFinding(f, agent, i)));
   }

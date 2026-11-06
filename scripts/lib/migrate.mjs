@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { addToLedger } from './ledger.mjs';
-import { statePaths, writeStateFile } from './state.mjs';
+import { appendStateFile, statePaths } from './state.mjs';
 import { SEVERITIES } from './policy.mjs';
 
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
@@ -66,7 +66,7 @@ export function migrate({ root, env = process.env, now }) {
     // A full ledger must not lose a decision without anyone seeing, so the record keeps them all and the answer says which did not fit.
     let noted = 0;
     for (const text of decisions) { try { addToLedger(root, { kind: 'decision', text }, env); noted += 1; } catch { skipped.push(`${slug}: ${text}`); } }
-    writeStateFile(root, path.join(statePaths(root, env).dir, 'migrated.jsonl'), `${JSON.stringify({ at: now(), slug, findings, decisions })}\n`, env, 'a');
+    appendStateFile(root, path.join(statePaths(root, env).dir, 'migrated.jsonl'), `${JSON.stringify({ at: now(), slug, findings, decisions })}\n`, env);
     imported.push({ slug, findings: findings.length, decisions: noted });
   }
   return { imported, skipped };

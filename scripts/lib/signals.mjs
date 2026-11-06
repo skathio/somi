@@ -59,37 +59,44 @@ const hits = (lines, test) => lines.some((l) => test(clip(l.text)));
 const isCode = (file) => !DOC.test(file) && !TEST_FILE.test(file);
 const sorted = (set) => [...set].sort();
 
-export function computeSignals({ rows, lines, unreadable = false }, configLayers = []) {
-  if (unreadable) return { review: ['unreadable-diff'], security: ['unreadable-diff'], facts: { files: 0, changed_lines: 0, modules: 0 } };
-  const review = new Set();
-  const security = new Set();
-  const files = rows.map((r) => r.file);
-  const code = files.filter(isCode);
-  const changed = rows.reduce((n, r) => n + r.added + r.deleted, 0);
-  if (changed > LARGE_DIFF_LINES) review.add('large-diff');
+function testsWeakened(rows, lines) {
+  const testLines = lines.filter((l) => TEST_FILE.test(l.file));
+  const assertions = (sign) => testLines.filter((l) => l.sign === sign && ASSERTION.test(clip(l.text))).length;
+  const deletedTest = rows.some((r) => TEST_FILE.test(r.file) && r.status.startsWith('D'));
+  return deletedTest || assertions('-') > assertions('+') || hits(testLines.filter((l) => l.sign === '+'), (t) => WEAKENS_TEST.test(t));
+}
 
-  const all = classifyPaths(files, configLayers);
-  const production = classifyPaths(code, configLayers);
+function reviewSignals({ rows, lines, files, all, production, changed }) {
+  const review = new Set();
+  if (changed > LARGE_DIFF_LINES) review.add('large-diff');
   if (production.modules > 1) review.add('multi-module');
   if (all.contract.includes('schema')) review.add('schema');
   if (all.contract.includes('lockfile') || all.contract.includes('manifest')) review.add('dependency');
   if (files.some((f) => GOLDEN.test(f))) review.add('goldens-moved');
-
   if (removesExport(lines)) review.add('public-api');
+  if (testsWeakened(rows, lines)) review.add('tests-weakened');
+  return review;
+}
 
-  const testLines = lines.filter((l) => TEST_FILE.test(l.file));
-  const assertions = (sign) => testLines.filter((l) => l.sign === sign && ASSERTION.test(clip(l.text))).length;
-  const deletedTest = rows.some((r) => TEST_FILE.test(r.file) && r.status.startsWith('D'));
-  if (deletedTest || assertions('-') > assertions('+') || hits(testLines.filter((l) => l.sign === '+'), (t) => WEAKENS_TEST.test(t))) review.add('tests-weakened');
+// Patterns read on added code. Access checks are read on any changed code, because removing one is as much a change to access.
+const ADDED_CODE_SIGNALS = [['sink', (t) => SINK.some((p) => p.test(t))], ['secrets', (t) => SECRETS.test(t)], ['network', (t) => NETWORK.test(t)], ['repo-content', (t) => REPO_CONTENT.test(t)]];
 
+function securitySignals({ lines, files, production }) {
+  const security = new Set();
   if (production.sensitive.length + production.boundary.length > 0 || files.some(denyListed)) security.add('sensitive-path');
   if (files.some(isPolicyFile)) security.add('policy-file');
   const addedCode = lines.filter((l) => l.sign === '+' && isCode(l.file));
-  if (hits(addedCode, (t) => SINK.some((p) => p.test(t)))) security.add('sink');
-  if (hits(addedCode, (t) => SECRETS.test(t))) security.add('secrets');
-  if (hits(addedCode, (t) => NETWORK.test(t))) security.add('network');
-  if (hits(addedCode, (t) => REPO_CONTENT.test(t))) security.add('repo-content');
+  for (const [name, test] of ADDED_CODE_SIGNALS) if (hits(addedCode, test)) security.add(name);
   if (hits(lines.filter((l) => isCode(l.file)), (t) => ACCESS.test(t))) security.add('access-control');
+  return security;
+}
 
-  return { review: sorted(review), security: sorted(security), facts: { files: files.length, changed_lines: changed, modules: production.modules } };
+export function computeSignals({ rows, lines, unreadable = false }, configLayers = []) {
+  if (unreadable) return { review: ['unreadable-diff'], security: ['unreadable-diff'], facts: { files: 0, changed_lines: 0, modules: 0 } };
+  const files = rows.map((r) => r.file);
+  const changed = rows.reduce((n, r) => n + r.added + r.deleted, 0);
+  const all = classifyPaths(files, configLayers);
+  const production = classifyPaths(files.filter(isCode), configLayers);
+  const facts = { rows, lines, files, all, production, changed };
+  return { review: sorted(reviewSignals(facts)), security: sorted(securitySignals(facts)), facts: { files: files.length, changed_lines: changed, modules: production.modules } };
 }

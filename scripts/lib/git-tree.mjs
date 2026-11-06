@@ -108,18 +108,25 @@ export function snapshotTree(root) {
 
 const OBJECT_ID = /^[0-9a-f]{40,64}$/;
 
-// [{ file, sign: '+'|'-', text }]. Only the file header needs care: a removed line starting `-- ` must not read as one.
+const stripPrefix = (name, prefix) => name.replace(new RegExp(`^"?${prefix}/`), '').replace(/"$/, '');
+
+// A file header names the file, from its old side and then its new one. /dev/null on either side leaves the name the other gave.
+function headerLine(state, line) {
+  for (const [marker, prefix] of [['--- ', 'a'], ['+++ ', 'b']]) {
+    if (line.startsWith(marker) && line !== `${marker}/dev/null`) state.file = stripPrefix(line.slice(4), prefix);
+  }
+}
+
+// [{ file, sign: '+'|'-', text }]. Only the file header needs care: a removed line starting `-- ` must not read as one, so headers
+// are read only before a file's first hunk.
 export function parsePatch(patch) {
   const out = [];
-  let file = null;
-  let inHunk = false;
-  const strip = (name, prefix) => name.replace(new RegExp(`^"?${prefix}/`), '').replace(/"$/, '');
+  const state = { file: null, inHunk: false };
   for (const line of patch.split('\n')) {
-    if (line.startsWith('diff --git ')) { inHunk = false; file = null; continue; }
-    if (line.startsWith('@@')) { inHunk = true; continue; }
-    if (!inHunk && line.startsWith('--- ')) { if (line !== '--- /dev/null') file = strip(line.slice(4), 'a'); continue; }
-    if (!inHunk && line.startsWith('+++ ')) { if (line !== '+++ /dev/null') file = strip(line.slice(4), 'b'); continue; }
-    if (inHunk && file !== null && (line[0] === '+' || line[0] === '-')) out.push({ file, sign: line[0], text: line.slice(1) });
+    if (line.startsWith('diff --git ')) Object.assign(state, { file: null, inHunk: false });
+    else if (line.startsWith('@@')) state.inHunk = true;
+    else if (!state.inHunk) headerLine(state, line);
+    else if (state.file !== null && (line[0] === '+' || line[0] === '-')) out.push({ file: state.file, sign: line[0], text: line.slice(1) });
   }
   return out;
 }
@@ -146,20 +153,31 @@ export function readDiff(root, from, to) {
 
 // What a diff added, per file: { file → { status, added: [[first, last], ...] } }, with line numbers in the new version. The quality
 // gate scores only the functions these lines touch.
-export function addedRanges(root, from, to) {
-  if (!OBJECT_ID.test(from) || !OBJECT_ID.test(to)) throw new Error('a recorded revision is not an object id');
+function changedFiles(root, from, to) {
   const out = new Map();
   const status = git(root, ['diff', ...DIFF, '--name-status', '-z', from, to]).split('\0').filter(Boolean);
   for (let i = 0; i + 1 < status.length; i += 2) out.set(status[i + 1], { status: status[i], added: [] });
+  return out;
+}
+
+const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+
+// A hunk header's new side: its first line and how many lines it holds there. A hunk that only removes holds none.
+function addHunk(entry, line) {
+  const hunk = HUNK.exec(line);
+  if (!hunk || !entry) return;
+  const first = Number(hunk[1]);
+  const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
+  if (count > 0) entry.added.push([first, first + count - 1]);
+}
+
+export function addedRanges(root, from, to) {
+  if (!OBJECT_ID.test(from) || !OBJECT_ID.test(to)) throw new Error('a recorded revision is not an object id');
+  const out = changedFiles(root, from, to);
   let file = null;
   for (const line of git(root, ['diff', ...DIFF, '-U0', from, to]).split('\n')) {
-    if (line.startsWith('+++ ')) { file = line === '+++ /dev/null' ? null : line.slice(4).replace(/^"?b\//, '').replace(/"$/, ''); continue; }
-    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
-    if (hunk && file !== null && out.has(file)) {
-      const first = Number(hunk[1]);
-      const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
-      if (count > 0) out.get(file).added.push([first, first + count - 1]);
-    }
+    if (line.startsWith('+++ ')) file = line === '+++ /dev/null' ? null : stripPrefix(line.slice(4), 'b');
+    else addHunk(file === null ? null : out.get(file), line);
   }
   return out;
 }

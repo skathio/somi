@@ -119,63 +119,86 @@ const QUALITY_CONFIG = 'Relay this briefly. To change a quality limit, write it 
 const STAGED_ADVICE = (host) => `The user typed /somi:deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing tree as review_tree, and tell the user its summary and status in a few lines. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
 const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi:deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
 
-export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
-  if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
-  const said = readPrompt(ctx.root, ctx.env);
-  const earlier = earlierPrompts(ctx.root, ctx.env);
-  let chosen = classify({ request: request ?? '', ticket, hint });
-  // With no rule to go on and the whole table to choose from, a request is new work. Asking the model to pick costs a turn and lets it
-  // pick a pricier route for small work, so the answer says what else might fit, and the agent can call again only if one clearly does.
-  let alternatives;
-  if (chosen.via === 'choose' && chosen.choices.length === Object.keys(WHEN).length) {
-    alternatives = 'If the request is clearly one of debug, refactor, upgrade, migrate, perf, incident, plan, design, review or answer, call somi_route again with that hint instead.';
-    chosen = { route: 'build', via: 'default' };
-  }
+// With no rule to go on and the whole table to choose from, a request is new work. Asking the model to pick costs a turn and lets it
+// pick a pricier route for small work, so the answer says what else might fit, and the agent can call again only if one clearly does.
+const OTHER_ROUTES = 'If the request is clearly one of debug, refactor, upgrade, migrate, perf, incident, plan, design, review or answer, call somi_route again with that hint instead.';
+function chooseRoute({ request, ticket, hint }) {
+  const chosen = classify({ request: request ?? '', ticket, hint });
+  if (chosen.via === 'choose' && chosen.choices.length === Object.keys(WHEN).length) return { chosen: { route: 'build', via: 'default' }, alternatives: OTHER_ROUTES };
+  return { chosen };
+}
+
+function configAnswer(ctx) {
+  const scoped = SCOPES.map((scope) => [scope, resolveLimits({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1], scope })]);
+  const ignored = [...new Map(scoped.flatMap(([, r]) => r.ignored).map((x) => [`${x.where}:${x.key}`, x])).values()];
+  return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: Object.fromEntries(scoped.map(([scope, r]) => [scope, r.limits])), ...(ignored.length ? { quality_ignored: ignored } : {}), global_config: globalConfigPath(ctx.env), advice: QUALITY_CONFIG };
+}
+
+// Routes that answer at once, with no work to place: asking which route fits, status, config, the pull request and the reviews.
+function directAnswer(ctx, chosen, staged) {
   if (chosen.via === 'choose') return { choose: Object.fromEntries(chosen.choices.map((r) => [r, WHEN[r]])), advice: `Pick the route that best fits, and call somi_route again with hint set to it and the same request${staged === true ? ', and staged true' : ''}.` };
   const wf = WORKFLOWS[chosen.route];
   if (chosen.route === 'status' || chosen.route === 'resume') return { route: chosen.route, advice: `Run \`${somiCommand('status')}\` and relay what it says. Open work carries on in this conversation.`, ...clean({ ledger: readLedger(ctx.root, ctx.env), plan: planStatus(ctx.root) }) };
-  if (chosen.route === 'config') {
-    const scoped = SCOPES.map((scope) => [scope, resolveLimits({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1], scope })]);
-    const ignored = [...new Map(scoped.flatMap(([, r]) => r.ignored).map((x) => [`${x.where}:${x.key}`, x])).values()];
-    return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: Object.fromEntries(scoped.map(([scope, r]) => [scope, r.limits])), ...(ignored.length ? { quality_ignored: ignored } : {}), global_config: globalConfigPath(ctx.env), advice: QUALITY_CONFIG };
-  }
+  if (chosen.route === 'config') return configAnswer(ctx);
   if (wf.kind === 'command') return { route: chosen.route, tier: wf.tier, advice: `Run \`${somiCommand('check --full')}\` in the shell, because it runs the project's tests. Then call somi_pr for the pull request text. If somi_pr refuses, it says why: a review is due, so call somi_review. Never open anything outward without the user's say.`, ...shardAdvice(ctx, 'pr.open') };
   if (wf.agent) return { route: chosen.route, tier: wf.tier, advice: `Call somi_review with always true${chosen.route === 'security-review' ? ' and security true' : ''}, and follow what it says. Tell the user what was found. Change nothing unless they ask.`, ...clean({ role: roleBrief(wf.role) }) };
+  return null;
+}
 
-  // Only the user saying so keeps work here up front. Otherwise the diff decides, after the work is done.
+// Where the work runs. Only the user saying so keeps work here up front; otherwise the diff decides, after the work is done. Down only
+// for code: a question or a plan stays where the conversation is, because a brief costs more than it saves. Inside a conversation a
+// piece of work is too small for a hand-off to pay: the main thread spends more briefing and checking a worker than the work costs on
+// its own tier, and measured on follow-up turns it did. So work goes down only as large work, a whole stage at a time, and up when it
+// needs a stronger model.
+function placement(ctx, wf, { request, sensitive, staged }) {
   const isSensitive = sensitive === true;
   const wanted = wf.kind === 'code' && isSensitive && rank(wf.tier) < rank('medium') ? 'medium' : wf.tier;
   const { tier, model, enforced } = resolveSpawn(ctx.config, ctx.host, wanted);
   const main = mainTier(ctx.config);
-  // Down only for code. A question or a plan stays where the conversation is, because a brief costs more than it saves.
-  // Inside a conversation, a piece of work is too small for a hand-off to pay: the main thread spends more briefing and checking a
-  // worker than the work costs on its own tier. Measured on follow-up turns, it did. So work goes down only as large work, a whole stage
-  // at a time, and up when it needs a stronger model.
   const large = wf.kind === 'code' && (staged === true || LARGE(request));
   const direction = rank(tier) > rank(main) ? 'up' : rank(tier) < rank(main) && large && !isSensitive ? 'down' : null;
+  const worker = direction ? { agent: workerAgent(tier), ...(model ? { model } : {}) } : null;
+  return { isSensitive, tier, enforced, main, large, direction, worker };
+}
+
+function workAdvice(ctx, wf, { start, workflow, large }) {
+  if (workflow) return STAGED_ADVICE(ctx.host);
+  const what = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
+  return `${large ? `${SUGGEST_STAGED} ` : ''}Run steps in order. ${what}`;
+}
+
+// A worker is given the role, skills and ledger in its brief. Work done here gets them in the answer.
+function placedFields(ctx, at, { role, skills, ledger }) {
+  if (at.worker) return { where: 'worker', worker: at.worker, note: at.enforced ? undefined : unmapped(ctx.host) };
+  return { where: 'here', worker: null, role, skills: skills.length > 0 ? skills : undefined, ledger };
+}
+
+export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
+  if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
+  const { chosen, alternatives } = chooseRoute({ request, ticket, hint });
+  const direct = directAnswer(ctx, chosen, staged);
+  if (direct) return direct;
+  const wf = WORKFLOWS[chosen.route];
+  const at = placement(ctx, wf, { request, sensitive, staged });
+  const said = readPrompt(ctx.root, ctx.env);
+  const earlier = earlierPrompts(ctx.root, ctx.env);
   const skills = (wf.skills ?? []).map((s) => libraryPath('skills', s));
   const ledger = readLedger(ctx.root, ctx.env);
   const role = roleBrief(wf.role);
-  const worker = direction ? { agent: workerAgent(tier), ...(model ? { model } : {}) } : null;
-  const start = worker ? delegate(worker.agent, worker.model, direction === 'up' ? UP : DOWN) : HERE;
-  const workflow = large && staged === true ? deliverWorkflow(ctx, { route: chosen.route, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, role, tier }) : undefined;
-  const advice = workflow ? STAGED_ADVICE(ctx.host) : wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
+  const start = at.worker ? delegate(at.worker.agent, at.worker.model, at.direction === 'up' ? UP : DOWN) : HERE;
+  const workflow = at.large && staged === true ? deliverWorkflow(ctx, { route: chosen.route, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, role, tier: at.tier }) : undefined;
+  const brief = at.worker ? workerBrief({ role, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, skills }) : undefined;
   return clean({
     route: chosen.route,
-    tier,
+    tier: at.tier,
     // With a workflow to start, the steps would repeat its whole payload. If it cannot start, asking again without staged gives them.
-    steps: workflow ? undefined : workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, host: ctx.host, work: { mainTier: main, tier, worker, brief: worker ? workerBrief({ role, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, skills }) : undefined } }),
-    where: worker ? 'worker' : 'here',
-    worker,
-    sensitive: isSensitive || undefined,
-    advice: workflow ? advice : `${large ? `${SUGGEST_STAGED} ` : ''}Run steps in order. ${advice}`,
+    steps: workflow ? undefined : workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, host: ctx.host, work: { mainTier: at.main, tier: at.tier, worker: at.worker, brief } }),
+    ...placedFields(ctx, at, { role, skills, ledger }),
+    sensitive: at.isSensitive || undefined,
+    advice: workAdvice(ctx, wf, { start, workflow, large: at.large }),
     workflow,
     alternatives,
-    role: worker ? undefined : role,
-    skills: !worker && skills.length > 0 ? skills : undefined,
-    ledger: worker ? undefined : ledger,
     plan: planStatus(ctx.root),
-    note: worker && !enforced ? unmapped(ctx.host) : undefined,
     ...shardAdvice(ctx, 'work-item.start'),
     ...(wf.kind === 'plan' ? { after_approval: shardAdvice(ctx, 'plan.approved') } : {}),
   });

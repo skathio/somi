@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO } from './helpers.mjs';
+import { projectRoot } from '../hooks/lib/common.mjs';
 
 const CASES = path.join(REPO, 'tests', 'hooks', 'cases');
 
@@ -93,4 +94,20 @@ test('session start warns loudly when the sandbox is off, and not when it is on'
   assert.match(runHook(hook, {}).out.hookSpecificOutput.additionalContext, /WARNING: the OS sandbox/);
   const on = { '.claude/settings.json': JSON.stringify({ sandbox: { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false } }) };
   assert.doesNotMatch(runHook(hook, {}, { files: on }).out.hookSpecificOutput.additionalContext, /WARNING/);
+});
+
+test('a hook started in a subfolder finds the repository, and with none above it stays where it started', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-root-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const sub = path.join(dir, 'repo', 'a', 'b');
+  fs.mkdirSync(sub, { recursive: true });
+  fs.mkdirSync(path.join(dir, 'repo', '.git'));
+  const loose = path.join(dir, 'loose');
+  fs.mkdirSync(loose);
+  const before = process.env.CLAUDE_PROJECT_DIR;
+  t.after(() => { if (before === undefined) delete process.env.CLAUDE_PROJECT_DIR; else process.env.CLAUDE_PROJECT_DIR = before; });
+  process.env.CLAUDE_PROJECT_DIR = sub;
+  assert.equal(projectRoot(), path.join(dir, 'repo'));
+  process.env.CLAUDE_PROJECT_DIR = loose;
+  assert.equal(projectRoot(), loose);
 });

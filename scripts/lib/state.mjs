@@ -32,8 +32,11 @@ export function ensureStateDir(root, env = process.env) {
   return dir;
 }
 
-export function writeStateFile(root, file, text, env = process.env, flag = 'w') {
+function writeState(root, file, text, { env, flag }) {
   ensureStateDir(root, env);
   refuseLink(file);
   fs.writeFileSync(file, text, { flag });
 }
+
+export const writeStateFile = (root, file, text, env = process.env) => writeState(root, file, text, { env, flag: 'w' });
+export const appendStateFile = (root, file, text, env = process.env) => writeState(root, file, text, { env, flag: 'a' });

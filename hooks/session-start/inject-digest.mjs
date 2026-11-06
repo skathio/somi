@@ -13,6 +13,21 @@ import { listShards } from '../../scripts/lib/shards.mjs';
 import { detectHost } from '../../scripts/lib/tiers.mjs';
 import { updateNotice } from '../../scripts/lib/update-notice.mjs';
 
+// Compaction drops rules and scope limits first. This hook fires on compaction too, so the ledger comes back every time.
+function projectParts(project) {
+  if (!project) return [];
+  const parts = [];
+  try {
+    const ledger = process.env.SOMI_STATE_DIR || !stateIsTracked(project) ? readLedger(project) : '';
+    if (ledger) parts.push(`Decisions and limits for the open work:\n${ledger}`);
+    const plan = planStatus(project);
+    if (plan?.next) parts.push(`An open plan is in the project at .somi/plan.md: ${plan.done} of ${plan.total} milestones done. Tell the user if it is relevant to what they ask.`);
+    const held = listShards({ root: project }).filter((b) => b.state !== 'ok');
+    if (held.length > 0) parts.push(`Connected steps needing attention: ${held.map((b) => `${b.ref} (${b.state})`).join(', ')}. See \`somi slot --list\`.`);
+  } catch { /* a bad state file must not stop a session starting */ }
+  return parts;
+}
+
 runHook(() => {
   const payload = readPayload();
   const root = pluginRoot();
@@ -22,16 +37,7 @@ runHook(() => {
   parts.push(`SoMi CLI: \`node "${path.join(root, 'scripts', 'somi.mjs')}"\`, written as \`somi\` in SoMi's commands.`);
   const warnings = settingsWarnings(host, sandboxSettings({ host, root: projectRoot() }));
   if (warnings.length > 0) parts.push(`WARNING: the OS sandbox, SoMi's security boundary, needs attention: ${warnings[0]}. Hooks are tripwires, not a boundary. Tell the user once, in one line, and do not repeat it. \`somi doctor\` has the detail, if they ask.`);
-  // Compaction drops rules and scope limits first. This hook fires on compaction too, so the ledger comes back every time.
-  try {
-    const project = projectRoot();
-    const ledger = project && (process.env.SOMI_STATE_DIR || !stateIsTracked(project)) ? readLedger(project) : '';
-    if (ledger) parts.push(`Decisions and limits for the open work:\n${ledger}`);
-    const plan = project ? planStatus(project) : null;
-    if (plan?.next) parts.push(`An open plan is in the project at .somi/plan.md: ${plan.done} of ${plan.total} milestones done. Tell the user if it is relevant to what they ask.`);
-    const held = project ? listShards({ root: project }).filter((b) => b.state !== 'ok') : [];
-    if (held.length > 0) parts.push(`Connected steps needing attention: ${held.map((b) => `${b.ref} (${b.state})`).join(', ')}. See \`somi slot --list\`.`);
-  } catch { /* a bad state file must not stop a session starting */ }
+  parts.push(...projectParts(projectRoot()));
   const notice = updateNotice();
   if (notice) parts.push(notice);
   // Claude Code names the active agent here. Copilot CLI does not, so nothing can be said about it there.
