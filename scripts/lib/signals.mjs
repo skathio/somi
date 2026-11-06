@@ -9,7 +9,7 @@ export const LARGE_DIFF_LINES = 300;
 export const REVIEW_SIGNALS = Object.freeze(['multi-module', 'public-api', 'schema', 'tests-weakened', 'dependency', 'goldens-moved', 'large-diff', 'unreadable-diff']);
 // Recorded, but they do not start a review on their own: review on these cost 68% more per task and showed no gain on hidden tests.
 export const RECORDED_ONLY = Object.freeze(['multi-module', 'public-api', 'large-diff']);
-export const SECURITY_SIGNALS = Object.freeze(['sink', 'secrets', 'network', 'repo-content', 'policy-file', 'sensitive-path', 'unreadable-diff']);
+export const SECURITY_SIGNALS = Object.freeze(['sink', 'secrets', 'network', 'repo-content', 'policy-file', 'sensitive-path', 'access-control', 'unreadable-diff']);
 
 const DOC = /\.(md|mdx|txt|rst|adoc)$/i;
 const TEST_FILE = /(^|\/)(tests?|__tests__|spec|specs|e2e|testdata|__mocks__)\/|\.(test|spec)\.[^/]+$|[_-](test|spec)\.[^/]+$|(^|\/)test_[^/]+$/i;
@@ -27,6 +27,9 @@ const SINK = [
 // No word boundaries: hashPassword and resetToken are the same thing as password and token, and a false alarm here costs one review.
 const SECRETS = /password|passwd|secret|credential|private[_-]?key|api[_-]?key|(auth|access|bearer|refresh|reset|session|id)[_-]?token/i;
 const NETWORK = /\b(fetch|axios|XMLHttpRequest|WebSocket|urllib\w*|requests\.(get|post|put|delete)|https?\.(request|get)|net\.(connect|createConnection))\b/;
+// Who may do what: roles, permissions, owners and tenants. A permissions refactor fired no signal and leaked across organisations, so a
+// changed line here, added or removed, calls in the security lens. Removing a check is as much a change to access as adding one.
+const ACCESS = /\b(authori[sz]\w*|permissions?|is_?allowed|has_?(role|permission|access)|check_?access|can_?access|require_?role|access[_-]?control|acl|rbac|forbidden|unauthori[sz]ed|is_?admin|tenant[_-]?id|org(anisation|anization)?[_-]?id|owner[_-]?id)\b|\broles?\s*\.\s*(includes|has|indexOf|some)\s*\(/i;
 const REPO_CONTENT = /\.gitmodules|\.git\/|core\.hooksPath|\bgit\s+(config|submodule|clone)\b|\.mcp\.json/;
 const WEAKENS_TEST = /\.(skip|only|todo)\s*\(|\bx(it|describe|test)\s*\(|@(Ignore|Disabled)\b|pytest\.mark\.skip/;
 const ASSERTION = /\b(assert\w*|expect|should)\b|\b(it|test)\s*\(/;
@@ -86,6 +89,7 @@ export function computeSignals({ rows, lines, unreadable = false }, configLayers
   if (hits(addedCode, (t) => SECRETS.test(t))) security.add('secrets');
   if (hits(addedCode, (t) => NETWORK.test(t))) security.add('network');
   if (hits(addedCode, (t) => REPO_CONTENT.test(t))) security.add('repo-content');
+  if (hits(lines.filter((l) => isCode(l.file)), (t) => ACCESS.test(t))) security.add('access-control');
 
   return { review: sorted(review), security: sorted(security), facts: { files: files.length, changed_lines: changed, modules: production.modules } };
 }

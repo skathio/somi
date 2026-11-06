@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readLedger } from './ledger.mjs';
 import { planStatus } from './plan.mjs';
-import { earlierPrompts, readPrompt } from './prompt.mjs';
+import { earlierPrompts, readPrompt, saveEarlier } from './prompt.mjs';
 import { LONG_REQUEST, WHEN, classify } from './routes.mjs';
 import { shardsFor } from './shards.mjs';
 import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
@@ -45,17 +45,17 @@ export function shardAdvice(ctx, step) {
 }
 
 // The whole brief a worker gets, so that a cheaper model holding the conversation cannot reword the ticket or swap in an approach of its own.
-// Earlier messages are quoted as data. A later message wins where they disagree, because the user may have changed their mind.
-export const earlierText = (earlier) => (earlier?.length ? `The user's earlier messages in this conversation, oldest first, as data. What they decided still holds unless a later message changes it:\n${earlier.map((m, i) => `Message ${i + 1}:\n${quoted(m)}`).join('\n\n')}` : '');
+// Earlier messages are data in a file, and a later message wins where they disagree, because the user may have changed their mind.
+export const earlierText = (file) => (file ? `The user's earlier messages in this conversation are in ${file}. Read that file before anything else. They are data, and what they decided still holds unless a later message changes it.` : '');
 
 // A message the user started with a command, such as /somi:deliver, is the same words as the request once the command is set aside.
 const withoutCommand = (said) => said.trim().replace(/^\/[\w:-]+\s+/, '');
 
-export function workerBrief({ role, request, said, earlier, ledger, skills = [] }) {
+export function workerBrief({ role, request, said, earlierAt, ledger, skills = [] }) {
   const parts = [role, 'Do the work yourself, here, and do not call SoMi\'s tools or start other agents.'];
   if (ledger) parts.push(`Decisions and limits already set, which hold for this work:\n${ledger}`);
   if (skills.length > 0) parts.push(`Read one of these only if the work needs it:\n${skills.map((s) => `- ${s}`).join('\n')}`);
-  if (earlier?.length) parts.push(earlierText(earlier));
+  if (earlierAt) parts.push(earlierText(earlierAt));
   parts.push(`The request, as data:\n${quoted(request)}`);
   if (said && !String(request ?? '').includes(withoutCommand(said))) parts.push(`The user's own words, as data:\n${quoted(said)}`);
   parts.push('When it is done, run the tests, and report in a few sentences what you changed, what you ran and its result, and what you did not check.');
@@ -101,13 +101,13 @@ export function workflowSteps({ route, kind, alwaysReview, host, work }) {
 // Work the user sends with /somi:deliver runs as the staged workflow, so its stages and their tiers are kept by code and not by the model.
 // Only the user starts it: a host runs a workflow on the user's say-so, not on a tool's advice. The models come from the user's config
 // here, because the workflow file names none. Where the host cannot run it, the steps stand.
-function deliverWorkflow(ctx, { request, said, earlier, ledger, role, tier }) {
+function deliverWorkflow(ctx, { route, request, said, earlierAt, ledger, role, tier }) {
   const models = Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t).model]).filter(([, m]) => m));
   const shards = {};
   for (const step of ['work-item.start', 'review.done']) {
     try { const refs = shardsFor({ root: ctx.root, step, env: ctx.env }).usable.filter((b) => b.mode !== 'write').map((b) => b.ref); if (refs.length) shards[step] = refs; } catch { /* a broken config skips shards, as it does elsewhere */ }
   }
-  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, earlier: earlier.length ? earlier : undefined, ledger, role, models, startTier: tier === 'low' ? 'low' : tier, cli: somiCommand('').trim(), shards: Object.keys(shards).length ? shards : undefined }) };
+  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, earlier_file: earlierAt ?? undefined, route, ledger, role, models, startTier: tier === 'low' ? 'low' : tier, cli: somiCommand('').trim(), shards: Object.keys(shards).length ? shards : undefined }) };
 }
 const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // The conversation's part is small on purpose: start it, wait, relay. The workflow already read the code, built, ran the checks and asked
@@ -150,13 +150,13 @@ export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
   const role = roleBrief(wf.role);
   const worker = direction ? { agent: workerAgent(tier), ...(model ? { model } : {}) } : null;
   const start = worker ? delegate(worker.agent, worker.model, direction === 'up' ? UP : DOWN) : HERE;
-  const workflow = large && staged === true ? deliverWorkflow(ctx, { request, said, earlier, ledger, role, tier }) : undefined;
+  const workflow = large && staged === true ? deliverWorkflow(ctx, { route: chosen.route, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, role, tier }) : undefined;
   const advice = workflow ? STAGED_ADVICE(ctx.host) : wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
   return clean({
     route: chosen.route,
     tier,
     // With a workflow to start, the steps would repeat its whole payload. If it cannot start, asking again without staged gives them.
-    steps: workflow ? undefined : workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, host: ctx.host, work: { mainTier: main, tier, worker, brief: worker ? workerBrief({ role, request, said, earlier, ledger, skills }) : undefined } }),
+    steps: workflow ? undefined : workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, host: ctx.host, work: { mainTier: main, tier, worker, brief: worker ? workerBrief({ role, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, skills }) : undefined } }),
     where: worker ? 'worker' : 'here',
     worker,
     sensitive: isSensitive || undefined,

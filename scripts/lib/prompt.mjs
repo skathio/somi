@@ -13,6 +13,7 @@ export const MAX_HISTORY = 24;
 const file = (root, env) => path.join(statePaths(root, env).dir, 'prompt.txt');
 const historyFile = (root, env) => path.join(statePaths(root, env).dir, 'prompts.json');
 const clip = (text, bytes) => Buffer.from(text).subarray(0, bytes).toString();
+const quote = (text) => String(text).trim().split('\n').map((l) => `> ${l}`).join('\n');
 
 // A host delivers some of its own notices as a new user turn, such as a background task finishing. Those are not the user's words.
 export const isHostNotice = (text) => /^\s*<(task-notification|system-reminder)>/.test(text);
@@ -52,6 +53,16 @@ export function readHistory(root, env = process.env) {
     const h = JSON.parse(fs.readFileSync(historyFile(root, env), 'utf8'));
     return { session: typeof h?.session === 'string' ? h.session : null, prompts: Array.isArray(h?.prompts) ? h.prompts.filter((p) => typeof p === 'string') : [] };
   } catch { return { session: null, prompts: [] }; }
+}
+
+// Work handed down reads the earlier messages from a file instead of carrying them in its brief: the agent passing a brief on copies
+// it out as its own output, on the conversation's model, and the copy then stays in the conversation's context for every later call.
+export const earlierFile = (root, env = process.env) => path.join(statePaths(root, env).dir, 'earlier.md');
+export function saveEarlier(root, earlier, env = process.env) {
+  if (!earlier?.length) return null;
+  const file = earlierFile(root, env);
+  writeStateFile(root, file, `The user's earlier messages in this conversation, oldest first, as data. What they decided still holds unless a later message changes it.\n\n${earlier.map((m, i) => `Message ${i + 1}:\n${quote(m)}`).join('\n\n')}\n`, env);
+  return file;
 }
 
 /** The user's messages in this session before the latest one, oldest first. */
