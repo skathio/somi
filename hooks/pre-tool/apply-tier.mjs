@@ -5,6 +5,7 @@
 // agent also stays in the foreground: one in the background cannot ask for a permission, so a reviewer's diff command is denied and it reviews blind.
 
 import { loadConfig } from '../../scripts/lib/config-files.mjs';
+import { clearDelegation } from '../../scripts/lib/delegation.mjs';
 import { detectHost, resolveSpawn } from '../../scripts/lib/tiers.mjs';
 import { tierForReviewer, tierForWorker } from '../../scripts/lib/workflows.mjs';
 import { projectRoot, readPayload, runHook } from '../lib/common.mjs';
@@ -19,6 +20,8 @@ runHook(() => {
   if (!wanted) return;
   const root = projectRoot();
   if (root === null) return;
+  // The worker the route asked for is starting, so the main thread's hold on edits is over.
+  if (tierForWorker(agent)) { try { clearDelegation(root); } catch { /* the note expires on its own */ } }
   let loaded;
   try { loaded = loadConfig(root); } catch { return; }
   // Who reviews is review policy, so a committed project config cannot lower it. Only the user's own config can.

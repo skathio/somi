@@ -62,7 +62,7 @@ const PROJECT_DIR = { type: 'string', description: 'Absolute path of the project
 const TOOLS = [
   {
     name: 'somi_route',
-    description: 'Ask once when the user wants work done: a change, a bug, a plan, a review, a release or a ticket. Says which workflow fits, at which tier, and whether to do it here or hand it to a stronger worker. Keeps no state and refuses nothing.',
+    description: 'Ask once when the user wants work done: a change, a bug, a plan, a review, a release or a ticket. Says which workflow and tier fit, and where to do it.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -77,7 +77,7 @@ const TOOLS = [
   },
   {
     name: 'somi_review',
-    description: 'Call when a change is ready. With no reviews, reads the diff and says which reviewers it needs, if any. With reviews, records what they returned and says what blocks the change from leaving.',
+    description: 'With no reviews, reads the diff and names the reviewers it needs. With reviews, records them and says what blocks the change.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -93,7 +93,7 @@ const TOOLS = [
   },
   {
     name: 'somi_note',
-    description: 'Record a decision or limit that must survive compaction and reach later workers. For lasting ones only: the ledger is small on purpose.',
+    description: 'Record a lasting decision or limit, so it survives compaction and reaches later workers.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -103,7 +103,7 @@ const TOOLS = [
   },
   {
     name: 'somi_plan',
-    description: 'Large work as a plain plan file. With text, saves the plan: one line per milestone reading "Milestone N: what it delivers". With done, marks milestone N done. With close, ends the plan and its ledger. With nothing, says where the plan has got to.',
+    description: 'The plan file for large work. text saves it, one "Milestone N: what it delivers" line each; done marks milestone N; close ends it; nothing shows progress.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -112,7 +112,7 @@ const TOOLS = [
   },
   {
     name: 'somi_pr',
-    description: 'The pull request text for this branch, from its commits, reviews and decisions. Refuses when the change needed a review and has none, or has an open blocking finding, unless unreviewed is true, and then the text says so at the top.',
+    description: 'The pull request text for this branch. Refuses an unreviewed or blocked change unless unreviewed is true, and then says so at the top.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,

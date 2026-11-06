@@ -11,6 +11,7 @@ import { addToLedger, readLedger, MAX_LINES } from '../scripts/lib/ledger.mjs';
 import { closePlan, markMilestoneDone, parseMilestones, planStatus, savePlan } from '../scripts/lib/plan.mjs';
 import { classify } from '../scripts/lib/routes.mjs';
 import { readPrompt, savePrompt } from '../scripts/lib/prompt.mjs';
+import { DELEGATION_TTL_MS, activeDelegation, markDelegation } from '../scripts/lib/delegation.mjs';
 import { setupAgent } from '../scripts/lib/setup.mjs';
 import { listShards, shardsFor, slot, confirmProjectShards, ShardError } from '../scripts/lib/shards.mjs';
 import { mainTier, resolveSpawn, resolveTier } from '../scripts/lib/tiers.mjs';
@@ -33,7 +34,9 @@ test('the conversation runs on medium, and small work that is not sensitive goes
   assert.match(r.advice, /no requirements or approach of your own/);
   assert.match(r.brief, /small, clear change/);
   assert.match(r.brief, /> Add a helper that doubles a number/);
-  assert.match(r.advice, /somi_review/);
+  assert.match(r.advice, /Do not write this change yourself/);
+  assert.match(r.advice, /SoMi reads the diff and tells you/, 'on Claude Code the stop hook checks for a review');
+  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: 'Add a helper that doubles a number' }).advice, /call somi_review/, 'elsewhere the agent asks');
 });
 
 test('work goes down by its kind, not by words that sound risky, and the user saying it is sensitive keeps it here', (t) => {
@@ -77,7 +80,7 @@ test('asking again with other work open is never refused, and no state is writte
   const second = advise(ctx, { request: 'Now fix the crash in the other module' });
   assert.equal(first.route, 'build');
   assert.equal(second.route, 'debug');
-  assert.equal(fs.existsSync(path.join(dir, '.somi')), false, 'routing writes nothing');
+  assert.deepEqual(fs.readdirSync(path.join(dir, '.somi', 'state')), ['delegation.json'], 'routing writes only the short-lived note that work was handed down');
   assert.deepEqual(advise(ctx, { request: 'Add a thing' }), first, 'the same request gets the same answer');
 });
 
@@ -413,4 +416,59 @@ test('the prompt hook keeps the latest message, adds nothing, and writes nothing
   assert.equal(readPrompt(dir, env), 'a later message');
   assert.equal(run({ prompt: 'x'.repeat(70000) }).status, 0);
   assert.equal(readPrompt(dir, env).length, 65536);
+});
+
+const hookAt = (dir, rel, payload, hookEnv = {}) => {
+  const r = spawnSync(process.execPath, [path.join(REPO, 'hooks', rel)], {
+    input: JSON.stringify(payload), encoding: 'utf8', cwd: dir,
+    env: { PATH: process.env.PATH, HOME: dir, SOMI_GLOBAL_CONFIG: '', CLAUDE_PROJECT_DIR: dir, SOMI_HOST: 'claude', SOMI_AUDIT_LOG: path.join(dir, '.git', 'audit.log'), ...hookEnv },
+  });
+  let out = null;
+  try { out = JSON.parse(r.stdout); } catch { /* an allow prints nothing */ }
+  return { status: r.status, out };
+};
+
+test('after a route sends a change down, the main thread\'s edits wait until the worker starts', (t) => {
+  const dir = makeRepo(t);
+  const edit = { tool_name: 'Edit', tool_input: { file_path: 'src/app.js' } };
+  assert.equal(hookAt(dir, 'pre-tool/keep-delegated.mjs', edit).status, 0, 'nothing routed, nothing held');
+  advise(makeCtx(dir), { request: 'Add a helper that doubles a number' });
+  const held = hookAt(dir, 'pre-tool/keep-delegated.mjs', edit);
+  assert.equal(held.status, 2);
+  assert.match(JSON.stringify(held.out), /somi:somi-worker-low/);
+  assert.equal(hookAt(dir, 'pre-tool/keep-delegated.mjs', { ...edit, agent_id: 'a1', agent_type: 'somi:somi-worker-low' }).status, 0, 'the worker writes freely');
+  assert.equal(hookAt(dir, 'pre-tool/keep-delegated.mjs', edit, { SOMI_HOST: 'copilot' }).status, 0, 'never on Copilot, where a denied agent gives up');
+  hookAt(dir, 'pre-tool/apply-tier.mjs', { tool_name: 'Agent', tool_input: { subagent_type: 'somi:somi-worker-low', prompt: 'x' } });
+  assert.equal(hookAt(dir, 'pre-tool/keep-delegated.mjs', edit).status, 0, 'released once the worker starts');
+});
+
+test('the next message from the user releases the hold, and work done here is never held', (t) => {
+  const dir = makeRepo(t);
+  const edit = { tool_name: 'Write', tool_input: { file_path: 'src/app.js' } };
+  advise(makeCtx(dir), { request: 'Add a helper that doubles a number' });
+  assert.equal(hookAt(dir, 'pre-tool/keep-delegated.mjs', edit).status, 2);
+  hookAt(dir, 'user-prompt/capture-prompt.mjs', { prompt: 'just do it yourself' });
+  assert.equal(hookAt(dir, 'pre-tool/keep-delegated.mjs', edit).status, 0);
+  advise(makeCtx(dir), { request: 'Fix the crash when the list is empty' });
+  assert.equal(hookAt(dir, 'pre-tool/keep-delegated.mjs', edit).status, 0, 'a route done here marks nothing');
+  assert.equal(activeDelegation(dir, env), null);
+  markDelegation(dir, { agent: 'somi:somi-worker-low', tier: 'low' }, env, Date.now() - DELEGATION_TTL_MS - 1);
+  assert.equal(activeDelegation(dir, env), null, 'an old note has expired');
+});
+
+test('when a turn ends, a change that needs a review is sent back once, and one that does not is let go', (t) => {
+  const dir = makeRepo(t);
+  const stop = (extra = {}) => hookAt(dir, 'stop/review-due.mjs', { hook_event_name: 'Stop', ...extra });
+  assert.equal(stop().out, null, 'nothing changed');
+  writeFiles(dir, { 'src/app.js': 'export const one = 2;\n' });
+  assert.equal(stop().out, null, 'no signal fired');
+  writeFiles(dir, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (c) => exec(c);\n' });
+  const sent = stop();
+  assert.equal(sent.out.decision, 'block');
+  assert.match(sent.out.reason, /needs a review.*sink/);
+  assert.equal(stop().out, null, 'asked once for this tree, so it never loops');
+  writeFiles(dir, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (c) => exec(`ls ${c}`);\n' });
+  assert.equal(stop({ stop_hook_active: true }).out, null, 'a turn the hook already continued ends');
+  assert.equal(hookAt(dir, 'stop/review-due.mjs', { hook_event_name: 'Stop' }, { SOMI_HOST: 'copilot' }).out, null);
+  assert.equal(stop().out.decision, 'block', 'a new tree is a new question');
 });

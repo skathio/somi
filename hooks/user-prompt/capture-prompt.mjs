@@ -3,6 +3,7 @@
 // It adds nothing to the conversation and never blocks a prompt. A committed state folder is not trusted, so nothing is written there.
 
 import { stateIsTracked } from '../../scripts/lib/git-tree.mjs';
+import { clearDelegation } from '../../scripts/lib/delegation.mjs';
 import { savePrompt } from '../../scripts/lib/prompt.mjs';
 import { projectRoot, readPayload, runHook } from '../lib/common.mjs';
 
@@ -13,5 +14,7 @@ runHook(() => {
   try {
     if (!process.env.SOMI_STATE_DIR && stateIsTracked(root)) return;
     savePrompt(root, payload.prompt ?? payload.userPrompt ?? '');
+    // A new message is a new decision: whatever the last route held back is the user's to direct again.
+    clearDelegation(root);
   } catch { /* a prompt must never fail because SoMi could not keep a copy */ }
 });

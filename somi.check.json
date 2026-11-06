@@ -131,6 +131,9 @@
     "scripts/lib/pr.mjs": [
       "tests/reviews.test.mjs",
       "tests/mcp.test.mjs"
+    ],
+    "scripts/lib/delegation.mjs": [
+      "tests/advisor.test.mjs"
     ]
   }
 }

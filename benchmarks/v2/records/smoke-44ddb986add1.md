@@ -3,14 +3,14 @@
 - Session model: claude-sonnet-5-5, low tier claude-haiku-5-5
 - Rule hash: 44ddb986add1733649ad1c5ffd01b0d0782b6b6c997d1f3ebc0c9ecf059034d3
 - Host: {"cpu":"Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz","cores":8,"memGb":15,"os":"6.8.0-147-generic","node":"v26.2.0"}
-- Draws recorded: 6 of 6. Dollars are the CLI's estimate.
+- Draws recorded: 22 of 22. Dollars are the CLI's estimate.
 
 ## Arms
 
 | Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |
 |---|---|---|---|---|---|---|---|---|
-| bare | 3 | 3 | 1.00 | 1.00 | 36831 | 0.079 | 0.5 | {"finished":3} |
-| somi5 | 3 | 3 | 1.00 | 1.00 | 136224 | 0.200 | 1.2 | {"finished":3} |
+| bare | 11 | 6 | 0.55 | 0.55 | 73508 | 0.158 | 0.9 | {"finished":11} |
+| somi5 | 11 | 9 | 0.82 | 0.82 | 127726 | 0.174 | 1.3 | {"finished":11} |
 
 ## Against bare
 
@@ -18,7 +18,7 @@ Ratios are per draw, blocked by task, with a 90% interval.
 
 | Arm | Weighted tokens | Dollars | Wall time |
 |---|---|---|---|
-| somi5 | 3.69 (2.83 to 4.81) | 2.49 (1.70 to 3.65) | 2.47 (2.25 to 2.70) |
+| somi5 | 2.14 (1.47 to 3.12) | 1.59 (1.28 to 1.96) | 1.81 (1.34 to 2.46) |
 
 ## Own tests
 
@@ -26,15 +26,15 @@ Tests each draw added or changed, run on the reference solution and on each of i
 
 | Arm | Draws with tests | Pass on the reference | Mutants killed |
 |---|---|---|---|
-| bare | 3 of 3 | 2 | 5 of 5 (100%) |
-| somi5 | 3 of 3 | 1 | 3 of 3 (100%) |
+| bare | 11 of 11 | 5 | 13 of 17 (76%) |
+| somi5 | 11 of 11 | 5 | 16 of 17 (94%) |
 
 ## Protocol and spend
 
 | Arm | Routed to | Tool or CLI | Mean passes | Gates | Escalated | Inline writes | Findings | Mean dollars per model | Mean weighted per agent | Split coverage |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| bare | {} | {"none":3} | 0.00 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.0795} | {"main":36831} | 1.00 |
-| somi5 | {"build":2} | {"tool":3} | 0.67 | {} | 0 | 1 | {"Minor":4,"Major":1,"Nit":3} | {"claude-sonnet-5-5":0.1956,"claude-haiku-5-5":0.0044} | {"somi:somi-security-reviewer":11916,"unknown":28627,"somi:somi-reviewer":24490,"main":71191} | 1.00 |
+| bare | {} | {"none":11} | 0.00 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.086} | {"main":40095} | 1.00 |
+| somi5 | {"debug":1,"build":9} | {"tool":11} | 0.09 | {} | 0 | 0 | {"Minor":2,"Nit":2} | {"claude-sonnet-5-5":0.1388,"claude-haiku-5-5":0.0038} | {"main":57385,"somi:somi-security-reviewer":6593,"unknown":8675,"somi:somi-reviewer":13809,"somi:somi-worker-low":18041} | 1.00 |
 
 ## Reading
 

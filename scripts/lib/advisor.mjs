@@ -1,5 +1,6 @@
 // advisor.mjs: what one request should run as, at which tier, and where. It keeps no state and refuses nothing: the agent holding the
-// conversation asks once, reads the answer at the moment it is deciding, and stays in charge.
+// conversation asks once, reads the answer at the moment it is deciding, and stays in charge. The one thing it writes is a short-lived note
+// that a change was sent to a worker, which a hook uses to keep the main thread from doing it anyway.
 //
 // The conversation runs on the medium tier, as a bare agent would, and does the work the route needs at that tier. What is cheaper than
 // that goes down to a low worker, and what needs more goes up. Whether work is risky is read from the code it changes, not from the words
@@ -9,6 +10,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { markDelegation } from './delegation.mjs';
 import { readLedger } from './ledger.mjs';
 import { planStatus } from './plan.mjs';
 import { readPrompt } from './prompt.mjs';
@@ -54,9 +56,12 @@ export function workerBrief({ role, request, said, ledger, skills = [] }) {
   return parts.join('\n\n');
 }
 
-const AFTER_CHANGE = 'When the change is ready, call somi_review. It reads the diff and says whether a review is needed. Any later change on this work goes the same way. Commit only if the user asked you to.';
+// On Claude Code a stop hook reads the diff when a turn ends and says when a review is due, so the agent spends no call asking.
+const afterChange = (host) => (host === 'claude'
+  ? 'You do not need to ask whether a review is due: when your turn ends, SoMi reads the diff and tells you. Commit only if the user asked you to.'
+  : 'When the change is ready, call somi_review. It reads the diff and says whether a review is needed. Any later change on this work goes the same way. Commit only if the user asked you to.');
 const HERE = 'Do this yourself, in this conversation, following role. Read, edit and ask the user whatever the work needs.';
-const delegate = (agent, model, why) => `Start ${agent}${model ? ` on model ${model}` : ''} in the foreground with brief unchanged, ${why}. Below the brief, under "From the conversation:", you may add facts the user or earlier turns settled that it needs: files, decisions, what was already tried. Add no requirements or approach of your own. When it reports, check the result against what the user asked and carry on the conversation. If the host refuses that model, tell the user why, and do it here.`;
+const delegate = (agent, model, why) => `Start ${agent}${model ? ` on model ${model}` : ''} now, in the foreground, with brief unchanged, ${why}. Do not write this change yourself: that spends the conversation's tier on work a worker does for less, and on Claude Code SoMi holds back your edits until the worker starts. Below the brief, under "From the conversation:", you may add facts the user or earlier turns settled that it needs: files, decisions, what was already tried. Add no requirements or approach of your own. When it reports, check the result against what the user asked and carry on the conversation. If the host refuses that model, tell the user why, and do it here.`;
 const DOWN = 'because this work is cheaper on that tier';
 const UP = 'because it needs a stronger model than this conversation';
 const unmapped = (host) => `No model is set for this tier on ${host}, so a worker would run on the session's model. The user can set one under tiers.${host} in config.`;
@@ -95,7 +100,8 @@ export function advise(ctx, { request, ticket, hint, sensitive } = {}) {
   const role = roleBrief(wf.role);
   const worker = direction ? { agent: workerAgent(tier), ...(model ? { model } : {}) } : null;
   const start = worker ? delegate(worker.agent, worker.model, direction === 'up' ? UP : DOWN) : HERE;
-  const steps = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${AFTER_CHANGE}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
+  if (worker && wf.kind === 'code') markDelegation(ctx.root, { agent: worker.agent, tier }, ctx.env);
+  const steps = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
   return clean({
     route: chosen.route,
     tier,

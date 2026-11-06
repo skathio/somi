@@ -9,7 +9,7 @@ When the user asks for work to be done, such as a change, a bug fix, a plan, a r
 
 Do not route questions, explanations, small follow-ups on work already under way, or changes of mind. Carry on with those yourself. A follow-up that changes code still ends with `somi_review`.
 
-Before you tell the user a change is finished, call `somi_review`. It says whether a review is needed. When SoMi gives you a brief for a worker or a reviewer, pass it unchanged: it already holds the request in the user's own words.
+Before you tell the user a change is finished, make sure it had any review it needs. On Claude Code, SoMi checks the diff when your turn ends and tells you. Elsewhere, call `somi_review`. When SoMi gives you a brief for a worker or a reviewer, pass it unchanged: it already holds the request in the user's own words.
 
 If a SoMi tool is unavailable or returns an error, say so once and do the work yourself. A SoMi tool never stops you from helping the user.
 
