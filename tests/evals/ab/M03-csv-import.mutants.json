@@ -1,0 +1,8 @@
+[
+ { "name": "float-cents", "file": "src/import.mjs", "find": "  return Number(m[1]) * 100 + Number((m[2] ?? '').padEnd(2, '0'));", "replace": "  return Math.floor(Number(text) * 100);" },
+ { "name": "partial-import", "file": "src/import.mjs", "find": "  if (rows.length > 0) return fail('invalid_rows', { rows });\n", "replace": "\n" },
+ { "name": "no-byte-limit", "file": "src/import.mjs", "find": "  if (Buffer.byteLength(text) > MAX_BYTES) return fail('too_large');\n", "replace": "\n" },
+ { "name": "formula-not-defused", "file": "src/export.mjs", "find": "const defused = (text) => (/^[=+\\-@]/.test(text) ? `'${text}` : text);", "replace": "const defused = (text) => (/^[=+]/.test(text) ? `'${text}` : text);" },
+ { "name": "negative-stock-allowed", "file": "src/import.mjs", "find": "const STOCK = /^\\d{1,9}$/;", "replace": "const STOCK = /^-?\\d{1,9}$/;" },
+ { "name": "quotes-not-doubled", "file": "src/import.mjs", "find": "      if (c === '\"' && text[i + 1] === '\"') { field += '\"'; i += 2; continue; }\n", "replace": "\n" }
+]

@@ -383,6 +383,14 @@
    "why": "flag rollout built over four messages: exact bucketing stated once at the start, a precedence rule reversed at the end",
    "stratum": "multi-turn",
    "release_large": true
+  },
+  {
+   "id": "M03-csv-import",
+   "dir": "tests/evals/ab/M03-csv-import",
+   "boundary": true,
+   "why": "an untrusted-input import and export built over four messages: limits and exact money stated once, a stock rule reversed at the end",
+   "stratum": "multi-turn",
+   "release_large": true
   }
  ]
 }
