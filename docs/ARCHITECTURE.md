@@ -11,8 +11,10 @@ the user talks to one agent, on the tier set by tiers.main: medium by default, t
        it returns the workflow as steps, each with where it runs, main or a subagent, and on which tier
        rules decide a clear request; with no rule to go on, it is new work and goes to build
   -> a small piece of code work: done here, as a bare agent would
-  -> large code work below the conversation's tier: down a tier as a whole, as the deliver workflow
-       on Claude Code, or a low worker with a brief somi_route built where workflows are not available
+  -> large code work below the conversation's tier: down a tier as a whole, to a low worker with a brief
+       somi_route built, and the agent tells the user that /somi:deliver runs it in stages
+  -> /somi:deliver: somi_route with staged true returns the deliver-stages workflow and its args, and the
+       agent starts it, because the user asked; where the host cannot run it, the steps stand
   -> the user said it is security-sensitive, or it is at the conversation's tier: done here
   -> above it: up to a worker, with a brief somi_route built
   -> the change is ready: somi_review reads the real diff, computes signals, and names reviewers with their briefs
@@ -36,6 +38,8 @@ Routing classifies what the work is, never how big it will be, because model siz
 Advice in a tool result arrives at the moment of decision, which is where it is most likely to be followed. What must happen does not rest on advice: the session agent's model and the worker and reviewer hook are configuration, the safety hooks deny, and the review gate sits at `somi pr`.
 
 ## Workflows and the library
+
+`workflows/deliver-stages.js` runs large work in code: a scout on low, its reproduction kept only if running it fails, a build that restarts one tier up from the handoff when the checks fail, the checks, and the reviewers the diff calls for. A host starts a workflow only on the user's say-so, never on a tool's advice, so it runs when the user types `/somi:deliver`. Claude Code reads the file from the plugin. Copilot CLI loads workflows only from an extension, so `somi init --host copilot` writes `.github/extensions/somi/extension.mjs`, which runs the same file through `scripts/lib/copilot-workflow.mjs`; Copilot runs workflows in experimental mode. The models come from the user's config in the workflow's args, because the file names none.
 
 `scripts/lib/workflows.mjs` says what each route is: its kind, tier, role text and skills. Role text is in `library/roles/`, expertise in `library/skills/`, and review lenses in `library/lenses/`. A host lists only commands and `somi-expertise`, at most 15 entries and 8,000 characters, and a test holds that, because hosts silently drop descriptions past a budget. Nothing in the library costs anything until it is used.
 
@@ -114,6 +118,7 @@ The sandbox is recommended, not required: session start warns loudly when it is 
 |---|---|---|---|
 | Default lane and CLI | Yes | Yes | Instructions only, CLI in a terminal |
 | Tripwire hooks | Plugin `hooks/hooks.json` | The same plugin file, or `somi init --host copilot` for `.github/hooks/somi.json` | Not assumed in VS Code |
+| Staged workflow | `/somi:deliver`, from the plugin's `workflows/` | `/somi:deliver`, after `somi init --host copilot`, in experimental mode | Steps only |
 | OS sandbox | `/sandbox`, profile in `profiles/claude.json` | `/sandbox enable` | Host settings |
 | Reviewer model tier | Per subagent | Host default unless config names one | Host default |
 

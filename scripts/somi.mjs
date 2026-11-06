@@ -25,7 +25,7 @@ import { runCheck } from './lib/check.mjs';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
 import { runDoctor } from './lib/doctor.mjs';
 import { repoRoot, stateIsTracked } from './lib/git-tree.mjs';
-import { writeCopilotHooks } from './lib/init.mjs';
+import { writeCopilotExtension, writeCopilotHooks } from './lib/init.mjs';
 import { addToLedger, readLedger } from './lib/ledger.mjs';
 import { migrate } from './lib/migrate.mjs';
 import { lastCheck, migratedFindings, pullRequest } from './lib/pr.mjs';
@@ -158,9 +158,10 @@ function main(argv) {
     case 'init': {
       const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
       if (values.host !== 'copilot') throw new StateError('init takes --host copilot; the Claude Code plugin needs no setup');
-      const result = writeCopilotHooks(ctx.root, PLUGIN_ROOT);
-      print(result);
-      return result.written ? 0 : 1;
+      const hooks = writeCopilotHooks(ctx.root, PLUGIN_ROOT);
+      const extension = writeCopilotExtension(ctx.root, PLUGIN_ROOT);
+      print({ hooks, extension, workflows: 'Copilot runs workflows in experimental mode: start it with --experimental, or turn it on with /experimental.' });
+      return hooks.written && extension.written ? 0 : 1;
     }
     default:
       throw new StateError('somi takes route, review, check, status, pr, plan, setup, slot, ledger, migrate, doctor or init');

@@ -1,12 +1,13 @@
 export const meta = {
-  name: 'deliver',
+  name: 'deliver-stages',
   description: 'Deliver one piece of work in stages, each on its cost tier: scout, build with escalation, verify, and review where the diff calls for it.',
   phases: [{ title: 'Scout' }, { title: 'Check the handoff' }, { title: 'Build' }, { title: 'Verify' }, { title: 'Review' }],
 }
 
 // The stages run in code, so each one gets its tier and none can be skipped. The models arrive in args from somi_route, which reads the
 // user's config, because this file names no model. What an agent returns is data: a stage only reads the fields its schema declares.
-const a = args ?? {};
+// Started by hand with plain text, the text is the request and every stage runs on the session's model.
+const a = typeof args === 'string' ? { request: args } : args ?? {};
 const models = a.models ?? {};
 const onTier = (tier, extra = {}) => ({ ...(models[tier] ? { model: models[tier] } : {}), ...extra });
 const quote = (text) => String(text ?? '').trim().split('\n').map((l) => `> ${l}`).join('\n');
@@ -52,7 +53,8 @@ for (const tier of ladder) {
 
 phase('Review');
 const plan = await agent(`Run \`${cli} review\` and return what it prints, unchanged, as the fields asked for. Change nothing.`, onTier('low', { label: 'review plan', schema: PLAN }));
-const reviews = plan?.needed ? (await pipeline(plan.reviewers ?? [], (r) => agent(r.brief, { label: r.agent, agentType: r.agent, ...(r.model ? { model: r.model } : {}) }))).filter(Boolean) : [];
+// A first stage gets the item itself on one host and (previous, item) on another, so it reads the item from either.
+const reviews = plan?.needed ? (await pipeline(plan.reviewers ?? [], (prev, item) => { const r = item ?? prev; return agent(r.brief, { label: r.agent, agentType: r.agent, ...(r.model ? { model: r.model } : {}) }); })).filter(Boolean) : [];
 await runShards('review.done');
 
 return { status: built?.status === 'done' && gate?.ok ? 'done' : 'needs-attention', summary: built?.summary ?? null, checks: gate, review_tree: plan?.tree ?? null, reviews, handoff_kept_repro: Boolean(repro) };

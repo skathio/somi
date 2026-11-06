@@ -134,6 +134,11 @@
     ],
     "workflows/": [
       "tests/workflows.test.mjs"
+    ],
+    "scripts/lib/copilot-workflow.mjs": [
+      "tests/workflows.test.mjs",
+      "tests/doctor.test.mjs",
+      "tests/advisor.test.mjs"
     ]
   }
 }

@@ -59,7 +59,7 @@ export const PHASE_ARMS = Object.freeze({
   large: ['bare', 'somi5', 'somi5-lane', 'somi41'],
   tight: ['bare', 'somi5', 'somi5-lane'],
   // A quick look, one draw per task and arm on tasks you name, to check a change works before anything is recorded for real.
-  smoke: ['bare', 'somi5', 'somi5-hooks'],
+  smoke: ['bare', 'somi5', 'somi5-hooks', 'somi5-deliver'],
 });
 
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -68,7 +68,8 @@ export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 const isBare = (arm) => arm.startsWith('bare');
 // Every arm gets the same plain request. The SoMi arms go through their own front door, so routing is what gets measured, not a flow
 // the benchmark picked for them. The one exception asks for a plan, as a maintainer can, because that is how the milestone lane is reached.
-export const armPrompt = (arm, text) => (arm === 'somi5-lane' ? `Show me a plan first, then build it.\n${text}` : text);
+// somi5-deliver is SoMi with each message sent as /somi:deliver, the way a user asks for the staged workflow, which only they can start.
+export const armPrompt = (arm, text) => (arm === 'somi5-lane' ? `Show me a plan first, then build it.\n${text}` : arm === 'somi5-deliver' ? `/somi:deliver ${text}` : text);
 // The hooks arm is SoMi's small path: the plugin's hooks and an Explore agent on the low tier, with no SoMi agent and no routing call.
 const engineArm = (arm) => (isBare(arm) ? 'bare' : arm === 'somi5-hooks' ? 'somi-hooks' : 'somi');
 export const armsFor = (phase, cells = readJson(ABLATIONS).cells) => (phase === 'ablation' ? [...PHASE_ARMS.ablation, ...Object.keys(cells)] : PHASE_ARMS[phase]);
@@ -389,7 +390,7 @@ async function run(args, session = { windowWeighted: 0 }) {
       // The small path's Explore runs on the low tier. It lives in the user's agent folder, so it is not a change in the workspace.
       if (d.arm === 'somi5-hooks') { fs.mkdirSync(path.join(tmp, 'cfg', 'agents'), { recursive: true }); fs.writeFileSync(path.join(tmp, 'cfg', 'agents', 'Explore.md'), `---\nname: Explore\ndescription: Fast read-only search of the codebase.\nmodel: ${alias(args['worker-model'] ?? args.model)}\n---\nSearch the codebase and answer briefly. Do not edit anything.\n`); }
       const result = await runDraw({
-        followUps: t.task.turns ?? [],
+        followUps: (t.task.turns ?? []).map((turn) => (d.arm === 'somi5-deliver' ? armPrompt(d.arm, turn) : turn)),
         model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
         settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude, env: { ...childEnv({ token: env.token, tmp }), ...WINDOW_ENV[phase] }, cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
       });

@@ -70,6 +70,7 @@ const TOOLS = [
         request: { type: 'string', description: 'The work: what the user wants, plus anything from the conversation it depends on, so that it reads on its own.' },
         hint: { type: 'string', description: 'A route name, when the user or an earlier answer named one.' },
         sensitive: { type: 'boolean', description: 'True only when the user has said this work is security-sensitive. Otherwise SoMi decides from the diff once the work is done.' },
+        staged: { type: 'boolean', description: 'True only when the user typed /somi:deliver, asking for this work to run as the staged workflow.' },
         ticket: { type: 'object' },
         project_dir: PROJECT_DIR,
       },
@@ -153,7 +154,7 @@ async function callTool(name, args) {
       a.request = said;
     }
     switch (name) {
-      case 'somi_route': return textResult(advise(ctx, { request: typeof a.request === 'string' ? a.request : undefined, hint: a.hint, ticket: a.ticket, sensitive: a.sensitive }));
+      case 'somi_route': return textResult(advise(ctx, { request: typeof a.request === 'string' ? a.request : undefined, hint: a.hint, ticket: a.ticket, sensitive: a.sensitive, staged: a.staged }));
       case 'somi_note': return textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env));
       case 'somi_plan': {
         if (a.close === true) return textResult(closePlan(ctx.root, ctx.env));

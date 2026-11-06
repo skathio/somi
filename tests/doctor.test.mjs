@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { makeRepo } from './helpers.mjs';
+import { REPO, makeRepo } from './helpers.mjs';
 import { runDoctor, sandboxSettings, settingsWarnings, tierWarnings } from '../scripts/lib/doctor.mjs';
-import { copilotHooks, writeCopilotHooks } from '../scripts/lib/init.mjs';
+import { copilotExtension, copilotHooks, writeCopilotExtension, writeCopilotHooks } from '../scripts/lib/init.mjs';
 
 const results = (touch, curl) => (cmd) => (cmd === 'touch' ? touch : curl);
 test('a tier with no model is named, on the host that has no defaults', () => {
@@ -81,4 +82,18 @@ test('the Copilot hook file points at the plugin with absolute, quoted paths', (
   assert.equal(writeCopilotHooks(dir, '/opt/somi').written, true);
   assert.equal(writeCopilotHooks(dir, '/opt/somi').written, true, 'the same file again is fine');
   assert.equal(writeCopilotHooks(dir, '/elsewhere').written, false, 'a different file is not overwritten');
+});
+
+test('init writes a Copilot extension that loads SoMi\'s workflow module from the plugin, and never overwrites another', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-ext-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const first = writeCopilotExtension(dir, REPO);
+  assert.equal(first.written, true);
+  assert.equal(first.file, path.join(dir, '.github', 'extensions', 'somi', 'extension.mjs'));
+  assert.equal(writeCopilotExtension(dir, REPO).written, true, 'the same file again is fine');
+  assert.equal(writeCopilotExtension(dir, '/elsewhere').written, false, 'a different file is not overwritten');
+  const url = /await import\(("[^"]+")\)/.exec(copilotExtension(REPO))[1];
+  const lib = await import(JSON.parse(url));
+  assert.equal(typeof lib.registerCopilotWorkflows, 'function', 'the module it points at exists and exports the entry');
+  assert.match(copilotExtension(REPO), /from '@github\/copilot-sdk\/extension'/);
 });

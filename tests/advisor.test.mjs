@@ -40,8 +40,9 @@ test('large work that is not sensitive goes down to a low worker with a brief So
   assert.equal(r.where, 'worker');
   assert.equal(r.worker.agent, 'somi:somi-worker-low');
   assert.equal(r.worker.model, 'haiku');
-  assert.equal(r.workflow.name, 'somi:deliver', 'on Claude Code it runs as a workflow');
-  assert.match(r.advice, /If the Workflow tool is not available, follow steps instead/);
+  assert.equal(r.workflow, undefined, 'only the user starts the staged workflow');
+  assert.match(r.advice, /typing \/somi:deliver/, 'so SoMi tells the agent to offer it');
+  assert.match(r.advice, /cheaper on that tier/);
   const copilot = advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG });
   assert.equal(copilot.workflow, undefined);
   assert.match(copilot.advice, /cheaper on that tier/);
@@ -142,16 +143,20 @@ test('each workflow comes back as steps that say where each runs and on which ti
   assert.deepEqual(design.steps.map((s) => [s.step, s.run_on, s.tier]), [['design', 'subagent', 'high']]);
 });
 
-test('large work on Claude Code runs as the deliver workflow, with the user\'s models in its args', (t) => {
+test('work the user sends with /somi:deliver runs as the staged workflow on either host, with the user\'s models in its args', (t) => {
   const ctx = makeCtx(makeRepo(t));
-  const long = `Add an export of all orders as CSV. ${'Each column follows the order schema in the README. '.repeat(14)}`;
-  const r = advise(ctx, { request: long });
-  assert.equal(r.workflow.name, 'somi:deliver');
+  const r = advise(ctx, { request: 'Add an export of all orders as CSV', staged: true });
+  assert.equal(r.workflow.name, 'somi:deliver-stages');
   assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
-  assert.equal(r.workflow.args.request, long);
-  assert.match(r.advice, /Workflow tool/);
-  assert.equal(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: long }).workflow, undefined, 'Copilot follows the steps');
+  assert.equal(r.workflow.args.request, 'Add an export of all orders as CSV');
+  assert.match(r.advice, /typed \/somi:deliver[\s\S]*Workflow tool[\s\S]*follow steps instead/);
+  const copilot = advise(makeCtx(makeRepo(t), { tiers: { copilot: { low: 'm-low' } } }, 'copilot'), { request: 'Add an export of all orders as CSV', staged: true });
+  assert.equal(copilot.workflow.name, 'somi-deliver-stages', 'the name the Copilot extension registers');
+  assert.deepEqual(copilot.workflow.args.models, { low: 'm-low' });
+  assert.match(copilot.advice, /experimental mode/);
+  assert.equal(advise(ctx, { request: 'What does the parser do?', staged: true }).workflow, undefined, 'a question is answered, not staged');
   assert.equal(advise(ctx, { request: 'Add a helper that doubles a number' }).workflow, undefined, 'small work stays light');
+  assert.match(advise(ctx, { request: 'Refactor the parser and fix the crash in it', staged: true }).advice, /staged true/, 'asked to pick, the agent keeps the user\'s choice');
 });
 
 test('the rest of the routes answer without starting anything', (t) => {

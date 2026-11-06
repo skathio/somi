@@ -301,7 +301,7 @@ test('both arms run on the session model, and a smoke run takes named tasks only
   const argv = claudeArgv({ arm: 'somi', prompt: 'x', budget: 1, plugin: 'p', model: 'm' });
   assert.equal(argv[argv.indexOf('--model') + 1], 'm');
   assert.equal(JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8')).patches['cheap-main'], undefined);
-  assert.deepEqual(armsFor('smoke'), ['bare', 'somi5', 'somi5-hooks']);
+  assert.deepEqual(armsFor('smoke'), ['bare', 'somi5', 'somi5-hooks', 'somi5-deliver']);
   const hooks = claudeArgv({ arm: 'somi-hooks', prompt: 'x', budget: 1, plugin: 'p', model: 'm' });
   assert.equal(hooks.includes('--agent'), false, 'the small path runs with no SoMi agent');
   assert.ok(hooks.includes('--plugin-dir'));
@@ -526,6 +526,7 @@ test('a recording pins the tiers in the user layer too, because reviewers read o
 
 test('the lane arm asks for a plan first, the tight phase has a small window, and compactions are counted', (t) => {
   assert.match(armPrompt('somi5-lane', 'do it'), /plan first[\s\S]*do it/);
+  assert.equal(armPrompt('somi5-deliver', 'do it'), '/somi:deliver do it', 'the user asks for the staged workflow');
   assert.equal(armPrompt('somi5', 'do it'), 'do it');
   assert.deepEqual(armsFor('tight'), ['bare', 'somi5', 'somi5-lane']);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-usage-'));

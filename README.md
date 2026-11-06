@@ -11,7 +11,10 @@ you talk to one agent, on the medium tier, the same as a bare agent
   -> a question, a follow-up, a change of mind: it just answers
   -> work to do: it asks somi_route once, and gets the workflow's steps: each one's tier, whether it runs here or on a subagent, and its brief
   -> a small change: it does it, as a bare agent would
-  -> large work: it runs down on the low tier as a whole, unless you said it is security-sensitive
+  -> large work: it goes down to the low tier as a whole, unless you said it is security-sensitive,
+       and it tells you that /somi:deliver runs it in stages
+  -> /somi:deliver <work or ticket>: a scout, a build that steps up a tier if the checks fail, the checks, and
+       the reviews the diff needs, each on its tier, run in code through to the end
   -> the diff touches a security sink: the review and every fix stay here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier
   -> the change is ready: somi_review reads the diff and says if a review is due
@@ -62,6 +65,7 @@ It runs on your session's model. To run the conversation on a different tier's m
 | `/plan`, `/design` | Split large work into milestones, or settle an expensive choice. |
 | `/review`, `/security-review` | Judge changes, with a stronger model on security. |
 | `/upgrade`, `/incident`, `/a11y-check` | Move a dependency, restore production, or build interface against a checklist. |
+| `/somi:deliver` | Run large work as SoMi's staged workflow. Only you can start it. On Copilot it needs `somi init --host copilot` and experimental mode. |
 | `/ship`, `/status`, `/somi-config` | Full suite and PR text, open plan and findings, and which model each tier uses. |
 
 Older command names still work.
