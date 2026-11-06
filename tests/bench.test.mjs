@@ -553,7 +553,8 @@ test("a recording stops on the host's reported usage, and a window past its rese
   fs.writeFileSync(file, `${event(0.2, 0.3)}\n{"cut\n${event(0.95, 0.4)}\n`);
   const windows = hostWindows(file);
   assert.equal(windows.five_hour.utilization, 0.95, 'the last report wins');
-  assert.deepEqual(hostStop(windows, 1000 * 1000), { name: 'five_hour', resetsAt: 2000 });
+  assert.deepEqual(hostStop(windows, 1000 * 1000), { name: 'five_hour', resetsAt: 2000, share: 0.85 });
+  assert.equal(hostStop(windows, 1000 * 1000, { five_hour: 0.96, seven_day: 0.96 }), null, 'a raised stop lets the run go on');
   assert.equal(hostStop(windows, 3000 * 1000), null, 'it has reset');
   assert.equal(hostStop(null), null);
   assert.equal(hostStop({ five_hour: { utilization: 0.84, resetsAt: 2000 } }, 0), null);

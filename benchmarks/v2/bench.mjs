@@ -85,7 +85,13 @@ export const liveCandidates = (tasks) => tasks.filter((t) => !t.retired);
 function tasksFor(phase, only) {
   if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all).filter((t) => !t.large && !t.release_large); }
   if (phase === 'large' || phase === 'tight') return readJson(CANDIDATES).tasks.filter((t) => t.large);
-  if (phase === 'smoke') { const set = readJson(TASK_SET).tasks; if (!only) throw new Error('smoke takes --tasks, a few task ids'); return set.filter((t) => only.includes(t.id)); }
+  // A smoke run can name any admitted task: the registered set, or a candidate such as the large multi-turn ones.
+  if (phase === 'smoke') {
+    if (!only) throw new Error('smoke takes --tasks, a few task ids');
+    const set = readJson(TASK_SET).tasks;
+    const extra = readJson(CANDIDATES).tasks.filter((t) => only.includes(t.id) && !set.some((s) => s.id === t.id));
+    return [...set.filter((t) => only.includes(t.id)), ...extra];
+  }
   if (!fs.existsSync(TASK_SET)) throw new Error('no task-set.json yet: run the pilot, then select');
   const set = readJson(TASK_SET);
   return phase === 'trial' ? set.tasks.filter((t) => set.hardest.includes(t.id)).slice(0, 2) : set.tasks;
@@ -159,10 +165,11 @@ export function hostWindows(file) {
 }
 
 /** Which of the host's windows is near its limit now: { name, resetsAt } or null. A window past its reset no longer counts. */
-export function hostStop(windows, nowMs = Date.now()) {
+// The share each window may reach before a recording stops. The maintainer can raise them for one run, and they stay below 1.
+export function hostStop(windows, nowMs = Date.now(), shares = { five_hour: HOST_STOP_SHARE, seven_day: HOST_STOP_SHARE }) {
   for (const name of ['seven_day', 'five_hour']) {
     const w = windows?.[name];
-    if (w && w.utilization >= HOST_STOP_SHARE && w.resetsAt * 1000 > nowMs) return { name, resetsAt: w.resetsAt };
+    if (w && w.utilization >= shares[name] && w.resetsAt * 1000 > nowMs) return { name, resetsAt: w.resetsAt, share: shares[name] };
   }
   return null;
 }
@@ -288,6 +295,8 @@ async function run(args, session = { windowWeighted: 0 }) {
   const budgetTotal = Number(args['budget-total']);
   if (!(budgetTotal > 0)) throw new Error('--budget-total is required');
   const budgetDraw = Number(args['budget-draw'] ?? 3);
+  const share = (flag) => { if (args[flag] === undefined) return HOST_STOP_SHARE; const v = Number(args[flag]); if (!(v > 0 && v < 1)) throw new Error(`--${flag} takes a share between 0 and 1, such as 0.85`); return v; };
+  const stopShares = { five_hour: share('stop-session'), seven_day: share('stop-week') };
   const chunk = Math.min(Number(args.chunk ?? MAX_CHUNK), MAX_CHUNK);
   if (['baseline', 'candidate', 'ablation', 'large', 'tight'].includes(phase)) {
     const problem = preregProblem();
@@ -353,8 +362,8 @@ async function run(args, session = { windowWeighted: 0 }) {
     }
     if (interrupted || ran >= chunk) break;
     if (spent + budgetDraw > budgetTotal) { stop = 'budget'; console.log(`budget stop: spent $${spent.toFixed(2)} of $${budgetTotal}`); break; }
-    const near = hostStop(session.hostWindows);
-    if (near) { stop = near.name === 'seven_day' ? 'week' : 'window'; console.log(`host window stop: ${near.name} is at ${HOST_STOP_SHARE * 100}% or more; resets=${near.resetsAt}`); break; }
+    const near = hostStop(session.hostWindows, Date.now(), stopShares);
+    if (near) { stop = near.name === 'seven_day' ? 'week' : 'window'; console.log(`host window stop: ${near.name} is at ${Math.round(near.share * 100)}% or more; resets=${near.resetsAt}`); break; }
     const windowTokens = Number(args['window-tokens']);
     if (windowTokens > 0 && session.windowWeighted >= windowTokens * WINDOW_STOP_SHARE) { stop = 'window'; console.log('window stop: this session used 60% of the stated window; run it again in the next window'); break; }
 
@@ -552,7 +561,7 @@ async function main(argv) {
     options: {
       phase: { type: 'string' }, out: { type: 'string' }, model: { type: 'string' }, seed: { type: 'string' }, go: { type: 'boolean' }, chunk: { type: 'string' },
       'budget-total': { type: 'string' }, 'budget-draw': { type: 'string' }, 'window-tokens': { type: 'string' }, 'plugin-41': { type: 'string' }, 'env-file': { type: 'string' },
-      'timeout-min': { type: 'string' }, 'worker-model': { type: 'string' }, arms: { type: 'string' }, k: { type: 'string' }, baseline: { type: 'string' }, candidate: { type: 'string' }, tasks: { type: 'string' }, write: { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
+      'timeout-min': { type: 'string' }, 'worker-model': { type: 'string' }, 'stop-session': { type: 'string' }, 'stop-week': { type: 'string' }, arms: { type: 'string' }, k: { type: 'string' }, baseline: { type: 'string' }, candidate: { type: 'string' }, tasks: { type: 'string' }, write: { type: 'string' }, 'quiet-wait-min': { type: 'string' }, claude: { type: 'string' }, 'no-sandbox': { type: 'boolean' }, pilot: { type: 'string' }, 'allow-short': { type: 'boolean' }, aa: { type: 'string' }, main: { type: 'string' },
     },
   });
   if (command === 'plan' || command === 'run' || command === 'record') {
