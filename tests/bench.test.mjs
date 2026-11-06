@@ -412,7 +412,7 @@ test('a task that failed its probe stays out of later pilots', () => {
 
 test('every candidate names a known kind of task', () => {
   const { tasks } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/candidates.json'), 'utf8'));
-  const kinds = ['multi-file', 'misleading-bug', 'security', 'ambiguous-spec', 'refactor', 'planted-trap', 'algorithm'];
+  const kinds = ['multi-file', 'misleading-bug', 'security', 'ambiguous-spec', 'refactor', 'planted-trap', 'algorithm', 'multi-turn'];
   for (const t of tasks) assert.ok(kinds.includes(t.stratum), t.id);
 });
 

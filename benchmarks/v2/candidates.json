@@ -1,372 +1,380 @@
 {
-  "note": "The pilot pool. The registered set mixes tasks in the band, near-miss floor tasks and ceiling tasks, across these kinds: multi-file, misleading-bug, security, ambiguous-spec, refactor and planted-trap. A task marked retired was probed at this model and is not wanted.",
-  "tasks": [
-    {
-      "id": "H1-csv-export",
-      "dir": "tests/evals/ab/H1-csv-export",
-      "boundary": true,
-      "why": "CSV formula injection from customer names",
-      "stratum": "security"
-    },
-    {
-      "id": "H2-ledger-migration",
-      "dir": "tests/evals/ab/H2-ledger-migration",
-      "stratum": "multi-file",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "H4-static-files",
-      "dir": "tests/evals/ab/H4-static-files",
-      "boundary": true,
-      "why": "paths a user names, reaching the filesystem",
-      "stratum": "security"
-    },
-    {
-      "id": "H5-pricing-refactor",
-      "dir": "tests/evals/ab/H5-pricing-refactor",
-      "stratum": "refactor",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "H6-recurrence-bug",
-      "dir": "tests/evals/ab/H6-recurrence-bug",
-      "stratum": "misleading-bug",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "H7-wikilinks",
-      "dir": "tests/evals/ab/H7-wikilinks",
-      "boundary": true,
-      "why": "link text reaching rendered HTML",
-      "stratum": "multi-file",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "T1-proration",
-      "dir": "tests/evals/ab/T1-proration",
-      "stratum": "multi-file",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "M01-bracket-seeding",
-      "dir": "tests/evals/ab-micro/M01-bracket-seeding",
-      "stratum": "algorithm",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "M02-swiss-pairing",
-      "dir": "tests/evals/ab-micro/M02-swiss-pairing",
-      "stratum": "algorithm",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "M03-rank-aggregation",
-      "dir": "tests/evals/ab-micro/M03-rank-aggregation",
-      "stratum": "algorithm",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "M04-stable-order",
-      "dir": "tests/evals/ab-micro/M04-stable-order",
-      "stratum": "algorithm",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "M05-round-robin",
-      "dir": "tests/evals/ab-micro/M05-round-robin",
-      "stratum": "algorithm",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "M06-recurrence",
-      "dir": "tests/evals/ab-micro/M06-recurrence",
-      "stratum": "algorithm",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "M07-apportionment",
-      "dir": "tests/evals/ab-micro/M07-apportionment",
-      "stratum": "algorithm",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "M08-line-breaks",
-      "dir": "tests/evals/ab-micro/M08-line-breaks",
-      "stratum": "algorithm",
-      "retired": "the ceiling at this model, with plenty of newer tasks there"
-    },
-    {
-      "id": "N05-rate-limit",
-      "dir": "tests/evals/ab/N05-rate-limit",
-      "boundary": true,
-      "why": "who is being limited, and which address is real, is settled only in the deployment notes",
-      "stratum": "ambiguous-spec"
-    },
-    {
-      "id": "N06-note-search",
-      "dir": "tests/evals/ab/N06-note-search",
-      "why": "what \"search\" means here is set by a conventions file and an existing helper",
-      "stratum": "ambiguous-spec"
-    },
-    {
-      "id": "N07-bulk-import",
-      "dir": "tests/evals/ab/N07-bulk-import",
-      "why": "a helper the new code must call has bugs a bulk path turns into real damage",
-      "stratum": "planted-trap"
-    },
-    {
-      "id": "N08-list-cursor",
-      "dir": "tests/evals/ab/N08-list-cursor",
-      "why": "the existing sort and limit helper quietly break stable paging",
-      "stratum": "planted-trap"
-    },
-    {
-      "id": "L1-shop-platform",
-      "dir": "tests/evals/ab/L1-shop-platform",
-      "why": "six connected milestones with decisions set early that later ones must honour",
-      "stratum": "multi-file",
-      "large": true
-    },
-    {
-      "id": "L2-task-tracker",
-      "dir": "tests/evals/ab/L2-task-tracker",
-      "boundary": true,
-      "why": "a later milestone must reach back into everything built earlier, under permission rules set at the start",
-      "stratum": "multi-file",
-      "large": true
-    },
-    {
-      "id": "L3-fleet-backoffice",
-      "dir": "tests/evals/ab/L3-fleet-backoffice",
-      "boundary": true,
-      "why": "forty domains to move to binding decisions, then one change reaching back into all of them: big enough to fill a context window",
-      "stratum": "multi-file",
-      "large": true
-    },
-    {
-      "id": "N01-invoice-cents",
-      "dir": "tests/evals/ab/N01-invoice-cents",
-      "why": "a blamed formatter hides per-line float tax and a duplicated code path",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N02-charge-retry",
-      "dir": "tests/evals/ab/N02-charge-retry",
-      "boundary": true,
-      "why": "money moved twice: the blamed retry count is not the cause",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N03-business-day",
-      "dir": "tests/evals/ab/N03-business-day",
-      "why": "a month-end symptom whose cause is calendar days in the wrong zone, in more than one report",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N04-account-delete",
-      "dir": "tests/evals/ab/N04-account-delete",
-      "boundary": true,
-      "why": "\"delete\" is decided by a policy document the ticket does not mention",
-      "stratum": "ambiguous-spec"
-    },
-    {
-      "id": "N13-order-refunds",
-      "dir": "tests/evals/ab/N13-order-refunds",
-      "why": "a refund touches orders, ledger and outbox, with a tax remainder and repeat requests",
-      "stratum": "multi-file"
-    },
-    {
-      "id": "N14-feature-flags",
-      "dir": "tests/evals/ab/N14-feature-flags",
-      "why": "rollout rules are simple, but a cache and the bucket's per-flag salt are easy to miss",
-      "stratum": "multi-file"
-    },
-    {
-      "id": "N15-stock-reservation",
-      "dir": "tests/evals/ab/N15-stock-reservation",
-      "why": "holds must be honoured by the existing checkout and stock report, not just the new module",
-      "stratum": "multi-file"
-    },
-    {
-      "id": "N16-cart-currency",
-      "dir": "tests/evals/ab/N16-cart-currency",
-      "why": "minor units differ per currency, and the existing formatter assumes two decimals",
-      "stratum": "multi-file"
-    },
-    {
-      "id": "N17-room-booking",
-      "dir": "tests/evals/ab/N17-room-booking",
-      "why": "overlap has half-open intervals, per-room buffers, closures and cancelled rows, and the free-slot view must agree",
-      "stratum": "multi-file"
-    },
-    {
-      "id": "N18-price-rules",
-      "dir": "tests/evals/ab/N18-price-rules",
-      "why": "quirks in a long function that the visible tests do not pin must survive being split into rules",
-      "stratum": "refactor"
-    },
-    {
-      "id": "N19-config-split",
-      "dir": "tests/evals/ab/N19-config-split",
-      "why": "splitting a parser into two passes silently changes sequential interpolation unless the quirk is noticed",
-      "stratum": "refactor"
-    },
-    {
-      "id": "N20-import-unify",
-      "dir": "tests/evals/ab/N20-import-unify",
-      "why": "two near-identical functions differ in small ways a merge flattens, and the new variant must pick the right ones",
-      "stratum": "refactor"
-    },
-    {
-      "id": "N21-ticket-flow",
-      "dir": "tests/evals/ab/N21-ticket-flow",
-      "why": "nested conditions hide an admin path and an event order that a transition table flattens",
-      "stratum": "refactor"
-    },
-    {
-      "id": "N22-session-expiry",
-      "dir": "tests/evals/ab/N22-session-expiry",
-      "why": "a too-short timeout is blamed, but sliding expiry and a units mismatch are the cause, in two code paths",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N23-flaky-totals",
-      "dir": "tests/evals/ab/N23-flaky-totals",
-      "why": "float rounding is blamed for run-to-run differences caused by lost updates and a mutated cached list",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N24-data-export",
-      "dir": "tests/evals/ab/N24-data-export",
-      "boundary": true,
-      "why": "what counts as a person's data and who may see it is set in a privacy document the ticket does not name",
-      "stratum": "ambiguous-spec"
-    },
-    {
-      "id": "N25-quiet-hours",
-      "dir": "tests/evals/ab/N25-quiet-hours",
-      "why": "who is quiet when, and where a deferred message lands, is decided by a notifications document and each user's zone",
-      "stratum": "ambiguous-spec"
-    },
-    {
-      "id": "N26-tag-rename",
-      "dir": "tests/evals/ab/N26-tag-rename",
-      "why": "the obvious helper double-counts a merge, and renaming must stay inside one person's notes",
-      "stratum": "planted-trap"
-    },
-    {
-      "id": "N27-coupon-redeem",
-      "dir": "tests/evals/ab/N27-coupon-redeem",
-      "why": "a usage helper counts cancelled redemptions, and repeats must not burn a limit",
-      "stratum": "planted-trap"
-    },
-    {
-      "id": "N28-share-links",
-      "dir": "tests/evals/ab/N28-share-links",
-      "boundary": true,
-      "why": "signed links with field splicing, truncation and revocation the ticket leaves unstated",
-      "stratum": "security"
-    },
-    {
-      "id": "N29-webhook-verify",
-      "dir": "tests/evals/ab/N29-webhook-verify",
-      "boundary": true,
-      "why": "verifying inbound signatures on raw bytes, with rotation, replay and crash-free malformed input",
-      "stratum": "security"
-    },
-    {
-      "id": "N30-email-template",
-      "dir": "tests/evals/ab/N30-email-template",
-      "boundary": true,
-      "why": "HTML escaping, prototype keys and re-expansion in a small template engine, keeping plain text unescaped",
-      "stratum": "security"
-    },
-    {
-      "id": "N31-download-name",
-      "dir": "tests/evals/ab/N31-download-name",
-      "boundary": true,
-      "why": "a customer-chosen file name reaching a response header, with unprompted injection and encoding traps",
-      "stratum": "security"
-    },
-    {
-      "id": "N32-retry-after",
-      "dir": "tests/evals/ab/N32-retry-after",
-      "why": "a retrying client whose server speaks both forms of a header, with shared budget across attempts",
-      "stratum": "multi-file"
-    },
-    {
-      "id": "N33-text-limit",
-      "dir": "tests/evals/ab/N33-text-limit",
-      "why": "a limit that cuts characters apart, blamed on the database, with the same mistake in more than one place",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N37-org-isolation",
-      "dir": "tests/evals/ab/N37-org-isolation",
-      "boundary": true,
-      "why": "tenant isolation across many code paths, including references written into records and a shared lookup, where one missed path is a real leak",
-      "stratum": "security"
-    },
-    {
-      "id": "N38-mail-templates",
-      "dir": "tests/evals/ab/N38-mail-templates",
-      "boundary": true,
-      "why": "customer data filling a template, where values and placeholder names both come from outside, with several small independent traps",
-      "stratum": "planted-trap"
-    },
-    {
-      "id": "N34-digest-schedule",
-      "dir": "tests/evals/ab/N34-digest-schedule",
-      "why": "local-time scheduling across clock changes, half-hour changes and a skipped day, with the rule stated and the arithmetic easy to get wrong",
-      "stratum": "misleading-bug"
-    },
-    {
-      "id": "N35-plugin-versions",
-      "dir": "tests/evals/ab/N35-plugin-versions",
-      "why": "a well-known standard with many edge rules, to be reimplemented exactly because no dependency is allowed",
-      "stratum": "multi-file"
-    },
-    {
-      "id": "N36-link-preview",
-      "dir": "tests/evals/ab/N36-link-preview",
-      "boundary": true,
-      "why": "server-side fetching of customer URLs, where the rule is stated and the address arithmetic is where it goes wrong",
-      "stratum": "security"
-    },
-    {
-      "id": "N39-hide-email",
-      "dir": "tests/evals/ab/N39-hide-email",
-      "boundary": true,
-      "why": "a privacy rule that has to hold across many code paths, including indirect ways of learning the value",
-      "stratum": "security"
-    },
-    {
-      "id": "N09-webhook-retry",
-      "dir": "tests/evals/ab/N09-webhook-retry",
-      "boundary": true,
-      "why": "a signature fixed at enqueue time goes stale once retries wait",
-      "stratum": "planted-trap"
-    },
-    {
-      "id": "N10-bundle-extract",
-      "dir": "tests/evals/ab/N10-bundle-extract",
-      "boundary": true,
-      "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
-      "stratum": "security"
-    },
-    {
-      "id": "N11-password-reset",
-      "dir": "tests/evals/ab/N11-password-reset",
-      "boundary": true,
-      "why": "a reset flow whose hard parts are what the ticket does not spell out",
-      "stratum": "security"
-    },
-    {
-      "id": "N12-safe-redirect",
-      "dir": "tests/evals/ab/N12-safe-redirect",
-      "boundary": true,
-      "why": "open redirects through URL forms that a simple prefix check misses",
-      "stratum": "security"
-    }
-  ]
+ "note": "The pilot pool. The registered set mixes tasks in the band, near-miss floor tasks and ceiling tasks, across these kinds: multi-file, misleading-bug, security, ambiguous-spec, refactor and planted-trap. A task marked retired was probed at this model and is not wanted.",
+ "tasks": [
+  {
+   "id": "H1-csv-export",
+   "dir": "tests/evals/ab/H1-csv-export",
+   "boundary": true,
+   "why": "CSV formula injection from customer names",
+   "stratum": "security"
+  },
+  {
+   "id": "H2-ledger-migration",
+   "dir": "tests/evals/ab/H2-ledger-migration",
+   "stratum": "multi-file",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "H4-static-files",
+   "dir": "tests/evals/ab/H4-static-files",
+   "boundary": true,
+   "why": "paths a user names, reaching the filesystem",
+   "stratum": "security"
+  },
+  {
+   "id": "H5-pricing-refactor",
+   "dir": "tests/evals/ab/H5-pricing-refactor",
+   "stratum": "refactor",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "H6-recurrence-bug",
+   "dir": "tests/evals/ab/H6-recurrence-bug",
+   "stratum": "misleading-bug",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "H7-wikilinks",
+   "dir": "tests/evals/ab/H7-wikilinks",
+   "boundary": true,
+   "why": "link text reaching rendered HTML",
+   "stratum": "multi-file",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "T1-proration",
+   "dir": "tests/evals/ab/T1-proration",
+   "stratum": "multi-file",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "M01-bracket-seeding",
+   "dir": "tests/evals/ab-micro/M01-bracket-seeding",
+   "stratum": "algorithm",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "M02-swiss-pairing",
+   "dir": "tests/evals/ab-micro/M02-swiss-pairing",
+   "stratum": "algorithm",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "M03-rank-aggregation",
+   "dir": "tests/evals/ab-micro/M03-rank-aggregation",
+   "stratum": "algorithm",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "M04-stable-order",
+   "dir": "tests/evals/ab-micro/M04-stable-order",
+   "stratum": "algorithm",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "M05-round-robin",
+   "dir": "tests/evals/ab-micro/M05-round-robin",
+   "stratum": "algorithm",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "M06-recurrence",
+   "dir": "tests/evals/ab-micro/M06-recurrence",
+   "stratum": "algorithm",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "M07-apportionment",
+   "dir": "tests/evals/ab-micro/M07-apportionment",
+   "stratum": "algorithm",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "M08-line-breaks",
+   "dir": "tests/evals/ab-micro/M08-line-breaks",
+   "stratum": "algorithm",
+   "retired": "the ceiling at this model, with plenty of newer tasks there"
+  },
+  {
+   "id": "N05-rate-limit",
+   "dir": "tests/evals/ab/N05-rate-limit",
+   "boundary": true,
+   "why": "who is being limited, and which address is real, is settled only in the deployment notes",
+   "stratum": "ambiguous-spec"
+  },
+  {
+   "id": "N06-note-search",
+   "dir": "tests/evals/ab/N06-note-search",
+   "why": "what \"search\" means here is set by a conventions file and an existing helper",
+   "stratum": "ambiguous-spec"
+  },
+  {
+   "id": "N07-bulk-import",
+   "dir": "tests/evals/ab/N07-bulk-import",
+   "why": "a helper the new code must call has bugs a bulk path turns into real damage",
+   "stratum": "planted-trap"
+  },
+  {
+   "id": "N08-list-cursor",
+   "dir": "tests/evals/ab/N08-list-cursor",
+   "why": "the existing sort and limit helper quietly break stable paging",
+   "stratum": "planted-trap"
+  },
+  {
+   "id": "L1-shop-platform",
+   "dir": "tests/evals/ab/L1-shop-platform",
+   "why": "six connected milestones with decisions set early that later ones must honour",
+   "stratum": "multi-file",
+   "large": true
+  },
+  {
+   "id": "L2-task-tracker",
+   "dir": "tests/evals/ab/L2-task-tracker",
+   "boundary": true,
+   "why": "a later milestone must reach back into everything built earlier, under permission rules set at the start",
+   "stratum": "multi-file",
+   "large": true
+  },
+  {
+   "id": "L3-fleet-backoffice",
+   "dir": "tests/evals/ab/L3-fleet-backoffice",
+   "boundary": true,
+   "why": "forty domains to move to binding decisions, then one change reaching back into all of them: big enough to fill a context window",
+   "stratum": "multi-file",
+   "large": true
+  },
+  {
+   "id": "N01-invoice-cents",
+   "dir": "tests/evals/ab/N01-invoice-cents",
+   "why": "a blamed formatter hides per-line float tax and a duplicated code path",
+   "stratum": "misleading-bug"
+  },
+  {
+   "id": "N02-charge-retry",
+   "dir": "tests/evals/ab/N02-charge-retry",
+   "boundary": true,
+   "why": "money moved twice: the blamed retry count is not the cause",
+   "stratum": "misleading-bug"
+  },
+  {
+   "id": "N03-business-day",
+   "dir": "tests/evals/ab/N03-business-day",
+   "why": "a month-end symptom whose cause is calendar days in the wrong zone, in more than one report",
+   "stratum": "misleading-bug"
+  },
+  {
+   "id": "N04-account-delete",
+   "dir": "tests/evals/ab/N04-account-delete",
+   "boundary": true,
+   "why": "\"delete\" is decided by a policy document the ticket does not mention",
+   "stratum": "ambiguous-spec"
+  },
+  {
+   "id": "N13-order-refunds",
+   "dir": "tests/evals/ab/N13-order-refunds",
+   "why": "a refund touches orders, ledger and outbox, with a tax remainder and repeat requests",
+   "stratum": "multi-file"
+  },
+  {
+   "id": "N14-feature-flags",
+   "dir": "tests/evals/ab/N14-feature-flags",
+   "why": "rollout rules are simple, but a cache and the bucket's per-flag salt are easy to miss",
+   "stratum": "multi-file"
+  },
+  {
+   "id": "N15-stock-reservation",
+   "dir": "tests/evals/ab/N15-stock-reservation",
+   "why": "holds must be honoured by the existing checkout and stock report, not just the new module",
+   "stratum": "multi-file"
+  },
+  {
+   "id": "N16-cart-currency",
+   "dir": "tests/evals/ab/N16-cart-currency",
+   "why": "minor units differ per currency, and the existing formatter assumes two decimals",
+   "stratum": "multi-file"
+  },
+  {
+   "id": "N17-room-booking",
+   "dir": "tests/evals/ab/N17-room-booking",
+   "why": "overlap has half-open intervals, per-room buffers, closures and cancelled rows, and the free-slot view must agree",
+   "stratum": "multi-file"
+  },
+  {
+   "id": "N18-price-rules",
+   "dir": "tests/evals/ab/N18-price-rules",
+   "why": "quirks in a long function that the visible tests do not pin must survive being split into rules",
+   "stratum": "refactor"
+  },
+  {
+   "id": "N19-config-split",
+   "dir": "tests/evals/ab/N19-config-split",
+   "why": "splitting a parser into two passes silently changes sequential interpolation unless the quirk is noticed",
+   "stratum": "refactor"
+  },
+  {
+   "id": "N20-import-unify",
+   "dir": "tests/evals/ab/N20-import-unify",
+   "why": "two near-identical functions differ in small ways a merge flattens, and the new variant must pick the right ones",
+   "stratum": "refactor"
+  },
+  {
+   "id": "N21-ticket-flow",
+   "dir": "tests/evals/ab/N21-ticket-flow",
+   "why": "nested conditions hide an admin path and an event order that a transition table flattens",
+   "stratum": "refactor"
+  },
+  {
+   "id": "N22-session-expiry",
+   "dir": "tests/evals/ab/N22-session-expiry",
+   "why": "a too-short timeout is blamed, but sliding expiry and a units mismatch are the cause, in two code paths",
+   "stratum": "misleading-bug"
+  },
+  {
+   "id": "N23-flaky-totals",
+   "dir": "tests/evals/ab/N23-flaky-totals",
+   "why": "float rounding is blamed for run-to-run differences caused by lost updates and a mutated cached list",
+   "stratum": "misleading-bug"
+  },
+  {
+   "id": "N24-data-export",
+   "dir": "tests/evals/ab/N24-data-export",
+   "boundary": true,
+   "why": "what counts as a person's data and who may see it is set in a privacy document the ticket does not name",
+   "stratum": "ambiguous-spec"
+  },
+  {
+   "id": "N25-quiet-hours",
+   "dir": "tests/evals/ab/N25-quiet-hours",
+   "why": "who is quiet when, and where a deferred message lands, is decided by a notifications document and each user's zone",
+   "stratum": "ambiguous-spec"
+  },
+  {
+   "id": "N26-tag-rename",
+   "dir": "tests/evals/ab/N26-tag-rename",
+   "why": "the obvious helper double-counts a merge, and renaming must stay inside one person's notes",
+   "stratum": "planted-trap"
+  },
+  {
+   "id": "N27-coupon-redeem",
+   "dir": "tests/evals/ab/N27-coupon-redeem",
+   "why": "a usage helper counts cancelled redemptions, and repeats must not burn a limit",
+   "stratum": "planted-trap"
+  },
+  {
+   "id": "N28-share-links",
+   "dir": "tests/evals/ab/N28-share-links",
+   "boundary": true,
+   "why": "signed links with field splicing, truncation and revocation the ticket leaves unstated",
+   "stratum": "security"
+  },
+  {
+   "id": "N29-webhook-verify",
+   "dir": "tests/evals/ab/N29-webhook-verify",
+   "boundary": true,
+   "why": "verifying inbound signatures on raw bytes, with rotation, replay and crash-free malformed input",
+   "stratum": "security"
+  },
+  {
+   "id": "N30-email-template",
+   "dir": "tests/evals/ab/N30-email-template",
+   "boundary": true,
+   "why": "HTML escaping, prototype keys and re-expansion in a small template engine, keeping plain text unescaped",
+   "stratum": "security"
+  },
+  {
+   "id": "N31-download-name",
+   "dir": "tests/evals/ab/N31-download-name",
+   "boundary": true,
+   "why": "a customer-chosen file name reaching a response header, with unprompted injection and encoding traps",
+   "stratum": "security"
+  },
+  {
+   "id": "N32-retry-after",
+   "dir": "tests/evals/ab/N32-retry-after",
+   "why": "a retrying client whose server speaks both forms of a header, with shared budget across attempts",
+   "stratum": "multi-file"
+  },
+  {
+   "id": "N33-text-limit",
+   "dir": "tests/evals/ab/N33-text-limit",
+   "why": "a limit that cuts characters apart, blamed on the database, with the same mistake in more than one place",
+   "stratum": "misleading-bug"
+  },
+  {
+   "id": "N37-org-isolation",
+   "dir": "tests/evals/ab/N37-org-isolation",
+   "boundary": true,
+   "why": "tenant isolation across many code paths, including references written into records and a shared lookup, where one missed path is a real leak",
+   "stratum": "security"
+  },
+  {
+   "id": "N38-mail-templates",
+   "dir": "tests/evals/ab/N38-mail-templates",
+   "boundary": true,
+   "why": "customer data filling a template, where values and placeholder names both come from outside, with several small independent traps",
+   "stratum": "planted-trap"
+  },
+  {
+   "id": "N34-digest-schedule",
+   "dir": "tests/evals/ab/N34-digest-schedule",
+   "why": "local-time scheduling across clock changes, half-hour changes and a skipped day, with the rule stated and the arithmetic easy to get wrong",
+   "stratum": "misleading-bug"
+  },
+  {
+   "id": "N35-plugin-versions",
+   "dir": "tests/evals/ab/N35-plugin-versions",
+   "why": "a well-known standard with many edge rules, to be reimplemented exactly because no dependency is allowed",
+   "stratum": "multi-file"
+  },
+  {
+   "id": "N36-link-preview",
+   "dir": "tests/evals/ab/N36-link-preview",
+   "boundary": true,
+   "why": "server-side fetching of customer URLs, where the rule is stated and the address arithmetic is where it goes wrong",
+   "stratum": "security"
+  },
+  {
+   "id": "N39-hide-email",
+   "dir": "tests/evals/ab/N39-hide-email",
+   "boundary": true,
+   "why": "a privacy rule that has to hold across many code paths, including indirect ways of learning the value",
+   "stratum": "security"
+  },
+  {
+   "id": "N09-webhook-retry",
+   "dir": "tests/evals/ab/N09-webhook-retry",
+   "boundary": true,
+   "why": "a signature fixed at enqueue time goes stale once retries wait",
+   "stratum": "planted-trap"
+  },
+  {
+   "id": "N10-bundle-extract",
+   "dir": "tests/evals/ab/N10-bundle-extract",
+   "boundary": true,
+   "why": "customer-supplied paths reach the filesystem, with an unprompted escape through links",
+   "stratum": "security"
+  },
+  {
+   "id": "N11-password-reset",
+   "dir": "tests/evals/ab/N11-password-reset",
+   "boundary": true,
+   "why": "a reset flow whose hard parts are what the ticket does not spell out",
+   "stratum": "security"
+  },
+  {
+   "id": "N12-safe-redirect",
+   "dir": "tests/evals/ab/N12-safe-redirect",
+   "boundary": true,
+   "why": "open redirects through URL forms that a simple prefix check misses",
+   "stratum": "security"
+  },
+  {
+   "id": "M01-subscription-billing",
+   "dir": "tests/evals/ab/M01-subscription-billing",
+   "boundary": false,
+   "why": "a feature built over four messages: binding decisions stated once at the start, then one rule reversed late, both checked at the end",
+   "stratum": "multi-turn",
+   "release_large": true
+  }
+ ]
 }

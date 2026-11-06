@@ -1,0 +1,7 @@
+[
+ { "name": "charge-rounds-to-nearest", "file": "src/subscriptions.mjs", "find": "const charged = (priceCents, days) => Math.floor((priceCents * days) / PERIOD_DAYS);", "replace": "const charged = (priceCents, days) => Math.round((priceCents * days) / PERIOD_DAYS);" },
+ { "name": "refund-rounds-down", "file": "src/subscriptions.mjs", "find": "    const refund = owedBack(", "replace": "    const refund = charged(" },
+ { "name": "plan-change-not-audited", "file": "src/subscriptions.mjs", "find": "  record(store, 'changePlan', id);\n", "replace": "\n" },
+ { "name": "pending-kept-after-close", "file": "src/subscriptions.mjs", "find": "  sub.pending = [];\n  if (active) {", "replace": "  if (active) {" },
+ { "name": "plan-line-first", "file": "src/subscriptions.mjs", "find": "const lines = [...sub.pending.map((l) => ({ ...l })), ...(active ? [{ kind: 'plan', amountCents: store.plans.get(sub.planId).priceCents }] : [])];", "replace": "const lines = [...(active ? [{ kind: 'plan', amountCents: store.plans.get(sub.planId).priceCents }] : []), ...sub.pending.map((l) => ({ ...l }))];" }
+]

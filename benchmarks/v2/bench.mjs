@@ -83,7 +83,7 @@ export const WINDOW_SETTINGS = Object.freeze({ large: { autoCompactWindow: 12000
 export const WINDOW_ENV = Object.freeze({ tight: { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '50' } });
 export const liveCandidates = (tasks) => tasks.filter((t) => !t.retired);
 function tasksFor(phase, only) {
-  if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all).filter((t) => !t.large); }
+  if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all).filter((t) => !t.large && !t.release_large); }
   if (phase === 'large' || phase === 'tight') return readJson(CANDIDATES).tasks.filter((t) => t.large);
   if (phase === 'smoke') { const set = readJson(TASK_SET).tasks; if (!only) throw new Error('smoke takes --tasks, a few task ids'); return set.filter((t) => only.includes(t.id)); }
   if (!fs.existsSync(TASK_SET)) throw new Error('no task-set.json yet: run the pilot, then select');
