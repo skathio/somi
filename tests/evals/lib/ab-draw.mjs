@@ -229,6 +229,7 @@ export async function runDraw({ followUps = [], settings, model, arm, prompt, bu
   const run = { arm, cost: 0, turns: 0, resumes: 0, followUps: 0, models: new Set(), exhausted: false, error: null, timedOut: false, stderr: '', result: null };
   const deadline = Date.now() + timeoutMs; const started = Date.now();
   let session = null; let text = prompt;
+  const sessionCosts = new Map();
   try {
     for (;;) {
       sink.turn();
@@ -238,7 +239,9 @@ export async function runDraw({ followUps = [], settings, model, arm, prompt, bu
       run.stderr += r.stderr; run.error = r.error; run.timedOut = r.timedOut;
       const res = sink.state.result; run.result = res;
       if (r.error || r.timedOut || sink.state.capped || !res) break;
-      run.cost += Number.isFinite(res.total_cost_usd) ? res.total_cost_usd : 0;
+      // A resumed session reports what the whole session has cost so far, so each session counts once, at its latest total.
+      sessionCosts.set(typeof res.session_id === 'string' ? res.session_id : `run-${sessionCosts.size}`, Number.isFinite(res.total_cost_usd) ? res.total_cost_usd : 0);
+      run.cost = [...sessionCosts.values()].reduce((s, c) => s + c, 0);
       run.turns += sink.state.turns;
       for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
       session = typeof res.session_id === 'string' ? res.session_id : null;

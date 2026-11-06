@@ -175,6 +175,9 @@ export function hostStop(windows, nowMs = Date.now(), shares = { five_hour: HOST
   return null;
 }
 
+// A resumed session's result reports cost and model usage for the whole session so far, while num_turns is that process's own. So the
+// usage is the latest result of each session, added across sessions, and the turns add as before. A result with no session id counts
+// on its own.
 export function streamUsage(file) {
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
   const spend = {};
@@ -182,16 +185,9 @@ export function streamUsage(file) {
   let turns = 0;
   let compactions = 0;
   let pending = null;
-  const flush = () => {
-    for (const [name, m] of Object.entries(pending ?? {})) {
-      spend[name] = (spend[name] ?? 0) + (m?.costUSD ?? 0);
-      totals.input += m?.inputTokens ?? 0;
-      totals.output += m?.outputTokens ?? 0;
-      totals.cacheRead += m?.cacheReadInputTokens ?? 0;
-      totals.cacheCreation += m?.cacheCreationInputTokens ?? 0;
-    }
-    pending = null;
-  };
+  let anonymous = 0;
+  const latest = new Map();
+  const flush = () => { if (pending) latest.set(pending.key ?? `anonymous-${anonymous++}`, pending.usage); pending = null; };
   let text = '';
   try { text = fs.readFileSync(file, 'utf8'); } catch { return { tokens: totals, models: [], turns, spend, compactions }; }
   for (const raw of text.split('\n')) {
@@ -202,12 +198,19 @@ export function streamUsage(file) {
     if (ev?.type === 'result') {
       turns += Number.isFinite(ev.num_turns) ? ev.num_turns : 0;
       if (ev.modelUsage && typeof ev.modelUsage === 'object') {
-        pending = ev.modelUsage;
+        pending = { key: typeof ev.session_id === 'string' ? ev.session_id : null, usage: ev.modelUsage };
         Object.keys(ev.modelUsage).forEach((m) => models.add(m));
       }
     } else flush();
   }
   flush();
+  for (const [name, m] of [...latest.values()].flatMap((u) => Object.entries(u))) {
+    spend[name] = (spend[name] ?? 0) + (m?.costUSD ?? 0);
+    totals.input += m?.inputTokens ?? 0;
+    totals.output += m?.outputTokens ?? 0;
+    totals.cacheRead += m?.cacheReadInputTokens ?? 0;
+    totals.cacheCreation += m?.cacheCreationInputTokens ?? 0;
+  }
   return { tokens: totals, models: [...models].sort(), turns, spend, compactions };
 }
 

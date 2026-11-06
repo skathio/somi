@@ -189,6 +189,20 @@ test('usage takes the last of a run of results, and adds across resumes', () => 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('a resumed session reports its whole cost so far, so each session counts once at its latest result', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-usage-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const usage = (costUSD, outputTokens) => ({ m: { costUSD, inputTokens: 0, outputTokens, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } });
+  // The shape a live three-message session wrote: output 4, 8 and 12 tokens across resumes of one session.
+  const lines = [{ type: 'result', session_id: 's1', num_turns: 1, modelUsage: usage(0.1, 4) }, { type: 'user' }, { type: 'result', session_id: 's1', num_turns: 1, modelUsage: usage(0.15, 8) }, { type: 'user' }, { type: 'result', session_id: 's1', num_turns: 1, modelUsage: usage(0.18, 12) }, { type: 'user' }, { type: 'result', session_id: 's2', num_turns: 2, modelUsage: usage(0.05, 3) }];
+  const file = path.join(dir, 's.jsonl');
+  fs.writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n'));
+  const u = streamUsage(file);
+  assert.equal(u.tokens.output, 15, 'the latest of s1, plus s2');
+  assert.ok(Math.abs(u.spend.m - 0.23) < 1e-9);
+  assert.equal(u.turns, 5, 'each process reports its own turns');
+});
+
 test('registration holds only for a committed, matching task set', (t) => {
   const repo = makeRepo(t);
   const dir = path.join(repo, 'benchmarks', 'v2');
@@ -570,14 +584,15 @@ test('a task\'s follow-up messages are sent in order on the same session, after 
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const log = path.join(dir, 'argv.jsonl');
   const stub = path.join(dir, 'claude-stub');
-  // The first answer asks a question, so the fixed approval goes first and the scripted messages follow it.
+  // The first answer asks a question, so the fixed approval goes first and the scripted messages follow it. Each result reports the
+  // session's running cost, as the CLI does on a resume.
   fs.writeFileSync(stub, [
     '#!/usr/bin/env node',
     "const fs = require('node:fs');",
     `fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + '\\n');`,
     `const n = fs.readFileSync(${JSON.stringify(log)}, 'utf8').trim().split('\\n').length;`,
     "const text = n === 1 ? 'Which option would you like? Shall I proceed?' : 'Done.';",
-    "for (const e of [{ type: 'system', subtype: 'init', session_id: 's1' }, { type: 'assistant', parent_tool_use_id: null, message: { id: 'm' + n, model: 'stub-1', content: [{ type: 'text', text }], usage: { output_tokens: 1 } } }, { type: 'result', subtype: 'success', session_id: 's1', result: text, num_turns: 1, total_cost_usd: 0.01, modelUsage: { 'stub-1': {} } }]) console.log(JSON.stringify(e));",
+    "for (const e of [{ type: 'system', subtype: 'init', session_id: 's1' }, { type: 'assistant', parent_tool_use_id: null, message: { id: 'm' + n, model: 'stub-1', content: [{ type: 'text', text }], usage: { output_tokens: 1 } } }, { type: 'result', subtype: 'success', session_id: 's1', result: text, num_turns: 1, total_cost_usd: 0.01 * n, modelUsage: { 'stub-1': {} } }]) console.log(JSON.stringify(e));",
   ].join('\n'), { mode: 0o755 });
   const drawDir = path.join(dir, 'draw');
   fs.mkdirSync(drawDir);
@@ -588,6 +603,7 @@ test('a task\'s follow-up messages are sent in order on the same session, after 
   assert.ok(calls.slice(1).every((a) => a[a.indexOf('--resume') + 1] === 's1'), 'every later turn resumes the same session');
   assert.equal(run.resumes, 1);
   assert.equal(run.followUps, 2);
+  assert.ok(Math.abs(run.cost - 0.04) < 1e-9, 'a resumed session reports its running total, so the draw costs the latest one');
 });
 
 test('a task may carry scripted follow-ups, and they are held to the same text rules', () => {
