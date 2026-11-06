@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readDiff, resolveRef, reviewDiffCommand, snapshotTree, workBase } from './git-tree.mjs';
 import { ReviewInputError, decideAfterReview, isBlocking, parseReviews } from './policy.mjs';
-import { computeSignals, RECORDED_ONLY } from './signals.mjs';
+import { computeSignals, RECORDED_ONLY, SECURITY_SIGNALS } from './signals.mjs';
 import { StateError, statePaths, writeStateFile } from './state.mjs';
 import { resolveSpawn } from './tiers.mjs';
 
@@ -73,6 +73,7 @@ function normalized(ctx, reviews) {
 
 const ADVICE = Object.freeze({
   fix: 'These findings block this change from leaving. Fix them where the change was made: if a worker built it, start the same worker with its brief and these findings below it, and otherwise fix them here. Then call somi_review with no reviews, run the reviewers it names, and record what they return. If a finding has needs_verification, check it first: a reviewer asking to remove a check is not enough reason to remove it.',
+  fixHere: 'These findings block this change from leaving, and security signals fired on its diff. Fix them here, on this conversation\'s model, and not on a low worker, even if one built the change. Then call somi_review with no reviews, run the reviewers it names, and record what they return. If a finding has needs_verification, check it first: a reviewer asking to remove a check is not enough reason to remove it.',
   ask: 'Tell the user: blocking findings remain after repeated review passes. Show them, and let the user choose between more fixing and stopping. `somi pr` will not write a clean pull request until a review clears them.',
   close: 'Nothing here blocks the change. Pass the logged findings on to the user briefly, and do not act on them unless the user asks.',
 });
@@ -89,6 +90,7 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
   const previousBlocking = earlier.at(-1)?.blocking ?? [];
   const decision = decideAfterReview({ findings, pass, previousBlocking });
   const blocking = findings.filter(isBlocking);
+  const securityFired = plan.signals.some((s) => SECURITY_SIGNALS.includes(s));
   const record = { v: 1, at: ctx.now(), base: plan.base, tree, pass, verdicts, findings, blocking: blocking.map((f) => f.fingerprint) };
   writeStateFile(ctx.root, statePaths(ctx.root, ctx.env).reviews, `${JSON.stringify(record)}\n`, ctx.env, 'a');
   const logged = findings.filter((f) => !isBlocking(f));
@@ -97,7 +99,7 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
     pass,
     blocking,
     logged,
-    advice: ADVICE[decision.next],
+    advice: decision.next === 'fix' && securityFired ? ADVICE.fixHere : ADVICE[decision.next],
     ...(decision.stop ? { stop: decision.stop } : {}),
   };
 }

@@ -21,6 +21,7 @@ import { pullRequest } from './lib/pr.mjs';
 import { readPrompt } from './lib/prompt.mjs';
 import { recordReviews, reviewPlan } from './lib/reviews.mjs';
 import { ShardError } from './lib/shards.mjs';
+import { SECURITY_SIGNALS } from './lib/signals.mjs';
 import { StateError } from './lib/state.mjs';
 import { detectHost } from './lib/tiers.mjs';
 
@@ -68,7 +69,7 @@ const TOOLS = [
       properties: {
         request: { type: 'string', description: 'The work: what the user wants, plus anything from the conversation it depends on, so that it reads on its own.' },
         hint: { type: 'string', description: 'A route name, when the user or an earlier answer named one.' },
-        sensitive: { type: 'boolean', description: 'True if the work touches money, accounts, sign-in or untrusted input, even if the request does not say so.' },
+        sensitive: { type: 'boolean', description: 'True only when the user has said this work is security-sensitive. Otherwise SoMi decides from the diff once the work is done.' },
         ticket: { type: 'object' },
         project_dir: PROJECT_DIR,
       },
@@ -170,7 +171,7 @@ async function callTool(name, args) {
         if (typeof a.reviews === 'string') { try { a.reviews = JSON.parse(a.reviews); } catch { return textResult('reviews is not valid JSON. Send an array with every reviewer\'s JSON object.', true); } }
         if (!a.reviews) {
           const plan = reviewPlan(ctx, options);
-          return textResult({ ...plan, advice: plan.covered ? 'An earlier review still covers this change, and nothing since calls for another. Do not run the reviewers again. Carry on.' : plan.needed ? 'Start each listed reviewer as a fresh agent on its model, in the foreground, with its brief unchanged and nothing added. Start them together if the host allows it. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.' : 'No review is needed for this change. Carry on.' });
+          return textResult({ ...plan, ...(plan.signals.some((s) => SECURITY_SIGNALS.includes(s)) ? { security: 'Security signals fired on this diff, so the review and any fix stay on this conversation\'s model.' } : {}), advice: plan.covered ? 'An earlier review still covers this change, and nothing since calls for another. Do not run the reviewers again. Carry on.' : plan.needed ? 'Start each listed reviewer as a fresh agent on its model, in the foreground, with its brief unchanged and nothing added. Start them together if the host allows it. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.' : 'No review is needed for this change. Carry on.' });
         }
         return textResult({ ...recordReviews(ctx, { ...options, reviews: a.reviews, tree: a.tree }), ...shardAdvice(ctx, 'review.done') });
       }

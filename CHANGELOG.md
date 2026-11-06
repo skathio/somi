@@ -14,7 +14,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 - **SoMi advises, and your agent stays in charge.** The agent holding the conversation can read, answer, edit and ask at any point. It asks `somi_route` once for a piece of work and gets back the workflow, the tier and what to do. An earlier release candidate used a step engine here, which proved too restrictive in real use and lost context on sequential requests, and it is gone.
 - **Nothing refuses your next request.** SoMi keeps no workflow state, so no work is ever "still open" in its way.
-- **Your conversation runs on the medium tier, as a bare agent would, and cheaper work goes down.** Small code work that is not sensitive goes to a low worker. Money, accounts, sign-in and untrusted input stay on medium, checked against the agent's summary and your own words. `somi setup` puts the conversation on another tier if you want.
+- **Your conversation runs on the medium tier, as a bare agent would, and cheaper work goes down.** Code work goes to a low worker. When the diff shows security signals, the security review and every fix stay on medium, and you can say up front that work is sensitive to keep it there. `somi setup` puts the conversation on another tier if you want.
 - **SoMi's tools build what a model would otherwise work out each time:** the worker's and the reviewers' briefs, the route when no rule fits, the reviewers a diff needs, the plan file and the pull request text.
 - **A hook gives SoMi's workers and reviewers their tier's model,** from the agent's name.
 - **Reviews follow the real diff.** No forecast decides a review. Only a Blocker, or a Major confirmed on a trust boundary, blocks a change, and after two passes the question goes to you.

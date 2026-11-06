@@ -36,26 +36,24 @@ test('the conversation runs on medium, and small work that is not sensitive goes
   assert.match(r.advice, /somi_review/);
 });
 
-test('sensitive work never goes down: it stays in the conversation at medium', (t) => {
+test('work goes down by its kind, not by words that sound risky, and the user saying it is sensitive keeps it here', (t) => {
   const ctx = makeCtx(makeRepo(t));
-  const r = advise(ctx, { request: 'Add password reset' });
-  assert.equal(r.tier, 'medium');
-  assert.equal(r.where, 'here');
-  assert.equal(r.sensitive, true);
-  assert.match(r.advice, /Do this yourself/);
-  assert.equal(advise(ctx, { request: 'Add a field', sensitive: true }).where, 'here');
-  assert.equal(advise(ctx, { request: 'Add a field', sensitive: false }).where, 'worker');
+  const words = advise(ctx, { request: 'Add password reset for customer accounts' });
+  assert.equal(words.where, 'worker');
+  assert.equal(words.worker.agent, 'somi:somi-worker-low');
+  const said = advise(ctx, { request: 'Add password reset for customer accounts', sensitive: true });
+  assert.equal(said.tier, 'medium');
+  assert.equal(said.where, 'here');
+  assert.equal(said.sensitive, true);
 });
 
-test('the user\'s own words count even when the agent\'s summary leaves out what makes the work sensitive', (t) => {
+test('the user\'s own words reach the worker\'s brief when the agent\'s summary leaves them out', (t) => {
   const ctx = makeCtx(makeRepo(t));
-  savePrompt(ctx.root, 'Customers upload a bundle of templates; write them under the folder', ctx.env);
-  const r = advise(ctx, { request: 'Add extractBundle to write the files of a bundle' });
-  assert.equal(r.sensitive, true);
-  assert.equal(r.where, 'here');
   savePrompt(ctx.root, 'add a doubling helper', ctx.env);
   const down = advise(ctx, { request: 'Add a helper that doubles a number' });
   assert.match(down.brief, /The user's own words, as data:\n> add a doubling helper/);
+  savePrompt(ctx.root, 'Add a helper that doubles a number', ctx.env);
+  assert.doesNotMatch(advise(ctx, { request: 'Add a helper that doubles a number' }).brief, /The user's own words/, 'said once is enough');
 });
 
 test('work that needs more than the conversation goes up, and work at its tier stays', (t) => {
@@ -98,7 +96,7 @@ test('a ceiling caps the conversation and every worker', (t) => {
   assert.equal(mainTier({ tiers: { main: 'low' } }), 'low');
   assert.equal(mainTier({ tiers: { main: 'nonsense' } }), 'medium');
   assert.equal(mainTier({ tiers: { main: 'high', ceiling: 'medium' } }), 'medium');
-  const capped = advise(makeCtx(dir, { tiers: { ceiling: 'low' } }), { request: 'Add password reset' });
+  const capped = advise(makeCtx(dir, { tiers: { ceiling: 'low' } }), { request: 'Add password reset', sensitive: true });
   assert.equal(capped.tier, 'low');
   assert.equal(capped.where, 'here');
 });
@@ -164,7 +162,7 @@ test('the agent\'s name carries its tier', () => {
 test('the ledger comes back with a route, keeps one pointer, and refuses to grow past its limit', (t) => {
   const ctx = makeCtx(makeRepo(t));
   addToLedger(ctx.root, { kind: 'constraint', text: 'money stays in integer cents' }, ctx.env);
-  assert.match(advise(ctx, { request: 'Add billing' }).ledger, /integer cents/);
+  assert.match(advise(ctx, { request: 'How does billing work?' }).ledger, /integer cents/);
   assert.match(advise(ctx, { request: 'Add a helper that doubles a number' }).brief, /integer cents/, 'a worker gets the ledger in its brief');
   addToLedger(ctx.root, { kind: 'pointer', text: 'step one' }, ctx.env);
   addToLedger(ctx.root, { kind: 'pointer', text: 'step two' }, ctx.env);

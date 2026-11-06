@@ -10,8 +10,8 @@ Tell SoMi what you want, in plain words or as a ticket, and it picks the right w
 you talk to one agent, on the medium tier, the same as a bare agent
   -> a question, a follow-up, a change of mind: it just answers
   -> work to do: it asks somi_route once, and gets the workflow, the tier and a ready-made brief
-  -> small work that is not sensitive: it goes down to a worker on the low tier
-  -> money, accounts, sign-in, untrusted input: it stays here, on medium
+  -> code work: it goes down to a worker on the low tier, unless you said it is security-sensitive
+  -> the diff touches a security sink: the review and every fix stay here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier
   -> the change is ready: somi_review reads the diff and says if a review is due
   -> somi_pr: refuses clean text for a change that needed a review and has none
@@ -67,7 +67,7 @@ Older command names still work.
 
 ## Set your tiers
 
-You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Work below it that is not sensitive goes down to a worker, and work above it goes up:
+You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code work below it goes down to a worker, and work above it goes up. When the diff shows security signals, the review and any fix stay on `main`:
 
 ```json
 { "tiers": { "main": "medium", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }

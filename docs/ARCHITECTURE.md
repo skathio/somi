@@ -9,17 +9,18 @@ the user talks to one agent, on the tier set by tiers.main: medium by default, t
   -> a question, a follow-up, a change of mind: the agent carries on, with no tool call needed
   -> work to do: somi_route, once, with the request written to read on its own
        rules decide a clear request; with no rule to go on, it is new work and goes to build
-  -> code below the conversation's tier, and not sensitive: down to a low worker, with a brief somi_route built
-  -> sensitive, or at the conversation's tier: done here
+  -> code below the conversation's tier: down to a low worker, with a brief somi_route built
+  -> the user said it is security-sensitive, or it is at the conversation's tier: done here
   -> above it: up to a worker, with a brief somi_route built
   -> the change is ready: somi_review reads the real diff, computes signals, and names reviewers with their briefs
   -> reviewers report: somi_review records them, and says what blocks the change from leaving
+       security signals on the diff: the fix happens here, on the conversation's tier
   -> somi_pr: the gate
 ```
 
 An earlier version made the agent a coordinator on a step engine: it could not read or answer, and each answer named the one thing it could do next. That was too restrictive in real use, and it lost context on sequential requests, because a new request was refused while work was open and a worker saw only the latest message. No benchmark caught it, because each draw was one prompt and an "Approved".
 
-SoMi's founding comparison is a bare agent on the same tier: both hold the conversation on medium and do the whole job, and SoMi saves by moving what is cheaper down to low. In the first candidate's ablation, a medium coordinator with low workers and no review cost 0.89 times bare per draw (0.79 to 1.02). The cheap tier lost on money, accounts and untrusted input, so that work never goes down: the agent can flag it, and the user's own words are checked as well as the agent's summary, because a summary can drop the words that mark it.
+SoMi's founding comparison is a bare agent on the same tier: both hold the conversation on medium and do the whole job, and SoMi saves by moving what is cheaper down to low. In the first candidate's ablation, a medium coordinator with low workers and no review cost 0.89 times bare per draw (0.79 to 1.02). The cheap tier lost on money, accounts and untrusted input. Matching those words in a request kept 11 of 16 benchmark tasks on medium, so whether work is risky is read from the code instead: the diff's security signals call in the security reviewer, and any fix they lead to stays on medium. That follows the rule to raise a tier only on observed evidence, and it carries a known risk: a low worker's build can miss a safety case that review does not catch. The user can still say up front that work is sensitive.
 
 What a model would otherwise work out the same way every time is done by the tools. The worker's and the reviewers' briefs are built by them, so a model passing them on cannot reword the ticket or add an approach of its own. With no rule to go on, a request goes to `build` without a turn spent choosing. The diff decides the reviewers, a clean review is not asked for again while it still covers the change, and the plan file and pull request text have tools of their own.
 
@@ -117,8 +118,8 @@ Low, medium and high, mapped to models per environment in config. Claude Code ha
 
 | Role | Tier |
 |---|---|
-| The conversation, and sensitive work | `main`, medium by default |
-| Small work that is not sensitive | low, on a worker |
+| The conversation, work the user calls sensitive, and fixes after a security signal | `main`, medium by default |
+| Code work | low, on a worker |
 | Real issues, planning | medium |
 | Design, security review | high |
 | First review | low |

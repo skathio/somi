@@ -14,13 +14,15 @@ function startServer(t, dir) {
   t.after(() => child.kill());
   const waiting = new Map();
   // A server that dies must fail the test, not leave it waiting for an answer.
-  child.on('exit', () => { for (const resolve of waiting.values()) resolve({ error: { code: 'exited' } }); });
+  let exited = false;
+  child.on('exit', () => { exited = true; for (const resolve of waiting.values()) resolve({ error: { code: 'exited' } }); });
   createInterface({ input: child.stdout }).on('line', (line) => {
     const msg = JSON.parse(line);
     waiting.get(msg.id)?.(msg);
   });
   let id = 0;
   return (method, params) => new Promise((resolve) => {
+    if (exited) { resolve({ error: { code: 'exited' } }); return; }
     id += 1;
     waiting.set(id, resolve);
     child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
@@ -45,6 +47,7 @@ test('five tools, which advise, record and never run project commands', async (t
   writeFiles(dir, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (c) => exec(c);\n' });
   const plan = JSON.parse((await call(rpc, 'somi_review', {})).text);
   assert.equal(plan.needed, true);
+  assert.match(plan.security, /stay on this conversation's model/);
   assert.match(plan.advice, /fresh agent/);
   const reviews = [{ agent: 'somi-reviewer', verdict: 'approve', findings: [] }, { agent: 'somi-security-reviewer', verdict: 'approve', findings: [] }];
   assert.equal(JSON.parse((await call(rpc, 'somi_review', { reviews, tree: plan.tree })).text).verdict, 'clear');
@@ -87,7 +90,7 @@ test('a field the model made up is named back to it instead of being read as an 
   savePrompt(dir, 'Add password reset for accounts', { ...process.env, SOMI_GLOBAL_CONFIG: '' });
   const fromPrompt = JSON.parse((await call(rpc, 'somi_route', {})).text);
   assert.equal(fromPrompt.route, 'build', 'with no request, the user\'s own words stand in');
-  assert.equal(fromPrompt.sensitive, true);
+  assert.match(fromPrompt.brief, /> Add password reset for accounts/);
   assert.equal((await call(rpc, 'somi_route', { hint: 'config' })).error, false);
   assert.match((await call(rpc, 'somi_review', { description: 'reviewed' })).text, /no field description/);
 });

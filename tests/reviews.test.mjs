@@ -35,6 +35,15 @@ test('nothing changed needs nothing, even when asked', (t) => {
   assert.equal(reviewPlan(ctx, { always: true }).needed, false);
 });
 
+test('a small change with a blocker but no security signal can go back to the worker that built it', (t) => {
+  const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n', 'test/a.test.js': 'test("a", () => assert(true));\n', '.gitignore': '.somi\n' });
+  const ctx = makeCtx(dir);
+  writeFiles(dir, { 'test/a.test.js': 'test.skip("a", () => assert(true));\n' });
+  const r = recordReviews(ctx, { reviews: [review('somi-reviewer', [{ ...blocker, file: 'test/a.test.js' }])] });
+  assert.equal(r.verdict, 'fix');
+  assert.match(r.advice, /start the same worker/);
+});
+
 test('a sink in the diff gets the low reviewer and the high security reviewer, read from the real diff', (t) => {
   const ctx = makeCtx(makeRepo(t));
   writeFiles(ctx.root, SINK);
@@ -89,6 +98,7 @@ test('a Blocker asks for a fix, the same one coming back asks the user, and noth
   writeFiles(ctx.root, SINK);
   const first = recordReviews(ctx, { reviews: [review('somi-reviewer', [blocker]), review('somi-security-reviewer')] });
   assert.equal(first.verdict, 'fix');
+  assert.match(first.advice, /security signals fired on its diff\. Fix them here/, 'a fix on a security signal stays on the conversation\'s tier');
   assert.equal(first.blocking[0].id, 'b1');
   const second = recordReviews(ctx, { reviews: [review('somi-reviewer', [blocker]), review('somi-security-reviewer')] });
   assert.equal(second.verdict, 'ask-user');

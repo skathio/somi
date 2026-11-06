@@ -2,16 +2,17 @@
 // conversation asks once, reads the answer at the moment it is deciding, and stays in charge.
 //
 // The conversation runs on the medium tier, as a bare agent would, and does the work the route needs at that tier. What is cheaper than
-// that goes down to a low worker, and what needs more goes up. Work on money, accounts or untrusted input never goes down, because the cheap
-// tier lost on exactly that work. Everything a model would otherwise have to work out the same way each time, such as a worker's brief, is
-// built here.
+// that goes down to a low worker, and what needs more goes up. Whether work is risky is read from the code it changes, not from the words
+// of the request: words like customer or upload marked most work risky and kept it all on medium. somi_review reads the diff, and when a
+// security signal fires, the review and every fix stay on this conversation's tier. Everything a model would otherwise have to work out
+// the same way each time, such as a worker's brief, is built here.
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readLedger } from './ledger.mjs';
 import { planStatus } from './plan.mjs';
 import { readPrompt } from './prompt.mjs';
-import { WHEN, classify, sensitiveWork } from './routes.mjs';
+import { WHEN, classify } from './routes.mjs';
 import { shardsFor } from './shards.mjs';
 import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
 import { WORKFLOWS, expertiseIndex, libraryPath, roleBrief, workerAgent } from './workflows.mjs';
@@ -82,11 +83,12 @@ export function advise(ctx, { request, ticket, hint, sensitive } = {}) {
   if (wf.kind === 'command') return { route: chosen.route, tier: wf.tier, advice: `Run \`${somiCommand('check --full')}\` in the shell, because it runs the project's tests. Then call somi_pr for the pull request text. If somi_pr refuses, it says why: a review is due, so call somi_review. Never open anything outward without the user's say.`, ...shardAdvice(ctx, 'pr.open') };
   if (wf.agent) return { route: chosen.route, tier: wf.tier, advice: `Call somi_review with always true${chosen.route === 'security-review' ? ' and security true' : ''}, and follow what it says. Tell the user what was found. Change nothing unless they ask.`, ...clean({ role: roleBrief(wf.role) }) };
 
-  const isSensitive = sensitive === true || sensitiveWork(request) || sensitiveWork(said);
+  // Only the user saying so keeps work here up front. Otherwise the diff decides, after the work is done.
+  const isSensitive = sensitive === true;
   const wanted = wf.kind === 'code' && isSensitive && rank(wf.tier) < rank('medium') ? 'medium' : wf.tier;
   const { tier, model, enforced } = resolveSpawn(ctx.config, ctx.host, wanted);
   const main = mainTier(ctx.config);
-  // Down only for code that is not sensitive. A question or a plan stays where the conversation is, because a brief costs more than it saves.
+  // Down only for code. A question or a plan stays where the conversation is, because a brief costs more than it saves.
   const direction = rank(tier) > rank(main) ? 'up' : rank(tier) < rank(main) && wf.kind === 'code' && !isSensitive ? 'down' : null;
   const skills = (wf.skills ?? []).map((s) => libraryPath('skills', s));
   const ledger = readLedger(ctx.root, ctx.env);
