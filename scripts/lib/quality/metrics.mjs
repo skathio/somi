@@ -44,70 +44,58 @@ function hasJsx(node) {
   return node.namedChildren.some((c) => !FUNCTIONS.has(c.type) && hasJsx(c));
 }
 
+// What each structure that breaks linear flow adds, and which of its parts sit one nesting level deeper. An else-if adds one and keeps
+// the nesting of the if it continues; an else adds one.
+function ifStatement(node, nesting, ctx) {
+  const elseIf = node.parent?.type === 'else_clause';
+  ctx.score += elseIf ? 1 : 1 + nesting;
+  const base = elseIf ? nesting - 1 : nesting;
+  ctx.walk(field(node, 'condition'), base);
+  ctx.walk(field(node, 'consequence'), base + 1);
+  const inner = field(node, 'alternative')?.namedChildren.find((c) => c.type !== 'comment');
+  if (inner && inner.type !== 'if_statement') ctx.score += 1;
+  ctx.walk(inner, base + 1);
+}
+
+const nestsIn = (fields) => (node, nesting, ctx) => {
+  ctx.score += 1 + nesting;
+  const deeper = fields.map((f) => field(node, f));
+  for (const c of node.namedChildren) ctx.walk(c, deeper.some((d) => same(c, d)) ? nesting + 1 : nesting);
+};
+
+const STRUCTURES = {
+  if_statement: ifStatement,
+  ternary_expression: nestsIn(['consequence', 'alternative']),
+  switch_statement: nestsIn(['body']),
+  catch_clause: nestsIn(['body']),
+  ...Object.fromEntries([...LOOPS].map((type) => [type, nestsIn(['body'])])),
+};
+
+// Increments that do not nest: a jump to a label, a new sequence of like boolean operators, and a call of the function itself.
+const labelled = (node) => (field(node, 'label') || node.namedChildren.some((c) => c.type === 'statement_identifier') ? 1 : 0);
+const sequence = (node) => {
+  const op = operator(node);
+  return BOOLEAN.has(op) && !(node.parent?.type === 'binary_expression' && operator(node.parent) === op) ? 1 : 0;
+};
+const recursion = (node, ctx) => {
+  const callee = field(node, 'function');
+  return ctx.name && callee?.type === 'identifier' && callee.text === ctx.name ? 1 : 0;
+};
+const FLAT = { break_statement: labelled, continue_statement: labelled, binary_expression: sequence, call_expression: recursion };
+
 // Cognitive complexity of one unit. Nested functions are left out here and scored as their own units by unitsOf.
 function cognitive(unit, name, startNesting) {
-  let score = 0;
-  const nested = (n, depth) => walk(n, depth + 1);
-  const walk = (node, nesting) => {
-    if (!node) return;
-    if (node !== unit && FUNCTIONS.has(node.type)) return;
-    switch (node.type) {
-      case 'if_statement': {
-        const elseIf = node.parent?.type === 'else_clause';
-        score += elseIf ? 1 : 1 + nesting;
-        const base = elseIf ? nesting - 1 : nesting;
-        walk(field(node, 'condition'), base);
-        nested(field(node, 'consequence'), base);
-        const alt = field(node, 'alternative');
-        if (alt) {
-          const inner = alt.namedChildren.find((c) => c.type !== 'comment');
-          if (inner?.type === 'if_statement') walk(inner, base + 1);
-          else { score += 1; nested(inner, base); }
-        }
-        return;
-      }
-      case 'ternary_expression':
-        score += 1 + nesting;
-        walk(field(node, 'condition'), nesting);
-        nested(field(node, 'consequence'), nesting);
-        nested(field(node, 'alternative'), nesting);
-        return;
-      case 'switch_statement':
-        score += 1 + nesting;
-        walk(field(node, 'value'), nesting);
-        nested(field(node, 'body'), nesting);
-        return;
-      case 'catch_clause':
-        score += 1 + nesting;
-        nested(field(node, 'body'), nesting);
-        return;
-      case 'break_statement':
-      case 'continue_statement':
-        if (field(node, 'label') || node.namedChildren.some((c) => c.type === 'statement_identifier')) score += 1;
-        return;
-      case 'binary_expression': {
-        const op = operator(node);
-        if (BOOLEAN.has(op) && !(node.parent?.type === 'binary_expression' && operator(node.parent) === op)) score += 1;
-        break;
-      }
-      case 'call_expression': {
-        const callee = field(node, 'function');
-        if (name && callee?.type === 'identifier' && callee.text === name) score += 1;
-        break;
-      }
-      default:
-        if (LOOPS.has(node.type)) {
-          score += 1 + nesting;
-          const body = field(node, 'body');
-          for (const c of node.namedChildren) (same(c, body) ? nested(c, nesting) : walk(c, nesting));
-          return;
-        }
-    }
-    for (const c of node.namedChildren) walk(c, nesting);
+  const ctx = { score: 0, name };
+  ctx.walk = (node, nesting) => {
+    if (!node || (node !== unit && FUNCTIONS.has(node.type))) return;
+    const structure = STRUCTURES[node.type];
+    if (structure) { structure(node, nesting, ctx); return; }
+    ctx.score += FLAT[node.type]?.(node, ctx) ?? 0;
+    for (const c of node.namedChildren) ctx.walk(c, nesting);
   };
   const body = field(unit, 'body');
-  if (body) walk(body, startNesting); else for (const c of unit.namedChildren) walk(c, startNesting);
-  return score;
+  for (const c of body ? [body] : unit.namedChildren) ctx.walk(c, startNesting);
+  return ctx.score;
 }
 
 function maxDepth(unit) {

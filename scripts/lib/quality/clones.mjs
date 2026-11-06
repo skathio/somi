@@ -30,35 +30,40 @@ export function windows(tokens, size) {
   return out;
 }
 
+function index(files) {
+  const m = new Map();
+  for (const f of files) for (const w of windows(f.tokens, f.size)) m.set(w.hash, [...(m.get(w.hash) ?? []), { file: f.file, w }]);
+  return m;
+}
+
+// The runs of consecutive new-copy windows in one file, each with one other place the fragment occurs.
+function copiedRuns(f, isNew, places) {
+  const runs = [];
+  let run = null;
+  for (const w of windows(f.tokens, f.size)) {
+    if (!isNew(w.hash)) { if (run) runs.push(run); run = null; continue; }
+    if (run && w.at === run.end + 1) { run.end = w.at; run.last = w.last; continue; }
+    if (run) runs.push(run);
+    const other = places(w.hash).find((c) => c.file !== f.file || Math.abs(c.w.at - w.at) >= f.size);
+    run = other ? { file: f.file, line: w.first, last: w.last, end: w.at, other: { file: other.file, line: other.w.first } } : null;
+  }
+  if (run) runs.push(run);
+  return runs;
+}
+
 /**
  * Copies a change made. A fragment is a new copy when it occurs more often after the change than before it, which does not depend on
  * how git pairs the changed lines. after and before are the touched files in each version, rest the files the change did not touch;
  * each is [{ file, tokens, size }]. Returns one finding per run of copied windows: { file, line, lines, other: { file, line } }.
  */
 export function findClones({ after, before = [], rest = [] }) {
-  const index = (files) => {
-    const m = new Map();
-    for (const f of files) for (const w of windows(f.tokens, f.size)) m.set(w.hash, [...(m.get(w.hash) ?? []), { file: f.file, w }]);
-    return m;
-  };
   const old = index([...before, ...rest]);
   const now = index([...after, ...rest]);
-  const grew = (h) => (now.get(h)?.length ?? 0) >= 2 && (now.get(h)?.length ?? 0) > (old.get(h)?.length ?? 0);
-  const findings = [];
-  for (const f of after) {
-    let run = null;
-    for (const w of windows(f.tokens, f.size)) {
-      if (grew(w.hash)) {
-        if (run && w.at === run.end + 1) { run.end = w.at; run.last = w.last; continue; }
-        if (run) findings.push(run);
-        const other = now.get(w.hash).find((c) => c.file !== f.file || Math.abs(c.w.at - w.at) >= f.size);
-        run = other ? { file: f.file, line: w.first, last: w.last, end: w.at, other: { file: other.file, line: other.w.first } } : null;
-      } else if (run) { findings.push(run); run = null; }
-    }
-    if (run) findings.push(run);
-  }
+  const count = (m, h) => m.get(h)?.length ?? 0;
+  const isNew = (h) => count(now, h) >= 2 && count(now, h) > count(old, h);
+  const findings = after.flatMap((f) => copiedRuns(f, isNew, (h) => now.get(h)));
   // Two copies that are both in the change would each be reported against the other: keep the later one.
+  const mirrors = (x, y) => y.file === x.other.file && y.line === x.other.line && y.other.file === x.file && y.other.line === x.line;
   const later = (x, y) => x.file > y.file || (x.file === y.file && x.line > y.line);
-  const unique = findings.filter((x) => !findings.some((y) => y !== x && y.file === x.other.file && y.line === x.other.line && y.other.file === x.file && y.other.line === x.line && later(y, x)));
-  return unique.map(({ file, line, last, other }) => ({ file, line, lines: last - line + 1, other }));
+  return findings.filter((x) => !findings.some((y) => y !== x && mirrors(x, y) && later(y, x))).map(({ file, line, last, other }) => ({ file, line, lines: last - line + 1, other }));
 }

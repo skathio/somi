@@ -4,6 +4,7 @@
 // function being split apart just to pass. Copied code, stylesheet rules and newly added suppressions are checked in what the change
 // added. A file the gate cannot parse fails it, because a change that cannot be measured must not pass as clean.
 
+import crypto from 'node:crypto';
 import { TEST_FILE } from '../signals.mjs';
 import { addedRanges, fileAt } from '../git-tree.mjs';
 import { findClones, tokensOf } from './clones.mjs';
@@ -28,11 +29,11 @@ const total = (units, top) => units.reduce((s, u) => s + u.cognitive, 0) + top;
 
 // An exemption sits on the line just above the function. It needs a reason of 20 characters or more and an expiry no more than 90 days
 // out. In benchmark mode none counts: an agent writing its own exemption is a violation.
-function exemption(lines, unit, rule, now, mode) {
+function exemption(ctx, lines, unit, rule) {
   const m = ALLOW.exec(lines[unit.start - 2] ?? '');
-  if (!m || (m[1] !== rule && m[1] !== 'all') || mode === 'benchmark') return null;
+  if (!m || (m[1] !== rule && m[1] !== 'all') || ctx.mode === 'benchmark') return null;
   const expires = Date.parse(`${m[3]}T00:00:00Z`);
-  const today = Date.parse(now);
+  const today = Date.parse(ctx.now);
   if (!(expires >= today) || expires - today > MAX_EXEMPTION_DAYS * 86400000) return null;
   return { reason: m[2], expires: m[3] };
 }
@@ -43,73 +44,113 @@ function pairUnits(before, after) {
   return after.map((u) => ({ after: u, before: pool.get(`${u.kind}:${u.name}`)?.shift() ?? null }));
 }
 
+const inAdded = (added, line) => added.some(([a, b]) => line >= a && line <= b);
+const flag = (ctx, v) => ctx.violations.push(v);
+
+// Lines the change added: a new suppression is a violation, and in a benchmark so is an exemption the agent wrote.
+function scoreLines(ctx, file, lines, added) {
+  for (const [i, line] of lines.entries()) {
+    if (!inAdded(added, i + 1)) continue;
+    if (SUPPRESSION.test(line)) flag(ctx, { rule: 'suppression', file, line: i + 1, value: 1, limit: ctx.limits.suppressions.added });
+    if (ctx.mode === 'benchmark' && /somi-gate-allow/.test(line)) flag(ctx, { rule: 'exemption', file, line: i + 1, value: 1, limit: 0 });
+  }
+}
+
+function scoreCss(ctx, file, tree, added) {
+  for (const r of cssRules(tree).filter((x) => added.some(([a, b]) => a <= x.end && b >= x.line))) {
+    for (const rule of ['nesting', 'compound', 'ids', 'important']) {
+      if (r[rule] > ctx.limits.css[rule]) flag(ctx, { rule: `css-${rule}`, file, line: r.line, value: r[rule], limit: ctx.limits.css[rule] });
+    }
+  }
+}
+
+// One touched function: over a limit is a violation if it is new, or if it got worse.
+function scoreUnit(ctx, { file, lines, after, before }) {
+  ctx.scored.functions += 1;
+  for (const metric of METRICS) {
+    const limit = ctx.limits[after.kind][metric];
+    if (after[metric] <= limit || (before && after[metric] <= before[metric])) continue;
+    const allowed = exemption(ctx, lines, after, metric);
+    if (allowed) ctx.exemptions.push({ rule: metric, file, line: after.start, name: after.name, ...allowed });
+    else flag(ctx, { rule: metric, file, line: after.start, name: after.name, kind: after.kind, value: after[metric], limit, ...(before ? { before: before[metric] } : {}) });
+  }
+}
+
+// A file may not end over its limit having grown, nor gain more than the per-change limit at once, however its functions are cut up.
+function scoreTotals(ctx, file, now, was) {
+  if (now > ctx.limits.file.cognitive && now > was) flag(ctx, { rule: 'file-cognitive', file, line: 1, value: now, limit: ctx.limits.file.cognitive, before: was });
+  if (now - was > ctx.limits.file.added_cognitive) flag(ctx, { rule: 'file-added-cognitive', file, line: 1, value: now - was, limit: ctx.limits.file.added_cognitive });
+}
+
+async function previousVersion(ctx, file, status, test) {
+  const text = status.startsWith('A') ? null : fileAt(ctx.root, ctx.from, file);
+  const parsed = text === null ? null : await parseSource(file, text);
+  if (!parsed?.tree) return { tree: null, units: [], total: 0 };
+  const units = unitsOf(parsed.tree, { file, isTest: test });
+  return { tree: parsed.tree, units, total: total(units, topLevelCognitive(parsed.tree)) };
+}
+
+async function scoreCode(ctx, { file, status, added, lines, tree, language }) {
+  const test = isTest(file);
+  const units = unitsOf(tree, { file, isTest: test });
+  const old = await previousVersion(ctx, file, status, test);
+  for (const pair of pairUnits(old.units, units)) if (touches(pair.after, added)) scoreUnit(ctx, { file, lines, ...pair });
+  scoreTotals(ctx, file, total(units, topLevelCognitive(tree)), old.total);
+  if (!JS_FAMILY.has(language)) return;
+  const size = test ? ctx.limits.clones.test_tokens : ctx.limits.clones.tokens;
+  ctx.cloneAfter.push({ file, tokens: tokensOf(tree), size });
+  if (old.tree) ctx.cloneBefore.push({ file, tokens: tokensOf(old.tree), size });
+}
+
+async function scoreFile(ctx, file, { status, added }) {
+  if (status.startsWith('D') || !languageOf(file)) return;
+  const text = fileAt(ctx.root, ctx.to, file);
+  if (text === null || skipped(file, text)) return;
+  const lines = text.split('\n');
+  scoreLines(ctx, file, lines, added);
+  const parsed = await parseSource(file, text);
+  if (parsed?.unanalyzed) {
+    ctx.unanalyzed.push({ file, reason: parsed.unanalyzed });
+    flag(ctx, { rule: 'unanalyzed', file, line: 1, value: 1, limit: 0, reason: parsed.unanalyzed });
+    return;
+  }
+  ctx.scored.files += 1;
+  if (parsed.language === 'css') scoreCss(ctx, file, parsed.tree, added);
+  else await scoreCode(ctx, { file, status, added, lines, ...parsed });
+}
+
+async function cachedTokens(cache, file, text) {
+  const key = cache ? `${file}\0${crypto.createHash('sha1').update(text).digest('hex')}` : null;
+  if (key && cache.has(key)) return cache.get(key);
+  const parsed = await parseSource(file, text);
+  const tokens = parsed?.tree ? tokensOf(parsed.tree) : null;
+  if (key) cache.set(key, tokens);
+  return tokens;
+}
+
+// The rest of the repository is what a copy is compared against. Test files are left out of it: copied setup in tests is often benign.
+// A caller scoring many changes in one repository can pass a cache, so files it has read once are not parsed again.
+async function restOfRepo(ctx, touched) {
+  const rest = [];
+  const candidates = ctx.repoFiles.filter((f) => JS_FAMILY.has(languageOf(f)) && !touched.has(f) && !isTest(f) && !SKIPPED.test(f) && !MINIFIED.test(f));
+  for (const file of candidates.slice(0, MAX_REPO_FILES)) {
+    const text = fileAt(ctx.root, ctx.to, file);
+    if (text === null || skipped(file, text)) continue;
+    const tokens = await cachedTokens(ctx.cache, file, text);
+    if (tokens) rest.push({ file, tokens, size: ctx.limits.clones.tokens });
+  }
+  return rest;
+}
+
 /**
  * The gate's verdict on the change from `from` to `to`: { ok, violations, exemptions, scored, unanalyzed }. Each violation is
  * { rule, file, line, name?, value, limit, before? }.
  */
-export async function qualityGate(root, { from, to, limits, now = new Date().toISOString(), mode = 'project', repoFiles = [] }) {
-  const violations = [];
-  const exemptions = [];
-  const unanalyzed = [];
-  const scored = { files: 0, functions: 0 };
-  const cloneAfter = [];
-  const cloneBefore = [];
+export async function qualityGate(root, { from, to, limits, now = new Date().toISOString(), mode = 'project', repoFiles = [], cache = null }) {
+  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, violations: [], exemptions: [], unanalyzed: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [] };
   const changed = addedRanges(root, from, to);
-  for (const [file, { status, added }] of changed) {
-    if (status.startsWith('D') || !languageOf(file)) continue;
-    const text = fileAt(root, to, file);
-    if (text === null || skipped(file, text)) continue;
-    const lines = text.split('\n');
-    for (const [i, line] of lines.entries()) {
-      if (added.some(([a, b]) => i + 1 >= a && i + 1 <= b) && SUPPRESSION.test(line)) violations.push({ rule: 'suppression', file, line: i + 1, value: 1, limit: limits.suppressions.added });
-      if (mode === 'benchmark' && added.some(([a, b]) => i + 1 >= a && i + 1 <= b) && /somi-gate-allow/.test(line)) violations.push({ rule: 'exemption', file, line: i + 1, value: 1, limit: 0 });
-    }
-    const parsed = await parseSource(file, text);
-    if (parsed?.unanalyzed) { unanalyzed.push({ file, reason: parsed.unanalyzed }); violations.push({ rule: 'unanalyzed', file, line: 1, value: 1, limit: 0, reason: parsed.unanalyzed }); continue; }
-    scored.files += 1;
-    if (parsed.language === 'css') {
-      for (const r of cssRules(parsed.tree).filter((x) => added.some(([a, b]) => a <= x.end && b >= x.line))) {
-        for (const [rule, value] of Object.entries({ nesting: r.nesting, compound: r.compound, ids: r.ids, important: r.important })) {
-          if (value > limits.css[rule]) violations.push({ rule: `css-${rule}`, file, line: r.line, value, limit: limits.css[rule] });
-        }
-      }
-      continue;
-    }
-    const test = isTest(file);
-    const units = unitsOf(parsed.tree, { file, isTest: test });
-    const oldText = status.startsWith('A') ? null : fileAt(root, from, file);
-    const oldParsed = oldText === null ? null : await parseSource(file, oldText);
-    const oldUnits = oldParsed?.tree ? unitsOf(oldParsed.tree, { file, isTest: test }) : [];
-    for (const { after, before } of pairUnits(oldUnits, units)) {
-      if (!touches(after, added)) continue;
-      scored.functions += 1;
-      for (const metric of METRICS) {
-        const limit = limits[after.kind][metric];
-        if (after[metric] <= limit || (before && after[metric] <= before[metric])) continue;
-        const allowed = exemption(lines, after, metric, now, mode);
-        if (allowed) { exemptions.push({ rule: metric, file, line: after.start, name: after.name, ...allowed }); continue; }
-        violations.push({ rule: metric, file, line: after.start, name: after.name, kind: after.kind, value: after[metric], limit, ...(before ? { before: before[metric] } : {}) });
-      }
-    }
-    const now_ = total(units, topLevelCognitive(parsed.tree));
-    const was = oldParsed?.tree ? total(oldUnits, topLevelCognitive(oldParsed.tree)) : 0;
-    if (now_ > limits.file.cognitive && now_ > was) violations.push({ rule: 'file-cognitive', file, line: 1, value: now_, limit: limits.file.cognitive, before: was });
-    if (now_ - was > limits.file.added_cognitive) violations.push({ rule: 'file-added-cognitive', file, line: 1, value: now_ - was, limit: limits.file.added_cognitive });
-    if (JS_FAMILY.has(parsed.language)) {
-      const size = test ? limits.clones.test_tokens : limits.clones.tokens;
-      cloneAfter.push({ file, tokens: tokensOf(parsed.tree), size });
-      if (oldParsed?.tree) cloneBefore.push({ file, tokens: tokensOf(oldParsed.tree), size });
-    }
-  }
-  // The rest of the repository is what a copy is compared against. Test files are left out of it: copied setup in tests is often benign.
-  const touched = new Set(changed.keys());
-  const rest = [];
-  for (const file of repoFiles.filter((f) => JS_FAMILY.has(languageOf(f)) && !touched.has(f) && !isTest(f) && !SKIPPED.test(f) && !MINIFIED.test(f)).slice(0, MAX_REPO_FILES)) {
-    const text = fileAt(root, to, file);
-    if (text === null || skipped(file, text)) continue;
-    const parsed = await parseSource(file, text);
-    if (parsed?.tree) rest.push({ file, tokens: tokensOf(parsed.tree), size: limits.clones.tokens });
-  }
-  for (const c of findClones({ after: cloneAfter, before: cloneBefore, rest })) violations.push({ rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other });
-  return { ok: violations.length === 0, violations, exemptions, scored, unanalyzed };
+  for (const [file, change] of changed) await scoreFile(ctx, file, change);
+  const rest = await restOfRepo(ctx, new Set(changed.keys()));
+  for (const c of findClones({ after: ctx.cloneAfter, before: ctx.cloneBefore, rest })) flag(ctx, { rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other });
+  return { ok: ctx.violations.length === 0, violations: ctx.violations, exemptions: ctx.exemptions, scored: ctx.scored, unanalyzed: ctx.unanalyzed };
 }

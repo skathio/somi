@@ -14,31 +14,28 @@ export const DEFAULT_LIMITS = Object.freeze({
 });
 
 const valid = (v) => Number.isInteger(v) && v >= 0 && v <= 100000;
+const NOT_A_LIMIT = 'not a quality limit';
+const NOT_A_NUMBER = 'not a whole number from 0 to 100000';
+
+// One value from one file. The user's own file may set it either way. A project's may only lower it, since lower is stricter for
+// every limit here.
+function apply(limits, ignored, { where, group, key, value }) {
+  const name = `quality.${group}.${key}`;
+  if (!(key in DEFAULT_LIMITS[group])) return ignored.push({ where, key: name, reason: NOT_A_LIMIT });
+  if (!valid(value)) return ignored.push({ where, key: name, reason: NOT_A_NUMBER });
+  if (where === 'project' && value > limits[group][key]) return ignored.push({ where, key: name, reason: `a project may only tighten a limit, and ${value} is looser than ${limits[group][key]}` });
+  limits[group][key] = value;
+  return null;
+}
 
 /** { limits, ignored } from the defaults, the global file's `quality` and the project file's `quality`, in that order. */
 export function resolveLimits({ global = {}, project = {} } = {}) {
-  const limits = {};
+  const limits = Object.fromEntries(Object.entries(DEFAULT_LIMITS).map(([group, values]) => [group, { ...values }]));
   const ignored = [];
-  for (const [group, values] of Object.entries(DEFAULT_LIMITS)) {
-    limits[group] = { ...values };
-    for (const key of Object.keys(values)) {
-      const g = global?.quality?.[group]?.[key];
-      if (g !== undefined) {
-        if (valid(g)) limits[group][key] = g;
-        else ignored.push({ where: 'global', key: `quality.${group}.${key}`, reason: 'not a whole number from 0 to 100000' });
-      }
-      const p = project?.quality?.[group]?.[key];
-      if (p !== undefined) {
-        if (!valid(p)) ignored.push({ where: 'project', key: `quality.${group}.${key}`, reason: 'not a whole number from 0 to 100000' });
-        else if (p > limits[group][key]) ignored.push({ where: 'project', key: `quality.${group}.${key}`, reason: `a project may only tighten a limit, and ${p} is looser than ${limits[group][key]}` });
-        else limits[group][key] = p;
-      }
-    }
-  }
   for (const [where, layer] of [['global', global], ['project', project]]) {
-    for (const group of Object.keys(layer?.quality ?? {})) {
-      if (!DEFAULT_LIMITS[group]) { ignored.push({ where, key: `quality.${group}`, reason: 'not a quality limit' }); continue; }
-      for (const key of Object.keys(layer.quality[group] ?? {})) if (!(key in DEFAULT_LIMITS[group])) ignored.push({ where, key: `quality.${group}.${key}`, reason: 'not a quality limit' });
+    for (const [group, values] of Object.entries(layer?.quality ?? {})) {
+      if (!DEFAULT_LIMITS[group]) { ignored.push({ where, key: `quality.${group}`, reason: NOT_A_LIMIT }); continue; }
+      for (const [key, value] of Object.entries(values ?? {})) apply(limits, ignored, { where, group, key, value });
     }
   }
   return { limits, ignored };
