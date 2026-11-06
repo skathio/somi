@@ -391,6 +391,14 @@
    "why": "an untrusted-input import and export built over four messages: limits and exact money stated once, a stock rule reversed at the end",
    "stratum": "multi-turn",
    "release_large": true
+  },
+  {
+   "id": "M02-doc-permissions",
+   "dir": "tests/evals/ab/M02-doc-permissions",
+   "boundary": true,
+   "why": "a permissions refactor into one policy, then sharing and archiving over four messages, with organisation isolation stated once and the admin rule reversed at the end",
+   "stratum": "multi-turn",
+   "release_large": true
   }
  ]
 }
