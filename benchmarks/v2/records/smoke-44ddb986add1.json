@@ -34,7 +34,7 @@
    "reason": "",
    "label": "finished",
    "gate": null,
-   "green": 22,
+   "green": 23,
    "total": 27,
    "solved": false,
    "scope": {
@@ -55,23 +55,23 @@
    },
    "agents": {
     "unknown": {
-     "weighted": 477004.85,
-     "messages": 64,
+     "weighted": 609432.8499999997,
+     "messages": 71,
      "models": [
-      "claude-haiku-5-5"
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5"
      ]
     },
     "main": {
-     "weighted": 213150.30000000002,
+     "weighted": 149745.19999999998,
      "messages": 22,
      "models": [
       "claude-sonnet-5-5"
      ]
     }
    },
-   "split_coverage": 0.9999999999999997,
+   "split_coverage": 0.9999999999999999,
    "failed": [
-    "AC3 [functional] a flag never defined is off and is noted once",
     "AC7 [functional] a user on the allow list is on whatever the percent",
     "AC7 [functional] a user on the deny list is off whatever the percent",
     "AC4 [functional] targets that are not lists of user ids have code invalid, and a change is recorded",
@@ -85,24 +85,24 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.3,
-   "cost": 0.46846278500000005,
-   "wall_ms": 289073,
+   "load": 0.2,
+   "cost": 0.6371332350000003,
+   "wall_ms": 382278,
    "turns": 22,
    "tokens": {
-    "input": 172,
-    "output": 42382,
-    "cacheRead": 1646319,
-    "cacheCreation": 250753
+    "input": 188,
+    "output": 54877,
+    "cacheRead": 1555913,
+    "cacheCreation": 263211
    },
-   "weighted": 690155.15,
+   "weighted": 759178.05,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.42076230000000003,
-    "claude-haiku-5-5": 0.047700484999999994
+    "claude-sonnet-5-5": 0.5924556999999998,
+    "claude-haiku-5-5": 0.044677535000000004
    },
    "compactions": 0,
    "own_tests": {
@@ -122,9 +122,9 @@
    "reason": "",
    "label": "finished",
    "gate": null,
-   "green": 26,
+   "green": 27,
    "total": 27,
-   "solved": false,
+   "solved": true,
    "scope": {
     "touched": [],
     "added": []
@@ -143,7 +143,7 @@
    },
    "agents": {
     "main": {
-     "weighted": 79395.65,
+     "weighted": 81534.5,
      "messages": 10,
      "models": [
       "claude-sonnet-5-5"
@@ -151,9 +151,7 @@
     }
    },
    "split_coverage": 1,
-   "failed": [
-    "AC4 [functional] targets that are not lists of user ids have code invalid, and a change is recorded"
-   ],
+   "failed": [],
    "flags": {
     "timedOut": false,
     "crashed": false,
@@ -162,26 +160,26 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.1,
-   "cost": 0.1615669,
-   "wall_ms": 63335,
+   "load": 0.4,
+   "cost": 0.16593900000000003,
+   "wall_ms": 65866,
    "turns": 10,
    "tokens": {
     "input": 20,
-    "output": 7765,
-    "cacheRead": 208569,
-    "cacheCreation": 15755
+    "output": 8133,
+    "cacheRead": 209770,
+    "cacheCreation": 15898
    },
-   "weighted": 79395.65,
+   "weighted": 81534.5,
    "models": [
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.1615669
+    "claude-sonnet-5-5": 0.16593900000000003
    },
    "compactions": 0,
    "own_tests": {
-    "tests": 1,
+    "tests": 3,
     "oracle_pass": false,
     "killed": 0,
     "total": 6
@@ -197,47 +195,70 @@
    "reason": "",
    "label": "finished",
    "gate": null,
-   "green": 20,
+   "green": 23,
    "total": 23,
-   "solved": false,
+   "solved": true,
    "scope": {
     "touched": [],
     "added": []
    },
    "adherence": {
     "route": "tool",
-    "steps": 8,
-    "agents": [],
+    "steps": 10,
+    "agents": [
+     {
+      "type": "somi:somi-reviewer",
+      "model": "haiku"
+     },
+     {
+      "type": "somi:somi-security-reviewer",
+      "model": "sonnet"
+     }
+    ],
     "inline_writes": 0,
     "routed": "build",
-    "passes": 4,
+    "passes": 2,
     "gates": [],
     "next": null,
     "stop": null,
-    "findings": {}
+    "findings": {
+     "Minor": 7,
+     "Nit": 4
+    }
    },
    "agents": {
+    "somi:somi-security-reviewer": {
+     "weighted": 26977.25,
+     "messages": 2,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    },
     "unknown": {
-     "weighted": 525035.8499999997,
-     "messages": 71,
+     "weighted": 874348.4500000002,
+     "messages": 93,
+     "models": [
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+     ]
+    },
+    "somi:somi-reviewer": {
+     "weighted": 36620.15,
+     "messages": 3,
      "models": [
       "claude-haiku-5-5"
      ]
     },
     "main": {
-     "weighted": 237534.9,
-     "messages": 23,
+     "weighted": 217029.79999999996,
+     "messages": 28,
      "models": [
       "claude-sonnet-5-5"
      ]
     }
    },
-   "split_coverage": 0.9999999999999999,
-   "failed": [
-    "AC3 [safety] a document in another organisation has code not_found for every action",
-    "AC4 [functional] each refused action is recorded once, with who, what and when",
-    "AC4 [functional] an allowed action and a missing document record nothing, and a refused one does"
-   ],
+   "split_coverage": 1,
+   "failed": [],
    "flags": {
     "timedOut": false,
     "crashed": false,
@@ -246,28 +267,28 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.7,
-   "cost": 0.515813985,
-   "wall_ms": 360064,
-   "turns": 24,
+   "load": 0.2,
+   "cost": 1.0181134800000002,
+   "wall_ms": 547087,
+   "turns": 29,
    "tokens": {
-    "input": 188,
-    "output": 54591,
-    "cacheRead": 1993490,
-    "cacheCreation": 232063
+    "input": 254,
+    "output": 83046,
+    "cacheRead": 2298929,
+    "cacheCreation": 407679
    },
-   "weighted": 762570.75,
+   "weighted": 1154975.65,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.4633104,
-    "claude-haiku-5-5": 0.052503585
+    "claude-sonnet-5-5": 0.9534176,
+    "claude-haiku-5-5": 0.06469588
    },
    "compactions": 0,
    "own_tests": {
-    "tests": 3,
+    "tests": 4,
     "oracle_pass": false,
     "killed": 0,
     "total": 6
@@ -304,14 +325,14 @@
    },
    "agents": {
     "main": {
-     "weighted": 110573.49999999999,
-     "messages": 11,
+     "weighted": 76808.5,
+     "messages": 9,
      "models": [
       "claude-sonnet-5-5"
      ]
     }
    },
-   "split_coverage": 0.9999999999999999,
+   "split_coverage": 1,
    "failed": [],
    "flags": {
     "timedOut": false,
@@ -321,26 +342,26 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.2,
-   "cost": 0.2257255,
-   "wall_ms": 80766,
-   "turns": 11,
+   "load": 0.5,
+   "cost": 0.15827099999999997,
+   "wall_ms": 59694,
+   "turns": 9,
    "tokens": {
-    "input": 22,
-    "output": 11707,
-    "cacheRead": 262915,
-    "cacheCreation": 20580
+    "input": 18,
+    "output": 7490,
+    "cacheRead": 193430,
+    "cacheCreation": 15998
    },
-   "weighted": 110573.5,
+   "weighted": 76808.5,
    "models": [
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.2257255
+    "claude-sonnet-5-5": 0.15827099999999997
    },
    "compactions": 0,
    "own_tests": {
-    "tests": 4,
+    "tests": 1,
     "oracle_pass": true,
     "killed": 6,
     "total": 6
@@ -356,9 +377,9 @@
    "reason": "",
    "label": "finished",
    "gate": null,
-   "green": 29,
+   "green": 25,
    "total": 29,
-   "solved": true,
+   "solved": false,
    "scope": {
     "touched": [],
     "added": []
@@ -377,22 +398,28 @@
    },
    "agents": {
     "unknown": {
-     "weighted": 726664.2,
-     "messages": 85,
+     "weighted": 872366.6,
+     "messages": 97,
      "models": [
-      "claude-haiku-5-5"
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5"
      ]
     },
     "main": {
-     "weighted": 347532,
-     "messages": 29,
+     "weighted": 196836.74999999997,
+     "messages": 27,
      "models": [
       "claude-sonnet-5-5"
      ]
     }
    },
    "split_coverage": 1,
-   "failed": [],
+   "failed": [
+    "AC5 [functional] an upgrade credits the unused days and charges the rest in the customer favour",
+    "AC5 [functional] a downgrade is prorated the same way",
+    "AC5 [boundary] a change on the first day prorates the whole period",
+    "AC5 [boundary] a change on the last day prorates one day"
+   ],
    "flags": {
     "timedOut": false,
     "crashed": false,
@@ -401,24 +428,24 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.3,
-   "cost": 0.7275259199999999,
-   "wall_ms": 480040,
-   "turns": 29,
+   "load": 0.5,
+   "cost": 0.8412818249999998,
+   "wall_ms": 507334,
+   "turns": 27,
    "tokens": {
-    "input": 228,
-    "output": 75462,
-    "cacheRead": 2823007,
-    "cacheCreation": 331486
+    "input": 252,
+    "output": 78441,
+    "cacheRead": 2489551,
+    "cacheCreation": 342233
    },
-   "weighted": 1074196.2,
+   "weighted": 1069203.35,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.6548595,
-    "claude-haiku-5-5": 0.07266641999999998
+    "claude-sonnet-5-5": 0.7756855999999999,
+    "claude-haiku-5-5": 0.06559622499999998
    },
    "compactions": 0,
    "own_tests": {
@@ -459,8 +486,8 @@
    },
    "agents": {
     "main": {
-     "weighted": 121643.35,
-     "messages": 13,
+     "weighted": 118714.70000000003,
+     "messages": 14,
      "models": [
       "claude-sonnet-5-5"
      ]
@@ -476,22 +503,22 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 1.3,
-   "cost": 0.2447751,
-   "wall_ms": 98578,
-   "turns": 13,
+   "load": 1.2,
+   "cost": 0.23505720000000002,
+   "wall_ms": 84433,
+   "turns": 14,
    "tokens": {
-    "input": 26,
-    "output": 12723,
-    "cacheRead": 309611,
-    "cacheCreation": 21633
+    "input": 28,
+    "output": 11791,
+    "cacheRead": 336592,
+    "cacheCreation": 20858
    },
-   "weighted": 121643.35,
+   "weighted": 118714.70000000001,
    "models": [
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.2447751
+    "claude-sonnet-5-5": 0.23505720000000002
    },
    "compactions": 0,
    "own_tests": {
@@ -532,15 +559,16 @@
    },
    "agents": {
     "unknown": {
-     "weighted": 515980.44999999966,
-     "messages": 70,
+     "weighted": 793087.2000000002,
+     "messages": 83,
      "models": [
-      "claude-haiku-5-5"
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5"
      ]
     },
     "main": {
-     "weighted": 241770.69999999998,
-     "messages": 23,
+     "weighted": 144906.95000000004,
+     "messages": 22,
      "models": [
       "claude-sonnet-5-5"
      ]
@@ -556,30 +584,30 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 1.6,
-   "cost": 0.534077745,
-   "wall_ms": 361620,
-   "turns": 23,
+   "load": 0.7,
+   "cost": 0.6611183449999999,
+   "wall_ms": 466863,
+   "turns": 22,
    "tokens": {
-    "input": 186,
-    "output": 53992,
-    "cacheRead": 2001964,
-    "cacheCreation": 229927
+    "input": 210,
+    "output": 73204,
+    "cacheRead": 2095629,
+    "cacheCreation": 289761
    },
-   "weighted": 757751.15,
+   "weighted": 937994.15,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.48247970000000007,
-    "claude-haiku-5-5": 0.05159804499999999
+    "claude-sonnet-5-5": 0.5990597,
+    "claude-haiku-5-5": 0.06205864500000001
    },
    "compactions": 0,
    "own_tests": {
-    "tests": 2,
-    "oracle_pass": true,
-    "killed": 4,
+    "tests": 4,
+    "oracle_pass": false,
+    "killed": 0,
     "total": 6
    }
   },
@@ -614,8 +642,8 @@
    },
    "agents": {
     "main": {
-     "weighted": 105561.6,
-     "messages": 14,
+     "weighted": 146405.1,
+     "messages": 19,
      "models": [
       "claude-sonnet-5-5"
      ]
@@ -631,28 +659,28 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.2,
-   "cost": 0.2067496,
-   "wall_ms": 88937,
-   "turns": 14,
+   "load": 0.5,
+   "cost": 0.2772231,
+   "wall_ms": 102969,
+   "turns": 19,
    "tokens": {
-    "input": 28,
-    "output": 10112,
-    "cacheRead": 319736,
-    "cacheCreation": 18400
+    "input": 38,
+    "output": 13583,
+    "cacheRead": 498771,
+    "cacheCreation": 22860
    },
-   "weighted": 105561.6,
+   "weighted": 146405.1,
    "models": [
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.2067496
+    "claude-sonnet-5-5": 0.2772231
    },
    "compactions": 0,
    "own_tests": {
     "tests": 2,
-    "oracle_pass": false,
-    "killed": 0,
+    "oracle_pass": true,
+    "killed": 6,
     "total": 6
    }
   }

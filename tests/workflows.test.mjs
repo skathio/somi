@@ -153,7 +153,7 @@ test('the user\'s rules are written as tests before the build, which must pass t
   const { value, calls } = await load('deliver-stages').run({ request: 'Add sharing', models: MODELS }, answers({ gateOk: [false, true] }));
   const labels = calls.map((c) => c.label);
   assert.ok(labels.indexOf('rules') > labels.indexOf('scout') && labels.indexOf('rules') < labels.indexOf('build on low'), 'after the scout, before the build');
-  assert.match(calls.find((c) => c.label === 'rules').prompt, /including a rule set earlier that extends to code added now[\s\S]*Change no source file and no existing test/);
+  assert.match(calls.find((c) => c.label === 'rules').prompt, /including a rule set earlier that extends to code added now[\s\S]*Test only what a message states\. Where the messages leave a detail open[\s\S]*write no test for it[\s\S]*Change no source file and no existing test/);
   for (const build of calls.filter((c) => c.label.startsWith('build on'))) {
     assert.match(build.prompt, /The tests in test\/rules\.test\.mjs hold the user's rules[\s\S]*Do not change, skip or delete them[\s\S]*> another organisation's document is not_found/);
   }
