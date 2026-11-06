@@ -136,7 +136,7 @@ test('large work on Claude Code runs as the deliver workflow, with the user\'s m
   assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
   assert.equal(r.workflow.args.request, long);
   assert.match(r.advice, /Workflow tool/);
-  assert.equal(activeDelegation(ctx.root, env), null, 'a workflow holds nothing back on the main thread');
+  assert.equal(activeDelegation(ctx.root, env)?.agent, 'somi:somi-worker-low', 'the build is held for its worker, in case the Workflow tool is not there');
   assert.equal(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: long }).workflow, undefined, 'Copilot follows the steps');
   assert.equal(advise(ctx, { request: 'Add a helper that doubles a number' }).workflow, undefined, 'small work stays light');
 });

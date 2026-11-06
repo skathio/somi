@@ -137,7 +137,8 @@ export function advise(ctx, { request, ticket, hint, sensitive } = {}) {
   const worker = direction ? { agent: workerAgent(tier), ...(model ? { model } : {}) } : null;
   const start = worker ? delegate(worker.agent, worker.model, direction === 'up' ? UP : DOWN) : HERE;
   const workflow = wf.kind === 'code' && LARGE(request) ? deliverWorkflow(ctx, { request, said, ledger, role, tier }) : undefined;
-  if (worker && wf.kind === 'code' && !workflow) markDelegation(ctx.root, { agent: worker.agent, tier }, ctx.env);
+  // Held whether or not a workflow is offered: where the Workflow tool is missing the steps stand, and a workflow that runs makes no edits here.
+  if (worker && wf.kind === 'code') markDelegation(ctx.root, { agent: worker.agent, tier }, ctx.env);
   const advice = workflow ? WORKFLOW_ADVICE : wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
   return clean({
     route: chosen.route,
