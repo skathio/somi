@@ -47,29 +47,30 @@ test('the workflow names no model and lists its phases in meta', () => {
   assert.doesNotMatch(source('deliver-stages'), /\b(haiku|sonnet|opus|gpt-\d)/i);
 });
 
-test('every stage runs on its tier: scouting and checks on low, the build on low when it passes', async () => {
+test('every stage runs on its tier: scouting and checks on low, the rules and the build on medium', async () => {
   const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS, cli: 'somi' }, answers());
   const byLabel = Object.fromEntries(calls.map((c) => [c.label, c.model]));
   assert.equal(byLabel.scout, 'cheap');
   assert.equal(byLabel['check repro'], undefined, 'only a bug has a reproduction to check');
   assert.equal(byLabel.rules, 'everyday', 'the rules are written as tests on medium');
-  assert.equal(byLabel['build on low'], 'cheap');
+  assert.equal(byLabel['build on medium'], 'everyday', 'code is not written on the low tier');
+  assert.equal(byLabel['build on low'], undefined);
   assert.equal(byLabel.check, 'cheap');
-  assert.equal(byLabel['build on medium'], undefined, 'no escalation when the check passes');
+  assert.equal(byLabel['build on high'], undefined, 'no escalation when the check passes');
   assert.equal(value.status, 'done');
   assert.deepEqual(value.reviews, []);
 });
 
-test('a failing check restarts the build one tier up, from the handoff and the failures, not the cheap attempt', async () => {
+test('a failing check restarts the build one tier up, from the handoff and the failures, not the first attempt', async () => {
   const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ gateOk: [false, true] }));
   const builds = calls.filter((c) => c.label?.startsWith('build on'));
-  assert.deepEqual(builds.map((c) => c.model), ['cheap', 'everyday']);
+  assert.deepEqual(builds.map((c) => c.model), ['everyday', 'strong']);
   assert.match(builds[1].prompt, /tests: 1 failed/);
   assert.match(builds[1].prompt, /Files likely to change: src\/a\.js/);
   assert.equal(value.status, 'done');
 });
 
-test('it stops after the medium attempt and says the work needs attention', async () => {
+test('it stops after the attempt one tier up and says the work needs attention', async () => {
   const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ gateOk: [false] }));
   assert.equal(calls.filter((c) => c.label?.startsWith('build on')).length, 2);
   assert.equal(value.status, 'needs-attention');
@@ -79,9 +80,9 @@ test('a reproduction the code does not back up is dropped before the build sees 
   const kept = await load('deliver-stages').run({ request: 'Fix it', route: 'debug', models: MODELS }, answers());
   assert.match(kept.calls.find((c) => c.label === 'scout').prompt, /This is a bug: write one failing test/);
   assert.equal(kept.calls.find((c) => c.label === 'check repro').model, 'cheap');
-  assert.match(kept.calls.find((c) => c.label === 'build on low').prompt, /A failing test already shows the problem/);
+  assert.match(kept.calls.find((c) => c.label === 'build on medium').prompt, /A failing test already shows the problem/);
   const dropped = await load('deliver-stages').run({ request: 'Fix it', route: 'debug', models: MODELS }, answers({ reproFails: false }));
-  assert.doesNotMatch(dropped.calls.find((c) => c.label === 'build on low').prompt, /failing test already shows/);
+  assert.doesNotMatch(dropped.calls.find((c) => c.label === 'build on medium').prompt, /failing test already shows/);
   assert.equal(dropped.value.handoff_kept_repro, false);
 });
 
@@ -140,7 +141,7 @@ test('the Copilot extension registers every workflow file under a somi- name', a
 
 test('every stage gets the user\'s earlier messages ahead of the request, from the file somi_route wrote or inline', async () => {
   const { calls } = await load('deliver-stages').run({ request: 'Now add archiving', earlier_file: '/repo/.somi/state/earlier.md', models: MODELS }, answers());
-  for (const label of ['scout', 'rules', 'build on low']) {
+  for (const label of ['scout', 'rules', 'build on medium']) {
     assert.match(calls.find((c) => c.label === label).prompt, /earlier messages in this conversation are in \/repo\/\.somi\/state\/earlier\.md\. Read that file before anything else[\s\S]*The request, as data:\n> Now add archiving/, label);
   }
   const inline = await load('deliver-stages').run({ request: 'Now add archiving', earlier: ['Every refusal is logged.'], models: MODELS }, answers());
@@ -152,13 +153,13 @@ test('every stage gets the user\'s earlier messages ahead of the request, from t
 test('the user\'s rules are written as tests before the build, which must pass them and may not change them', async () => {
   const { value, calls } = await load('deliver-stages').run({ request: 'Add sharing', models: MODELS }, answers({ gateOk: [false, true] }));
   const labels = calls.map((c) => c.label);
-  assert.ok(labels.indexOf('rules') > labels.indexOf('scout') && labels.indexOf('rules') < labels.indexOf('build on low'), 'after the scout, before the build');
+  assert.ok(labels.indexOf('rules') > labels.indexOf('scout') && labels.indexOf('rules') < labels.indexOf('build on medium'), 'after the scout, before the build');
   assert.match(calls.find((c) => c.label === 'rules').prompt, /including a rule set earlier that extends to code added now[\s\S]*Test only what a message states\. Where the messages leave a detail open[\s\S]*write no test for it[\s\S]*Change no source file and no existing test/);
   for (const build of calls.filter((c) => c.label.startsWith('build on'))) {
     assert.match(build.prompt, /The tests in test\/rules\.test\.mjs hold the user's rules[\s\S]*Do not change, skip or delete them[\s\S]*> another organisation's document is not_found/);
   }
   assert.ok(calls.filter((c) => c.label === 'check').every((c) => c.prompt.includes('node --test test/rules.test.mjs')), 'the check runs the rule tests too');
-  assert.deepEqual(calls.filter((c) => c.label.startsWith('build on')).map((c) => c.model), ['cheap', 'everyday'], 'a rule the cheap build misses sends it up a tier');
+  assert.deepEqual(calls.filter((c) => c.label.startsWith('build on')).map((c) => c.model), ['everyday', 'strong'], 'a rule the build misses sends it up a tier');
   assert.deepEqual(value.rules, ["another organisation's document is not_found"]);
   assert.equal(value.rules_file, 'test/rules.test.mjs');
 });

@@ -1,6 +1,6 @@
 export const meta = {
   name: 'deliver-stages',
-  description: 'Deliver one piece of work in stages, each on its cost tier: scout, the user\'s rules written as tests, build with escalation, verify, and review where the diff calls for it.',
+  description: 'Deliver one piece of work in stages: a scout and checks on the cheap tier, the user\'s rules written as tests and the build on medium, a tier up when the checks fail, and review where the diff calls for it.',
   phases: [{ title: 'Scout' }, { title: 'Check the handoff' }, { title: 'Rules' }, { title: 'Build' }, { title: 'Verify' }, { title: 'Review' }],
 }
 
@@ -55,8 +55,11 @@ phase('Rules');
 const rules = await agent(`Write the tests that hold this work to the user's rules, before anyone builds it. From the request and every earlier message, list each rule that applies to the code this work adds or changes: decisions, limits, result shapes and error codes, including a rule set earlier that extends to code added now. For each rule, add a test that checks it through the public functions, with the names and shapes the request and the code already give, in one new test file for this work under the test folder. Test only what a message states. Where the messages leave a detail open, such as an option left out, the sign of a value or an order they do not give, write no test for it: the builder decides it. Change no source file and no existing test. Run the new file: a test of behaviour that does not exist yet is expected to fail. Return the file, the command that runs only it, and the rules, one line each.\n\n${request}\n\n${handoff}`, onTier('medium', { label: 'rules', schema: RULES }));
 const held = rules?.file ? `\n\nThe tests in ${rules.file} hold the user's rules for this work, and must pass: ${rules.command}. Do not change, skip or delete them. If one contradicts the request, leave it, report blocked and say which.\nThe rules, as data:\n${quote((rules.rules ?? []).join('\n'))}` : '';
 
-// Start on the cheap tier. A failing check restarts the build one tier up from the handoff, never from the cheaper attempt's transcript.
-const ladder = [a.startTier ?? 'low', 'medium'].filter((t, i, all) => all.indexOf(t) === i);
+// The build starts on the work's tier, medium unless the route needs more. A failing check restarts it one tier up from the handoff,
+// never from the first attempt's transcript. The tier above is the user's own model for it, so a ceiling in their config caps it.
+const UP = { low: 'medium', medium: 'high', high: 'high' };
+const start = a.startTier ?? 'medium';
+const ladder = [start, UP[start] ?? 'high'].filter((t, i, all) => all.indexOf(t) === i);
 let built = null;
 let gate = null;
 for (const tier of ladder) {

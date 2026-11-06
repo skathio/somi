@@ -10,15 +10,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Writing code is medium work at the least. On the low tier, builds broke rules they were given, wrote tests that passed only their own
+// code, and shipped functions far over the quality limits, and the fixes cost more than the low tier saved. The low tier is kept for
+// gathering information and running commands.
 export const WORKFLOWS = Object.freeze({
-  build: { kind: 'code', role: 'build', tier: 'low', skills: ['testing-checklist'] },
+  build: { kind: 'code', role: 'build', tier: 'medium', skills: ['testing-checklist'] },
   debug: { kind: 'code', role: 'debug', tier: 'medium', skills: ['testing-checklist'] },
   refactor: { kind: 'code', role: 'refactor', tier: 'medium', skills: ['testing-checklist'] },
   upgrade: { kind: 'code', role: 'upgrade', tier: 'medium', skills: ['ci-infra-gotchas'] },
   migrate: { kind: 'code', role: 'migrate', tier: 'medium', skills: ['ci-infra-gotchas'], alwaysReview: true },
   perf: { kind: 'code', role: 'perf', tier: 'medium', skills: ['perf-method'] },
   incident: { kind: 'code', role: 'incident', tier: 'medium', skills: [] },
-  accessibility: { kind: 'code', role: 'accessibility', tier: 'low', skills: ['accessibility'] },
+  accessibility: { kind: 'code', role: 'accessibility', tier: 'medium', skills: ['accessibility'] },
   plan: { kind: 'plan', role: 'plan', tier: 'medium', skills: [] },
   design: { kind: 'report', role: 'design', tier: 'high', skills: ['threat-modeling'] },
   discover: { kind: 'report', role: 'discover', tier: 'medium', skills: [] },

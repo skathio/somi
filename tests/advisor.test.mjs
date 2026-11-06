@@ -19,47 +19,55 @@ import { expertiseIndex, roleBrief, tierForReviewer, tierForWorker, WORKFLOWS } 
 
 const briefOf = (r) => r.steps.find((s) => s.brief)?.brief;
 const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
+// A conversation on the low tier, so code goes up to a medium worker and the brief it gets can be checked.
+const LOW_MAIN = { tiers: { main: 'low' } };
 const makeCtx = (dir, config = {}, host = 'claude') => ({ root: dir, env, config, configLayers: [config], host, now: () => '2026-01-02T00:00:00Z' });
-// Large work: a request long enough to be a whole piece of work, which is what goes down a tier.
+// Large work: a request long enough to be a whole piece of work, for which SoMi offers the staged workflow.
 const BIG = `Add a helper that doubles a number. ${'It takes one number, returns twice it, and rejects anything that is not a finite number. '.repeat(8)}`;
 
 test('the conversation runs on medium and does small work itself, since a hand-off costs more than the work', (t) => {
   const r = advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' });
   assert.equal(mainTier({}), 'medium');
   assert.equal(r.route, 'build');
-  assert.equal(r.tier, 'low');
+  assert.equal(r.tier, 'medium', 'code is medium work at the least');
   assert.equal(r.where, 'here');
   assert.equal(r.worker, undefined);
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on]), [['build', 'main'], ['review', 'subagent']]);
 });
 
-test('large work that is not sensitive goes down to a low worker with a brief SoMi built', (t) => {
+test('large code work stays on medium in the conversation, and SoMi offers the staged workflow', (t) => {
   const r = advise(makeCtx(makeRepo(t)), { request: BIG });
   assert.equal(r.route, 'build');
-  assert.equal(r.tier, 'low');
-  assert.equal(r.where, 'worker');
-  assert.equal(r.worker.agent, 'somi:somi-worker-low');
-  assert.equal(r.worker.model, 'haiku');
+  assert.equal(r.tier, 'medium');
+  assert.equal(r.where, 'here', 'code is not handed down to the low tier');
+  assert.equal(r.worker, undefined);
   assert.equal(r.workflow, undefined, 'only the user starts the staged workflow');
   assert.match(r.advice, /typing \/somi:deliver/, 'so SoMi tells the agent to offer it');
-  assert.match(r.advice, /cheaper on that tier/);
-  const copilot = advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG });
-  assert.equal(copilot.workflow, undefined);
-  assert.match(copilot.advice, /cheaper on that tier/);
-  assert.match(copilot.advice, /brief unchanged/);
-  assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'subagent', 'low'], ['review', 'subagent', null]]);
-  assert.match(copilot.advice, /no requirements or approach of your own/);
-  assert.match(briefOf(r), /small, clear change/);
-  assert.match(briefOf(r), /> Add a helper that doubles a number/);
+  assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'main', 'medium'], ['review', 'subagent', null]]);
   assert.match(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /SoMi reads the diff and tells you/, 'on Claude Code the stop hook checks for a review');
-  assert.match(copilot.advice, /call somi_review/, 'elsewhere the agent asks');
+  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG }).advice, /call somi_review/, 'elsewhere the agent asks');
 });
 
-test('work goes down by its kind, not by words that sound risky, and the user saying it is sensitive keeps it here', (t) => {
-  const ctx = makeCtx(makeRepo(t));
+test('code that goes up to a worker gets a brief SoMi built, passed on unchanged', (t) => {
+  const r = advise(makeCtx(makeRepo(t), LOW_MAIN), { request: BIG });
+  assert.equal(r.where, 'worker');
+  assert.equal(r.worker.agent, 'somi:somi-worker-medium');
+  assert.equal(r.worker.model, 'sonnet');
+  assert.match(r.advice, /needs a stronger model/);
+  assert.match(r.advice, /brief unchanged/);
+  assert.match(r.advice, /no requirements or approach of your own/);
+  assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'subagent', 'medium'], ['review', 'subagent', null]]);
+  assert.match(briefOf(r), /small, clear change/);
+  assert.match(briefOf(r), /> Add a helper that doubles a number/);
+});
+
+test('work moves by its kind, not by words that sound risky, and the user saying it is sensitive keeps it here', (t) => {
+  // A conversation on the high tier is the one place code can still go down, to medium.
+  const ctx = makeCtx(makeRepo(t), { tiers: { main: 'high' } });
   const words = advise(ctx, { request: `Add password reset for customer accounts. ${BIG}` });
   assert.equal(words.where, 'worker');
-  assert.equal(words.worker.agent, 'somi:somi-worker-low');
+  assert.equal(words.worker.agent, 'somi:somi-worker-medium');
+  assert.match(words.advice, /cheaper on that tier/);
   const said = advise(ctx, { request: `Add password reset for customer accounts. ${BIG}`, sensitive: true });
   assert.equal(said.tier, 'medium');
   assert.equal(said.where, 'here');
@@ -67,7 +75,7 @@ test('work goes down by its kind, not by words that sound risky, and the user sa
 });
 
 test('the user\'s own words reach the worker\'s brief when the agent\'s summary leaves them out', (t) => {
-  const ctx = makeCtx(makeRepo(t));
+  const ctx = makeCtx(makeRepo(t), LOW_MAIN);
   savePrompt(ctx.root, 'add a doubling helper', ctx.env);
   const down = advise(ctx, { request: BIG });
   assert.match(briefOf(down), /The user's own words, as data:\n> add a doubling helper/);
@@ -91,7 +99,7 @@ test('work that needs more than the conversation goes up, and work at its tier s
 
 test('asking again with other work open is never refused, and no state is written', (t) => {
   const dir = makeRepo(t);
-  const ctx = makeCtx(dir);
+  const ctx = makeCtx(dir, LOW_MAIN);
   const first = advise(ctx, { request: BIG });
   const second = advise(ctx, { request: 'Now fix the crash in the other module' });
   assert.equal(first.route, 'build');
@@ -122,11 +130,11 @@ test('a ceiling caps the conversation and every worker', (t) => {
 });
 
 test('with no model set on Copilot the answer says so instead of pretending', (t) => {
-  const r = advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG });
+  const r = advise(makeCtx(makeRepo(t), LOW_MAIN, 'copilot'), { request: BIG });
   assert.equal(r.worker.model, undefined);
   assert.match(r.note, /No model is set/);
-  const set = { tiers: { copilot: { low: 'm-low' } } };
-  assert.equal(advise(makeCtx(makeRepo(t), set, 'copilot'), { request: BIG }).worker.model, 'm-low');
+  const set = { tiers: { main: 'low', copilot: { medium: 'm-medium' } } };
+  assert.equal(advise(makeCtx(makeRepo(t), set, 'copilot'), { request: BIG }).worker.model, 'm-medium');
 });
 
 test('each workflow comes back as steps that say where each runs and on which tier', (t) => {
@@ -214,7 +222,7 @@ test('the agent\'s name carries its tier', () => {
 });
 
 test('the ledger comes back with a route, keeps one pointer, and refuses to grow past its limit', (t) => {
-  const ctx = makeCtx(makeRepo(t));
+  const ctx = makeCtx(makeRepo(t), LOW_MAIN);
   addToLedger(ctx.root, { kind: 'constraint', text: 'money stays in integer cents' }, ctx.env);
   assert.match(advise(ctx, { request: 'How does billing work?' }).ledger, /integer cents/);
   assert.match(briefOf(advise(ctx, { request: BIG })), /integer cents/, 'a worker gets the ledger in its brief');
@@ -480,7 +488,7 @@ test('the prompt hook keeps the latest message, adds nothing, and writes nothing
 });
 
 test('the session\'s earlier messages go with work handed down, the first one always, and a new session starts empty', (t) => {
-  const ctx = makeCtx(makeRepo(t));
+  const ctx = makeCtx(makeRepo(t), LOW_MAIN);
   savePrompt(ctx.root, 'Decision: a document in another organisation is not_found.', ctx.env, { session: 'a' });
   savePrompt(ctx.root, 'Next, add sharing.', ctx.env, { session: 'a' });
   savePrompt(ctx.root, BIG, ctx.env, { session: 'a' });

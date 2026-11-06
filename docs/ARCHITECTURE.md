@@ -10,9 +10,8 @@ the user talks to one agent, on the tier set by tiers.main: medium by default, t
   -> work to do: somi_route, once, with the request written to read on its own
        it returns the workflow as steps, each with where it runs, main or a subagent, and on which tier
        rules decide a clear request; with no rule to go on, it is new work and goes to build
-  -> a small piece of code work: done here, as a bare agent would
-  -> large code work below the conversation's tier: down a tier as a whole, to a low worker with a brief
-       somi_route built, and the agent tells the user that /somi:deliver runs it in stages
+  -> code work: done here on medium, as a bare agent would, and for large work the agent tells the user
+       that /somi:deliver runs it in stages
   -> /somi:deliver: somi_route with staged true returns the deliver-stages workflow and its args, and the
        agent starts it, because the user asked; where the host cannot run it, the steps stand
   -> the user said it is security-sensitive, or it is at the conversation's tier: done here
@@ -27,7 +26,7 @@ An earlier version made the agent a coordinator on a step engine: it could not r
 
 SoMi's founding comparison is a bare agent on the same tier: both hold the conversation on medium and do the whole job, and SoMi saves by moving what is cheaper down to low. In the first candidate's ablation, a medium coordinator with low workers and no review cost 0.89 times bare per draw (0.79 to 1.02). The cheap tier lost on money, accounts and untrusted input. Matching those words in a request kept 11 of 16 benchmark tasks on medium, so whether work is risky is read from the code instead: the diff's security signals call in the security reviewer, and any fix they lead to stays on medium. That follows the rule to raise a tier only on observed evidence, and it carries a known risk: a low worker's build can miss a safety case that review does not catch. The user can still say up front that work is sensitive.
 
-A small piece of work stays in the conversation. On four tasks built over four messages each, a follow-up cost the bare agent about two cents. Sending one to a low worker cost the main thread more than that in routing, briefing and checking, before the worker's own cost, so SoMi came out at 1.2 to 1.4 times bare. Asking the main agent to hand work down did not hold either: it often wrote the files itself. So only large work goes down, a whole stage at a time, where the work is worth more than the hand-off.
+Code is written on medium. A small piece of work stays in the conversation: on four tasks built over four messages each, a follow-up cost the bare agent about two cents, and sending one to a low worker cost the main thread more than that in routing, briefing and checking. On the same tasks, builds on the low tier inside `/somi:deliver` broke rules set in an earlier message, wrote tests that passed only their own code, and wrote a parser at cognitive 47, and the medium-tier fixes cost more than the low tier saved. So the low tier keeps only the work that needs no judgement: finding the files and the test command, and running commands such as the checks.
 
 Each workflow comes back as a short list of steps. A debug is reproduce, fix and review; a plan is plan, milestones and close. Each step says whether it runs on the main thread or on a subagent, and on which tier. That is SoMi 3.x's per-step dispatch, but computed for each request and kept nowhere, so it never stands between the user and the next message.
 
@@ -39,7 +38,7 @@ Advice in a tool result arrives at the moment of decision, which is where it is 
 
 ## Workflows and the library
 
-`workflows/deliver-stages.js` runs large work in code: a scout on low, a reproduction for a bug kept only if running it fails, the user's rules written as tests on medium, a build that restarts one tier up from the handoff when the checks or those tests fail, the checks, and the reviewers the diff calls for. The rules stage is there because a low build checked only by its own tests passed while it broke rules set in an earlier message, so nothing sent it up a tier. A host starts a workflow only on the user's say-so, never on a tool's advice, so it runs when the user types `/somi:deliver`. Claude Code reads the file from the plugin. Copilot CLI loads workflows only from an extension, so `somi init --host copilot` writes `.github/extensions/somi/extension.mjs`, which runs the same file through `scripts/lib/copilot-workflow.mjs`; Copilot runs workflows in experimental mode. The models come from the user's config in the workflow's args, because the file names none.
+`workflows/deliver-stages.js` runs large work in code: a scout on low, a reproduction for a bug kept only if running it fails, the user's rules written as tests on medium, a build on medium that restarts one tier up from the handoff when the checks, the quality gate or the rule tests fail, the checks, and the reviewers the diff calls for. The rules stage is there because a build checked only by its own tests passed while it broke rules set in an earlier message, so nothing sent it up a tier. A host starts a workflow only on the user's say-so, never on a tool's advice, so it runs when the user types `/somi:deliver`. Claude Code reads the file from the plugin. Copilot CLI loads workflows only from an extension, so `somi init --host copilot` writes `.github/extensions/somi/extension.mjs`, which runs the same file through `scripts/lib/copilot-workflow.mjs`; Copilot runs workflows in experimental mode. The models come from the user's config in the workflow's args, because the file names none.
 
 `scripts/lib/workflows.mjs` says what each route is: its kind, tier, role text and skills. Role text is in `library/roles/`, expertise in `library/skills/`, and review lenses in `library/lenses/`. A host lists only commands and `somi-expertise`, at most 15 entries and 8,000 characters, and a test holds that, because hosts silently drop descriptions past a budget. Nothing in the library costs anything until it is used.
 
@@ -159,8 +158,8 @@ Low, medium and high, mapped to models per environment in config. Claude Code ha
 | Role | Tier |
 |---|---|
 | The conversation, work the user calls sensitive, and fixes after a security signal | `main`, medium by default |
-| Large code work | low, as a workflow or a worker |
-| Small code work | `main`, in the conversation |
+| Code work | medium, in the conversation or in the staged build, and one tier up when its checks fail |
+| Finding files and running checks | low |
 | Real issues, planning | medium |
 | Design, security review | high |
 | First review | low |
