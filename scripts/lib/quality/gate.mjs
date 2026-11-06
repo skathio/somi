@@ -51,13 +51,24 @@ function pairUnits(before, after) {
 const inAdded = (added, line) => added.some(([a, b]) => line >= a && line <= b);
 const flag = (ctx, v) => ctx.violations.push(v);
 
-// Lines the change added: a new suppression is a violation, and in a benchmark so is an exemption the agent wrote.
+// Comments the change added: a new suppression is a violation, and in a benchmark so is an exemption the agent wrote. Only comments
+// count, so a string that mentions eslint-disable is not one.
+function scoreComment(ctx, file, line, text) {
+  if (SUPPRESSION.test(text) && (ctx.mode === 'benchmark' || !REASONED.test(text))) flag(ctx, { rule: 'suppression', file, line, value: 1, limit: ctx.limits.suppressions.added });
+  if (ctx.mode === 'benchmark' && /somi-gate-allow/.test(text)) flag(ctx, { rule: 'exemption', file, line, value: 1, limit: 0 });
+}
+
+function scoreComments(ctx, file, tree, added) {
+  const visit = (n) => {
+    if (n.type === 'comment') { if (inAdded(added, n.startPosition.row + 1)) scoreComment(ctx, file, n.startPosition.row + 1, n.text); return; }
+    for (const c of n.children) visit(c);
+  };
+  visit(tree.rootNode);
+}
+
+// With no tree to read comments from, every added line is checked instead.
 function scoreLines(ctx, file, lines, added) {
-  for (const [i, line] of lines.entries()) {
-    if (!inAdded(added, i + 1)) continue;
-    if (SUPPRESSION.test(line) && (ctx.mode === 'benchmark' || !REASONED.test(line))) flag(ctx, { rule: 'suppression', file, line: i + 1, value: 1, limit: ctx.limits.suppressions.added });
-    if (ctx.mode === 'benchmark' && /somi-gate-allow/.test(line)) flag(ctx, { rule: 'exemption', file, line: i + 1, value: 1, limit: 0 });
-  }
+  for (const [i, line] of lines.entries()) if (inAdded(added, i + 1)) scoreComment(ctx, file, i + 1, line);
 }
 
 function scoreCss(ctx, file, tree, added) {
@@ -127,8 +138,8 @@ async function scoreFile(ctx, file, { status, added }) {
   const text = fileAt(ctx.root, ctx.to, file);
   if (text === null || skipped(file, text)) return;
   const lines = text.split('\n');
-  scoreLines(ctx, file, lines, added);
   const parsed = await parseSource(file, text);
+  if (parsed?.tree) scoreComments(ctx, file, parsed.tree, added); else scoreLines(ctx, file, lines, added);
   try { await scoreParsed(ctx, { file, status, added, lines, parsed }); } finally { parsed?.tree?.delete(); }
 }
 
