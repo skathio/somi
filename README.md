@@ -7,23 +7,24 @@ Tell SoMi what you want, in plain words or as a ticket, and it picks the right w
 ## How it works
 
 ```text
-you talk to one agent, on the model you chose for it
+you talk to one agent, on the medium tier, the same as a bare agent
   -> a question, a follow-up, a change of mind: it just answers
-  -> work to do: it asks somi_route once, and gets the workflow, the tier and what to do
-  -> within its tier: it does the work here, where the context already is
-  -> needs a stronger model: it writes a brief with what the conversation decided, and hands that one piece to a worker
+  -> work to do: it asks somi_route once, and gets the workflow, the tier and a ready-made brief
+  -> small work that is not sensitive: it goes down to a worker on the low tier
+  -> money, accounts, sign-in, untrusted input: it stays here, on medium
+  -> work that needs more, such as design: it goes up to a worker on the high tier
   -> the change is ready: somi_review reads the diff and says if a review is due
-  -> `somi pr`: refuses clean text for a change that needed a review and has none
+  -> somi_pr: refuses clean text for a change that needed a review and has none
 ```
 
-SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses your next request. Most of the saving comes from the model the conversation runs on, because the main thread re-sends everything on every turn. Handing small work to a worker costs more than it saves, so SoMi only delegates what needs a stronger model.
+SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses your next request. A bare agent runs everything on medium. SoMi runs the conversation there too and moves the work that is cheaper down to low, so you ask once and get the whole job, for less. The deterministic parts are done by SoMi's tools, not left to the model: which reviewers a diff needs, the briefs workers and reviewers get, the plan file and the pull request text.
 
 | | 4.1 | 5.0 |
 |---|---|---|
-| Who is in charge | A workflow's procedure | Your agent, with SoMi advising |
+| Who is in charge | A workflow's procedure | Your agent, with SoMi advising and building the deterministic parts |
 | When a review runs | Sized before coding | Decided from signals in the real diff, and checked at `somi pr` |
 | Long work | Plan and progress files read by hand | One plan file, a small ledger put back after every compaction, and fresh context per milestone |
-| Model tiers | A lookup the agent could skip | The session agent's model, and a hook for workers and reviewers |
+| Model tiers | A lookup the agent could skip | The conversation on medium, workers and reviewers set by a hook |
 | Listed entries | 91 | 15, with a library behind them |
 | Other plugins | No way in | Shards: `somi slot pr.open <plugin:component>` |
 
@@ -45,14 +46,13 @@ copilot plugin install somi@somi
 
 ## Use
 
-Set your models, then start with SoMi as the session's agent:
+Start with SoMi as the session's agent and just talk to it:
 
 ```bash
-somi setup                    # writes the agent to your own agent folder, on the model for its tier
-copilot --agent somi-main     # or: claude --agent somi-main
+claude --agent somi:somi    # or: copilot --agent somi:somi
 ```
 
-Then just talk to it. On Claude Code, passing `--model` as well overrides the agent's model. Without `somi setup`, use `--agent somi:somi`, which runs on your session's model, or give a request to `/somi`. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start.
+It runs on your session's model. To run the conversation on a different tier's model instead, set `tiers.main` and run `somi setup`, which writes `somi-main` to your own agent folder. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start.
 
 | Command | What it does |
 |---|---|
@@ -67,15 +67,15 @@ Older command names still work.
 
 ## Set your tiers
 
-You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, and work above it goes to a worker:
+You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Work below it that is not sensitive goes down to a worker, and work above it goes up:
 
 ```json
-{ "tiers": { "main": "low", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }
+{ "tiers": { "main": "medium", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }
 ```
 
 Claude Code has those defaults. Copilot has none, because its models vary by plan, so a tier with no model runs on the session's. Three things to know on Copilot CLI:
 
-- **Auto:** with the session model on Auto, every subagent gets the model Auto chose, so tiers do nothing. `somi setup` avoids this, and `somi doctor` warns about it.
+- **Auto:** with the session model on Auto, every subagent gets the model Auto chose, so tiers do nothing. Pick a named model for the session, and `somi doctor` warns about Auto.
 - **A model your plan cannot use:** it falls back to the session's model without an error.
 - **VS Code:** it refuses a subagent above the main model's cost tier, so there the main agent needs to run on the strongest tier you want to use.
 

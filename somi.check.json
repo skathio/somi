@@ -124,6 +124,13 @@
     ],
     "scripts/lib/state.mjs": [
       "tests/reviews.test.mjs"
+    ],
+    "scripts/lib/prompt.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/pr.mjs": [
+      "tests/reviews.test.mjs",
+      "tests/mcp.test.mjs"
     ]
   }
 }

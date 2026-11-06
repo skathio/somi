@@ -5,20 +5,23 @@ SoMi 5.0 keeps what SoMi is for, picking the right workflow for any request, and
 ## The loop
 
 ```text
-the user talks to one agent, on the model set for tiers.main
+the user talks to one agent, on the tier set by tiers.main: medium by default, the same as a bare agent
   -> a question, a follow-up, a change of mind: the agent carries on, with no tool call needed
   -> work to do: somi_route, once, with the request written to read on its own
-       rules decide a clear request; otherwise the agent picks from a short table
-  -> the route's tier is within the conversation's: the agent does it here
-  -> above it: the agent writes a brief and hands that piece to a worker on the stronger model
-  -> the change is ready: somi_review reads the real diff, computes signals, and names any reviewers
+       rules decide a clear request; with no rule to go on, it is new work and goes to build
+  -> code below the conversation's tier, and not sensitive: down to a low worker, with a brief somi_route built
+  -> sensitive, or at the conversation's tier: done here
+  -> above it: up to a worker, with a brief somi_route built
+  -> the change is ready: somi_review reads the real diff, computes signals, and names reviewers with their briefs
   -> reviewers report: somi_review records them, and says what blocks the change from leaving
-  -> `somi pr`: the gate
+  -> somi_pr: the gate
 ```
 
 An earlier version made the agent a coordinator on a step engine: it could not read or answer, and each answer named the one thing it could do next. That was too restrictive in real use, and it lost context on sequential requests, because a new request was refused while work was open and a worker saw only the latest message. No benchmark caught it, because each draw was one prompt and an "Approved".
 
-Most of the saving comes from the model on the main thread, which re-sends the conversation on every turn. Measured on 16 tasks, a cheap coordinator took SoMi from 2.35 times bare's dollars per solved task to about 1 time, with quality level. A session agent's `model` holds across follow-ups and keeps the conversation, which a skill's or a typed command's `model` does not. A worker is for work that needs a stronger model: it starts cold and needs a brief, and a Sonnet coordinator with a Sonnet worker cost 1.5 times bare with no review at all.
+SoMi's founding comparison is a bare agent on the same tier: both hold the conversation on medium and do the whole job, and SoMi saves by moving what is cheaper down to low. In the first candidate's ablation, a medium coordinator with low workers and no review cost 0.89 times bare per draw (0.79 to 1.02). The cheap tier lost on money, accounts and untrusted input, so that work never goes down: the agent can flag it, and the user's own words are checked as well as the agent's summary, because a summary can drop the words that mark it.
+
+What a model would otherwise work out the same way every time is done by the tools. The worker's and the reviewers' briefs are built by them, so a model passing them on cannot reword the ticket or add an approach of its own. With no rule to go on, a request goes to `build` without a turn spent choosing. The diff decides the reviewers, a clean review is not asked for again while it still covers the change, and the plan file and pull request text have tools of their own.
 
 Routing classifies what the work is, never how big it will be, because model size forecasts ran 2 to 8 times too high. Rules alone scored 41% on fresh phrasings, so anything they cannot place goes back to the agent to choose, for one extra call. The tool takes a `sensitive` flag because a follow-up's words may not say what it touches, and that flag can only raise a tier.
 
@@ -36,6 +39,7 @@ Nothing here steers the work. These files only remember what happened, so a new 
 
 - **`reviews.jsonl`:** one line per review pass: the tree it covered, the verdicts and the findings.
 - **`ledger.md`:** decisions and constraints that must outlive the context, at most 40 lines and 6 KB. Compaction drops rules and scope limits first, and what gets re-injected survives, so this comes back at every session start and with every route.
+- **`prompt.txt`:** the user's latest message, kept by a prompt hook so that routing and briefs can read the user's own words. It is overwritten by every prompt and never leaves the machine.
 - **`check.json`:** the last `somi check`, so a pull request can say whether the full suite passed on this code.
 
 `.somi/plan.md` holds an approved plan, at most 200 lines and 16 KB, and `somi plan --done N` marks a milestone in place. `somi status` and `somi pr` render every other view on demand. There are no progress or diary files, because an oversized state file is its own failure: one 4.x plan reached 11 MB.
@@ -48,7 +52,6 @@ Nothing here steers the work. These files only remember what happened, so a new 
 | Reviewers | One on the low tier, plus a security reviewer on the high tier on a boundary. A project's config cannot lower these |
 | What blocks | A Blocker, or a Major with a boundary flag, a line and evidence |
 | What never blocks | Minor, Nit, unconfirmed Major, approve-with-comments |
-| Tested fix | After the first pass, the security reviewer's Minor and unconfirmed Major findings are offered as claims to test. Only what a failing test proves is fixed, and a finding that asks to remove a check is left out |
 | Passes | Two. After that, or when the same blocking fingerprint comes back, the answer tells the agent to take it to the user |
 | Relay check | A finding that suggests removing a check, flag, validation or test is marked `needs_verification` |
 
@@ -110,16 +113,17 @@ Hook denials exit 2, which both CLIs treat as a deny. Hook output carries both h
 
 ## Tiers
 
-Low, medium and high, mapped to models per environment in config. Claude Code has defaults. Copilot has none, because its models vary by plan, and an unmapped tier runs on the session's model and says so. `main` says which tier the conversation runs on, low by default. A `ceiling` caps every tier.
+Low, medium and high, mapped to models per environment in config. Claude Code has defaults. Copilot has none, because its models vary by plan, and an unmapped tier runs on the session's model and says so. `main` says which tier the conversation runs on, medium by default. A `ceiling` caps every tier.
 
 | Role | Tier |
 |---|---|
-| The conversation, and small work done in it | `main`, low by default |
-| Real issues, planning, and work on money, accounts or untrusted input | medium |
+| The conversation, and sensitive work | `main`, medium by default |
+| Small work that is not sensitive | low, on a worker |
+| Real issues, planning | medium |
 | Design, security review | high |
 | First review | low |
 
-`somi setup` writes the session's agent to the user's own agent folder, with the model for its tier, so that shared files stay free of model names. On Claude Code a live check showed that model holding across follow-ups, with the conversation kept. Copilot CLI documents the same and it has not been confirmed live, because the account used for checks serves Auto only.
+`somi setup` writes the session's agent to the user's own agent folder, with the model for `tiers.main`, for a user who wants the conversation on a tier other than the session's. Shared files stay free of model names. On Claude Code a live check showed that model holding across follow-ups, with the conversation kept. Copilot CLI documents the same and it has not been confirmed live, because the account used for checks serves Auto only.
 
 The `apply-tier` hook sets a SoMi worker's or reviewer's model from its name, so it needs no state and a tier does not depend on an agent remembering it. It rewrites and never denies, because a denied agent on some hosts does the work inline. On Claude Code it also keeps those agents in the foreground, because one in the background cannot ask for a permission, so a reviewer's diff command is denied and it reviews blind.
 

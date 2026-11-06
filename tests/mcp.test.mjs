@@ -31,14 +31,14 @@ const call = async (rpc, name, args) => {
   return { error: r.result.isError === true, text: r.result.content[0].text };
 };
 
-test('three tools, which advise, record and never run project commands', async (t) => {
+test('five tools, which advise, record and never run project commands', async (t) => {
   const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n', 'somi.check.json': JSON.stringify({ fast_cmd: 'touch ran-marker' }), '.gitignore': '.somi\nran-marker\n' });
   const rpc = startServer(t, dir);
   await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
   const { result } = await rpc('tools/list', {});
-  assert.deepEqual(result.tools.map((x) => x.name), ['somi_route', 'somi_review', 'somi_note']);
+  assert.deepEqual(result.tools.map((x) => x.name), ['somi_route', 'somi_review', 'somi_note', 'somi_plan', 'somi_pr']);
 
-  assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Add a helper' })).text).where, 'here');
+  assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Add a helper' })).text).where, 'worker');
   assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Now fix the crash in the parser' })).text).route, 'debug', 'another request while work is under way is simply answered');
 
   writeFiles(dir, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (c) => exec(c);\n' });
@@ -48,6 +48,12 @@ test('three tools, which advise, record and never run project commands', async (
   const reviews = [{ agent: 'somi-reviewer', verdict: 'approve', findings: [] }, { agent: 'somi-security-reviewer', verdict: 'approve', findings: [] }];
   assert.equal(JSON.parse((await call(rpc, 'somi_review', { reviews, tree: plan.tree })).text).verdict, 'clear');
   assert.equal(somi(dir, ['pr']).status, 0);
+  const pr = JSON.parse((await call(rpc, 'somi_pr', {})).text);
+  assert.equal(pr.reviewed, true);
+  assert.match(pr.text, /somi-security-reviewer: approve/);
+  assert.equal(JSON.parse((await call(rpc, 'somi_plan', { text: 'Milestone 1: a\nMilestone 2: b\n' })).text).total, 2);
+  assert.equal(JSON.parse((await call(rpc, 'somi_plan', { done: 1 })).text).done, 1);
+  assert.equal(JSON.parse((await call(rpc, 'somi_plan', { close: true })).text).closed, true);
   assert.equal(fs.existsSync(path.join(dir, 'ran-marker')), false, 'the MCP path runs outside the sandbox, so it never runs project commands');
 
   assert.equal(JSON.parse((await call(rpc, 'somi_note', { kind: 'decision', text: 'use postgres' })).text).added, true);

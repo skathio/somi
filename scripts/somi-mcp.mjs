@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// somi-mcp.mjs: a zero-dependency stdio MCP server with three tools. They give advice and keep a small record, and none of them holds up the
+// somi-mcp.mjs: a zero-dependency stdio MCP server with five tools. They give advice and keep a small record, and none of them holds up the
 // conversation: a question, a follow-up or a change of mind never needs to go through here.
 //
 // MCP servers run outside the OS sandbox on Claude Code, so this path never executes project commands. It only reads git and SoMi's own files.
@@ -16,6 +16,8 @@ import { repoRoot, stateIsTracked } from './lib/git-tree.mjs';
 import { addToLedger } from './lib/ledger.mjs';
 import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
+import { closePlan, markMilestoneDone, planStatus, savePlan } from './lib/plan.mjs';
+import { pullRequest } from './lib/pr.mjs';
 import { recordReviews, reviewPlan } from './lib/reviews.mjs';
 import { ShardError } from './lib/shards.mjs';
 import { StateError } from './lib/state.mjs';
@@ -97,6 +99,24 @@ const TOOLS = [
       required: ['kind', 'text'],
     },
   },
+  {
+    name: 'somi_plan',
+    description: 'Large work as a plain plan file. With text, saves the plan: one line per milestone reading "Milestone N: what it delivers". With done, marks milestone N done. With close, ends the plan and its ledger. With nothing, says where the plan has got to.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { text: { type: 'string' }, done: { type: 'integer', minimum: 1 }, close: { type: 'boolean' }, project_dir: PROJECT_DIR },
+    },
+  },
+  {
+    name: 'somi_pr',
+    description: 'The pull request text for this branch, from its commits, reviews and decisions. Refuses when the change needed a review and has none, or has an open blocking finding, unless unreviewed is true, and then the text says so at the top.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { unreviewed: { type: 'boolean', description: 'Only when the user has said to go ahead without the review.' }, base: { type: 'string' }, project_dir: PROJECT_DIR },
+    },
+  },
 ];
 
 async function context(projectDir, env = process.env) {
@@ -128,13 +148,23 @@ async function callTool(name, args) {
     switch (name) {
       case 'somi_route': return textResult(advise(ctx, { request: typeof a.request === 'string' ? a.request : undefined, hint: a.hint, ticket: a.ticket, sensitive: a.sensitive }));
       case 'somi_note': return textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env));
+      case 'somi_plan': {
+        if (a.close === true) return textResult(closePlan(ctx.root, ctx.env));
+        if (Number.isInteger(a.done)) return textResult(markMilestoneDone(ctx.root, a.done));
+        if (typeof a.text === 'string') return textResult({ saved: savePlan(ctx.root, a.text), ...planStatus(ctx.root) });
+        return textResult(planStatus(ctx.root) ?? { plan: null, advice: 'No plan is open.' });
+      }
+      case 'somi_pr': {
+        const result = pullRequest(ctx, { base: a.base, unreviewed: a.unreviewed === true });
+        return textResult(result.ok ? { ...result, ...shardAdvice(ctx, 'pr.open') } : result, !result.ok);
+      }
       default: {
         const options = { base: a.base, always: a.always === true, security: a.security === true };
         // A model may send the array as text. The content is what matters, and it is validated either way.
         if (typeof a.reviews === 'string') { try { a.reviews = JSON.parse(a.reviews); } catch { return textResult('reviews is not valid JSON. Send an array with every reviewer\'s JSON object.', true); } }
         if (!a.reviews) {
           const plan = reviewPlan(ctx, options);
-          return textResult({ ...plan, advice: plan.covered ? 'An earlier review still covers this change, and nothing since calls for another. Do not run the reviewers again. Carry on.' : plan.needed ? 'Start each reviewer as a fresh agent on its model, giving it only diff and prompt, and add nothing of your own. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.' : 'No review is needed for this change. Carry on.' });
+          return textResult({ ...plan, advice: plan.covered ? 'An earlier review still covers this change, and nothing since calls for another. Do not run the reviewers again. Carry on.' : plan.needed ? 'Start each listed reviewer as a fresh agent on its model, in the foreground, with its brief unchanged and nothing added. Start them together if the host allows it. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.' : 'No review is needed for this change. Carry on.' });
         }
         return textResult({ ...recordReviews(ctx, { ...options, reviews: a.reviews, tree: a.tree }), ...shardAdvice(ctx, 'review.done') });
       }

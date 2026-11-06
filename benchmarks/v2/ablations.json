@@ -1,5 +1,5 @@
 {
-  "note": "Each arm is the packed plugin with these edits applied to its private copy. The shipped plugin has no switch for turning a part off, so a project's config can never do it. Sizing is gone in 5.0, so it has no factor. Escalation is the choice between signal-fired and always-on review. Every SoMi arm runs the way `somi setup` leaves it, with the cheap model on the session's agent.",
+  "note": "Each arm is the packed plugin with these edits applied to its private copy. The shipped plugin has no switch for turning a part off, so a project's config can never do it. Sizing is gone in 5.0, so it has no factor. Escalation is the choice between signal-fired and always-on review.",
   "patches": {
     "review-off": {
       "file": "scripts/lib/reviews.mjs",
@@ -20,16 +20,6 @@
       "file": "library/roles/build.md",
       "find": "You build one small, clear change.",
       "replace": "First write a short plan with a test or command that proves each milestone, and pipe it to `somi plan`. Then build it. You build one small, clear change."
-    },
-    "tested-fixes-off": {
-      "file": "scripts/lib/reviews.mjs",
-      "find": "const gaps = decision.next === 'close' && pass === 1 ? testableGaps(findings) : [];",
-      "replace": "const gaps = [];"
-    },
-    "cheap-main": {
-      "file": "agents/somi.md",
-      "find": "name: somi\n",
-      "replace": "name: somi\nmodel: haiku\n"
     }
   },
   "cells": {
@@ -65,8 +55,5 @@
     ]
   },
   "large_cells": {},
-  "large_note": "The large phases ask whether fresh context per milestone pays. The plain arm routes a long ticket to one worker, which can split it, and the lane arm asks for a plan first, the way a maintainer can.",
-  "every_somi_arm": [
-    "cheap-main"
-  ]
+  "large_note": "The large phases ask whether fresh context per milestone pays. The plain arm routes a long ticket to one worker, which can split it, and the lane arm asks for a plan first, the way a maintainer can."
 }

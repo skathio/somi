@@ -24,18 +24,19 @@ import { advise } from './lib/advisor.mjs';
 import { runCheck } from './lib/check.mjs';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
 import { runDoctor } from './lib/doctor.mjs';
-import { commitSubjects, repoRoot, snapshotTree, stateIsTracked } from './lib/git-tree.mjs';
+import { repoRoot, stateIsTracked } from './lib/git-tree.mjs';
 import { writeCopilotHooks } from './lib/init.mjs';
 import { addToLedger, readLedger } from './lib/ledger.mjs';
-import { migrate, readMigrated } from './lib/migrate.mjs';
+import { migrate } from './lib/migrate.mjs';
+import { lastCheck, migratedFindings, pullRequest } from './lib/pr.mjs';
 import { closePlan, markMilestoneDone, planStatus, savePlan } from './lib/plan.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
-import { prGate, readReviews, recordReviews, reviewPlan } from './lib/reviews.mjs';
+import { readReviews, recordReviews, reviewPlan } from './lib/reviews.mjs';
 import { setupAgent } from './lib/setup.mjs';
 import { ShardError, confirmProjectShards, listShards, slot, unslot } from './lib/shards.mjs';
 import { StateError, statePaths, writeStateFile } from './lib/state.mjs';
 import { detectHost } from './lib/tiers.mjs';
-import { renderPr, renderStatus } from './lib/views.mjs';
+import { renderStatus } from './lib/views.mjs';
 
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -63,8 +64,6 @@ function checkAndRecord(ctx, { full = false } = {}) {
   return result;
 }
 
-const lastCheck = (ctx) => { try { return JSON.parse(fs.readFileSync(statePaths(ctx.root, ctx.env).check, 'utf8')); } catch { return null; } };
-const migratedFindings = (ctx) => readMigrated(ctx.root, ctx.env).flatMap((m) => m.findings ?? []);
 
 function review(ctx, args) {
   const { values } = parseArgs({ args, options: { record: { type: 'boolean' }, input: { type: 'string' }, tree: { type: 'string' }, base: { type: 'string' }, always: { type: 'boolean' }, security: { type: 'boolean' } } });
@@ -76,13 +75,12 @@ function review(ctx, args) {
 
 function pr(ctx, args) {
   const { values } = parseArgs({ args, options: { base: { type: 'string' }, unreviewed: { type: 'boolean' } } });
-  const gate = prGate(ctx, { base: values.base });
-  if (!gate.ok && !values.unreviewed) {
-    const why = gate.reason === 'open-blocking' ? 'blocking findings are still open on this change' : `this change needs a review and none covers it (${gate.signals.join(', ')})`;
-    process.stderr.write(`somi: no pull request text, because ${why}. Run a review and record it. To go ahead anyway, pass --unreviewed, and the text will say so at the top.\n`);
+  const result = pullRequest(ctx, { base: values.base, unreviewed: values.unreviewed });
+  if (!result.ok) {
+    process.stderr.write(`somi: ${result.why.replace('pass unreviewed', 'pass --unreviewed')}\n`);
     return 1;
   }
-  process.stdout.write(renderPr({ subjects: commitSubjects(ctx.root, gate.plan.base), gate, ledger: readLedger(ctx.root, ctx.env), reviews: readReviews(ctx.root, ctx.env), check: lastCheck(ctx), tree: snapshotTree(ctx.root), migrated: migratedFindings(ctx) }));
+  process.stdout.write(result.text);
   return 0;
 }
 
@@ -127,7 +125,7 @@ function main(argv) {
       return result.ok ? 0 : 1;
     }
     case 'status':
-      process.stdout.write(renderStatus({ plan: planStatus(ctx.root), ledger: readLedger(ctx.root, ctx.env), reviews: readReviews(ctx.root, ctx.env), check: lastCheck(ctx), migrated: migratedFindings(ctx) }));
+      process.stdout.write(renderStatus({ plan: planStatus(ctx.root), ledger: readLedger(ctx.root, ctx.env), reviews: readReviews(ctx.root, ctx.env), check: lastCheck(ctx.root, ctx.env), migrated: migratedFindings(ctx.root, ctx.env) }));
       return 0;
     case 'pr':
       return pr(ctx, args);

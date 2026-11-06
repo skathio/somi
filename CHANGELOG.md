@@ -14,21 +14,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 - **SoMi advises, and your agent stays in charge.** The agent holding the conversation can read, answer, edit and ask at any point. It asks `somi_route` once for a piece of work and gets back the workflow, the tier and what to do. An earlier release candidate used a step engine here, which proved too restrictive in real use and lost context on sequential requests, and it is gone.
 - **Nothing refuses your next request.** SoMi keeps no workflow state, so no work is ever "still open" in its way.
-- **Your conversation runs on the model you chose.** `somi setup` writes the session agent to your own agent folder, with the model for `tiers.main`, and that model holds across follow-ups.
-- **Work goes to a worker only when it needs a stronger model,** with a brief the agent writes from the conversation. Small work stays where the context already is.
+- **Your conversation runs on the medium tier, as a bare agent would, and cheaper work goes down.** Small code work that is not sensitive goes to a low worker. Money, accounts, sign-in and untrusted input stay on medium, checked against the agent's summary and your own words. `somi setup` puts the conversation on another tier if you want.
+- **SoMi's tools build what a model would otherwise work out each time:** the worker's and the reviewers' briefs, the route when no rule fits, the reviewers a diff needs, the plan file and the pull request text.
 - **A hook gives SoMi's workers and reviewers their tier's model,** from the agent's name.
 - **Reviews follow the real diff.** No forecast decides a review. Only a Blocker, or a Major confirmed on a trust boundary, blocks a change, and after two passes the question goes to you.
 - **The review gate is at `somi pr`.** It refuses clean text for a change that needed a review and has none, or that has an open blocking finding. `--unreviewed` writes it with a label at the top. A later change that fires a signal needs its own review, committed or not.
 - **Work on money, accounts or untrusted input gets a stronger worker,** chosen from the request's words or flagged by the agent. It only raises a tier, and a ceiling still caps it.
 - **A changed interface, a large diff or several modules no longer call for a review on their own.** Security signals, weakened tests, schema and dependency changes, moved goldens and an unreadable diff still do.
-- **A security finding below the bar is offered as a claim to test.** A fix follows only if a test proves the gap.
+- **A clean review is not asked for again** while it still covers the change. A new signal, an open blocker or a user asking still gets one.
 - **Large work is one plain plan file,** with milestones in fresh context, instead of a document chain.
 - **State is a small ledger and a review record, both written by the tools.** The ledger comes back after every compaction and with every route.
 - **The OS sandbox is the security boundary on both hosts.** `somi doctor` proves it with vendor probes, and also warns about tiers with no model, Copilot's Auto, and hooks that seem not to be running. Hooks are tripwires, and the policy-file guard is frozen.
 - **Rules arrive at session start and after compaction,** as a short digest.
-- **Three MCP tools,** `somi_route`, `somi_review` and `somi_note`, which never run project commands. A field the model made up is named back to it, instead of reading as an empty request.
+- **Five MCP tools,** `somi_route`, `somi_review`, `somi_note`, `somi_plan` and `somi_pr`, which never run project commands. A field the model made up is named back to it, instead of reading as an empty request.
 - **Hook denials exit 2,** and hook output carries both hosts' fields, so hooks behave the same on both.
-- **Benchmark v2:** a mixed task set, every arm given the same plain request through its real entry point, dollars per solved task from billing, spend per model, and a mechanical release rule.
+- **Benchmark v2:** both arms on the same session model, a score for the tests each draw writes, against the task's recorded mutants, a mixed task set, every arm given the same plain request through its real entry point, dollars per solved task from billing, spend per model, and a mechanical release rule.
 
 #### Added
 

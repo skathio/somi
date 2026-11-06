@@ -34,8 +34,9 @@ export function resolveSpawn(config, host, wanted) {
   return { tier, model, enforced: model !== null };
 }
 
-// The tier the conversation itself runs on. Cheap by default: work above it goes to a stronger worker, and a ceiling can lower it.
+// The tier the conversation itself runs on: medium, as a bare agent would run, unless the user chose otherwise. Work cheaper than that
+// goes down to a worker and work that needs more goes up. A ceiling can lower it.
 export function mainTier(config) {
   const chosen = plain(config?.tiers) ? config.tiers.main : undefined;
-  return capped(config, TIERS.includes(chosen) ? chosen : 'low');
+  return capped(config, TIERS.includes(chosen) ? chosen : 'medium');
 }

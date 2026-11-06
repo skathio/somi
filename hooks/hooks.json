@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-hooks.json",
-  "description": "SoMi tripwires: dangerous shell commands, dependency installs, secret and protected-path writes, an audit log, and the rules digest. Also applies routed model tiers.",
+  "description": "SoMi tripwires: dangerous shell commands, dependency installs, secret and protected-path writes, an audit log, the rules digest, and a copy of the latest prompt for routing. Also applies routed model tiers.",
   "hooks": {
     "SessionStart": [
       {
@@ -64,6 +64,16 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool/audit-log.mjs"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/user-prompt/capture-prompt.mjs"
           }
         ]
       }

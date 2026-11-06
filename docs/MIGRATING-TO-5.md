@@ -54,7 +54,7 @@ Copy your test commands into a committed `somi.check.json`. See [the architectur
 
 ## MCP
 
-There are three tools: `somi_route`, `somi_review` and `somi_note`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
+There are five tools: `somi_route`, `somi_review`, `somi_note`, `somi_plan` and `somi_pr`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
 
 ## Hooks
 

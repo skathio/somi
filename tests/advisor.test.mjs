@@ -10,6 +10,7 @@ import { advise } from '../scripts/lib/advisor.mjs';
 import { addToLedger, readLedger, MAX_LINES } from '../scripts/lib/ledger.mjs';
 import { closePlan, markMilestoneDone, parseMilestones, planStatus, savePlan } from '../scripts/lib/plan.mjs';
 import { classify } from '../scripts/lib/routes.mjs';
+import { readPrompt, savePrompt } from '../scripts/lib/prompt.mjs';
 import { setupAgent } from '../scripts/lib/setup.mjs';
 import { listShards, shardsFor, slot, confirmProjectShards, ShardError } from '../scripts/lib/shards.mjs';
 import { mainTier, resolveSpawn, resolveTier } from '../scripts/lib/tiers.mjs';
@@ -19,26 +20,56 @@ import { expertiseIndex, roleBrief, tierForReviewer, tierForWorker, WORKFLOWS } 
 const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
 const makeCtx = (dir, config = {}, host = 'claude') => ({ root: dir, env, config, configLayers: [config], host, now: () => '2026-01-02T00:00:00Z' });
 
-test('small work stays in the conversation, where the context already is', (t) => {
+test('the conversation runs on medium, and small work that is not sensitive goes down to a low worker with a brief SoMi built', (t) => {
   const r = advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' });
+  assert.equal(mainTier({}), 'medium');
   assert.equal(r.route, 'build');
   assert.equal(r.tier, 'low');
-  assert.equal(r.where, 'here');
-  assert.equal(r.worker, undefined);
-  assert.match(r.advice, /Do this yourself/);
+  assert.equal(r.where, 'worker');
+  assert.equal(r.worker.agent, 'somi:somi-worker-low');
+  assert.equal(r.worker.model, 'haiku');
+  assert.match(r.advice, /cheaper on that tier/);
+  assert.match(r.advice, /brief unchanged/);
+  assert.match(r.advice, /no requirements or approach of your own/);
+  assert.match(r.brief, /small, clear change/);
+  assert.match(r.brief, /> Add a helper that doubles a number/);
   assert.match(r.advice, /somi_review/);
-  assert.match(r.role, /small, clear change/);
 });
 
-test('work above the conversation\'s tier goes to a stronger worker, told to carry the conversation in its brief', (t) => {
-  const r = advise(makeCtx(makeRepo(t)), { request: 'Fix the crash when the list is empty' });
-  assert.equal(r.route, 'debug');
-  assert.equal(r.where, 'worker');
-  assert.equal(r.worker.agent, 'somi:somi-worker-medium');
-  assert.equal(r.worker.model, 'sonnet');
-  assert.match(r.advice, /it cannot see this conversation/);
-  assert.match(r.advice, /every decision, constraint, file and failed attempt/);
-  assert.match(r.advice, /If the host refuses that model/);
+test('sensitive work never goes down: it stays in the conversation at medium', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  const r = advise(ctx, { request: 'Add password reset' });
+  assert.equal(r.tier, 'medium');
+  assert.equal(r.where, 'here');
+  assert.equal(r.sensitive, true);
+  assert.match(r.advice, /Do this yourself/);
+  assert.equal(advise(ctx, { request: 'Add a field', sensitive: true }).where, 'here');
+  assert.equal(advise(ctx, { request: 'Add a field', sensitive: false }).where, 'worker');
+});
+
+test('the user\'s own words count even when the agent\'s summary leaves out what makes the work sensitive', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  savePrompt(ctx.root, 'Customers upload a bundle of templates; write them under the folder', ctx.env);
+  const r = advise(ctx, { request: 'Add extractBundle to write the files of a bundle' });
+  assert.equal(r.sensitive, true);
+  assert.equal(r.where, 'here');
+  savePrompt(ctx.root, 'add a doubling helper', ctx.env);
+  const down = advise(ctx, { request: 'Add a helper that doubles a number' });
+  assert.match(down.brief, /The user's own words, as data:\n> add a doubling helper/);
+});
+
+test('work that needs more than the conversation goes up, and work at its tier stays', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  const debug = advise(ctx, { request: 'Fix the crash when the list is empty' });
+  assert.equal(debug.route, 'debug');
+  assert.equal(debug.where, 'here');
+  const design = advise(ctx, { request: 'Design the architecture for sync' });
+  assert.equal(design.worker.agent, 'somi:somi-worker-high', 'design is a high-tier route, so it goes up');
+  assert.equal(advise(ctx, { request: 'What does the parser do?' }).where, 'here', 'a question is never sent down');
+  const up = advise(makeCtx(makeRepo(t), { tiers: { main: 'low' } }), { request: 'Fix the crash when the list is empty' });
+  assert.equal(up.where, 'worker');
+  assert.equal(up.worker.agent, 'somi:somi-worker-medium');
+  assert.match(up.advice, /needs a stronger model/);
 });
 
 test('asking again with other work open is never refused, and no state is written', (t) => {
@@ -46,56 +77,43 @@ test('asking again with other work open is never refused, and no state is writte
   const ctx = makeCtx(dir);
   const first = advise(ctx, { request: 'Add a thing' });
   const second = advise(ctx, { request: 'Now fix the crash in the other module' });
-  assert.equal(first.where, 'here');
+  assert.equal(first.route, 'build');
   assert.equal(second.route, 'debug');
   assert.equal(fs.existsSync(path.join(dir, '.somi')), false, 'routing writes nothing');
   assert.deepEqual(advise(ctx, { request: 'Add a thing' }), first, 'the same request gets the same answer');
 });
 
-test('a follow-up the rules cannot read still gets an answer, and the agent can name the route', (t) => {
+test('a request no rule fits is built, with no extra turn, and names what else might fit', (t) => {
   const ctx = makeCtx(makeRepo(t));
   const unclear = advise(ctx, { request: 'that other endpoint too' });
-  assert.ok(unclear.choose.build);
-  assert.match(unclear.advice, /hint/);
-  assert.equal(advise(ctx, { request: 'that other endpoint too', hint: 'build' }).route, 'build');
+  assert.equal(unclear.route, 'build');
+  assert.match(unclear.alternatives, /debug, refactor/);
+  assert.equal(advise(ctx, { request: 'that other endpoint too', hint: 'debug' }).route, 'debug');
+  const conflict = advise(ctx, { request: 'Refactor the parser and fix the crash in it' });
+  assert.ok(conflict.choose, 'two rules that disagree still ask');
 });
 
-test('the agent can say a follow-up is sensitive when its words do not, and that only raises the tier', (t) => {
-  const ctx = makeCtx(makeRepo(t));
-  assert.equal(advise(ctx, { request: 'Add a field' }).tier, 'low');
-  assert.equal(advise(ctx, { request: 'Add a field', sensitive: true }).tier, 'medium');
-  assert.equal(advise(ctx, { request: 'Add a field', sensitive: false }).tier, 'low');
-});
-
-test('work on money, accounts or untrusted input gets a stronger worker, and a ceiling still caps it', (t) => {
+test('a ceiling caps the conversation and every worker', (t) => {
   const dir = makeRepo(t);
-  assert.equal(advise(makeCtx(dir), { request: 'Add password reset' }).where, 'worker');
+  assert.equal(mainTier({ tiers: { main: 'low' } }), 'low');
+  assert.equal(mainTier({ tiers: { main: 'nonsense' } }), 'medium');
+  assert.equal(mainTier({ tiers: { main: 'high', ceiling: 'medium' } }), 'medium');
   const capped = advise(makeCtx(dir, { tiers: { ceiling: 'low' } }), { request: 'Add password reset' });
   assert.equal(capped.tier, 'low');
   assert.equal(capped.where, 'here');
 });
 
-test('the conversation\'s tier is the user\'s to set, and delegation follows it', (t) => {
-  const dir = makeRepo(t);
-  assert.equal(mainTier({}), 'low');
-  assert.equal(mainTier({ tiers: { main: 'medium' } }), 'medium');
-  assert.equal(mainTier({ tiers: { main: 'nonsense' } }), 'low');
-  assert.equal(mainTier({ tiers: { main: 'high', ceiling: 'medium' } }), 'medium');
-  assert.equal(advise(makeCtx(dir, { tiers: { main: 'medium' } }), { request: 'Fix the crash when the list is empty' }).where, 'here');
-  assert.equal(advise(makeCtx(dir, { tiers: { main: 'medium' } }), { request: 'Design the architecture for sync' }).where, 'worker');
-});
-
 test('with no model set on Copilot the answer says so instead of pretending', (t) => {
-  const r = advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: 'Fix the crash when the list is empty' });
+  const r = advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: 'Add a helper that doubles a number' });
   assert.equal(r.worker.model, undefined);
   assert.match(r.note, /No model is set/);
-  const set = { tiers: { copilot: { medium: 'm-medium' } } };
-  assert.equal(advise(makeCtx(makeRepo(t), set, 'copilot'), { request: 'Fix the crash when the list is empty' }).worker.model, 'm-medium');
+  const set = { tiers: { copilot: { low: 'm-low' } } };
+  assert.equal(advise(makeCtx(makeRepo(t), set, 'copilot'), { request: 'Add a helper that doubles a number' }).worker.model, 'm-low');
 });
 
 test('the rest of the routes answer without starting anything', (t) => {
   const ctx = makeCtx(makeRepo(t));
-  assert.match(advise(ctx, { request: 'x', hint: 'ship' }).advice, /somi\.mjs" pr/);
+  assert.match(advise(ctx, { request: 'x', hint: 'ship' }).advice, /somi_pr/);
   assert.match(advise(ctx, { request: 'review this', hint: 'review' }).advice, /always true/);
   assert.match(advise(ctx, { request: 'x', hint: 'security-review' }).advice, /security true/);
   assert.equal(advise(ctx, { hint: 'config' }).host, 'claude');
@@ -103,6 +121,7 @@ test('the rest of the routes answer without starting anything', (t) => {
   assert.match(advise(ctx, { hint: 'status' }).advice, /status/);
   assert.match(advise(ctx, { request: 'x', hint: 'migrate' }).advice, /always reviewed/);
   assert.match(advise(ctx, { request: 'x', hint: 'plan' }).advice, /wait for their approval/);
+  assert.match(advise(ctx, { request: 'x', hint: 'plan' }).advice, /somi_plan/);
 });
 
 test('a bare ticket key starts as build, and ticket types are read before text', () => {
@@ -146,6 +165,7 @@ test('the ledger comes back with a route, keeps one pointer, and refuses to grow
   const ctx = makeCtx(makeRepo(t));
   addToLedger(ctx.root, { kind: 'constraint', text: 'money stays in integer cents' }, ctx.env);
   assert.match(advise(ctx, { request: 'Add billing' }).ledger, /integer cents/);
+  assert.match(advise(ctx, { request: 'Add a helper that doubles a number' }).brief, /integer cents/, 'a worker gets the ledger in its brief');
   addToLedger(ctx.root, { kind: 'pointer', text: 'step one' }, ctx.env);
   addToLedger(ctx.root, { kind: 'pointer', text: 'step two' }, ctx.env);
   assert.equal(readLedger(ctx.root, ctx.env).match(/pointer/g).length, 1);
@@ -200,14 +220,14 @@ test('setup writes the session agent on the model the user chose, per host', (t)
   const w = setupWorld(t);
   const claude = setupAgent({ ...w, host: 'claude', config: {} });
   assert.equal(claude.written, true);
-  assert.equal(claude.model, 'haiku');
+  assert.equal(claude.model, 'sonnet');
   assert.equal(claude.start, 'claude --agent somi-main');
   const text = fs.readFileSync(claude.file, 'utf8');
   assert.match(text, /^---\nname: somi-main\n/);
-  assert.match(text, /\nmodel: haiku\n/);
+  assert.match(text, /\nmodel: sonnet\n/);
   assert.match(text, /call `somi_route` once/);
   assert.equal(path.relative(w.home, claude.file), '.claude/agents/somi-main.md');
-  const copilot = setupAgent({ ...w, host: 'copilot', config: { tiers: { main: 'medium', copilot: { low: 'a', medium: 'b' } } } });
+  const copilot = setupAgent({ ...w, host: 'copilot', config: { tiers: { copilot: { low: 'a', medium: 'b' } } } });
   assert.equal(copilot.model, 'b');
   assert.equal(path.relative(w.home, copilot.file), '.copilot/agents/somi-main.agent.md');
   assert.match(copilot.warning, /tier high/);
@@ -227,7 +247,7 @@ test('setup says what to set when the host has no model, and does not touch a fi
 test('setup reruns over its own file and picks up a new model', (t) => {
   const w = setupWorld(t);
   setupAgent({ ...w, host: 'claude', config: {} });
-  const again = setupAgent({ ...w, host: 'claude', config: { tiers: { claude: { low: 'other-model' } } } });
+  const again = setupAgent({ ...w, host: 'claude', config: { tiers: { claude: { medium: 'other-model' } } } });
   assert.match(fs.readFileSync(again.file, 'utf8'), /model: other-model/);
 });
 
@@ -380,4 +400,19 @@ test('session start brings back the ledger and an open plan, and says what to do
   assert.doesNotMatch(text, /not the active agent/);
   assert.doesNotMatch(run({ agent_type: 'somi-main' }), /not the active agent/);
   assert.match(run({}), /somi setup/);
+});
+
+test('the prompt hook keeps the latest message, adds nothing, and writes nothing to a committed state folder', (t) => {
+  const dir = makeRepo(t);
+  const run = (payload, extra = {}) => spawnSync(process.execPath, [path.join(REPO, 'hooks', 'user-prompt', 'capture-prompt.mjs')], {
+    input: JSON.stringify(payload), encoding: 'utf8', cwd: dir, env: { PATH: process.env.PATH, HOME: dir, CLAUDE_PROJECT_DIR: dir, SOMI_GLOBAL_CONFIG: '', ...extra },
+  });
+  const r = run({ hook_event_name: 'UserPromptSubmit', prompt: 'Customers upload bundles' });
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, '');
+  assert.equal(readPrompt(dir, env), 'Customers upload bundles');
+  run({ prompt: 'a later message' });
+  assert.equal(readPrompt(dir, env), 'a later message');
+  assert.equal(run({ prompt: 'x'.repeat(70000) }).status, 0);
+  assert.equal(readPrompt(dir, env).length, 65536);
 });

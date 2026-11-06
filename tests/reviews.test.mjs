@@ -7,6 +7,7 @@ import path from 'node:path';
 import { makeRepo, somi, writeFiles } from './helpers.mjs';
 import { commitSubjects, headSha, snapshotTree, workBase } from '../scripts/lib/git-tree.mjs';
 import { decideAfterReview, isBlocking, parseReviews } from '../scripts/lib/policy.mjs';
+import { pullRequest } from '../scripts/lib/pr.mjs';
 import { prGate, readReviews, recordReviews, reviewPlan } from '../scripts/lib/reviews.mjs';
 
 const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
@@ -39,7 +40,8 @@ test('a sink in the diff gets the low reviewer and the high security reviewer, r
   writeFiles(ctx.root, SINK);
   const plan = reviewPlan(ctx);
   assert.equal(plan.needed, true);
-  assert.deepEqual(plan.reviewers, [{ agent: 'somi:somi-reviewer', tier: 'low', model: 'haiku' }, { agent: 'somi:somi-security-reviewer', tier: 'high', model: 'opus' }]);
+  assert.deepEqual(plan.reviewers.map(({ agent, tier, model }) => ({ agent, tier, model })), [{ agent: 'somi:somi-reviewer', tier: 'low', model: 'haiku' }, { agent: 'somi:somi-security-reviewer', tier: 'high', model: 'opus' }]);
+  for (const r of plan.reviewers) assert.ok(r.brief.endsWith(plan.diff), 'each reviewer\'s whole brief is built here, with the diff command in it');
   assert.match(plan.diff, /^git diff --no-ext-diff --no-textconv [0-9a-f]+ [0-9a-f]+$/);
   assert.equal(plan.tree, snapshotTree(ctx.root));
   assert.deepEqual(plan.signals, ['sink']);
@@ -112,19 +114,6 @@ test('reviewers\' absolute paths and long claims do not cost a whole review', (t
   assert.equal(r.logged[0].claim.length, 400);
   assert.equal(r.logged[0].evidence.length, 400);
   assert.throws(() => recordReviews(ctx, { reviews: [review('somi-reviewer', [{ severity: 'Minor', file: '/etc/passwd', claim: 'x' }]), review('somi-security-reviewer')] }), /unusable file path/);
-});
-
-test('a security finding below the bar is offered as a claim to test, once, and a plain reviewer\'s is not', (t) => {
-  const ctx = makeCtx(makeRepo(t));
-  writeFiles(ctx.root, SINK);
-  const gap = { id: 's1', severity: 'Minor', file: 'src/app.js', line: 1, claim: 'A link in the folder lets a write escape.' };
-  const removal = { id: 's2', severity: 'Major', file: 'src/app.js', line: 2, claim: 'Remove the path validation, it is too strict.' };
-  const nit = { id: 'r1', severity: 'Minor', file: 'src/app.js', line: 3, claim: 'The name is unclear.' };
-  const r = recordReviews(ctx, { reviews: [review('somi-reviewer', [nit]), review('somi-security-reviewer', [gap, removal])] });
-  assert.equal(r.verdict, 'clear');
-  assert.deepEqual(r.to_test.map((f) => f.id), ['s1']);
-  assert.match(r.to_test_advice, /Fix only what a test proves, remove no check/);
-  assert.equal(recordReviews(ctx, { reviews: [review('somi-reviewer'), review('somi-security-reviewer', [gap])] }).to_test, undefined);
 });
 
 test('review input is validated as untrusted', () => {
@@ -329,4 +318,17 @@ test('migrate imports open findings and decisions once, and changes no old file'
   assert.match(status, /Major a\.js: Still open/);
   assert.match(status, /old-work: Use one tool/);
   assert.doesNotMatch(status, /Done/);
+});
+
+test('an unreviewed pull request from the tool is refused with the reason, and the user\'s go-ahead labels it', (t) => {
+  const dir = makeRepo(t);
+  branch(dir);
+  writeFiles(dir, SINK);
+  const ctx = makeCtx(dir);
+  const refused = pullRequest(ctx);
+  assert.equal(refused.ok, false);
+  assert.match(refused.why, /needs a review and none covers it \(sink\)/);
+  const labelled = pullRequest(ctx, { unreviewed: true });
+  assert.equal(labelled.reviewed, false);
+  assert.match(labelled.text, /^> \*\*Not reviewed\.\*\*/);
 });

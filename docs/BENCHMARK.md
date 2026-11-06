@@ -54,6 +54,14 @@ Differences of a few draws are inside the noise floor. Review shows no gain on t
 
 The cheap command takes dollars per solved from 2.35x bare to about 1x, with quality level. Small work on Haiku costs about a fifth of bare on N01 and N18. Review still shows no gain on the hidden tests and is 63% of the dollars. Tested fixes raised N10 and N11 but show no overall gain, and SoMi still loses to bare on both. In 6 of 192 draws a follow-up reply led to code committed on the main thread with no SoMi review, which has to be fixed before this ships.
 
+## How SoMi is compared
+
+Bare and SoMi both hold the conversation on the medium tier and do the whole job. SoMi's saving comes from moving cheaper work down to low. The light and advice recordings below ran SoMi's conversation on the low tier, so they measured a model choice and not SoMi: by the maintainer's founding rule they were flawed by design, and they stay published only as a record. Every SoMi arm now runs on the same session model as bare.
+
+Solving the hidden tests is not all SoMi is for, so each draw is also scored on what it delivers. The tests a draw added or changed are run on the task's reference solution and on each of its recorded mutants, the same mutants task admission uses. A test suite that passes on the reference and fails on a mutant would have caught that defect. Bare is scored the same way.
+
+`--phase smoke` runs one draw per task and arm on tasks named with `--tasks`, to check that a change works before anything is recorded for real.
+
 ## The advice design
 
 Exploratory, on the design that replaced the step engine, recorded on 1085bce. Records: [16 tasks](../benchmarks/v2/records/exploratory/advice-candidate-44ddb986add1.md), [small context](../benchmarks/v2/records/exploratory/advice-tight-44ddb986add1.md), [large tasks](../benchmarks/v2/records/exploratory/advice-large-44ddb986add1.md).

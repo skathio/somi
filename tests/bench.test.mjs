@@ -1,3 +1,4 @@
+import { scoreOwnTests } from './evals/lib/own-tests.mjs';
 import { RESUME_PROMPT, claudeArgv, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
 import { globalConfigPath } from '../scripts/lib/config-files.mjs';
 import { resolveSpawn } from '../scripts/lib/tiers.mjs';
@@ -116,9 +117,9 @@ test('a later pilot replaces an earlier one task by task', () => {
   assert.deepEqual(pilotRows(['old', 'new'], (d) => dirs[d]).map((r) => [r.task, r.solved]), [['x', true], ['y', true]]);
 });
 
-test('a paid recording cannot run part of its plan, and only a pilot can', () => {
+test('a paid recording cannot run part of its plan, and only a pilot or a smoke can', () => {
   const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'aa', '--out', 'x', '--model', 'claude-x-5-5', '--budget-total', '1', '--go', '--tasks', 'a'], { encoding: 'utf8' });
-  assert.match(r.stderr, /--tasks is for a pilot or a stub/);
+  assert.match(r.stderr, /--tasks is for a pilot, a smoke or a stub/);
 });
 
 test('the candidate plan re-checks bare with one draw', () => {
@@ -295,13 +296,29 @@ test('adherence reads the route, the agents and the review record', () => {
   assert.equal(reviewFacts(line({ pass: 2, findings: [], blocking: [] })).next, null);
 });
 
-test('a SoMi arm runs on its agent\'s model, because --model would override it, and a bare arm is pinned', () => {
-  assert.equal(claudeArgv({ arm: 'somi', prompt: 'x', budget: 1, plugin: 'p', model: null }).includes('--model'), false);
-  const bare = claudeArgv({ arm: 'bare', prompt: 'x', budget: 1, model: 'm' });
-  assert.equal(bare[bare.indexOf('--model') + 1], 'm');
-  const { every_somi_arm: always, patches } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8'));
-  assert.deepEqual(always, ['cheap-main']);
-  assert.match(patches['cheap-main'].replace, /model: haiku/);
+test('both arms run on the session model, and a smoke run takes named tasks only', () => {
+  const argv = claudeArgv({ arm: 'somi', prompt: 'x', budget: 1, plugin: 'p', model: 'm' });
+  assert.equal(argv[argv.indexOf('--model') + 1], 'm');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8')).patches['cheap-main'], undefined);
+  assert.deepEqual(armsFor('smoke'), ['bare', 'somi5']);
+});
+
+test('a draw\'s own tests are scored on the reference and on its mutants', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-own-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  write('task/fixture/src/add.mjs', 'export const add = () => 0;\n');
+  write('task/fixture/test/old.test.mjs', 'import test from "node:test";\ntest("old", () => {});\n');
+  write('task/oracle/src/add.mjs', 'export const add = (a, b) => a + b;\n');
+  const task = { runner: 'node-test', test_dir: 'test' };
+  const mutants = [{ name: 'minus', file: 'src/add.mjs', find: 'a + b', replace: 'a - b' }, { name: 'gone', file: 'src/add.mjs', find: 'not there', replace: 'x' }];
+  write('ws/test/old.test.mjs', 'import test from "node:test";\ntest("old", () => {});\n');
+  const taskDir = path.join(root, 'task');
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 0 }, 'an unchanged fixture test is not the draw\'s');
+  write('ws/test/add.test.mjs', 'import test from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "../src/add.mjs";\ntest("adds", () => assert.equal(add(2, 2), 4));\n');
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, oracle_pass: true, killed: 1, total: 2 });
+  write('ws/test/add.test.mjs', 'import test from "node:test";\nimport assert from "node:assert/strict";\ntest("wrong", () => assert.equal(1, 2));\n');
+  assert.equal(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }).oracle_pass, false, 'a test that fails on the reference counts for nothing');
 });
 
 test('every draw gets one label, and a stopped loop is never finished', () => {
