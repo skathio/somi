@@ -236,3 +236,28 @@ test('the commit scope scores what a commit adds to the last one, and the pr sco
   r.git('add', '-A'); r.git('commit', '-qm', 'second');
   assert.equal(run('commit').ok, true, 'with nothing uncommitted, the last commit is what is scored');
 });
+
+test('somi check runs the quality gate at commit scope, --scope pr holds a change to the branch limits, and somi pr refuses below the bar', (t) => {
+  const r = repo(t);
+  r.write('src/a.js', 'export const a = 1;\n');
+  r.write('package.json', '{"name":"q","private":true}\n');
+  r.git('add', '-A'); r.git('commit', '-qm', 'base');
+  r.git('checkout', '-q', '-b', 'work');
+  // Five functions of 6 each: within every function limit, but 30 added to one file is over a commit's 25 and within a branch's 100.
+  r.write('src/a.js', `export const a = 1;\n${Array.from({ length: 5 }, (_, i) => `export function part${i}(a, b, c) {\n  if (a) { if (b) { if (c) { return ${i}; } } }\n  return -1;\n}\n`).join('')}`);
+  const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
+  const somi = (...args) => spawnSync(process.execPath, [CLI, ...args], { cwd: r.dir, encoding: 'utf8', env });
+  const commit = JSON.parse(somi('check').stdout);
+  assert.equal(commit.ok, false);
+  assert.match(commit.gates.find((g) => g.name === 'quality').failures[0], /^file-added-cognitive src\/a\.js:1: 30 over 25/);
+  assert.equal(JSON.parse(somi('check', '--scope', 'pr').stdout).failed.includes('quality'), false, 'a branch may add a module');
+  assert.equal(somi('check', '--scope', 'release').status, 64);
+  r.write('src/b.js', PYRAMID('deep'));
+  const refused = somi('pr', '--unreviewed');
+  assert.notEqual(refused.status, 0, 'going ahead unreviewed does not go ahead below the quality bar');
+  assert.match(`${refused.stdout}${refused.stderr}`, /does not meet the quality limits[\s\S]*depth src\/b\.js:1 deep: 5 over 4/);
+});
+
+test('a staged build is checked at the branch scope', () => {
+  assert.match(fs.readFileSync(path.join(REPO, 'workflows', 'deliver-stages.js'), 'utf8'), /check --scope pr/);
+});

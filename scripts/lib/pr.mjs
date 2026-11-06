@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { commitSubjects, snapshotTree } from './git-tree.mjs';
 import { readLedger } from './ledger.mjs';
 import { readMigrated } from './migrate.mjs';
+import { qualityStep } from './quality/run.mjs';
 import { prGate, readReviews } from './reviews.mjs';
 import { statePaths } from './state.mjs';
 import { renderPr } from './views.mjs';
@@ -12,8 +13,11 @@ import { renderPr } from './views.mjs';
 export const lastCheck = (root, env) => { try { return JSON.parse(fs.readFileSync(statePaths(root, env).check, 'utf8')); } catch { return null; } };
 export const migratedFindings = (root, env) => readMigrated(root, env).flatMap((m) => m.findings ?? []);
 
-// {ok, text} or {ok: false, why}. Going ahead unreviewed is the user's call, and the text then says so at the top.
+// {ok, text} or {ok: false, why}. Going ahead unreviewed is the user's call, and the text then says so at the top. Going ahead below the
+// quality bar is not: the limits are the user's to set in their own config, and a pull request is held to them.
 export function pullRequest(ctx, { base, unreviewed = false } = {}) {
+  const quality = qualityStep(ctx.root, { scope: 'pr', env: ctx.env });
+  if (!quality.ok) return { ok: false, reason: 'quality', failures: quality.failures, why: `No pull request text, because this branch does not meet the quality limits:\n${quality.failures.join('\n')}\nFix these, or set the limits you want under quality in your own config. Run somi quality for the detail.` };
   const gate = prGate(ctx, { base });
   if (!gate.ok && !unreviewed) {
     const why = gate.reason === 'open-blocking' ? 'blocking findings are still open on this change' : `this change needs a review and none covers it (${gate.signals.join(', ')})`;

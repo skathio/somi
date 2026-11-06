@@ -13,6 +13,7 @@ import os from 'node:os';
 import vm from 'node:vm';
 import { spawnSync } from 'node:child_process';
 import { readDiff, baseRef, snapshotTree } from './git-tree.mjs';
+import { qualityStep } from './quality/run.mjs';
 import { readReviews } from './reviews.mjs';
 import { conflictMarkerProblems, modelNameProblems, pipefailProblems, planningIdProblems } from './gates.mjs';
 
@@ -118,7 +119,9 @@ function runTests(root, tests, timeoutMs) {
   return gate('tests', results);
 }
 
-export function runCheck({ root, env = process.env, full = false, from = null }) {
+// The quality gate scores what a commit adds to the last one by default, and the whole branch with --full, which is what a push and a
+// pull request carry. A staged build asks for the branch scope too, so it is held to what its pull request will be.
+export function runCheck({ root, env = process.env, full = false, from = null, scope = full ? 'pr' : 'commit' }) {
   const started = Date.now();
   const plan = loadPlan(root);
   const tree = snapshotTree(root);
@@ -136,6 +139,8 @@ export function runCheck({ root, env = process.env, full = false, from = null })
     gate('model-names', plan.model_name_gate ? modelNameProblems(added) : []),
     artefactGate(root, env),
   ];
+  const quality = qualityStep(root, { scope, env });
+  gates.push(gate('quality', quality.failures));
 
   if (full) {
     const command = plan.full_cmd ?? (hasNpmTest(root) ? 'npm test' : null);

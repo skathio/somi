@@ -60,8 +60,8 @@ export function makeContext(cwd = process.cwd(), env = process.env) {
 
 const print = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
 
-function checkAndRecord(ctx, { full = false } = {}) {
-  const result = runCheck({ root: ctx.root, env: ctx.env, full });
+function checkAndRecord(ctx, { full = false, scope } = {}) {
+  const result = runCheck({ root: ctx.root, env: ctx.env, full, ...(scope ? { scope } : {}) });
   writeStateFile(ctx.root, statePaths(ctx.root, ctx.env).check, `${JSON.stringify({ at: ctx.now(), tree: result.tree, ok: result.ok, full })}\n`, ctx.env);
   return result;
 }
@@ -155,8 +155,9 @@ const COMMANDS = {
   review: (ctx, args) => { review(ctx, args); return 0; },
   quality,
   check: (ctx, args) => {
-    const { values } = parseArgs({ args, options: { full: { type: 'boolean' } } });
-    const result = checkAndRecord(ctx, { full: values.full });
+    const { values } = parseArgs({ args, options: { full: { type: 'boolean' }, scope: { type: 'string' } } });
+    if (values.scope !== undefined && !SCOPES.includes(values.scope)) throw new StateError(`check takes --scope ${SCOPES.join(' or ')}`);
+    const result = checkAndRecord(ctx, { full: values.full, scope: values.scope });
     return printed(result, result.ok);
   },
   status: (ctx) => {

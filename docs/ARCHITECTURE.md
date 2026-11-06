@@ -85,8 +85,9 @@ These signals are patterns over file names and added lines, so they over-fire by
 
 | Tier | When | Budget | Contents |
 |---|---|---|---|
-| `somi check` | Every commit | 60 s | Syntax, JSON and pipefail lint on changed files, conflict markers, planning-id and optional model-name gates on added lines, a readable review record, affected tests, and your `fast_cmd` |
-| `somi check --full` | Every push | None | The above, plus your full suite |
+| `somi check` | Every commit | 60 s | Syntax, JSON and pipefail lint on changed files, conflict markers, planning-id and optional model-name gates on added lines, a readable review record, the quality gate at commit scope, affected tests, and your `fast_cmd` |
+| `somi check --full` | Every push | None | The above with the quality gate at branch scope, plus your full suite |
+| `somi pr` | The pull request | None | Refuses the text when the branch fails the quality gate, or when a review it needs is missing. `--unreviewed` goes ahead without the review and says so. Nothing goes ahead below the quality bar. |
 | Release | Ship | None | The full suite, plus the benchmark |
 
 Affected tests come from `somi.check.json`. A code file no key covers falls back to `full_cmd`, within the budget.

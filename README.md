@@ -96,6 +96,8 @@ Set your own under `quality` in the same global file, and give either scope its 
 
 A project's `.somi/config.json` can only make a limit stricter: a looser value there is ignored, and `somi quality` says so. SoMi asks before an agent changes a limit.
 
+`somi check` runs the gate on every commit, and `somi check --full` before a push at branch scope. `somi pr` writes no pull request text while the branch fails it. `/somi:deliver` checks each build at branch scope and steps the build up a tier with the findings.
+
 ## Connect other plugins with shards
 
 A shard slots another plugin's skill, agent or tool into a named step: `work-item.start`, `plan.approved`, `pr.open` or `review.done`.

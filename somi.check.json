@@ -51,7 +51,8 @@
       "tests/signals.test.mjs"
     ],
     "scripts/lib/check.mjs": [
-      "tests/check.test.mjs"
+      "tests/check.test.mjs",
+      "tests/quality.test.mjs"
     ],
     "scripts/lib/gates.mjs": [
       "tests/check.test.mjs"
@@ -132,7 +133,8 @@
     ],
     "scripts/lib/pr.mjs": [
       "tests/reviews.test.mjs",
-      "tests/mcp.test.mjs"
+      "tests/mcp.test.mjs",
+      "tests/quality.test.mjs"
     ],
     "workflows/": [
       "tests/workflows.test.mjs"
@@ -162,6 +164,9 @@
     ],
     "tests/evals/lib/task-store.mjs": [
       "tests/canary.test.mjs"
+    ],
+    "scripts/lib/quality/run.mjs": [
+      "tests/quality.test.mjs"
     ]
   }
 }
