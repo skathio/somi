@@ -31,6 +31,9 @@ import { scoreHidden } from '../../tests/evals/lib/score-hidden.mjs';
 import { taskHash } from '../../tests/evals/lib/task-store.mjs';
 import { armSummary, costDrawsPerArm, evaluateAa, evaluateRelease, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, passDrawsPerArm, selectTasks, weightedTokens } from './stats.mjs';
 import { adherence, agentSplit, labelDraw, scopeCheck } from './telemetry.mjs';
+import { listFiles, snapshotTree } from '../../scripts/lib/git-tree.mjs';
+import { qualityGate } from '../../scripts/lib/quality/gate.mjs';
+import { DEFAULT_LIMITS } from '../../scripts/lib/quality/limits.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -399,6 +402,8 @@ async function run(args, session = { windowWeighted: 0 }) {
       });
       if (interrupted) { stop = 'interrupted'; break; }
       const after = lstatManifest(ws);
+      // Measured before anything is copied in to score the draw, so only the draw's own work is judged.
+      const quality = await scoreQuality(ws);
       result.leaks = [...new Set([...result.leaks, ...inspectDraw({ ws, cfg: path.join(tmp, 'cfg'), after, drawDir, token: env.token, canary: t.task.canary, absAb: path.dirname(dir) })])];
       const cls = classify({ run: result, arm: engineArm(d.arm), budget: budgetDraw });
       const usage = streamUsage(path.join(drawDir, 'stream.jsonl'));
@@ -432,6 +437,7 @@ async function run(args, session = { windowWeighted: 0 }) {
       if (!servedAsPinned(measured.models, pins)) { scratch.outcome = 'invalid'; scratch.reason = 'model-pin'; }
       row = scoreRow(d, { outcome: scratch.outcome, reason: scratch.reason, label: scratch.reason === 'model-pin' ? 'invalid' : label, gate, green: scratch.green, total: sc.total, solved: solved && scratch.reason !== 'model-pin', scope, adherence: adh, agents: split.agents, split_coverage: split.coverage, failed: (scratch.failedNames ?? []).slice(0, MAX_FAILED_NAMES), flags: scratch.flags, load, ...measured });
       row.own_tests = ownTests;
+      row.quality = quality;
       fs.appendFileSync(resultsFile, `${JSON.stringify(row)}\n`);
       rows.push(row);
       console.log(`done ${d.id}: ${solved ? 'solved' : 'not solved'}, $${measured.cost.toFixed(3)}`);
@@ -481,7 +487,7 @@ export function resultScore(row) {
   const P = row.solved === true ? 1 : 0;
   const o = row.own_tests;
   const V = !o ? null : o.tests > 0 && o.oracle_pass === true && (o.total === 0 || o.killed / o.total >= TEST_VALIDITY_KILL) ? 1 : 0;
-  const G = typeof row.gate?.ok === 'boolean' ? (row.gate.ok ? 1 : 0) : null;
+  const G = typeof row.quality?.ok === 'boolean' ? (row.quality.ok ? 1 : 0) : null;
   return { P, V, G, strict: P * (V ?? 0) * (G ?? 1) };
 }
 
@@ -497,6 +503,20 @@ export function rankArms(rows) {
   // The front: no other arm has at least as many strict successes for less.
   for (const a of arms) a.front = !arms.some((b) => b !== a && b.strict >= a.strict && b.cost < a.cost && (b.strict > a.strict || !costTie(a, b)));
   return arms;
+}
+
+// The quality gate on what a draw changed, from the workspace's first commit, so a draw that commits its own work is still measured.
+// It scores with the default limits in benchmark mode, where an agent's own exemptions count as violations. A gate that cannot run
+// fails the draw's quality rather than leaving it unscored.
+export async function scoreQuality(ws) {
+  try {
+    const roots = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], { cwd: ws, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n');
+    const to = snapshotTree(ws);
+    const r = await qualityGate(ws, { from: roots.at(-1), to, limits: DEFAULT_LIMITS, mode: 'benchmark', repoFiles: listFiles(ws, to) });
+    const rules = {};
+    for (const v of r.violations) rules[v.rule] = (rules[v.rule] ?? 0) + 1;
+    return { ok: r.ok, violations: r.violations.length, rules, scored: r.scored, unanalyzed: r.unanalyzed.length };
+  } catch (e) { return { ok: false, error: String(e?.message ?? e).slice(0, 200) }; }
 }
 
 export function renderReport(dir) {

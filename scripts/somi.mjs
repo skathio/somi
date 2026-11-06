@@ -24,13 +24,15 @@ import { advise } from './lib/advisor.mjs';
 import { runCheck } from './lib/check.mjs';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
 import { runDoctor } from './lib/doctor.mjs';
-import { repoRoot, stateIsTracked } from './lib/git-tree.mjs';
+import { listFiles, repoRoot, resolveRef, snapshotTree, stateIsTracked, workBase } from './lib/git-tree.mjs';
 import { writeCopilotExtension, writeCopilotHooks } from './lib/init.mjs';
 import { addToLedger, readLedger } from './lib/ledger.mjs';
 import { migrate } from './lib/migrate.mjs';
 import { lastCheck, migratedFindings, pullRequest } from './lib/pr.mjs';
 import { closePlan, markMilestoneDone, planStatus, savePlan } from './lib/plan.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
+import { DEFAULT_LIMITS, resolveLimits } from './lib/quality/limits.mjs';
+import { qualityGate } from './lib/quality/gate.mjs';
 import { readReviews, recordReviews, reviewPlan } from './lib/reviews.mjs';
 import { setupAgent } from './lib/setup.mjs';
 import { ShardError, confirmProjectShards, listShards, slot, unslot } from './lib/shards.mjs';
@@ -84,6 +86,18 @@ function pr(ctx, args) {
   return 0;
 }
 
+// The quality gate on the work since this branch left the shared history, uncommitted files included, as the review check sees it.
+// --benchmark scores with the default limits and counts an agent's own exemptions as violations.
+async function quality(ctx, args) {
+  const { values } = parseArgs({ args, options: { from: { type: 'string' }, benchmark: { type: 'boolean' } } });
+  const from = values.from ? resolveRef(ctx.root, values.from) : workBase(ctx.root);
+  const to = snapshotTree(ctx.root);
+  const { limits, ignored } = values.benchmark ? { limits: DEFAULT_LIMITS, ignored: [] } : resolveLimits({ global: ctx.configLayers[0], project: ctx.configLayers[1] });
+  const result = await qualityGate(ctx.root, { from, to, limits, now: ctx.now(), mode: values.benchmark ? 'benchmark' : 'project', repoFiles: listFiles(ctx.root, to) });
+  print({ ...result, from, to, ...(ignored.length ? { ignored_config: ignored } : {}) });
+  return result.ok ? 0 : 1;
+}
+
 function plan(ctx, args) {
   const { values } = parseArgs({ args, options: { done: { type: 'string' }, close: { type: 'boolean' } } });
   if (values.close) return print(closePlan(ctx.root, ctx.env));
@@ -118,6 +132,8 @@ function main(argv) {
     case 'review':
       review(ctx, args);
       return 0;
+    case 'quality':
+      return quality(ctx, args);
     case 'check': {
       const { values } = parseArgs({ args, options: { full: { type: 'boolean' } } });
       const result = checkAndRecord(ctx, { full: values.full });
@@ -164,14 +180,18 @@ function main(argv) {
       return hooks.written && extension.written ? 0 : 1;
     }
     default:
-      throw new StateError('somi takes route, review, check, status, pr, plan, setup, slot, ledger, migrate, doctor or init');
+      throw new StateError('somi takes route, review, check, quality, status, pr, plan, setup, slot, ledger, migrate, doctor or init');
   }
 }
 
-try {
-  process.exitCode = main(process.argv.slice(2));
-} catch (e) {
+function fail(e) {
   const refused = e instanceof ReviewInputError || e instanceof StateError || e instanceof ShardError || e?.code?.startsWith?.('ERR_PARSE_ARGS');
   process.stderr.write(`somi: ${refused ? e.message : e.stack ?? e}\n`);
   process.exitCode = refused ? 64 : 70;
 }
+
+// Every command answers at once except the quality gate, which waits on its parser.
+try {
+  const code = main(process.argv.slice(2));
+  if (code instanceof Promise) code.then((c) => { process.exitCode = c; }, fail); else process.exitCode = code;
+} catch (e) { fail(e); }

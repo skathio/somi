@@ -17,7 +17,8 @@
   "map": {
     "scripts/somi.mjs": [
       "tests/reviews.test.mjs",
-      "tests/check.test.mjs"
+      "tests/check.test.mjs",
+      "tests/quality.test.mjs"
     ],
     "scripts/somi-mcp.mjs": [
       "tests/mcp.test.mjs"
@@ -37,7 +38,8 @@
     ],
     "scripts/lib/git-tree.mjs": [
       "tests/reviews.test.mjs",
-      "tests/signals.test.mjs"
+      "tests/signals.test.mjs",
+      "tests/quality.test.mjs"
     ],
     "scripts/lib/signals.mjs": [
       "tests/signals.test.mjs"
@@ -139,6 +141,24 @@
       "tests/workflows.test.mjs",
       "tests/doctor.test.mjs",
       "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/quality/parse.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/metrics.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/clones.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/css.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/limits.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/gate.mjs": [
+      "tests/quality.test.mjs"
     ]
   }
 }

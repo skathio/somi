@@ -135,6 +135,38 @@ export function readDiff(root, from, to) {
   }
 }
 
+// What a diff added, per file: { file → { status, added: [[first, last], ...] } }, with line numbers in the new version. The quality
+// gate scores only the functions these lines touch.
+export function addedRanges(root, from, to) {
+  if (!OBJECT_ID.test(from) || !OBJECT_ID.test(to)) throw new Error('a recorded revision is not an object id');
+  const out = new Map();
+  const status = git(root, ['diff', ...DIFF, '--name-status', '-z', from, to]).split('\0').filter(Boolean);
+  for (let i = 0; i + 1 < status.length; i += 2) out.set(status[i + 1], { status: status[i], added: [] });
+  let file = null;
+  for (const line of git(root, ['diff', ...DIFF, '-U0', from, to]).split('\n')) {
+    if (line.startsWith('+++ ')) { file = line === '+++ /dev/null' ? null : line.slice(4).replace(/^"?b\//, '').replace(/"$/, ''); continue; }
+    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (hunk && file !== null && out.has(file)) {
+      const first = Number(hunk[1]);
+      const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
+      if (count > 0) out.get(file).added.push([first, first + count - 1]);
+    }
+  }
+  return out;
+}
+
+/** Every file path in a commit or tree. */
+export function listFiles(root, rev) {
+  if (!OBJECT_ID.test(rev)) throw new Error('a recorded revision is not an object id');
+  return git(root, ['ls-tree', '-r', '--name-only', '-z', rev]).split('\0').filter(Boolean);
+}
+
+/** A file's text at a commit or tree, or null when it is not there. */
+export function fileAt(root, rev, file) {
+  if (!OBJECT_ID.test(rev)) throw new Error('a recorded revision is not an object id');
+  try { return git(root, ['cat-file', '-p', `${rev}:${file}`]); } catch { return null; }
+}
+
 // This string reaches an agent as a command, and its ids come from a state file, so anything but an object id is refused.
 export function reviewDiffCommand(from, to) {
   if (!OBJECT_ID.test(String(from)) || !OBJECT_ID.test(String(to))) throw new Error('a recorded revision is not an object id');

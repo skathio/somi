@@ -11,7 +11,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { REPO, makeRepo, writeFiles } from './helpers.mjs';
 import { armSummary, callRatio, testShare, costDrawsPerArm, evaluateAa, evaluateRelease, holm, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, pairedDifference, passDrawsPerArm, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
-import { COST_TIE, TEST_VALIDITY_KILL, rankArms, resultScore, WINDOW_ENV, WINDOW_SETTINGS, hostStop, hostWindows, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
+import { COST_TIE, TEST_VALIDITY_KILL, rankArms, resultScore, scoreQuality, WINDOW_ENV, WINDOW_SETTINGS, hostStop, hostWindows, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
 import { adherence, agentSplit, labelDraw, reviewFacts, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
 
 // Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
@@ -622,7 +622,8 @@ test('a draw scores on results first: hidden tests, then tests that are valid, t
   assert.equal(resultScore({ solved: true, own_tests: own(3, false, 6, 6) }).V, 0, 'tests that fail on correct code are not valid');
   assert.equal(resultScore({ solved: true, own_tests: own(0, true, 0, 0) }).V, 0, 'no tests is not valid tests');
   assert.equal(resultScore({ solved: false, own_tests: own(3, true, 6, 6) }).strict, 0, 'valid tests do not rescue failed work');
-  assert.equal(resultScore({ solved: true, own_tests: own(3, true, 6, 6), gate: { ok: false } }).strict, 0, 'a failed gate is not a strict success');
+  assert.equal(resultScore({ solved: true, own_tests: own(3, true, 6, 6), quality: { ok: false } }).strict, 0, 'a failed quality gate is not a strict success');
+  assert.equal(resultScore({ solved: true, own_tests: own(3, true, 6, 6), gate: 'budget' }).G, null, 'the stop reason named gate is not the quality gate');
   assert.equal(resultScore({ solved: true }).V, null, 'with no reference to check against, validity is unknown');
 });
 
@@ -639,4 +640,19 @@ test('arms rank by results before cost, a cost within the tie band never decides
   const dominated = rankArms([...rows, ...[1, 2, 3].map(() => ({ arm: 'pricey', solved: true, own_tests: own, cost: 2 }))]);
   assert.equal(dominated.find((a) => a.arm === 'pricey').front, false, 'as many successes for more money is off the front');
   assert.ok(COST_TIE > 0 && COST_TIE < 1);
+});
+
+test('a draw\'s quality is measured from the workspace\'s first commit, so committing its own work does not hide it', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-q-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: dir, stdio: 'ignore' });
+  git('init', '-q');
+  fs.writeFileSync(path.join(dir, 'a.js'), 'export const a = 1;\n');
+  git('add', '-A'); git('commit', '-qm', 'initial');
+  fs.writeFileSync(path.join(dir, 'a.js'), 'export function f(a, b, c, d, e) {\n  if (a) { if (b) { if (c) { if (d) { if (e) { return 1; } } } } }\n  return 0;\n}\n');
+  git('add', '-A'); git('commit', '-qm', 'the agent committed it');
+  const q = await scoreQuality(dir);
+  assert.equal(q.ok, false);
+  assert.ok(q.rules.depth >= 1 && q.rules.params >= 1);
+  assert.equal((await scoreQuality(path.join(dir, 'missing'))).ok, false, 'a gate that cannot run is not a pass');
 });

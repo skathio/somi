@@ -12,7 +12,7 @@ export const RECORDED_ONLY = Object.freeze(['multi-module', 'public-api', 'large
 export const SECURITY_SIGNALS = Object.freeze(['sink', 'secrets', 'network', 'repo-content', 'policy-file', 'sensitive-path', 'access-control', 'unreadable-diff']);
 
 const DOC = /\.(md|mdx|txt|rst|adoc)$/i;
-const TEST_FILE = /(^|\/)(tests?|__tests__|spec|specs|e2e|testdata|__mocks__)\/|\.(test|spec)\.[^/]+$|[_-](test|spec)\.[^/]+$|(^|\/)test_[^/]+$/i;
+export const TEST_FILE = /(^|\/)(tests?|__tests__|spec|specs|e2e|testdata|__mocks__)\/|\.(test|spec)\.[^/]+$|[_-](test|spec)\.[^/]+$|(^|\/)test_[^/]+$/i;
 const GOLDEN = /(^|\/)(goldens?|__snapshots__|snapshots)\/|\.(snap|golden)$/i;
 const MAX_SCANNED_LINE = 2000;
 

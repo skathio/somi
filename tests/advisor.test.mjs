@@ -430,6 +430,9 @@ test('changing tier config through a file tool asks first', (t) => {
   const dir = makeRepo(t);
   const asked = runHook('guard-tier-config.mjs', { tool_name: 'Write', tool_input: { file_path: `${dir}/.somi/config.json`, content: '{"tiers":{"ceiling":"low"}}' } }, { dir });
   assert.equal(asked.out.hookSpecificOutput.permissionDecision, 'ask');
+  const quality = runHook('guard-tier-config.mjs', { tool_name: 'Write', tool_input: { file_path: `${dir}/.somi/config.json`, content: '{"quality":{"function":{"cognitive":40}}}' } }, { dir });
+  assert.equal(quality.out.hookSpecificOutput.permissionDecision, 'ask');
+  assert.match(JSON.stringify(quality.out), /quality gate holds code to/);
   const other = runHook('guard-tier-config.mjs', { tool_name: 'Write', tool_input: { file_path: `${dir}/.somi/config.json`, content: '{"signals":{}}' } }, { dir });
   assert.equal(other.out, null);
 });
@@ -528,4 +531,13 @@ test('when a turn ends, a change that needs a review is sent back once, and one 
   assert.equal(stop({ stop_hook_active: true }).out, null, 'a turn the hook already continued ends');
   assert.equal(hookAt(dir, 'stop/review-due.mjs', { hook_event_name: 'Stop' }, { SOMI_HOST: 'copilot' }).out, null);
   assert.equal(stop().out.decision, 'block', 'a new tree is a new question');
+});
+
+test('the config route shows the quality limits, which project values were ignored, and where a change goes', (t) => {
+  const ctx = { ...makeCtx(makeRepo(t)), configLayers: [{ quality: { function: { cognitive: 20 } } }, { quality: { function: { cognitive: 30, depth: 3 } } }] };
+  const r = advise(ctx, { request: 'x', hint: 'config' });
+  assert.equal(r.quality.function.cognitive, 20, 'the user\'s own file loosened it');
+  assert.equal(r.quality.function.depth, 3, 'the project tightened it');
+  assert.equal(r.quality_ignored[0].key, 'quality.function.cognitive');
+  assert.match(r.advice, /never in the project's \.somi\/config\.json[\s\S]*looser than the current limit, ask the user/);
 });

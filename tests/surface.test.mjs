@@ -85,7 +85,9 @@ test('no runtime dependencies', () => assert.equal(json('package.json').dependen
 test('every test the check plan names exists, and every code module is mapped', () => {
   const plan = json('somi.check.json');
   for (const t of [...plan.always, ...Object.values(plan.map).flat()]) assert.ok(fs.existsSync(path.join(REPO, t)), t);
-  for (const f of list('scripts/lib')) assert.ok(plan.map[`scripts/lib/${f}`], `scripts/lib/${f} is not in somi.check.json`);
+  // A folder of modules is checked file by file, so none inside it goes unmapped.
+  const modules = list('scripts/lib').flatMap((f) => (fs.statSync(path.join(REPO, 'scripts/lib', f)).isDirectory() ? list(`scripts/lib/${f}`).map((g) => `${f}/${g}`) : [f]));
+  for (const f of modules) assert.ok(plan.map[`scripts/lib/${f}`], `scripts/lib/${f} is not in somi.check.json`);
 });
 
 test('the overview page roadmap covers every release in the changelog, once', () => {

@@ -93,6 +93,29 @@ Affected tests come from `somi.check.json`. A code file no key covers falls back
 
 Mutation testing is diff-scoped and covers security-relevant code only: `npm run mutate` flips an operator on each changed line of the path, state, policy, signal and hook files, and names what the mapped tests missed. Run it before a push when one of those files changed.
 
+## Quality gate
+
+`somi quality` holds a change to code-quality limits. It scores only what the change touches, against the version before it, so an old codebase is not failed on day one and nothing gets worse:
+- **New functions** must meet the limits. A changed function fails only if it is over a limit and got worse.
+- **Files** may not gain more than 25 points of complexity in one change. That stops a function being split apart just to pass.
+- **Copies:** a fragment of 50 tokens or more, with names and literals normalised, fails when the change makes it occur more often than before. Counting before and after does not depend on how git pairs the lines.
+- **Suppressions** newly added, such as `eslint-disable` or `@ts-ignore`, fail. So does a file the parser cannot read, because a change that cannot be measured must not pass as clean.
+- **Stylesheets:** nesting depth, chained selectors, ID selectors and `!important`.
+
+Complexity is SoMi-CC v1, which follows SonarSource's cognitive complexity. A function nested in another is scored as its own unit, starting at the control-flow nesting around it: under Sonar's rule a test file's `describe` block would be one function.
+
+| Kind | Cognitive | Nesting | Lines | Parameters |
+|---|---|---|---|---|
+| Function | 15 | 4 | 60 | 4 |
+| UI component | 15 | 4 | 150 | 4 |
+| Test | 5 | 2 | 40 | 4 |
+
+These are starting points from common practice, and no study ties them to defects. They are to be calibrated on known-good code, failing at the 95th percentile. The user's global config may set any of them. A project's config may only tighten them, and a looser value there is ignored and reported. A benchmark scores with the defaults alone.
+
+An exemption sits on the line above a function: `// somi-gate-allow <rule> reason="…" expires=YYYY-MM-DD`. It needs a reason of 20 characters or more and an expiry within 90 days. In a benchmark, an exemption the agent added counts as a violation.
+
+The parser is tree-sitter as WebAssembly, vendored unchanged in `scripts/vendor/tree-sitter/` from the npm tarballs of web-tree-sitter 0.27.1 and @vscode/tree-sitter-wasm 0.3.1. `manifest.json` holds each file's SHA-256, and the loader refuses a file that does not match, then hands the runtime the bytes it checked. It covers JavaScript, TypeScript, TSX and CSS so far. A benchmark records the gate's verdict for each draw, and a draw is a strict success only if the hidden tests pass, its tests are valid and the gate passes.
+
 ## Trust model
 
 A **boundary** stops an attacker. A **signal** only tells someone to look. SoMi keeps the two apart and stops hardening signals against the agent's own evasion.

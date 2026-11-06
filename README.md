@@ -84,6 +84,16 @@ Claude Code has those defaults. Copilot has none, because its models vary by pla
 - **A model your plan cannot use:** it falls back to the session's model without an error.
 - **VS Code:** it refuses a subagent above the main model's cost tier, so there the main agent needs to run on the strongest tier you want to use.
 
+## Set your quality limits
+
+`somi quality` checks what a change touched against limits on complexity, nesting, length, parameters, copied code and suppressions. The defaults are in [ARCHITECTURE.md](docs/ARCHITECTURE.md#quality-gate). Set your own under `quality` in the same global file:
+
+```json
+{ "quality": { "function": { "cognitive": 15, "depth": 4, "lines": 60, "params": 4 }, "file": { "added_cognitive": 25 } } }
+```
+
+A project's `.somi/config.json` can only make a limit stricter: a looser value there is ignored, and `somi quality` says so. SoMi asks before an agent changes a limit.
+
 ## Connect other plugins with shards
 
 A shard slots another plugin's skill, agent or tool into a named step: `work-item.start`, `plan.approved`, `pr.open` or `review.done`.

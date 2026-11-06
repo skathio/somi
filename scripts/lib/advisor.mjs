@@ -17,6 +17,8 @@ import { shardsFor } from './shards.mjs';
 import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
 import { WORKFLOWS, expertiseIndex, libraryPath, roleBrief, workerAgent } from './workflows.mjs';
 import { copilotName } from './copilot-workflow.mjs';
+import { globalConfigPath } from './config-files.mjs';
+import { resolveLimits } from './quality/limits.mjs';
 
 const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'somi.mjs');
 export const somiCommand = (args) => `node ${JSON.stringify(CLI)} ${args}`;
@@ -112,6 +114,8 @@ function deliverWorkflow(ctx, { route, request, said, earlierAt, ledger, role, t
 const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // The conversation's part is small on purpose: start it, wait, relay. The workflow already read the code, built, ran the checks and asked
 // for the reviews, so reading the work again here spends the conversation's tier on what a cheaper stage has done.
+// A project's config is cloned input and may only tighten a limit, so a change the user wants goes in their own file.
+const QUALITY_CONFIG = 'Relay this briefly. To change a quality limit, write it under quality in the file named by global_config, never in the project\'s .somi/config.json, where only a tighter value counts. Before you write a value looser than the current limit, ask the user and wait for a yes.';
 const STAGED_ADVICE = (host) => `The user typed /somi:deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing tree as review_tree, and tell the user its summary and status in a few lines. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
 const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi:deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
 
@@ -130,7 +134,10 @@ export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
   if (chosen.via === 'choose') return { choose: Object.fromEntries(chosen.choices.map((r) => [r, WHEN[r]])), advice: `Pick the route that best fits, and call somi_route again with hint set to it and the same request${staged === true ? ', and staged true' : ''}.` };
   const wf = WORKFLOWS[chosen.route];
   if (chosen.route === 'status' || chosen.route === 'resume') return { route: chosen.route, advice: `Run \`${somiCommand('status')}\` and relay what it says. Open work carries on in this conversation.`, ...clean({ ledger: readLedger(ctx.root, ctx.env), plan: planStatus(ctx.root) }) };
-  if (chosen.route === 'config') return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, advice: 'Relay this briefly.' };
+  if (chosen.route === 'config') {
+    const quality = resolveLimits({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1] });
+    return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: quality.limits, ...(quality.ignored.length ? { quality_ignored: quality.ignored } : {}), global_config: globalConfigPath(ctx.env), advice: QUALITY_CONFIG };
+  }
   if (wf.kind === 'command') return { route: chosen.route, tier: wf.tier, advice: `Run \`${somiCommand('check --full')}\` in the shell, because it runs the project's tests. Then call somi_pr for the pull request text. If somi_pr refuses, it says why: a review is due, so call somi_review. Never open anything outward without the user's say.`, ...shardAdvice(ctx, 'pr.open') };
   if (wf.agent) return { route: chosen.route, tier: wf.tier, advice: `Call somi_review with always true${chosen.route === 'security-review' ? ' and security true' : ''}, and follow what it says. Tell the user what was found. Change nothing unless they ask.`, ...clean({ role: roleBrief(wf.role) }) };
 

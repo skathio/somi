@@ -1,0 +1,59 @@
+{
+  "note": "Vendored unchanged from the npm tarballs named here, fetched with npm pack, which checks the tarball integrity. The loader refuses any file whose sha256 does not match.",
+  "files": {
+    "web-tree-sitter.js": {
+      "package": "web-tree-sitter",
+      "version": "0.27.1",
+      "tarball_integrity": "sha512-qtx0VyUyNRHtL3ze7+v0hCKB/sLcAmY7ZAVp/ZK/bCj0yED8ptvNrr7Vd7DwDyKDWN9baqcUx4uaD2r2ql+6IA==",
+      "repository": "https://github.com/tree-sitter/tree-sitter",
+      "license": "MIT",
+      "bytes": 156132,
+      "sha256": "7c49e3c1d87e24e0bb4c2def909d17154dfde281f5f8280225450090bb4b8110"
+    },
+    "web-tree-sitter.wasm": {
+      "package": "web-tree-sitter",
+      "version": "0.27.1",
+      "tarball_integrity": "sha512-qtx0VyUyNRHtL3ze7+v0hCKB/sLcAmY7ZAVp/ZK/bCj0yED8ptvNrr7Vd7DwDyKDWN9baqcUx4uaD2r2ql+6IA==",
+      "repository": "https://github.com/tree-sitter/tree-sitter",
+      "license": "MIT",
+      "bytes": 210415,
+      "sha256": "beca80e44cccbf2299ed4d1e3fa6462a9a6fe818aeebf847547a392227ce4acc"
+    },
+    "tree-sitter-javascript.wasm": {
+      "package": "@vscode/tree-sitter-wasm",
+      "version": "0.3.1",
+      "tarball_integrity": "sha512-RJFoomET6FajjG511fmQxeBQfU6M24a0aFZPqpid+ttIxanWf1VGytBG0UmsGjt07qmIPJS8U31D+aecuCucsQ==",
+      "repository": "https://github.com/microsoft/vscode-tree-sitter-wasm",
+      "license": "MIT",
+      "bytes": 411770,
+      "sha256": "5fb488d0cabb4775a594bab85682de5ad6ce83c0d6ac997a9f82dd084d571240"
+    },
+    "tree-sitter-typescript.wasm": {
+      "package": "@vscode/tree-sitter-wasm",
+      "version": "0.3.1",
+      "tarball_integrity": "sha512-RJFoomET6FajjG511fmQxeBQfU6M24a0aFZPqpid+ttIxanWf1VGytBG0UmsGjt07qmIPJS8U31D+aecuCucsQ==",
+      "repository": "https://github.com/microsoft/vscode-tree-sitter-wasm",
+      "license": "MIT",
+      "bytes": 1413849,
+      "sha256": "778025db5a8be0e70f8ccc3671e486dfeddd048c25d9e8a70c26de2e1bf6f97d"
+    },
+    "tree-sitter-tsx.wasm": {
+      "package": "@vscode/tree-sitter-wasm",
+      "version": "0.3.1",
+      "tarball_integrity": "sha512-RJFoomET6FajjG511fmQxeBQfU6M24a0aFZPqpid+ttIxanWf1VGytBG0UmsGjt07qmIPJS8U31D+aecuCucsQ==",
+      "repository": "https://github.com/microsoft/vscode-tree-sitter-wasm",
+      "license": "MIT",
+      "bytes": 1445638,
+      "sha256": "79e5da75ea62855a0cd67177685f0164eac87d5f630b3cbe1e0a099751ad30f8"
+    },
+    "tree-sitter-css.wasm": {
+      "package": "@vscode/tree-sitter-wasm",
+      "version": "0.3.1",
+      "tarball_integrity": "sha512-RJFoomET6FajjG511fmQxeBQfU6M24a0aFZPqpid+ttIxanWf1VGytBG0UmsGjt07qmIPJS8U31D+aecuCucsQ==",
+      "repository": "https://github.com/microsoft/vscode-tree-sitter-wasm",
+      "license": "MIT",
+      "bytes": 128668,
+      "sha256": "8a23977fe271357cce6f254ef88c9bebf3854602d8046605aef6a45c02135c59"
+    }
+  }
+}
