@@ -65,6 +65,14 @@ test('old lines never block new work', (t) => {
   assert.equal(somi(dir, ['check']).status, 0);
 });
 
+test('a workflow script parses as the body the host runs, and a broken one still fails', (t) => {
+  const dir = makeRepo(t);
+  writeFiles(dir, { 'workflows/ok.js': "export const meta = { name: 'ok', description: 'x' }\nconst r = await agent('hi')\nreturn r\n" });
+  assert.equal(somi(dir, ['check']).status, 0);
+  writeFiles(dir, { 'workflows/ok.js': "export const meta = { name: 'ok', description: 'x' }\nconst = await agent('hi')\n" });
+  assert.deepEqual(failedGates(somi(dir, ['check'])), ['lint']);
+});
+
 test('a syntax error and invalid JSON fail lint', (t) => {
   const dir = makeRepo(t);
   writeFiles(dir, { 'src/bad.mjs': 'export const = ;\n', 'data.json': '{nope' });

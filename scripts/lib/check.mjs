@@ -60,6 +60,8 @@ function parses(abs) {
   const checkAsModule = (file) => spawnSync(process.execPath, ['--check', file], { encoding: 'utf8', timeout: 10000 }).status === 0;
   if (abs.endsWith('.mjs')) return checkAsModule(abs);
   const text = fs.readFileSync(abs, 'utf8').replace(/^#!.*/, '');
+  // A host workflow script is the body of an async function after its meta block: top-level await and return are allowed there.
+  if (/(^|\/)workflows\/[^/]+\.js$/.test(abs)) { try { new vm.Script(`(async function () {\n${text.replace(/^export const meta = /m, 'const meta = ')}\n})`); return true; } catch { return false; } }
   try { new vm.Script(`(function () {\n${text}\n})`); return true; } catch { /* not a script; it may still be a module */ }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-parse-'));
   try {

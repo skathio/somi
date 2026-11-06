@@ -380,6 +380,7 @@ async function run(args, session = { windowWeighted: 0 }) {
       // The small path's Explore runs on the low tier. It lives in the user's agent folder, so it is not a change in the workspace.
       if (d.arm === 'somi5-hooks') { fs.mkdirSync(path.join(tmp, 'cfg', 'agents'), { recursive: true }); fs.writeFileSync(path.join(tmp, 'cfg', 'agents', 'Explore.md'), `---\nname: Explore\ndescription: Fast read-only search of the codebase.\nmodel: ${alias(args['worker-model'] ?? args.model)}\n---\nSearch the codebase and answer briefly. Do not edit anything.\n`); }
       const result = await runDraw({
+        followUps: t.task.turns ?? [],
         model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: budgetDraw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
         settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude, env: { ...childEnv({ token: env.token, tmp }), ...WINDOW_ENV[phase] }, cwd: ws, plugin: pluginOf(d.arm), drawDir, token: env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills, sandbox: specFor(d.arm),
       });

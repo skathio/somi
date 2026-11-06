@@ -74,10 +74,6 @@
       "description": "Give SoMi any request or ticket, and it routes the work to the right workflow."
     },
     {
-      "name": "status",
-      "description": "Show open work, findings and decisions."
-    },
-    {
       "name": "upgrade",
       "description": "Upgrade a dependency from its real changelog and migrate its uses."
     }

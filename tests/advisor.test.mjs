@@ -128,6 +128,19 @@ test('each workflow comes back as steps that say where each runs and on which ti
   assert.deepEqual(design.steps.map((s) => [s.step, s.run_on, s.tier]), [['design', 'subagent', 'high']]);
 });
 
+test('large work on Claude Code runs as the deliver workflow, with the user\'s models in its args', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  const long = `Add an export of all orders as CSV. ${'Each column follows the order schema in the README. '.repeat(14)}`;
+  const r = advise(ctx, { request: long });
+  assert.equal(r.workflow.name, 'somi:deliver');
+  assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
+  assert.equal(r.workflow.args.request, long);
+  assert.match(r.advice, /Workflow tool/);
+  assert.equal(activeDelegation(ctx.root, env), null, 'a workflow holds nothing back on the main thread');
+  assert.equal(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: long }).workflow, undefined, 'Copilot follows the steps');
+  assert.equal(advise(ctx, { request: 'Add a helper that doubles a number' }).workflow, undefined, 'small work stays light');
+});
+
 test('the rest of the routes answer without starting anything', (t) => {
   const ctx = makeCtx(makeRepo(t));
   assert.match(advise(ctx, { request: 'x', hint: 'ship' }).advice, /somi_pr/);

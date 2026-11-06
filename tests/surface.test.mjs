@@ -14,7 +14,8 @@ const FLOW_FILES = [...list('commands').map((f) => `commands/${f}`), ...list('ag
 
 const description = (text) => /^description: "?(.*?)"?$/m.exec(text)?.[1] ?? '';
 const listedCommands = () => list('commands').filter((f) => !/^disable-model-invocation: true$/m.test(read(`commands/${f}`)));
-const listed = () => [...listedCommands().map((f) => [f.replace('.md', ''), description(read(`commands/${f}`))]), ...list('skills').map((s) => [s, description(read(`skills/${s}/SKILL.md`))])];
+const workflowDescription = (f) => /description: '([^']*)'/.exec(read(`workflows/${f}`))?.[1] ?? '';
+const listed = () => [...listedCommands().map((f) => [f.replace('.md', ''), description(read(`commands/${f}`))]), ...list('skills').map((s) => [s, description(read(`skills/${s}/SKILL.md`))]), ...list('workflows').map((f) => [f.replace('.js', ''), workflowDescription(f)])];
 
 test('a host lists at most 15 entries and 8,000 characters', () => {
   assert.ok(listed().length <= 15, `${listed().length} entries`);
@@ -73,7 +74,7 @@ test('version files agree', () => {
 
 test('the package ships what the plugin needs and no tests or benchmarks', () => {
   const { files } = json('package.json');
-  for (const f of ['commands/', 'agents/', 'skills/', 'library/', 'rules/', 'hooks/', 'scripts/', 'profiles/']) assert.ok(files.includes(f), f);
+  for (const f of ['commands/', 'agents/', 'skills/', 'workflows/', 'library/', 'rules/', 'hooks/', 'scripts/', 'profiles/']) assert.ok(files.includes(f), f);
   assert.equal(files.includes('tests/'), false);
   assert.equal(files.includes('benchmarks/'), false);
   assert.ok(fs.existsSync(path.join(REPO, json('package.json').bin.somi)));

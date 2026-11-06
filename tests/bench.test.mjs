@@ -1,5 +1,6 @@
 import { scoreOwnTests } from './evals/lib/own-tests.mjs';
-import { RESUME_PROMPT, claudeArgv, looksPaused, prepareWorkspace } from './evals/lib/ab-draw.mjs';
+import { RESUME_PROMPT, claudeArgv, looksPaused, prepareWorkspace, runDraw } from './evals/lib/ab-draw.mjs';
+import { validateTaskJson } from './evals/lib/task-store.mjs';
 import { globalConfigPath } from '../scripts/lib/config-files.mjs';
 import { resolveSpawn } from '../scripts/lib/tiers.mjs';
 import { test } from 'node:test';
@@ -561,3 +562,37 @@ test("a recording stops on the host's reported usage, and a window past its rese
   assert.equal(hostWindows(file), null);
 });
 
+
+test('a task\'s follow-up messages are sent in order on the same session, after any question is answered', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-turns-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const log = path.join(dir, 'argv.jsonl');
+  const stub = path.join(dir, 'claude-stub');
+  // The first answer asks a question, so the fixed approval goes first and the scripted messages follow it.
+  fs.writeFileSync(stub, [
+    '#!/usr/bin/env node',
+    "const fs = require('node:fs');",
+    `fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + '\\n');`,
+    `const n = fs.readFileSync(${JSON.stringify(log)}, 'utf8').trim().split('\\n').length;`,
+    "const text = n === 1 ? 'Which option would you like? Shall I proceed?' : 'Done.';",
+    "for (const e of [{ type: 'system', subtype: 'init', session_id: 's1' }, { type: 'assistant', parent_tool_use_id: null, message: { id: 'm' + n, model: 'stub-1', content: [{ type: 'text', text }], usage: { output_tokens: 1 } } }, { type: 'result', subtype: 'success', session_id: 's1', result: text, num_turns: 1, total_cost_usd: 0.01, modelUsage: { 'stub-1': {} } }]) console.log(JSON.stringify(e));",
+  ].join('\n'), { mode: 0o755 });
+  const drawDir = path.join(dir, 'draw');
+  fs.mkdirSync(drawDir);
+  const run = await runDraw({ followUps: ['Now rename it.', 'What did you change?'], model: 'stub-1', arm: 'bare', prompt: 'Build it.', budget: 1, timeoutMs: 60000, claude: stub, env: { PATH: process.env.PATH }, cwd: dir, drawDir, token: 'not-a-real-token-value', canary: 'CANARYcanary0123456789', task: 'T-x', absAb: path.join(dir, 'ab'), ownTmp: dir, kills: new Set() });
+  const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const prompts = calls.map((a) => a[a.indexOf('--print') + 1]);
+  assert.deepEqual(prompts, ['Build it.', RESUME_PROMPT, 'Now rename it.', 'What did you change?']);
+  assert.ok(calls.slice(1).every((a) => a[a.indexOf('--resume') + 1] === 's1'), 'every later turn resumes the same session');
+  assert.equal(run.resumes, 1);
+  assert.equal(run.followUps, 2);
+});
+
+test('a task may carry scripted follow-ups, and they are held to the same text rules', () => {
+  const base = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/evals/ab/T1-proration/task.json'), 'utf8'));
+  assert.deepEqual(validateTaskJson(base).task.turns, []);
+  assert.deepEqual(validateTaskJson({ ...base, turns: ['Now the second part.'] }).task.turns, ['Now the second part.']);
+  assert.equal(validateTaskJson({ ...base, turns: [] }).ok, false);
+  assert.equal(validateTaskJson({ ...base, turns: ['a‮b'] }).ok, false);
+  assert.equal(validateTaskJson({ ...base, turns: Array.from({ length: 17 }, (_, i) => `turn ${i}`) }).ok, false);
+});

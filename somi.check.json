@@ -134,6 +134,9 @@
     ],
     "scripts/lib/delegation.mjs": [
       "tests/advisor.test.mjs"
+    ],
+    "workflows/": [
+      "tests/workflows.test.mjs"
     ]
   }
 }

@@ -17,6 +17,8 @@
 //   root_files      array of 0..64 distinct tolerated root file names (single segment).
 //   brief           the fixed brief: 1..8192 UTF-16 units, the same character rule as statements except that
 //                   newline and tab are allowed, and not only whitespace.
+//   turns           optional: an array of 1..16 distinct follow-up messages, sent in order after the first turn ends, the
+//                   same character rule as statements. They let a task test what a session keeps across a conversation.
 //   Every other key is refused (the reason is `task.json: unknown key <key>`, the key escaped and cut to 64
 //   bytes). `.git` and `.somi` and their subpaths cannot be declared. A path is relative and obeys the manifest path rule (no leading '/', no empty, '.'
 //   or '..' segment, no backslash, NFC, the manifest name rule per segment).
@@ -64,6 +66,7 @@ const MAX_JSON_BYTES = 256 * 1024;
 const HIDDEN_DIRS = ['hidden', 'oracle', 'oracle2'];
 const LAYOUT = ['fixture', ...HIDDEN_DIRS];
 const KEYS = ['schema_version', 'statements', 'runner', 'canary', 'source', 'test_dir', 'root_files', 'brief'];
+const OPTIONAL = ['turns'];
 const RUNNERS = ['node-test', 'playwright'];
 const CANARY = /^[A-Za-z0-9_-]{16,64}$/;
 const UNSAFE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\u2028\u2029\u3164\u115f\u1160\uffa0\u2800]/u;
@@ -109,7 +112,7 @@ const dirPath = (p, field) => {
 function readTask(obj) {
   plainObject(obj, 'task.json');
   const keys = Reflect.ownKeys(obj);
-  const extra = keys.find((k) => !KEYS.includes(k));
+  const extra = keys.find((k) => !KEYS.includes(k) && !OPTIONAL.includes(k));
   // The key is hostile text: bounded before it is escaped, so the reason stays printable ASCII and short.
   if (extra !== undefined) bad('task.json', `unknown key ${esc(String(extra).slice(0, 64)).slice(0, 64)}`);
   const raw = {};
@@ -130,14 +133,16 @@ function readTask(obj) {
   const rootFiles = distinct(list(raw.root_files, 'root_files', 0), 'root_files');
   if (!rootFiles.every((p) => typeof p === 'string' && validPath(p) && !p.includes('/') && !reserved(p))) bad('root_files', 'a name is not a single valid path segment');
   if (!isBrief(raw.brief)) bad('brief', 'must be 1..8192 units of plain text');
-  return { schema_version: 1, statements, runner: raw.runner, canary: raw.canary, source, test_dir: testDir, root_files: rootFiles, brief: raw.brief };
+  const turns = keys.includes('turns') ? distinct(list(own(obj, 'turns', 'turns'), 'turns', 1), 'turns') : [];
+  if (turns.length > 16 || !turns.every(isText)) bad('turns', 'must be 1..16 lines of plain 1..512-unit text');
+  return { schema_version: 1, statements, runner: raw.runner, canary: raw.canary, source, test_dir: testDir, root_files: rootFiles, brief: raw.brief, turns };
 }
 
 /** A parsed `task.json` value -> `{ok: true, task}` (deep-frozen plain copy) or `{ok: false, reason}` naming the field. */
 export function validateTaskJson(obj) {
   try {
     const t = readTask(obj);
-    for (const k of ['statements', 'source', 'root_files']) Object.freeze(t[k]);
+    for (const k of ['statements', 'source', 'root_files', 'turns']) Object.freeze(t[k]);
     return { ok: true, task: Object.freeze(t) };
   } catch (e) {
     return e instanceof Bad ? refuse(e.field, e.message) : refuse('task.json', 'unreadable');
@@ -231,6 +236,7 @@ export function canaryCheck(dir, opts) {
     const needle = Buffer.from(canary);
     if (brief.includes(canary)) return refuse('brief', 'contains the canary');
     if (statements.some((t) => t.includes(canary))) return refuse('statements', 'a line contains the canary');
+    if (l.task.turns.some((t) => t.includes(canary))) return refuse('turns', 'a line contains the canary');
     const found = new Set();
     for (const [p, fileHash] of l.m.files) {
       const top = p.split('/')[0];

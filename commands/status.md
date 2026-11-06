@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: "Show open work, findings and decisions."
 argument-hint: ""
 ---

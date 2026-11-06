@@ -224,9 +224,9 @@ export function runClaude({ command, args, env, cwd, sink, timeoutMs, kills, fdT
 }
 
 /** All turns of one draw -> the facts classify() needs. The token is only ever handed to the child and the sink. */
-export async function runDraw({ settings, model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
+export async function runDraw({ followUps = [], settings, model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
   const sink = createSink(path.join(drawDir, 'stream.jsonl'), { token, canary, task, absAb, ownTmp, maxBytes });
-  const run = { arm, cost: 0, turns: 0, resumes: 0, models: new Set(), exhausted: false, error: null, timedOut: false, stderr: '', result: null };
+  const run = { arm, cost: 0, turns: 0, resumes: 0, followUps: 0, models: new Set(), exhausted: false, error: null, timedOut: false, stderr: '', result: null };
   const deadline = Date.now() + timeoutMs; const started = Date.now();
   let session = null; let text = prompt;
   try {
@@ -242,9 +242,15 @@ export async function runDraw({ settings, model, arm, prompt, budget, timeoutMs,
       run.turns += sink.state.turns;
       for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
       session = typeof res.session_id === 'string' ? res.session_id : null;
-      if (sink.state.limit || res.subtype !== 'success' || session === null || !looksPaused(sink.state.text) || run.resumes >= maxResumes) break;
+      if (sink.state.limit || res.subtype !== 'success' || session === null) break;
+      // A session that asked a question gets the fixed approval. One that finished gets the task's next scripted message, the way a
+      // user carries on a conversation, so a task can test what survives across turns.
+      const paused = looksPaused(sink.state.text);
+      const resume = paused && run.resumes < maxResumes;
+      const followUp = !paused && run.followUps < followUps.length;
+      if (!resume && !followUp) break;
       if (budget - run.cost < MIN_REMAINING_USD) { run.exhausted = true; break; }
-      run.resumes++; text = RESUME_PROMPT;
+      if (resume) { run.resumes++; text = RESUME_PROMPT; } else { text = followUps[run.followUps]; run.followUps++; }
     }
   } finally { await sweepProcesses(`CLAUDE_CONFIG_DIR=${env.CLAUDE_CONFIG_DIR}`); sink.end(); }
   return { ...run, models: [...run.models].sort(), text: sink.state.text, leaks: [...sink.state.leaks].sort(), capped: sink.state.capped, limit: sink.state.limit, reset: sink.state.reset, wallMs: Date.now() - started, stderr: redactToken(run.stderr, token) };

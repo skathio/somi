@@ -47,6 +47,7 @@
     "mcp.json",
     "VERSION",
     "LICENSE",
-    "library/"
+    "library/",
+    "workflows/"
   ]
 }

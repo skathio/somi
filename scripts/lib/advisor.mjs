@@ -14,7 +14,7 @@ import { markDelegation } from './delegation.mjs';
 import { readLedger } from './ledger.mjs';
 import { planStatus } from './plan.mjs';
 import { readPrompt } from './prompt.mjs';
-import { WHEN, classify } from './routes.mjs';
+import { LONG_REQUEST, WHEN, classify } from './routes.mjs';
 import { shardsFor } from './shards.mjs';
 import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
 import { WORKFLOWS, expertiseIndex, libraryPath, roleBrief, workerAgent } from './workflows.mjs';
@@ -92,6 +92,20 @@ export function workflowSteps({ route, kind, alwaysReview, host, work }) {
   return [{ step: route === 'build' ? 'build' : route, ...doWork, do: WHAT.build }, REVIEW_STEP(host, alwaysReview)];
 }
 
+// Large work on Claude Code runs as the deliver workflow, so its stages and their tiers are kept by code and not by the model. The models
+// come from the user's config here, because the workflow file names none. Elsewhere, or where workflows are off, the steps stand.
+function deliverWorkflow(ctx, { request, said, ledger, role, tier }) {
+  if (ctx.host !== 'claude') return undefined;
+  const models = Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t).model]).filter(([, m]) => m));
+  const shards = {};
+  for (const step of ['work-item.start', 'review.done']) {
+    try { const refs = shardsFor({ root: ctx.root, step, env: ctx.env }).usable.filter((b) => b.mode !== 'write').map((b) => b.ref); if (refs.length) shards[step] = refs; } catch { /* a broken config skips shards, as it does elsewhere */ }
+  }
+  return { name: 'somi:deliver', args: clean({ request, said, ledger, role, models, startTier: tier === 'low' ? 'low' : tier, cli: somiCommand('').trim(), shards: Object.keys(shards).length ? shards : undefined }) };
+}
+const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
+const WORKFLOW_ADVICE = 'This is large work: run it as the workflow below with its args unchanged, using the Workflow tool, and keep talking with the user while it runs in the background. When it returns, record its reviews with somi_review, passing tree as review_tree, and tell the user the result. If the Workflow tool is not available, follow steps instead.';
+
 export function advise(ctx, { request, ticket, hint, sensitive } = {}) {
   if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
   const said = readPrompt(ctx.root, ctx.env);
@@ -122,8 +136,9 @@ export function advise(ctx, { request, ticket, hint, sensitive } = {}) {
   const role = roleBrief(wf.role);
   const worker = direction ? { agent: workerAgent(tier), ...(model ? { model } : {}) } : null;
   const start = worker ? delegate(worker.agent, worker.model, direction === 'up' ? UP : DOWN) : HERE;
-  if (worker && wf.kind === 'code') markDelegation(ctx.root, { agent: worker.agent, tier }, ctx.env);
-  const advice = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
+  const workflow = wf.kind === 'code' && LARGE(request) ? deliverWorkflow(ctx, { request, said, ledger, role, tier }) : undefined;
+  if (worker && wf.kind === 'code' && !workflow) markDelegation(ctx.root, { agent: worker.agent, tier }, ctx.env);
+  const advice = workflow ? WORKFLOW_ADVICE : wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
   return clean({
     route: chosen.route,
     tier,
@@ -131,7 +146,8 @@ export function advise(ctx, { request, ticket, hint, sensitive } = {}) {
     where: worker ? 'worker' : 'here',
     worker,
     sensitive: isSensitive || undefined,
-    advice: `Run steps in order. ${advice}`,
+    advice: workflow ? advice : `Run steps in order. ${advice}`,
+    workflow,
     alternatives,
     role: worker ? undefined : role,
     skills: !worker && skills.length > 0 ? skills : undefined,
