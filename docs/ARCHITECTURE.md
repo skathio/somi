@@ -96,10 +96,12 @@ Mutation testing is diff-scoped and covers security-relevant code only: `npm run
 ## Quality gate
 
 `somi quality` holds a change to code-quality limits. It scores only what the change touches, against the version before it, so an old codebase is not failed on day one and nothing gets worse:
-- **New functions** must meet the limits. A changed function fails only if it is over a limit and got worse.
-- **Files** may not gain more than 25 points of complexity in one change. That stops a function being split apart just to pass.
-- **Copies:** a fragment of 50 tokens or more, with names and literals normalised, fails when the change makes it occur more often than before. Counting before and after does not depend on how git pairs the lines.
-- **Suppressions** newly added, such as `eslint-disable` or `@ts-ignore`, fail. So does a file the parser cannot read, because a change that cannot be measured must not pass as clean.
+- **Functions:** a change may not take a function over a limit, whether it is new or was within the limit before. A function already over a limit that gets worse is a warning, as SonarQube treats an existing issue.
+- **Files:** a change may not take a file over 100, nor add more than 25 to one file. That stops a function being split apart just to pass.
+- **Copies:** in product code, a fragment of 100 tokens or more inside functions, with names and literals normalised, fails when the change makes it occur more often than before. Counting before and after does not depend on how git pairs the lines.
+- **Suppressions:** a newly added `eslint-disable` or `@ts-ignore` fails unless it states a reason. In a benchmark every one fails.
+- **Unreadable code:** code the parser cannot follow warns in a project, because a grammar can lag valid syntax, and fails in a benchmark.
+- **Skipped:** docs, examples, demos, playgrounds and generated files.
 - **Stylesheets:** nesting depth, chained selectors, ID selectors and `!important`.
 
 Complexity is SoMi-CC v1, which follows SonarSource's cognitive complexity. A function nested in another is scored as its own unit, starting at the control-flow nesting around it: under Sonar's rule a test file's `describe` block would be one function.
@@ -108,9 +110,9 @@ Complexity is SoMi-CC v1, which follows SonarSource's cognitive complexity. A fu
 |---|---|---|---|---|
 | Function | 15 | 4 | 60 | 4 |
 | UI component | 15 | 4 | 150 | 4 |
-| Test | 5 | 2 | 40 | 4 |
+| Test | 8 | 3 | 150 | 4 |
 
-These are starting points from common practice, and no study ties them to defects. They are to be calibrated on known-good code, failing at the 95th percentile. The user's global config may set any of them. A project's config may only tighten them, and a looser value there is ignored and reported. A benchmark scores with the defaults alone.
+No study ties these numbers to defects. They were calibrated on 12 well-kept projects ([record](../benchmarks/quality/records/calibration-2026-11-06.md)). The gate catches about 97% of injected smells. It fails about 15% of those projects' own recent commits, mostly on real findings. A copy shorter than about ten lines is not caught by default. The user's global config may set any of them. A project's config may only tighten them, and a looser value there is ignored and reported. A benchmark scores with the defaults alone.
 
 An exemption sits on the line above a function: `// somi-gate-allow <rule> reason="…" expires=YYYY-MM-DD`. It needs a reason of 20 characters or more and an expiry within 90 days. In a benchmark, an exemption the agent added counts as a violation.
 

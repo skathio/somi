@@ -8,16 +8,23 @@ import crypto from 'node:crypto';
 const NAMES = new Set(['identifier', 'property_identifier', 'shorthand_property_identifier', 'shorthand_property_identifier_pattern', 'type_identifier', 'private_property_identifier', 'statement_identifier', 'field_identifier']);
 const LITERALS = new Set(['string', 'template_string', 'number', 'regex', 'string_fragment']);
 
-/** [{ t, row }] for a tree: names become ID, literals LIT, everything else its own text. Comments are dropped. */
+const FUNCTIONS = new Set(['function_declaration', 'function_expression', 'function', 'arrow_function', 'method_definition', 'generator_function_declaration', 'generator_function']);
+
+/**
+ * [{ t, row }] for the code inside functions: names become ID, literals LIT, everything else its own text. Comments are dropped, and so
+ * is code outside any function: a repeated config object or table is data, not the copied logic this looks for.
+ */
 export function tokensOf(tree) {
   const out = [];
-  const visit = (n) => {
+  const visit = (n, inside) => {
     if (n.type === 'comment') return;
+    const within = inside || FUNCTIONS.has(n.type);
+    if (!within) { for (const c of n.children) visit(c, false); return; }
     if (LITERALS.has(n.type)) { out.push({ t: 'LIT', row: n.startPosition.row + 1 }); return; }
     if (n.childCount === 0) { if (n.text.trim() !== '') out.push({ t: NAMES.has(n.type) ? 'ID' : n.text, row: n.startPosition.row + 1 }); return; }
-    for (const c of n.children) visit(c);
+    for (const c of n.children) visit(c, true);
   };
-  visit(tree.rootNode);
+  visit(tree.rootNode, false);
   return out;
 }
 

@@ -18,6 +18,12 @@ const SKIPPED = /(^|\/)(node_modules|vendor|dist|build|coverage|\.next|fixtures?
 const METRICS = ['cognitive', 'depth', 'lines', 'params'];
 const PCTS = [70, 80, 90, 95, 99];
 
+// The share of functions at or under each value, which is what a per-function limit acts on.
+export function percentiles(units, metric, pcts = PCTS) {
+  const values = units.map((u) => u[metric]).sort((a, b) => a - b);
+  return Object.fromEntries(pcts.map((p) => [`p${p}`, values[Math.min(values.length - 1, Math.ceil((p / 100) * values.length) - 1)] ?? null]));
+}
+
 export function weightedPercentiles(units, metric, pcts = PCTS) {
   const rows = units.map((u) => [u[metric], Math.max(1, u.lines)]).sort((a, b) => a[0] - b[0]);
   const total = rows.reduce((s, [, w]) => s + w, 0);
@@ -43,13 +49,15 @@ for (const file of files) {
   const parsed = await parseSource(file, text);
   if (!parsed?.tree) { unanalyzed += 1; continue; }
   for (const u of unitsOf(parsed.tree, { file, isTest: TEST_FILE.test(file) })) byKind[u.kind].push(u);
+  parsed.tree.delete();
 }
 const distributions = {};
 for (const [kind, units] of Object.entries(byKind)) {
   if (!units.length) continue;
-  distributions[kind] = { functions: units.length, over_default: {}, weighted: {} };
+  distributions[kind] = { functions: units.length, over_default: {}, per_function: {}, weighted: {} };
   for (const m of METRICS) {
     distributions[kind].weighted[m] = weightedPercentiles(units, m);
+    distributions[kind].per_function[m] = percentiles(units, m);
     distributions[kind].over_default[m] = Number((units.filter((u) => u[m] > DEFAULT_LIMITS[kind][m]).length / units.length).toFixed(4));
   }
 }
@@ -62,7 +70,7 @@ for (const [sha, parent] of commits) {
     const r = await qualityGate(root, { from: parent, to: sha, limits: DEFAULT_LIMITS, repoFiles: listFiles(root, sha), cache });
     const rules = {};
     for (const v of r.violations) rules[v.rule] = (rules[v.rule] ?? 0) + 1;
-    changes.push({ sha: sha.slice(0, 12), ok: r.ok, functions: r.scored.functions, rules, examples: r.violations.slice(0, 3).map((v) => `${v.rule} ${v.file}:${v.line} ${v.name ?? ''} ${v.value}/${v.limit}`) });
+    changes.push({ sha: sha.slice(0, 12), ok: r.ok, functions: r.scored.functions, warnings: r.warnings.length, rules, examples: r.violations.slice(0, 3).map((v) => `${v.rule} ${v.file}:${v.line} ${v.name ?? ''} ${v.value}/${v.limit}`) });
   } catch (e) { changes.push({ sha: sha.slice(0, 12), error: String(e.message).slice(0, 120) }); }
 }
 const scored = changes.filter((c) => !c.error && c.functions > 0);

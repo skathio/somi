@@ -43,7 +43,22 @@ async function load(language) {
   return parser;
 }
 
-/** { tree, language } for a supported file, { unanalyzed: reason } when it could not be parsed, or null for a language not covered. */
+// Where the parser could not follow the code, as [first, last] lines. A grammar can lag a language's newest syntax, so an error far
+// from a change does not stop the rest of the file being scored.
+function errorRanges(tree) {
+  const out = [];
+  const visit = (n) => {
+    if (n.isError || n.isMissing) { out.push([n.startPosition.row + 1, n.endPosition.row + 1]); return; }
+    for (const c of n.children) if (c.hasError || c.isMissing) visit(c);
+  };
+  visit(tree.rootNode);
+  return out;
+}
+
+/**
+ * { tree, language, errors } for a supported file, { unanalyzed: reason } when it could not be parsed at all, or null for a language not
+ * covered. errors lists the lines the parser could not follow, which the gate does not score.
+ */
 export async function parseSource(file, text) {
   const language = languageOf(file);
   if (!language) return null;
@@ -53,8 +68,6 @@ export async function parseSource(file, text) {
   try {
     const tree = parser.parse(text, null, { progressCallback: () => Date.now() > deadline });
     if (!tree) return { unanalyzed: `not parsed within ${PARSE_TIMEOUT_MS} ms` };
-    // A tree with syntax errors still comes back, but its scores would be measured on a guess at the code, so it is not scored.
-    if (tree.rootNode.hasError) { tree.delete(); return { unanalyzed: 'the parser found syntax errors' }; }
-    return { tree, language };
+    return { tree, language, errors: tree.rootNode.hasError ? errorRanges(tree) : [] };
   } finally { parser.delete(); }
 }

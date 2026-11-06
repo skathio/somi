@@ -1,14 +1,15 @@
-// quality/limits.mjs: the gate's thresholds. The defaults are SoMi-CC v1's starting points, taken from common practice (SonarSource,
-// ESLint, PMD) and not yet calibrated against known-good code, which is the next step. The user's global config may set any of them,
+// quality/limits.mjs: the gate's thresholds, calibrated on 12 well-kept JavaScript and TypeScript projects (benchmarks/quality/). The
+// function limits are the common SonarSource and ESLint ones, which a few percent of those projects' functions exceed. Tests may run
+// longer, and a copy has to be SonarQube's 100 tokens, about ten lines, because shorter repeated patterns were most of the false alarms. The user's global config may set any of them,
 // and the somi-config command asks before loosening one. A project's config is cloned input, so it may only tighten: a looser value
 // there is ignored and reported. A benchmark scores with the defaults alone, so its results stay comparable.
 
 export const DEFAULT_LIMITS = Object.freeze({
   function: Object.freeze({ cognitive: 15, depth: 4, lines: 60, params: 4 }),
   component: Object.freeze({ cognitive: 15, depth: 4, lines: 150, params: 4 }),
-  test: Object.freeze({ cognitive: 5, depth: 2, lines: 40, params: 4 }),
+  test: Object.freeze({ cognitive: 8, depth: 3, lines: 150, params: 4 }),
   file: Object.freeze({ cognitive: 100, added_cognitive: 25 }),
-  clones: Object.freeze({ tokens: 50, test_tokens: 100 }),
+  clones: Object.freeze({ tokens: 100 }),
   css: Object.freeze({ nesting: 3, compound: 3, ids: 0, important: 0 }),
   suppressions: Object.freeze({ added: 0 }),
 });

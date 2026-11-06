@@ -31,10 +31,15 @@ function paramCount(node) {
   return params ? params.namedChildren.filter((c) => c.type !== 'comment').length : 0;
 }
 
-// Lines that hold code: the start row of every token that is not a comment.
+// Lines that hold code: the start row of every token that is not a comment. A nested function's lines are its own, as its complexity
+// is, so a test file's describe block is not as long as every test inside it.
 function logicalLines(node) {
   const rows = new Set();
-  const visit = (n) => { if (n.childCount === 0) { if (n.type !== 'comment' && n.text.trim() !== '') rows.add(n.startPosition.row); return; } for (const c of n.children) visit(c); };
+  const visit = (n) => {
+    if (n !== node && FUNCTIONS.has(n.type)) return;
+    if (n.childCount === 0) { if (n.type !== 'comment' && n.text.trim() !== '') rows.add(n.startPosition.row); return; }
+    for (const c of n.children) visit(c);
+  };
   visit(node);
   return rows.size;
 }
