@@ -470,6 +470,35 @@ export function comparableRecordings(aaDir, mainDir) {
 const fmt = (x, digits = 2) => (x === null || x === undefined ? 'n/a' : Number(x).toFixed(digits));
 const ratioCell = (r) => (r.ratio === null ? 'n/a' : `${fmt(r.ratio)} (${fmt(r.lower)} to ${fmt(r.upper)})`);
 
+// Results come first and cost second. A draw is a strict success when the hidden tests pass (P), the tests it wrote are valid (V:
+// they pass on the reference solution and kill at least 60% of its mutants), and the quality gate passes (G). Arms rank by strict
+// successes, then by correct work with valid tests, and only then by cost, where costs within 10% are a tie. Until the gate ships, G
+// is not scored and a strict success is P and V. Cheap work that fails the hidden tests, or tests that only prove themselves, cannot
+// buy a place by costing less.
+export const TEST_VALIDITY_KILL = 0.6;
+export const COST_TIE = 0.1;
+export function resultScore(row) {
+  const P = row.solved === true ? 1 : 0;
+  const o = row.own_tests;
+  const V = !o ? null : o.tests > 0 && o.oracle_pass === true && (o.total === 0 || o.killed / o.total >= TEST_VALIDITY_KILL) ? 1 : 0;
+  const G = typeof row.gate?.ok === 'boolean' ? (row.gate.ok ? 1 : 0) : null;
+  return { P, V, G, strict: P * (V ?? 0) * (G ?? 1) };
+}
+
+export function rankArms(rows) {
+  const arms = [...new Set(rows.map((r) => r.arm))].map((arm) => {
+    const list = rows.filter((r) => r.arm === arm);
+    const scores = list.map(resultScore);
+    const sum = (f) => scores.reduce((s, x) => s + f(x), 0);
+    return { arm, draws: list.length, P: sum((x) => x.P), V: sum((x) => x.V ?? 0), PV: sum((x) => x.P * (x.V ?? 0)), G: scores.some((x) => x.G !== null) ? sum((x) => x.G ?? 0) : null, strict: sum((x) => x.strict), cost: list.reduce((s, r) => s + (r.cost ?? 0), 0) / (list.length || 1) };
+  });
+  const costTie = (a, b) => Math.abs(a.cost - b.cost) <= COST_TIE * Math.max(a.cost, b.cost);
+  arms.sort((a, b) => (b.strict - a.strict) || (b.PV - a.PV) || (costTie(a, b) ? 0 : a.cost - b.cost) || a.arm.localeCompare(b.arm));
+  // The front: no other arm has at least as many strict successes for less.
+  for (const a of arms) a.front = !arms.some((b) => b !== a && b.strict >= a.strict && b.cost < a.cost && (b.strict > a.strict || !costTie(a, b)));
+  return arms;
+}
+
 export function renderReport(dir) {
   const rows = completed(dir);
   const planned = readJson(path.join(dir, 'plan.json'));
@@ -477,7 +506,9 @@ export function renderReport(dir) {
   const k = drawsFor(planned.phase, reg);
   const arms = [...new Set(rows.map((r) => r.arm))].sort();
   const base = arms.includes('bare') ? 'bare' : arms[0];
-  const out = [`# Benchmark record: ${planned.phase}`, '', `- Session model: ${planned.model}${planned.worker_model ? `, low tier ${planned.worker_model}` : ''}`, `- Rule hash: ${planned.rule}`, `- Host: ${JSON.stringify(planned.host)}`, `- Draws recorded: ${rows.length} of ${planned.draws.length}. Dollars are the CLI's estimate.`, '', '## Arms', '', '| Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |', '|---|---|---|---|---|---|---|---|---|'];
+  const ranked = rankArms(rows);
+  const gateScored = ranked.some((a) => a.G !== null);
+  const out = [`# Benchmark record: ${planned.phase}`, '', `- Session model: ${planned.model}${planned.worker_model ? `, low tier ${planned.worker_model}` : ''}`, `- Rule hash: ${planned.rule}`, `- Host: ${JSON.stringify(planned.host)}`, `- Draws recorded: ${rows.length} of ${planned.draws.length}. Dollars are the CLI's estimate.`, '', '## Results first', '', `Ranked by strict successes, then by correct work with valid tests, then by cost (within ${COST_TIE * 100}% is a tie). Valid tests pass on the reference solution and kill at least ${TEST_VALIDITY_KILL * 100}% of its mutants.${gateScored ? '' : ' The quality gate is not scored yet, so a strict success here is hidden tests passed with valid tests.'}`, '', '| Rank | Arm | Draws | Hidden tests pass | Own tests valid | Both | Quality gate | Strict successes | Mean dollars | On the cost front |', '|---|---|---|---|---|---|---|---|---|---|', ...ranked.map((a, i) => `| ${i + 1} | ${a.arm} | ${a.draws} | ${a.P} | ${a.V} | ${a.PV} | ${a.G === null ? 'not scored' : a.G} | ${a.strict} | ${fmt(a.cost, 3)} | ${a.front ? 'yes' : 'no'} |`), '', '## Arms', '', '| Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |', '|---|---|---|---|---|---|---|---|---|'];
   for (const arm of arms) {
     const a = armSummary(rows, arm, planned.phase === 'candidate' ? reg.arm_k[arm] ?? k : k);
     out.push(`| ${arm} | ${a.draws} | ${a.solved} | ${fmt(a.pass_at_1)} | ${fmt(a.pass_all_k)} | ${fmt(a.weighted_per_solved, 0)} | ${fmt(a.cost_per_solved, 3)} | ${a.wall_ms_per_solved === null ? 'n/a' : fmt(a.wall_ms_per_solved / 60000, 1)} | ${JSON.stringify(a.labels)} |`);

@@ -43,7 +43,7 @@
    },
    "adherence": {
     "route": "tool",
-    "steps": 8,
+    "steps": 9,
     "agents": [],
     "inline_writes": 0,
     "routed": "build",
@@ -55,15 +55,15 @@
    },
    "agents": {
     "unknown": {
-     "weighted": 609432.8499999997,
-     "messages": 71,
+     "weighted": 668675.4999999998,
+     "messages": 79,
      "models": [
-      "claude-haiku-5-5",
-      "claude-sonnet-5-5"
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
      ]
     },
     "main": {
-     "weighted": 149745.19999999998,
+     "weighted": 153982.55,
      "messages": 22,
      "models": [
       "claude-sonnet-5-5"
@@ -85,28 +85,28 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.2,
-   "cost": 0.6371332350000003,
-   "wall_ms": 382278,
-   "turns": 22,
+   "load": 0.1,
+   "cost": 0.6695920299999999,
+   "wall_ms": 387609,
+   "turns": 23,
    "tokens": {
-    "input": 188,
-    "output": 54877,
-    "cacheRead": 1555913,
-    "cacheCreation": 263211
+    "input": 202,
+    "output": 57581,
+    "cacheRead": 1722448,
+    "cacheCreation": 289845
    },
-   "weighted": 759178.05,
+   "weighted": 822658.05,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.5924556999999998,
-    "claude-haiku-5-5": 0.044677535000000004
+    "claude-sonnet-5-5": 0.6200109999999999,
+    "claude-haiku-5-5": 0.04958103
    },
    "compactions": 0,
    "own_tests": {
-    "tests": 4,
+    "tests": 5,
     "oracle_pass": false,
     "killed": 0,
     "total": 6
@@ -122,9 +122,9 @@
    "reason": "",
    "label": "finished",
    "gate": null,
-   "green": 27,
+   "green": 26,
    "total": 27,
-   "solved": true,
+   "solved": false,
    "scope": {
     "touched": [],
     "added": []
@@ -143,7 +143,7 @@
    },
    "agents": {
     "main": {
-     "weighted": 81534.5,
+     "weighted": 88844.35,
      "messages": 10,
      "models": [
       "claude-sonnet-5-5"
@@ -151,7 +151,9 @@
     }
    },
    "split_coverage": 1,
-   "failed": [],
+   "failed": [
+    "AC4 [functional] targets that are not lists of user ids have code invalid, and a change is recorded"
+   ],
    "flags": {
     "timedOut": false,
     "crashed": false,
@@ -160,22 +162,22 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.4,
-   "cost": 0.16593900000000003,
-   "wall_ms": 65866,
+   "load": 0.5,
+   "cost": 0.1817536,
+   "wall_ms": 68420,
    "turns": 10,
    "tokens": {
     "input": 20,
-    "output": 8133,
-    "cacheRead": 209770,
-    "cacheCreation": 15898
+    "output": 9257,
+    "cacheRead": 213556,
+    "cacheCreation": 16947
    },
-   "weighted": 81534.5,
+   "weighted": 88844.35,
    "models": [
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.16593900000000003
+    "claude-sonnet-5-5": 0.1817536
    },
    "compactions": 0,
    "own_tests": {
@@ -204,17 +206,8 @@
    },
    "adherence": {
     "route": "tool",
-    "steps": 10,
-    "agents": [
-     {
-      "type": "somi:somi-reviewer",
-      "model": "haiku"
-     },
-     {
-      "type": "somi:somi-security-reviewer",
-      "model": "sonnet"
-     }
-    ],
+    "steps": 9,
+    "agents": [],
     "inline_writes": 0,
     "routed": "build",
     "passes": 2,
@@ -222,36 +215,23 @@
     "next": null,
     "stop": null,
     "findings": {
-     "Minor": 7,
+     "Major": 1,
+     "Minor": 2,
      "Nit": 4
     }
    },
    "agents": {
-    "somi:somi-security-reviewer": {
-     "weighted": 26977.25,
-     "messages": 2,
-     "models": [
-      "claude-sonnet-5-5"
-     ]
-    },
     "unknown": {
-     "weighted": 874348.4500000002,
-     "messages": 93,
+     "weighted": 754690.6000000003,
+     "messages": 85,
      "models": [
       "claude-sonnet-5-5",
       "claude-haiku-5-5"
      ]
     },
-    "somi:somi-reviewer": {
-     "weighted": 36620.15,
-     "messages": 3,
-     "models": [
-      "claude-haiku-5-5"
-     ]
-    },
     "main": {
-     "weighted": 217029.79999999996,
-     "messages": 28,
+     "weighted": 175609.30000000002,
+     "messages": 24,
      "models": [
       "claude-sonnet-5-5"
      ]
@@ -267,24 +247,24 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.2,
-   "cost": 1.0181134800000002,
-   "wall_ms": 547087,
-   "turns": 29,
+   "load": 0.3,
+   "cost": 0.7547748450000001,
+   "wall_ms": 438718,
+   "turns": 24,
    "tokens": {
-    "input": 254,
-    "output": 83046,
-    "cacheRead": 2298929,
-    "cacheCreation": 407679
+    "input": 220,
+    "output": 67488,
+    "cacheRead": 1923049,
+    "cacheCreation": 320268
    },
-   "weighted": 1154975.65,
+   "weighted": 930299.9,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.9534176,
-    "claude-haiku-5-5": 0.06469588
+    "claude-sonnet-5-5": 0.6988477000000003,
+    "claude-haiku-5-5": 0.055927145000000004
    },
    "compactions": 0,
    "own_tests": {
@@ -325,14 +305,14 @@
    },
    "agents": {
     "main": {
-     "weighted": 76808.5,
-     "messages": 9,
+     "weighted": 97387.99999999999,
+     "messages": 14,
      "models": [
       "claude-sonnet-5-5"
      ]
     }
    },
-   "split_coverage": 1,
+   "split_coverage": 0.9999999999999999,
    "failed": [],
    "flags": {
     "timedOut": false,
@@ -342,22 +322,22 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.5,
-   "cost": 0.15827099999999997,
-   "wall_ms": 59694,
-   "turns": 9,
+   "load": 0.2,
+   "cost": 0.18955799999999998,
+   "wall_ms": 85003,
+   "turns": 14,
    "tokens": {
-    "input": 18,
-    "output": 7490,
-    "cacheRead": 193430,
-    "cacheCreation": 15998
+    "input": 28,
+    "output": 8909,
+    "cacheRead": 311800,
+    "cacheCreation": 17308
    },
-   "weighted": 76808.5,
+   "weighted": 97388,
    "models": [
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.15827099999999997
+    "claude-sonnet-5-5": 0.18955799999999998
    },
    "compactions": 0,
    "own_tests": {
@@ -377,9 +357,9 @@
    "reason": "",
    "label": "finished",
    "gate": null,
-   "green": 25,
+   "green": 29,
    "total": 29,
-   "solved": false,
+   "solved": true,
    "scope": {
     "touched": [],
     "added": []
@@ -388,9 +368,9 @@
     "route": "tool",
     "steps": 10,
     "agents": [],
-    "inline_writes": 0,
+    "inline_writes": 1,
     "routed": "build",
-    "passes": 5,
+    "passes": 4,
     "gates": [],
     "next": null,
     "stop": null,
@@ -398,28 +378,23 @@
    },
    "agents": {
     "unknown": {
-     "weighted": 872366.6,
-     "messages": 97,
+     "weighted": 797766.2499999998,
+     "messages": 95,
      "models": [
       "claude-haiku-5-5",
       "claude-sonnet-5-5"
      ]
     },
     "main": {
-     "weighted": 196836.74999999997,
-     "messages": 27,
+     "weighted": 229972.35,
+     "messages": 30,
      "models": [
       "claude-sonnet-5-5"
      ]
     }
    },
-   "split_coverage": 1,
-   "failed": [
-    "AC5 [functional] an upgrade credits the unused days and charges the rest in the customer favour",
-    "AC5 [functional] a downgrade is prorated the same way",
-    "AC5 [boundary] a change on the first day prorates the whole period",
-    "AC5 [boundary] a change on the last day prorates one day"
-   ],
+   "split_coverage": 0.9999999999999998,
+   "failed": [],
    "flags": {
     "timedOut": false,
     "crashed": false,
@@ -428,30 +403,30 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.5,
-   "cost": 0.8412818249999998,
-   "wall_ms": 507334,
-   "turns": 27,
+   "load": 0.4,
+   "cost": 0.8600572100000001,
+   "wall_ms": 554121,
+   "turns": 31,
    "tokens": {
     "input": 252,
-    "output": 78441,
-    "cacheRead": 2489551,
-    "cacheCreation": 342233
+    "output": 75657,
+    "cacheRead": 2445991,
+    "cacheCreation": 323682
    },
-   "weighted": 1069203.35,
+   "weighted": 1027738.6,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.7756855999999999,
-    "claude-haiku-5-5": 0.06559622499999998
+    "claude-sonnet-5-5": 0.8002355000000002,
+    "claude-haiku-5-5": 0.059821709999999986
    },
    "compactions": 0,
    "own_tests": {
-    "tests": 6,
-    "oracle_pass": false,
-    "killed": 0,
+    "tests": 5,
+    "oracle_pass": true,
+    "killed": 5,
     "total": 5
    }
   },
@@ -486,8 +461,8 @@
    },
    "agents": {
     "main": {
-     "weighted": 118714.70000000003,
-     "messages": 14,
+     "weighted": 133432.45000000004,
+     "messages": 17,
      "models": [
       "claude-sonnet-5-5"
      ]
@@ -503,22 +478,22 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 1.2,
-   "cost": 0.23505720000000002,
-   "wall_ms": 84433,
-   "turns": 14,
+   "load": 0.4,
+   "cost": 0.2576427,
+   "wall_ms": 100915,
+   "turns": 17,
    "tokens": {
-    "input": 28,
-    "output": 11791,
-    "cacheRead": 336592,
-    "cacheCreation": 20858
+    "input": 34,
+    "output": 12650,
+    "cacheRead": 424547,
+    "cacheCreation": 22155
    },
-   "weighted": 118714.70000000001,
+   "weighted": 133432.45,
    "models": [
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.23505720000000002
+    "claude-sonnet-5-5": 0.2576427
    },
    "compactions": 0,
    "own_tests": {
@@ -547,11 +522,11 @@
    },
    "adherence": {
     "route": "tool",
-    "steps": 8,
+    "steps": 4,
     "agents": [],
     "inline_writes": 0,
     "routed": "build",
-    "passes": 4,
+    "passes": 0,
     "gates": [],
     "next": null,
     "stop": null,
@@ -559,16 +534,16 @@
    },
    "agents": {
     "unknown": {
-     "weighted": 793087.2000000002,
-     "messages": 83,
+     "weighted": 764442.0000000002,
+     "messages": 85,
      "models": [
       "claude-haiku-5-5",
       "claude-sonnet-5-5"
      ]
     },
     "main": {
-     "weighted": 144906.95000000004,
-     "messages": 22,
+     "weighted": 127996,
+     "messages": 17,
      "models": [
       "claude-sonnet-5-5"
      ]
@@ -584,28 +559,28 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 0.7,
-   "cost": 0.6611183449999999,
-   "wall_ms": 466863,
-   "turns": 22,
+   "load": 0.2,
+   "cost": 0.6776566800000001,
+   "wall_ms": 460608,
+   "turns": 17,
    "tokens": {
-    "input": 210,
-    "output": 73204,
-    "cacheRead": 2095629,
-    "cacheCreation": 289761
+    "input": 206,
+    "output": 71678,
+    "cacheRead": 1786020,
+    "cacheCreation": 284192
    },
-   "weighted": 937994.15,
+   "weighted": 892438,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.5990597,
-    "claude-haiku-5-5": 0.06205864500000001
+    "claude-sonnet-5-5": 0.6207822000000001,
+    "claude-haiku-5-5": 0.05687448000000001
    },
    "compactions": 0,
    "own_tests": {
-    "tests": 4,
+    "tests": 5,
     "oracle_pass": false,
     "killed": 0,
     "total": 6
@@ -642,8 +617,8 @@
    },
    "agents": {
     "main": {
-     "weighted": 146405.1,
-     "messages": 19,
+     "weighted": 102467.8,
+     "messages": 12,
      "models": [
       "claude-sonnet-5-5"
      ]
@@ -660,21 +635,21 @@
     "truncated": false
    },
    "load": 0.5,
-   "cost": 0.2772231,
-   "wall_ms": 102969,
-   "turns": 19,
+   "cost": 0.20546279999999997,
+   "wall_ms": 80335,
+   "turns": 12,
    "tokens": {
-    "input": 38,
-    "output": 13583,
-    "cacheRead": 498771,
-    "cacheCreation": 22860
+    "input": 24,
+    "output": 10373,
+    "cacheRead": 273488,
+    "cacheCreation": 18584
    },
-   "weighted": 146405.1,
+   "weighted": 102467.8,
    "models": [
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 0.2772231
+    "claude-sonnet-5-5": 0.20546279999999997
    },
    "compactions": 0,
    "own_tests": {

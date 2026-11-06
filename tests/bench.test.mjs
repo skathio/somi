@@ -11,7 +11,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { REPO, makeRepo, writeFiles } from './helpers.mjs';
 import { armSummary, callRatio, testShare, costDrawsPerArm, evaluateAa, evaluateRelease, holm, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, pairedDifference, passDrawsPerArm, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
-import { WINDOW_ENV, WINDOW_SETTINGS, hostStop, hostWindows, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
+import { COST_TIE, TEST_VALIDITY_KILL, rankArms, resultScore, WINDOW_ENV, WINDOW_SETTINGS, hostStop, hostWindows, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
 import { adherence, agentSplit, labelDraw, reviewFacts, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
 
 // Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
@@ -613,4 +613,30 @@ test('a task may carry scripted follow-ups, and they are held to the same text r
   assert.equal(validateTaskJson({ ...base, turns: [] }).ok, false);
   assert.equal(validateTaskJson({ ...base, turns: ['a‮b'] }).ok, false);
   assert.equal(validateTaskJson({ ...base, turns: Array.from({ length: 17 }, (_, i) => `turn ${i}`) }).ok, false);
+});
+
+test('a draw scores on results first: hidden tests, then tests that are valid, then the gate', () => {
+  const own = (tests, oracle_pass, killed, total) => ({ tests, oracle_pass, killed, total });
+  assert.deepEqual(resultScore({ solved: true, own_tests: own(3, true, 4, 6) }), { P: 1, V: 1, G: null, strict: 1 });
+  assert.equal(resultScore({ solved: true, own_tests: own(3, true, 3, 6) }).V, 0, `under ${TEST_VALIDITY_KILL * 100}% of mutants killed`);
+  assert.equal(resultScore({ solved: true, own_tests: own(3, false, 6, 6) }).V, 0, 'tests that fail on correct code are not valid');
+  assert.equal(resultScore({ solved: true, own_tests: own(0, true, 0, 0) }).V, 0, 'no tests is not valid tests');
+  assert.equal(resultScore({ solved: false, own_tests: own(3, true, 6, 6) }).strict, 0, 'valid tests do not rescue failed work');
+  assert.equal(resultScore({ solved: true, own_tests: own(3, true, 6, 6), gate: { ok: false } }).strict, 0, 'a failed gate is not a strict success');
+  assert.equal(resultScore({ solved: true }).V, null, 'with no reference to check against, validity is unknown');
+});
+
+test('arms rank by results before cost, a cost within the tie band never decides, and the cost front is marked', () => {
+  const own = { tests: 2, oracle_pass: true, killed: 6, total: 6 };
+  const rows = [
+    ...[1, 2, 3].map(() => ({ arm: 'careful', solved: true, own_tests: own, cost: 0.9 })),
+    ...[1, 2, 3].map((i) => ({ arm: 'cheap', solved: i < 3, own_tests: own, cost: 0.2 })),
+    ...[1, 2].map(() => ({ arm: 'cheap-twin', solved: true, own_tests: own, cost: 0.21 })), { arm: 'cheap-twin', solved: false, own_tests: own, cost: 0.21 },
+  ];
+  const ranked = rankArms(rows);
+  assert.deepEqual(ranked.map((a) => a.arm), ['careful', 'cheap', 'cheap-twin'], 'three successes beat two however cheap; a 5% cost gap is a tie, settled by name');
+  assert.deepEqual(ranked.map((a) => a.front), [true, true, true], 'within the tie band neither cheap arm dominates the other');
+  const dominated = rankArms([...rows, ...[1, 2, 3].map(() => ({ arm: 'pricey', solved: true, own_tests: own, cost: 2 }))]);
+  assert.equal(dominated.find((a) => a.arm === 'pricey').front, false, 'as many successes for more money is off the front');
+  assert.ok(COST_TIE > 0 && COST_TIE < 1);
 });
