@@ -159,6 +159,9 @@
     ],
     "scripts/lib/quality/gate.mjs": [
       "tests/quality.test.mjs"
+    ],
+    "tests/evals/lib/task-store.mjs": [
+      "tests/canary.test.mjs"
     ]
   }
 }

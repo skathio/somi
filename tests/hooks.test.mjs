@@ -35,23 +35,32 @@ function runHook(script, payload, { files = {}, config, env = {} } = {}) {
 
 const decision = (r) => r.out?.hookSpecificOutput?.permissionDecision ?? r.out?.permissionDecision ?? 'allow';
 
+// What each expected decision means for the hook's exit and its output.
+const EXPECT = {
+  deny: (r, c) => {
+    assert.equal(r.status, 2, 'a deny exits 2 on both hosts');
+    assert.equal(decision(r), 'deny');
+    if (c.expect_reason) assert.ok(r.stderr.includes(c.expect_reason), r.stderr);
+  },
+  ask: (r) => assert.equal(decision(r), 'ask'),
+  allow: (r) => {
+    assert.equal(r.status, 0);
+    assert.equal(decision(r), 'allow');
+  },
+};
+
+function checkAudit(r, c) {
+  if (c.expect_audit_log) assert.ok(r.audit?.includes(c.expect_audit_log), r.audit);
+  if (c.expect_no_audit_log) assert.equal(r.audit, null);
+}
+
 for (const file of fs.readdirSync(CASES).filter((f) => f.endsWith('.json'))) {
   const { script, cases } = JSON.parse(fs.readFileSync(path.join(CASES, file), 'utf8'));
   for (const c of cases) {
     test(`${file.replace('.json', '')}: ${c.name}`, () => {
       const r = runHook(script, c.payload, c);
-      if (c.expect === 'deny') {
-        assert.equal(r.status, 2, 'a deny exits 2 on both hosts');
-        assert.equal(decision(r), 'deny');
-        if (c.expect_reason) assert.ok(r.stderr.includes(c.expect_reason), r.stderr);
-      } else if (c.expect === 'ask') {
-        assert.equal(decision(r), 'ask');
-      } else if (c.expect === 'allow') {
-        assert.equal(r.status, 0);
-        assert.equal(decision(r), 'allow');
-      }
-      if (c.expect_audit_log) assert.ok(r.audit?.includes(c.expect_audit_log), r.audit);
-      if (c.expect_no_audit_log) assert.equal(r.audit, null);
+      EXPECT[c.expect]?.(r, c);
+      checkAudit(r, c);
     });
   }
 }

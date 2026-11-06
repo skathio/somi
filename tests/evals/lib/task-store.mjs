@@ -225,29 +225,42 @@ export function taskHash(dir, opts) {
 }
 
 /** A task directory -> `{ok: true}` or `{ok: false, reason}` naming the first offending file; the rules are in the header. */
+// The task's own text and declared paths, which a candidate sees, must not hold the canary.
+function declaredLeak(task, canary) {
+  const declared = [['source', task.source], ['test_dir', [task.test_dir]], ['root_files', task.root_files]];
+  const leak = declared.find(([, paths]) => paths.some((x) => x.includes(canary)));
+  if (leak) return refuse(leak[0], 'a declared path contains the canary');
+  if (task.brief.includes(canary)) return refuse('brief', 'contains the canary');
+  if (task.statements.some((s) => s.includes(canary))) return refuse('statements', 'a line contains the canary');
+  if (task.turns.some((s) => s.includes(canary))) return refuse('turns', 'a line contains the canary');
+  return null;
+}
+
+// One file under the task: where it may sit, that it still matches its hash, and that the canary is in every hidden file and in no
+// file a candidate sees.
+function fileProblem(l, p, fileHash, canary) {
+  const top = p.split('/')[0];
+  if (!p.includes('/') || !LAYOUT.includes(top)) return refuse('dir', `unexpected top-level entry at ${esc(p)}`);
+  if (p.includes(canary)) return refuse(esc(p), 'the path contains the canary');
+  const bytes = readSmall(l.f, `${l.root}/${p}`, MAX_FILE_BYTES);
+  if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== fileHash) return refuse(esc(p), 'unreadable, too large or changed since it was hashed');
+  // A file a candidate sees must lack the canary and a hidden one must have it, so a file fails when the two agree.
+  const visible = top === 'fixture';
+  if (visible === bytes.includes(Buffer.from(canary))) return refuse(esc(p), visible ? 'candidate-visible file contains the canary' : 'missing the canary');
+  return null;
+}
+
 export function canaryCheck(dir, opts) {
   try {
     const l = load(dir, opts);
     if (!l.ok) return l;
-    const { canary, brief, statements } = l.task;
-    const declared = [['source', l.task.source], ['test_dir', [l.task.test_dir]], ['root_files', l.task.root_files]];
-    const leak = declared.find(([, paths]) => paths.some((x) => x.includes(canary)));
-    if (leak) return refuse(leak[0], 'a declared path contains the canary');
-    const needle = Buffer.from(canary);
-    if (brief.includes(canary)) return refuse('brief', 'contains the canary');
-    if (statements.some((t) => t.includes(canary))) return refuse('statements', 'a line contains the canary');
-    if (l.task.turns.some((t) => t.includes(canary))) return refuse('turns', 'a line contains the canary');
+    const leak = declaredLeak(l.task, l.task.canary);
+    if (leak) return leak;
     const found = new Set();
-    for (const [p, fileHash] of l.m.files) {
-      const top = p.split('/')[0];
-      if (p === 'task.json') continue;
-      if (!p.includes('/') || !LAYOUT.includes(top)) return refuse('dir', `unexpected top-level entry at ${esc(p)}`);
-      if (p.includes(canary)) return refuse(esc(p), 'the path contains the canary');
-      const bytes = readSmall(l.f, `${l.root}/${p}`, MAX_FILE_BYTES);
-      if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== fileHash) return refuse(esc(p), 'unreadable, too large or changed since it was hashed');
-      const has = bytes.includes(needle);
-      if (top === 'fixture' ? has : !has) return refuse(esc(p), top === 'fixture' ? 'candidate-visible file contains the canary' : 'missing the canary');
-      found.add(top);
+    for (const [p, fileHash] of l.m.files.filter(([name]) => name !== 'task.json')) {
+      const problem = fileProblem(l, p, fileHash, l.task.canary);
+      if (problem) return problem;
+      found.add(p.split('/')[0]);
     }
     const none = HIDDEN_DIRS.find((d) => !found.has(d));
     return none === undefined ? { ok: true, hash: digest(l.m.files) } : refuse(`${none}/`, 'has no files (a check over nothing proves nothing)');

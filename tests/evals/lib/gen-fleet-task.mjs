@@ -54,15 +54,18 @@ const DOMAINS = [
 const fns = (d) => ({ add: `${d.verb}${d.Cap}`, void: `void${d.Cap}`, total: `${d.name}Total`, report: `${d.name}Report`, csv: `${d.name}Csv`, month: `${d.name}ByMonth`, price: `price${d.Cap}`, make: `make${d.Cap}Entry` });
 
 // The price of `units` at `rate`, in cents, for the numbers the hidden tests use.
+const PRICES = {
+  bulk: (units, rate, t, k) => (units >= t ? Math.round((units * rate * (100 - k)) / 100) : units * rate),
+  allowance: (units, rate, t) => Math.max(0, units - t) * rate,
+  cap: (units, rate, t, k) => Math.min(units * rate, Math.round(k * 100)),
+  minimum: (units, rate, t, k) => Math.max(units * rate, Math.round(k * 100)),
+  surcharge: (units, rate, t, k) => units * rate + (units > t ? Math.round(k * 100) : 0),
+  tiered: (units, rate, t, k) => Math.min(units, t) * rate + Math.round((Math.max(0, units - t) * rate * (100 - k)) / 100),
+  double: (units, rate, t) => Math.min(units, t) * rate + Math.max(0, units - t) * rate * 2,
+};
 function priceCents(d, units, rate) {
   const [kind, t, k] = d.rule;
-  if (kind === 'bulk') return units >= t ? Math.round((units * rate * (100 - k)) / 100) : units * rate;
-  if (kind === 'allowance') return Math.max(0, units - t) * rate;
-  if (kind === 'cap') return Math.min(units * rate, Math.round(k * 100));
-  if (kind === 'minimum') return Math.max(units * rate, Math.round(k * 100));
-  if (kind === 'surcharge') return units * rate + (units > t ? Math.round(k * 100) : 0);
-  if (kind === 'tiered') return Math.min(units, t) * rate + Math.round((Math.max(0, units - t) * rate * (100 - k)) / 100);
-  return Math.min(units, t) * rate + Math.max(0, units - t) * rate * 2;
+  return (PRICES[kind] ?? PRICES.double)(units, rate, t, k);
 }
 // The same formula as source. `money` turns the dollar constant into what this tree counts in.
 function ruleSource(d, money, round) {

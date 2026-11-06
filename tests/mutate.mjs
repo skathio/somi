@@ -31,38 +31,46 @@ export function candidates(fileText, addedLines) {
   });
 }
 
+// The lines a branch added to each guarded file.
+function guardedLines(root, base) {
+  const added = new Map();
+  for (const l of readDiff(root, base, snapshotTree(root)).lines.filter((x) => x.sign === '+' && GUARDED.test(x.file))) added.set(l.file, [...(added.get(l.file) ?? []), l.text]);
+  return added;
+}
+
+const mappedTests = (map, file) => Object.entries(map).filter(([k]) => file === k || (k.endsWith('/') && file.startsWith(k))).flatMap(([, list]) => list);
+
+// Each mutant of one file, run against the file's mapped tests in the copy, with the original put back afterwards.
+function mutateFile(copy, { file, text, tests }, run) {
+  const original = fs.readFileSync(path.join(copy, file), 'utf8');
+  for (const { index, mutated } of candidates(original, text)) {
+    if (run.ran >= run.max) break;
+    run.ran += 1;
+    const mutant = original.split('\n');
+    mutant[index] = mutated;
+    fs.writeFileSync(path.join(copy, file), mutant.join('\n'));
+    const { NODE_TEST_CONTEXT: _child, ...env } = process.env;
+    const r = spawnSync(process.execPath, ['--test', ...tests], { cwd: copy, env: { ...env, SOMI_GLOBAL_CONFIG: '' }, encoding: 'utf8', timeout: 180000 });
+    if (r.status === 0) run.survivors.push(`${file}:${index + 1}: ${mutated.trim().slice(0, 110)}`);
+  }
+  fs.writeFileSync(path.join(copy, file), original);
+}
+
 function main() {
   const { values } = parseArgs({ options: { base: { type: 'string' }, max: { type: 'string' } } });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const base = spawnSync('git', ['rev-parse', values.base ?? 'origin/main'], { cwd: root, encoding: 'utf8' }).stdout.trim();
-  const max = Number(values.max ?? 25);
-  const { lines } = readDiff(root, base, snapshotTree(root));
-  const added = new Map();
-  for (const l of lines) if (l.sign === '+' && GUARDED.test(l.file)) added.set(l.file, [...(added.get(l.file) ?? []), l.text]);
+  const added = guardedLines(root, base);
   if (added.size === 0) { console.log('no guarded file changed'); return 0; }
 
   const { map } = JSON.parse(fs.readFileSync(path.join(root, 'somi.check.json'), 'utf8'));
   const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-mutate-'));
-  const survivors = [];
-  let ran = 0;
+  const run = { ran: 0, max: Number(values.max ?? 25), survivors: [] };
   try {
     fs.cpSync(root, copy, { recursive: true, filter: (src) => !/(^|\/)(node_modules|\.git|\.somi|dist|coverage)$/.test(src) });
-    for (const [file, text] of added) {
-      const tests = Object.entries(map).filter(([k]) => file === k || (k.endsWith('/') && file.startsWith(k))).flatMap(([, list]) => list);
-      const original = fs.readFileSync(path.join(copy, file), 'utf8');
-      for (const { index, mutated } of candidates(original, text)) {
-        if (ran >= max) break;
-        ran += 1;
-        const mutant = original.split('\n');
-        mutant[index] = mutated;
-        fs.writeFileSync(path.join(copy, file), mutant.join('\n'));
-        const { NODE_TEST_CONTEXT: _child, ...env } = process.env;
-        const r = spawnSync(process.execPath, ['--test', ...tests], { cwd: copy, env: { ...env, SOMI_GLOBAL_CONFIG: '' }, encoding: 'utf8', timeout: 180000 });
-        if (r.status === 0) survivors.push(`${file}:${index + 1}: ${mutated.trim().slice(0, 110)}`);
-      }
-      fs.writeFileSync(path.join(copy, file), original);
-    }
+    for (const [file, text] of added) mutateFile(copy, { file, text, tests: mappedTests(map, file) }, run);
   } finally { fs.rmSync(copy, { recursive: true, force: true }); }
+  const { ran, survivors } = run;
   console.log(`${ran} mutants, ${survivors.length} survived`);
   survivors.forEach((s) => console.log(`  ${s}`));
   return survivors.length === 0 ? 0 : 1;

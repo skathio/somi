@@ -44,6 +44,34 @@ export function ownTestFiles({ workspace, taskDir, task }) {
   });
 }
 
+// The reference solution, with the draw's own test files laid over it. False when the task's setup fails.
+function stageReference(tmp, { workspace, taskDir, task, changed }) {
+  copyTree(path.join(taskDir, 'fixture'), tmp);
+  copyTree(path.join(taskDir, 'oracle'), tmp);
+  const setup = path.join(taskDir, 'hidden', 'setup.mjs');
+  if (fs.existsSync(setup) && spawnSync(process.execPath, [setup, tmp], { cwd: tmp, env: { PATH: process.env.PATH ?? '', HOME: tmp }, stdio: 'ignore', timeout: 20000 }).status !== 0) return false;
+  for (const rel of changed) {
+    const to = path.join(tmp, task.test_dir, rel);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(path.join(workspace, task.test_dir, rel), to);
+  }
+  return true;
+}
+
+// A mutant counts only where its text is found exactly once, and each one is undone before the next.
+function killedMutants(tmp, mutants, run) {
+  let killed = 0;
+  for (const mu of mutants) {
+    const file = path.join(tmp, mu.file);
+    const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+    if (text === null || text.split(mu.find).length !== 2) continue;
+    fs.writeFileSync(file, text.replace(mu.find, mu.replace));
+    if (!run()) killed += 1;
+    fs.writeFileSync(file, text);
+  }
+  return killed;
+}
+
 export function scoreOwnTests({ workspace, taskDir, task, mutants = [], wrap = (command, args) => ({ command, args }), timeoutMs = RUN_MS }) {
   if (task.runner !== 'node-test') return { tests: 0 };
   const changed = ownTestFiles({ workspace, taskDir, task });
@@ -51,30 +79,12 @@ export function scoreOwnTests({ workspace, taskDir, task, mutants = [], wrap = (
   if (runnable.length === 0) return { tests: 0 };
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-own-tests-'));
   try {
-    copyTree(path.join(taskDir, 'fixture'), tmp);
-    copyTree(path.join(taskDir, 'oracle'), tmp);
-    const setup = path.join(taskDir, 'hidden', 'setup.mjs');
-    if (fs.existsSync(setup) && spawnSync(process.execPath, [setup, tmp], { cwd: tmp, env: { PATH: process.env.PATH ?? '', HOME: tmp }, stdio: 'ignore', timeout: 20000 }).status !== 0) return { tests: runnable.length, oracle_pass: false, error: 'setup' };
-    for (const rel of changed) {
-      const to = path.join(tmp, task.test_dir, rel);
-      fs.mkdirSync(path.dirname(to), { recursive: true });
-      fs.copyFileSync(path.join(workspace, task.test_dir, rel), to);
-    }
+    if (!stageReference(tmp, { workspace, taskDir, task, changed })) return { tests: runnable.length, oracle_pass: false, error: 'setup' };
     const run = () => {
       const { command, args } = wrap(process.execPath, ['--test', ...runnable.map((f) => path.join(task.test_dir, f))], [tmp]);
       return spawnSync(command, args, { cwd: tmp, env: { PATH: process.env.PATH ?? '', HOME: tmp }, stdio: 'ignore', timeout: timeoutMs, killSignal: 'SIGKILL' }).status === 0;
     };
     if (!run()) return { tests: runnable.length, oracle_pass: false, killed: 0, total: mutants.length };
-    let killed = 0;
-    for (const mu of mutants) {
-      const file = path.join(tmp, mu.file);
-      if (!fs.existsSync(file)) continue;
-      const text = fs.readFileSync(file, 'utf8');
-      if (text.split(mu.find).length !== 2) continue;
-      fs.writeFileSync(file, text.replace(mu.find, mu.replace));
-      if (!run()) killed += 1;
-      fs.writeFileSync(file, text);
-    }
-    return { tests: runnable.length, oracle_pass: true, killed, total: mutants.length };
+    return { tests: runnable.length, oracle_pass: true, killed: killedMutants(tmp, mutants, run), total: mutants.length };
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }
