@@ -13,15 +13,280 @@
    "node": "v26.2.0"
   },
   "draws": [
-   "M02-doc-permissions.somi5-deliver.1"
+   "M04-flag-rollout.somi5-deliver.1",
+   "M04-flag-rollout.bare.1",
+   "M02-doc-permissions.somi5-deliver.1",
+   "M02-doc-permissions.bare.1",
+   "M01-subscription-billing.somi5-deliver.1",
+   "M01-subscription-billing.bare.1",
+   "M03-csv-import.somi5-deliver.1",
+   "M03-csv-import.bare.1"
   ]
  },
  "rows": [
   {
    "schema": 2,
+   "draw": "M04-flag-rollout.somi5-deliver.1",
+   "task": "M04-flag-rollout",
+   "arm": "somi5-deliver",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 23,
+   "total": 27,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 7,
+    "agents": [
+     {
+      "type": "somi:somi-worker-low",
+      "model": "haiku"
+     }
+    ],
+    "inline_writes": 0,
+    "routed": "build",
+    "passes": 3,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "somi:somi-worker-low": {
+     "weighted": 56339.149999999994,
+     "messages": 6,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    },
+    "unknown": {
+     "weighted": 376734.39999999997,
+     "messages": 55,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 136845,
+     "messages": 20,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC7 [functional] a user on the allow list is on whatever the percent",
+    "AC7 [functional] a user on the deny list is off whatever the percent",
+    "AC4 [functional] targets that are not lists of user ids have code invalid, and a change is recorded",
+    "AC8 [functional] a prerequisite on its allow list counts as on"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 1.1,
+   "cost": 0.307906355,
+   "wall_ms": 267138,
+   "turns": 23,
+   "tokens": {
+    "input": 162,
+    "output": 37995,
+    "cacheRead": 1347128,
+    "cacheCreation": 196055
+   },
+   "weighted": 569918.55,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.26459900000000003,
+    "claude-haiku-5-5": 0.043307355
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 4,
+    "oracle_pass": false,
+    "killed": 0,
+    "total": 6
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "M04-flag-rollout.bare.1",
+   "task": "M04-flag-rollout",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 27,
+   "total": 27,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 105816.55000000002,
+     "messages": 13,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.21011780000000002,
+   "wall_ms": 77404,
+   "turns": 13,
+   "tokens": {
+    "input": 26,
+    "output": 10509,
+    "cacheRead": 297318,
+    "cacheCreation": 18811
+   },
+   "weighted": 105816.55,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.21011780000000002
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 3,
+    "oracle_pass": false,
+    "killed": 0,
+    "total": 6
+   }
+  },
+  {
+   "schema": 2,
    "draw": "M02-doc-permissions.somi5-deliver.1",
    "task": "M02-doc-permissions",
    "arm": "somi5-deliver",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 20,
+   "total": 23,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 8,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": "build",
+    "passes": 4,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "unknown": {
+     "weighted": 536260.2,
+     "messages": 78,
+     "models": [
+      "claude-haiku-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 182280.25000000003,
+     "messages": 23,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC3 [safety] a document in another organisation has code not_found for every action",
+    "AC4 [functional] each refused action is recorded once, with who, what and when",
+    "AC4 [functional] an allowed action and a missing document record nothing, and a refused one does"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.39738902,
+   "wall_ms": 343772,
+   "turns": 24,
+   "tokens": {
+    "input": 204,
+    "output": 50133,
+    "cacheRead": 1922827,
+    "cacheCreation": 220311
+   },
+   "weighted": 718540.45,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.34376300000000004,
+    "claude-haiku-5-5": 0.053626019999999996
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 4,
+    "oracle_pass": true,
+    "killed": 4,
+    "total": 6
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "M02-doc-permissions.bare.1",
+   "task": "M02-doc-permissions",
+   "arm": "bare",
    "k": 1,
    "outcome": "scored",
    "reason": "",
@@ -35,8 +300,81 @@
     "added": []
    },
    "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 94823.65000000001,
+     "messages": 13,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.18790590000000001,
+   "wall_ms": 70935,
+   "turns": 13,
+   "tokens": {
+    "input": 26,
+    "output": 8406,
+    "cacheRead": 295739,
+    "cacheCreation": 18555
+   },
+   "weighted": 94823.65,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.18790590000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "oracle_pass": true,
+    "killed": 6,
+    "total": 6
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "M01-subscription-billing.somi5-deliver.1",
+   "task": "M01-subscription-billing",
+   "arm": "somi5-deliver",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 29,
+   "total": 29,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
     "route": "tool",
-    "steps": 8,
+    "steps": 10,
     "agents": [],
     "inline_writes": 0,
     "routed": "build",
@@ -48,22 +386,21 @@
    },
    "agents": {
     "unknown": {
-     "weighted": 557968.65,
-     "messages": 73,
+     "weighted": 749158.3499999999,
+     "messages": 94,
      "models": [
-      "claude-haiku-5-5",
-      "claude-sonnet-5-5"
+      "claude-haiku-5-5"
      ]
     },
     "main": {
-     "weighted": 227309.19999999995,
-     "messages": 27,
+     "weighted": 252809.35000000003,
+     "messages": 28,
      "models": [
       "claude-sonnet-5-5"
      ]
     }
    },
-   "split_coverage": 0.36024494319364647,
+   "split_coverage": 1,
    "failed": [],
    "flags": {
     "timedOut": false,
@@ -73,28 +410,260 @@
     "taskChanged": false,
     "truncated": false
    },
-   "load": 1.1,
-   "cost": 1.6141605399999999,
-   "wall_ms": 367350,
+   "load": 0.3,
+   "cost": 0.543493935,
+   "wall_ms": 466327,
    "turns": 32,
    "tokens": {
-    "input": 552,
-    "output": 140703,
-    "cacheRead": 5038147,
-    "cacheCreation": 777570
+    "input": 244,
+    "output": 72573,
+    "cacheRead": 2629562,
+    "cacheCreation": 300722
    },
-   "weighted": 2179844.2,
+   "weighted": 1001967.7,
    "models": [
     "claude-haiku-5-5",
     "claude-sonnet-5-5"
    ],
    "spend": {
-    "claude-sonnet-5-5": 1.4726763000000003,
-    "claude-haiku-5-5": 0.14148424
+    "claude-sonnet-5-5": 0.4685781,
+    "claude-haiku-5-5": 0.07491583499999999
    },
    "compactions": 0,
    "own_tests": {
-    "tests": 5,
+    "tests": 6,
+    "oracle_pass": false,
+    "killed": 0,
+    "total": 5
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "M01-subscription-billing.bare.1",
+   "task": "M01-subscription-billing",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 29,
+   "total": 29,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 109415,
+     "messages": 12,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.9,
+   "cost": 0.22081799999999996,
+   "wall_ms": 90850,
+   "turns": 12,
+   "tokens": {
+    "input": 24,
+    "output": 11432,
+    "cacheRead": 275860,
+    "cacheCreation": 19716
+   },
+   "weighted": 109415,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.22081799999999996
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 3,
+    "oracle_pass": true,
+    "killed": 5,
+    "total": 5
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "M03-csv-import.somi5-deliver.1",
+   "task": "M03-csv-import",
+   "arm": "somi5-deliver",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 24,
+   "total": 24,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "tool",
+    "steps": 9,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": "build",
+    "passes": 1,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {
+     "Minor": 2,
+     "Nit": 2
+    }
+   },
+   "agents": {
+    "unknown": {
+     "weighted": 652490.6499999999,
+     "messages": 76,
+     "models": [
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5"
+     ]
+    },
+    "main": {
+     "weighted": 202073.40000000002,
+     "messages": 24,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.48773450999999995,
+   "wall_ms": 402010,
+   "turns": 25,
+   "tokens": {
+    "input": 202,
+    "output": 64366,
+    "cacheRead": 1984833,
+    "cacheCreation": 267239
+   },
+   "weighted": 854564.05,
+   "models": [
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.4248387,
+    "claude-haiku-5-5": 0.06289581
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 4,
+    "oracle_pass": false,
+    "killed": 0,
+    "total": 6
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "M03-csv-import.bare.1",
+   "task": "M03-csv-import",
+   "arm": "bare",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 24,
+   "total": 24,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 96474.40000000001,
+     "messages": 13,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.19110639999999998,
+   "wall_ms": 80747,
+   "turns": 13,
+   "tokens": {
+    "input": 26,
+    "output": 8766,
+    "cacheRead": 295384,
+    "cacheCreation": 18464
+   },
+   "weighted": 96474.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.19110639999999998
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 2,
     "oracle_pass": true,
     "killed": 6,
     "total": 6

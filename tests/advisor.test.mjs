@@ -10,7 +10,7 @@ import { advise } from '../scripts/lib/advisor.mjs';
 import { addToLedger, readLedger, MAX_LINES } from '../scripts/lib/ledger.mjs';
 import { closePlan, markMilestoneDone, parseMilestones, planStatus, savePlan } from '../scripts/lib/plan.mjs';
 import { classify } from '../scripts/lib/routes.mjs';
-import { readPrompt, savePrompt } from '../scripts/lib/prompt.mjs';
+import { MAX_HISTORY, MAX_HISTORY_BYTES, earlierPrompts, fit, readPrompt, savePrompt } from '../scripts/lib/prompt.mjs';
 import { setupAgent } from '../scripts/lib/setup.mjs';
 import { listShards, shardsFor, slot, confirmProjectShards, ShardError } from '../scripts/lib/shards.mjs';
 import { mainTier, resolveSpawn, resolveTier } from '../scripts/lib/tiers.mjs';
@@ -150,6 +150,8 @@ test('work the user sends with /somi:deliver runs as the staged workflow on eith
   assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
   assert.equal(r.workflow.args.request, 'Add an export of all orders as CSV');
   assert.match(r.advice, /typed \/somi:deliver[\s\S]*Workflow tool[\s\S]*follow steps instead/);
+  assert.match(r.advice, /no script and no authoring guide/);
+  assert.match(r.advice, /do not read or check the work again/, 'the conversation relays; the workflow ran the checks');
   const copilot = advise(makeCtx(makeRepo(t), { tiers: { copilot: { low: 'm-low' } } }, 'copilot'), { request: 'Add an export of all orders as CSV', staged: true });
   assert.equal(copilot.workflow.name, 'somi-deliver-stages', 'the name the Copilot extension registers');
   assert.deepEqual(copilot.workflow.args.models, { low: 'm-low' });
@@ -463,6 +465,30 @@ test('the prompt hook keeps the latest message, adds nothing, and writes nothing
   assert.equal(readPrompt(dir, env), 'a later message');
   assert.equal(run({ prompt: 'x'.repeat(70000) }).status, 0);
   assert.equal(readPrompt(dir, env).length, 65536);
+  assert.deepEqual(earlierPrompts(dir, env), [], 'with no session id, nothing is carried over');
+  run({ prompt: 'Money stays in cents.', session_id: 's1' });
+  run({ prompt: 'Now add refunds.', session_id: 's1' });
+  assert.deepEqual(earlierPrompts(dir, env), ['Money stays in cents.'], 'the hook passes the session, so earlier messages are kept');
+});
+
+test('the session\'s earlier messages go with work handed down, the first one always, and a new session starts empty', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  savePrompt(ctx.root, 'Decision: a document in another organisation is not_found.', ctx.env, { session: 'a' });
+  savePrompt(ctx.root, 'Next, add sharing.', ctx.env, { session: 'a' });
+  savePrompt(ctx.root, BIG, ctx.env, { session: 'a' });
+  assert.deepEqual(earlierPrompts(ctx.root, ctx.env), ['Decision: a document in another organisation is not_found.', 'Next, add sharing.']);
+  const brief = briefOf(advise(ctx, { request: BIG }));
+  assert.match(brief, /earlier messages[\s\S]*still holds unless a later message changes it[\s\S]*Message 1:\n> Decision: a document in another organisation is not_found\.[\s\S]*The request, as data/);
+  assert.deepEqual(advise(ctx, { request: 'Add an export', staged: true }).workflow.args.earlier, ['Decision: a document in another organisation is not_found.', 'Next, add sharing.']);
+  savePrompt(ctx.root, 'A new conversation.', ctx.env, { session: 'b' });
+  assert.deepEqual(earlierPrompts(ctx.root, ctx.env), [], 'another session carries nothing over');
+  assert.equal(advise(ctx, { request: 'Add an export', staged: true }).workflow.args.earlier, undefined);
+  const many = ['first', ...Array.from({ length: 40 }, (_, i) => `m${i}`)];
+  assert.equal(fit(many).length, MAX_HISTORY);
+  assert.equal(fit(many)[0], 'first', 'the first message stays');
+  assert.equal(fit(many).at(-1), 'm39', 'and then the newest');
+  const big = fit(['first', 'x'.repeat(MAX_HISTORY_BYTES - 10), 'y'.repeat(20), 'latest']);
+  assert.deepEqual(big.map((m) => m[0]), ['f', 'y', 'l'], 'past the byte limit the oldest after the first go');
 });
 
 const hookAt = (dir, rel, payload, hookEnv = {}) => {

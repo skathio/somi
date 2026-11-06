@@ -52,6 +52,7 @@ Nothing here steers the work. These files only remember what happened, so a new 
 - **`reviews.jsonl`:** one line per review pass: the tree it covered, the verdicts and the findings.
 - **`ledger.md`:** decisions and constraints that must outlive the context, at most 40 lines and 6 KB. Compaction drops rules and scope limits first, and what gets re-injected survives, so this comes back at every session start and with every route.
 - **`prompt.txt`:** the user's latest message, kept by a prompt hook so that routing and briefs can read the user's own words. It is overwritten by every prompt and never leaves the machine.
+- **`prompts.json`:** the same session's messages, for a worker or workflow stage, which starts with none of the conversation. Its brief quotes the earlier ones as data, and a later message wins where they disagree. The first message always stays, then the newest up to 24 messages and 64 KB. A new session starts it again, and with no session id from the host nothing is carried over. On M02 and M04, the two `/somi:deliver` draws that failed broke decisions stated only in the first message.
 - **`check.json`:** the last `somi check`, so a pull request can say whether the full suite passed on this code.
 
 `.somi/plan.md` holds an approved plan, at most 200 lines and 16 KB, and `somi plan --done N` marks a milestone in place. `somi status` and `somi pr` render every other view on demand. There are no progress or diary files, because an oversized state file is its own failure: one 4.x plan reached 11 MB.

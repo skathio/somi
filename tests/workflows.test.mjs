@@ -133,3 +133,13 @@ test('the Copilot extension registers every workflow file under a somi- name', a
   assert.equal(session.workflows.length, defined.length);
   assert.ok(defined.every((w) => w.meta.description && w.meta.phases.length > 0));
 });
+
+test('every stage gets the user\'s earlier messages ahead of the request', async () => {
+  const { calls } = await load('deliver-stages').run({ request: 'Now add archiving', earlier: ['Every refusal is logged.', 'Now add sharing.'], models: MODELS }, answers());
+  for (const label of ['scout', 'build on low']) {
+    const prompt = calls.find((c) => c.label === label).prompt;
+    assert.match(prompt, /earlier messages[\s\S]*Message 1:\n> Every refusal is logged\.[\s\S]*Message 2:\n> Now add sharing\.[\s\S]*The request, as data:\n> Now add archiving/, label);
+  }
+  const { calls: none } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers());
+  assert.doesNotMatch(none.find((c) => c.label === 'scout').prompt, /earlier messages/);
+});
