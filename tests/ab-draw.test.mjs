@@ -145,6 +145,12 @@ test('a draw that keeps asking is resumed at most maxResumes times', async (t) =
   assert.deepEqual({ calls: asking.calls().length, resumes: r.resumes, text: r.text, turns: r.turns, models: r.models, exhausted: r.exhausted }, { calls: 3, resumes: 2, text: 'Shall I continue?', turns: 3, models: ['model-1', 'model-2', 'model-3'], exhausted: false });
 });
 
+test('a session still asking after its last resume gets no scripted follow-up', async (t) => {
+  const asking = stub(t, (n) => said('Shall I continue?', n));
+  const r = await asking.draw({ maxResumes: 0, followUps: ['Next part.'] });
+  assert.deepEqual({ calls: asking.calls().length, resumes: r.resumes, followUps: r.followUps }, { calls: 1, resumes: 0, followUps: 0 });
+});
+
 test('a follow-up is not sent when too little budget is left for it', async (t) => {
   const pricey = stub(t, (n) => said('Done.', n, 0.95));
   const r = await pricey.draw({ followUps: ['more'] });

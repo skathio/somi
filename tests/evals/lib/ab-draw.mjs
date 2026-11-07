@@ -77,32 +77,47 @@ export function looksPaused(text) {
   return TERMINAL_QUESTION.test(t) || CHECKPOINT_MENU.test(t) || GATE_MENU.test(t) || EXPLICIT_REQUEST.test(t);
 }
 
+const ENV_ONE_LINE = 'the env file must hold exactly one line CLAUDE_CODE_OAUTH_TOKEN=<value>';
+const ENV_BAD_TOKEN = 'the token is missing or malformed';
+// What the file must be before it is read, checked on the lstat and again on the open descriptor: a reason, or null.
+function envFileRefusal(st) {
+  if (!st.isFile()) return 'the env file is not a regular file';
+  if ((st.mode & 0o077) !== 0) return 'the env file must not be accessible to group or others (mode 0600)';
+  if (st.uid !== process.getuid()) return 'the env file is not owned by the current user';
+  if (st.size > 4096) return 'the env file is larger than 4096 bytes';
+  return null;
+}
+function tokenValue(line, token) {
+  const m = /^(?:export\s+)?([A-Z_][A-Z0-9_]*)=(.*)$/.exec(line);
+  if (!m || m[1] !== 'CLAUDE_CODE_OAUTH_TOKEN' || token !== null) return { reason: ENV_ONE_LINE };
+  const q = /^(["'])(.*)(["'])$/.exec(m[2]);
+  if (q && q[1] !== q[3]) return { reason: ENV_BAD_TOKEN };
+  return { token: q ? q[2] : m[2] };
+}
+// The file's one token line, among blank lines and comments: {token} or {reason}.
+function tokenLine(text) {
+  let token = null;
+  for (const line of text.split('\n').map((l) => l.trim()).filter((l) => l !== '' && !l.startsWith('#'))) {
+    const value = tokenValue(line, token);
+    if (value.reason) return value;
+    token = value.token;
+  }
+  // The strict alphabet means the token's JSON form equals its raw form, so a stream scan for the raw literal is exact.
+  return token !== null && /^[A-Za-z0-9_-]{16,512}$/.test(token) ? { token } : { reason: ENV_BAD_TOKEN };
+}
+const closeQuietly = (fd) => { try { fs.closeSync(fd); } catch { /* read-only handle */ } };
+
 /** The env file -> {ok: true, token} or {ok: false, reason}. Owner-only, one regular file, one key, no echo of its content. */
 export function readEnvFile(file) {
   let fd = null;
-  const ok = (st) => st.isFile() && (st.mode & 0o077) === 0 && st.uid === process.getuid() && st.size <= 4096;
   try {
-    const l = fs.lstatSync(file);
-    if (!l.isFile()) return { ok: false, reason: 'the env file is not a regular file' };
-    if ((l.mode & 0o077) !== 0) return { ok: false, reason: 'the env file must not be accessible to group or others (mode 0600)' };
-    if (l.uid !== process.getuid()) return { ok: false, reason: 'the env file is not owned by the current user' };
-    if (l.size > 4096) return { ok: false, reason: 'the env file is larger than 4096 bytes' };
+    const refusal = envFileRefusal(fs.lstatSync(file));
+    if (refusal) return { ok: false, reason: refusal };
     fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
-    if (!ok(fs.fstatSync(fd))) return { ok: false, reason: 'the env file changed while it was opened' };
-    const text = fs.readFileSync(fd, 'utf8');
-    let token = null;
-    for (const raw of text.split('\n')) {
-      const line = raw.trim();
-      if (line === '' || line.startsWith('#')) continue;
-      const m = /^(?:export\s+)?([A-Z_][A-Z0-9_]*)=(.*)$/.exec(line);
-      if (!m || m[1] !== 'CLAUDE_CODE_OAUTH_TOKEN' || token !== null) return { ok: false, reason: 'the env file must hold exactly one line CLAUDE_CODE_OAUTH_TOKEN=<value>' };
-      const q = /^(["'])(.*)(["'])$/.exec(m[2]);
-      if (q && q[1] !== q[3]) return { ok: false, reason: 'the token is missing or malformed' };
-      token = q ? q[2] : m[2];
-    }
-    // The strict alphabet means the token's JSON form equals its raw form, so a stream scan for the raw literal is exact.
-    return token !== null && /^[A-Za-z0-9_-]{16,512}$/.test(token) ? { ok: true, token } : { ok: false, reason: 'the token is missing or malformed' };
-  } catch { return { ok: false, reason: 'the env file could not be read' }; } finally { if (fd !== null) try { fs.closeSync(fd); } catch { /* read-only handle */ } }
+    if (envFileRefusal(fs.fstatSync(fd))) return { ok: false, reason: 'the env file changed while it was opened' };
+    const read = tokenLine(fs.readFileSync(fd, 'utf8'));
+    return read.reason ? { ok: false, reason: read.reason } : { ok: true, token: read.token };
+  } catch { return { ok: false, reason: 'the env file could not be read' }; } finally { if (fd !== null) closeQuietly(fd); }
 }
 
 // ---- sandbox --------------------------------------------------------------------------------------------------
@@ -135,6 +150,37 @@ export const probeSandbox = (spec) => spawnSync('bwrap', sandboxArgs({ ...spec, 
 // ---- workspace and plugin ---------------------------------------------------------------------------------------
 
 const PATH_ONLY = (home) => ({ PATH: process.env.PATH ?? '', HOME: home });
+function copyFixture(root, files, ws) {
+  for (const [p] of files.filter(([f]) => f.startsWith('fixture/'))) {
+    const from = `${root}/${p}`; const to = path.join(ws, p.slice('fixture/'.length));
+    if (!fs.lstatSync(from).isFile()) throw new Error('a fixture entry is not a regular file');
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(from, to);
+  }
+}
+// Same invocation as task admission, so the files git cannot hold on every host exist before the snapshot.
+function runTaskSetup(root, ws) {
+  const r = spawnSync(process.execPath, [path.resolve(root, 'hidden/setup.mjs'), ws], { cwd: ws, env: PATH_ONLY(ws), stdio: 'ignore', timeout: SETUP_MS, killSignal: 'SIGKILL' });
+  if (r.error || r.status !== 0) throw new Error('the task setup failed');
+}
+function writeConfigs(ws, tmp, { config, globalConfig }) {
+  fs.mkdirSync(path.join(ws, '.somi'), { recursive: true });
+  fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify(config)}\n`);
+  // Reviewers read only the user's own config, so a recording pins their model there. childEnv makes tmp the home directory.
+  if (!globalConfig) return;
+  fs.mkdirSync(path.join(tmp, '.config', 'somi'), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(tmp, '.config', 'somi', 'config.json'), `${JSON.stringify(globalConfig)}\n`);
+}
+function commitWorkspace(ws, tmp) {
+  const git = (...a) => { const r = spawnSync('git', a, { cwd: ws, env: { ...PATH_ONLY(tmp), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore', timeout: SETUP_MS }); if (r.error || r.status !== 0) throw new Error(`git ${a[0]} failed`); };
+  git('init', '-q', '-b', 'main', '--template=');
+  git('config', 'user.name', 'somi-ab');
+  git('config', 'user.email', 'ab@example.invalid');
+  git('config', 'core.hooksPath', '/dev/null');
+  git('add', '-A');
+  git('commit', '-q', '--no-verify', '-m', 'initial');
+}
+
 /** Fresh directories under `tmp` (made by the caller with mkdtemp) -> {ws, before}; throws an Error naming the step that failed. */
 /** `cost` is the already-validated `cost` block of the workspace's .somi/config.json (plain data; the caller validates it). */
 export function prepareWorkspace({ taskDir, tmp, config = { cost: { ceiling: 'medium' } }, globalConfig }) {
@@ -144,32 +190,10 @@ export function prepareWorkspace({ taskDir, tmp, config = { cost: { ceiling: 'me
   const root = taskDir.replace(/\/+$/, '');
   const m = lstatManifest(root);
   if (!m?.ok) throw new Error('the task directory could not be read');
-  for (const [p] of m.files) {
-    if (!p.startsWith('fixture/')) continue;
-    const from = `${root}/${p}`; const to = path.join(ws, p.slice('fixture/'.length));
-    if (!fs.lstatSync(from).isFile()) throw new Error('a fixture entry is not a regular file');
-    fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.copyFileSync(from, to);
-  }
-  // Same invocation as task admission, so the files git cannot hold on every host exist before the snapshot.
-  if (m.files.some(([p]) => p === 'hidden/setup.mjs')) {
-    const r = spawnSync(process.execPath, [path.resolve(root, 'hidden/setup.mjs'), ws], { cwd: ws, env: PATH_ONLY(ws), stdio: 'ignore', timeout: SETUP_MS, killSignal: 'SIGKILL' });
-    if (r.error || r.status !== 0) throw new Error('the task setup failed');
-  }
-  fs.mkdirSync(path.join(ws, '.somi'), { recursive: true });
-  fs.writeFileSync(path.join(ws, '.somi', 'config.json'), `${JSON.stringify(config)}\n`);
-  // Reviewers read only the user's own config, so a recording pins their model there. childEnv makes tmp the home directory.
-  if (globalConfig) {
-    fs.mkdirSync(path.join(tmp, '.config', 'somi'), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(path.join(tmp, '.config', 'somi', 'config.json'), `${JSON.stringify(globalConfig)}\n`);
-  }
-  const git = (...a) => { const r = spawnSync('git', a, { cwd: ws, env: { ...PATH_ONLY(tmp), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore', timeout: SETUP_MS }); if (r.error || r.status !== 0) throw new Error(`git ${a[0]} failed`); };
-  git('init', '-q', '-b', 'main', '--template=');
-  git('config', 'user.name', 'somi-ab');
-  git('config', 'user.email', 'ab@example.invalid');
-  git('config', 'core.hooksPath', '/dev/null');
-  git('add', '-A');
-  git('commit', '-q', '--no-verify', '-m', 'initial');
+  copyFixture(root, m.files, ws);
+  if (m.files.some(([p]) => p === 'hidden/setup.mjs')) runTaskSetup(root, ws);
+  writeConfigs(ws, tmp, { config, globalConfig });
+  commitWorkspace(ws, tmp);
   const before = lstatManifest(ws);
   if (!before?.ok) throw new Error('the before manifest was refused');
   return { ws, before };
@@ -223,56 +247,79 @@ export function runClaude({ command, args, env, cwd, sink, timeoutMs, kills, fdT
   });
 }
 
-/** All turns of one draw -> the facts classify() needs. The token is only ever handed to the child and the sink. */
-export async function runDraw({ followUps = [], settings, model, arm, prompt, budget, timeoutMs, claude, env, cwd, plugin, drawDir, token, tokenFd, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES, sandbox, kills, maxResumes = MAX_RESUMES }) {
-  const sink = createSink(path.join(drawDir, 'stream.jsonl'), { token, canary, task, absAb, ownTmp, maxBytes });
-  const run = { arm, cost: 0, turns: 0, resumes: 0, followUps: 0, models: new Set(), exhausted: false, error: null, timedOut: false, stderr: '', result: null };
-  const deadline = Date.now() + timeoutMs; const started = Date.now();
-  let session = null; let text = prompt;
-  const sessionCosts = new Map();
-  try {
-    for (;;) {
-      sink.turn();
-      const argv = claudeArgv({ model, arm, prompt: text, budget: budget - run.cost, plugin, resume: session, settings });
-      const launch = sandbox ? { command: 'bwrap', args: sandboxArgs({ ...sandbox, rw: [ownTmp] }, claude, argv) } : { command: claude, args: argv };
-      const r = await runClaude({ ...launch, env, cwd, sink, timeoutMs: deadline - Date.now(), kills, fdToken: tokenFd ? token : null });
-      run.stderr += r.stderr; run.error = r.error; run.timedOut = r.timedOut;
-      const res = sink.state.result; run.result = res;
-      if (r.error || r.timedOut || sink.state.capped || !res) break;
-      // A resumed session reports what the whole session has cost so far, so each session counts once, at its latest total.
-      sessionCosts.set(typeof res.session_id === 'string' ? res.session_id : `run-${sessionCosts.size}`, Number.isFinite(res.total_cost_usd) ? res.total_cost_usd : 0);
-      run.cost = [...sessionCosts.values()].reduce((s, c) => s + c, 0);
-      run.turns += sink.state.turns;
-      for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
-      session = typeof res.session_id === 'string' ? res.session_id : null;
-      if (sink.state.limit || res.subtype !== 'success' || session === null) break;
-      // A session that asked a question gets the fixed approval. One that finished gets the task's next scripted message, the way a
-      // user carries on a conversation, so a task can test what survives across turns.
-      const paused = looksPaused(sink.state.text);
-      const resume = paused && run.resumes < maxResumes;
-      const followUp = !paused && run.followUps < followUps.length;
-      if (!resume && !followUp) break;
-      if (budget - run.cost < MIN_REMAINING_USD) { run.exhausted = true; break; }
-      if (resume) { run.resumes++; text = RESUME_PROMPT; } else { text = followUps[run.followUps]; run.followUps++; }
-    }
-  } finally { await sweepProcesses(`CLAUDE_CONFIG_DIR=${env.CLAUDE_CONFIG_DIR}`); sink.end(); }
-  return { ...run, models: [...run.models].sort(), text: sink.state.text, leaks: [...sink.state.leaks].sort(), capped: sink.state.capped, limit: sink.state.limit, reset: sink.state.reset, wallMs: Date.now() - started, stderr: redactToken(run.stderr, token) };
+// A resumed session reports what the whole session has cost so far, so each session counts once, at its latest total.
+function addUsage({ run, loop }, res, turns) {
+  loop.sessionCosts.set(typeof res.session_id === 'string' ? res.session_id : `run-${loop.sessionCosts.size}`, Number.isFinite(res.total_cost_usd) ? res.total_cost_usd : 0);
+  run.cost = [...loop.sessionCosts.values()].reduce((s, c) => s + c, 0);
+  run.turns += turns;
+  for (const k of Object.keys(res.modelUsage ?? {})) run.models.add(k);
+  loop.session = typeof res.session_id === 'string' ? res.session_id : null;
 }
 
-/** Facts -> {outcome, reason} in the compareArms vocabulary; the first matching rule wins. */
-export function classify({ run, arm, budget }) {
-  const inv = (reason) => ({ outcome: 'invalid', reason });
-  const r = run.result;
-  if (run.error) return inv(`spawn-error:${run.error}`);
-  if (run.leaks.length > 0) return inv(`leak:${run.leaks.join(',')}`);
-  if (run.capped) return inv('output-cap');
-  if (run.timedOut) return inv('timeout');
+// One invocation, folded into the run: its result event, or null when it failed or ended without one.
+async function oneCall(o, draw) {
+  const { sink, run, loop } = draw;
+  sink.turn();
+  const argv = claudeArgv({ model: o.model, arm: o.arm, prompt: loop.text, budget: o.budget - run.cost, plugin: o.plugin, resume: loop.session, settings: o.settings });
+  const launch = o.sandbox ? { command: 'bwrap', args: sandboxArgs({ ...o.sandbox, rw: [o.ownTmp] }, o.claude, argv) } : { command: o.claude, args: argv };
+  const r = await runClaude({ ...launch, env: o.env, cwd: o.cwd, sink, timeoutMs: loop.deadline - Date.now(), kills: o.kills, fdToken: o.tokenFd ? o.token : null });
+  run.stderr += r.stderr; run.error = r.error; run.timedOut = r.timedOut;
+  const res = sink.state.result; run.result = res;
+  if (r.error || r.timedOut || sink.state.capped || !res) return null;
+  addUsage(draw, res, sink.state.turns);
+  return res;
+}
+
+// What the draw sends next, or null when it is done. A session that asked a question gets the fixed approval. One that finished gets the
+// task's next scripted message, the way a user carries on a conversation, so a task can test what survives across turns.
+function nextMessage(o, { sink, run, loop }, res) {
+  if (sink.state.limit || res.subtype !== 'success' || loop.session === null) return null;
+  const paused = looksPaused(sink.state.text);
+  const resume = paused && run.resumes < o.maxResumes;
+  const followUp = !paused && run.followUps < o.followUps.length;
+  if (!resume && !followUp) return null;
+  if (o.budget - run.cost < MIN_REMAINING_USD) { run.exhausted = true; return null; }
+  if (resume) { run.resumes++; return RESUME_PROMPT; }
+  return o.followUps[run.followUps++];
+}
+
+/** All turns of one draw -> the facts classify() needs. The token is only ever handed to the child and the sink. */
+export async function runDraw({ followUps = [], maxBytes = MAX_STREAM_BYTES, maxResumes = MAX_RESUMES, ...rest }) {
+  const o = { ...rest, followUps, maxResumes };
+  const sink = createSink(path.join(o.drawDir, 'stream.jsonl'), { token: o.token, canary: o.canary, task: o.task, absAb: o.absAb, ownTmp: o.ownTmp, maxBytes });
+  const run = { arm: o.arm, cost: 0, turns: 0, resumes: 0, followUps: 0, models: new Set(), exhausted: false, error: null, timedOut: false, stderr: '', result: null };
+  const started = Date.now();
+  const draw = { sink, run, loop: { deadline: started + o.timeoutMs, session: null, text: o.prompt, sessionCosts: new Map() } };
+  try {
+    for (;;) {
+      const res = await oneCall(o, draw);
+      const next = res && nextMessage(o, draw, res);
+      if (!next) break;
+      draw.loop.text = next;
+    }
+  } finally { await sweepProcesses(`CLAUDE_CONFIG_DIR=${o.env.CLAUDE_CONFIG_DIR}`); sink.end(); }
+  return { ...run, models: [...run.models].sort(), text: sink.state.text, leaks: [...sink.state.leaks].sort(), capped: sink.state.capped, limit: sink.state.limit, reset: sink.state.reset, wallMs: Date.now() - started, stderr: redactToken(run.stderr, o.token) };
+}
+
+// The draws that say nothing about the arm, in order: the first that matches names the reason.
+const INVALID = [
+  [(run) => run.error, (run) => `spawn-error:${run.error}`],
+  [(run) => run.leaks.length > 0, (run) => `leak:${run.leaks.join(',')}`],
+  [(run) => run.capped, () => 'output-cap'],
+  [(run) => run.timedOut, () => 'timeout'],
   // An exhausted usage window ends a call as a success; it is an infrastructure failure and outranks every other reading.
-  if (run.limit) return inv('account-limit');
+  [(run) => run.limit, () => 'account-limit'],
   // The CLI ended the session on its own background-wait ceiling: the work never finished, so the score says nothing.
-  if (/Background tasks still running after/.test(run.stderr)) return inv('bg-wait-ceiling');
-  if (!r) return inv(AUTH_STDERR.test(run.stderr) ? 'auth' : 'no-result');
-  if (r.is_error && (AUTH_STDERR.test(run.stderr) || /please run \/login/i.test(String(r.result ?? '')))) return inv('auth');
+  [(run) => /Background tasks still running after/.test(run.stderr), () => 'bg-wait-ceiling'],
+  [(run) => !run.result, (run) => (AUTH_STDERR.test(run.stderr) ? 'auth' : 'no-result')],
+  [(run) => run.result.is_error && (AUTH_STDERR.test(run.stderr) || /please run \/login/i.test(String(run.result.result ?? ''))), () => 'auth'],
+];
+
+/** Facts -> {outcome, reason} in the compareArms vocabulary; the first matching rule wins. */
+export function classify({ run, budget }) {
+  const invalid = INVALID.find(([when]) => when(run));
+  if (invalid) return { outcome: 'invalid', reason: invalid[1](run) };
+  const r = run.result;
   if (r.subtype === 'error_max_budget_usd' || run.cost > budget || run.exhausted) return { outcome: 'over-budget', reason: 'budget exhausted' };
   if (r.subtype === 'success' && looksPaused(run.text)) return { outcome: 'paused', reason: `still waiting after ${run.resumes} resume(s)` };
   return { outcome: 'scored', reason: r.subtype === 'success' ? '' : String(r.subtype ?? 'no-subtype').slice(0, 40) };
