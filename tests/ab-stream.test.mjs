@@ -211,3 +211,17 @@ test('the sweep kills every process holding the draw\'s config entry, even one i
   assert.equal(await ends(mine), true);
   assert.equal(alive(other), true, 'a prefix of the entry is not a match');
 });
+
+test('a file that vanishes during the walk is skipped, and the rest are still redacted', (t) => {
+  const d = draw(t, { files: { 'a.txt': 'gone soon', 'b.txt': TOKEN } });
+  const real = fs.lstatSync;
+  t.mock.method(fs, 'lstatSync', (p, ...a) => { if (p.endsWith('a.txt')) throw Object.assign(new Error('gone'), { code: 'ENOENT' }); return real(p, ...a); });
+  assert.deepEqual(d.inspect({ after: { ok: true, files: [] } }), ['token']);
+  assert.equal(fs.readFileSync(path.join(d.ws, 'b.txt'), 'utf8'), '[REDACTED]');
+});
+
+test('a sweep with nothing to kill returns at once', async (t) => {
+  const started = Date.now();
+  await sweepProcesses(`CLAUDE_CONFIG_DIR=${scratch(t)}/none`);
+  assert.ok(Date.now() - started < 1000, 'a process it did not kill, or could not read, is not counted');
+});
