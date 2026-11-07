@@ -98,10 +98,28 @@ function scoreUnit(ctx, { file, lines, after, before }) {
   }
 }
 
-// A change may not take a file over its limit, nor add more than the per-change limit at once, however its functions are cut up.
-function scoreTotals(ctx, file, now, was) {
+// A change may not take a file over its limit, nor add more than the per-change limit at once, however its functions are cut up. What
+// it moved in from another file it touched is not added, so splitting a file into modules is not refused for its size.
+function scoreTotals(ctx, { file, now, was, moved }) {
   if (now > ctx.limits.file.cognitive && was <= ctx.limits.file.cognitive) flag(ctx, { rule: 'file-cognitive', file, line: 1, value: now, limit: ctx.limits.file.cognitive, before: was });
-  if (now - was > ctx.limits.file.added_cognitive) flag(ctx, { rule: 'file-added-cognitive', file, line: 1, value: now - was, limit: ctx.limits.file.added_cognitive });
+  const added = now - was - moved;
+  if (added > ctx.limits.file.added_cognitive) flag(ctx, { rule: 'file-added-cognitive', file, line: 1, value: added, limit: ctx.limits.file.added_cognitive, ...(moved > 0 ? { moved } : {}) });
+}
+
+// A function's text, trimmed line by line, so the same function moved elsewhere, or indented differently, has the same key.
+const keyOf = (lines, u) => lines.slice(u.start - 1, u.end).map((l) => l.trim()).join('\n');
+const countOf = (keys) => keys.reduce((m, k) => m.set(k, (m.get(k) ?? 0) + 1), new Map());
+
+// A function is moved, not added, when its file did not have it, the files the change touched did, and it occurs no more often after
+// the change than before. A copy occurs more often, and a function changed on the way has a new key, so both still count in full.
+function scoreMoves(ctx) {
+  const before = countOf(ctx.moves.before);
+  const after = countOf(ctx.moves.after);
+  const moved = (key) => (before.get(key) ?? 0) >= after.get(key);
+  for (const { units, own, ...totals } of ctx.totals) {
+    const credit = units.filter((u) => !own.has(u.key) && moved(u.key)).reduce((s, u) => s + u.cognitive, 0);
+    scoreTotals(ctx, { ...totals, moved: credit });
+  }
 }
 
 // A tree lives in the parser's WebAssembly memory, which the garbage collector does not free, so each one is deleted as soon as what
@@ -111,14 +129,21 @@ export async function withTree(file, text, read) {
   try { return read(parsed); } finally { parsed?.tree?.delete(); }
 }
 
+const NO_VERSION = Object.freeze({ units: [], keys: [], total: 0, tokens: null });
 async function previousVersion(ctx, file, status, test) {
   const text = status.startsWith('A') ? null : fileAt(ctx.root, ctx.from, file);
-  if (text === null) return { units: [], total: 0, tokens: null };
+  if (text === null || skipped(file, text)) return NO_VERSION;
+  const lines = text.split('\n');
   return withTree(file, text, (parsed) => {
-    if (!parsed?.tree) return { units: [], total: 0, tokens: null };
+    if (!parsed?.tree) return NO_VERSION;
     const units = unitsOf(parsed.tree, { file, isTest: test });
-    return { units, total: total(units, topLevelCognitive(parsed.tree)), tokens: JS_FAMILY.has(parsed.language) && !test ? tokensOf(parsed.tree) : null };
+    return { units, keys: units.map((u) => keyOf(lines, u)), total: total(units, topLevelCognitive(parsed.tree)), tokens: JS_FAMILY.has(parsed.language) && !test ? tokensOf(parsed.tree) : null };
   });
+}
+
+// A deleted file scores nothing, but what it held may have moved to another file the change touched.
+async function recordDeleted(ctx, file, status) {
+  ctx.moves.before.push(...(await previousVersion(ctx, file, status, isTest(file))).keys);
 }
 
 async function scoreCode(ctx, { file, status, added, lines, tree, language, errors }) {
@@ -128,7 +153,10 @@ async function scoreCode(ctx, { file, status, added, lines, tree, language, erro
   // A function the parser could not follow is not scored, and with any such function the file's total is not trusted either.
   const readable = (u) => !errors.some(([a, b]) => a <= u.end && b >= u.start);
   for (const pair of pairUnits(old.units, units)) if (touches(pair.after, added) && readable(pair.after)) scoreUnit(ctx, { file, lines, ...pair });
-  if (errors.length === 0) scoreTotals(ctx, file, total(units, topLevelCognitive(tree)), old.total);
+  const keyed = units.map((u) => ({ key: keyOf(lines, u), cognitive: u.cognitive }));
+  ctx.moves.before.push(...old.keys);
+  ctx.moves.after.push(...keyed.map((u) => u.key));
+  if (errors.length === 0) ctx.totals.push({ file, now: total(units, topLevelCognitive(tree)), was: old.total, units: keyed, own: new Set(old.keys) });
   // Copies are looked for in product code. Copied setup between tests is mostly benign (Kapser and Godfrey), and it was most of the
   // false alarms on known-good projects.
   if (!JS_FAMILY.has(language) || test) return;
@@ -138,7 +166,8 @@ async function scoreCode(ctx, { file, status, added, lines, tree, language, erro
 }
 
 async function scoreFile(ctx, file, { status, added }) {
-  if (status.startsWith('D') || !languageOf(file)) return;
+  if (!languageOf(file)) return;
+  if (status.startsWith('D')) return recordDeleted(ctx, file, status);
   const text = fileAt(ctx.root, ctx.to, file);
   if (text === null || skipped(file, text)) return;
   const lines = text.split('\n');
@@ -191,9 +220,10 @@ async function restOfRepo(ctx, touched) {
  * { rule, file, line, name?, value, limit, before? }.
  */
 export async function qualityGate(root, { from, to, limits, now = new Date().toISOString(), mode = 'project', repoFiles = [], cache = null }) {
-  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, violations: [], warnings: [], exemptions: [], unanalyzed: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [] };
+  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, violations: [], warnings: [], exemptions: [], unanalyzed: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [], totals: [], moves: { before: [], after: [] } };
   const changed = addedRanges(root, from, to);
   for (const [file, change] of changed) await scoreFile(ctx, file, change);
+  scoreMoves(ctx);
   const rest = await restOfRepo(ctx, new Set(changed.keys()));
   for (const c of findClones({ after: ctx.cloneAfter, before: ctx.cloneBefore, rest })) flag(ctx, { rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other });
   return { ok: ctx.violations.length === 0, violations: ctx.violations, warnings: ctx.warnings, exemptions: ctx.exemptions, scored: ctx.scored, unanalyzed: ctx.unanalyzed };

@@ -164,6 +164,32 @@ test('a change that takes a function over a limit fails, one already over that g
   assert.equal(added?.value, 30, 'five functions of 6 each, under the per-function limit, still add 30 to one file at once');
 });
 
+test('code moved between files the change touches is not added, but a copy or a changed function is', async (t) => {
+  const r = repo(t);
+  const parts = Array.from({ length: 5 }, (_, i) => `export function part${i}(a, b, c) {\n  if (a) { if (b) { if (c) { return ${i}; } } }\n  return -1;\n}\n`);
+  r.write('src/a.js', `export const keep = 1;\n${parts.join('')}`);
+  r.write('src/gone.js', parts.slice(0, 2).join('').replaceAll('part', 'old'));
+  r.git('add', '-A'); r.git('commit', '-qm', 'base');
+  const cap = async () => (await gate(r, { scope: 'commit' })).violations.filter((v) => v.rule === 'file-added-cognitive').map((v) => [v.file, v.value, v.moved]);
+  r.write('src/a.js', 'export const keep = 1;\n');
+  r.write('src/b.js', parts.map((p) => p.replaceAll('\n  ', '\n    ')).join(''));
+  assert.deepEqual(await cap(), [], 'five functions moved to a new file, reindented, add nothing');
+  r.write('src/a.js', `export const keep = 1;\n${parts.join('')}`);
+  assert.deepEqual(await cap(), [['src/b.js', 30, undefined]], 'a copy that leaves the original in place is added');
+  r.write('src/a.js', 'export const keep = 1;\n');
+  r.write('src/b.js', parts.map((p) => p.replace('return -1', 'return -2')).join(''));
+  assert.deepEqual(await cap(), [['src/b.js', 30, undefined]], 'a function changed on the way is added');
+  r.write('src/b.js', parts.join(''));
+  r.write('src/c.js', parts.join(''));
+  assert.deepEqual(await cap(), [['src/b.js', 30, undefined], ['src/c.js', 30, undefined]], 'moved to two places at once is a copy: neither is credited');
+  fs.rmSync(path.join(r.dir, 'src', 'c.js'));
+  r.write('src/b.js', `${parts.slice(0, 4).join('')}export function fresh(a, b, c, d) {\n  if (a) { if (b) { if (c) { if (d) { return 1; } } } }\n  return 0;\n}\n`);
+  assert.deepEqual(await cap(), [], 'four moved and one new one of 10 add 10');
+  r.git('rm', '-q', 'src/gone.js');
+  r.write('src/b.js', [...parts, ...parts.slice(0, 2).map((p) => p.replaceAll('part', 'old'))].join(''));
+  assert.deepEqual(await cap(), [], 'what a deleted file held is moved too');
+});
+
 test('suppressions, syntax errors and generated files', async (t) => {
   const r = repo(t);
   r.write('src/a.js', 'export const a = 1;\n');
