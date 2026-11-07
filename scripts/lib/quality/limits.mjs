@@ -11,7 +11,9 @@
 // only tighten: a looser value there is ignored and reported. A benchmark scores a whole draw as a pull request with the defaults alone,
 // so its results stay comparable.
 
-export const SCOPES = Object.freeze(['commit', 'pr']);
+// commit and pr gate a change. repo is a report on the whole codebase as it stands, for cleanups and refactors.
+export const CHANGE_SCOPES = Object.freeze(['commit', 'pr']);
+export const SCOPES = Object.freeze([...CHANGE_SCOPES, 'repo']);
 
 export const DEFAULT_LIMITS = Object.freeze({
   function: Object.freeze({ cognitive: 15, depth: 4, lines: 60, params: 4 }),
@@ -23,11 +25,11 @@ export const DEFAULT_LIMITS = Object.freeze({
   suppressions: Object.freeze({ added: 0 }),
 });
 
-const SCOPE_DEFAULTS = Object.freeze({ commit: {}, pr: { file: { added_cognitive: 100 } } });
+const SCOPE_DEFAULTS = Object.freeze({ commit: {}, pr: { file: { added_cognitive: 100 } }, repo: {} });
 
 /** The default limits at one scope, as a fresh object. */
 export function limitsFor(scope = 'pr') {
-  if (!SCOPES.includes(scope)) throw new Error(`the quality scope is commit or pr, not ${scope}`);
+  if (!SCOPES.includes(scope)) throw new Error(`the quality scope is ${SCOPES.join(', ')}, not ${scope}`);
   const limits = Object.fromEntries(Object.entries(DEFAULT_LIMITS).map(([group, values]) => [group, { ...values }]));
   for (const [group, values] of Object.entries(SCOPE_DEFAULTS[scope])) Object.assign(limits[group], values);
   return limits;

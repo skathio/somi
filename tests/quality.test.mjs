@@ -85,7 +85,7 @@ test('a commit and a pull request share every limit but how much one change may 
   assert.equal(limitsFor('commit').file.added_cognitive, 25);
   assert.equal(limitsFor('pr').file.added_cognitive, 100, 'a branch can add a new module');
   assert.deepEqual({ ...limitsFor('pr'), file: null }, { ...limitsFor('commit'), file: null });
-  assert.throws(() => limitsFor('release'), /commit or pr/);
+  assert.throws(() => limitsFor('release'), /commit, pr, repo/);
   const global = { quality: { function: { cognitive: 20 }, pr: { function: { cognitive: 25 } }, commit: { file: { added_cognitive: 40 } } } };
   assert.equal(resolveLimits({ global, scope: 'pr' }).limits.function.cognitive, 25, 'a scope overrides the shared value');
   assert.equal(resolveLimits({ global, scope: 'commit' }).limits.function.cognitive, 20);
@@ -260,4 +260,28 @@ test('somi check runs the quality gate at commit scope, --scope pr holds a chang
 
 test('a staged build is checked at the branch scope', () => {
   assert.match(fs.readFileSync(path.join(REPO, 'workflows', 'deliver-stages.js'), 'utf8'), /check --scope pr/);
+});
+
+test('the repo scope reports the whole codebase as it stands, worst first, and somi check does not take it', (t) => {
+  const r = repo(t);
+  const copy = 'export function load(store, id) {\n  const row = store.rows.get(id);\n  if (!row) return { ok: false, error: { code: \'not_found\' } };\n  if (row.deleted) return { ok: false, error: { code: \'gone\' } };\n  const owner = store.users.get(row.ownerId);\n  if (!owner || owner.disabled) return { ok: false, error: { code: \'forbidden\' } };\n  return { ok: true, value: { ...row, owner: owner.name, seen: store.clock() } };\n}\n';
+  r.write('src/old.js', `${PYRAMID('legacy')}${copy}`);
+  r.write('src/again.js', copy.replace('function load', 'function fetchRow'));
+  r.write('src/ok.js', 'export const ok = 1;\n');
+  r.git('add', '-A'); r.git('commit', '-qm', 'old code');
+  const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
+  const somi = (...args) => spawnSync(process.execPath, [CLI, ...args], { cwd: r.dir, encoding: 'utf8', env });
+  assert.equal(JSON.parse(somi('quality', '--scope', 'pr').stdout).ok, true, 'a change scope sees nothing: nothing changed');
+  const run = somi('quality', '--scope', 'repo');
+  assert.equal(run.status, 1);
+  const report = JSON.parse(run.stdout);
+  assert.equal(report.scope, 'repo');
+  assert.ok(report.violations.some((v) => v.rule === 'depth' && v.name === 'legacy'), 'old code a diff never touches is reported');
+  assert.ok(report.violations.some((v) => v.rule === 'clone'), 'and so is a copy that was already there');
+  assert.equal(report.summary.most_complex[0].name, 'legacy', 'worst first');
+  assert.equal(report.summary.most_findings[0].file, 'src/old.js');
+  const global = path.join(r.dir, 'global.json');
+  fs.writeFileSync(global, JSON.stringify({ quality: { repo: { function: { depth: 9, cognitive: 40 }, clones: { tokens: 1000 } } } }));
+  assert.equal(spawnSync(process.execPath, [CLI, 'quality', '--scope', 'repo'], { cwd: r.dir, encoding: 'utf8', env: { ...env, SOMI_GLOBAL_CONFIG: global } }).status, 0, 'the repo scope has its own limits under quality.repo');
+  assert.equal(somi('check', '--scope', 'repo').status, 64, 'somi check gates a change, not the whole codebase');
 });

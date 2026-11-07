@@ -95,6 +95,8 @@ Set your own under `quality` in the same global file, and give either scope its 
 
 A project's `.somi/config.json` can only make a limit stricter: a looser value there is ignored, and `somi quality` says so. SoMi asks before an agent changes a limit.
 
+For a cleanup or a refactor, `somi quality --scope repo` reports on the whole codebase as it stands: every function and file over a limit, every copy in product code and every suppression with no reason. It lists the most complex functions and the files with the most findings first. Give it its own limits under `quality.repo`.
+
 `somi check` runs the gate on every commit, and `somi check --full` before a push at branch scope. `somi pr` writes no pull request text while the branch fails it. `/somi:deliver` checks each build at branch scope and steps the build up a tier with the findings.
 
 ## Connect other plugins with shards

@@ -167,6 +167,9 @@
     ],
     "scripts/lib/quality/run.mjs": [
       "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/repo.mjs": [
+      "tests/quality.test.mjs"
     ]
   }
 }

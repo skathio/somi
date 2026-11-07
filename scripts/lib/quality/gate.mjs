@@ -23,18 +23,18 @@ const SUPPRESSION = /eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|NOSO
 const REASONED = /eslint-disable[^\n]*\s--\s+\S.{8,}|@ts-(expect-error|ignore)\s*:?\s+\S.{8,}|stylelint-disable[^\n]*\s--\s+\S.{8,}/;
 const ALLOW = /somi-gate-allow\s+([a-z_-]+)\s+reason="([^"]{20,})"\s+expires=(\d{4}-\d{2}-\d{2})/;
 export const MAX_EXEMPTION_DAYS = 90;
-const METRICS = ['cognitive', 'depth', 'lines', 'params'];
-const JS_FAMILY = new Set(['javascript', 'typescript', 'tsx']);
+export const METRICS = ['cognitive', 'depth', 'lines', 'params'];
+export const JS_FAMILY = new Set(['javascript', 'typescript', 'tsx']);
 const MAX_REPO_FILES = 3000;
 
 const touches = (unit, ranges) => ranges.some(([a, b]) => a <= unit.end && b >= unit.start);
-const isTest = (file) => TEST_FILE.test(file);
-const skipped = (file, text) => SKIPPED.test(file) || MINIFIED.test(file) || GENERATED.test(text.split('\n').slice(0, 5).join('\n'));
-const total = (units, top) => units.reduce((s, u) => s + u.cognitive, 0) + top;
+export const isTest = (file) => TEST_FILE.test(file);
+export const skipped = (file, text) => SKIPPED.test(file) || MINIFIED.test(file) || GENERATED.test(text.split('\n').slice(0, 5).join('\n'));
+export const total = (units, top) => units.reduce((s, u) => s + u.cognitive, 0) + top;
 
 // An exemption sits on the line just above the function. It needs a reason of 20 characters or more and an expiry no more than 90 days
 // out. In benchmark mode none counts: an agent writing its own exemption is a violation.
-function exemption(ctx, lines, unit, rule) {
+export function exemption(ctx, lines, unit, rule) {
   const m = ALLOW.exec(lines[unit.start - 2] ?? '');
   if (!m || (m[1] !== rule && m[1] !== 'all') || ctx.mode === 'benchmark') return null;
   const expires = Date.parse(`${m[3]}T00:00:00Z`);
@@ -62,7 +62,7 @@ function scoreComment(ctx, file, line, text) {
 // A directive opens its comment: // eslint-disable-next-line, /* @ts-nocheck */. A comment that only mentions one is prose.
 const DIRECTIVE = /^(\/\/|\/\*+|#)\s*(eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|NOSONAR|nolint|stylelint-disable|istanbul ignore|c8 ignore|somi-gate-allow)/;
 
-function scoreComments(ctx, file, tree, added) {
+export function scoreComments(ctx, file, tree, added) {
   const visit = (n) => {
     if (n.type === 'comment') { if (inAdded(added, n.startPosition.row + 1) && DIRECTIVE.test(n.text)) scoreComment(ctx, file, n.startPosition.row + 1, n.text); return; }
     for (const c of n.children) visit(c);
@@ -75,7 +75,7 @@ function scoreLines(ctx, file, lines, added) {
   for (const [i, line] of lines.entries()) if (inAdded(added, i + 1)) scoreComment(ctx, file, i + 1, line);
 }
 
-function scoreCss(ctx, file, tree, added) {
+export function scoreCss(ctx, file, tree, added) {
   for (const r of cssRules(tree).filter((x) => added.some(([a, b]) => a <= x.end && b >= x.line))) {
     for (const rule of ['nesting', 'compound', 'ids', 'important']) {
       if (r[rule] > ctx.limits.css[rule]) flag(ctx, { rule: `css-${rule}`, file, line: r.line, value: r[rule], limit: ctx.limits.css[rule] });
@@ -106,7 +106,7 @@ function scoreTotals(ctx, file, now, was) {
 
 // A tree lives in the parser's WebAssembly memory, which the garbage collector does not free, so each one is deleted as soon as what
 // the gate needs has been taken from it. Without that a large repository fills the memory and the runtime aborts.
-async function withTree(file, text, read) {
+export async function withTree(file, text, read) {
   const parsed = await parseSource(file, text);
   try { return read(parsed); } finally { parsed?.tree?.delete(); }
 }
