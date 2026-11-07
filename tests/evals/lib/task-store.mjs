@@ -109,7 +109,8 @@ const dirPath = (p, field) => {
   return p;
 };
 
-function readTask(obj) {
+// Every required key, each read once as a plain data property; an unknown key or a missing one is refused.
+function rawFields(obj) {
   plainObject(obj, 'task.json');
   const keys = Reflect.ownKeys(obj);
   const extra = keys.find((k) => !KEYS.includes(k) && !OPTIONAL.includes(k));
@@ -120,22 +121,44 @@ function readTask(obj) {
     if (!keys.includes(k)) bad(k, 'missing');
     raw[k] = own(obj, k, k);
   }
-  if (raw.schema_version !== 1) bad('schema_version', 'must be 1');
-  const statements = distinct(list(raw.statements, 'statements', 1), 'statements');
-  if (!statements.every(isText)) bad('statements', 'a line is not plain 1..512-unit text');
-  if (!RUNNERS.includes(raw.runner)) bad('runner', `must be one of ${RUNNERS.join(', ')}`);
-  if (typeof raw.canary !== 'string' || !CANARY.test(raw.canary)) bad('canary', 'must match [A-Za-z0-9_-]{16,64}');
+  return { raw, keys };
+}
+
+const textLines = (v, field, why) => {
+  const lines = distinct(list(v, field, 1), field);
+  if (!lines.every(isText)) bad(field, why);
+  return lines;
+};
+
+// The declared scope: source entries (a trailing '/' marks a directory), the test directory and the root files.
+function readScope(raw) {
   const source = list(raw.source, 'source', 1);
-  // A trailing '/' marks a directory; "src" and "src/" name the same path, so they are duplicates.
+  // "src" and "src/" name the same path, so they are duplicates.
   const bare = source.map((p) => dirPath(typeof p === 'string' && p.endsWith('/') ? p.slice(0, -1) : p, 'source'));
   distinct(bare, 'source');
   const testDir = dirPath(raw.test_dir, 'test_dir');
   const rootFiles = distinct(list(raw.root_files, 'root_files', 0), 'root_files');
   if (!rootFiles.every((p) => typeof p === 'string' && validPath(p) && !p.includes('/') && !reserved(p))) bad('root_files', 'a name is not a single valid path segment');
-  if (!isBrief(raw.brief)) bad('brief', 'must be 1..8192 units of plain text');
+  return { source, test_dir: testDir, root_files: rootFiles };
+}
+
+function readTurns(obj, keys) {
   const turns = keys.includes('turns') ? distinct(list(own(obj, 'turns', 'turns'), 'turns', 1), 'turns') : [];
   if (turns.length > 16 || !turns.every(isText)) bad('turns', 'must be 1..16 lines of plain 1..512-unit text');
-  return { schema_version: 1, statements, runner: raw.runner, canary: raw.canary, source, test_dir: testDir, root_files: rootFiles, brief: raw.brief, turns };
+  return turns;
+}
+
+// The fields are checked in a fixed order, so the first rule a task breaks is the one its refusal names.
+function readTask(obj) {
+  const { raw, keys } = rawFields(obj);
+  if (raw.schema_version !== 1) bad('schema_version', 'must be 1');
+  const statements = textLines(raw.statements, 'statements', 'a line is not plain 1..512-unit text');
+  if (!RUNNERS.includes(raw.runner)) bad('runner', `must be one of ${RUNNERS.join(', ')}`);
+  if (typeof raw.canary !== 'string' || !CANARY.test(raw.canary)) bad('canary', 'must match [A-Za-z0-9_-]{16,64}');
+  const scope = readScope(raw);
+  if (!isBrief(raw.brief)) bad('brief', 'must be 1..8192 units of plain text');
+  const turns = readTurns(obj, keys);
+  return { schema_version: 1, statements, runner: raw.runner, canary: raw.canary, ...scope, brief: raw.brief, turns };
 }
 
 /** A parsed `task.json` value -> `{ok: true, task}` (deep-frozen plain copy) or `{ok: false, reason}` naming the field. */
@@ -171,23 +194,35 @@ function readSmall(f, file, max = MAX_JSON_BYTES) {
 // The first thing the manifest does not cover that a task must not have, as a reason, or null: a root `.git`, a
 // file with an execute bit, an empty directory. Also refuses a file the manifest did not list (changed since).
 function strayReason(f, root, listed) {
-  const seen = new Set();
-  const walk = (rel) => {
-    const names = f.readdirSync(rel === '' ? root : `${root}/${rel}`);
-    if (names.length === 0 && rel !== '') return `empty directory at ${esc(rel)}`;
-    for (const name of names) {
-      const p = rel === '' ? name : `${rel}/${name}`;
-      if (rel === '' && name === '.git') return `root .git entry at ${esc(p)}`;
-      const st = f.lstatSync(`${root}/${p}`);
-      if (st.isDirectory()) { const r = walk(p); if (r) return r; } else if (st.isFile()) {
-        if ((st.mode & 0o111) !== 0) return `execute bit at ${esc(p)}`;
-        seen.add(p);
-      } else return `changed since it was listed at ${esc(p)}`;
-    }
-    return null;
-  };
-  const r = walk('');
-  return r ?? (seen.size === listed.size && [...seen].every((p) => listed.has(p)) ? null : 'changed since it was listed');
+  const ctx = { f, root, seen: new Set() };
+  const r = strayIn(ctx, '');
+  return r ?? (ctx.seen.size === listed.size && [...ctx.seen].every((p) => listed.has(p)) ? null : 'changed since it was listed');
+}
+function strayIn(ctx, rel) {
+  const names = ctx.f.readdirSync(rel === '' ? ctx.root : `${ctx.root}/${rel}`);
+  if (names.length === 0 && rel !== '') return `empty directory at ${esc(rel)}`;
+  for (const name of names) {
+    const r = strayEntry(ctx, rel, name);
+    if (r) return r;
+  }
+  return null;
+}
+function strayEntry(ctx, rel, name) {
+  const p = rel === '' ? name : `${rel}/${name}`;
+  if (rel === '' && name === '.git') return `root .git entry at ${esc(p)}`;
+  const st = ctx.f.lstatSync(`${ctx.root}/${p}`);
+  if (st.isDirectory()) return strayIn(ctx, p);
+  if (!st.isFile()) return `changed since it was listed at ${esc(p)}`;
+  if ((st.mode & 0o111) !== 0) return `execute bit at ${esc(p)}`;
+  ctx.seen.add(p);
+  return null;
+}
+
+// task.json as JSON, read again and checked against the hash the manifest took.
+function readTaskJson(f, root, hash) {
+  const bytes = readSmall(f, `${root}/task.json`);
+  if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== hash) return refuse('task.json', 'unreadable, too large or changed since it was hashed');
+  try { return { ok: true, value: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) }; } catch { return refuse('task.json', 'not valid UTF-8 JSON'); }
 }
 
 // The shared start of taskHash and canaryCheck: the manifest, the validated task and the injected-or-real fs.
@@ -199,11 +234,9 @@ function load(dir, opts) {
   if (!entry) return refuse('task.json', 'missing');
   const root = dir.replace(/\/+$/, '') || '/';
   const f = opts === undefined ? fs : opts.fs;
-  const bytes = readSmall(f, `${root}/task.json`);
-  if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== entry[1]) return refuse('task.json', 'unreadable, too large or changed since it was hashed');
-  let parsed;
-  try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { return refuse('task.json', 'not valid UTF-8 JSON'); }
-  const v = validateTaskJson(parsed);
+  const parsed = readTaskJson(f, root, entry[1]);
+  if (!parsed.ok) return parsed;
+  const v = validateTaskJson(parsed.value);
   if (!v.ok) return v;
   const stray = strayReason(f, root, new Set(m.files.map((e) => e[0])));
   return stray === null ? { ok: true, m, task: v.task, f, root } : refuse('dir', stray);
