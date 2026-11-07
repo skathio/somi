@@ -41,78 +41,134 @@ const SETUP_MS = 20000;
 class SetupFailure extends Error {}
 
 
+function readOptions(taskDir, opts) {
+  if (typeof taskDir !== 'string' || typeof opts !== 'object' || opts === null || Array.isArray(opts)) return { refusal: refuse('arguments', 'a task directory and an options object are required') };
+  const { mutants = [], repeats = 20, timeoutMs } = opts;
+  if (!Number.isInteger(repeats) || repeats < 1 || repeats > MAX_REPEATS) return { refusal: refuse('arguments', 'repeats must be an integer from 1 to 50') };
+  if (!Array.isArray(mutants) || mutants.length > MAX_MUTANTS) return { refusal: refuse('arguments', 'mutants must be an array of at most 64') };
+  return { mutants, repeats, timeoutMs };
+}
+
+// The task as admission reads it: the canary check's hash, the manifest's paths and whether it has a setup script.
+function taskFor(taskDir, made) {
+  const canary = canaryCheck(taskDir);
+  if (!canary.ok) return { refusal: refuse('canary', canary.reason) };
+  const m = lstatManifest(taskDir);
+  if (!m?.ok) return { refusal: refuse('canary', 'the task directory changed while it was being read') };
+  const setup = m.files.some((e) => e[0] === 'hidden/setup.mjs');
+  if (setup && process.platform === 'win32') return { refusal: refuse('setup', 'the task needs a POSIX host and is skipped on this one') };
+  return { ctx: { taskDir, root: taskDir.replace(/\/+$/, '') || '/', paths: m.files.map((e) => e[0]), setup, hash: canary.hash, made } };
+}
+
+const under = (ctx, dir) => ctx.paths.filter((p) => p.startsWith(`${dir}/`));
+function copyTo(ctx, p, to) {
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  fs.copyFileSync(`${ctx.root}/${p}`, to);
+}
+function runSetup(ctx, ws) {
+  const r = spawnSync(process.execPath, [path.resolve(ctx.root, 'hidden/setup.mjs'), ws], { cwd: ws, env: { PATH: process.env.PATH ?? '', HOME: ws }, stdio: 'ignore', timeout: SETUP_MS, killSignal: 'SIGKILL' });
+  if (r.error || r.status !== 0) throw new SetupFailure(r.error ? 'the setup could not run to the end' : `the setup exited with ${r.status}`);
+}
+// Fresh workspace holding the given task directories' files in order (later ones overwrite earlier ones).
+function workspace(ctx, dirs, edit) {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'admit-'));
+  ctx.made.push(ws);
+  for (const d of dirs) for (const p of under(ctx, d)) copyTo(ctx, p, path.join(ws, p.slice(d.length + 1)));
+  if (ctx.setup) runSetup(ctx, ws);
+  edit?.(ws);
+  return ws;
+}
+const run = (ctx, rule, ws, expect) => { const s = scoreHidden({ workspace: ws, timeoutMs: ctx.timeoutMs, taskDir: ctx.taskDir, admittedHash: ctx.hash, expect }); return s.ok ? s : refuse(rule, s.reason); };
+
+// One mutant, checked before any run: {name, file, mutated}, or a refusal.
+function prepareMutant(ctx, mu, { prepared, oracleFiles }) {
+  if (typeof mu !== 'object' || mu === null || typeof mu.name !== 'string' || !NAME.test(mu.name) || prepared.some((q) => q.name === mu.name)) return refuse('mutant', 'each mutant needs a unique name of 1..64 characters [A-Za-z0-9._-]');
+  const { file, find, replace } = mu;
+  if (typeof file !== 'string' || !validPath(file) || !oracleFiles.has(file)) return refuse('mutant', `${mu.name}: file is not a file under oracle/`);
+  if (typeof find !== 'string' || find === '' || typeof replace !== 'string') return refuse('mutant', `${mu.name}: find must be a non-empty string and replace a string`);
+  const src = fs.readFileSync(`${ctx.root}/oracle/${file}`, 'utf8');
+  const count = src.split(find).length - 1;
+  if (count !== 1) return refuse('mutant', `${mu.name}: find occurs ${count} times, it must occur exactly once`);
+  return { name: mu.name, file, mutated: src.replace(find, () => replace) };
+}
+function prepareMutants(ctx, mutants) {
+  const oracleFiles = new Set(under(ctx, 'oracle').map((p) => p.slice('oracle/'.length)));
+  const prepared = [];
+  for (const mu of mutants) {
+    const entry = prepareMutant(ctx, mu, { prepared, oracleFiles });
+    if (entry.ok === false) return { refusal: entry };
+    prepared.push(entry);
+  }
+  return { prepared };
+}
+
+function nopRefusal(first, nop) {
+  const passedOnNop = new Set(first.names.filter((n) => !nop.failed.includes(n)));
+  const wrong = first.names.filter((n) => REGRESSION.test(n) !== passedOnNop.has(n));
+  if (wrong.length > 0) return refuse('nop', `on the fixture alone every [regression] test must pass and every other test must fail; wrong: ${wrong.join(', ')}`);
+  if (nop.green >= first.total) return refuse('nop', 'every test passes on the fixture alone, so nothing is left to implement');
+  return null;
+}
+// The oracle's run fixes the test list; the second oracle must pass all of it, and the fixture alone must leave something to build.
+function checkOracles(ctx) {
+  const oracleWs = workspace(ctx, ['fixture', 'oracle']); const first = run(ctx, 'oracle', oracleWs);
+  if (!first.ok) return { refusal: first };
+  if (first.green !== first.total) return { refusal: refuse('oracle', `scores ${first.green}/${first.total}, failing ${first.failed.join(', ')}`) };
+  const strict = (rule, ws) => run(ctx, rule, ws, { total: first.total, names: first.names });
+  const second = strict('oracle2', workspace(ctx, ['fixture', 'oracle2']));
+  if (!second.ok) return { refusal: second };
+  if (second.green !== first.total) return { refusal: refuse('oracle2', `scores ${second.green}/${first.total}, failing ${second.failed.join(', ')}`) };
+  const nop = strict('nop', workspace(ctx, ['fixture']));
+  if (!nop.ok) return { refusal: nop };
+  const wrong = nopRefusal(first, nop);
+  return wrong ? { refusal: wrong } : { first, strict, oracleWs };
+}
+
+function killMutants(ctx, prepared, strict) {
+  const killed = [];
+  for (const mu of prepared) {
+    const res = strict('mutant', workspace(ctx, ['fixture', 'oracle'], (ws) => fs.writeFileSync(path.join(ws, mu.file), mu.mutated)));
+    if (!res.ok) return { refusal: refuse('mutant', `${mu.name}: ${res.reason}`) };
+    if (res.green === res.total) return { refusal: refuse('mutant', `${mu.name} survives: ${res.green}/${res.total} tests still pass`) };
+    killed.push({ name: mu.name, failed: res.failed });
+  }
+  return { killed };
+}
+
+// Repeated oracle runs in the same workspace must agree, so state a run leaves behind shows.
+function stabilityRefusal({ first, strict, oracleWs }, repeats) {
+  for (let i = 1; i < repeats; i++) {
+    const again = strict('stability', oracleWs);
+    if (!again.ok) return again;
+    if (again.green !== first.total) return refuse('stability', `run ${i + 1} scored ${again.green}/${again.total} where the first scored ${first.green}/${first.total}`);
+  }
+  return null;
+}
+
+const failure = (e) => (e instanceof SetupFailure ? refuse('setup', e.message) : refuse('run', 'the task could not be admitted'));
+const removeAll = (dirs) => { for (const ws of dirs) try { fs.rmSync(ws, { recursive: true, force: true }); } catch { /* disposable */ } };
+
 /** See the header. */
 export function admitTask(taskDir, opts = {}) {
   const made = [];
   try {
-    if (typeof taskDir !== 'string' || typeof opts !== 'object' || opts === null || Array.isArray(opts)) return refuse('arguments', 'a task directory and an options object are required');
-    const { mutants = [], repeats = 20, timeoutMs } = opts;
-    if (!Number.isInteger(repeats) || repeats < 1 || repeats > MAX_REPEATS) return refuse('arguments', 'repeats must be an integer from 1 to 50');
-    if (!Array.isArray(mutants) || mutants.length > MAX_MUTANTS) return refuse('arguments', 'mutants must be an array of at most 64');
-    const canary = canaryCheck(taskDir);
-    if (!canary.ok) return refuse('canary', canary.reason);
-    const m = lstatManifest(taskDir); const root = taskDir.replace(/\/+$/, '') || '/';
-    if (!m?.ok) return refuse('canary', 'the task directory changed while it was being read');
-    const setup = m.files.some((e) => e[0] === 'hidden/setup.mjs');
-    if (setup && process.platform === 'win32') return refuse('setup', 'the task needs a POSIX host and is skipped on this one');
-    const under = (dir) => m.files.map((e) => e[0]).filter((p) => p.startsWith(`${dir}/`));
-    // Fresh workspace holding the given task directories' files in order (later ones overwrite earlier ones).
-    const workspace = (dirs, edit) => {
-      const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'admit-'));
-      made.push(ws);
-      for (const d of dirs) for (const p of under(d)) {
-        const to = path.join(ws, p.slice(d.length + 1));
-        fs.mkdirSync(path.dirname(to), { recursive: true });
-        fs.copyFileSync(`${root}/${p}`, to);
-      }
-      if (setup) {
-        const r = spawnSync(process.execPath, [path.resolve(root, 'hidden/setup.mjs'), ws], { cwd: ws, env: { PATH: process.env.PATH ?? '', HOME: ws }, stdio: 'ignore', timeout: SETUP_MS, killSignal: 'SIGKILL' });
-        if (r.error || r.status !== 0) throw new SetupFailure(r.error ? 'the setup could not run to the end' : `the setup exited with ${r.status}`);
-      }
-      edit?.(ws);
-      return ws;
-    };
-    const run = (rule, ws, expect) => { const s = scoreHidden({ workspace: ws, timeoutMs, taskDir, admittedHash: canary.hash, expect }); return s.ok ? s : refuse(rule, s.reason); };
-
-    const oracleFiles = new Set(under('oracle').map((p) => p.slice('oracle/'.length)));
-    const prepared = [];
-    for (const mu of mutants) {
-      if (typeof mu !== 'object' || mu === null || typeof mu.name !== 'string' || !NAME.test(mu.name) || prepared.some((q) => q.name === mu.name)) return refuse('mutant', 'each mutant needs a unique name of 1..64 characters [A-Za-z0-9._-]');
-      const { file, find, replace } = mu;
-      if (typeof file !== 'string' || !validPath(file) || !oracleFiles.has(file)) return refuse('mutant', `${mu.name}: file is not a file under oracle/`);
-      if (typeof find !== 'string' || find === '' || typeof replace !== 'string') return refuse('mutant', `${mu.name}: find must be a non-empty string and replace a string`);
-      const src = fs.readFileSync(`${root}/oracle/${file}`, 'utf8');
-      const count = src.split(find).length - 1;
-      if (count !== 1) return refuse('mutant', `${mu.name}: find occurs ${count} times, it must occur exactly once`);
-      prepared.push({ name: mu.name, file, mutated: src.replace(find, () => replace) });
-    }
-    const oracleWs = workspace(['fixture', 'oracle']); const first = run('oracle', oracleWs);
-    if (!first.ok) return first;
-    if (first.green !== first.total) return refuse('oracle', `scores ${first.green}/${first.total}, failing ${first.failed.join(', ')}`);
-    const { total } = first; const strict = (rule, ws) => run(rule, ws, { total, names: first.names });
-    const second = strict('oracle2', workspace(['fixture', 'oracle2'])); if (!second.ok) return second;
-    if (second.green !== total) return refuse('oracle2', `scores ${second.green}/${total}, failing ${second.failed.join(', ')}`);
-    const nop = strict('nop', workspace(['fixture'])); if (!nop.ok) return nop;
-    const passedOnNop = new Set(first.names.filter((n) => !nop.failed.includes(n)));
-    const wrong = first.names.filter((n) => REGRESSION.test(n) !== passedOnNop.has(n));
-    if (wrong.length > 0) return refuse('nop', `on the fixture alone every [regression] test must pass and every other test must fail; wrong: ${wrong.join(', ')}`);
-    if (nop.green >= total) return refuse('nop', 'every test passes on the fixture alone, so nothing is left to implement');
-    const killed = [];
-    for (const mu of prepared) {
-      const res = strict('mutant', workspace(['fixture', 'oracle'], (ws) => fs.writeFileSync(path.join(ws, mu.file), mu.mutated)));
-      if (!res.ok) return refuse('mutant', `${mu.name}: ${res.reason}`);
-      if (res.green === res.total) return refuse('mutant', `${mu.name} survives: ${res.green}/${res.total} tests still pass`);
-      killed.push({ name: mu.name, failed: res.failed });
-    }
-    for (let i = 1; i < repeats; i++) {
-      const again = strict('stability', oracleWs);
-      if (!again.ok) return again;
-      if (again.green !== total) return refuse('stability', `run ${i + 1} scored ${again.green}/${again.total} where the first scored ${first.green}/${first.total}`);
-    }
-    return { ok: true, hash: canary.hash, names: first.names, total, repeats, mutantsKilled: killed };
+    const o = readOptions(taskDir, opts);
+    if (o.refusal) return o.refusal;
+    const task = taskFor(taskDir, made);
+    if (task.refusal) return task.refusal;
+    const ctx = { ...task.ctx, timeoutMs: o.timeoutMs };
+    const mutants = prepareMutants(ctx, o.mutants);
+    if (mutants.refusal) return mutants.refusal;
+    const oracles = checkOracles(ctx);
+    if (oracles.refusal) return oracles.refusal;
+    const k = killMutants(ctx, mutants.prepared, oracles.strict);
+    if (k.refusal) return k.refusal;
+    const unstable = stabilityRefusal(oracles, o.repeats);
+    if (unstable) return unstable;
+    return { ok: true, hash: ctx.hash, names: oracles.first.names, total: oracles.first.total, repeats: o.repeats, mutantsKilled: k.killed };
   } catch (e) {
-    return e instanceof SetupFailure ? refuse('setup', e.message) : refuse('run', 'the task could not be admitted');
+    return failure(e);
   } finally {
-    for (const ws of made) try { fs.rmSync(ws, { recursive: true, force: true }); } catch { /* disposable */ }
+    removeAll(made);
   }
 }
