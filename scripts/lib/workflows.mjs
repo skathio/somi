@@ -27,7 +27,7 @@ export const WORKFLOWS = Object.freeze({
   discover: { kind: 'report', role: 'discover', tier: 'medium', skills: [] },
   atlas: { kind: 'report', role: 'atlas', tier: 'medium', skills: [] },
   answer: { kind: 'report', role: 'answer', tier: 'low', skills: [] },
-  review: { kind: 'report', role: 'review', agent: 'somi:somi-reviewer', tier: 'low', skills: ['testing-checklist'] },
+  review: { kind: 'report', role: 'review', agent: 'somi:somi-reviewer', tier: 'medium', skills: ['testing-checklist'] },
   'security-review': { kind: 'report', role: 'security-review', agent: 'somi:somi-security-reviewer', tier: 'high', skills: ['secure-coding', 'threat-modeling'] },
   ship: { kind: 'command', tier: 'low' },
   status: { kind: 'direct' },
@@ -37,7 +37,8 @@ export const WORKFLOWS = Object.freeze({
 
 export const workerAgent = (tier) => `somi:somi-worker-${tier}`;
 const WORKERS = Object.freeze({ 'somi-worker-low': 'low', 'somi-worker-medium': 'medium', 'somi-worker-high': 'high' });
-const REVIEWERS = Object.freeze({ 'somi-reviewer': 'low', 'somi-security-reviewer': 'high' });
+// Judging a diff is judgement work, so the code reviewer is never on the low tier.
+const REVIEWERS = Object.freeze({ 'somi-reviewer': 'medium', 'somi-security-reviewer': 'high' });
 const plainName = (name) => String(name ?? '').split(':').pop();
 export const tierForWorker = (name) => (Object.hasOwn(WORKERS, plainName(name)) ? WORKERS[plainName(name)] : null);
 export const tierForReviewer = (name) => (Object.hasOwn(REVIEWERS, plainName(name)) ? REVIEWERS[plainName(name)] : null);

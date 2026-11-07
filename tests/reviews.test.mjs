@@ -49,7 +49,7 @@ test('a sink in the diff gets the low reviewer and the high security reviewer, r
   writeFiles(ctx.root, SINK);
   const plan = reviewPlan(ctx);
   assert.equal(plan.needed, true);
-  assert.deepEqual(plan.reviewers.map(({ agent, tier, model }) => ({ agent, tier, model })), [{ agent: 'somi:somi-reviewer', tier: 'low', model: 'haiku' }, { agent: 'somi:somi-security-reviewer', tier: 'high', model: 'opus' }]);
+  assert.deepEqual(plan.reviewers.map(({ agent, tier, model }) => ({ agent, tier, model })), [{ agent: 'somi:somi-reviewer', tier: 'medium', model: 'sonnet' }, { agent: 'somi:somi-security-reviewer', tier: 'high', model: 'opus' }]);
   for (const r of plan.reviewers) assert.ok(r.brief.endsWith(plan.diff), 'each reviewer\'s whole brief is built here, with the diff command in it');
   assert.match(plan.diff, /^git diff --no-ext-diff --no-textconv [0-9a-f]+ [0-9a-f]+$/);
   assert.equal(plan.tree, snapshotTree(ctx.root));
@@ -59,8 +59,8 @@ test('a sink in the diff gets the low reviewer and the high security reviewer, r
 test('a user asking only ever adds a reviewer', (t) => {
   const ctx = makeCtx(makeRepo(t));
   writeFiles(ctx.root, SMALL);
-  assert.deepEqual(reviewPlan(ctx, { always: true }).reviewers.map((r) => r.tier), ['low']);
-  assert.deepEqual(reviewPlan(ctx, { security: true }).reviewers.map((r) => r.tier), ['low', 'high']);
+  assert.deepEqual(reviewPlan(ctx, { always: true }).reviewers.map((r) => r.tier), ['medium'], 'a review is never on the low tier');
+  assert.deepEqual(reviewPlan(ctx, { security: true }).reviewers.map((r) => r.tier), ['medium', 'high']);
 });
 
 test('a changed interface or a large diff alone is recorded and does not start a review; weakened tests still do', (t) => {

@@ -61,7 +61,7 @@ Nothing here steers the work. These files only remember what happened, so a new 
 | Rule | Value |
 |---|---|
 | Review at all | Only if a signal fired, the work is always reviewed, or the user asks |
-| Reviewers | One on the low tier, plus a security reviewer on the high tier on a boundary. A project's config cannot lower these |
+| Reviewers | A code reviewer on medium, plus a security reviewer on the high tier on a boundary. A project's config cannot lower these |
 | What blocks | A Blocker, or a Major with a boundary flag, a line and evidence |
 | What never blocks | Minor, Nit, unconfirmed Major, approve-with-comments |
 | Passes | Two. After that, or when the same blocking fingerprint comes back, the answer tells the agent to take it to the user |
@@ -162,7 +162,7 @@ Low, medium and high, mapped to models per environment in config. Claude Code ha
 | Finding files and running checks | low |
 | Real issues, planning | medium |
 | Design, security review | high |
-| First review | low |
+| Code review | medium |
 
 `somi setup` writes the session's agent to the user's own agent folder, with the model for `tiers.main`, for a user who wants the conversation on a tier other than the session's. Shared files stay free of model names. On Claude Code a live check showed that model holding across follow-ups, with the conversation kept. Copilot CLI documents the same and it has not been confirmed live, because the account used for checks serves Auto only.
 

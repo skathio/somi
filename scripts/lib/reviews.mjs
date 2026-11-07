@@ -15,7 +15,8 @@ const REVIEWER = 'somi-reviewer';
 const SECURITY_REVIEWER = 'somi-security-reviewer';
 const OBJECT_ID = /^[0-9a-f]{40,64}$/;
 const REVIEWER_PROMPT = 'Fresh, read-only review. Run the diff command, read what you need, return only the JSON your instructions define.';
-const TIERS = Object.freeze({ [REVIEWER]: 'low', [SECURITY_REVIEWER]: 'high' });
+// Judging a diff is judgement work, so the code reviewer runs on medium and the security reviewer on high.
+const TIERS = Object.freeze({ [REVIEWER]: 'medium', [SECURITY_REVIEWER]: 'high' });
 const bare = (agent) => String(agent ?? '').split(':').pop();
 
 // Who reviews is review policy, so only the user's own config chooses the model, and a committed project config has no say.
