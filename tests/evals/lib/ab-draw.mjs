@@ -1,6 +1,6 @@
-// Draw machinery for the SoMi-vs-bare experiment: workspace preparation, the child environment, the sandbox, the claude
-// command line per arm, process control, outcome classification and the plugin package. A library: no entrypoint,
-// only node built-ins and sibling libraries (stream hygiene is in ab-stream.mjs, the report in ab-report.mjs). It runs a
+// Draw machinery for the SoMi-vs-bare experiment: workspace preparation, the child environment, the claude command line
+// per arm, process control and outcome classification. A library: no entrypoint, only node built-ins and sibling
+// libraries (stream hygiene is in ab-stream.mjs, the sandbox and the plugin package in ab-sandbox.mjs, the report in ab-report.mjs). It runs a
 // model agent with host access (bypassPermissions) and handles one credential, so every doubt is a refusal and nothing
 // here prints or stores the token.
 //
@@ -12,11 +12,11 @@
 //   .somi/config.json so they are byte-identical apart from the plugin; the bare arm has no plugin to read it, so it only
 //   sits there as an inert file. Recorded here because a plan that says "no .somi" would otherwise be silently contradicted.
 // Arms differ in ONE thing: the SoMi arm gets `--plugin-dir <packed plugin>` and a command prefix on the same
-//   task text. The plugin is the npm package of the repository extracted read-only (buildPlugin), never the checkout.
+//   task text. The plugin is the npm package of the repository extracted read-only (buildPlugin in ab-sandbox.mjs), never the checkout.
 // Environment (childEnv): an allowlist of six variables; the token is a parameter, never read from process.env. The sixth,
 //   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0, makes `claude --print` wait for background work without its own 600 s ceiling
 //   (a SoMi planner runs in the background); it is set for both arms, and the per-draw deadline stays the hard bound.
-// Sandbox (sandboxArgs): bubblewrap, read-only root, the real HOME and /tmp replaced by empty tmpfs, then only the claude
+// Sandbox (sandboxArgs in ab-sandbox.mjs): bubblewrap, read-only root, the real HOME and /tmp replaced by empty tmpfs, then only the claude
 //   and PATH directories (read-only), the plugin (read-only) and the draw directory (read-write) bound back; a new pid
 //   namespace dies with the leader. The repository, ~/.claude, ~/.ssh and other draws' directories are not visible. The
 //   network stays shared (the model needs it).
@@ -29,6 +29,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { lstatManifest } from './manifest.mjs';
+import { sandboxArgs } from './ab-sandbox.mjs';
 import { MAX_STREAM_BYTES, createSink, redactToken, sweepProcesses } from './ab-stream.mjs';
 
 export const MAX_RESUMES = 4;
@@ -120,34 +121,7 @@ export function readEnvFile(file) {
   } catch { return { ok: false, reason: 'the env file could not be read' }; } finally { if (fd !== null) closeQuietly(fd); }
 }
 
-// ---- sandbox --------------------------------------------------------------------------------------------------
-
-const under = (p, dir) => p === dir || p.startsWith(`${dir}/`);
-/** Absolute real path of a command (looked up in PATH when it has no slash), or null. */
-export function resolveBinary(name) {
-  const cands = name.includes('/') ? [path.resolve(name)] : (process.env.PATH ?? '').split(':').filter(Boolean).map((d) => path.join(d, name));
-  for (const c of cands) { try { const r = fs.realpathSync(c); if (fs.statSync(r).isFile()) return r; } catch { /* next */ } }
-  return null;
-}
-/** The bubblewrap command line (without the program name) running `command argv` in the sandbox described by `spec`. */
-export function sandboxArgs(spec, command, argv) {
-  const a = ['--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', spec.home, '--tmpfs', '/tmp'];
-  if (!under(spec.repoRoot, spec.home) && !under(spec.repoRoot, '/tmp')) a.push('--tmpfs', spec.repoRoot);
-  for (const p of spec.ro) a.push('--ro-bind', p, p);
-  for (const p of spec.rw) a.push('--bind', p, p);
-  return [...a, '--unshare-pid', '--die-with-parent', '--new-session', '--share-net', '--', command, ...argv];
-}
-/** The spec for one run: the claude binary's directory and every PATH directory under HOME, read-only; `rw` per draw. */
-export function sandboxSpec({ home, repoRoot, claudeReal, plugin }) {
-  const ro = new Set([path.dirname(claudeReal)]);
-  for (const d of (process.env.PATH ?? '').split(':').filter(Boolean)) { try { const r = fs.realpathSync(d); if (under(r, home)) ro.add(r); } catch { /* absent */ } }
-  if (plugin) ro.add(plugin);
-  return { home, repoRoot, ro: [...ro].filter((p) => fs.existsSync(p)) };
-}
-/** True when bubblewrap runs a harmless command with this spec. */
-export const probeSandbox = (spec) => spawnSync('bwrap', sandboxArgs({ ...spec, rw: [] }, 'true', []), { stdio: 'ignore', timeout: 10000 }).status === 0;
-
-// ---- workspace and plugin ---------------------------------------------------------------------------------------
+// ---- workspace ------------------------------------------------------------------------------------------
 
 const PATH_ONLY = (home) => ({ PATH: process.env.PATH ?? '', HOME: home });
 function copyFixture(root, files, ws) {
@@ -197,31 +171,6 @@ export function prepareWorkspace({ taskDir, tmp, config = { cost: { ceiling: 'me
   const before = lstatManifest(ws);
   if (!before?.ok) throw new Error('the before manifest was refused');
   return { ws, before };
-}
-
-/** `npm pack` the repository into `runTmp` and extract it read-only -> the plugin directory. Throws on any doubt. */
-export function buildPlugin({ repoRoot, runTmp, dirName = 'plugin', patches = [] }) {
-  const env = { PATH: process.env.PATH ?? '', HOME: runTmp, npm_config_cache: path.join(runTmp, 'npm-cache'), npm_config_update_notifier: 'false' };
-  const pack = spawnSync('npm', ['pack', '--ignore-scripts', '--silent', '--pack-destination', runTmp], { cwd: repoRoot, env, encoding: 'utf8', timeout: 120000 });
-  const name = (pack.stdout ?? '').trim().split('\n').pop();
-  if (pack.status !== 0 || !/^[A-Za-z0-9._@-]+\.tgz$/.test(name)) throw new Error('npm pack failed');
-  const dest = path.join(runTmp, dirName);
-  fs.mkdirSync(dest, { mode: 0o700 });
-  const tar = spawnSync('tar', ['-xzf', path.join(runTmp, name), '-C', dest, '--strip-components=1', '--no-same-owner'], { stdio: 'ignore', timeout: 60000 });
-  if (tar.status !== 0) throw new Error('extracting the package failed');
-  const m = lstatManifest(dest);
-  if (!m?.ok || m.files.some(([p]) => p.startsWith('tests/evals/') || p.startsWith('.somi/') || p.includes('/manual/'))) throw new Error('the packed plugin holds files that must not ship');
-  // An ablation edits this private copy only, so the shipped plugin has no switch for turning a part off. A patch that no longer
-  // matches exactly once stops the recording instead of quietly measuring the full plugin.
-  for (const { file, find, replace } of patches) {
-    const target = path.join(dest, file);
-    const text = fs.readFileSync(target, 'utf8');
-    if (text.split(find).length !== 2) throw new Error(`the ablation patch for ${file} does not match exactly once`);
-    fs.writeFileSync(target, text.replace(find, () => replace));
-  }
-  const lock = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) lock(p); else fs.chmodSync(p, fs.statSync(p).mode & 0o111 ? 0o500 : 0o400); } fs.chmodSync(d, 0o500); };
-  lock(dest);
-  return dest;
 }
 
 // ---- process control ---------------------------------------------------------------------------------------------

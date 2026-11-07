@@ -5,7 +5,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildPlugin, classify, probeSandbox, readEnvFile, resolveBinary, runDraw, sandboxSpec } from '../../tests/evals/lib/ab-draw.mjs';
+import { classify, readEnvFile, runDraw } from '../../tests/evals/lib/ab-draw.mjs';
+import { buildPlugin, probeSandbox, resolveBinary, sandboxSpec } from '../../tests/evals/lib/ab-sandbox.mjs';
 import { inspectDraw } from '../../tests/evals/lib/ab-stream.mjs';
 import { lstatManifest } from '../../tests/evals/lib/manifest.mjs';
 import { ABLATIONS, HERE, HOST_STOP_SHARE, MAX_CHUNK, PHASE_ARMS, PREREG, QUIET_LOAD_SHARE, QUIET_POLL_MS, QUIET_WAIT_MIN, REPO, WINDOW_STOP_SHARE, abandonedArms, armKFor, buildPlan, drawsFor, engineArm, hostFingerprint, isBare, isFullModelId, preregProblem, readJson, readResults, ruleHash, scoreRow, tasksFor } from './config.mjs';
