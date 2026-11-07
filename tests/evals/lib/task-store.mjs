@@ -27,7 +27,7 @@
 // never mount task.json where the candidate can read it (the task standard wins over a candidate-visible
 // fixture reading of the brief). validateTaskJson returns `{ok: false, reason}`, not null, so the field is named.
 //
-// declaredScope(task) -> the `declared` argument of scopeVerdict: {source: {files, dirs}, testDir, rootFiles}.
+// declaredScope(task) -> the `declared` argument of scopeVerdict (scope.mjs): {source: {files, dirs}, testDir, rootFiles}.
 //
 // taskHash(dir, {fs}) -> {ok: true, hash, task} or {ok: false, reason}; `fs` is for tests only. The directory must
 // hold a valid `task.json` at its root and pass lstatManifest (a link, special file, bad name or cap anywhere is

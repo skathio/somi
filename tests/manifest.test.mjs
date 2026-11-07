@@ -8,7 +8,8 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { writeFiles } from './helpers.mjs';
-import { esc, lstatManifest, scopeVerdict, validPath } from './evals/lib/manifest.mjs';
+import { esc, lstatManifest, validPath } from './evals/lib/manifest.mjs';
+import { scopeVerdict } from './evals/lib/scope.mjs';
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
 const HASH = sha('x');

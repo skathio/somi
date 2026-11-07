@@ -188,6 +188,9 @@
     "tests/evals/lib/ab-draw.mjs": [
       "tests/ab-draw.test.mjs",
       "tests/bench.test.mjs"
+    ],
+    "tests/evals/lib/scope.mjs": [
+      "tests/manifest.test.mjs"
     ]
   }
 }

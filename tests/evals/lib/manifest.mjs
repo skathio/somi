@@ -1,4 +1,4 @@
-// Scope manifest (FR-8c, FR-39): what changed in a draw's workspace, and is it inside the declared scope?
+// Scope manifest (FR-8c, FR-39): what changed in a draw's workspace. Whether that is inside the declared scope is scope.mjs.
 // Read-only: no child process, no network, nothing written, no candidate file parsed or run (only hashed).
 // The directory is hostile data (a bypassPermissions agent wrote it): every doubt is a refusal.
 //
@@ -16,7 +16,7 @@
 //   C0/C1 control, format (bidi, zero-width, BOM) or line-separator character, no backslash; case variants stay
 //   distinct. A file with setuid, setgid or world-writable bits (unsafe-mode), a directory on another device than
 //   the root (mount-point) and a repeated name are refused. Every `path` and reason is display text, printable
-//   ASCII through esc (bytes as %XX; scopeVerdict escapes again): show it only as given, never raw.
+//   ASCII through esc (bytes as %XX; the scope verdict escapes again): show it only as given, never raw.
 //   Guarantees: no link is followed and no special file is opened. Does NOT guarantee: (1) a hard link to an
 //   outside file is a regular file to lstat, so only the container boundary stops it; (2) a concurrent writer
 //   can swap a directory for a link after it was checked (each directory is re-checked after listing and the
@@ -26,15 +26,7 @@
 //   process in its cgroup is gone (O_NOFOLLOW covers the last component only); mount the workspace nodev; map
 //   uids (no host-visible setuid root); never run git or hooks on the after-workspace (.git and .somi are
 //   ignored by design).
-//
-// scopeVerdict({before, after, declared}) -> {verdict: 'in-scope' | 'out-of-scope', reason, path?}, or null.
-//   declared = {source: {files: [path], dirs: [path]}, testDir: path, rootFiles: [name]}, all repo-relative.
-//   A path is 1..1024 bytes, '/'-separated, no empty, '.' or '..' segment, no leading or trailing '/', the name
-//   rule per segment; anything else is null (never normalised). A file entry covers exactly that path; a dir
-//   entry and testDir cover their subtree only; rootFiles are single-segment names; the subtree of `.somi` is
-//   always tolerated (the entry `.somi` itself is not). A null result is a failure, never a pass. Matching is by exact bytes: `src` does not cover
-//   `SRC/x` or `src2/x`. Changed = added, removed or modified; the first changed path (sorted) outside the
-//   scope names the failure. A null or refused manifest on either side is out-of-scope. Source is non-empty.
+
 
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -45,9 +37,7 @@ export const MAX_FILE_BYTES = 16 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 const MAX_NAME_BYTES = 255;
 const MAX_PATH_BYTES = 1024;
-const MAX_LIST = 1024;
 const BAD_CHARS = /[\u0000-\u001f\u007f-\u009f\\\p{Cf}\p{Zl}\p{Zp}]/u;
-const HEX = /^[0-9a-f]{64}$/;
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 export const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 export const byBytes = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
@@ -62,16 +52,6 @@ function validName(s) {
 }
 export const validPath = (p) => typeof p === 'string' && Buffer.byteLength(p) <= MAX_PATH_BYTES && p.split('/').every(validName);
 export const sameKeys = (o, keys) => { const k = Reflect.ownKeys(o); return k.length === keys.length && keys.every((x) => k.includes(x)); };
-// Dense plain copy (`length` and each slot read once), or null.
-function dense(arr, max = MAX_LIST) {
-  if (!Array.isArray(arr)) return null;
-  const n = arr.length;
-  if (n > max) return null;
-  const list = [];
-  for (let i = 0; i < n; i++) { if (!Object.hasOwn(arr, i)) return null; list.push(arr[i]); }
-  return list;
-}
-
 const FS_METHODS = ['lstatSync', 'opendirSync', 'openSync', 'fstatSync', 'readSync', 'closeSync'];
 
 // The root without its trailing slashes and the fs to read it with (bound copies of the methods used), or null for a malformed argument.
@@ -200,65 +180,4 @@ export function lstatManifest(root, opts) {
   } catch (e) {
     return e instanceof Refusal ? { ok: false, reason: e.reason, path: esc(e.path) } : { ok: false, reason: 'io-error', path: '.' };
   }
-}
-
-const validEntry = (pair, map) => Boolean(pair) && pair.length === 2 && validPath(pair[0]) && typeof pair[1] === 'string' && HEX.test(pair[1]) && !map.has(pair[0]);
-function refusedManifest(m, side) {
-  if (!sameKeys(m, ['ok', 'reason', 'path'])) return null;
-  const { reason, path } = m;
-  return typeof reason === 'string' && typeof path === 'string' ? { fail: `${side} manifest refused: ${esc(reason)} at ${esc(path)}`, path: esc(path) } : null;
-}
-function fileMap(m) {
-  if (m.ok !== true || !sameKeys(m, ['ok', 'files'])) return null;
-  const list = dense(m.files, MAX_ENTRIES);
-  if (!list) return null;
-  const map = new Map();
-  for (const entry of list) {
-    const pair = dense(entry);
-    if (!validEntry(pair, map)) return null;
-    map.set(pair[0], pair[1]);
-  }
-  return { map };
-}
-// A manifest as scopeVerdict sees it: {map} to compare, {fail, path?} when it is null or refused (never
-// in scope), or null when it is not a manifest at all.
-function readManifest(m, side) {
-  if (m === null) return { fail: `${side} manifest unavailable` };
-  if (!isObject(m)) return null;
-  return m.ok === false ? refusedManifest(m, side) : fileMap(m);
-}
-
-function readDeclared(d) {
-  if (!isObject(d) || !sameKeys(d, ['source', 'testDir', 'rootFiles'])) return null;
-  const { source, testDir, rootFiles } = d;
-  if (!isObject(source) || !sameKeys(source, ['files', 'dirs'])) return null;
-  const srcFiles = dense(source.files);
-  const srcDirs = dense(source.dirs);
-  const roots = dense(rootFiles);
-  if (!srcFiles || !srcDirs || !roots || srcFiles.length + srcDirs.length === 0) return null;
-  if (![...srcFiles, ...srcDirs, ...roots, testDir].every(validPath) || roots.some((p) => p.includes('/'))) return null;
-  return { exact: new Set([...srcFiles, ...roots]), dirs: [...srcDirs, testDir, '.somi'] };
-}
-
-const covered = (decl, p) => decl.exact.has(p) || decl.dirs.some((d) => p.startsWith(`${d}/`));
-// Changed = added, removed or modified; the first changed path, by bytes, outside the scope names the failure.
-function compare(decl, b, a) {
-  const changed = [...new Set([...b.map.keys(), ...a.map.keys()])].filter((p) => b.map.get(p) !== a.map.get(p)).sort(byBytes);
-  const bad = changed.find((p) => !covered(decl, p));
-  if (bad !== undefined) return { verdict: 'out-of-scope', reason: `out of scope: ${esc(bad)} changed`, path: esc(bad) };
-  return { verdict: 'in-scope', reason: `${changed.length} changed path(s), all within the declared scope` };
-}
-
-/** `{before, after, declared}` -> `{verdict, reason, path?}`, or `null` for a malformed argument. */
-export function scopeVerdict(args) {
-  try {
-    if (!isObject(args) || !sameKeys(args, ['before', 'after', 'declared'])) return null;
-    const { before, after, declared } = args;
-    const decl = readDeclared(declared);
-    const b = readManifest(before, 'before');
-    const a = readManifest(after, 'after');
-    if (!decl || !b || !a) return null;
-    const refused = [b, a].find((m) => m.fail);
-    return refused ? { verdict: 'out-of-scope', reason: refused.fail, ...(refused.path === undefined ? {} : { path: refused.path }) } : compare(decl, b, a);
-  } catch { return null; }
 }
