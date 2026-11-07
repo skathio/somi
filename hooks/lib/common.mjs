@@ -270,9 +270,6 @@ export function config(fieldPath) {
   return typeof cur === 'string' ? cur : JSON.stringify(cur);
 }
 
-// Append a structured line to the audit log. Frozen contract:
-// "timestamp\tkind\ttool\tdetail\n", byte-exact — any deviation here is a
-// regression, not a style choice.
 // Creates `dir` (and missing parents) without fs.mkdirSync's recursive mode, which spins forever on some
 // paths (for example under /proc): find the nearest existing ancestor within a bounded walk, then make each
 // missing level one step at a time, so an impossible path fails fast with the OS error instead of hanging.
@@ -311,6 +308,9 @@ function ensureDir(dir) {
   }
 }
 
+// Append a structured line to the audit log. Frozen contract:
+// "timestamp\tkind\ttool\tdetail\n", byte-exact — any deviation here is a
+// regression, not a style choice.
 export function audit(payload, kind, detail) {
   const tool = field(payload, '.tool_name');
   const log = auditLogPath();

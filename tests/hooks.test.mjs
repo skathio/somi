@@ -120,3 +120,25 @@ test('a hook started in a subfolder finds the repository, and with none above it
   process.env.CLAUDE_PROJECT_DIR = loose;
   assert.equal(projectRoot(), loose);
 });
+
+test('the audit log makes only the folders that are missing, and fails fast where it cannot', async (t) => {
+  const { audit } = await import('../hooks/lib/common.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-audit-dir-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const saved = process.env.SOMI_AUDIT_LOG;
+  t.after(() => { if (saved === undefined) delete process.env.SOMI_AUDIT_LOG; else process.env.SOMI_AUDIT_LOG = saved; });
+  const made = t.mock.method(fs, 'mkdirSync');
+  const auditInto = (...parts) => { process.env.SOMI_AUDIT_LOG = path.join(dir, ...parts, 'audit.log'); audit({ tool_name: 'Bash' }, 'deny', 'x'); };
+
+  auditInto('a', 'b', 'c');
+  assert.match(fs.readFileSync(path.join(dir, 'a', 'b', 'c', 'audit.log'), 'utf8'), /\tdeny\tBash\tx\n$/);
+  assert.deepEqual(made.mock.calls.map((c) => c.arguments[0]), ['a', 'a/b', 'a/b/c'].map((p) => path.join(dir, p)), 'the levels below the nearest folder, outermost first, and nothing above it');
+
+  made.mock.resetCalls();
+  const deep = Array.from({ length: 70 }, (_, i) => `l${i}`);
+  assert.throws(() => auditInto(...deep), { code: 'ENOENT' }, 'the walk up is bounded, so a path this deep fails with the OS error');
+  assert.equal(fs.existsSync(path.join(dir, 'l0')), false);
+
+  fs.writeFileSync(path.join(dir, 'file'), '');
+  assert.throws(() => auditInto('file', 'x'), { code: 'ENOTDIR' }, 'nothing is made below a file');
+});
