@@ -126,91 +126,81 @@ function lineOf(src, index) {
   return src.slice(0, index).split('\n').length;
 }
 
-function main() {
-  const dead = [];
-  const stale = [];
-  const misplaced = [];
-  let exemptions = 0;
-  let checked = 0;
-
-  for (const file of trackedMarkdown()) {
-    const dir = path.dirname(file);
-    let raw;
-    try {
-      raw = fs.readFileSync(file, 'utf8');
-    } catch (err) {
-      // A tracked file missing from the worktree is a real condition (mid-rebase, partial
-      // checkout). Diagnose it rather than dying on an ENOENT stack.
-      dead.push(`${file}: unreadable (${err.code || err.message})`);
-      continue;
-    }
-    const src = blankCode(raw, file);
-
-    // Reference definitions, harvested from the same blanked content so a definition inside a fence
-    // is not honoured.
-    const refs = new Map();
-    REF_DEF_RE.lastIndex = 0;
-    let d;
-    while ((d = REF_DEF_RE.exec(src))) refs.set(d[1].toLowerCase(), d[2]);
-
-    const found = [];
-    INLINE_RE.lastIndex = 0;
-    let m;
-    while ((m = INLINE_RE.exec(src))) found.push({ target: m[1], index: m.index });
-    REF_USE_RE.lastIndex = 0;
-    while ((m = REF_USE_RE.exec(src))) {
-      const key = (m[2] || m[1]).toLowerCase();
-      if (refs.has(key)) found.push({ target: refs.get(key), index: m.index });
-    }
-
-    for (const { target: rawTarget, index } of found) {
-      if (isExternal(rawTarget)) continue;
-      const target = rawTarget.split('#')[0];
-      if (target === '') continue;
-
-      const lineStart = src.lastIndexOf('\n', index) + 1;
-      const marked = src.slice(lineStart, index).trimEnd().endsWith(MARKER);
-      const resolves = fs.existsSync(path.resolve(dir, target));
-      const where = `${file}:${lineOf(src, index)} -> ${rawTarget}`;
-
-      if (marked && !file.startsWith(MARKER_SCOPE)) {
-        misplaced.push(where);
-      } else if (!resolves && !marked) {
-        dead.push(where);
-      } else if (resolves && marked) {
-        stale.push(where);
-      } else if (marked) {
-        exemptions++;
-      } else {
-        checked++;
-      }
-    }
+// Every link in a file, inline and by reference, from content with code blanked out, so a definition inside a fence is not honoured.
+function linksIn(src) {
+  const refs = new Map();
+  REF_DEF_RE.lastIndex = 0;
+  let d;
+  while ((d = REF_DEF_RE.exec(src))) refs.set(d[1].toLowerCase(), d[2]);
+  const found = [];
+  INLINE_RE.lastIndex = 0;
+  let m;
+  while ((m = INLINE_RE.exec(src))) found.push({ target: m[1], index: m.index });
+  REF_USE_RE.lastIndex = 0;
+  while ((m = REF_USE_RE.exec(src))) {
+    const key = (m[2] || m[1]).toLowerCase();
+    if (refs.has(key)) found.push({ target: refs.get(key), index: m.index });
   }
+  return found;
+}
 
+// What one relative link is: dead, a marker on a link that now resolves, a marker outside the examples, an exemption, or fine.
+function verdict(file, { marked, resolves }) {
+  if (marked && !file.startsWith(MARKER_SCOPE)) return 'misplaced';
+  if (!resolves && !marked) return 'dead';
+  if (resolves && marked) return 'stale';
+  return marked ? 'exemptions' : 'checked';
+}
+
+function scanFile(file, tally) {
+  let raw;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    // A tracked file missing from the worktree is a real condition (mid-rebase, partial
+    // checkout). Diagnose it rather than dying on an ENOENT stack.
+    tally.dead.push(`${file}: unreadable (${err.code || err.message})`);
+    return;
+  }
+  const src = blankCode(raw, file);
+  const dir = path.dirname(file);
+  for (const { target: rawTarget, index } of linksIn(src)) {
+    const target = rawTarget.split('#')[0];
+    if (isExternal(rawTarget) || target === '') continue;
+    const lineStart = src.lastIndexOf('\n', index) + 1;
+    const marked = src.slice(lineStart, index).trimEnd().endsWith(MARKER);
+    const kind = verdict(file, { marked, resolves: fs.existsSync(path.resolve(dir, target)) });
+    if (Array.isArray(tally[kind])) tally[kind].push(`${file}:${lineOf(src, index)} -> ${rawTarget}`);
+    else tally[kind] += 1;
+  }
+}
+
+const REPORTS = [
+  ['dead', () => 'DEAD RELATIVE LINK(S):', () => `\nIf a link is correct for the context an example illustrates but does not resolve\n` + `here, mark it inline on the SAME line, in ${MARKER_SCOPE}: ${MARKER}[text](path)`],
+  ['stale', () => 'STALE illustrative-path MARKER(S) — the target now resolves, drop the marker:', null],
+  ['misplaced', () => `illustrative-path MARKER OUTSIDE ${MARKER_SCOPE} — the hatch is scoped to examples:`, null],
+];
+
+function report(tally) {
   let failed = false;
-  if (dead.length) {
-    console.error('DEAD RELATIVE LINK(S):');
-    for (const x of dead) console.error(`  ${x}`);
-    console.error(`\nIf a link is correct for the context an example illustrates but does not resolve\n` +
-      `here, mark it inline on the SAME line, in ${MARKER_SCOPE}: ${MARKER}[text](path)`);
+  for (const [kind, title, after] of REPORTS.filter(([k]) => tally[k].length > 0)) {
+    console.error(title());
+    for (const x of tally[kind]) console.error(`  ${x}`);
+    if (after) console.error(after());
     failed = true;
   }
-  if (stale.length) {
-    console.error('STALE illustrative-path MARKER(S) — the target now resolves, drop the marker:');
-    for (const x of stale) console.error(`  ${x}`);
-    failed = true;
-  }
-  if (misplaced.length) {
-    console.error(`illustrative-path MARKER OUTSIDE ${MARKER_SCOPE} — the hatch is scoped to examples:`);
-    for (const x of misplaced) console.error(`  ${x}`);
-    failed = true;
-  }
-  if (failed) {
+  return failed;
+}
+
+function main() {
+  const tally = { dead: [], stale: [], misplaced: [], exemptions: 0, checked: 0 };
+  for (const file of trackedMarkdown()) scanFile(file, tally);
+  if (report(tally)) {
     process.exitCode = 1;
     return;
   }
   console.log(
-    `check-links: ${checked} relative link(s) resolve; ${exemptions} illustrative-path exemption(s)`
+    `check-links: ${tally.checked} relative link(s) resolve; ${tally.exemptions} illustrative-path exemption(s)`
   );
 }
 

@@ -110,49 +110,75 @@ export async function resolveProjectRoot(opts) {
   return { ...(await resolveWith(opts, seen)), hosted: seen.hosted };
 }
 
-async function resolveWith({ projectDirArg, listRoots }, seen) {
-  // Validated FIRST regardless of whether a host root exists -- a malformed value is 64 either
-  // way, and the bounding check below needs a real, fs-verified directory to compare against.
-  let projectDir; // undefined (not given), or the validated absolute path
-  if (projectDirArg !== undefined) {
-    const v = validateDir(projectDirArg);
-    if (!v.ok) {
-      const reason = {
-        empty: `project_dir requires a non-empty string, got ${echo(projectDirArg)}`,
-        'not-absolute': `project_dir must be an absolute path, got ${echo(projectDirArg)}`,
-        missing: `project_dir ${echo(projectDirArg)} does not exist`,
-        'not-a-directory': `project_dir ${echo(projectDirArg)} is not a directory`,
-      }[v.reason];
-      return { ok: false, code: EXIT_USAGE, message: reason };
-    }
-    projectDir = v.dir;
-  }
+// Validated first, whether or not a host root exists: a malformed value is 64 either way, and the bounding check needs a real,
+// fs-verified directory to compare against.
+function validatedProjectDir(projectDirArg) {
+  if (projectDirArg === undefined) return { dir: undefined };
+  const v = validateDir(projectDirArg);
+  if (v.ok) return { dir: v.dir };
+  const reason = {
+    empty: `project_dir requires a non-empty string, got ${echo(projectDirArg)}`,
+    'not-absolute': `project_dir must be an absolute path, got ${echo(projectDirArg)}`,
+    missing: `project_dir ${echo(projectDirArg)} does not exist`,
+    'not-a-directory': `project_dir ${echo(projectDirArg)} is not a directory`,
+  }[v.reason];
+  return { refusal: { ok: false, code: EXIT_USAGE, message: reason } };
+}
 
-  const host = await hostRoot({ listRoots });
-  seen.hosted = host !== undefined;
+// Host supplies nothing: project_dir alone decides.
+function withoutHost(projectDir) {
+  if (projectDir) return { ok: true, root: projectDir, source: 'project_dir' };
+  return {
+    ok: false,
+    code: EXIT_PROJECT_ENV,
+    message:
+      'no project root could be established: CLAUDE_PROJECT_DIR is unset, the client offered no ' +
+      'MCP roots (or none were returned), and no project_dir argument was given -- pass ' +
+      'project_dir explicitly; this never falls back to the SoMi install directory',
+  };
+}
 
-  if (!host) {
-    // Host supplies nothing: project_dir alone decides.
-    if (projectDir) return { ok: true, root: projectDir, source: 'project_dir' };
+// No project_dir: the host's one root, refused when it offers several.
+function hostRootOnly(validCandidates, host) {
+  if (validCandidates.length > 1) {
     return {
       ok: false,
       code: EXIT_PROJECT_ENV,
-      message:
-        'no project root could be established: CLAUDE_PROJECT_DIR is unset, the client offered no ' +
-        'MCP roots (or none were returned), and no project_dir argument was given -- pass ' +
-        'project_dir explicitly; this never falls back to the SoMi install directory',
+      message: `ambiguous: the client offered ${validCandidates.length} MCP roots and no project_dir was given to select one`,
     };
   }
+  return { ok: true, root: validCandidates[0], source: host.source };
+}
 
-  // Each host-offered candidate must itself exist as a directory -- an entry that fails is
-  // dropped, not treated as its own hard error (a multi-folder client can legitimately offer one
-  // root this process can't see). CLAUDE_PROJECT_DIR's single candidate failing is exactly "a
-  // root that doesn't exist", refused below like any other.
-  const validCandidates = host.dirs
-    .map((d) => validateDir(d))
-    .filter((v) => v.ok)
-    .map((v) => v.dir);
+// A host root exists AND project_dir is given: it must realpath to one of the host's own candidates, or inside one -- a model
+// argument narrows the host's root, never overrides it.
+function boundedProjectDir(projectDir, validCandidates) {
+  const projectDirReal = realpathOrNull(projectDir);
+  const matches = projectDirReal !== null && validCandidates.some((c) => {
+    const candidateReal = realpathOrNull(c);
+    if (candidateReal === null) return false;
+    return projectDirReal === candidateReal || projectDirReal.startsWith(candidateReal + path.sep);
+  });
+  if (matches) return { ok: true, root: projectDir, source: 'project_dir' };
+  return {
+    ok: false,
+    code: EXIT_USAGE,
+    message:
+      `project_dir ${echo(projectDir)} is outside the host-supplied root -- refusing (project_dir ` +
+      `may only select a directory inside the host's own root, never override it)`,
+  };
+}
 
+async function resolveWith({ projectDirArg, listRoots }, seen) {
+  const { dir: projectDir, refusal } = validatedProjectDir(projectDirArg);
+  if (refusal) return refusal;
+  const host = await hostRoot({ listRoots });
+  seen.hosted = host !== undefined;
+  if (!host) return withoutHost(projectDir);
+  // Each host-offered candidate must itself exist as a directory -- an entry that fails is dropped, not treated as its own hard
+  // error (a multi-folder client can legitimately offer one root this process can't see). CLAUDE_PROJECT_DIR's single candidate
+  // failing is exactly "a root that doesn't exist", refused below like any other.
+  const validCandidates = host.dirs.map((d) => validateDir(d)).filter((v) => v.ok).map((v) => v.dir);
   if (validCandidates.length === 0) {
     return {
       ok: false,
@@ -160,34 +186,5 @@ async function resolveWith({ projectDirArg, listRoots }, seen) {
       message: `the host-supplied root (${host.source}) does not resolve to an existing directory -- refusing rather than creating one`,
     };
   }
-
-  if (!projectDir) {
-    if (validCandidates.length > 1) {
-      return {
-        ok: false,
-        code: EXIT_PROJECT_ENV,
-        message: `ambiguous: the client offered ${validCandidates.length} MCP roots and no project_dir was given to select one`,
-      };
-    }
-    return { ok: true, root: validCandidates[0], source: host.source };
-  }
-
-  // A host root exists AND project_dir is given: it must realpath to one of the host's own
-  // candidates, or inside one -- a model argument narrows the host's root, never overrides it.
-  const projectDirReal = realpathOrNull(projectDir);
-  const matches = projectDirReal !== null && validCandidates.some((c) => {
-    const candidateReal = realpathOrNull(c);
-    if (candidateReal === null) return false;
-    return projectDirReal === candidateReal || projectDirReal.startsWith(candidateReal + path.sep);
-  });
-  if (!matches) {
-    return {
-      ok: false,
-      code: EXIT_USAGE,
-      message:
-        `project_dir ${echo(projectDir)} is outside the host-supplied root -- refusing (project_dir ` +
-        `may only select a directory inside the host's own root, never override it)`,
-    };
-  }
-  return { ok: true, root: projectDir, source: 'project_dir' };
+  return projectDir ? boundedProjectDir(projectDir, validCandidates) : hostRootOnly(validCandidates, host);
 }

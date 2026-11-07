@@ -276,21 +276,32 @@ export function config(fieldPath) {
 // Creates `dir` (and missing parents) without fs.mkdirSync's recursive mode, which spins forever on some
 // paths (for example under /proc): find the nearest existing ancestor within a bounded walk, then make each
 // missing level one step at a time, so an impossible path fails fast with the OS error instead of hanging.
-function ensureDir(dir) {
+// True when `d` is a directory, false when nothing is there. Anything else there throws, since nothing can be made below it.
+function isDirectory(d) {
+  try {
+    if (fs.statSync(d).isDirectory()) return true;
+    throw Object.assign(new Error(`${d} is not a directory`), { code: 'ENOTDIR' });
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e;
+    return false;
+  }
+}
+
+// The levels below the nearest existing ancestor, outermost first, within a bounded walk.
+function missingLevels(dir) {
   const missing = [];
   let d = dir;
-  for (let i = 0; i < 64; i++) {
-    try {
-      if (fs.statSync(d).isDirectory()) break;
-      throw Object.assign(new Error(`${d} is not a directory`), { code: 'ENOTDIR' });
-    } catch (e) {
-      if (e.code !== 'ENOENT') throw e;
-    }
+  for (let i = 0; i < 64 && !isDirectory(d); i++) {
     missing.unshift(d);
     const parent = path.dirname(d);
     if (parent === d) break;
     d = parent;
   }
+  return missing;
+}
+
+function ensureDir(dir) {
+  const missing = missingLevels(dir);
   for (const m of missing) {
     try {
       fs.mkdirSync(m);

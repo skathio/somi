@@ -65,12 +65,12 @@
 }
 
 /* Present mode: one section per screen. */
-.present main > section {
+.present section {
   min-height: 100vh;
   display: flex;
   align-items: center;
 }
-.present main > section > div {
+.present section > div {
   width: 100%;
 }
 
