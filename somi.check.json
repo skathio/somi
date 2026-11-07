@@ -163,6 +163,7 @@
       "tests/quality.test.mjs"
     ],
     "tests/evals/lib/task-store.mjs": [
+      "tests/task-store.test.mjs",
       "tests/canary.test.mjs"
     ],
     "scripts/lib/quality/run.mjs": [
@@ -170,6 +171,23 @@
     ],
     "scripts/lib/quality/repo.mjs": [
       "tests/quality.test.mjs"
+    ],
+    "tests/evals/lib/manifest.mjs": [
+      "tests/manifest.test.mjs",
+      "tests/task-store.test.mjs"
+    ],
+    "tests/evals/lib/score-hidden.mjs": [
+      "tests/score-hidden.test.mjs"
+    ],
+    "tests/evals/lib/admit.mjs": [
+      "tests/admit.test.mjs"
+    ],
+    "tests/evals/lib/ab-stream.mjs": [
+      "tests/ab-stream.test.mjs"
+    ],
+    "tests/evals/lib/ab-draw.mjs": [
+      "tests/ab-draw.test.mjs",
+      "tests/bench.test.mjs"
     ]
   }
 }
