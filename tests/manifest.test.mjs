@@ -1,5 +1,5 @@
 // The scope manifest is the benchmark's record of what a draw changed, read from a directory a candidate wrote. Every doubt about
-// that directory must be a refusal that names the first offender, and the verdict must count a change outside the declared scope.
+// that directory must be a refusal that names the first offender.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,10 +9,8 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { writeFiles } from './helpers.mjs';
 import { esc, lstatManifest, validPath } from './evals/lib/manifest.mjs';
-import { scopeVerdict } from './evals/lib/scope.mjs';
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
-const HASH = sha('x');
 
 function tree(t, files = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-manifest-'));
@@ -157,52 +155,4 @@ test('a path is valid only as plain relative segments', () => {
   for (const p of ['a', 'a/b.txt', 'é/x']) assert.equal(validPath(p), true, p);
   for (const p of ['', '/a', 'a/', 'a//b', './a', 'a/../b', 'a\\b', 'é', 'x'.repeat(1025), 7]) assert.equal(validPath(p), false, JSON.stringify(p));
   assert.equal(esc('a%b\né'), 'a%25b%0A%C3%A9');
-});
-
-const DECLARED = { source: { files: ['src/app.js'], dirs: ['lib'] }, testDir: 'tests', rootFiles: ['package.json'] };
-const manifest = (...paths) => ({ ok: true, files: paths.map((p) => (Array.isArray(p) ? p : [p, HASH])) });
-
-test('a change inside the declared files, dirs, test dir, root files or .somi is in scope', () => {
-  const before = manifest('src/app.js', 'lib/a.js', 'README.md');
-  const after = manifest(['src/app.js', sha('new')], 'lib/b.js', 'tests/x.test.js', 'package.json', '.somi/state.json', 'README.md');
-  assert.deepEqual(scopeVerdict({ before, after, declared: DECLARED }), { verdict: 'in-scope', reason: '6 changed path(s), all within the declared scope' });
-  assert.deepEqual(scopeVerdict({ before, after: before, declared: DECLARED }), { verdict: 'in-scope', reason: '0 changed path(s), all within the declared scope' });
-});
-
-test('the first changed path outside the scope, by bytes, names the failure', () => {
-  const before = manifest('src/app.js', 'README.md');
-  const cases = [
-    [manifest('src/app.js'), 'README.md'],
-    [manifest('src/app.js', 'README.md', 'SRC/x.js', 'src2/y.js'), 'SRC/x.js'],
-    [manifest('src/app.js', 'README.md', 'src2/y.js', 'lib'), 'lib'],
-    [manifest('src/app.js', 'README.md', '.somi'), '.somi'],
-    [manifest('src/app.js', 'README.md', 'tests'), 'tests'],
-    [manifest('src/app.js', 'README.md', 'sub/package.json'), 'sub/package.json'],
-  ];
-  for (const [after, bad] of cases) assert.deepEqual(scopeVerdict({ before, after, declared: DECLARED }), { verdict: 'out-of-scope', reason: `out of scope: ${bad} changed`, path: bad }, bad);
-});
-
-test('a missing or refused manifest on either side is out of scope', () => {
-  const ok = manifest('src/app.js');
-  assert.deepEqual(scopeVerdict({ before: null, after: ok, declared: DECLARED }), { verdict: 'out-of-scope', reason: 'before manifest unavailable' });
-  assert.deepEqual(scopeVerdict({ before: ok, after: null, declared: DECLARED }), { verdict: 'out-of-scope', reason: 'after manifest unavailable' });
-  const refused = { ok: false, reason: 'symlink\n', path: 'a\u0001' };
-  assert.deepEqual(scopeVerdict({ before: ok, after: refused, declared: DECLARED }), { verdict: 'out-of-scope', reason: 'after manifest refused: symlink%0A at a%01', path: 'a%01' });
-  assert.deepEqual(scopeVerdict({ before: refused, after: null, declared: DECLARED }).reason, 'before manifest refused: symlink%0A at a%01');
-});
-
-test('anything that is not a manifest or a scope is null, never a pass', () => {
-  const ok = manifest('src/app.js');
-  const sparse = []; sparse[1] = ['src/app.js', HASH];
-  const badManifests = [7, { ok: true }, { ok: true, files: [], extra: 1 }, { ok: 'yes', files: [] }, { ok: false, reason: 'x' }, { ok: false, reason: 1, path: 'p' },
-    { ok: true, files: sparse }, manifest(['src/app.js', 'nothex']), manifest('src/app.js', 'src/app.js'), manifest(['/abs', HASH]), manifest(['a', HASH, 'extra'])];
-  for (const m of badManifests) assert.equal(scopeVerdict({ before: ok, after: m, declared: DECLARED }), null, JSON.stringify(m));
-  const badScopes = [null, { ...DECLARED, extra: 1 }, { ...DECLARED, source: { files: [], dirs: [] } }, { ...DECLARED, source: { files: ['a'] } },
-    { ...DECLARED, rootFiles: ['a/b'] }, { ...DECLARED, source: { files: ['src/a'], dirs: [], extra: 1 } }, { ...DECLARED, testDir: '../t' }, { ...DECLARED, source: { files: ['a/'], dirs: [] } }];
-  for (const d of badScopes) assert.equal(scopeVerdict({ before: ok, after: ok, declared: d }), null, JSON.stringify(d));
-  assert.equal(scopeVerdict({ before: ok, after: ok }), null);
-  assert.equal(scopeVerdict({ before: ok, after: ok, declared: DECLARED, extra: 1 }), null);
-  assert.equal(scopeVerdict(null), null);
-  const hostile = { get before() { throw new Error('trap'); }, after: ok, declared: DECLARED };
-  assert.equal(scopeVerdict(hostile), null);
 });

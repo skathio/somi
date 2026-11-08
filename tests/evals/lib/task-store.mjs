@@ -27,8 +27,6 @@
 // never mount task.json where the candidate can read it (the task standard wins over a candidate-visible
 // fixture reading of the brief). validateTaskJson returns `{ok: false, reason}`, not null, so the field is named.
 //
-// declaredScope(task) -> the `declared` argument of scopeVerdict (scope.mjs): {source: {files, dirs}, testDir, rootFiles}.
-//
 // taskHash(dir, {fs}) -> {ok: true, hash, task} or {ok: false, reason}; `fs` is for tests only. The directory must
 // hold a valid `task.json` at its root and pass lstatManifest (a link, special file, bad name or cap anywhere is
 // a refusal). It is also refused for a root `.git` entry, a file with an execute bit and an empty directory
@@ -170,12 +168,6 @@ export function validateTaskJson(obj) {
   } catch (e) {
     return e instanceof Bad ? refuse(e.field, e.message) : refuse('task.json', 'unreadable');
   }
-}
-
-/** A validated task -> the `declared` argument of `scopeVerdict`: a source entry ending in '/' is a directory. */
-export function declaredScope(task) {
-  const dirs = task.source.filter((p) => p.endsWith('/')).map((p) => p.slice(0, -1));
-  return { source: { files: task.source.filter((p) => !p.endsWith('/')), dirs }, testDir: task.test_dir, rootFiles: [...task.root_files] };
 }
 
 // Bytes of `file` (a regular file of at most `max` bytes, opened without following a link or blocking), or null.

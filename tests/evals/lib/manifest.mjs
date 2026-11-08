@@ -1,4 +1,4 @@
-// Scope manifest (FR-8c, FR-39): what changed in a draw's workspace. Whether that is inside the declared scope is scope.mjs.
+// Scope manifest (FR-8c, FR-39): what changed in a draw's workspace. The bench's scopeCheck (benchmarks/v2/telemetry.mjs) judges it against the declared scope.
 // Read-only: no child process, no network, nothing written, no candidate file parsed or run (only hashed).
 // The directory is hostile data (a bypassPermissions agent wrote it): every doubt is a refusal.
 //
@@ -16,7 +16,7 @@
 //   C0/C1 control, format (bidi, zero-width, BOM) or line-separator character, no backslash; case variants stay
 //   distinct. A file with setuid, setgid or world-writable bits (unsafe-mode), a directory on another device than
 //   the root (mount-point) and a repeated name are refused. Every `path` and reason is display text, printable
-//   ASCII through esc (bytes as %XX; the scope verdict escapes again): show it only as given, never raw.
+//   ASCII through esc (bytes as %XX): show it only as given, never raw.
 //   Guarantees: no link is followed and no special file is opened. Does NOT guarantee: (1) a hard link to an
 //   outside file is a regular file to lstat, so only the container boundary stops it; (2) a concurrent writer
 //   can swap a directory for a link after it was checked (each directory is re-checked after listing and the
@@ -39,8 +39,8 @@ const MAX_NAME_BYTES = 255;
 const MAX_PATH_BYTES = 1024;
 const BAD_CHARS = /[\u0000-\u001f\u007f-\u009f\\\p{Cf}\p{Zl}\p{Zp}]/u;
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
-export const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
-export const byBytes = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+const byBytes = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 // Printable ASCII only, so a hostile name can never inject a control character into a reason.
 export const esc = (v) => [...(Buffer.isBuffer(v) ? v : Buffer.from(String(v)))].map((b) => (b >= 0x20 && b < 0x7f && b !== 0x25 && b !== 0x5c ? String.fromCharCode(b) : `%${b.toString(16).padStart(2, '0').toUpperCase()}`)).join('');
 class Refusal { constructor(reason, path) { this.reason = reason; this.path = path; } }
@@ -51,7 +51,7 @@ function validName(s) {
     && !BAD_CHARS.test(s) && !LONE_SURROGATE.test(s) && s.normalize('NFC') === s;
 }
 export const validPath = (p) => typeof p === 'string' && Buffer.byteLength(p) <= MAX_PATH_BYTES && p.split('/').every(validName);
-export const sameKeys = (o, keys) => { const k = Reflect.ownKeys(o); return k.length === keys.length && keys.every((x) => k.includes(x)); };
+const sameKeys = (o, keys) => { const k = Reflect.ownKeys(o); return k.length === keys.length && keys.every((x) => k.includes(x)); };
 const FS_METHODS = ['lstatSync', 'opendirSync', 'openSync', 'fstatSync', 'readSync', 'closeSync'];
 
 // The root without its trailing slashes and the fs to read it with (bound copies of the methods used), or null for a malformed argument.

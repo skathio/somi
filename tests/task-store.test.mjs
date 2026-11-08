@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { REPO } from './helpers.mjs';
-import { declaredScope, taskHash, validateTaskJson } from './evals/lib/task-store.mjs';
+import { taskHash, validateTaskJson } from './evals/lib/task-store.mjs';
 
 const SOURCE = path.join(REPO, 'tests', 'fixtures', 'ab', 'M02-doc-permissions');
 const TASK = JSON.parse(fs.readFileSync(path.join(SOURCE, 'task.json'), 'utf8'));
@@ -25,8 +25,6 @@ test('a valid task.json comes back as a frozen plain copy', () => {
   assert.equal(Object.isFrozen(v.task) && Object.isFrozen(v.task.statements) && Object.isFrozen(v.task.turns), true);
   const { turns: _t, ...noTurns } = TASK;
   assert.deepEqual(validateTaskJson(noTurns).task.turns, [], 'turns are optional');
-  assert.deepEqual(declaredScope(v.task), { source: { files: [], dirs: ['src'] }, testDir: 'test', rootFiles: ['README.md'] });
-  assert.deepEqual(declaredScope({ ...v.task, source: ['a.js', 'lib/'] }).source, { files: ['a.js'], dirs: ['lib'] });
 });
 
 test('each field is held to its rule, and the refusal names it', () => {
