@@ -225,3 +225,13 @@ test('a sweep with nothing to kill returns at once', async (t) => {
   await sweepProcesses(`CLAUDE_CONFIG_DIR=${scratch(t)}/none`);
   assert.ok(Date.now() - started < 1000, 'a process it did not kill, or could not read, is not counted');
 });
+
+test('a directory the walk cannot read is not called clean, wherever it is', (t) => {
+  const d = draw(t, { cfgFiles: { 'hide/copy.txt': TOKEN, 'projects/p/1.jsonl': '{}\n', 'projects/q/2.jsonl': '{}\n' } });
+  const locked = [path.join(d.cfg, 'hide'), path.join(d.cfg, 'projects', 'q')];
+  for (const dir of locked) fs.chmodSync(dir, 0o000);
+  let leaks;
+  try { leaks = d.inspect(); } finally { if (fs.existsSync(locked[0])) fs.chmodSync(locked[0], 0o700); }
+  assert.deepEqual(leaks, ['unscanned-transcript', 'unscanned-workspace'], 'a token copy under an unreadable directory cannot be redacted, so the draw is flagged');
+  assert.equal(fs.existsSync(path.join(d.cfg, 'projects')), false, 'the transcripts are still removed, locked directory and all');
+});

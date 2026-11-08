@@ -11,7 +11,8 @@
 // Inspection (inspectDraw, run after the child is gone): the canary in any file of the after manifest (a silent copy of
 //   the oracle), the canary, the repository path and the token in the session transcripts under cfg/projects (then
 //   deleted, a redacted copy kept when small), and the token redacted in place in every regular file of the workspace and
-//   the config directory. Links are never followed. Git objects are compressed and are not searched for the canary.
+//   the config directory. Links are never followed. A directory the walk cannot read is not called clean: what it holds could not be
+//   searched or redacted, so the scan reports it unscanned. Git objects are compressed and are not searched for the canary.
 // Sweep (sweepProcesses): SIGKILL every process whose environment holds the draw's unique config directory entry, so a
 //   process that left the process group (setsid) cannot outlive the draw. Linux /proc only; elsewhere it does nothing.
 
@@ -141,14 +142,15 @@ function readNoFollow(file, max = MAX_FILE) {
     return st.isFile() && st.size <= max ? fs.readFileSync(fd) : null;
   } catch { return null; } finally { if (fd !== null) try { fs.closeSync(fd); } catch { /* read-only handle */ } }
 }
-/** Regular files under `root` (links and special files skipped, never followed), or null when the walk exceeded its cap. */
+/** Regular files under `root` (links and special files skipped, never followed), or null when the walk exceeded its cap or met a
+ * directory it could not read. */
 function filesUnder(root) {
   const ctx = { out: [], n: 0 };
   return walkFiles(ctx, root, 0) ? ctx.out : null;
 }
 function walkFiles(ctx, dir, depth) {
   if (depth > 32) return false;
-  let names; try { names = fs.readdirSync(dir); } catch { return true; }
+  let names; try { names = fs.readdirSync(dir); } catch { return false; }
   for (const name of names) {
     if (++ctx.n > MAX_WALK || !walkEntry(ctx, path.join(dir, name), depth)) return false;
   }
@@ -194,6 +196,18 @@ function scanTranscript(leaks, f, o, kept) {
   if (b.length <= KEEP_COPY) keepCopy(o, text, ++kept.n);
   return leaks;
 }
+// A directory nobody may read or write cannot be emptied, so each one is opened to its owner first (links are not followed).
+function unlockDirs(dir, depth = 0) {
+  if (depth > 32) return;
+  try { fs.chmodSync(dir, 0o700); } catch { return; }
+  let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const e of entries.filter((x) => x.isDirectory())) unlockDirs(path.join(dir, e.name), depth + 1);
+}
+function removeUnlocked(dir) {
+  unlockDirs(dir);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 // The session transcripts are scanned, kept redacted when small, then deleted; a projects entry that is not a directory is removed.
 function transcriptLeaks(leaks, o) {
   const proj = path.join(o.cfg, 'projects');
@@ -204,7 +218,7 @@ function transcriptLeaks(leaks, o) {
   if (list === null) leaks.add('unscanned-transcript');
   const kept = { n: 0 };
   for (const f of (list ?? []).filter((x) => x.endsWith('.jsonl'))) scanTranscript(leaks, f, o, kept);
-  return fs.rmSync(proj, { recursive: true, force: true });
+  return removeUnlocked(proj);
 }
 
 // The token is redacted in place in every regular file of the workspace and the config directory.

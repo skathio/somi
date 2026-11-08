@@ -656,3 +656,14 @@ test('a draw\'s quality is measured from the workspace\'s first commit, so commi
   assert.ok(q.rules.depth >= 1 && q.rules.params >= 1);
   assert.equal((await scoreQuality(path.join(dir, 'missing'))).ok, false, 'a gate that cannot run is not a pass');
 });
+
+test('a draw\'s directory is removed even when it holds a directory nobody may read', async (t) => {
+  const { removeTree } = await import('../benchmarks/v2/run.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-remove-'));
+  t.after(() => { if (fs.existsSync(dir)) { fs.chmodSync(path.join(dir, 'cfg', 'hide'), 0o700); fs.rmSync(dir, { recursive: true, force: true }); } });
+  fs.mkdirSync(path.join(dir, 'cfg', 'hide'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'cfg', 'hide', 'copy.txt'), 'secret');
+  fs.chmodSync(path.join(dir, 'cfg', 'hide'), 0o000);
+  removeTree(dir);
+  assert.equal(fs.existsSync(dir), false);
+});

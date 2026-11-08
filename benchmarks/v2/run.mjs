@@ -16,8 +16,8 @@ import { scoreQuality } from './scoring.mjs';
 import { weightedTokens } from './stats.mjs';
 import { hostStop, hostWindows, streamUsage } from './usage.mjs';
 
-// The packed plugin is locked read-only, so it has to be unlocked before it can be removed.
-function removeTree(dir) {
+// The packed plugin is locked read-only, and a draw can leave a directory nobody may read, so a tree is unlocked before it is removed.
+export function removeTree(dir) {
   const unlock = (d) => {
     fs.chmodSync(d, 0o700);
     for (const e of fs.readdirSync(d, { withFileTypes: true })) if (e.isDirectory()) unlock(path.join(d, e.name));
@@ -181,7 +181,7 @@ async function oneDraw(st, cfg, d, load) {
     if (halt) throw new Error(halt);
     if (!pinned) throw new Error(`${d.id}: served ${measured.models.join(', ')}, not the pinned model`);
     return null;
-  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  } finally { removeTree(tmp); }
 }
 
 async function drawAll(st, cfg, plan, finished) {
