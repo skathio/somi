@@ -5,7 +5,7 @@ import path from 'node:path';
 import { makeRepo, somi, writeFiles } from './helpers.mjs';
 import { modelNameProblems, pipefailProblems, planningIdProblems } from '../scripts/lib/gates.mjs';
 import { selectTests } from '../scripts/lib/check.mjs';
-import { GUARDED, candidates, mutateLine } from './mutate.mjs';
+import { GUARDED, candidates, mutateLine, report } from './mutate.mjs';
 
 const failedGates = (r) => r.json.failed;
 
@@ -162,4 +162,17 @@ test('a project\'s committed files under .somi are scanned, and only the working
   const nested = makeRepo(t, { 'src/app.js': 'export const one = 1;\n' });
   writeFiles(nested, { 'pkg/.somi/plan.md': 'Option A, chosen in D7 of the plan (D7).\n' });
   assert.deepEqual(failedGates(somi(nested, ['check'])), ['planning-ids']);
+});
+
+test('a mutation run passes only when every mutant ran and was caught, and says how many ran of how many', () => {
+  const mutants = (n, tests = ['t.test.mjs']) => Array.from({ length: n }, (_, i) => ({ file: `f${i % 2}.mjs`, tests }));
+  const clean = { caught: 3, survivors: [], timedOut: [] };
+  assert.deepEqual(report(mutants(3), 3, clean), { code: 0, lines: ['3 of 3 mutants run: 3 caught, 0 survived, 0 timed out'] });
+  const capped = report(mutants(66), 25, { caught: 25, survivors: [], timedOut: [] });
+  assert.deepEqual(capped, { code: 1, lines: ['25 of 66 mutants run: 25 caught, 0 survived, 0 timed out', 'INCOMPLETE: 41 mutants were not run (--max). This is not a pass.'] }, 'a capped run is not a pass');
+  assert.equal(report(mutants(2), 2, { caught: 1, survivors: ['f0.mjs:3: x'], timedOut: [] }).code, 1);
+  assert.equal(report(mutants(2), 2, { caught: 1, survivors: [], timedOut: ['f0.mjs:3: x'] }).code, 1, 'a timeout verifies nothing');
+  const unmapped = report([...mutants(1), ...mutants(1, [])], 1, { caught: 1, survivors: [], timedOut: [] });
+  assert.equal(unmapped.code, 1);
+  assert.match(unmapped.lines.at(-1), /^NOT VERIFIED: no tests are mapped to f0\.mjs/);
 });

@@ -91,7 +91,7 @@ These signals are patterns over file names and added lines, so they over-fire by
 
 Affected tests come from `somi.check.json`. A code file no key covers falls back to `full_cmd`, within the budget.
 
-Mutation testing is diff-scoped and covers security-relevant code only: `npm run mutate` flips an operator on each changed line of the path, state, policy, signal and hook files, and names what the mapped tests missed. Run it before a push when one of those files changed.
+Mutation testing is diff-scoped and covers security-relevant code only: `npm run mutate` flips an operator on each changed line of the path, state, policy, signal and hook files, and names what the mapped tests missed. Run it before a push when one of those files changed. It runs every mutant, several at once, and its summary says how many ran out of how many there are. It passes only when all of them ran and were caught: a mutant left out by `--max`, one whose tests timed out, and one in a file with no mapped tests each fail the run.
 
 ## Quality gate
 
