@@ -9,7 +9,9 @@ export const HOOKS: Record<string, string> = {
   'audit-log': '**Audit log** of every tool call in `.somi/audit.log`.',
   'inject-digest': '**Rules digest and decision ledger** at session start and after compaction, with a loud warning when the sandbox is off.',
   'apply-tier': '**Model tiers** set on every subagent, so they do not depend on an agent remembering.',
-  'keep-work-delegated': '**Edits stay with workers** during a workflow on Claude Code, and reviewers stay read-only.',
+  'reviewers-read-only': '**Reviewers stay read-only** on both hosts. The main agent and workers write freely.',
+  'capture-prompt': '**Your own words** are kept, so SoMi\'s tools read what you asked and not only the agent\'s summary of it.',
+  'review-due': '**A review that is due** is asked for before the turn ends, once, when the diff calls for one and none covers it.',
   'guard-tier-config': '**Tier changes** ask you first.',
 };
 
@@ -17,4 +19,6 @@ export const HOOK_EVENTS: Record<string, string> = {
   PreToolUse: 'Before a tool runs',
   PostToolUse: 'After a tool runs',
   SessionStart: 'At session start',
+  UserPromptSubmit: 'When you send a message',
+  Stop: 'Before a turn ends',
 };
