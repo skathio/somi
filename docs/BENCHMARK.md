@@ -2,77 +2,15 @@
 
 5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** `bench.mjs run` refuses without `--go`, and the test suite spends nothing.
 
-**Status:** the results below describe an earlier design, a step engine that real use on Copilot found too restrictive and that lost context on sequential requests. This benchmark could not see that: each draw is one prompt and an "Approved", on one host. The current design has not been recorded yet. Benchmarks run on Claude Code only, because there is no budget for Copilot runs, so Copilot is checked by hand. Neither earlier candidate passes the release rule. The second passes both quality checks and misses on cost. See [Results](#results). 5.0 stays a release candidate. An exploratory run with a cheap `/somi` command came in at about 1x bare with quality level, which is not a release pass: see [The light phase](#the-light-phase).
-
-## Results
-
-Sixteen tasks, a Sonnet session, a Haiku low tier, recorded with dollars from billing. Records are in `benchmarks/v2/records/`, each with a written reading.
-
-| Arm | Draws | Solved | Dollars per solved | Minutes per draw |
-|---|---|---|---|---|
-| Bare | 96 | 73 | $0.118 | 0.5 |
-| 4.1 | 96 | 63 | $3.162 | 6.4 |
-| 5.0 first candidate | 96 | 70 | $0.211 | 2.3 |
-| 5.0 second candidate | 96 | 71 | $0.277 | 1.6 |
-
-**Release rule: neither ships.** The checks, with failures in bold:
-
-| Check | Limit | First candidate | Second candidate |
-|---|---|---|---|
-| Dollars per solved against bare | at most 1.5x | **1.79x** | **2.35x** |
-| Solved rate against bare, lower 95% bound | at least -20 points | **-20.35** (mean -3.1) | -18.3 (mean -2.1) |
-| Hidden tests passed against bare, lower 95% bound | at least -5 points | **-15.6** (mean -5.0) | -1.9 (mean -0.4) |
-| A/A interval contains zero | yes | yes (-15.2 to 6.8 points) | yes, same recording |
-
-**The second candidate** gives sensitive work a stronger worker and no longer starts a review on three size and shape signals, which it still records. It was designed after reading how the first failed on these tasks, so its two quality passes are weaker evidence than a first look. Its [record](../benchmarks/v2/records/candidate2-44ddb986add1.md) has the full reading. In N10 and N11, 9 of the 10 unsolved draws had a reviewer naming the missed gap and rating it Minor or Nit, which does not re-loop. The coordinator alone uses more tokens per draw than bare uses for the whole task.
-
-**Against 4.1,** per draw, the first candidate: 0.088x the dollars (0.063 to 0.125), 0.227x the tokens (0.168 to 0.307). The second: 0.113x the dollars (0.083 to 0.153), 0.158x the tokens (0.108 to 0.230). Both solved more tasks. 4.1 cost 16.69x bare in dollars (12.55 to 22.21). Bare did not drift between recordings (0.989, 0.928 to 1.054, then 0.976, 0.936 to 1.017). Neither candidate had an inline write in 96 draws.
-
-**Which parts pay,** from the registered ablation on the first candidate, 64 draws a side, one draw per task and cell:
-
-| Part | With: solved, share, dollars per draw | Without: solved, share, dollars per draw |
-|---|---|---|
-| Review on signals | 44, 0.913, $0.128 | 46, 0.916, $0.076 |
-| Digest | 44, 0.911, $0.103 | 46, 0.918, $0.100 |
-| Planning step | 43, 0.911, $0.102 | 47, 0.918, $0.102 |
-
-Differences of a few draws are inside the noise floor. Review shows no gain on these tests for 68% more dollars, though reviewers did report real problems that the hidden tests do not check.
-
-**What the worker model does,** from an [exploratory ablation](../benchmarks/v2/records/exploratory/ablation-sonnet-worker-44ddb986add1.md) with the low tier mapped to Sonnet, chosen after seeing the candidate result and outside the release decision. Across 128 draws each, solved stays at 90. Hidden-test share rises from 0.915 to 0.978 (bare 0.983), and dollars per draw from $0.102 to $0.168 (bare $0.090). Failed safety tests fall from 103 to 48, and boundary tests from 41 to 1.
-
-## The light phase
-
-`--phase light` is exploratory and tests each part on its own. Both SoMi arms come in through `/somi` with that command pinned to the cheap model, because that was the first way found to pin the main thread: the same setting on a skill the model loads did not change the model in a live check. A later live check on CLI 2.1.316 found that a `model` on the agent passed to `--agent` keeps the main thread on that model across follow-ups, unless `--model` is also given. This run did not test that. `somi5` also has tested fixes, and `somi5-pin` does not. The pin is applied by the bench for now, and a shipped version needs a way to carry it on Claude alone, since shared files name no models. These draws use the same 16 tasks, so they can stop an idea cheaply but cannot prove one.
-
-**Result.** Recorded on a4312b5, 96 draws an arm, [full reading](../benchmarks/v2/records/exploratory/light-44ddb986add1.md). This is a third look at the same tasks and the pin is not shipped, so it is not a release pass.
-
-| Arm | Solved | Dollars per solved | Against bare | Solved rate against bare | Time against bare |
-|---|---|---|---|---|---|
-| Bare | 73 | $0.118 | | | |
-| `somi5`, cheap command and tested fixes | 75 | $0.131 | 1.11x | +2.1 (-9.6 to +13.7) | 2.97x |
-| `somi5-pin`, cheap command only | 77 | $0.114 | 0.97x | +4.2 (-11.2 to +19.5) | 2.91x |
-
-The cheap command takes dollars per solved from 2.35x bare to about 1x, with quality level. Small work on Haiku costs about a fifth of bare on N01 and N18. Review still shows no gain on the hidden tests and is 63% of the dollars. Tested fixes raised N10 and N11 but show no overall gain, and SoMi still loses to bare on both. In 6 of 192 draws a follow-up reply led to code committed on the main thread with no SoMi review, which has to be fixed before this ships.
+**Status:** there is no recorded result for 5.0 as it is now. Every earlier recording either ran SoMi's code on the Haiku low tier (the step engine's candidates, its ablations and the large-work first readings) or its whole conversation on Haiku (the light and advice phases). Neither is what SoMi is built for: the conversation and the code run on the medium tier, as they do for a bare agent, and the low tier only gathers information and runs checks. Those records were removed; they are in the git history before this change. The next recordings run on Sonnet, after a smoke run.
 
 ## How SoMi is compared
 
-Bare and SoMi both hold the conversation on the medium tier and do the whole job. SoMi's saving comes from moving cheaper work down to low. The light and advice recordings below ran SoMi's conversation on the low tier, so they measured a model choice and not SoMi: by the maintainer's founding rule they were flawed by design, and they stay published only as a record. Every SoMi arm now runs on the same session model as bare.
+Bare and SoMi both hold the conversation on the medium tier and do the whole job. SoMi's saving comes from moving cheaper work down to low.
 
 Solving the hidden tests is not all SoMi is for, so each draw is also scored on what it delivers. The tests a draw added or changed are run on the task's reference solution and on each of its recorded mutants, the same mutants task admission uses. A test suite that passes on the reference and fails on a mutant would have caught that defect. Bare is scored the same way.
 
 `--phase smoke` runs one draw per task and arm on tasks named with `--tasks`, to check that a change works before anything is recorded for real.
-
-## The advice design
-
-Exploratory, on the design that replaced the step engine, recorded on 1085bce. Records: [16 tasks](../benchmarks/v2/records/exploratory/advice-candidate-44ddb986add1.md), [small context](../benchmarks/v2/records/exploratory/advice-tight-44ddb986add1.md), [large tasks](../benchmarks/v2/records/exploratory/advice-large-44ddb986add1.md).
-
-| On 16 tasks | Solved | Dollars per solved | Against bare | Hidden tests against bare |
-|---|---|---|---|---|
-| Bare | 73 | $0.118 | | |
-| Cheap `/somi` on the step engine | 77 | $0.114 | 0.97x | +0.0 (-1.5 to +1.5) |
-| Advice design | 78 | $0.188 | **1.60x** | **-5.7 (-15.4 to +4.0)** |
-
-It does not pass the release rule. The agent takes twice the turns, acts on non-blocking review comments and runs reviewers again, and routes some small work to the medium tier. On large tasks and with the context squeezed it lost nothing, and it was cheaper than the step engine.
 
 ## The questions
 
@@ -174,15 +112,6 @@ The diff facts and signals in each row are what the review thresholds can later 
 
 **Share of hidden tests passed, -5 point margin:** 41 draws per arm at a per-draw spread of 0.08, 142 at 0.15 and 393 at 0.25. Off-ceiling spread on the current pool is under 0.1, but it has no catastrophic failures yet.
 
-### Time and usage per draw, bare
-
-| Tier | Minutes | Weighted tokens | CLI dollars | On the two hard tasks |
-|---|---|---|---|---|
-| Medium | 0.7 | 50k | 0.109 | 1.1 min, 71k, 0.151 |
-| Low | 1.7 | 190k | 0.022 | 2.0 min, 247k, 0.028 |
-
-The medium tier was faster and used fewer tokens per draw than the low tier, on these tasks and on a bare agent. How each tier counts against the usage window is unmeasured, so a window reading is part of the medium pilot.
-
 ## Running it
 
 ```bash
@@ -251,27 +180,4 @@ cut -c1-200 .somi/state/journal.jsonl
 
 The `large` phase asks whether fresh context per milestone pays. Three projects set binding decisions early, and hidden tests check that later milestones honour them. The arms are bare, 5.0 as a plain request, 5.0 asked for a plan first (the milestone lane), and 4.1. It is a pilot, reported apart from the release rule.
 
-First draw per arm, at a 120,000-token window, after the fixes below. These are 12 of the 36 registered draws, so they are a first reading only:
-
-| Task | Bare | 5.0 | Lane | 4.1 |
-|---|---|---|---|---|
-| L2, task tracker, 23 tests | 23, $0.14, 1 min | 23, $0.14, 3 min | 23, $0.75, 8 min | 2, $3.68, 13 min |
-| L1, shop, 21 tests | 21, $0.15, 1 min | 21, $0.57, 7 min | 21, $0.83, 9 min | 2, $1.40, 7 min (not a fair reading) |
-| L3, fleet back office, 323 tests | 323, $0.30, 1 min | 323, $1.39, 24 min | 323, $4.20, 52 min | 10, $3.42, 8 min |
-
-The 4.1 L1 draw sat at its plan checkpoint because the bench failed to answer it, a bug fixed since. The other two 4.1 draws stopped at its own limits, such as its 400-line diff cap.
-
-What these draws support, and what they do not:
-
-- **Long tickets start on one worker.** Plain 5.0 scored the same as the lane at about a third of the cost on L3, because the worker splits only what proves too big.
-- **The lane has not earned its cost in this measure.** No hidden test failed for a bare agent in these draws. The lane's reviewers did find a real bug that the hidden tests miss (a negative quantity that mints stock), which this score does not reward. Asking for a plan first is the maintainer's choice, not the default.
-- **Rot was not demonstrated.** Bare never reached compaction at the natural window, because a model scripts uniform work. Forced to compact, it kept every decision on L1 and L2 through up to four compactions, and on L3 through one. These are tasks we can write offline, not a real project, so this is no proof that rot cannot happen on one.
-
 **How compaction was forced.** The host accepts a window from 100,000 to 1,000,000 tokens and ignores other values, so an earlier run at 30,000 never compacted. The `tight` phase sets the lowest legal window and lowers the point of compaction with `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`. At 30% the host ended sessions as thrashing, because a session starts at about 20,000 tokens, so those scores measure the host's limit. At 50%, the lane and plain 5.0 each finished L1 and L2 at full score with up to one compaction. Both stopped blocked on L3, where a low-tier worker built the wrong milestone in one draw and overwrote files in the other. Neither report describes a lost decision, though both come from the coordinator's own summary. In these two draws the bench did not yet answer a blocked worker, a bug fixed since, so they may have gone further. A 50,000-token point is also below the 100,000 window the host's settings allow.
-
-**What the large runs found in 5.0 itself,** all fixed:
-
-- The engine cut every request at 8,192 characters without saying so, which lost the late milestones of a long ticket. It now keeps the whole request and refuses one over 64 KiB.
-- The coordinator repeated each worker's brief in its context and reworded it. A brief over 2,000 characters now goes to a file. On L3 the lane's peak context fell from 344,000 to 87,000 tokens and its cost from $7.76 to $4.20.
-- `somi finish` scanned SoMi's own `.somi/plan.md` for planning ids and blocked on it. The gates now skip that folder, which is never committed.
-- A critic's confirmation did not bind when a coordinator dropped a finding's evidence.

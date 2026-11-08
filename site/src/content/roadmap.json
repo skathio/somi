@@ -114,5 +114,5 @@
       ]
     }
   ],
-  "open": "5.0 is a release candidate. It ships as the default only if the pre-registered benchmark passes, and neither candidate has. The second passes both quality checks but costs 2.35x bare in dollars per solved task against a limit of 1.5x."
+  "open": "5.0 is a release candidate. It ships as the default only if the pre-registered benchmark passes. Earlier recordings put SoMi's code or its whole conversation on the cheap tier, which is not how it is built, so they were withdrawn; the benchmark runs again on Sonnet."
 }
