@@ -334,9 +334,22 @@ test('a draw\'s own tests are scored on the reference and on its mutants', (t) =
   const taskDir = path.join(root, 'task');
   assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 0 }, 'an unchanged fixture test is not the draw\'s');
   write('ws/test/add.test.mjs', 'import test from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "../src/add.mjs";\ntest("adds", () => assert.equal(add(2, 2), 4));\n');
-  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, oracle_pass: true, killed: 1, total: 2 });
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 1, agree: 1, killed: 1, total: 2 });
   write('ws/test/add.test.mjs', 'import test from "node:test";\nimport assert from "node:assert/strict";\ntest("wrong", () => assert.equal(1, 2));\n');
-  assert.equal(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }).oracle_pass, false, 'a test that fails on the reference counts for nothing');
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 1, agree: 0, killed: 0, total: 2 }, 'a test that fails on the reference counts for nothing');
+  const mixed = 'import test from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "../src/add.mjs";\n';
+  write('ws/test/add.test.mjs', `${mixed}test("pins a detail the reference does differently", () => assert.equal(add(1, 1), 3));\ntest("adds", () => assert.equal(add(2, 2), 4));\ntest.skip("later", () => {});\n`);
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 3, agree: 1, killed: 1, total: 2 }, 'a case that disagrees with the reference, or is skipped, is left out; the agreeing case still catches the mutant');
+  write('ws/test/add.test.mjs', `${mixed}test("disagrees", () => assert.equal(add(1, 1), 3));\ntest("always passes", () => assert.ok(true));\n`);
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 2, agree: 1, killed: 0, total: 2 }, 'a mutant is killed only by a case that agreed with the reference');
+  write('task/hidden/setup.mjs', 'import fs from "node:fs";\nfs.writeFileSync(process.argv[2] + "/made.txt", "made");\n');
+  write('ws/test/add.test.mjs', `${mixed}import fs from "node:fs";\ntest("the setup ran", () => assert.equal(fs.readFileSync("made.txt", "utf8"), "made"));\n`);
+  assert.equal(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }).agree, 1, 'the task\'s setup makes its files in the reference copy first');
+  write('task/hidden/setup.mjs', 'process.exit(1);\n');
+  assert.equal(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }).error, 'setup', 'a setup that fails scores nothing');
+  fs.rmSync(path.join(root, 'task', 'hidden'), { recursive: true });
+  write('ws/test/add.test.mjs', 'this is not javascript(');
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 0, agree: 0, killed: 0, total: 2 }, 'a file that does not load runs no case');
 });
 
 test('every draw gets one label, and a stopped loop is never finished', () => {
@@ -616,11 +629,13 @@ test('a task may carry scripted follow-ups, and they are held to the same text r
 });
 
 test('a draw scores on results first: hidden tests, then tests that are valid, then the gate', () => {
-  const own = (tests, oracle_pass, killed, total) => ({ tests, oracle_pass, killed, total });
-  assert.deepEqual(resultScore({ solved: true, own_tests: own(3, true, 4, 6) }), { P: 1, V: 1, G: null, strict: 1 });
-  assert.equal(resultScore({ solved: true, own_tests: own(3, true, 3, 6) }).V, 0, `under ${TEST_VALIDITY_KILL * 100}% of mutants killed`);
-  assert.equal(resultScore({ solved: true, own_tests: own(3, false, 6, 6) }).V, 0, 'tests that fail on correct code are not valid');
-  assert.equal(resultScore({ solved: true, own_tests: own(0, true, 0, 0) }).V, 0, 'no tests is not valid tests');
+  const own = (tests, agree, killed, total) => ({ tests, cases: agree + 1, agree, killed, total });
+  assert.deepEqual(resultScore({ solved: true, own_tests: own(3, 2, 4, 6) }), { P: 1, V: 1, G: null, strict: 1 });
+  assert.equal(resultScore({ solved: true, own_tests: own(3, 2, 3, 6) }).V, 0, `under ${TEST_VALIDITY_KILL * 100}% of mutants killed`);
+  assert.equal(resultScore({ solved: true, own_tests: own(3, 0, 6, 6) }).V, 0, 'no case that agrees with correct code is not valid');
+  assert.equal(resultScore({ solved: true, own_tests: own(0, 1, 0, 0) }).V, 0, 'no tests is not valid tests');
+  assert.equal(resultScore({ solved: true, own_tests: { tests: 1, oracle_pass: true, killed: 6, total: 6 } }).V, 1, 'a row recorded before cases were counted still scores');
+  assert.equal(resultScore({ solved: true, own_tests: { tests: 1, oracle_pass: false, killed: 0, total: 6 } }).V, 0);
   assert.equal(resultScore({ solved: false, own_tests: own(3, true, 6, 6) }).strict, 0, 'valid tests do not rescue failed work');
   assert.equal(resultScore({ solved: true, own_tests: own(3, true, 6, 6), quality: { ok: false } }).strict, 0, 'a failed quality gate is not a strict success');
   assert.equal(resultScore({ solved: true, own_tests: own(3, true, 6, 6), gate: 'budget' }).G, null, 'the stop reason named gate is not the quality gate');
@@ -628,7 +643,7 @@ test('a draw scores on results first: hidden tests, then tests that are valid, t
 });
 
 test('arms rank by results before cost, a cost within the tie band never decides, and the cost front is marked', () => {
-  const own = { tests: 2, oracle_pass: true, killed: 6, total: 6 };
+  const own = { tests: 2, cases: 3, agree: 3, killed: 6, total: 6 };
   const rows = [
     ...[1, 2, 3].map(() => ({ arm: 'careful', solved: true, own_tests: own, cost: 0.9 })),
     ...[1, 2, 3].map((i) => ({ arm: 'cheap', solved: i < 3, own_tests: own, cost: 0.2 })),

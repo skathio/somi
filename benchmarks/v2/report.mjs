@@ -48,7 +48,7 @@ const ratioCell = (r) => (r.ratio === null ? 'n/a' : `${fmt(r.ratio)} (${fmt(r.l
 function resultsFirst(rows) {
   const ranked = rankArms(rows);
   const gateScored = ranked.some((a) => a.G !== null);
-  return ['## Results first', '', `Ranked by strict successes, then by correct work with valid tests, then by cost (within ${COST_TIE * 100}% is a tie). Valid tests pass on the reference solution and kill at least ${TEST_VALIDITY_KILL * 100}% of its mutants.${gateScored ? '' : ' The quality gate is not scored yet, so a strict success here is hidden tests passed with valid tests.'}`, '', '| Rank | Arm | Draws | Hidden tests pass | Own tests valid | Both | Quality gate | Strict successes | Mean dollars | On the cost front |', '|---|---|---|---|---|---|---|---|---|---|', ...ranked.map((a, i) => `| ${i + 1} | ${a.arm} | ${a.draws} | ${a.P} | ${a.V} | ${a.PV} | ${a.G === null ? 'not scored' : a.G} | ${a.strict} | ${fmt(a.cost, 3)} | ${a.front ? 'yes' : 'no'} |`), ''];
+  return ['## Results first', '', `Ranked by strict successes, then by correct work with valid tests, then by cost (within ${COST_TIE * 100}% is a tie). Tests are valid when the cases that pass on the reference solution kill at least ${TEST_VALIDITY_KILL * 100}% of its mutants; a case that fails on the reference does not count.${gateScored ? '' : ' The quality gate is not scored yet, so a strict success here is hidden tests passed with valid tests.'}`, '', '| Rank | Arm | Draws | Hidden tests pass | Own tests valid | Both | Quality gate | Strict successes | Mean dollars | On the cost front |', '|---|---|---|---|---|---|---|---|---|---|', ...ranked.map((a, i) => `| ${i + 1} | ${a.arm} | ${a.draws} | ${a.P} | ${a.V} | ${a.PV} | ${a.G === null ? 'not scored' : a.G} | ${a.strict} | ${fmt(a.cost, 3)} | ${a.front ? 'yes' : 'no'} |`), ''];
 }
 
 function armsTable(rows, arms, { planned, reg, k }) {
@@ -75,10 +75,13 @@ function noiseFloor(rows, arms, k) {
 function ownTestsRow(rows, arm) {
   const list = rows.filter((r) => r.arm === arm && r.own_tests);
   const wrote = list.filter((r) => r.own_tests.tests > 0);
-  const passed = wrote.filter((r) => r.own_tests.oracle_pass);
-  const killed = passed.reduce((s, r) => s + r.own_tests.killed, 0);
-  const total = passed.reduce((s, r) => s + r.own_tests.total, 0);
-  return `| ${arm} | ${wrote.length} of ${list.length} | ${passed.length} | ${total ? `${killed} of ${total} (${Math.round((100 * killed) / total)}%)` : 'n/a'} |`;
+  const cases = wrote.reduce((s, r) => s + (r.own_tests.cases ?? 0), 0);
+  const agree = wrote.reduce((s, r) => s + (r.own_tests.agree ?? 0), 0);
+  const scored = wrote.filter((r) => (r.own_tests.agree ?? 0) > 0);
+  const killed = scored.reduce((s, r) => s + r.own_tests.killed, 0);
+  const total = scored.reduce((s, r) => s + r.own_tests.total, 0);
+  const pct = (a, b) => (b ? `${a} of ${b} (${Math.round((100 * a) / b)}%)` : 'n/a');
+  return `| ${arm} | ${wrote.length} of ${list.length} | ${pct(agree, cases)} | ${pct(killed, total)} |`;
 }
 
 const meanPer = (list, entries) => {
@@ -111,7 +114,7 @@ export function renderReport(dir) {
     ...armsTable(rows, arms, { planned, reg, k }),
     ...againstBase(rows, arms, base),
     ...noiseFloor(rows, arms, k),
-    '', '## Own tests', '', 'Tests each draw added or changed, run on the reference solution and on each of its recorded mutants.', '', '| Arm | Draws with tests | Pass on the reference | Mutants killed |', '|---|---|---|---|', ...arms.map((arm) => ownTestsRow(rows, arm)),
+    '', '## Own tests', '', 'Tests each draw added or changed, run case by case on the reference solution and on each of its recorded mutants. A case that fails on the reference pins something the reference does differently, often a detail the task leaves open, and is left out. Mutants are counted for draws with at least one agreeing case.', '', '| Arm | Draws with tests | Cases agreeing with the reference | Mutants killed |', '|---|---|---|---|', ...arms.map((arm) => ownTestsRow(rows, arm)),
     '', '## Protocol and spend', '', '| Arm | Routed to | Tool or CLI | Mean passes | Gates | Escalated | Inline writes | Findings | Mean dollars per model | Mean weighted per agent | Split coverage |', '|---|---|---|---|---|---|---|---|---|---|---|---|', ...arms.map((arm) => protocolRow(rows, arm)),
     '', '## Reading', '', 'To be written by a person: read 10 transcripts first, then say what the figures mean. An inconclusive result is published as inconclusive, with every figure.', '',
   ].join('\n');

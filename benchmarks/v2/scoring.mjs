@@ -6,7 +6,8 @@ import { qualityGate } from '../../scripts/lib/quality/gate.mjs';
 import { limitsFor } from '../../scripts/lib/quality/limits.mjs';
 
 // Results come first and cost second. A draw is a strict success when the hidden tests pass (P), the tests it wrote are valid (V:
-// they pass on the reference solution and kill at least 60% of its mutants), and the quality gate passes (G). Arms rank by strict
+// the cases among them that pass on the reference solution kill at least 60% of its mutants; a case that fails on the reference does
+// not count either way), and the quality gate passes (G). Arms rank by strict
 // successes, then by correct work with valid tests, and only then by cost, where costs within 10% are a tie. Until the gate ships, G
 // is not scored and a strict success is P and V. Cheap work that fails the hidden tests, or tests that only prove themselves, cannot
 // buy a place by costing less.
@@ -15,7 +16,9 @@ export const COST_TIE = 0.1;
 export function resultScore(row) {
   const P = row.solved === true ? 1 : 0;
   const o = row.own_tests;
-  const V = !o ? null : o.tests > 0 && o.oracle_pass === true && (o.total === 0 || o.killed / o.total >= TEST_VALIDITY_KILL) ? 1 : 0;
+  // A row recorded before cases were counted has only oracle_pass, which says whether every case agreed.
+  const agree = o?.agree ?? (o?.oracle_pass === true ? 1 : 0);
+  const V = !o ? null : o.tests > 0 && agree > 0 && (o.total === 0 || o.killed / o.total >= TEST_VALIDITY_KILL) ? 1 : 0;
   const G = typeof row.quality?.ok === 'boolean' ? (row.quality.ok ? 1 : 0) : null;
   return { P, V, G, strict: P * (V ?? 0) * (G ?? 1) };
 }

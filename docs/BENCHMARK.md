@@ -8,7 +8,7 @@
 
 Bare and SoMi both hold the conversation on the medium tier and do the whole job. SoMi's saving comes from moving cheaper work down to low.
 
-Solving the hidden tests is not all SoMi is for, so each draw is also scored on what it delivers. The tests a draw added or changed are run on the task's reference solution and on each of its recorded mutants, the same mutants task admission uses. A test suite that passes on the reference and fails on a mutant would have caught that defect. Bare is scored the same way.
+Solving the hidden tests is not all SoMi is for, so each draw is also scored on what it delivers. The tests a draw added or changed are run on the task's reference solution and on each of its recorded mutants, the same mutants task admission uses. A test suite that passes on the reference and fails on a mutant would have caught that defect. Each test case is judged on its own: a case that fails on the reference pins something the reference does differently, often a detail the task leaves open, so it is left out, and the report gives the share of cases that agree. The tests are valid when the agreeing cases kill at least 60% of the mutants. Bare is scored the same way.
 
 `--phase smoke` runs one draw per task and arm on tasks named with `--tasks`, to check that a change works before anything is recorded for real.
 
