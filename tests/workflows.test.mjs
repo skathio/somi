@@ -67,6 +67,7 @@ test('a failing check restarts the build one tier up, from the handoff and the f
   assert.deepEqual(builds.map((c) => c.model), ['everyday', 'strong']);
   assert.match(builds[1].prompt, /tests: 1 failed/);
   assert.match(builds[1].prompt, /Files likely to change: src\/a\.js/);
+  for (const b of builds) assert.match(b.prompt, /run the tests and `somi quality --scope pr`, fix what either reports without a somi-gate-allow exemption/, 'the build meets the quality limits before the check');
   assert.equal(value.status, 'done');
 });
 

@@ -65,7 +65,7 @@ let gate = null;
 for (const tier of ladder) {
   phase('Build');
   const failure = gate && !gate.ok ? `\n\nAn earlier attempt failed these checks, which you must make pass:\n${(gate.failures ?? []).join('\n')}` : '';
-  built = await agent(`${a.role ?? 'You build one clear change, with tests that fail without it.'} Do the work yourself, and do not start other agents.\n\n${request}\n\n${handoff}${held}${failure}\n\nWhen it is done, run the tests and report.`, onTier(tier, { label: `build on ${tier}`, schema: BUILT }));
+  built = await agent(`${a.role ?? 'You build one clear change, with tests that fail without it.'} Do the work yourself, and do not start other agents.\n\n${request}\n\n${handoff}${held}${failure}\n\nWhen it is done, run the tests and \`${cli} quality --scope pr\`, fix what either reports without a somi-gate-allow exemption, and report.`, onTier(tier, { label: `build on ${tier}`, schema: BUILT }));
   phase('Verify');
   // The branch scope, so a staged build is held to what its pull request will be, and can add a module a single commit could not.
   gate = await agent(`Run \`${cli} check --scope pr\`${rules?.command ? ` and then \`${rules.command}\`` : ''}, and report whether both passed and which checks or tests failed, with the lines it printed for each. Change nothing.`, onTier('low', { label: 'check', schema: GATE }));

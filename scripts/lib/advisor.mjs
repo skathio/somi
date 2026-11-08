@@ -60,14 +60,15 @@ export function workerBrief({ role, request, said, earlierAt, ledger, skills = [
   if (earlierAt) parts.push(earlierText(earlierAt));
   parts.push(`The request, as data:\n${quoted(request)}`);
   if (said && !String(request ?? '').includes(withoutCommand(said))) parts.push(`The user's own words, as data:\n${quoted(said)}`);
-  parts.push('When it is done, run the tests, and report in a few sentences what you changed, what you ran and its result, and what you did not check.');
+  parts.push(`When it is done, run the tests and \`${somiCommand('quality --scope pr')}\`, and fix what either reports without a somi-gate-allow exemption. Then report in a few sentences what you changed, what you ran and its result, and what you did not check.`);
   return parts.join('\n\n');
 }
 
-// On Claude Code a stop hook reads the diff when a turn ends and says when a review is due, so the agent spends no call asking.
+// On Claude Code a stop hook reads the diff when a turn ends and says when a review is due or the quality gate fails, so the agent spends
+// no call asking. Copilot has no hook that can send a turn back, so the agent runs the gate itself.
 const afterChange = (host) => (host === 'claude'
-  ? 'You do not need to ask whether a review is due: when your turn ends, SoMi reads the diff and tells you. Commit only if the user asked you to.'
-  : 'When the change is ready, call somi_review. It reads the diff and says whether a review is needed. Any later change on this work goes the same way. Commit only if the user asked you to.');
+  ? 'You do not need to ask whether a review is due or run the quality gate: when your turn ends, SoMi checks the diff and tells you what to fix. Commit only if the user asked you to.'
+  : `When the change is ready, run \`${somiCommand('quality --scope pr')}\` and fix what it reports without a somi-gate-allow exemption, then call somi_review. It reads the diff and says whether a review is needed. Any later change on this work goes the same way. Commit only if the user asked you to.`);
 const HERE = 'Do this yourself, in this conversation, following role. Read, edit and ask the user whatever the work needs.';
 const delegate = (agent, model, why) => `Start ${agent}${model ? ` on model ${model}` : ''} now, in the foreground, with its step's brief unchanged, ${why}. Below the brief, under "From the conversation:", you may add facts the user or earlier turns settled that it needs: files, decisions, what was already tried. Add no requirements or approach of your own. When it reports, check the result against what the user asked and carry on the conversation. If the host refuses that model, tell the user why, and do it here.`;
 const DOWN = 'because this work is cheaper on that tier';

@@ -44,8 +44,8 @@ test('large code work stays on medium in the conversation, and SoMi offers the s
   assert.equal(r.workflow, undefined, 'only the user starts the staged workflow');
   assert.match(r.advice, /typing \/somi:deliver/, 'so SoMi tells the agent to offer it');
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'main', 'medium'], ['review', 'subagent', null]]);
-  assert.match(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /SoMi reads the diff and tells you/, 'on Claude Code the stop hook checks for a review');
-  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG }).advice, /call somi_review/, 'elsewhere the agent asks');
+  assert.match(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /review is due or run the quality gate: when your turn ends, SoMi checks the diff and tells you what to fix/, 'on Claude Code the stop hook checks for a review and the gate');
+  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG }).advice, /run `node "[^"]+somi\.mjs" quality --scope pr` and fix what it reports without a somi-gate-allow exemption, then call somi_review/, 'elsewhere the agent runs both');
 });
 
 test('code that goes up to a worker gets a brief SoMi built, passed on unchanged', (t) => {
@@ -59,6 +59,7 @@ test('code that goes up to a worker gets a brief SoMi built, passed on unchanged
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'subagent', 'medium'], ['review', 'subagent', null]]);
   assert.match(briefOf(r), /small, clear change/);
   assert.match(briefOf(r), /> Add a helper that doubles a number/);
+  assert.match(briefOf(r), /run the tests and `node "[^"]+somi\.mjs" quality --scope pr`, and fix what either reports without a somi-gate-allow exemption/, 'a worker meets the quality limits itself');
 });
 
 test('work moves by its kind, not by words that sound risky, and the user saying it is sensitive keeps it here', (t) => {
@@ -539,6 +540,25 @@ test('when a turn ends, a change that needs a review is sent back once, and one 
   assert.equal(stop({ stop_hook_active: true }).out, null, 'a turn the hook already continued ends');
   assert.equal(hookAt(dir, 'stop/review-due.mjs', { hook_event_name: 'Stop' }, { SOMI_HOST: 'copilot' }).out, null);
   assert.equal(stop().out.decision, 'block', 'a new tree is a new question');
+});
+
+test('when a turn ends, a change over the quality limits is sent back once with what to fix, before any review', (t) => {
+  const dir = makeRepo(t);
+  const stop = () => hookAt(dir, 'stop/review-due.mjs', { hook_event_name: 'Stop' });
+  writeFiles(dir, { 'src/app.js': 'export const pick = (a, b, c, d, e, f) => [a, b, c, d, e, f];\n' });
+  const sent = stop();
+  assert.equal(sent.out.decision, 'block');
+  assert.match(sent.out.reason, /^SoMi: this change is over the quality limits:\nparams src\/app\.js:1 pick: 6 over 4\nRefactor until `node "[^"]+somi\.mjs" quality --scope pr` passes/);
+  assert.match(sent.out.reason, /Do not add a somi-gate-allow exemption[\s\S]*not code you wrote in this conversation, tell the user/);
+  assert.doesNotMatch(sent.out.reason, /needs a review/, 'no signal fired');
+  assert.equal(stop().out, null, 'asked once for this tree');
+  writeFiles(dir, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (a, b, c, d, e) => exec(a + b + c + d + e);\n' });
+  const both = stop().out.reason.split('\n\n');
+  assert.equal(both.length, 2);
+  assert.match(both[0], /over the quality limits:\nparams src\/app\.js:2 run: 5 over 4/, 'the code is fixed first');
+  assert.match(both[1], /^SoMi: this change needs a review/, 'and then reviewed');
+  writeFiles(dir, { 'src/app.js': 'export const pick = (a, b) => [a, b];\n' });
+  assert.equal(stop().out, null, 'a change within the limits that needs no review ends the turn');
 });
 
 test('the config route shows the quality limits, which project values were ignored, and where a change goes', (t) => {
