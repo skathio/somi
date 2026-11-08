@@ -147,10 +147,11 @@ test('the router clears a floor on the labelled set', async () => {
 
 test('plans are paired, seeded and repeatable', () => {
   const tasks = [{ id: 'a', dir: 'x/a' }, { id: 'b', dir: 'x/b' }];
-  const plan = buildPlan('baseline', tasks, { seed: 7 });
+  const plan = buildPlan('candidate', tasks, { seed: 7 });
   assert.equal(plan.length, 2 * 3 * 2);
-  assert.deepEqual(plan, buildPlan('baseline', tasks, { seed: 7 }));
-  assert.notDeepEqual(plan.map((d) => d.id), buildPlan('baseline', tasks, { seed: 8 }).map((d) => d.id));
+  assert.deepEqual(plan, buildPlan('candidate', tasks, { seed: 7 }));
+  assert.notDeepEqual(plan.map((d) => d.id), buildPlan('candidate', tasks, { seed: 8 }).map((d) => d.id));
+  assert.equal(buildPlan('baseline', tasks).length, 2 * 3, 'the baseline is bare alone');
   assert.equal(buildPlan('aa', tasks).length, 12);
   const round = plan.slice(0, 2).map((d) => d.task);
   assert.equal(new Set(round).size, 1, 'all arms of a task run in the same round');

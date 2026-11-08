@@ -30,7 +30,8 @@ export const PHASE_ARMS = Object.freeze({
   pilot: ['bare'],
   aa: ['bare-a', 'bare-b'],
   trial: ['somi5', 'somi41'],
-  baseline: ['bare', 'somi41'],
+  // 4.1 is not in the baseline: it wrote code on the low tier, so it measured a cheap model, not a workflow (decided 2026-11-08).
+  baseline: ['bare'],
   candidate: ['somi5', 'bare-check'],
   ablation: ['bare'],
   large: ['bare', 'somi5', 'somi5-lane', 'somi41'],

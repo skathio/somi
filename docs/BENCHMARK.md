@@ -126,7 +126,7 @@ node benchmarks/v2/bench.mjs prereg   # refuses while a decision is open; commit
 node benchmarks/v2/bench.mjs plan --phase aa --pilot .somi/bench/pilot   # prints the draws and the timeout from the pilot
 node benchmarks/v2/bench.mjs record --phase aa --model <id> --timeout-min <n> --out .somi/bench/aa --budget-total <usd> --go
 node benchmarks/v2/bench.mjs record --phase trial --model <id> --worker-model <id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/trial --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase baseline --model <id> --worker-model <id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/baseline --budget-total <usd> --go
+node benchmarks/v2/bench.mjs record --phase baseline --model <id> --worker-model <id> --timeout-min <n> --out .somi/bench/baseline --budget-total <usd> --go
 node benchmarks/v2/bench.mjs record --phase candidate --model <id> --worker-model <id> --timeout-min <n> --out .somi/bench/candidate --budget-total <usd> --go
 node benchmarks/v2/bench.mjs record --phase ablation --model <id> --worker-model <id> --timeout-min <n> --out .somi/bench/ablation --budget-total <usd> --go
 node benchmarks/v2/bench.mjs record --phase large --model <id> --worker-model <id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/large --budget-total <usd> --go
@@ -170,7 +170,7 @@ cut -c1-200 .somi/state/journal.jsonl
 | **Quality guard** | Keep -5 on solved rate; widen the margin; or add a finer measure | Keep -5, on the share of hidden tests passed. Add a -20 guard on solved rate. -5 on solved rate passes an equal lane 8% of the time | Same |
 | **Tier for the paired run** | Medium; low with a small medium check | Medium. Low-tier effects are not shown to transfer, and on bare it was not the cheaper tier in tokens | A recording per change |
 | **Review tier** | All agents at the work tier; or the security reviewer at the review tier, as shipped | As shipped, so it measures what users get | A recording |
-| **Tasks and draws** | 20 tasks by 3 draws; 16 by 6 | 16 tasks by 6 draws on bare and 5.0, 3 on 4.1 | A recording, and new tasks need authoring |
+| **Tasks and draws** | 20 tasks by 3 draws; 16 by 6 | 16 tasks by 6 draws on bare and 5.0. 4.1 is not recorded: it wrote code on the Haiku low tier (2026-11-08) | A recording, and new tasks need authoring |
 | **Ablation set** | Full 3-factor factorial; one-at-a-time; none yet | Review, digest and planning factorial, one draw per task and cell, plus always-on review as the escalation check. Sizing no longer exists | One recording |
 | **Minimum effect** | 20%, 25% or 30% on cost | 25% for a release, 30% for a part | Free before registration |
 | **Budget per release** | Set per run | A figure per step, from the table below | Any time |
