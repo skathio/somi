@@ -12,7 +12,7 @@
 //   somi status | migrate
 //   somi setup [--host claude|copilot]                  makes SoMi the session agent, on the model set for its tier
 //   somi doctor [--host claude|copilot] [--profile]
-//   somi init --host copilot
+//   somi init --host copilot                          registers the staged workflow with Copilot CLI
 //
 // Exit codes: 0 done, 1 a check, the doctor or the pull request gate failed, 64 the request was refused.
 
@@ -23,9 +23,9 @@ import { fileURLToPath } from 'node:url';
 import { advise } from './lib/advisor.mjs';
 import { runCheck } from './lib/check.mjs';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
-import { runDoctor } from './lib/doctor.mjs';
+import { duplicateHookWarnings, runDoctor } from './lib/doctor.mjs';
 import { commitBase, listFiles, repoRoot, resolveRef, snapshotTree, stateIsTracked, workBase } from './lib/git-tree.mjs';
-import { writeCopilotExtension, writeCopilotHooks } from './lib/init.mjs';
+import { writeCopilotExtension } from './lib/init.mjs';
 import { addToLedger, readLedger } from './lib/ledger.mjs';
 import { migrate } from './lib/migrate.mjs';
 import { lastCheck, migratedFindings, pullRequest } from './lib/pr.mjs';
@@ -145,10 +145,10 @@ function slotCommand(ctx, args) {
 function initCommand(ctx, args) {
   const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
   if (values.host !== 'copilot') throw new StateError('init takes --host copilot; the Claude Code plugin needs no setup');
-  const hooks = writeCopilotHooks(ctx.root, PLUGIN_ROOT);
   const extension = writeCopilotExtension(ctx.root, PLUGIN_ROOT);
-  print({ hooks, extension, workflows: 'Copilot runs workflows in experimental mode: start it with --experimental, or turn it on with /experimental.' });
-  return hooks.written && extension.written ? 0 : 1;
+  const [duplicate] = duplicateHookWarnings(ctx.root);
+  print({ extension, workflows: 'Copilot runs workflows in experimental mode: start it with --experimental, or turn it on with /experimental.', ...(duplicate ? { warning: duplicate } : {}) });
+  return extension.written ? 0 : 1;
 }
 
 const printed = (value, ok = true) => { print(value); return ok ? 0 : 1; };

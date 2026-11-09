@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { REPO, makeRepo } from './helpers.mjs';
-import { runDoctor, sandboxSettings, settingsWarnings, tierWarnings } from '../scripts/lib/doctor.mjs';
-import { copilotExtension, copilotHooks, writeCopilotExtension, writeCopilotHooks } from '../scripts/lib/init.mjs';
+import { REPO, makeRepo, somi } from './helpers.mjs';
+import { duplicateHookWarnings, runDoctor, sandboxSettings, settingsWarnings, tierWarnings } from '../scripts/lib/doctor.mjs';
+import { copilotExtension, writeCopilotExtension } from '../scripts/lib/init.mjs';
 
 const results = (touch, curl) => (cmd) => (cmd === 'touch' ? touch : curl);
 test('a tier with no model is named, on the host that has no defaults', () => {
@@ -65,23 +65,15 @@ test('project settings merge over user settings on Claude Code', (t) => {
   assert.deepEqual(sandboxSettings({ host: 'claude', root: dir, home, env: {} }), { enabled: true, failIfUnavailable: true });
 });
 
-test('the Copilot hook file carries every hook the plugin registers', () => {
-  const listed = JSON.stringify(copilotHooks('/opt/somi'));
-  const registered = JSON.parse(fs.readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8'));
-  const names = JSON.stringify(registered).match(/[\w-]+\.mjs/g);
-  assert.ok(names.length > 5);
-  for (const name of names) assert.ok(listed.includes(name), name);
-});
-
-test('the Copilot hook file points at the plugin with absolute, quoted paths', (t) => {
-  const hooks = copilotHooks("/opt/so'mi");
-  assert.equal(hooks.version, 1);
-  const bash = hooks.hooks.PreToolUse.find((e) => e.matcher === 'Bash');
-  assert.match(bash.bash, /^SOMI_HOST=copilot node '\/opt\/so'\\''mi\/hooks\/pre-tool\/block-dangerous-bash\.mjs'$/);
+test('Copilot CLI runs the plugin\'s own hooks, so init writes none, and an old copy is reported as running every hook twice', (t) => {
   const dir = makeRepo(t);
-  assert.equal(writeCopilotHooks(dir, '/opt/somi').written, true);
-  assert.equal(writeCopilotHooks(dir, '/opt/somi').written, true, 'the same file again is fine');
-  assert.equal(writeCopilotHooks(dir, '/elsewhere').written, false, 'a different file is not overwritten');
+  assert.equal(somi(dir, ['init', '--host', 'copilot']).status, 0);
+  assert.equal(fs.existsSync(path.join(dir, '.github', 'hooks', 'somi.json')), false);
+  assert.deepEqual(duplicateHookWarnings(dir), []);
+  fs.mkdirSync(path.join(dir, '.github', 'hooks'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.github', 'hooks', 'somi.json'), '{}');
+  assert.match(duplicateHookWarnings(dir)[0], /earlier somi init[\s\S]*every SoMi hook runs twice; delete that file/);
+  assert.match(JSON.parse(somi(dir, ['init', '--host', 'copilot']).stdout).warning, /runs twice/, 'init says so too');
 });
 
 test('init writes a Copilot extension that loads SoMi\'s workflow module from the plugin, and never overwrites another', async (t) => {

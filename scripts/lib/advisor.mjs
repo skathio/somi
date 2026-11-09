@@ -64,11 +64,9 @@ export function workerBrief({ role, request, said, earlierAt, ledger, skills = [
   return parts.join('\n\n');
 }
 
-// On Claude Code a stop hook reads the diff when a turn ends and says when a review is due or the quality gate fails, so the agent spends
-// no call asking. Copilot has no hook that can send a turn back, so the agent runs the gate itself.
-const afterChange = (host) => (host === 'claude'
-  ? 'You do not need to ask whether a review is due or run the quality gate: when your turn ends, SoMi checks the diff and tells you what to fix. Commit only if the user asked you to.'
-  : `When the change is ready, run \`${somiCommand('quality --scope pr')}\` and fix what it reports without a somi-gate-allow exemption, then call somi_review. It reads the diff and says whether a review is needed. Any later change on this work goes the same way. Commit only if the user asked you to.`);
+// On Claude Code and Copilot CLI a stop hook reads the diff when a turn ends and says when a review is due or the quality gate fails,
+// so the agent spends no call asking.
+const AFTER_CHANGE = 'You do not need to ask whether a review is due or run the quality gate: when your turn ends, SoMi checks the diff and tells you what to fix. Commit only if the user asked you to.';
 const HERE = 'Do this yourself, in this conversation, following role. Read, edit and ask the user whatever the work needs.';
 const delegate = (agent, model, why) => `Start ${agent}${model ? ` on model ${model}` : ''} now, in the foreground, with its step's brief unchanged, ${why}. Below the brief, under "From the conversation:", you may add facts the user or earlier turns settled that it needs: files, decisions, what was already tried. Add no requirements or approach of your own. When it reports, check the result against what the user asked and carry on the conversation. If the host refuses that model, tell the user why, and do it here.`;
 const DOWN = 'because this work is cheaper on that tier';
@@ -82,7 +80,7 @@ function planAdvice(start) {
 // A workflow as its steps, each saying where it runs and on which tier, worked out fresh for every request and kept nowhere. The agent runs
 // them in order. Only a step on a subagent holds the main thread's edits back, and review happens only where the diff calls for it.
 // Either reviewer, never both: somi_review names the security reviewer when a security signal fired, and the code reviewer otherwise.
-const REVIEW_STEP = (host, always) => ({ step: 'review', run_on: 'subagent', agents: ['somi:somi-reviewer', 'somi:somi-security-reviewer'], when: always ? 'always' : 'the diff signals it', how: host === 'claude' && !always ? 'SoMi checks when your turn ends and tells you' : 'call somi_review' });
+const REVIEW_STEP = (always) => ({ step: 'review', run_on: 'subagent', agents: ['somi:somi-reviewer', 'somi:somi-security-reviewer'], when: always ? 'always' : 'the diff signals it', how: always ? 'call somi_review' : 'SoMi checks when your turn ends and tells you' });
 const FIRST_STEP = Object.freeze({ debug: 'reproduce', plan: 'plan', design: 'design', discover: 'research', atlas: 'map', answer: 'answer' });
 const WHAT = Object.freeze({
   reproduce: 'Write a failing test that shows the bug, from the code and the report.',
@@ -93,13 +91,13 @@ const WHAT = Object.freeze({
   close: 'Close the plan with somi_plan when every milestone is done.',
 });
 
-export function workflowSteps({ route, kind, alwaysReview, host, work }) {
+export function workflowSteps({ route, kind, alwaysReview, work }) {
   const main = { run_on: 'main', tier: work.mainTier };
   const doWork = work.worker ? { run_on: 'subagent', agent: work.worker.agent, tier: work.tier, ...(work.worker.model ? { model: work.worker.model } : {}), brief: work.brief } : { run_on: 'main', tier: work.tier };
   if (kind === 'plan') return [{ step: 'plan', ...main, do: WHAT.plan }, { step: 'milestones', run_on: 'main', tier: work.mainTier, do: WHAT.milestones }, { step: 'close', ...main, do: WHAT.close }];
   if (kind === 'report') return [{ step: FIRST_STEP[route] ?? route, ...doWork }];
-  if (route === 'debug') return [{ step: 'reproduce', ...main, do: WHAT.reproduce }, { step: 'fix', ...doWork, do: WHAT.fix }, REVIEW_STEP(host, alwaysReview)];
-  return [{ step: route === 'build' ? 'build' : route, ...doWork, do: WHAT.build }, REVIEW_STEP(host, alwaysReview)];
+  if (route === 'debug') return [{ step: 'reproduce', ...main, do: WHAT.reproduce }, { step: 'fix', ...doWork, do: WHAT.fix }, REVIEW_STEP(alwaysReview)];
+  return [{ step: route === 'build' ? 'build' : route, ...doWork, do: WHAT.build }, REVIEW_STEP(alwaysReview)];
 }
 
 // Work the user sends with /somi-deliver runs as the staged workflow, so its stages and their tiers are kept by code and not by the model.
@@ -119,7 +117,7 @@ const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // A project's config is cloned input and may only tighten a limit, so a change the user wants goes in their own file.
 // Everything here is done from the chat: the agent runs SoMi's own commands by their full path, because no somi command is on the PATH.
 const QUALITY_CONFIG = 'Relay this briefly. To change a quality limit, write it under quality in the file named by global_config, or under quality.commit or quality.pr for one scope, never in the project\'s .somi/config.json, where only a tighter value counts. Before you write a value looser than the current limit, ask the user and wait for a yes.';
-const SETUP = (host) => `To check SoMi's setup, run \`${somiCommand('doctor')}\` and relay what it finds. After tiers.main changes, run \`${somiCommand('setup')}\`.${host === 'claude' ? '' : ` To turn on SoMi's hooks and the staged workflow in this project, run \`${somiCommand('init --host copilot')}\` once the user says yes.`}`;
+const SETUP = (host) => `To check SoMi's setup, run \`${somiCommand('doctor')}\` and relay what it finds. After tiers.main changes, run \`${somiCommand('setup')}\`. To connect another plugin to a step, run \`${somiCommand('slot <step> <plugin:component>')}\` with the step and component the user names, and \`${somiCommand('slot --list')}\` to show what is connected.${host === 'claude' ? '' : ` To turn on the staged workflow, /somi-deliver, in this project, run \`${somiCommand('init --host copilot')}\` once the user says yes.`}`;
 const STAGED_ADVICE = (host) => `The user typed /somi-deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing tree as review_tree, and tell the user its summary and status in a few lines. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
 const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi-deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
 
@@ -167,7 +165,7 @@ function placement(ctx, wf, { request, sensitive, staged }) {
 
 function workAdvice(ctx, wf, { start, workflow, large }) {
   if (workflow) return STAGED_ADVICE(ctx.host);
-  const what = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${afterChange(ctx.host)}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
+  const what = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${AFTER_CHANGE}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
   return `${large ? `${SUGGEST_STAGED} ` : ''}Run steps in order. ${what}`;
 }
 
@@ -196,7 +194,7 @@ export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
     route: chosen.route,
     tier: at.tier,
     // With a workflow to start, the steps would repeat its whole payload. If it cannot start, asking again without staged gives them.
-    steps: workflow ? undefined : workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, host: ctx.host, work: { mainTier: at.main, tier: at.tier, worker: at.worker, brief } }),
+    steps: workflow ? undefined : workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, work: { mainTier: at.main, tier: at.tier, worker: at.worker, brief } }),
     ...placedFields(ctx, at, { role, skills, ledger }),
     sensitive: at.isSensitive || undefined,
     advice: workAdvice(ctx, wf, { start, workflow, large: at.large }),

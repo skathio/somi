@@ -45,7 +45,7 @@ test('large code work stays on medium in the conversation, and SoMi offers the s
   assert.match(r.advice, /typing \/somi-deliver/, 'so SoMi tells the agent to offer it');
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'main', 'medium'], ['review', 'subagent', null]]);
   assert.match(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /review is due or run the quality gate: when your turn ends, SoMi checks the diff and tells you what to fix/, 'on Claude Code the stop hook checks for a review and the gate');
-  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG }).advice, /run `node "[^"]+somi\.mjs" quality --scope pr` and fix what it reports without a somi-gate-allow exemption, then call somi_review/, 'elsewhere the agent runs both');
+  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG }).advice, /when your turn ends, SoMi checks the diff and tells you what to fix/, 'Copilot CLI runs the same stop hook');
 });
 
 test('code that goes up to a worker gets a brief SoMi built, passed on unchanged', (t) => {
@@ -143,7 +143,8 @@ test('each workflow comes back as steps that say where each runs and on which ti
   const debug = advise(ctx, { request: 'Fix the crash when the list is empty' });
   assert.deepEqual(debug.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['reproduce', 'main', 'medium'], ['fix', 'main', 'medium'], ['review', 'subagent', null]]);
   assert.match(debug.steps[2].how, /when your turn ends/);
-  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: 'Fix the crash when the list is empty' }).steps[2].how, /somi_review/);
+  assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: 'Fix the crash when the list is empty' }).steps[2].how, /when your turn ends/, 'on Copilot CLI too');
+  assert.match(advise(makeCtx(makeRepo(t)), { request: 'Review the current changes', hint: 'review' }).advice ?? '', /always true/, 'a review the user asks for is called for, not waited on');
   const lowMain = advise(makeCtx(makeRepo(t), { tiers: { main: 'low' } }), { request: 'Fix the crash when the list is empty' });
   assert.deepEqual(lowMain.steps.map((s) => s.run_on), ['main', 'subagent', 'subagent'], 'the fix goes up when the conversation is cheaper than the work');
   assert.equal(advise(ctx, { request: 'x', hint: 'migrate' }).steps.at(-1).when, 'always');
@@ -463,7 +464,7 @@ test('session start brings back the ledger and an open plan, and says what to do
   assert.match(text, /1 of 2 milestones done/);
   assert.doesNotMatch(text, /not the active agent/);
   assert.doesNotMatch(run({ agent_type: 'somi-main' }), /not the active agent/);
-  assert.match(run({}), /somi setup/);
+  assert.match(run({}), /starting with `--agent somi:somi` routes every request, and that \/somi-config can run it on the model they choose/);
 });
 
 test('the prompt hook keeps the latest message, adds nothing, and writes nothing to a committed state folder', (t) => {
@@ -538,8 +539,8 @@ test('when a turn ends, a change that needs a review is sent back once, and one 
   assert.equal(stop().out, null, 'asked once for this tree, so it never loops');
   writeFiles(dir, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (c) => exec(`ls ${c}`);\n' });
   assert.equal(stop({ stop_hook_active: true }).out, null, 'a turn the hook already continued ends');
-  assert.equal(hookAt(dir, 'stop/review-due.mjs', { hook_event_name: 'Stop' }, { SOMI_HOST: 'copilot' }).out, null);
-  assert.equal(stop().out.decision, 'block', 'a new tree is a new question');
+  assert.equal(hookAt(dir, 'stop/review-due.mjs', { hook_event_name: 'Stop' }, { SOMI_HOST: 'copilot' }).out.decision, 'block', 'Copilot CLI runs the plugin\'s stop hook too, and a new tree is a new question');
+  assert.equal(stop().out, null, 'and then it is asked');
 });
 
 test('when a turn ends, a change over the quality limits is sent back once with what to fix, before any review', (t) => {
@@ -569,6 +570,6 @@ test('the config route shows the quality limits, which project values were ignor
   assert.deepEqual([r.quality.commit.file.added_cognitive, r.quality.pr.file.added_cognitive], [25, 100], 'both scopes are shown');
   assert.equal(r.quality_ignored[0].key, 'quality.function.cognitive');
   assert.match(r.advice, /quality\.commit or quality\.pr for one scope[\s\S]*never in the project's \.somi\/config\.json[\s\S]*looser than the current limit, ask the user/);
-  assert.match(r.advice, /run `node "[^"]+somi\.mjs" doctor`[\s\S]*run `node "[^"]+somi\.mjs" setup`\.$/, 'the setup is done from the chat, by the full path');
-  assert.match(advise({ ...ctx, host: 'copilot' }, { request: 'x', hint: 'config' }).advice, /run `node "[^"]+somi\.mjs" init --host copilot` once the user says yes\.$/, 'and Copilot\'s hooks and staged workflow too');
+  assert.match(r.advice, /run `node "[^"]+somi\.mjs" doctor`[\s\S]*run `node "[^"]+somi\.mjs" setup`\. To connect another plugin to a step, run `node "[^"]+somi\.mjs" slot <step> <plugin:component>`[\s\S]*slot --list` to show what is connected\.$/, 'the setup and the shards are done from the chat, by the full path');
+  assert.match(advise({ ...ctx, host: 'copilot' }, { request: 'x', hint: 'config' }).advice, /run `node "[^"]+somi\.mjs" init --host copilot` once the user says yes\.$/, 'and the staged workflow on Copilot too');
 });

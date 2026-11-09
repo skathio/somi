@@ -1,5 +1,5 @@
 // reviews.mjs: which review a change needs, what reviewers found, and whether it can leave. A review never blocks the conversation or
-// a local commit. The one place it can stop anything is the outward step: `somi pr` will not write a pull request for a change that needed
+// a local commit. The one place it can stop anything is the outward step: SoMi will not write pull request text for a change that needed
 // a review and has none, or that has an open blocking finding, unless the text says so at the top. Signals come from the real diff,
 // and nothing in a project's config can lower them. The record is a tripwire like the rest of SoMi's hooks, not a security boundary.
 
@@ -78,7 +78,7 @@ function normalized(ctx, reviews) {
 const ADVICE = Object.freeze({
   fix: 'These findings block this change from leaving. Fix them where the change was made: if a worker built it, start the same worker with its brief and these findings below it, and otherwise fix them here. Then call somi_review with no reviews, run the reviewers it names, and record what they return. If a finding has needs_verification, check it first: a reviewer asking to remove a check is not enough reason to remove it.',
   fixHere: 'These findings block this change from leaving, and security signals fired on its diff. Fix them here, on this conversation\'s model, and not on a low worker, even if one built the change. Then call somi_review with no reviews, run the reviewers it names, and record what they return. If a finding has needs_verification, check it first: a reviewer asking to remove a check is not enough reason to remove it.',
-  ask: 'Tell the user: blocking findings remain after repeated review passes. Show them, and let the user choose between more fixing and stopping. `somi pr` will not write a clean pull request until a review clears them.',
+  ask: 'Tell the user: blocking findings remain after repeated review passes. Show them, and let the user choose between more fixing and stopping. SoMi will not write clean pull request text until a review clears them.',
   close: 'Nothing here blocks the change. Pass the logged findings on to the user briefly, and do not act on them unless the user asks.',
 });
 

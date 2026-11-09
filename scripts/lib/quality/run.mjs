@@ -27,7 +27,7 @@ export function runQuality(root, { scope, env = process.env }) {
 /** Each violation as one line naming the rule, the place and the numbers, at most MAX_SHOWN of them. */
 export function describeAll(violations, scope) {
   const lines = violations.map(describe);
-  return lines.length > MAX_SHOWN ? [...lines.slice(0, MAX_SHOWN), `and ${lines.length - MAX_SHOWN} more: run somi quality --scope ${scope}`] : lines;
+  return lines.length > MAX_SHOWN ? [...lines.slice(0, MAX_SHOWN), `and ${lines.length - MAX_SHOWN} more: somi_quality with scope ${scope} lists them`] : lines;
 }
 
 /** { ok, failures: [line], warnings: n } for one scope, where each failure names the rule, the place and the numbers. */

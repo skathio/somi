@@ -58,11 +58,17 @@ export function autoWarnings(host, { home = os.homedir(), env = process.env } = 
   return String(model ?? '').toLowerCase() === 'auto' ? ['the session model is Auto, so Copilot CLI ignores the model on every subagent and tiers do nothing; start with `somi setup`'] : [];
 }
 
+// An earlier somi init wrote the hooks into the project. Copilot CLI now runs the plugin's own, so with that file every hook runs twice.
+export function duplicateHookWarnings(root) {
+  const file = path.join(root, '.github', 'hooks', 'somi.json');
+  return fs.existsSync(file) ? [`${file} was written by an earlier somi init, and Copilot CLI now runs the plugin's own hooks, so every SoMi hook runs twice; delete that file`] : [];
+}
+
 // A plugin's hooks can fail to load without any error. The audit hook runs on every tool call, so a log with nothing recent means none of them ran.
 export function hookWarnings(root, { now = Date.now(), env = process.env } = {}) {
   const log = env.SOMI_AUDIT_LOG || path.join(root, '.somi', 'audit.log');
   try { if (now - fs.statSync(log).mtimeMs < 3600000) return []; } catch { /* no log is the same answer as an old one */ }
-  return ['no hook has logged a tool call here in the last hour, so the tripwire hooks may not be running on this host; run this from inside an agent session, and on Copilot CLI try `somi init --host copilot`'];
+  return ['no hook has logged a tool call here in the last hour, so the tripwire hooks may not be running on this host; run this from inside an agent session, and check that the SoMi plugin is enabled'];
 }
 
 export function runDoctor({ root, host, config = {}, platform = process.platform, env = process.env, home = os.homedir(), exec = defaultExec, removeFile = fs.rmSync, pid = process.pid }) {
@@ -79,7 +85,7 @@ export function runDoctor({ root, host, config = {}, platform = process.platform
   const ok = probes.every((p) => p.blocked);
   return {
     ok, verdict: ok ? 'PASS' : 'FAIL', host, probes,
-    warnings: [...settingsWarnings(host, sandboxSettings({ host, root, home, env })), ...tierWarnings(config, host), ...autoWarnings(host, { home, env }), ...hookWarnings(root, { env })],
-    remedy: ok ? undefined : 'Enable the sandbox (see `somi doctor --profile`), then run this from inside an agent session. Typing it at a `!` prompt usually bypasses the sandbox.',
+    warnings: [...settingsWarnings(host, sandboxSettings({ host, root, home, env })), ...tierWarnings(config, host), ...autoWarnings(host, { home, env }), ...hookWarnings(root, { env }), ...duplicateHookWarnings(root)],
+    remedy: ok ? undefined : 'Enable the sandbox: `somi doctor --profile` prints the settings to merge into the host\'s own. Then check again from inside an agent session, because a command typed at a `!` prompt usually bypasses the sandbox.',
   };
 }

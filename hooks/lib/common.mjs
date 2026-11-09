@@ -81,7 +81,7 @@ export function runHook(main) {
 // graph — still carry their own copy; unifying those is a follow-up.)
 // A host can start in a subfolder of a repository. State and the audit log belong to the repository, so walk up to it.
 export function projectRoot() {
-  let base = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  let base = process.env.CLAUDE_PROJECT_DIR || process.env.COPILOT_PROJECT_DIR || process.cwd();
   if (base.includes('${')) base = process.cwd();
   for (let d = path.resolve(base); ; d = path.dirname(d)) {
     if (fs.existsSync(path.join(d, '.git'))) return d;

@@ -144,8 +144,8 @@ The sandbox is recommended, not required: session start warns loudly when it is 
 | Capability | Claude Code | Copilot CLI | VS Code and cloud agent |
 |---|---|---|---|
 | Default lane and CLI | Yes | Yes | Instructions only, CLI in a terminal |
-| Tripwire hooks | Plugin `hooks/hooks.json` | The same plugin file, or `somi init --host copilot` for `.github/hooks/somi.json` | Not assumed in VS Code |
-| Staged workflow | `/somi-deliver`, from the plugin's `workflows/` | `/somi-deliver`, after `/somi-config` turns it on (`somi init --host copilot`), in experimental mode | Steps only |
+| Tripwire hooks | Plugin `hooks/hooks.json` | The same plugin file: Copilot CLI runs Claude-format plugin hooks, the stop hook included | Not assumed in VS Code |
+| Staged workflow | `/somi-deliver`, from the plugin's `workflows/` | `/somi-deliver`, after `/somi-config` registers it (`somi init --host copilot` writes the extension), in experimental mode | Steps only |
 | OS sandbox | `/sandbox`, profile in `profiles/claude.json` | `/sandbox enable` | Host settings |
 | Reviewer model tier | Per subagent | Host default unless config names one | Host default |
 

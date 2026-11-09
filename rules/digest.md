@@ -37,4 +37,4 @@ Priorities, in order: security, correctness, maintainability, convenience. When 
 
 ## SoMi
 
-All state is written by the `somi` CLI or SoMi's tools. Never edit a state file, and if something seems to need a hand edit, the CLI is wrong. SoMi advises and you stay in charge: `somi_route` says which workflow and tier fit a piece of work, and `somi_review` says whether a change needs a review. Neither one stops you from reading, answering or asking. `somi pr` is the one place SoMi can refuse: it will not write clean pull request text for a change that needed a review and has none.
+All state is written by the `somi` CLI or SoMi's tools. Never edit a state file, and if something seems to need a hand edit, the CLI is wrong. SoMi advises and you stay in charge: `somi_route` says which workflow and tier fit a piece of work, and `somi_review` says whether a change needs a review. Neither one stops you from reading, answering or asking. The pull request text is the one place SoMi can refuse: `somi_pr` will not write it clean for a change that needed a review and has none, or that is over the quality limits.

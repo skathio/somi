@@ -23,7 +23,7 @@ function projectParts(project) {
     const plan = planStatus(project);
     if (plan?.next) parts.push(`An open plan is in the project at .somi/plan.md: ${plan.done} of ${plan.total} milestones done. Tell the user if it is relevant to what they ask.`);
     const held = listShards({ root: project }).filter((b) => b.state !== 'ok');
-    if (held.length > 0) parts.push(`Connected steps needing attention: ${held.map((b) => `${b.ref} (${b.state})`).join(', ')}. See \`somi slot --list\`.`);
+    if (held.length > 0) parts.push(`Connected steps needing attention: ${held.map((b) => `${b.ref} (${b.state})`).join(', ')}. Run \`somi slot --list\` for the detail if the user asks.`);
   } catch { /* a bad state file must not stop a session starting */ }
   return parts;
 }
@@ -36,12 +36,12 @@ runHook(() => {
   const parts = [fs.readFileSync(path.join(root, 'rules', 'digest.md'), 'utf8').trim()];
   parts.push(`SoMi CLI: \`node "${path.join(root, 'scripts', 'somi.mjs')}"\`, written as \`somi\` in SoMi's commands.`);
   const warnings = settingsWarnings(host, sandboxSettings({ host, root: projectRoot() }));
-  if (warnings.length > 0) parts.push(`WARNING: the OS sandbox, SoMi's security boundary, needs attention: ${warnings[0]}. Hooks are tripwires, not a boundary. Tell the user once, in one line, and do not repeat it. \`somi doctor\` has the detail, if they ask.`);
+  if (warnings.length > 0) parts.push(`WARNING: the OS sandbox, SoMi's security boundary, needs attention: ${warnings[0]}. Hooks are tripwires, not a boundary. Tell the user once, in one line, and do not repeat it. If they ask for the detail, run \`somi doctor\` and relay it.`);
   parts.push(...projectParts(projectRoot()));
   const notice = updateNotice();
   if (notice) parts.push(notice);
   // Claude Code names the active agent here. Copilot CLI does not, so nothing can be said about it there.
-  if (host === 'claude' && !/(^|:)somi(-main)?$/.test(payload?.agent_type ?? '')) parts.push('SoMi is not the active agent in this session, so plain prompts are not routed and tiers apply only under `/somi` and SoMi commands. Tell the user once, and mention that `somi setup` makes it the session agent on their chosen model.');
+  if (host === 'claude' && !/(^|:)somi(-main)?$/.test(payload?.agent_type ?? '')) parts.push('SoMi is not the active agent in this session, so plain prompts are not routed and tiers apply only under `/somi` and SoMi commands. Tell the user once, and mention that starting with `--agent somi:somi` routes every request, and that /somi-config can run it on the model they choose.');
   // Copilot CLI gives an MCP server no project root, so the tool takes it from the session.
   if (host === 'copilot' && payload?.cwd) parts.push(`Pass project_dir "${payload.cwd}" on every SoMi tool call.`);
   const context = parts.join('\n\n');
