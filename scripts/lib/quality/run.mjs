@@ -4,10 +4,23 @@
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { loadConfig } from '../config-files.mjs';
+import { QUALITY_TIMEOUT, resolveTimeout } from './limits.mjs';
 
 const CLI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'somi.mjs');
-export const QUALITY_TIMEOUT_MS = 120000;
 const MAX_SHOWN = 20;
+
+/** The seconds the gate may run in this project, from the user's and the project's config. An unreadable config keeps the default. */
+export function qualityTimeout(root, env = process.env) {
+  try {
+    const loaded = loadConfig(root, env);
+    return resolveTimeout({ global: loaded.global.config ?? {}, project: loaded.project.config ?? {} }).seconds;
+  } catch {
+    return QUALITY_TIMEOUT.default;
+  }
+}
+
+const timedOut = (seconds) => `the quality gate did not finish within ${seconds} s. To give it longer, set quality.timeout_seconds in your own config, up to ${QUALITY_TIMEOUT.max}; /somi-config can do it`;
 
 const describe = (v) => {
   const where = `${v.file}:${v.line}${v.name ? ` ${v.name}` : ''}`;
@@ -15,9 +28,16 @@ const describe = (v) => {
   return `${v.rule} ${where}: ${v.value} over ${v.limit}${v.before !== undefined ? `, was ${v.before}` : ''}`;
 };
 
-/** The gate's own report for one scope, or { error } when it could not run. */
+/** The gate's own report for one scope, or { error } when it could not run, with timed_out when it ran out of time. */
 export function runQuality(root, { scope, env = process.env }) {
-  const r = spawnSync(process.execPath, [CLI, 'quality', '--scope', scope], { cwd: root, env, encoding: 'utf8', timeout: QUALITY_TIMEOUT_MS, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024 });
+  const seconds = qualityTimeout(root, env);
+  const r = spawnSync(process.execPath, [CLI, 'quality', '--scope', scope], { cwd: root, env, encoding: 'utf8', timeout: seconds * 1000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024 });
+  return gateOutcome(r, seconds);
+}
+
+/** What one run of the gate's process means: its report, or { error } and, when it ran out of time, timed_out. */
+export function gateOutcome(r, seconds) {
+  if (r.error?.code === 'ETIMEDOUT') return { error: timedOut(seconds), timed_out: true };
   let result = null;
   try { result = JSON.parse(r.stdout); } catch { /* reported below */ }
   if (!result || (r.status !== 0 && r.status !== 1)) return { error: `the quality gate could not run: ${(r.stderr || r.error?.message || 'no output').trim().split('\n')[0].slice(0, 200)}` };
@@ -30,9 +50,9 @@ export function describeAll(violations, scope) {
   return lines.length > MAX_SHOWN ? [...lines.slice(0, MAX_SHOWN), `and ${lines.length - MAX_SHOWN} more: somi_quality with scope ${scope} lists them`] : lines;
 }
 
-/** { ok, failures: [line], warnings: n } for one scope, where each failure names the rule, the place and the numbers. */
+/** { ok, failures: [line], warnings: n } for one scope, where each failure names the rule, the place and the numbers, or { error }. */
 export function qualityStep(root, { scope, env = process.env }) {
   const result = runQuality(root, { scope, env });
-  if (result.error) return { ok: false, failures: [result.error], warnings: 0 };
+  if (result.error) return { ok: false, failures: [result.error], warnings: 0, error: result.error };
   return { ok: result.ok, failures: describeAll(result.violations, scope), warnings: result.warnings.length };
 }

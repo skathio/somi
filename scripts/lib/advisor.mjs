@@ -18,7 +18,7 @@ import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
 import { WORKFLOWS, expertiseIndex, libraryPath, roleBrief, workerAgent } from './workflows.mjs';
 import { copilotName } from './copilot-workflow.mjs';
 import { globalConfigPath } from './config-files.mjs';
-import { SCOPES, resolveLimits } from './quality/limits.mjs';
+import { QUALITY_TIMEOUT, SCOPES, resolveLimits, resolveTimeout } from './quality/limits.mjs';
 
 const CLI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'somi.mjs');
 export const somiCommand = (args) => `node ${JSON.stringify(CLI)} ${args}`;
@@ -116,7 +116,7 @@ const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // for the reviews, so reading the work again here spends the conversation's tier on what a cheaper stage has done.
 // A project's config is cloned input and may only tighten a limit, so a change the user wants goes in their own file.
 // Everything here is done from the chat: the agent runs SoMi's own commands by their full path, because no somi command is on the PATH.
-const QUALITY_CONFIG = 'Relay this briefly. To change a quality limit, write it under quality in the file named by global_config, or under quality.commit or quality.pr for one scope, never in the project\'s .somi/config.json, where only a tighter value counts. Before you write a value looser than the current limit, ask the user and wait for a yes.';
+const QUALITY_CONFIG = `Relay this briefly. To change a quality limit, write it under quality in the file named by global_config, or under quality.commit or quality.pr for one scope, never in the project's .somi/config.json, where only a tighter value counts. Before you write a value looser than the current limit, ask the user and wait for a yes. quality_timeout_seconds is how long the gate may run before it counts as failed: to change it, write quality.timeout_seconds there, a whole number from ${QUALITY_TIMEOUT.min} to ${QUALITY_TIMEOUT.max}.`;
 const SETUP = (host) => `To check SoMi's setup, run \`${somiCommand('doctor')}\` and relay what it finds. After tiers.main changes, run \`${somiCommand('setup')}\`. To connect another plugin to a step, run \`${somiCommand('slot <step> <plugin:component>')}\` with the step and component the user names, and \`${somiCommand('slot --list')}\` to show what is connected.${host === 'claude' ? '' : ` To turn on the staged workflow, /somi-deliver, in this project, run \`${somiCommand('init --host copilot')}\` once the user says yes.`}`;
 const STAGED_ADVICE = (host) => `The user typed /somi-deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing tree as review_tree, and tell the user its summary and status in a few lines. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
 const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi-deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
@@ -133,7 +133,7 @@ function chooseRoute({ request, ticket, hint }) {
 function configAnswer(ctx) {
   const scoped = SCOPES.map((scope) => [scope, resolveLimits({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1], scope })]);
   const ignored = [...new Map(scoped.flatMap(([, r]) => r.ignored).map((x) => [`${x.where}:${x.key}`, x])).values()];
-  return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: Object.fromEntries(scoped.map(([scope, r]) => [scope, r.limits])), ...(ignored.length ? { quality_ignored: ignored } : {}), global_config: globalConfigPath(ctx.env), advice: `${QUALITY_CONFIG} ${SETUP(ctx.host)}` };
+  return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: Object.fromEntries(scoped.map(([scope, r]) => [scope, r.limits])), quality_timeout_seconds: resolveTimeout({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1] }).seconds, ...(ignored.length ? { quality_ignored: ignored } : {}), global_config: globalConfigPath(ctx.env), advice: `${QUALITY_CONFIG} ${SETUP(ctx.host)}` };
 }
 
 // Routes that answer at once, with no work to place: asking which route fits, status, config, the pull request and the reviews.

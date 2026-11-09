@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The quality gate no longer times out on large changes.** It had a fixed 120 seconds, and the end-of-turn check ran under the host's own hook limit, about 30 seconds on Copilot CLI and, by its documentation, 60 on Claude Code, after which the host ended the turn as if the gate had passed. The gate now has 300 seconds by default, and `quality.timeout_seconds` sets it from 10 to 1800: the user's config either way, and a project's only to lengthen it. The end-of-turn hook asks the host for 1860 seconds. A gate that runs out of time says so and how to give it longer, through `somi_quality`, `somi check`, `somi pr` and the end-of-turn check, instead of an `ETIMEDOUT` read as code to fix. `/somi-config` shows and changes the value.
+- **A slow quality gate no longer starves the tests in `somi check`.** Their 60-second budget now starts after the gate.
+
 ## [5.0.0] — 2026-11-09 — feat!: your agent stays in charge and SoMi advises, with six commands, a quality gate and one reviewer per change
 
 **Major — breaking.** A ground-up rebuild of how SoMi runs, keeping what it is for: pass any request or ticket, and it picks the right workflow at the lowest cost that does the job well. Remove a 4.x install before installing 5.0, and see [the migration guide](docs/MIGRATING-TO-5.md).

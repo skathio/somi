@@ -185,6 +185,7 @@ function qualityTool(ctx, a) {
   const scope = a.scope ?? 'pr';
   if (!SCOPES.includes(scope)) return textResult(`scope is one of ${SCOPES.join(', ')}.`, true);
   const r = runQuality(ctx.root, { scope, env: ctx.env });
+  if (r.timed_out) return textResult({ ok: false, scope, error: r.error, advice: 'Tell the user the gate ran out of time on this change, and that a longer quality.timeout_seconds in their own config gives it more. It is not a pass. Do not change code for it.' }, true);
   if (r.error) return textResult(r.error, true);
   const worst = CHANGE_SCOPES.includes(scope) ? {} : { most_complex: r.summary.most_complex.slice(0, 5), most_findings: r.summary.most_findings.slice(0, 5) };
   const ignored = r.ignored_config ? { ignored_config: r.ignored_config } : {};

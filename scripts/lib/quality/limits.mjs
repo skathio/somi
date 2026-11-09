@@ -25,6 +25,13 @@ export const DEFAULT_LIMITS = Object.freeze({
   suppressions: Object.freeze({ added: 0 }),
 });
 
+// How long the gate may run before it counts as failed, in seconds. A large change on a slow machine needs longer than the default, so
+// either file may set quality.timeout_seconds: the user's own either way, and a project's, which knows its own size, only to lengthen it.
+// A gate that runs out of time is not a pass, so a cloned project cannot make the gate pass by shortening it, and may not make it fail
+// every change that way either. The end-of-turn hook's own time, in
+// hooks/hooks.json, is set above the maximum, so the host never cuts the gate off first.
+export const QUALITY_TIMEOUT = Object.freeze({ default: 300, min: 10, max: 1800 });
+
 const SCOPE_DEFAULTS = Object.freeze({ commit: {}, pr: { file: { added_cognitive: 100 } }, repo: {} });
 
 /** The default limits at one scope, as a fresh object. */
@@ -52,7 +59,7 @@ function apply(limits, ignored, { where, prefix, group, key, value }) {
 
 function applyLayer(limits, ignored, { where, prefix, layer }) {
   for (const [group, values] of Object.entries(layer ?? {})) {
-    if (prefix === 'quality' && SCOPES.includes(group)) continue;
+    if (prefix === 'quality' && (SCOPES.includes(group) || group === 'timeout_seconds')) continue;
     if (!DEFAULT_LIMITS[group]) { ignored.push({ where, key: `${prefix}.${group}`, reason: NOT_A_LIMIT }); continue; }
     for (const [key, value] of Object.entries(values ?? {})) apply(limits, ignored, { where, prefix, group, key, value });
   }
@@ -69,5 +76,22 @@ export function resolveLimits({ global = {}, project = {}, scope = 'pr' } = {}) 
     applyLayer(limits, ignored, { where, prefix: 'quality', layer: file?.quality });
     applyLayer(limits, ignored, { where, prefix: `quality.${scope}`, layer: file?.quality?.[scope] });
   }
-  return { limits, ignored };
+  return { limits, ignored: [...ignored, ...resolveTimeout({ global, project }).ignored] };
+}
+
+const TIMEOUT_KEY = 'quality.timeout_seconds';
+const timeoutValid = (v) => Number.isInteger(v) && v >= QUALITY_TIMEOUT.min && v <= QUALITY_TIMEOUT.max;
+
+/** { seconds, ignored }: the default, then the global file's quality.timeout_seconds, then the project's if it is longer. */
+export function resolveTimeout({ global = {}, project = {} } = {}) {
+  let seconds = QUALITY_TIMEOUT.default;
+  const ignored = [];
+  for (const [where, file] of [['global', global], ['project', project]]) {
+    const value = file?.quality?.timeout_seconds;
+    if (value === undefined) continue;
+    if (!timeoutValid(value)) ignored.push({ where, key: TIMEOUT_KEY, reason: `not a whole number of seconds from ${QUALITY_TIMEOUT.min} to ${QUALITY_TIMEOUT.max}` });
+    else if (where === 'project' && value < seconds) ignored.push({ where, key: TIMEOUT_KEY, reason: `a project may only lengthen the time, and ${value} is shorter than ${seconds}` });
+    else seconds = value;
+  }
+  return { seconds, ignored };
 }
