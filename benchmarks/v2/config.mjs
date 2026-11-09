@@ -7,7 +7,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { seededShuffle } from '../../tests/evals/lib/ab-draw.mjs';
+import { seededShuffle, taskText } from '../../tests/evals/lib/ab-draw.mjs';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO = path.resolve(HERE, '..', '..');
@@ -38,7 +38,17 @@ export const PHASE_ARMS = Object.freeze({
   tight: ['bare', 'somi5', 'somi5-lane'],
   // A quick look, one draw per task and arm on tasks you name, to check a change works before anything is recorded for real.
   smoke: ['bare', 'somi5', 'somi5-hooks', 'somi5-deliver'],
+  // Work whose right route is not build: bugs whose ticket blames the wrong cause, and refactors that must keep behaviour.
+  routing: ['bare', 'somi5'],
 });
+
+// The routing phase's tasks come from the pool, not the registered set, which is nearly all build work. Written and probed before routing
+// was measured, so the router was not tuned to them. Exploratory: its draws are set here and not in the registration.
+export const ROUTING_TASKS = Object.freeze({ debug: ['N03-business-day', 'N23-flaky-totals', 'N33-text-limit', 'N34-digest-schedule'], refactor: ['N19-config-split', 'N20-import-unify', 'N21-ticket-flow'] });
+export const ROUTING_K = 3;
+// Every other phase opens with "Implement the following", which reads as build work to a router. The routing phase sends the ticket as a
+// user would, to both arms.
+export const requestText = (phase, task) => (phase === 'routing' ? `${task.statements.join('\n')}\n${taskText(task).split('\n').at(-1)}` : taskText(task));
 
 export const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
@@ -52,7 +62,7 @@ export const armPrompt = (arm, text) => (arm === 'somi5-lane' ? `Show me a plan 
 export const engineArm = (arm) => (isBare(arm) ? 'bare' : arm === 'somi5-hooks' ? 'somi-hooks' : 'somi');
 export const armsFor = (phase, cells = readJson(ABLATIONS).cells) => (phase === 'ablation' ? [...PHASE_ARMS.ablation, ...Object.keys(cells)] : PHASE_ARMS[phase]);
 
-export const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, trial: reg.trial_k, ablation: reg.ablation_k, large: reg.large_k, tight: reg.tight_k, smoke: 1 })[phase] ?? reg.k;
+export const drawsFor = (phase, reg) => ({ pilot: reg.pilot_k, aa: reg.aa_k, trial: reg.trial_k, ablation: reg.ablation_k, large: reg.large_k, tight: reg.tight_k, smoke: 1, routing: ROUTING_K })[phase] ?? reg.k;
 export const armKFor = (phase, reg) => (phase === 'candidate' ? reg.arm_k : {});
 // The large phase runs on a window a long session can really fill. The tight phase makes the window small enough that every arm compacts,
 // because no task we can write offline fills a large one: a model scripts uniform work and finishes short work in one pass.
@@ -64,6 +74,7 @@ export const liveCandidates = (tasks) => tasks.filter((t) => !t.retired);
 export function tasksFor(phase, only) {
   if (phase === 'pilot') { const all = readJson(CANDIDATES).tasks; return only ? all.filter((t) => only.includes(t.id)) : liveCandidates(all).filter((t) => !t.large && !t.release_large); }
   if (phase === 'large' || phase === 'tight') return readJson(CANDIDATES).tasks.filter((t) => t.large);
+  if (phase === 'routing') { const ids = Object.values(ROUTING_TASKS).flat(); return readJson(CANDIDATES).tasks.filter((t) => ids.includes(t.id)); }
   // A smoke run can name any admitted task: the registered set, or a candidate such as the large multi-turn ones.
   if (phase === 'smoke') {
     if (!only) throw new Error('smoke takes --tasks, a few task ids');

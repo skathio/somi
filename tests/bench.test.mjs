@@ -683,3 +683,18 @@ test('a draw\'s directory is removed even when it holds a directory nobody may r
   removeTree(dir);
   assert.equal(fs.existsSync(dir), false);
 });
+
+test('the routing phase sends the ticket as a user would, to both arms, on pool tasks whose right route is not build', async () => {
+  const { ROUTING_TASKS, ROUTING_K, requestText, tasksFor } = await import('../benchmarks/v2/config.mjs');
+  const ids = tasksFor('routing').map((t) => t.id).sort();
+  assert.deepEqual(ids, Object.values(ROUTING_TASKS).flat().sort());
+  const task = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/fixtures/ab/N03-business-day/task.json'), 'utf8'));
+  const text = requestText('routing', task);
+  assert.ok(!text.includes('Implement the following'));
+  assert.ok(text.startsWith(task.statements[0]));
+  assert.match(text.split('\n').at(-1), /^Declared scope: /);
+  assert.match(requestText('candidate', task), /^Implement the following/);
+  const plan = buildPlan('routing', tasksFor('routing'), { k: ROUTING_K });
+  assert.deepEqual([...new Set(plan.map((d) => d.arm))].sort(), ['bare', 'somi5']);
+  assert.equal(plan.length, ids.length * 2 * ROUTING_K);
+});

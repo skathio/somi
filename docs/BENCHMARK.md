@@ -181,3 +181,14 @@ cut -c1-200 .somi/state/journal.jsonl
 The `large` phase asks whether fresh context per milestone pays. Three projects set binding decisions early, and hidden tests check that later milestones honour them. The arms are bare, 5.0 as a plain request, 5.0 asked for a plan first (the milestone lane), and 4.1. It is a pilot, reported apart from the release rule.
 
 **How compaction was forced.** The host accepts a window from 100,000 to 1,000,000 tokens and ignores other values, so an earlier run at 30,000 never compacted. The `tight` phase sets the lowest legal window and lowers the point of compaction with `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`. At 30% the host ended sessions as thrashing, because a session starts at about 20,000 tokens, so those scores measure the host's limit. At 50%, the lane and plain 5.0 each finished L1 and L2 at full score with up to one compaction. Both stopped blocked on L3, where a low-tier worker built the wrong milestone in one draw and overwrote files in the other. Neither report describes a lost decision, though both come from the coordinator's own summary. In these two draws the bench did not yet answer a blocked worker, a bug fixed since, so they may have gone further. A 50,000-token point is also below the 100,000 window the host's settings allow.
+
+## Routing
+
+The registered tasks cannot show whether routing pays: each request opens with "Implement the following", and nearly every task is one clear change, so the right route is build, and the somi agent is told to do a small, clear change without routing. The `routing` phase asks the question on work whose right route is not build. It is exploratory and sits outside the registration.
+
+- **Tasks:** seven from the pool, written and probed before routing was measured. Four are bugs whose ticket blames the wrong cause, where the right route is debug: N03, N23, N33 and N34. Three are refactors that must keep behaviour, where it is refactor: N19, N20 and N21.
+- **Request:** the ticket as a user would send it, with the declared scope and without the "Implement the following" opening, the same for both arms.
+- **Arms and draws:** bare and SoMi as shipped, 3 draws each, 42 in all.
+- **Reported:** solved, strict successes and cost per arm, and for SoMi how often it called `somi_route` and whether the route it got was the right one.
+
+**Before any draw:** the router, run on the seven requests, routes one right outright: refactor for N20. It gives debug for N21, build by default for N19, N03, N23 and N34, and for N33 asks the model to choose between perf and debug. The router's own labelled set scores 99%, but its author wrote it, and these tickets were written for other reasons. So this phase measures SoMi as it ships, router included.

@@ -2,7 +2,7 @@
 // bench.mjs: benchmark v2. Is SoMi worth it against a bare agent on the same model, is 5.0 better than 4.1, and which parts pay? See
 // docs/BENCHMARK.md for the design. A paid run needs --go. The test suite proves this driver with a stub agent and spends nothing.
 //
-//   bench.mjs plan   --phase pilot|aa|trial|baseline|candidate|ablation|large [--pilot DIR] [--seed N]    the draws and timeout, spends nothing
+//   bench.mjs plan   --phase pilot|aa|trial|baseline|candidate|ablation|large|tight|smoke|routing [--pilot DIR] [--seed N]    the draws and timeout, spends nothing
 //   bench.mjs routes                                                                     scores the router on the labelled set, spends nothing
 //   bench.mjs admit                                                                      every live task's admission and mutants, spends nothing
 //   bench.mjs power  [--pilot DIR]                                                       draws per arm for each effect, spends nothing

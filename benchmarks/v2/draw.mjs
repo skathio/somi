@@ -6,11 +6,11 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { admitTask } from '../../tests/evals/lib/admit.mjs';
 import { scoreOwnTests } from '../../tests/evals/lib/own-tests.mjs';
-import { childEnv, foldScore, looksPaused, prepareWorkspace, taskText } from '../../tests/evals/lib/ab-draw.mjs';
+import { childEnv, foldScore, looksPaused, prepareWorkspace } from '../../tests/evals/lib/ab-draw.mjs';
 import { sandboxArgs } from '../../tests/evals/lib/ab-sandbox.mjs';
 import { scoreHidden } from '../../tests/evals/lib/score-hidden.mjs';
 import { taskHash } from '../../tests/evals/lib/task-store.mjs';
-import { ADMIT_TRIES, MAX_FAILED_NAMES, WINDOW_ENV, WINDOW_SETTINGS, armPrompt, engineArm, readJson, scoreRow, servedAsPinned } from './config.mjs';
+import { ADMIT_TRIES, MAX_FAILED_NAMES, WINDOW_ENV, WINDOW_SETTINGS, armPrompt, engineArm, readJson, requestText, scoreRow, servedAsPinned } from './config.mjs';
 import { adherence, agentSplit, labelDraw, scopeCheck } from './telemetry.mjs';
 
 // Admission runs the reference solution through the same timed suites, so it gets a few tries. A task is refused only if all fail.
@@ -58,7 +58,7 @@ export function drawRequest(st, cfg, d, { t, dir, tmp, ws, drawDir }) {
   const { args, phase } = cfg;
   return {
     followUps: (t.task.turns ?? []).map((turn) => (d.arm === 'somi5-deliver' ? armPrompt(d.arm, turn) : turn)),
-    model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, taskText(t.task)), budget: cfg.budget.draw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
+    model: args.model, arm: engineArm(d.arm), prompt: armPrompt(d.arm, requestText(phase, t.task)), budget: cfg.budget.draw, timeoutMs: Number(args['timeout-min'] ?? 40) * 60000,
     settings: WINDOW_SETTINGS[phase], maxResumes: 6, claude: cfg.claude, env: { ...childEnv({ token: cfg.env.token, tmp }), ...WINDOW_ENV[phase] }, cwd: ws, plugin: cfg.pluginOf(d.arm), drawDir, token: cfg.env.token, canary: t.task.canary, task: t.task, absAb: path.dirname(dir), ownTmp: tmp, kills: st.kills, sandbox: cfg.specFor(d.arm),
   };
 }
