@@ -3,11 +3,12 @@
 // review is due and whether the change meets the quality limits, so the model does not have to remember either. When the gate fails, or
 // a signal fired and no review covers the change, the turn goes on once with the reasons: the quality failures first, so the review
 // reads the code that is finished. It asks once per tree, so it never loops, and when it cannot read the repository it lets the turn end.
+// A turn that changed nothing, such as a question, ends at once: the gate reads the whole branch, and on a large one that takes a while.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig } from '../../scripts/lib/config-files.mjs';
-import { stateIsTracked } from '../../scripts/lib/git-tree.mjs';
+import { snapshotTree, stateIsTracked } from '../../scripts/lib/git-tree.mjs';
 import { somiCommand } from '../../scripts/lib/advisor.mjs';
 import { qualityStep } from '../../scripts/lib/quality/run.mjs';
 import { reviewPlan } from '../../scripts/lib/reviews.mjs';
@@ -20,15 +21,21 @@ runHook(() => {
   if (payload.stop_hook_active === true || payload.agent_id) return;
   const root = projectRoot();
   if (root === null) return;
+  const asked = path.join(statePaths(root).dir, 'review-asked.json');
+  const read = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
   let plan;
   try {
     if (!process.env.SOMI_STATE_DIR && stateIsTracked(root)) return;
+    const tree = snapshotTree(root);
+    const turn = read(statePaths(root).turn);
+    if (turn?.tree === tree && turn.session === (payload.session_id ?? payload.sessionId ?? null)) return;
+    if (read(asked)?.tree === tree) return;
     let loaded = { config: {}, global: { config: {} }, project: { config: {} } };
     try { loaded = loadConfig(root); } catch { /* built-in signals still apply */ }
     plan = reviewPlan({ root, env: process.env, config: loaded.config, configLayers: [loaded.global.config ?? {}, loaded.project.config ?? {}], host: detectHost(), now: () => new Date().toISOString() });
   } catch { return; }
-  const asked = path.join(statePaths(root).dir, 'review-asked.json');
-  try { if (JSON.parse(fs.readFileSync(asked, 'utf8')).tree === plan.tree) return; } catch { /* not asked about this tree yet */ }
+  // The tree is marked before the gate runs, so a host that stops the hook part way does not start the same gate again every turn.
+  try { writeStateFile(root, asked, `${JSON.stringify({ tree: plan.tree })}\n`); } catch { return; }
   const quality = qualityStep(root, { scope: 'pr', env: process.env });
   // A gate that could not run is not a pass, and there is nothing in the code to fix for it, so the user hears why.
   const qualityReason = quality.error
@@ -38,7 +45,6 @@ runHook(() => {
     ...(quality.ok ? [] : [qualityReason]),
     ...(plan.needed ? [`SoMi: this change needs a review before it is finished (${plan.signals.join(', ')}). Call somi_review, start the reviewers it names with their briefs, and record what they return. If the user said not to review, tell them it is due and stop.`] : []),
   ];
-  try { writeStateFile(root, asked, `${JSON.stringify({ tree: plan.tree })}\n`); } catch { return; }
   if (reasons.length === 0) return;
   process.stdout.write(`${JSON.stringify({ decision: 'block', reason: reasons.join('\n\n') })}\n`);
 });

@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A turn that changed nothing no longer runs the quality gate.** The end-of-turn check scored the whole branch whenever the tree differed from the last one it had checked, so a question asked after you edited a file yourself, or after the host had cut the check off, waited for a full scan of the branch. The prompt hook now notes the tree as the turn starts, and a turn that leaves it as it found it ends at once. A background task's notice carries on the turn before it, so what the task changed is still checked. The tree is also marked before the gate starts, so a check the host stops part way is not started again on every later turn.
+- **The quality gate reads files in batches.** It started one git process for every changed file and for every file it compared copies against, and on a large branch that was most of its time: on SoMi's own 5.0 branch, 14 seconds become 4 with the same report. With no changed code that copies could be in, it no longer reads the rest of the repository at all.
+
 ## [5.0.1] — 2026-11-09 — fix: a configurable quality gate time limit, and the end-of-turn check no longer cut off by the host
 
 **Patch — fixes only.** No migration action required. A large change may want a longer time: set `quality.timeout_seconds`.

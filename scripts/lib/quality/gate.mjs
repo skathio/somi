@@ -6,7 +6,7 @@
 
 import crypto from 'node:crypto';
 import { TEST_FILE } from '../signals.mjs';
-import { addedRanges, fileAt } from '../git-tree.mjs';
+import { addedRanges, filesAt } from '../git-tree.mjs';
 import { findClones, tokensOf } from './clones.mjs';
 import { cssRules } from './css.mjs';
 import { unitsOf, topLevelCognitive } from './metrics.mjs';
@@ -131,7 +131,7 @@ export async function withTree(file, text, read) {
 
 const NO_VERSION = Object.freeze({ units: [], keys: [], total: 0, tokens: null });
 async function previousVersion(ctx, file, status, test) {
-  const text = status.startsWith('A') ? null : fileAt(ctx.root, ctx.from, file);
+  const text = status.startsWith('A') ? null : ctx.before.get(file) ?? null;
   if (text === null || skipped(file, text)) return NO_VERSION;
   const lines = text.split('\n');
   return withTree(file, text, (parsed) => {
@@ -168,7 +168,7 @@ async function scoreCode(ctx, { file, status, added, lines, tree, language, erro
 async function scoreFile(ctx, file, { status, added }) {
   if (!languageOf(file)) return;
   if (status.startsWith('D')) return recordDeleted(ctx, file, status);
-  const text = fileAt(ctx.root, ctx.to, file);
+  const text = ctx.after.get(file) ?? null;
   if (text === null || skipped(file, text)) return;
   const lines = text.split('\n');
   const parsed = await parseSource(file, text);
@@ -206,9 +206,8 @@ async function cachedTokens(cache, file, text) {
 async function restOfRepo(ctx, touched) {
   const rest = [];
   const candidates = ctx.repoFiles.filter((f) => JS_FAMILY.has(languageOf(f)) && !touched.has(f) && !isTest(f) && !SKIPPED.test(f) && !MINIFIED.test(f));
-  for (const file of candidates.slice(0, MAX_REPO_FILES)) {
-    const text = fileAt(ctx.root, ctx.to, file);
-    if (text === null || skipped(file, text)) continue;
+  for (const [file, text] of filesAt(ctx.root, ctx.to, candidates.slice(0, MAX_REPO_FILES))) {
+    if (skipped(file, text)) continue;
     const tokens = await cachedTokens(ctx.cache, file, text);
     if (tokens) rest.push({ file, tokens, size: ctx.limits.clones.tokens });
   }
@@ -222,9 +221,14 @@ async function restOfRepo(ctx, touched) {
 export async function qualityGate(root, { from, to, limits, now = new Date().toISOString(), mode = 'project', repoFiles = [], cache = null }) {
   const ctx = { root, from, to, limits, now, mode, repoFiles, cache, violations: [], warnings: [], exemptions: [], unanalyzed: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [], totals: [], moves: { before: [], after: [] } };
   const changed = addedRanges(root, from, to);
+  // The changed code is read up front, a batch at a time. One git process per file was most of the gate's time on a large branch.
+  const code = [...changed].filter(([file]) => languageOf(file));
+  ctx.before = filesAt(root, from, code.filter(([, c]) => !c.status.startsWith('A')).map(([file]) => file));
+  ctx.after = filesAt(root, to, code.filter(([, c]) => !c.status.startsWith('D')).map(([file]) => file));
   for (const [file, change] of changed) await scoreFile(ctx, file, change);
   scoreMoves(ctx);
-  const rest = await restOfRepo(ctx, new Set(changed.keys()));
+  // A copy is only reported in code the change holds, so with none of that the rest of the repository is not read.
+  const rest = ctx.cloneAfter.length > 0 ? await restOfRepo(ctx, new Set(changed.keys())) : [];
   for (const c of findClones({ after: ctx.cloneAfter, before: ctx.cloneBefore, rest })) flag(ctx, { rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other });
   return { ok: ctx.violations.length === 0, violations: ctx.violations, warnings: ctx.warnings, exemptions: ctx.exemptions, scored: ctx.scored, unanalyzed: ctx.unanalyzed };
 }

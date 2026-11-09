@@ -194,6 +194,45 @@ export function fileAt(root, rev, file) {
   try { return git(root, ['cat-file', '-p', `${rev}:${file}`]); } catch { return null; }
 }
 
+const BATCH = 200;
+
+/** Many files' text at a commit or tree, read by one git process per batch: a Map from file to text, without the files not there. */
+export function filesAt(root, rev, files) {
+  if (!OBJECT_ID.test(rev)) throw new Error('a recorded revision is not an object id');
+  const texts = new Map();
+  for (let i = 0; i < files.length; i += BATCH) {
+    for (const [file, text] of readBatch(root, rev, files.slice(i, i + BATCH))) if (text !== null) texts.set(file, text);
+  }
+  return texts;
+}
+
+// [file, text or null] for each file, in order. The batch protocol is one name per line, so a name with a newline in it is read on its
+// own, and so is every file of a batch too large to buffer.
+function readBatch(root, rev, files) {
+  const named = files.filter((f) => !f.includes('\n'));
+  let out = null;
+  try { out = git(root, ['cat-file', '--batch'], { encoding: null, stdio: ['pipe', 'pipe', 'pipe'], input: named.map((f) => `${rev}:${f}\n`).join('') }); } catch { /* read one by one */ }
+  const read = out ? parseBatch(out, named) : new Map();
+  return files.map((f) => [f, out && !f.includes('\n') ? read.get(f) ?? null : fileAt(root, rev, f)]);
+}
+
+// Each answer is "<id> <type> <size>" and the content, or one line saying the name is missing.
+function parseBatch(out, names) {
+  const read = new Map();
+  let at = 0;
+  for (const name of names) {
+    const end = out.indexOf(10, at);
+    if (end < 0) break;
+    const header = /^[0-9a-f]+ (\w+) (\d+)$/.exec(out.toString('utf8', at, end));
+    at = end + 1;
+    if (!header) continue;
+    const size = Number(header[2]);
+    if (header[1] === 'blob') read.set(name, out.toString('utf8', at, at + size));
+    at += size + 1;
+  }
+  return read;
+}
+
 // This string reaches an agent as a command, and its ids come from a state file, so anything but an object id is refused.
 export function reviewDiffCommand(from, to) {
   if (!OBJECT_ID.test(String(from)) || !OBJECT_ID.test(String(to))) throw new Error('a recorded revision is not an object id');

@@ -8,7 +8,7 @@ export class StateError extends Error {}
 
 export function statePaths(root, env = process.env) {
   const dir = env.SOMI_STATE_DIR ? path.resolve(env.SOMI_STATE_DIR) : path.join(root, '.somi', 'state');
-  return { dir, reviews: path.join(dir, 'reviews.jsonl'), check: path.join(dir, 'check.json') };
+  return { dir, reviews: path.join(dir, 'reviews.jsonl'), check: path.join(dir, 'check.json'), turn: path.join(dir, 'turn.json') };
 }
 
 export function refuseLink(p) {
