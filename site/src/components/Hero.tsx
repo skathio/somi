@@ -24,7 +24,7 @@ export function Hero() {
               So<span className="text-accent">Mi</span>: say what you want, and it runs the right workflow.
             </h1>
             <p className="mt-5 max-w-3xl text-lg text-muted sm:text-xl">
-              A plugin for Claude Code and GitHub Copilot CLI. Your agent codes in the conversation, as a bare agent would. When a turn that changed code ends, SoMi runs the quality gate and asks for a fresh reviewer only when the real diff calls for one. Tools write all state, and the OS sandbox is the security boundary.
+              A plugin for Claude Code and GitHub Copilot CLI. Your agent codes in the conversation, as a bare agent would. When a turn that changed code ends, SoMi runs the quality gate and asks for a fresh reviewer only when the real diff calls for one. Shards plug the other plugins you use, for your tracker, your chat or your forge, into its steps. Tools write all state, and the OS sandbox is the security boundary.
             </p>
           </div>
           <img

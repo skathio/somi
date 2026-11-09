@@ -3,6 +3,7 @@ import { Header, type NavItem } from './components/Header';
 import { Hero } from './components/Hero';
 import { Roadmap } from './components/Roadmap';
 import { Workflow } from './components/Workflow';
+import { Shards } from './components/Shards';
 import { Guardrails } from './components/Guardrails';
 import { Loops } from './components/Loops';
 import { Measured } from './components/Measured';
@@ -13,6 +14,7 @@ import { toggleTheme, useActiveSection, useKeyboard } from './lib/navigation';
 export const NAV: NavItem[] = [
   { id: 'roadmap', label: 'Roadmap' },
   { id: 'workflow', label: 'Workflow' },
+  { id: 'shards', label: 'Shards' },
   { id: 'guardrails', label: 'Guardrails' },
   { id: 'loops', label: 'Review' },
   { id: 'measured', label: 'Measured' },
@@ -34,6 +36,7 @@ export function App() {
         <Hero />
         <Roadmap />
         <Workflow />
+        <Shards />
         <Guardrails />
         <Loops />
         <Measured />

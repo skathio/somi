@@ -1,5 +1,5 @@
 // facts.mjs -- writes src/generated/facts.json: everything the overview page states that the repo itself
-// already knows (release list, counts, hook registrations).
+// already knows (release list, counts, hook registrations, the steps a shard can join).
 // Read from the source of each fact rather than copied, so the page cannot drift from the code; the
 // hand-written content in src/content/ is checked against this file by the site's tests.
 //
@@ -53,6 +53,7 @@ async function main() {
     agents: stems('agents', '.md'),
     skills: fs.readdirSync(at('skills')).filter((d) => fs.existsSync(at('skills', d, 'SKILL.md'))).sort(),
     hooks: hookFacts(),
+    shardSteps: [...(await import(pathToFileURL(at('scripts', 'lib', 'shards.mjs')).href)).SHARD_STEPS],
   };
 
   const out = path.join(site, 'src', 'generated', 'facts.json');
