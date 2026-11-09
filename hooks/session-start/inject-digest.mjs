@@ -40,8 +40,9 @@ runHook(() => {
   parts.push(...projectParts(projectRoot()));
   const notice = updateNotice();
   if (notice) parts.push(notice);
-  // Claude Code names the active agent here. Copilot CLI does not, so nothing can be said about it there.
+  // Claude Code names the active agent here. Copilot CLI does not, so there the model is told how to tell from its own instructions.
   if (host === 'claude' && !/(^|:)somi(-main)?$/.test(payload?.agent_type ?? '')) parts.push('SoMi is not the active agent in this session, so plain prompts are not routed and tiers apply only under `/somi` and SoMi commands. Tell the user once, and mention that starting with `--agent somi:somi` routes every request, and that /somi-config can run it on the model they choose.');
+  if (host === 'copilot') parts.push('Unless your own instructions already tell you to call somi_route for work, SoMi is not the active agent here, so plain prompts are not routed and tiers apply only under `/somi` and SoMi commands. Then tell the user once that starting with `copilot --agent somi:somi`, or `/agent somi` in a session, routes every request.');
   // Copilot CLI gives an MCP server no project root, so the tool takes it from the session.
   if (host === 'copilot' && payload?.cwd) parts.push(`Pass project_dir "${payload.cwd}" on every SoMi tool call.`);
   const context = parts.join('\n\n');

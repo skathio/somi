@@ -449,10 +449,10 @@ test('changing tier config through a file tool asks first', (t) => {
 
 test('session start brings back the ledger and an open plan, and says what to do when SoMi is not the agent', (t) => {
   const dir = makeRepo(t);
-  const run = (payload) => {
+  const run = (payload, host = 'claude') => {
     const r = spawnSync(process.execPath, [path.join(REPO, 'hooks', 'session-start', 'inject-digest.mjs')], {
       input: JSON.stringify(payload), encoding: 'utf8', cwd: dir,
-      env: { PATH: process.env.PATH, HOME: dir, SOMI_GLOBAL_CONFIG: '', CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: REPO, SOMI_HOST: 'claude', SOMI_NO_UPDATE_CHECK: '1' },
+      env: { PATH: process.env.PATH, HOME: dir, SOMI_GLOBAL_CONFIG: '', CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: REPO, SOMI_HOST: host, SOMI_NO_UPDATE_CHECK: '1' },
     });
     return JSON.parse(r.stdout).additionalContext;
   };
@@ -465,6 +465,9 @@ test('session start brings back the ledger and an open plan, and says what to do
   assert.doesNotMatch(text, /not the active agent/);
   assert.doesNotMatch(run({ agent_type: 'somi-main' }), /not the active agent/);
   assert.match(run({}), /starting with `--agent somi:somi` routes every request, and that \/somi-config can run it on the model they choose/);
+  const copilot = run({ cwd: dir }, 'copilot');
+  assert.match(copilot, /Unless your own instructions already tell you to call somi_route for work, SoMi is not the active agent here[\s\S]*`copilot --agent somi:somi`, or `\/agent somi` in a session/, 'Copilot does not say which agent is active, so the model tells from its own instructions');
+  assert.match(copilot, /Pass project_dir/);
 });
 
 test('the prompt hook keeps the latest message, adds nothing, and writes nothing to a committed state folder', (t) => {

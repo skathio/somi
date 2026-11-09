@@ -16,7 +16,8 @@ you talk to one agent, on the medium tier, the same as a bare agent
        the reviews the diff needs, each on its tier, run in code through to the end
   -> the diff touches a security sink: the review and every fix stay here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier
-  -> the change is ready: the quality gate runs, and somi_review reads the diff and says if a review is due
+  -> a turn that changed code ends: the quality gate runs, anything over a limit goes back to be fixed,
+       and the diff decides if a review is due
   -> somi_pr: refuses clean text for a change that needed a review and has none
 ```
 
@@ -25,11 +26,11 @@ SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses
 | | 4.1 | 5.0 |
 |---|---|---|
 | Who is in charge | A workflow's procedure | Your agent, with SoMi advising and building the deterministic parts |
-| When a review runs | Sized before coding | Decided from signals in the real diff, and checked at `somi pr` |
+| When a review runs | Sized before coding | Decided from signals in the real diff when a turn ends, with one reviewer, and checked before the pull request text |
 | Long work | Plan and progress files read by hand | One plan file, a small ledger put back after every compaction, and fresh context per milestone |
 | Model tiers | A lookup the agent could skip | The conversation on medium, workers and reviewers set by a hook |
 | Listed entries | 91 | 6 commands and one skill, with a library behind them |
-| Other plugins | No way in | Shards: `somi slot pr.open <plugin:component>` |
+| Other plugins | No way in | Shards, connected from `/somi-config` |
 
 ## Install
 
@@ -55,12 +56,12 @@ Start with SoMi as the session's agent and just talk to it:
 claude --agent somi:somi    # or: copilot --agent somi:somi
 ```
 
-Everything is done from the chat. Ask for a change, a bug fix, a refactor, a plan, a design, a review, an upgrade or the pull request text in plain words, or paste a ticket, and SoMi's agent picks the workflow. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start. Six commands do the rest:
+Everything is done from the chat. Ask for a change, a bug fix, a refactor, a plan, a design, a review, an upgrade or the pull request text in plain words, or paste a ticket, and SoMi's agent picks the workflow. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start. In a Copilot session already running, `/agent somi` switches to it. Six commands do the rest:
 
 | Command | What it does |
 |---|---|
 | `/somi <anything>` | Routes anything, the way the agent does with plain words. Use it from another agent. |
-| `/somi-deliver <work or ticket>` | Runs large work as SoMi's staged workflow. Only you can start it. |
+| `/somi-deliver <work or ticket>` | Runs large work as SoMi's staged workflow. Only you can start it. On Copilot, ask `/somi-config` to register it once, and turn on `/experimental`. |
 | `/somi-review` | Reviews the current changes, whether or not the diff calls for it. |
 | `/somi-quality [commit \| repo]` | Checks the code against the quality limits: the branch, one commit, or the whole codebase. |
 | `/somi-status` | Shows the open plan, decisions and findings. |
@@ -96,7 +97,7 @@ A project's `.somi/config.json` can only make a limit stricter: a looser value t
 
 For a cleanup or a refactor, `/somi-quality repo` reports on the whole codebase as it stands: every function and file over a limit, every copy in product code and every suppression with no reason. It lists the most complex functions and the files with the most findings first. Give it its own limits under `quality.repo`.
 
-You do not need to run it yourself. When a turn that changed code ends on Claude Code, SoMi runs the gate and sends anything over a limit back to the agent to fix, before any review; on Copilot the agent runs it before it calls the change done. The agent never adds an exemption to get past it: that is yours to decide. No pull request text is written while the branch fails it, and `/somi-deliver` checks each build and steps the build up a tier with the findings.
+You do not need to run it yourself. When a turn that changed code ends, on Claude Code and Copilot CLI alike, SoMi runs the gate and sends anything over a limit back to the agent to fix, before any review. The agent never adds an exemption to get past it: that is yours to decide. No pull request text is written while the branch fails it, and `/somi-deliver` checks each build and steps the build up a tier with the findings.
 
 ## Connect other plugins with shards
 
@@ -123,7 +124,7 @@ somi doctor
 
 ## Upgrading from 4.1
 
-This is a breaking release. See [the migration guide](docs/MIGRATING-TO-5.md). Remove a 4.x install first: if both load, both sets of hooks and skills run.
+This is a breaking release. See [the migration guide](docs/MIGRATING-TO-5.md). Remove a 4.x install first: if both load, both sets of hooks and skills run. On Copilot, `copilot plugin list` shows which version is installed, and a project that ran an earlier `somi init` should delete `.github/hooks/somi.json`, or every hook runs twice.
 
 ## Docs
 
