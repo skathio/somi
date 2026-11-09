@@ -118,8 +118,9 @@
       "label": "Where it is now",
       "entries": [
         {
-          "version": "5.0.0",
-          "covers": ["5.0.0"],
+          "version": "5.0.1",
+          "label": "5.0",
+          "covers": ["5.0.0", "5.0.1"],
           "title": "Your agent in charge, SoMi advising",
           "major": true,
           "highlights": [
@@ -136,7 +137,8 @@
               "items": [
                 "**A quality gate** scores what a change adds for complexity, nesting, length, parameters, copies and suppressions. When a turn that changed code ends, anything over a limit goes back to be fixed, on Claude Code and Copilot CLI.",
                 "**One reviewer per change,** decided from the real diff: the security reviewer alone on a boundary.",
-                "**On the registered benchmark,** 90 of 96 draws solved against bare's 72, at 1.28x bare's cost per solved task."
+                "**On the registered benchmark,** 90 of 96 draws solved against bare's 72, at 1.28x bare's cost per solved task.",
+                "**5.0.1** gives the quality gate a time limit you can set, so a large change is checked instead of cut off."
               ]
             }
           ]
