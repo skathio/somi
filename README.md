@@ -30,7 +30,7 @@ SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses
 | When a review runs | Sized before coding | Decided from signals in the real diff when a turn ends, with one reviewer, and checked before the pull request text |
 | Long work | Plan and progress files read by hand | One plan file, a small ledger put back after every compaction, and each milestone routed on its own |
 | Model tiers | A lookup the agent could skip | The conversation on medium, workers and reviewers set by a hook |
-| Listed entries | 91 | 13: 6 commands, 6 agents and one skill, with a library behind them |
+| Listed entries | 91 | 14: 6 commands, 6 agents, one skill and one workflow, with a library behind them |
 | Other plugins | No way in | Shards, connected from `/somi-config` |
 
 ## Install
