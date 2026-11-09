@@ -584,6 +584,25 @@ test('when a turn ends, a change over the quality limits is sent back once with 
   assert.equal(stop().out, null, 'a change within the limits that needs no review ends the turn');
 });
 
+test('a turn that changed nothing ends without the gate, and a background task finishing carries on the turn before it', (t) => {
+  const dir = makeRepo(t);
+  const prompt = (text, session = 's1') => spawnSync(process.execPath, [path.join(REPO, 'hooks', 'user-prompt', 'capture-prompt.mjs')], {
+    input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: text, session_id: session }), encoding: 'utf8', cwd: dir, env: { PATH: process.env.PATH, HOME: dir, CLAUDE_PROJECT_DIR: dir, SOMI_GLOBAL_CONFIG: '' },
+  });
+  const stop = (session = 's1') => hookAt(dir, 'stop/review-due.mjs', { hook_event_name: 'Stop', session_id: session });
+  writeFiles(dir, { 'src/app.js': 'export const pick = (a, b, c, d, e, f) => [a, b, c, d, e, f];\n' });
+  prompt('What does pick do?');
+  assert.equal(stop().out, null, 'the code over the limit was there before the turn, and the turn only answered a question');
+  assert.equal(stop('s2').out.decision, 'block', 'another session did not start from that tree, so the change is new to it');
+  prompt('Add a total.');
+  writeFiles(dir, { 'src/total.js': 'export const total = (a, b, c, d, e) => a + b + c + d + e;\n' });
+  assert.match(stop().out.reason, /params src\/total\.js:1 total: 5 over 4/, 'a turn that changed something is checked');
+  prompt('Start a worker on the export.');
+  writeFiles(dir, { 'src/export.js': 'export const row = (a, b, c, d, e) => [a, b, c, d, e];\n' });
+  prompt('<task-notification>\n<task-id>w1</task-id>\n<status>completed</status>');
+  assert.match(stop().out.reason, /params src\/export\.js:1 row: 5 over 4/, 'what the worker changed counts in the turn its notice opens');
+});
+
 test('the config route shows the quality limits, which project values were ignored, and where a change goes', (t) => {
   const ctx = { ...makeCtx(makeRepo(t)), configLayers: [{ quality: { function: { cognitive: 20 } } }, { quality: { function: { cognitive: 30, depth: 3 } } }] };
   const r = advise(ctx, { request: 'x', hint: 'config' });

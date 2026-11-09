@@ -13,7 +13,7 @@ import { qualityGate } from '../scripts/lib/quality/gate.mjs';
 import { DEFAULT_LIMITS, limitsFor, resolveLimits } from '../scripts/lib/quality/limits.mjs';
 import { topLevelCognitive, unitsOf } from '../scripts/lib/quality/metrics.mjs';
 import { parseSource, verifiedFile } from '../scripts/lib/quality/parse.mjs';
-import { listFiles, snapshotTree } from '../scripts/lib/git-tree.mjs';
+import { fileAt, filesAt, listFiles, snapshotTree } from '../scripts/lib/git-tree.mjs';
 
 const VENDOR = path.join(REPO, 'scripts', 'vendor', 'tree-sitter');
 const units = async (code, file = 'x.js', opts = {}) => unitsOf((await parseSource(file, code)).tree, { file, ...opts });
@@ -131,6 +131,20 @@ const gate = async (r, opts = {}) => {
   const to = snapshotTree(r.dir);
   return qualityGate(r.dir, { from, to, limits: DEFAULT_LIMITS, now: '2031-01-01T00:00:00Z', repoFiles: listFiles(r.dir, to), ...opts });
 };
+test('many files read in batches come back as each one read alone would, without the files that are not there', (t) => {
+  const r = repo(t);
+  for (let i = 0; i < 205; i++) r.write(`src/f${i}.js`, `export const v${i} = ${i};\n`);
+  r.write('src/empty.js', '');
+  r.write('src/naïve ünïcode.js', 'export const s = "é";\n');
+  r.write('src/two\nlines.js', 'export const n = 2;\n');
+  const to = snapshotTree(r.dir);
+  const files = [...listFiles(r.dir, to), 'src/gone.js'];
+  const read = filesAt(r.dir, to, files);
+  assert.equal(read.size, files.length - 1, 'a file that is not there is left out');
+  for (const f of files.slice(0, -1)) assert.equal(read.get(f), fileAt(r.dir, to, f), f);
+  assert.deepEqual([...read.keys()], files.slice(0, -1), 'in the order asked');
+});
+
 const PYRAMID = (name) => `export function ${name}(xs, a, b) {\n  for (const x of xs) {\n    for (const y of x) {\n      if (a) { if (b) { if (y) { return y; } } }\n    }\n  }\n  return null;\n}\n`;
 
 test('the gate fails a new function over a limit, and passes an old one that did not get worse', async (t) => {

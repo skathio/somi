@@ -11,7 +11,7 @@ export const HOOKS: Record<string, string> = {
   'apply-tier': '**Model tiers** set on every subagent, so they do not depend on an agent remembering.',
   'reviewers-read-only': '**Reviewers stay read-only** on both hosts. The main agent and workers write freely.',
   'capture-prompt': '**Your own words** are kept, so SoMi\'s tools read what you asked and not only the agent\'s summary of it.',
-  'review-due': '**The quality gate and a review that is due** are checked before the turn ends, once per change: code over the quality limits goes back to be fixed, and a review is asked for when the diff calls for one and none covers it.',
+  'review-due': '**The quality gate and a review that is due** are checked before the turn ends, once per change, and not at all after a turn that changed nothing: code over the quality limits goes back to be fixed, and a review is asked for when the diff calls for one and none covers it.',
   'guard-tier-config': '**Changes to the tier models or the quality limits** ask you first.',
 };
 
