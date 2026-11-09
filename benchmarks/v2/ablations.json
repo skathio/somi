@@ -8,8 +8,8 @@
     },
     "review-always": {
       "file": "scripts/lib/reviews.mjs",
-      "find": "if (!empty && (fired.length > 0 || always || security)) agents.push(REVIEWER);",
-      "replace": "if (!empty) agents.push(REVIEWER);"
+      "find": "else if (!empty && (fired.length > 0 || always)) agents.push(REVIEWER);",
+      "replace": "else if (!empty) agents.push(REVIEWER);"
     },
     "digest-off": {
       "file": "hooks/session-start/inject-digest.mjs",

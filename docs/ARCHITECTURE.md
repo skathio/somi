@@ -61,7 +61,7 @@ Nothing here steers the work. These files only remember what happened, so a new 
 | Rule | Value |
 |---|---|
 | Review at all | Only if a signal fired, the work is always reviewed, or the user asks |
-| Reviewers | A code reviewer on medium, plus a security reviewer on the high tier on a boundary. A project's config cannot lower these |
+| Reviewers | One per change: a code reviewer on medium, or on a boundary a security reviewer on the high tier that also reviews the rest of the change. A project's config cannot lower these |
 | What blocks | A Blocker, or a Major with a boundary flag, a line and evidence |
 | What never blocks | Minor, Nit, unconfirmed Major, approve-with-comments |
 | Passes | Two. After that, or when the same blocking fingerprint comes back, the answer tells the agent to take it to the user |

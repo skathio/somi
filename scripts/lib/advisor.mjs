@@ -81,6 +81,7 @@ function planAdvice(start) {
 
 // A workflow as its steps, each saying where it runs and on which tier, worked out fresh for every request and kept nowhere. The agent runs
 // them in order. Only a step on a subagent holds the main thread's edits back, and review happens only where the diff calls for it.
+// Either reviewer, never both: somi_review names the security reviewer when a security signal fired, and the code reviewer otherwise.
 const REVIEW_STEP = (host, always) => ({ step: 'review', run_on: 'subagent', agents: ['somi:somi-reviewer', 'somi:somi-security-reviewer'], when: always ? 'always' : 'the diff signals it', how: host === 'claude' && !always ? 'SoMi checks when your turn ends and tells you' : 'call somi_review' });
 const FIRST_STEP = Object.freeze({ debug: 'reproduce', plan: 'plan', design: 'design', discover: 'research', atlas: 'map', answer: 'answer' });
 const WHAT = Object.freeze({

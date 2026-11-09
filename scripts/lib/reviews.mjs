@@ -52,8 +52,11 @@ export function reviewPlan(ctx, { base, always = false, security = false } = {})
   const empty = signals.facts.files === 0;
   const fired = triggers(signals);
   const agents = [];
-  if (!empty && (fired.length > 0 || always || security)) agents.push(REVIEWER);
+  // One reviewer per change. When a security signal fired, the security reviewer also reads the change as the code reviewer would, so
+  // its attack paths and its defects come from one pass: a second reviewer on the same diff found little the first had not, at about
+  // twice the cost.
   if (!empty && (signals.security.length > 0 || security)) agents.push(SECURITY_REVIEWER);
+  else if (!empty && (fired.length > 0 || always)) agents.push(REVIEWER);
   // A clean review still vouches for a change until something new fires, so acting on its comments does not pay for it again. A user asking
   // is the exception, and so is an open blocking finding, whose fix needs a look.
   const covered = agents.length > 0 && !always && !security && coveringReview(ctx, tree, agents);

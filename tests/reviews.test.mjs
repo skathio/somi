@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { makeRepo, somi, writeFiles } from './helpers.mjs';
+import { REPO, makeRepo, somi, writeFiles } from './helpers.mjs';
 import { commitSubjects, headSha, snapshotTree, workBase } from '../scripts/lib/git-tree.mjs';
 import { decideAfterReview, isBlocking, parseReviews } from '../scripts/lib/policy.mjs';
 import { pullRequest } from '../scripts/lib/pr.mjs';
@@ -44,23 +44,29 @@ test('a small change with a blocker but no security signal can go back to the wo
   assert.match(r.advice, /start the same worker/);
 });
 
-test('a sink in the diff gets the low reviewer and the high security reviewer, read from the real diff', (t) => {
+test('a sink in the diff gets one reviewer, the security reviewer on high, read from the real diff', (t) => {
   const ctx = makeCtx(makeRepo(t));
   writeFiles(ctx.root, SINK);
   const plan = reviewPlan(ctx);
   assert.equal(plan.needed, true);
-  assert.deepEqual(plan.reviewers.map(({ agent, tier, model }) => ({ agent, tier, model })), [{ agent: 'somi:somi-reviewer', tier: 'medium', model: 'sonnet' }, { agent: 'somi:somi-security-reviewer', tier: 'high', model: 'opus' }]);
+  assert.deepEqual(plan.reviewers.map(({ agent, tier, model }) => ({ agent, tier, model })), [{ agent: 'somi:somi-security-reviewer', tier: 'high', model: 'opus' }], 'it also reviews the rest of the change, so the code reviewer is not paid for twice');
   for (const r of plan.reviewers) assert.ok(r.brief.endsWith(plan.diff), 'each reviewer\'s whole brief is built here, with the diff command in it');
   assert.match(plan.diff, /^git diff --no-ext-diff --no-textconv [0-9a-f]+ [0-9a-f]+$/);
   assert.equal(plan.tree, snapshotTree(ctx.root));
   assert.deepEqual(plan.signals, ['sink']);
 });
 
-test('a user asking only ever adds a reviewer', (t) => {
+test('the security reviewer, as the only reviewer of its change, reads it as the code reviewer would too', () => {
+  const brief = fs.readFileSync(path.join(REPO, 'agents', 'somi-security-reviewer.md'), 'utf8');
+  assert.match(brief, /walk that input to each sink[\s\S]*You are the only reviewer of this change, so review the rest of it too[\s\S]*wrong behaviour, missed requirements, data loss, races, missing tests for risky paths/);
+});
+
+test('a user asking only ever adds a review, and the strongest one they ask for', (t) => {
   const ctx = makeCtx(makeRepo(t));
   writeFiles(ctx.root, SMALL);
   assert.deepEqual(reviewPlan(ctx, { always: true }).reviewers.map((r) => r.tier), ['medium'], 'a review is never on the low tier');
-  assert.deepEqual(reviewPlan(ctx, { security: true }).reviewers.map((r) => r.tier), ['medium', 'high']);
+  assert.deepEqual(reviewPlan(ctx, { security: true }).reviewers.map((r) => r.tier), ['high']);
+  assert.deepEqual(reviewPlan(ctx, { always: true, security: true }).reviewers.map((r) => r.agent), ['somi:somi-security-reviewer']);
 });
 
 test('a changed interface or a large diff alone is recorded and does not start a review; weakened tests still do', (t) => {
