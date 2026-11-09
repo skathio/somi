@@ -52,10 +52,14 @@ test('flow text never asks a model to edit a state file', () => {
   for (const f of FLOW_FILES) assert.doesNotMatch(read(f), EDIT, f);
 });
 
-test('every hook registered on Claude Code exists', () => {
+test('every hook registered on Claude Code exists, by a quoted path', () => {
   const commands = Object.values(json('hooks/hooks.json').hooks).flat().flatMap((e) => e.hooks).map((h) => h.command);
   assert.ok(commands.length >= 6);
-  for (const c of commands) assert.ok(fs.existsSync(path.join(REPO, c.split('${CLAUDE_PLUGIN_ROOT}/')[1])), c);
+  for (const c of commands) {
+    const m = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/([^"]+)"$/.exec(c);
+    assert.ok(m, `${c}: the plugin path is quoted, so a path with a space still runs it`);
+    assert.ok(fs.existsSync(path.join(REPO, m[1])), c);
+  }
 });
 
 test('the write guards are registered for every file-writing tool', () => {
