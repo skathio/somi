@@ -11,15 +11,15 @@ Ranked by strict successes, then by correct work with valid tests, then by cost 
 
 | Rank | Arm | Draws | Hidden tests pass | Own tests valid | Both | Quality gate | Strict successes | Mean dollars | On the cost front |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | somi5 | 96 | 82 | 62 | 55 | 96 | 55 | 0.175 | yes |
-| 2 | bare-check | 16 | 13 | 10 | 8 | 15 | 8 | 0.086 | yes |
+| 1 | somi5 | 96 | 90 | 66 | 62 | 96 | 62 | 0.141 | yes |
+| 2 | bare-check | 16 | 13 | 9 | 8 | 15 | 7 | 0.089 | yes |
 
 ## Arms
 
 | Arm | Draws | Solved | pass@1 | pass^k | Weighted per solved | Dollars per solved | Minutes per solved | Labels |
 |---|---|---|---|---|---|---|---|---|
-| bare-check | 16 | 13 | 0.81 | 0.81 | 50124 | 0.106 | 0.7 | {"finished":16} |
-| somi5 | 96 | 82 | 0.94 | 0.63 | 102514 | 0.205 | 1.1 | {"finished":96} |
+| bare-check | 16 | 13 | 0.81 | 0.81 | 51602 | 0.110 | 0.7 | {"finished":16} |
+| somi5 | 96 | 90 | 1.00 | 0.75 | 74857 | 0.150 | 1.1 | {"finished":96} |
 
 ## Against bare-check
 
@@ -27,7 +27,7 @@ Ratios are per draw, blocked by task, with a 90% interval.
 
 | Arm | Weighted tokens | Dollars | Wall time |
 |---|---|---|---|
-| somi5 | 1.79 (1.42 to 2.27) | 1.73 (1.39 to 2.14) | 1.54 (1.25 to 1.88) |
+| somi5 | 1.51 (1.25 to 1.82) | 1.44 (1.22 to 1.70) | 1.55 (1.31 to 1.84) |
 
 ## Own tests
 
@@ -35,15 +35,15 @@ Tests each draw added or changed, run case by case on the reference solution and
 
 | Arm | Draws with tests | Cases agreeing with the reference | Mutants killed |
 |---|---|---|---|
-| bare-check | 16 of 16 | 68 of 79 (86%) | 71 of 108 (66%) |
-| somi5 | 96 of 96 | 505 of 621 (81%) | 381 of 648 (59%) |
+| bare-check | 16 of 16 | 64 of 78 (82%) | 49 of 103 (48%) |
+| somi5 | 96 of 96 | 464 of 573 (81%) | 391 of 643 (61%) |
 
 ## Protocol and spend
 
 | Arm | Routed to | Tool or CLI | Mean passes | Gates | Escalated | Inline writes | Findings | Mean dollars per model | Mean weighted per agent | Split coverage |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| bare-check | {} | {"none":16} | 0.00 | {} | 0 | 0 | {} | {"claude-sonnet-5-5":0.0865} | {"main":40726} | 1.00 |
-| somi5 | {"build":53,"debug":1} | {"none":26,"tool":70} | 0.50 | {} | 0 | 4 | {"Nit":78,"Minor":58,"Major":9} | {"claude-sonnet-5-5":0.1749} | {"main":64337,"somi:somi-security-reviewer":6216,"unknown":8911,"somi:somi-reviewer":8099} | 1.00 |
+| bare-check | {} | {"none":16} | 0.00 | {} | 0 | 1 | {} | {"claude-sonnet-5-5":0.0892} | {"main":41927} | 1.00 |
+| somi5 | {"build":4} | {"none":46,"tool":50} | 0.53 | {} | 0 | 1 | {"Minor":60,"Nit":37,"Major":9,"Blocker":1} | {"claude-sonnet-5-5":0.1407} | {"main":58426,"somi:somi-security-reviewer":5844,"unknown":5907} | 1.00 |
 
 ## Reading
 
