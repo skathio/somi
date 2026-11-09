@@ -203,7 +203,7 @@ function reviewTool(ctx, a) {
   if (typeof a.reviews === 'string') { try { a.reviews = JSON.parse(a.reviews); } catch { return textResult('reviews is not valid JSON. Send an array with every reviewer\'s JSON object.', true); } }
   if (a.reviews) return textResult({ ...recordReviews(ctx, { ...options, reviews: a.reviews, tree: a.tree }), ...shardAdvice(ctx, 'review.done') });
   const plan = reviewPlan(ctx, options);
-  const security = plan.signals.some((s) => SECURITY_SIGNALS.includes(s)) ? { security: 'Security signals fired on this diff, so the review and any fix stay on this conversation\'s model.' } : {};
+  const security = plan.signals.some((s) => SECURITY_SIGNALS.includes(s)) ? { security: 'Security signals fired on this diff, so the security reviewer runs on the high tier, and any fix stays in this conversation, not on a cheaper worker.' } : {};
   return textResult({ ...plan, ...security, advice: reviewAdvice(plan) });
 }
 

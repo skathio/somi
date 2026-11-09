@@ -7,18 +7,23 @@ SoMi 5.0 keeps what SoMi is for, picking the right workflow for any request, and
 ```text
 the user talks to one agent, on the tier set by tiers.main: medium by default, the same as a bare agent
   -> a question, a follow-up, a change of mind: the agent carries on, with no tool call needed
-  -> work to do: somi_route, once, with the request written to read on its own
+  -> a small, clear change: the agent does it, as a bare agent would, with no routing call
+  -> a ticket, large work, or a request that fits no obvious workflow: somi_route, once, with the request
+       written to read on its own
        it returns the workflow as steps, each with where it runs, main or a subagent, and on which tier
-       rules decide a clear request; with no rule to go on, it is new work and goes to build
+       rules decide a clear request; with no rule to go on, it goes to build, with the other routes named
   -> code work: done here on medium, as a bare agent would, and for large work the agent tells the user
        that /somi-deliver runs it in stages
   -> /somi-deliver: somi_route with staged true returns the deliver-stages workflow and its args, and the
        agent starts it, because the user asked; where the host cannot run it, the steps stand
   -> the user said it is security-sensitive, or it is at the conversation's tier: done here
   -> above it: up to a worker, with a brief somi_route built
-  -> the change is ready: somi_review reads the real diff, computes signals, and names reviewers with their briefs
-  -> reviewers report: somi_review records them, and says what blocks the change from leaving
-       security signals on the diff: the fix happens here, on the conversation's tier
+  -> a turn that changed code ends: the stop hook runs the quality gate on the branch and sends anything over
+       a limit back to be fixed, then reads the real diff's signals and says which reviewer is due
+  -> the agent calls somi_review, which names the one reviewer with its brief, and records the report
+       and what blocks the change from leaving
+       security signals on the diff: the security reviewer on the high tier, and the fix here, on the
+       conversation's tier
   -> somi_pr: the gate
 ```
 
@@ -26,21 +31,21 @@ An earlier version made the agent a coordinator on a step engine: it could not r
 
 SoMi's founding comparison is a bare agent on the same tier: both hold the conversation on medium and do the whole job, and SoMi saves by moving what is cheaper down to low. In the first candidate's ablation, a medium coordinator with low workers and no review cost 0.89 times bare per draw (0.79 to 1.02). The cheap tier lost on money, accounts and untrusted input. Matching those words in a request kept 11 of 16 benchmark tasks on medium, so whether work is risky is read from the code instead: the diff's security signals call in the security reviewer, and any fix they lead to stays on medium. That follows the rule to raise a tier only on observed evidence, and it carries a known risk: a low worker's build can miss a safety case that review does not catch. The user can still say up front that work is sensitive.
 
-Code is written on medium. A small piece of work stays in the conversation: on four tasks built over four messages each, a follow-up cost the bare agent about two cents, and sending one to a low worker cost the main thread more than that in routing, briefing and checking. On the same tasks, builds on the low tier inside `/somi:deliver` broke rules set in an earlier message, wrote tests that passed only their own code, and wrote a parser at cognitive 47, and the medium-tier fixes cost more than the low tier saved. So the low tier keeps only the work that needs no judgement: finding the files and the test command, and running commands such as the checks.
+Code is written on medium. A small piece of work stays in the conversation: on four tasks built over four messages each, a follow-up cost the bare agent about two cents, and sending one to a low worker cost the main thread more than that in routing, briefing and checking. On the same tasks, builds on the low tier inside `/somi-deliver` broke rules set in an earlier message, wrote tests that passed only their own code, and wrote a parser at cognitive 47, and the medium-tier fixes cost more than the low tier saved. So the low tier keeps only the work that needs no judgement: finding the files and the test command, and running commands such as the checks.
 
 Each workflow comes back as a short list of steps. A debug is reproduce, fix and review; a plan is plan, milestones and close. Each step says whether it runs on the main thread or on a subagent, and on which tier. That is SoMi 3.x's per-step dispatch, but computed for each request and kept nowhere, so it never stands between the user and the next message.
 
 What a model would otherwise work out the same way every time is done by the tools. The worker's and the reviewers' briefs are built by them, so a model passing them on cannot reword the ticket or add an approach of its own. With no rule to go on, a request goes to `build` without a turn spent choosing. The diff decides the reviewers, a clean review is not asked for again while it still covers the change, and the plan file and pull request text have tools of their own.
 
-Routing classifies what the work is, never how big it will be, because model size forecasts ran 2 to 8 times too high. Rules alone scored 41% on fresh phrasings, so anything they cannot place goes back to the agent to choose, for one extra call. The tool takes a `sensitive` flag because a follow-up's words may not say what it touches, and that flag can only raise a tier.
+Routing classifies what the work is, never how big it will be, because model size forecasts ran 2 to 8 times too high. Rules alone scored 41% on fresh phrasings, and 11 of 24 fresh tickets in the last check, so they decide only what they can place. A request that matches several kinds goes back to the agent to choose, for one extra call. One that matches none goes to build, and the answer names the other routes, so the agent can ask again with a hint when one clearly fits. The tool takes a `sensitive` flag because a follow-up's words may not say what it touches, and that flag can only raise a tier.
 
-Advice in a tool result arrives at the moment of decision, which is where it is most likely to be followed. What must happen does not rest on advice: the session agent's model and the worker and reviewer hook are configuration, the safety hooks deny, and the review gate sits at `somi pr`.
+Advice in a tool result arrives at the moment of decision, which is where it is most likely to be followed. What must happen does not rest on advice: the session agent's model and the worker and reviewer hook are configuration, the safety hooks deny, and the review gate sits at `somi_pr`.
 
 ## Workflows and the library
 
-`workflows/deliver-stages.js` runs large work in code: a scout on low, a reproduction for a bug kept only if running it fails, the user's rules written as tests on medium, a build on medium that restarts one tier up from the handoff when the checks, the quality gate or the rule tests fail, the checks, and the reviewers the diff calls for. The rules stage is there because a build checked only by its own tests passed while it broke rules set in an earlier message, so nothing sent it up a tier. A host starts a workflow only on the user's say-so, never on a tool's advice, so it runs when the user types `/somi:deliver`. Claude Code reads the file from the plugin. Copilot CLI loads workflows only from an extension, so `somi init --host copilot` writes `.github/extensions/somi/extension.mjs`, which runs the same file through `scripts/lib/copilot-workflow.mjs`; Copilot runs workflows in experimental mode. The models come from the user's config in the workflow's args, because the file names none.
+`workflows/deliver-stages.js` runs large work in code: a scout on low, a reproduction for a bug kept only if running it fails, the user's rules written as tests on medium, a build on medium that restarts one tier up from the handoff when the checks, the quality gate or the rule tests fail, the checks, and the reviewers the diff calls for. The rules stage is there because a build checked only by its own tests passed while it broke rules set in an earlier message, so nothing sent it up a tier. A host starts a workflow only on the user's say-so, never on a tool's advice, so it runs when the user types `/somi-deliver` (`/somi:somi-deliver` on Claude Code). Claude Code reads the file from the plugin. Copilot CLI loads workflows only from an extension, so `somi init --host copilot` writes `.github/extensions/somi/extension.mjs`, which runs the same file through `scripts/lib/copilot-workflow.mjs`; Copilot runs workflows in experimental mode. The models come from the user's config in the workflow's args, because the file names none.
 
-`scripts/lib/workflows.mjs` says what each route is: its kind, tier, role text and skills. Role text is in `library/roles/`, expertise in `library/skills/`, and review lenses in `library/lenses/`. A host lists only commands and `somi-expertise`, at most 15 entries and 8,000 characters, and a test holds that, because hosts silently drop descriptions past a budget. Nothing in the library costs anything until it is used.
+`scripts/lib/workflows.mjs` says what each route is: its kind, tier, role text and skills. Role text is in `library/roles/`, expertise in `library/skills/`, and review lenses in `library/lenses/`. A host lists only the commands, the agents and `somi-expertise`, at most 15 entries and 8,000 characters, and a test holds that, because hosts silently drop descriptions past a budget. Nothing in the library costs anything until it is used.
 
 An addition has to earn its place with a paired test: at least 15 points on 15 tasks, no regression on control tasks, and at most double the tokens. Existing items get one model generation before the same test applies.
 
@@ -51,7 +56,7 @@ Nothing here steers the work. These files only remember what happened, so a new 
 - **`reviews.jsonl`:** one line per review pass: the tree it covered, the verdicts and the findings.
 - **`ledger.md`:** decisions and constraints that must outlive the context, at most 40 lines and 6 KB. Compaction drops rules and scope limits first, and what gets re-injected survives, so this comes back at every session start and with every route.
 - **`prompt.txt`:** the user's latest message, kept by a prompt hook so that routing and briefs can read the user's own words. It is overwritten by every prompt and never leaves the machine.
-- **`prompts.json`:** the same session's messages, for a worker or workflow stage, which starts with none of the conversation. Routing writes the earlier ones to `earlier.md`, and a brief or a workflow names that file instead of quoting them, so the agent passing it on does not copy them out on the conversation's model. A later message wins where they disagree. Host notices that arrive as a user turn, such as a background task finishing, are not kept. The first message always stays, then the newest up to 24 messages and 64 KB. A new session starts it again, and with no session id from the host nothing is carried over. On M02 and M04, the two `/somi:deliver` draws that failed broke decisions stated only in the first message.
+- **`prompts.json`:** the same session's messages, for a worker or workflow stage, which starts with none of the conversation. Routing writes the earlier ones to `earlier.md`, and a brief or a workflow names that file instead of quoting them, so the agent passing it on does not copy them out on the conversation's model. A later message wins where they disagree. Host notices that arrive as a user turn, such as a background task finishing, are not kept. The first message always stays, then the newest up to 24 messages and 64 KB. A new session starts it again, and with no session id from the host nothing is carried over. On M02 and M04, the two `/somi-deliver` draws that failed broke decisions stated only in the first message.
 - **`check.json`:** the last `somi check`, so a pull request can say whether the full suite passed on this code.
 
 `.somi/plan.md` holds an approved plan, at most 200 lines and 16 KB, and `somi plan --done N` marks a milestone in place. `somi status` and `somi pr` render every other view on demand. There are no progress or diary files, because an oversized state file is its own failure: one 4.x plan reached 11 MB.
@@ -67,7 +72,7 @@ Nothing here steers the work. These files only remember what happened, so a new 
 | Passes | Two. After that, or when the same blocking fingerprint comes back, the answer tells the agent to take it to the user |
 | Relay check | A finding that suggests removing a check, flag, validation or test is marked `needs_verification` |
 
-**The gate is at the outward step.** `somi pr` will not write pull request text for a change that fired a signal and has no review covering it, or that has an open blocking finding. `--unreviewed` writes it anyway, with a label at the top that a reader cannot miss. A review covers later changes only while they fire no signal of their own, and committing does not change that, so a follow-up on a sink needs its own review.
+**The gate is at the outward step.** `somi_pr` and `somi pr` will not write pull request text for a change that fired a signal and has no review covering it, that has an open blocking finding, or that fails the quality gate. `--unreviewed` writes it anyway, with a label at the top that a reader cannot miss. A review covers later changes only while they fire no signal of their own, and committing does not change that, so a follow-up on a sink needs its own review.
 
 These are constants in `scripts/lib/policy.mjs` and `scripts/lib/reviews.mjs`. A committed project config is untrusted, so none of them is configurable. Config may add sensitive paths, and it cannot remove a built-in signal. The record is a tripwire like the hooks, because an agent that sets out to can forge it: the boundary is the sandbox and the maintainer's push.
 
@@ -76,7 +81,7 @@ These are constants in `scripts/lib/policy.mjs` and `scripts/lib/reviews.mjs`. A
 `scripts/lib/signals.mjs` reads the actual diff, and only raises.
 
 - **Review signals:** `schema`, `tests-weakened`, `dependency`, `goldens-moved`, `unreadable-diff`. `multi-module`, `public-api` and `large-diff` are recorded but do not start a review.
-- **Security signals:** `sink`, `secrets`, `network`, `repo-content`, `policy-file`, `sensitive-path`, `access-control`, `unreadable-diff`. `access-control` fires on a changed line, added or removed, that checks roles, permissions, owners or tenants: a permissions refactor fired nothing before it and leaked across organisations.
+- **Security signals:** `sink`, `secrets`, `network`, `repo-content`, `policy-file`, `sensitive-path`, `access-control`, `unreadable-diff`. `access-control` fires on a changed line, added or removed, that checks roles, permissions, owners or tenants: a permissions refactor fired nothing before it and leaked across organisations. A regex's own `exec` is not a shell, and a whole-line comment runs nothing, so neither counts for `sink`, `network` or `access-control`; a key pasted into a comment still counts for `secrets`.
 
 These signals are patterns over file names and added lines, so they over-fire by design and they cannot prove a taint path. They route attention and do not make anything safe.
 

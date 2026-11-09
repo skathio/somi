@@ -25,13 +25,7 @@ Expertise is loaded by workflows when needed, or through `somi-expertise`. `clea
 
 ## State
 
-Existing `.somi/plans/*` and `.somi/reviews/*` folders are no longer read or written. Import what is still open once, by asking the agent to run `somi migrate`, or yourself:
-
-```bash
-somi migrate
-```
-
-It copies open findings to a record of their own and recorded decisions to the ledger, and changes no old file. `somi status` then shows them.
+Existing `.somi/plans/*` and `.somi/reviews/*` folders are no longer read or written. Import what is still open once, by asking the agent to run `somi migrate` for you. It copies open findings to a record of their own and recorded decisions to the ledger, and changes no old file. `/somi-status` then shows them.
 
 ## Config
 
@@ -49,8 +43,8 @@ Copy your test commands into a committed `somi.check.json`. See [the architectur
 
 ## MCP
 
-There are five tools: `somi_route`, `somi_review`, `somi_note`, `somi_plan` and `somi_pr`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
+There are six tools: `somi_route`, `somi_review`, `somi_quality`, `somi_note`, `somi_plan` and `somi_pr`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
 
 ## Hooks
 
-Rules arrive at session start and after compaction, not on every prompt. The dangerous-shell, dependency-install, secret-write, protected-path and audit hooks stay. New hooks apply tiers to subagents, keep edits with workers during a workflow on Claude Code, keep reviewers read-only, and ask before tier config changes.
+Rules arrive at session start and after compaction, not on every prompt. The dangerous-shell, dependency-install, secret-write, protected-path and audit hooks stay. New hooks apply tiers to subagents, keep reviewers read-only, ask before a change to the tier models or the quality limits, keep the user's own words for routing and briefs, and, when a turn that changed code ends, run the quality gate and say whether a review is due.

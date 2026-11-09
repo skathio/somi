@@ -18,13 +18,13 @@ export function Hero() {
         <div className="flex flex-col-reverse gap-6 md:flex-row md:items-center md:justify-between md:gap-10">
           <div className="min-w-0">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent">
-              A small kernel for coding agents · {FACTS.version}
+              A workflow plugin for coding agents · {FACTS.version}
             </p>
             <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
               So<span className="text-accent">Mi</span>: say what you want, and it runs the right workflow.
             </h1>
             <p className="mt-5 max-w-3xl text-lg text-muted sm:text-xl">
-              A plugin for Claude Code and GitHub Copilot CLI. The agent codes in the main thread. A deterministic check runs before each commit, and a fresh reviewer runs only when the real diff calls for one. Tools write all state, and the OS sandbox is the security boundary.
+              A plugin for Claude Code and GitHub Copilot CLI. Your agent codes in the conversation, as a bare agent would. When a turn that changed code ends, SoMi runs the quality gate and asks for a fresh reviewer only when the real diff calls for one. Tools write all state, and the OS sandbox is the security boundary.
             </p>
           </div>
           <img

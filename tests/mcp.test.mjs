@@ -47,7 +47,7 @@ test('six tools, which advise, record and never run project commands', async (t)
   writeFiles(dir, { 'src/app.js': 'import { exec } from "node:child_process";\nexport const run = (c) => exec(c);\n' });
   const plan = JSON.parse((await call(rpc, 'somi_review', {})).text);
   assert.equal(plan.needed, true);
-  assert.match(plan.security, /stay on this conversation's model/);
+  assert.match(plan.security, /security reviewer runs on the high tier, and any fix stays in this conversation/);
   assert.match(plan.advice, /fresh agent/);
   const reviews = [{ agent: 'somi-reviewer', verdict: 'approve', findings: [] }, { agent: 'somi-security-reviewer', verdict: 'approve', findings: [] }];
   assert.equal(JSON.parse((await call(rpc, 'somi_review', { reviews, tree: plan.tree })).text).verdict, 'clear');

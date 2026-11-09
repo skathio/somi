@@ -10,8 +10,8 @@
     {
       "name": "somi",
       "source": "github:skathio/somi",
-      "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it routes the work to the right workflow, on workers on the cheapest model that can do it.",
-      "version": "5.0.0-rc.3",
+      "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it picks the right workflow and keeps the cost down, while your agent stays in charge.",
+      "version": "5.0.0",
       "tags": [
         "workflow",
         "agents",

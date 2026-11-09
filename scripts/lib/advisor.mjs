@@ -4,7 +4,7 @@
 // The conversation runs on the medium tier, as a bare agent would, and does the work in it. Large work goes down a tier a stage at a
 // time, and work that needs more goes up. Whether work is risky is read from the code it changes, not from the words
 // of the request: words like customer or upload marked most work risky and kept it all on medium. somi_review reads the diff, and when a
-// security signal fires, the review and every fix stay on this conversation's tier. Everything a model would otherwise have to work out
+// security signal fires, the security reviewer runs on the high tier and every fix stays on this conversation's. Everything a model would otherwise have to work out
 // the same way each time, such as a worker's brief, is built here.
 
 import path from 'node:path';

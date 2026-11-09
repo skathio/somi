@@ -2,23 +2,24 @@
 
 Tell SoMi what you want, in plain words or as a ticket, and it picks the right workflow and keeps the cost down, on Claude Code and GitHub Copilot CLI. You keep talking to your agent the whole time: it can read, answer and change its mind, and SoMi advises instead of taking over.
 
-> **Status: 5.0 release candidate.** This design replaces an earlier step engine that proved too restrictive in real use. On Sonnet it solves more tasks than a bare agent and meets the quality limits on every draw, but it costs 1.74 times as much per solved task, over the 1.5 the [benchmark](docs/BENCHMARK.md) allows, so it does not ship yet.
+> **5.0, measured.** On the pre-registered [benchmark](docs/BENCHMARK.md) (Sonnet, 16 tasks, 96 draws each), SoMi solved 90 draws against a bare agent's 72, met the quality limits on all 96 against 84, and cost 1.28 times as much per solved task, under the 1.5 the benchmark allows. On those single-change tasks the agent rarely routes, so the gain comes from the rules, the quality gate and the review; routing has not been measured on larger work yet.
 
 ## How it works
 
 ```text
 you talk to one agent, on the medium tier, the same as a bare agent
   -> a question, a follow-up, a change of mind: it just answers
-  -> work to do: it asks somi_route once, and gets the workflow's steps: each one's tier, whether it runs here or on a subagent, and its brief
-  -> a small change: it does it, as a bare agent would
+  -> a small, clear change: it does it, as a bare agent would
+  -> a ticket, large work, or a request that fits no obvious workflow: it asks somi_route once, and gets the
+       workflow's steps: each one's tier, whether it runs here or on a subagent, and its brief
   -> large work: it does it too, on medium, and tells you that /somi-deliver runs it in stages
   -> /somi-deliver <work or ticket>: a scout, a build that steps up a tier if the checks fail, the checks, and
        the reviews the diff needs, each on its tier, run in code through to the end
-  -> the diff touches a security sink: the review and every fix stay here, on medium
+  -> the diff touches a security sink: the security reviewer runs on high, and every fix stays here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier
   -> a turn that changed code ends: the quality gate runs, anything over a limit goes back to be fixed,
        and the diff decides if a review is due
-  -> somi_pr: refuses clean text for a change that needed a review and has none
+  -> somi_pr: refuses clean text for a change that needed a review and has none, or that fails the quality gate
 ```
 
 SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses your next request. A bare agent runs everything on medium. SoMi runs the conversation there too, and code is written on medium: on the low tier it broke rules and fell below the quality bar, and the fixes cost more than the low tier saved. The low tier does what needs no judgement, such as finding the files and running the checks. The deterministic parts are done by SoMi's tools, not left to the model: which reviewers a diff needs, the briefs workers and reviewers get, the plan file and the pull request text.
@@ -27,9 +28,9 @@ SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses
 |---|---|---|
 | Who is in charge | A workflow's procedure | Your agent, with SoMi advising and building the deterministic parts |
 | When a review runs | Sized before coding | Decided from signals in the real diff when a turn ends, with one reviewer, and checked before the pull request text |
-| Long work | Plan and progress files read by hand | One plan file, a small ledger put back after every compaction, and fresh context per milestone |
+| Long work | Plan and progress files read by hand | One plan file, a small ledger put back after every compaction, and each milestone routed on its own |
 | Model tiers | A lookup the agent could skip | The conversation on medium, workers and reviewers set by a hook |
-| Listed entries | 91 | 6 commands and one skill, with a library behind them |
+| Listed entries | 91 | 13: 6 commands, 6 agents and one skill, with a library behind them |
 | Other plugins | No way in | Shards, connected from `/somi-config` |
 
 ## Install
@@ -71,7 +72,7 @@ On Claude Code they also answer to `/somi:somi-review` and so on. On Copilot, So
 
 ## Set your tiers
 
-You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code is written on medium, in the conversation or in `/somi-deliver`'s build, and work above the conversation's tier goes up to a worker. The low tier only gathers information and runs checks. When the diff shows security signals, the review and any fix stay on `main`. Ask `/somi-config` to change any of it: after `main` changes, it writes `somi-main` to your own agent folder so the conversation runs on that tier's model.
+You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code is written on medium, in the conversation or in `/somi-deliver`'s build, and work above the conversation's tier goes up to a worker. The low tier only gathers information and runs checks. When the diff shows security signals, the security reviewer runs on high, and any fix stays on `main`. Ask `/somi-config` to change any of it: after `main` changes, it writes `somi-main` to your own agent folder so the conversation runs on that tier's model.
 
 ```json
 { "tiers": { "main": "medium", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }
@@ -101,7 +102,7 @@ You do not need to run it yourself. When a turn that changed code ends, on Claud
 
 ## Connect other plugins with shards
 
-A shard slots another plugin's skill, agent or tool into a named step: `work-item.start`, `plan.approved`, `pr.open` or `review.done`. Ask `/somi-config` in the chat, for example "connect jira:fetch-ticket to work-item.start", and the agent runs `somi slot` for you:
+A shard slots another plugin's skill, agent or tool into a named step: `work-item.start`, `plan.approved`, `pr.open` or `review.done`. Ask `/somi-config` in the chat, for example "connect jira:fetch-ticket to work-item.start", and the agent runs `somi slot` for you, like this:
 
 ```bash
 somi slot work-item.start jira:fetch-ticket
@@ -113,12 +114,7 @@ A shard keeps working when its plugin updates, and tells you it changed. What it
 
 ## Turn on the sandbox
 
-Hooks catch honest mistakes. They are not a security boundary. Ask `/somi-config` to check the setup, which runs the doctor inside the agent's own shell, or run these from inside an agent session: print the recommended settings, merge them into your host's settings, then run the doctor:
-
-```bash
-somi doctor --profile
-somi doctor
-```
+Hooks catch honest mistakes. They are not a security boundary. Ask `/somi-config` to check the setup: it runs `somi doctor` inside the agent's own shell, and when the sandbox is off it gives you the recommended settings from `somi doctor --profile` to merge into your host's settings. Check again from inside an agent session, because a command typed at a `!` prompt usually bypasses the sandbox.
 
 `doctor` passes only when writing to your home directory and reaching the network directly both fail inside the agent's shell. See [the trust model](docs/ARCHITECTURE.md#trust-model).
 
