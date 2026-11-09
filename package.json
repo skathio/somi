@@ -1,6 +1,6 @@
 {
   "name": "@skathio/somi",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "scripts": {
     "test": "node --test --test-reporter=spec tests/*.test.mjs",
     "test:coverage": "node -e \"require('fs').mkdirSync('coverage',{recursive:true})\" && node --test --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info tests/*.test.mjs",

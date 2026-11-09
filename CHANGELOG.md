@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+## [5.0.1] — 2026-11-09 — fix: a configurable quality gate time limit, and the end-of-turn check no longer cut off by the host
+
+**Patch — fixes only.** No migration action required. A large change may want a longer time: set `quality.timeout_seconds`.
+
 ### Fixed
 
 - **The quality gate no longer times out on large changes.** It had a fixed 120 seconds, and the end-of-turn check ran under the host's own hook limit, about 30 seconds on Copilot CLI and, by its documentation, 60 on Claude Code, after which the host ended the turn as if the gate had passed. The gate now has 300 seconds by default, and `quality.timeout_seconds` sets it from 10 to 1800: the user's config either way, and a project's only to lengthen it. The end-of-turn hook asks the host for 1860 seconds. A gate that runs out of time says so and how to give it longer, through `somi_quality`, `somi check`, `somi pr` and the end-of-turn check, instead of an `ETIMEDOUT` read as code to fix. `/somi-config` shows and changes the value.
