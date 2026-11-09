@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ROADMAP as roadmap } from '../src/content/roadmap';
 import { COMMANDS } from '../src/content/commands';
 import { HOOK_EVENTS, HOOKS } from '../src/content/hooks';
+import { SHARD_STEPS } from '../src/content/shards';
 import { FACTS, formatDate, monthsSpanned } from '../src/lib/facts';
 
 const sorted = (xs: string[]) => [...xs].sort();
@@ -16,6 +17,10 @@ describe('content matches the repo', () => {
   it('describes every registered hook, and only those', () => {
     expect(sorted(Object.keys(HOOKS))).toEqual(sorted(FACTS.hooks.map((h) => h.name)));
     for (const h of FACTS.hooks) expect(HOOK_EVENTS, h.event).toHaveProperty(h.event);
+  });
+
+  it('describes every step a shard can join, and only those', () => {
+    expect(sorted(Object.keys(SHARD_STEPS))).toEqual(sorted(FACTS.shardSteps));
   });
 
   it('covers every CHANGELOG release exactly once on the roadmap', () => {

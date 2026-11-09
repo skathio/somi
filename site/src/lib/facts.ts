@@ -13,6 +13,8 @@ export interface Facts {
   agents: string[];
   skills: string[];
   hooks: { name: string; event: string }[];
+  /** The named steps a shard can join, from scripts/lib/shards.mjs. */
+  shardSteps: string[];
 }
 
 /** Generated from the repo by scripts/facts.mjs; see that file for where each field comes from. */
