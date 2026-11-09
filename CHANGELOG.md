@@ -63,9 +63,146 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 - `clean-code`, `solid-principles`, `reasoning-craft` and the general `observability` skill, as the evidence shows they do not pay.
 - Pre-code sizing, the design and planning document chain, parallel orchestration, and the diary and progress files. Old command names still work.
 
-### Changes on main before the 5.0 rebuild
+## [4.1.1] — 2026-11-04 — fix: loop plan files saved with CRLF on Windows, comma-joined `--files`, `--findings` from PowerShell
+
+**Patch — fixes only.** A stopgap for the parts of issue #46 that are bugs in 4.1 and small to fix; the loop
+lifecycle items (resume after a stop, pause, counters kept across restarts, a per-iteration baseline) and the
+PR-review-driven loop are left to 5.0.0. No migration action required.
+
+### Fixed
+
+- **A loop no longer refuses a plan file saved with CRLF line endings or a UTF-8 BOM.** With Git's
+  `core.autocrlf=true`, or Windows PowerShell 5.1's `Set-Content`, `progress.md` gets CRLF, and `step open`
+  refused the iteration as `not-declared` (64); the diary and progress writers refused the file the same way and
+  handed their lines back as `unwritten`. `progress.md`, `diary.md`, the diary archive and the phase files are now
+  read with a leading BOM dropped and every CRLF read as LF, and a writer saves the file back as LF. A lone CR is
+  still refused as before.
+- **`--files` refuses a path that holds a comma** (64, naming `files`, before any state is written or pass is
+  counted), in `step open`, the `somi_loop` tool and `init`: `a.js,b.js` was recorded as one path, so the diff gate
+  measured a scope that matched nothing. Paths are separated by spaces, or given as a list in the tool. A real file
+  name with a comma can no longer be put in scope by name.
+- **`--findings` and `--fixed` take `@<file>`.** Windows PowerShell 5.1 strips the double quotes inside an argument it
+  passes to `node`, so JSON typed on its command line reached `somi-loop.mjs step after-review` broken and was
+  refused as `--findings expects JSON text`. `--findings @findings.json` reads the JSON from a UTF-8 file (a BOM is
+  dropped), and the refusal now says to do that.
+- **The `somi_loop` tool's `no-host-root` refusal (67) says why.** It now says the host set no
+  `CLAUDE_PROJECT_DIR` and answered no MCP `roots/list`, and that a `project_dir` alone never authorizes a write,
+  and to run the loop through the CLI from the project directory. The rule itself is unchanged: a write still needs
+  a root the host supplied.
+- **The CHANGELOG lists the `somi_loop` tool under 4.1.0**, which shipped it, instead of under `[Unreleased]`.
+
+## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
+
+**Minor — additive.** Commands, agent names, tiers and the MCP tools are unchanged; two agents and
+32 skills are new. No migration action required.
+
+### Fixed
+
+- **The `somi` front door did the work itself about half the time.** It ran each command's
+  procedure in its own context and recursed into sub-commands, so over one `/ship-loop` run its
+  own context held about 115 KB of prompt and procedure text, against about 25 KB now (measured with
+  the L0 tool; `@somi /plan` 53 KB → 25 KB). Once
+  that context was full or compacted, it often stopped starting agents and did the planning,
+  coding or reviewing itself. It is now a dispatcher of about 85 lines that carries no procedure
+  text: it strips its `/somi` marker, picks one flow (a known command, or the `somi-routing` table
+  for free text), announces it, and starts **one** agent. It never edits, runs commands or follows a
+  procedure. A drift test keeps its list of known commands equal to `commands/`.
 
 ### Added
+
+- **`somi-flow`** (agent, default `medium`): runs one named workflow end to end from its flow skill,
+  starting the specialists through `somi-dispatch`. A composite workflow (`/ship-loop` running
+  `/plan-loop` and `/code-loop`) runs its sub-flows inside the same runner, so the chain stays two
+  levels below the session: within Copilot CLI's nesting, and Claude Code's default.
+- **`somi-general`** (agent, default `medium`): the fallback for requests that match no workflow
+  (questions, explanations, research, housekeeping). It edits no tracked files and returns
+  `REROUTE <flow>` when a request turns out to be a workflow. `somi-routing` gains the matching
+  "none of the above" row, plus a `status` row.
+- **`somi-checkpoint`** (skill): neither host lets a subagent ask the user anything, so a gate inside
+  a runner (a slug confirmation, `DECISIONS-NEEDED`, `/ship-loop`'s brief-handoff gate, `/pr`'s
+  confirmation) saves its state, returns a `CHECKPOINT` block and stops; `somi` asks you and starts
+  the runner again with a `RESUME` block. It also defines the `DONE`, `STOPPED` and `REROUTE` blocks.
+- **`flow-status`** (skill): the dashboard, moved out of the front door.
+
+### Changed
+
+- **Every workflow's procedure is now a skill,** `skills/flow-<name>/SKILL.md` (25 of them, moved
+  verbatim with links rebased). `commands/<name>.md` is a thin wrapper that loads it, so a typed
+  command and the runner follow one procedure. Flow skills are `user-invocable: false` with a
+  one-line description, to keep the skill listing small. `somi_command` still serves the command
+  file, which is now the wrapper; read a procedure with `somi_skill`.
+- **The five largest agents are light.** `somi-planner`, `somi-discovery-analyst`, `somi-coder`,
+  `somi-reviewer` and `somi-designer` keep their role, tier note, `low` trims and write contract
+  (37 to 61 lines, from 192 to 394); their procedures moved to `role-planner`,
+  `role-discovery-analyst`, `role-coder`, `role-reviewer` and `role-designer`, which the agent loads
+  first. An agent that cannot load its role skill stops and says so.
+- Gates follow the move: the dispatch-reference and dispatch-line gates, the `/ship-loop` checkpoint
+  gate, the review-panel seat derivation, the size-tier text guards and the coder's Decision Ladder
+  check now read the flow and role skills. The size ledger entry for the planner moved with its
+  text to `skills/role-planner/SKILL.md` (402 → 354 lines); `somi-discovery-analyst` left the ledger.
+
+- **What a code loop's agents share: a run card.** `scripts/somi-card.mjs` prints, from the loop state, the
+  few facts every coder and reviewer start needs (SoMi's script path, the project, the plan files, the files in
+  scope, the baseline, the test command, which files only the orchestrator writes): under 2 KiB, byte-stable,
+  no history, so the reviewer stays independent. `/code-loop` pastes it first in every briefing. Its
+  orchestrator no longer reads or edits the iteration's code, runs its tests or reviews it, and flows that call
+  SoMi's scripts name `${CLAUDE_PLUGIN_ROOT}`, which Claude Code fills in when it loads the skill.
+- **The test suite runs in parallel, and CI splits it over four runners** (`tests/scripts/suite-plan.json`):
+  `npm test` runs its scripts half the cores at a time (`SOMI_TEST_JOBS`), runs
+  `eval-gate-micro-tasks.sh` by itself (a hidden-suite family uses 3 s of its 10 s limit and failed under
+  load), and CI runs three shards of slow scripts beside the rest (`SOMI_SUITE_SHARD`); a plan that names a
+  script `validate.sh` does not queue fails the run. CI went from 31 to under 10 minutes.
+
+### Verified live, and what it fixed
+
+Live runs on Copilot CLI 1.0.103 (`copilot --agent somi:somi -p ...` in a throwaway repo, full debug
+logs):
+
+- A one-line bug fix: `somi` loaded only the routing and dispatch skills and started `somi-flow`;
+  the runner loaded `flow-code` and started `somi-coder`, which loaded `role-coder` two levels
+  down and made the edit. The front door did no work. 1.74 AI credits for a one-line fix: each level
+  loads its own prompt and skills.
+- `/plan` across two turns: the runner stopped at the slug gate and at the planner's scope
+  decision, `somi` asked each time and stopped, and `--resume` with an answer continued the flow.
+  No decision was recorded as user-verified without an answer.
+- Fixed along the way: in `-p` mode `somi` answered checkpoints itself (Copilot tells it no user can
+  reply), `RESUME` dropped the request, and a resumed runner resolved agents for the wrong host. A
+  checkpoint now ends the dispatcher's turn even in a non-interactive session; `RESUME` keeps every
+  briefing line but `flow:`; the runner passes the briefing's `host:` to every resolve.
+
+Not verified: that a runner's subagents receive the repo's instruction files on Copilot, and a live
+run on Claude Code (the suite only). On Copilot the agent's id is `somi:somi`; `--agent somi` is
+refused.
+
+### Measured
+
+L0 (exact injected bytes, `benchmarks/usage-speed/reports/`): the `somi` front door's own context
+for `@somi /plan` falls from 53 KB to 25 KB (-53%), and over a `/ship-loop` run from 115 KB to 25 KB
+(-78%). The cost is on Claude Code's typed commands: each now injects 2 to 6% more bytes (the wrapper,
+the extra skill and agent headers, the routing rows).
+
+L2 (48 live draws on Claude Code, low tier, against 4.0.0 `f4e7cc1`; `reports/03c1f76-vs-f4e7cc1.md`):
+inconclusive on every metric. The point estimates lean worse (SoMi-arm overhead +31% time, +32% cost,
+tokens +22%, turns +7%, mostly S3), with every interval including no change; the quality guard is clear.
+Two of eight `/ship-loop` draws on S2 scored 0/31: sizing put T1 at `full` in 3 of 8 draws (4.0.0: 0 of 8,
+an estimate of about 110 lines against the 100-line limit), and a `full` run stops at the planner's
+decisions when no one answers. One of those draws also showed the main thread handing `/plan-loop` to a
+`somi-flow` subagent; the command wrappers now say a sub-workflow runs inline in the main conversation.
+
+The run card, the orchestrator limits and the script path, measured together against that 4.1.0 baseline
+(`reports/6cced12-vs-03c1f76.md`): **no measurable cost saving.** The primary metric, cost overhead, reads 0.87
+(0.70 to 1.41, inconclusive) and the SoMi arm's own cost 0.99. The transcripts show the orchestrator limits
+working (on S3 the main thread's cost fell a quarter and the coder's rose about as much: the coding moved to
+the coder) and the card saving nothing on these scenarios, whose loops rarely start a second coder or reviewer.
+The orchestrator limits and the script path stay for what they fix (the orchestrator coding, a search
+of the disk for SoMi); the card stays as the shared-context mechanism, with no measured benefit yet. L0 rises 1.3%.
+
+### The `somi_loop` MCP tool
+
+These entries shipped in 4.1.0 (the published package holds `scripts/lib/loop-step-tool.mjs`) but stayed under
+`[Unreleased]` until 4.1.1.
+
+#### Added
 
 - **A bundled `somi_loop` MCP tool runs a bounded-loop transition in one call, and `/code-loop` and `/plan-loop` now run
   on it.** `step` is `open`, `after-code`, `after-review`, `close` or `status`, over the same code as
@@ -85,7 +222,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   `"confidence": "high"` is recorded as `High`; a value still outside the set is refused as
   `findings[2].confidence: must be one of High|Medium|Low`, where it used to be a message that named no field.
 
-### Fixed
+#### Fixed
 
 - **The code loop's diff gate no longer misses changes.** `check-diff` and the loop step skipped untracked files
   whose names git quotes (non-ASCII, a tab, a quote), dropped the whole count when the changed-file listing passed
@@ -94,7 +231,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   file git calls binary is counted from its old and new contents. The delta review is told to use
   `git diff --text`, so it sees those lines too.
 
-### Changed
+#### Changed
 
 - **A clean `close` now leaves progress.md complete.** The writer sets the phase's `Iterations done / total` cell to the
   number of that phase's iterations marked done (the total and the phase Status are kept; a count above the total is left
@@ -210,7 +347,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   A progress.md that the iteration reader refuses is now refused with the condition that failed. A findings-ledger
   save removes the temp files of killed saves that are over an hour old.
 
-### Measured
+#### Measured
 
 The `somi_loop` tool, against the run-card baseline (48 live draws, low tier, `reports/e376e98-vs-6cced12.md`):
 **inconclusive on cost**, the primary metric (overhead 1.02, 0.64 to 1.33; the SoMi arm's own cost 0.89). On
@@ -222,112 +359,6 @@ went to second passes (3 of 8 draws) and to progress.md edits made by hand after
 With `close` writing those progress.md lines itself, an S1-only check (8 draws, `reports/75f886b-s1-check.md`, a
 transcript check, not a rule verdict) meets the bar: main thread 13 turns and 99k weighted tokens, the SoMi draw
 $0.033 and 149 s against bare $0.005 and 22 s.
-
-## [4.1.0] — 2026-10-27 — feat: the `somi` front door only dispatches; every workflow runs in the `somi-flow` runner from its own flow skill
-
-**Minor — additive.** Commands, agent names, tiers and the MCP tools are unchanged; two agents and
-32 skills are new. No migration action required.
-
-### Fixed
-
-- **The `somi` front door did the work itself about half the time.** It ran each command's
-  procedure in its own context and recursed into sub-commands, so over one `/ship-loop` run its
-  own context held about 115 KB of prompt and procedure text, against about 25 KB now (measured with
-  the L0 tool; `@somi /plan` 53 KB → 25 KB). Once
-  that context was full or compacted, it often stopped starting agents and did the planning,
-  coding or reviewing itself. It is now a dispatcher of about 85 lines that carries no procedure
-  text: it strips its `/somi` marker, picks one flow (a known command, or the `somi-routing` table
-  for free text), announces it, and starts **one** agent. It never edits, runs commands or follows a
-  procedure. A drift test keeps its list of known commands equal to `commands/`.
-
-### Added
-
-- **`somi-flow`** (agent, default `medium`): runs one named workflow end to end from its flow skill,
-  starting the specialists through `somi-dispatch`. A composite workflow (`/ship-loop` running
-  `/plan-loop` and `/code-loop`) runs its sub-flows inside the same runner, so the chain stays two
-  levels below the session: within Copilot CLI's nesting, and Claude Code's default.
-- **`somi-general`** (agent, default `medium`): the fallback for requests that match no workflow
-  (questions, explanations, research, housekeeping). It edits no tracked files and returns
-  `REROUTE <flow>` when a request turns out to be a workflow. `somi-routing` gains the matching
-  "none of the above" row, plus a `status` row.
-- **`somi-checkpoint`** (skill): neither host lets a subagent ask the user anything, so a gate inside
-  a runner (a slug confirmation, `DECISIONS-NEEDED`, `/ship-loop`'s brief-handoff gate, `/pr`'s
-  confirmation) saves its state, returns a `CHECKPOINT` block and stops; `somi` asks you and starts
-  the runner again with a `RESUME` block. It also defines the `DONE`, `STOPPED` and `REROUTE` blocks.
-- **`flow-status`** (skill): the dashboard, moved out of the front door.
-
-### Changed
-
-- **Every workflow's procedure is now a skill,** `skills/flow-<name>/SKILL.md` (25 of them, moved
-  verbatim with links rebased). `commands/<name>.md` is a thin wrapper that loads it, so a typed
-  command and the runner follow one procedure. Flow skills are `user-invocable: false` with a
-  one-line description, to keep the skill listing small. `somi_command` still serves the command
-  file, which is now the wrapper; read a procedure with `somi_skill`.
-- **The five largest agents are light.** `somi-planner`, `somi-discovery-analyst`, `somi-coder`,
-  `somi-reviewer` and `somi-designer` keep their role, tier note, `low` trims and write contract
-  (37 to 61 lines, from 192 to 394); their procedures moved to `role-planner`,
-  `role-discovery-analyst`, `role-coder`, `role-reviewer` and `role-designer`, which the agent loads
-  first. An agent that cannot load its role skill stops and says so.
-- Gates follow the move: the dispatch-reference and dispatch-line gates, the `/ship-loop` checkpoint
-  gate, the review-panel seat derivation, the size-tier text guards and the coder's Decision Ladder
-  check now read the flow and role skills. The size ledger entry for the planner moved with its
-  text to `skills/role-planner/SKILL.md` (402 → 354 lines); `somi-discovery-analyst` left the ledger.
-
-- **What a code loop's agents share: a run card.** `scripts/somi-card.mjs` prints, from the loop state, the
-  few facts every coder and reviewer start needs (SoMi's script path, the project, the plan files, the files in
-  scope, the baseline, the test command, which files only the orchestrator writes): under 2 KiB, byte-stable,
-  no history, so the reviewer stays independent. `/code-loop` pastes it first in every briefing. Its
-  orchestrator no longer reads or edits the iteration's code, runs its tests or reviews it, and flows that call
-  SoMi's scripts name `${CLAUDE_PLUGIN_ROOT}`, which Claude Code fills in when it loads the skill.
-- **The test suite runs in parallel, and CI splits it over four runners** (`tests/scripts/suite-plan.json`):
-  `npm test` runs its scripts half the cores at a time (`SOMI_TEST_JOBS`), runs
-  `eval-gate-micro-tasks.sh` by itself (a hidden-suite family uses 3 s of its 10 s limit and failed under
-  load), and CI runs three shards of slow scripts beside the rest (`SOMI_SUITE_SHARD`); a plan that names a
-  script `validate.sh` does not queue fails the run. CI went from 31 to under 10 minutes.
-
-### Verified live, and what it fixed
-
-Live runs on Copilot CLI 1.0.103 (`copilot --agent somi:somi -p ...` in a throwaway repo, full debug
-logs):
-
-- A one-line bug fix: `somi` loaded only the routing and dispatch skills and started `somi-flow`;
-  the runner loaded `flow-code` and started `somi-coder`, which loaded `role-coder` two levels
-  down and made the edit. The front door did no work. 1.74 AI credits for a one-line fix: each level
-  loads its own prompt and skills.
-- `/plan` across two turns: the runner stopped at the slug gate and at the planner's scope
-  decision, `somi` asked each time and stopped, and `--resume` with an answer continued the flow.
-  No decision was recorded as user-verified without an answer.
-- Fixed along the way: in `-p` mode `somi` answered checkpoints itself (Copilot tells it no user can
-  reply), `RESUME` dropped the request, and a resumed runner resolved agents for the wrong host. A
-  checkpoint now ends the dispatcher's turn even in a non-interactive session; `RESUME` keeps every
-  briefing line but `flow:`; the runner passes the briefing's `host:` to every resolve.
-
-Not verified: that a runner's subagents receive the repo's instruction files on Copilot, and a live
-run on Claude Code (the suite only). On Copilot the agent's id is `somi:somi`; `--agent somi` is
-refused.
-
-### Measured
-
-L0 (exact injected bytes, `benchmarks/usage-speed/reports/`): the `somi` front door's own context
-for `@somi /plan` falls from 53 KB to 25 KB (-53%), and over a `/ship-loop` run from 115 KB to 25 KB
-(-78%). The cost is on Claude Code's typed commands: each now injects 2 to 6% more bytes (the wrapper,
-the extra skill and agent headers, the routing rows).
-
-L2 (48 live draws on Claude Code, low tier, against 4.0.0 `f4e7cc1`; `reports/03c1f76-vs-f4e7cc1.md`):
-inconclusive on every metric. The point estimates lean worse (SoMi-arm overhead +31% time, +32% cost,
-tokens +22%, turns +7%, mostly S3), with every interval including no change; the quality guard is clear.
-Two of eight `/ship-loop` draws on S2 scored 0/31: sizing put T1 at `full` in 3 of 8 draws (4.0.0: 0 of 8,
-an estimate of about 110 lines against the 100-line limit), and a `full` run stops at the planner's
-decisions when no one answers. One of those draws also showed the main thread handing `/plan-loop` to a
-`somi-flow` subagent; the command wrappers now say a sub-workflow runs inline in the main conversation.
-
-The run card, the orchestrator limits and the script path, measured together against that 4.1.0 baseline
-(`reports/6cced12-vs-03c1f76.md`): **no measurable cost saving.** The primary metric, cost overhead, reads 0.87
-(0.70 to 1.41, inconclusive) and the SoMi arm's own cost 0.99. The transcripts show the orchestrator limits
-working (on S3 the main thread's cost fell a quarter and the coder's rose about as much: the coding moved to
-the coder) and the card saving nothing on these scenarios, whose loops rarely start a second coder or reviewer.
-The orchestrator limits and the script path stay for what they fix (the orchestrator coding, a search
-of the disk for SoMi); the card stays as the shared-context mechanism, with no measured benefit yet. L0 rises 1.3%.
 
 ## [4.0.1] — 2026-10-27 — fix: one global config for every project, merged with each repo's; config reads follow junctions and symlinks
 
