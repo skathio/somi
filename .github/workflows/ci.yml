@@ -67,8 +67,10 @@ jobs:
     with:
       library_ref: 'v2' # MUST match the uses: pin above (dual-pin invariant, D9) — same ref as publish.yml
       node_version: '24'
-      # test_command, coverage_path, scan_disable left at their documented
-      # defaults — see the comments above for why each is correct as-is.
+      # The shared test action needs coverage at coverage/lcov.info, so CI runs the
+      # same suite as `npm test` with Node's built-in coverage writing it there.
+      test_command: 'npm run test:coverage'
+      # coverage_path and scan_disable are left at their documented defaults.
 
   # Preserves the old hand-rolled `ci` job's publishability gate (D10
   # consumer-composition pattern — same shape as rogue's 4 custom jobs
