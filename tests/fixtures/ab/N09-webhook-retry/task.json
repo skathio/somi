@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Webhook deliveries are lost when a customer's endpoint has a bad moment. Add retries to drain(queue, deps) in src/deliver.mjs: a delivery that fails waits and tries again.",
+    "The wait doubles from one minute, so it is 1, 2, 4 and 8 minutes. After five failed attempts the event moves to queue.dead and stops.",
+    "A customer's answer of 4xx means they refuse the event for good, so it goes to queue.dead at once, except that 429 means try later.",
+    "Customers must keep accepting our deliveries as their integration guide in the README promises.",
+    "Time comes from deps.clock. drain handles what is due now and returns. The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N09-0d11aeb1872d1109",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add retries to webhook delivery, as the numbered statements describe. The README holds what customers were promised. Follow the conventions already in the code and change only what the ticket needs."
+}

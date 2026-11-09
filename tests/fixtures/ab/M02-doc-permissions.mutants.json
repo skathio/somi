@@ -1,0 +1,8 @@
+[
+ { "name": "admin-reads-everything", "file": "src/policy.mjs", "find": "    case 'read': return owner || share !== null || has(user, 'viewer', 'editor');", "replace": "    case 'read': return owner || share !== null || has(user, 'viewer', 'editor', 'admin');" },
+ { "name": "other-org-says-forbidden", "file": "src/docs.mjs", "find": "  if (user && user.orgId !== doc.orgId) { deny(store, action, actorId, id); return { error: fail('not_found') }; }", "replace": "  if (user && user.orgId !== doc.orgId) { deny(store, action, actorId, id); return { error: fail('forbidden') }; }" },
+ { "name": "archived-still-editable", "file": "src/policy.mjs", "find": "    case 'update': return !doc.archived && (owner", "replace": "    case 'update': return (owner" },
+ { "name": "read-share-allows-update", "file": "src/policy.mjs", "find": "share === 'edit' || has(user, 'editor')", "replace": "share !== null || has(user, 'editor')" },
+ { "name": "denial-not-recorded", "file": "src/docs.mjs", "find": "  if (!can(store, actorId, action, doc)) { deny(store, action, actorId, id); return { error: fail('forbidden') }; }", "replace": "  if (!can(store, actorId, action, doc)) return { error: fail('forbidden') };" },
+ { "name": "cross-org-share", "file": "src/docs.mjs", "find": "  if (!target || target.orgId !== doc.orgId || !['read', 'edit'].includes(level)) return fail('invalid');", "replace": "  if (!target || !['read', 'edit'].includes(level)) return fail('invalid');" }
+]

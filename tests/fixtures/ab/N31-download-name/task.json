@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Reports can be downloaded now, but the browser saves them under a meaningless name. Add downloadHeaders(report) to src/download.mjs, returning the response headers for a report, so the browser saves it under the title the customer gave it, followed by .pdf.",
+    "Customers write titles in any language and with any characters they like.",
+    "The headers include content-type application/pdf and the file's byte length as content-length. Everything else stays as it is. The new behaviour has tests in test/."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N31-46c26e4c74582d3b",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add download headers for reports, as the numbered statements describe. Follow the conventions already in the code and change only what the ticket needs."
+}

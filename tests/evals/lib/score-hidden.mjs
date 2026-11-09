@@ -109,76 +109,160 @@ function readExpect(e) {
   return Number.isInteger(total) && total >= 1 && total <= MAX_TESTS && Array.isArray(names) && names.length === total && names.every((s) => typeof s === 'string') && new Set(names).size === total ? { total, names: [...names] } : null;
 }
 
+const isPath = (v) => typeof v === 'string' && v !== '';
+const optionalString = (v) => ['undefined', 'string'].includes(typeof v);
+const validTimeout = (v) => Number.isInteger(v) && v >= 1 && v <= MAX_TIMEOUT_MS;
+function argsRefusal({ workspace, timeoutMs, taskDir, admittedHash, hiddenDir, extra, expect, ownHidden }) {
+  if (![workspace, hiddenDir].every(isPath)) return 'arguments: workspace and hiddenDir (or taskDir) must be paths';
+  if (!validTimeout(timeoutMs)) return 'arguments: timeoutMs must be an integer from 1 to 600000';
+  if (extra === null || expect === null || !optionalString(taskDir) || !optionalString(admittedHash)) return 'arguments: extraEnv, expect, taskDir or admittedHash is malformed';
+  const misplaced = ownHidden !== undefined && taskDir !== undefined && path.resolve(hiddenDir) !== path.resolve(taskDir, 'hidden');
+  if ((admittedHash !== undefined && taskDir === undefined) || misplaced) return 'arguments: admittedHash needs taskDir, and hiddenDir may only be taskDir/hidden';
+  return null;
+}
+// The arguments, checked in order before anything runs: the values the run uses, with `refusal` set when one is malformed.
+function readArgs(args) {
+  if (!plain(args)) return { refusal: 'arguments: not an object' };
+  const { workspace, timeoutMs = DEFAULT_TIMEOUT_MS, taskDir, admittedHash, hiddenDir: ownHidden } = args;
+  const hiddenDir = ownHidden ?? (typeof taskDir === 'string' ? `${taskDir}/hidden` : undefined);
+  const extra = readExtra(args.extraEnv); const expect = args.expect === undefined ? undefined : readExpect(args.expect);
+  const a = { workspace, timeoutMs, taskDir, admittedHash, hiddenDir, extra, expect, ownHidden };
+  return { ...a, refusal: argsRefusal(a) };
+}
+
+// The task's hash before the run, or a refusal when it is unreadable or changed since admission.
+function taskBefore(taskDir, admittedHash) {
+  if (taskDir === undefined) return { before: null };
+  const before = taskHash(taskDir);
+  if (!before.ok) return { refusal: `taskDir: ${before.reason}` };
+  if (admittedHash !== undefined && before.hash !== admittedHash) return { refusal: 'task material changed since admission' };
+  return { before };
+}
+
+const idOf = (p) => lst(p).split(':').slice(0, 2).join(':');
+function copyIn(from, to, name, files) {
+  fs.copyFileSync(path.join(from, name), path.join(to, name), fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(path.join(to, name), 0o444);
+  if (name.endsWith('.test.mjs')) files.push(path.join(to, name));
+}
+// A fresh 0700 directory holding a read-only copy of the suite's regular files, the child's home and the reporter. `h` keeps its path
+// for the cleanup, which runs however this ends.
+function makeHarness(h, hiddenDir) {
+  h.tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'score-')); h.tmpId = idOf(h.tmp);
+  const hid = path.join(h.tmp, 'hidden'); const home = path.join(h.tmp, 'home'); const files = []; fs.mkdirSync(hid); fs.mkdirSync(home);
+  for (const e of fs.readdirSync(hiddenDir, { withFileTypes: true })) {
+    if (e.isSymbolicLink()) return { refusal: `hiddenDir: ${tname(e.name)} is a link` };
+    if (e.isFile()) copyIn(hiddenDir, hid, e.name, files);
+  }
+  if (files.length === 0) return { refusal: 'hiddenDir: no *.test.mjs files' };
+  files.sort(); fs.writeFileSync(path.join(h.tmp, 'reporter.mjs'), REPORTER); fs.chmodSync(hid, 0o555);
+  return { hid, home, files };
+}
+
+function runSuite(h, { home, files }, { real, extra, timeoutMs }) {
+  const r = spawnSync(process.execPath, ['--test', `--test-reporter=${path.join(h.tmp, 'reporter.mjs')}`, '--test-concurrency=1', ...files], {
+    cwd: home, env: childEnv(real, home, process.env.PATH, extra), shell: false, detached: true, stdio: ['ignore', 'pipe', 'ignore'], timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: MAX_OUTPUT, windowsHide: true,
+  });
+  // `--test` runs each file in a child of its own, which a SIGKILL of the runner leaves behind: end the whole group.
+  if (r.pid) try { process.kill(-r.pid, 'SIGKILL'); } catch { /* the group is already gone */ }
+  return r;
+}
+
+// What the run did: whether the task or the harness copy changed, and how the runner ended.
+function runFlags(r, { tmp, hid, pre, before, taskDir }) {
+  const taskChanged = before !== null && (() => { const after = taskHash(taskDir); return !after.ok || after.hash !== before.hash; })();
+  const tampered = !intact(tmp, hid, pre) || taskChanged;
+  return { timedOut: r.error?.code === 'ETIMEDOUT', truncated: r.error?.code === 'ENOBUFS', crashed: !r.error && r.signal != null, tampered, taskChanged };
+}
+// Without an oracle list, the first of these that happened is the refusal.
+const oracleFault = (f) => [[f.timedOut, 'timeout'], [f.truncated, 'output: the report exceeded 8 MiB'], [f.tampered, 'task material changed during the run']].find(([on]) => on)?.[1] ?? 'run: the suite was killed';
+
+function reportText(r, truncated) {
+  const text = r.stdout ? r.stdout.toString('utf8') : '';
+  return truncated ? text.slice(0, text.lastIndexOf('\n') + 1) : text;
+}
+function readRecord(line) {
+  let rec;
+  try { rec = JSON.parse(line); } catch { throw new Fault('report: a line is not JSON'); }
+  if (!plain(rec) || typeof rec.ok !== 'boolean' || typeof rec.name !== 'string' || typeof rec.skip !== 'boolean' || typeof rec.load !== 'boolean') throw new Fault('report: a record has the wrong shape');
+  return rec;
+}
+function failedLoad(rep, rec, name, expect) {
+  if (!expect) throw new Fault(`load: a test file failed to load: ${name}`);
+  rep.loadFailed = true; rep.badFiles.add(rec.file);
+}
+function checkName(rep, rec, name, expect) {
+  if (rec.skip && !expect) throw new Fault(`skipped: a test is skipped or todo: ${name}`);
+  if (rep.got.has(name)) throw new Fault(`integrity: a test is reported twice: ${name}`);
+  if (expect && !expect.names.includes(name)) throw new Fault(`integrity: a test the oracle does not have: ${name}`);
+}
+function takeRecord(rep, rec, expect) {
+  const name = tname(rec.load ? path.basename(rec.name) : rec.name);
+  if (rec.load && !rec.ok) failedLoad(rep, rec, name, expect);
+  if (rec.kind !== 'test' || rec.load) return; // a suite, or the file's own record
+  checkName(rep, rec, name, expect);
+  rep.got.set(name, rec.ok && !rec.skip); rep.fileOf.set(name, rec.file);
+}
+// The report, one record per line. Without an oracle list a fault in it is a refusal; with one it is scored.
+function readReport(text, expect) {
+  const rep = { got: new Map(), badFiles: new Set(), fileOf: new Map(), loadFailed: false, integrity: false };
+  try {
+    const lines = text.split('\n').filter((l) => l !== '');
+    if (lines.length > MAX_TESTS) throw new Fault('report: too many records');
+    for (const line of lines) takeRecord(rep, readRecord(line), expect);
+  } catch (e) {
+    if (!(e instanceof Fault)) throw e;
+    if (!expect) return { refusal: e.message };
+    rep.integrity = true; // a candidate that adds, repeats or garbles reports is scored, never excluded
+  }
+  return rep;
+}
+
+function scored(expect, rep, flags) {
+  const good = (n) => rep.got.get(n) === true && !rep.badFiles.has(rep.fileOf.get(n));
+  const list = expect ? expect.names : [...rep.got.keys()];
+  const failed = list.filter((n) => flags.timedOut || rep.integrity || flags.tampered || !good(n));
+  const { timedOut, truncated, crashed, tampered, taskChanged } = flags;
+  return { ok: true, green: list.length - failed.length, total: list.length, failed, names: [...rep.got.keys()], timedOut, truncated, crashed, loadFailed: rep.loadFailed, integrity: rep.integrity, tampered, taskChanged };
+}
+function verdict(expect, r, flags) {
+  if (r.error && !flags.timedOut && !flags.truncated) return refuse('run: the suite could not be run');
+  if (!expect && (flags.timedOut || flags.truncated || flags.crashed || flags.tampered)) return refuse(oracleFault(flags));
+  const rep = readReport(reportText(r, flags.truncated), expect);
+  if (rep.refusal) return refuse(rep.refusal);
+  if (!expect && rep.got.size === 0) return refuse('report: the suite reported no tests');
+  return scored(expect, rep, flags);
+}
+
+// The harness directory is removed by its explicit path, and only while it is still the directory mkdtemp made, so a link swapped in is
+// not followed.
+function cleanup(h) {
+  if (h.tmp === null) return;
+  let same = false;
+  try { same = fs.lstatSync(h.tmp).isDirectory() && idOf(h.tmp) === h.tmpId; } catch { /* gone */ }
+  if (!same) return;
+  unlock(h.tmp);
+  try { fs.rmSync(h.tmp, { recursive: true, force: true }); } catch { /* disposable */ }
+}
+
 /** See the header. */
 export function scoreHidden(args) {
-  let tmp = null; let tmpId = null;
+  const h = { tmp: null, tmpId: null };
   try {
-    if (!plain(args)) return refuse('arguments: not an object');
-    const { workspace, timeoutMs = DEFAULT_TIMEOUT_MS, taskDir, admittedHash } = args;
-    const hiddenDir = args.hiddenDir ?? (typeof taskDir === 'string' ? `${taskDir}/hidden` : undefined);
-    const extra = readExtra(args.extraEnv); const expect = args.expect === undefined ? undefined : readExpect(args.expect);
-    if (![workspace, hiddenDir].every((v) => typeof v === 'string' && v !== '')) return refuse('arguments: workspace and hiddenDir (or taskDir) must be paths');
-    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) return refuse('arguments: timeoutMs must be an integer from 1 to 600000');
-    if (extra === null || expect === null || !['undefined', 'string'].includes(typeof taskDir) || !['undefined', 'string'].includes(typeof admittedHash)) return refuse('arguments: extraEnv, expect, taskDir or admittedHash is malformed');
-    if ((admittedHash !== undefined && taskDir === undefined) || (args.hiddenDir !== undefined && taskDir !== undefined && path.resolve(hiddenDir) !== path.resolve(taskDir, 'hidden'))) return refuse('arguments: admittedHash needs taskDir, and hiddenDir may only be taskDir/hidden');
-    const before = taskDir === undefined ? null : taskHash(taskDir);
-    if (before && !before.ok) return refuse(`taskDir: ${before.reason}`);
-    if (before && admittedHash !== undefined && before.hash !== admittedHash) return refuse('task material changed since admission');
-    const real = fs.realpathSync(workspace);
+    const a = readArgs(args);
+    if (a.refusal) return refuse(a.refusal);
+    const task = taskBefore(a.taskDir, a.admittedHash);
+    if (task.refusal) return refuse(task.refusal);
+    const real = fs.realpathSync(a.workspace);
     if (!fs.statSync(real).isDirectory()) return refuse('workspace: not a directory');
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'score-')); tmpId = lst(tmp).split(':').slice(0, 2).join(':');
-    const hid = path.join(tmp, 'hidden'); const home = path.join(tmp, 'home'); const files = []; fs.mkdirSync(hid); fs.mkdirSync(home);
-    for (const e of fs.readdirSync(hiddenDir, { withFileTypes: true })) {
-      if (e.isSymbolicLink()) return refuse(`hiddenDir: ${tname(e.name)} is a link`);
-      if (!e.isFile()) continue;
-      fs.copyFileSync(path.join(hiddenDir, e.name), path.join(hid, e.name), fs.constants.COPYFILE_EXCL);
-      fs.chmodSync(path.join(hid, e.name), 0o444);
-      if (e.name.endsWith('.test.mjs')) files.push(path.join(hid, e.name));
-    }
-    if (files.length === 0) return refuse('hiddenDir: no *.test.mjs files');
-    files.sort(); fs.writeFileSync(path.join(tmp, 'reporter.mjs'), REPORTER); fs.chmodSync(hid, 0o555);
-    const pre = snapshot(tmp, hid);
-    const r = spawnSync(process.execPath, ['--test', `--test-reporter=${path.join(tmp, 'reporter.mjs')}`, '--test-concurrency=1', ...files], {
-      cwd: home, env: childEnv(real, home, process.env.PATH, extra), shell: false, detached: true, stdio: ['ignore', 'pipe', 'ignore'], timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: MAX_OUTPUT, windowsHide: true,
-    });
-    // `--test` runs each file in a child of its own, which a SIGKILL of the runner leaves behind: end the whole group.
-    if (r.pid) try { process.kill(-r.pid, 'SIGKILL'); } catch { /* the group is already gone */ }
-    const taskChanged = before !== null && (() => { const after = taskHash(taskDir); return !after.ok || after.hash !== before.hash; })();
-    const tampered = !intact(tmp, hid, pre) || taskChanged;
-    const timedOut = r.error?.code === 'ETIMEDOUT'; const truncated = r.error?.code === 'ENOBUFS'; const crashed = !r.error && r.signal != null;
-    if (r.error && !timedOut && !truncated) return refuse('run: the suite could not be run');
-    if (!expect && (timedOut || truncated || crashed || tampered)) return refuse(timedOut ? 'timeout' : truncated ? 'output: the report exceeded 8 MiB' : tampered ? 'task material changed during the run' : 'run: the suite was killed');
-    let text = r.stdout ? r.stdout.toString('utf8') : '';
-    if (truncated) text = text.slice(0, text.lastIndexOf('\n') + 1);
-    const got = new Map(); const badFiles = new Set(); const fileOf = new Map(); let loadFailed = false; let integrity = false;
-    try {
-      const lines = text.split('\n').filter((l) => l !== '');
-      if (lines.length > MAX_TESTS) throw new Fault('report: too many records');
-      for (const line of lines) {
-        let rec;
-        try { rec = JSON.parse(line); } catch { throw new Fault('report: a line is not JSON'); }
-        if (!plain(rec) || typeof rec.ok !== 'boolean' || typeof rec.name !== 'string' || typeof rec.skip !== 'boolean' || typeof rec.load !== 'boolean') throw new Fault('report: a record has the wrong shape');
-        const name = tname(rec.load ? path.basename(rec.name) : rec.name);
-        if (rec.load && !rec.ok) { if (!expect) throw new Fault(`load: a test file failed to load: ${name}`); loadFailed = true; badFiles.add(rec.file); }
-        if (rec.kind !== 'test' || rec.load) continue; // a suite, or the file's own record
-        if (rec.skip && !expect) throw new Fault(`skipped: a test is skipped or todo: ${name}`);
-        if (got.has(name)) throw new Fault(`integrity: a test is reported twice: ${name}`);
-        if (expect && !expect.names.includes(name)) throw new Fault(`integrity: a test the oracle does not have: ${name}`);
-        got.set(name, rec.ok && !rec.skip); fileOf.set(name, rec.file);
-      }
-    } catch (e) {
-      if (!(e instanceof Fault)) throw e;
-      if (!expect) return refuse(e.message);
-      integrity = true; // a candidate that adds, repeats or garbles reports is scored, never excluded
-    }
-    if (!expect && got.size === 0) return refuse('report: the suite reported no tests');
-    const good = (n) => got.get(n) === true && !badFiles.has(fileOf.get(n));
-    const list = expect ? expect.names : [...got.keys()];
-    const failed = list.filter((n) => timedOut || integrity || tampered || !good(n));
-    return { ok: true, green: list.length - failed.length, total: list.length, failed, names: [...got.keys()], timedOut, truncated, crashed, loadFailed, integrity, tampered, taskChanged };
+    const harness = makeHarness(h, a.hiddenDir);
+    if (harness.refusal) return refuse(harness.refusal);
+    const pre = snapshot(h.tmp, harness.hid);
+    const r = runSuite(h, harness, { real, extra: a.extra, timeoutMs: a.timeoutMs });
+    return verdict(a.expect, r, runFlags(r, { tmp: h.tmp, hid: harness.hid, pre, before: task.before, taskDir: a.taskDir }));
   } catch {
     return refuse('run: the suite could not be run');
   } finally {
-    if (tmp !== null) { let same = false; try { const c = fs.lstatSync(tmp); same = c.isDirectory() && lst(tmp).split(':').slice(0, 2).join(':') === tmpId; } catch { /* gone */ } if (same) { unlock(tmp); try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* disposable */ } } }
+    cleanup(h);
   }
 }

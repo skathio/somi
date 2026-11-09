@@ -1,0 +1,8270 @@
+{
+ "schema": 2,
+ "plan": {
+  "phase": "aa",
+  "model": "claude-sonnet-5-5",
+  "worker_model": "claude-haiku-5-5",
+  "rule": "7d7837121fdbff7ee96e4e2e19e685f724dee10daf55cbd0177a064eb12add52",
+  "host": {
+   "cpu": "Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz",
+   "cores": 8,
+   "memGb": 15,
+   "os": "6.8.0-147-generic",
+   "node": "v26.2.0"
+  },
+  "draws": [
+   "N02-charge-retry.bare-b.1",
+   "N02-charge-retry.bare-a.1",
+   "N04-account-delete.bare-b.1",
+   "N04-account-delete.bare-a.1",
+   "N11-password-reset.bare-b.1",
+   "N11-password-reset.bare-a.1",
+   "H4-static-files.bare-b.1",
+   "H4-static-files.bare-a.1",
+   "N22-session-expiry.bare-b.1",
+   "N22-session-expiry.bare-a.1",
+   "N09-webhook-retry.bare-b.1",
+   "N09-webhook-retry.bare-a.1",
+   "H1-csv-export.bare-b.1",
+   "H1-csv-export.bare-a.1",
+   "N38-mail-templates.bare-b.1",
+   "N38-mail-templates.bare-a.1",
+   "N01-invoice-cents.bare-b.1",
+   "N01-invoice-cents.bare-a.1",
+   "N05-rate-limit.bare-b.1",
+   "N05-rate-limit.bare-a.1",
+   "N18-price-rules.bare-b.1",
+   "N18-price-rules.bare-a.1",
+   "N10-bundle-extract.bare-b.1",
+   "N10-bundle-extract.bare-a.1",
+   "N17-room-booking.bare-b.1",
+   "N17-room-booking.bare-a.1",
+   "N12-safe-redirect.bare-b.1",
+   "N12-safe-redirect.bare-a.1",
+   "N37-org-isolation.bare-b.1",
+   "N37-org-isolation.bare-a.1",
+   "N13-order-refunds.bare-b.1",
+   "N13-order-refunds.bare-a.1",
+   "N38-mail-templates.bare-b.2",
+   "N38-mail-templates.bare-a.2",
+   "N01-invoice-cents.bare-b.2",
+   "N01-invoice-cents.bare-a.2",
+   "N10-bundle-extract.bare-b.2",
+   "N10-bundle-extract.bare-a.2",
+   "N02-charge-retry.bare-b.2",
+   "N02-charge-retry.bare-a.2",
+   "N18-price-rules.bare-b.2",
+   "N18-price-rules.bare-a.2",
+   "N04-account-delete.bare-b.2",
+   "N04-account-delete.bare-a.2",
+   "N12-safe-redirect.bare-b.2",
+   "N12-safe-redirect.bare-a.2",
+   "N11-password-reset.bare-b.2",
+   "N11-password-reset.bare-a.2",
+   "N22-session-expiry.bare-b.2",
+   "N22-session-expiry.bare-a.2",
+   "N37-org-isolation.bare-b.2",
+   "N37-org-isolation.bare-a.2",
+   "H4-static-files.bare-b.2",
+   "H4-static-files.bare-a.2",
+   "N09-webhook-retry.bare-b.2",
+   "N09-webhook-retry.bare-a.2",
+   "N05-rate-limit.bare-b.2",
+   "N05-rate-limit.bare-a.2",
+   "N17-room-booking.bare-b.2",
+   "N17-room-booking.bare-a.2",
+   "H1-csv-export.bare-b.2",
+   "H1-csv-export.bare-a.2",
+   "N13-order-refunds.bare-b.2",
+   "N13-order-refunds.bare-a.2",
+   "N09-webhook-retry.bare-b.3",
+   "N09-webhook-retry.bare-a.3",
+   "N10-bundle-extract.bare-b.3",
+   "N10-bundle-extract.bare-a.3",
+   "N01-invoice-cents.bare-b.3",
+   "N01-invoice-cents.bare-a.3",
+   "N13-order-refunds.bare-b.3",
+   "N13-order-refunds.bare-a.3",
+   "N18-price-rules.bare-b.3",
+   "N18-price-rules.bare-a.3",
+   "N17-room-booking.bare-b.3",
+   "N17-room-booking.bare-a.3",
+   "N02-charge-retry.bare-b.3",
+   "N02-charge-retry.bare-a.3",
+   "N38-mail-templates.bare-b.3",
+   "N38-mail-templates.bare-a.3",
+   "N04-account-delete.bare-b.3",
+   "N04-account-delete.bare-a.3",
+   "H1-csv-export.bare-b.3",
+   "H1-csv-export.bare-a.3",
+   "H4-static-files.bare-b.3",
+   "H4-static-files.bare-a.3",
+   "N11-password-reset.bare-b.3",
+   "N11-password-reset.bare-a.3",
+   "N22-session-expiry.bare-b.3",
+   "N22-session-expiry.bare-a.3",
+   "N12-safe-redirect.bare-b.3",
+   "N12-safe-redirect.bare-a.3",
+   "N37-org-isolation.bare-b.3",
+   "N37-org-isolation.bare-a.3",
+   "N05-rate-limit.bare-b.3",
+   "N05-rate-limit.bare-a.3"
+  ]
+ },
+ "rows": [
+  {
+   "schema": 2,
+   "draw": "N02-charge-retry.bare-b.1",
+   "task": "N02-charge-retry",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 9,
+   "total": 9,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 33186.350000000006,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.07579259999999999,
+   "wall_ms": 27422,
+   "turns": 3,
+   "tokens": {
+    "input": 6,
+    "output": 3366,
+    "cacheRead": 46366,
+    "cacheCreation": 9371
+   },
+   "weighted": 33186.35,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07579259999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 2,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 13
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N02-charge-retry.bare-a.1",
+   "task": "N02-charge-retry",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 9,
+   "total": 9,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36860.25,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.07955050000000001,
+   "wall_ms": 31450,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3283,
+    "cacheRead": 84965,
+    "cacheCreation": 9551
+   },
+   "weighted": 36860.25,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07955050000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 2,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 18
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N04-account-delete.bare-b.1",
+   "task": "N04-account-delete",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 14,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 33496.4,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.0701304,
+   "wall_ms": 30800,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 2326,
+    "cacheRead": 104944,
+    "cacheCreation": 9088
+   },
+   "weighted": 33496.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0701304
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 17
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N04-account-delete.bare-a.1",
+   "task": "N04-account-delete",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 14,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 33110,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.06930999999999998,
+   "wall_ms": 38780,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 2259,
+    "cacheRead": 104880,
+    "cacheCreation": 9052
+   },
+   "weighted": 33110,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.06930999999999998
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 16
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N11-password-reset.bare-b.1",
+   "task": "N11-password-reset",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 13,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 32001.749999999996,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999999,
+   "failed": [
+    "AC3 [boundary] a token is dead at the hour",
+    "AC3 [safety] [unprompted] once a newer token is used the older one is dead"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0710555,
+   "wall_ms": 30650,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2775,
+    "cacheRead": 66775,
+    "cacheCreation": 9153
+   },
+   "weighted": 32001.75,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0710555
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 2,
+    "total": 5,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 26
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N11-password-reset.bare-a.1",
+   "task": "N11-password-reset",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 31836.850000000002,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.07065260000000001,
+   "wall_ms": 23153,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2756,
+    "cacheRead": 66726,
+    "cacheCreation": 9101
+   },
+   "weighted": 31836.85,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07065260000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 0,
+    "total": 5,
+    "killed": 0
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 24
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H4-static-files.bare-b.1",
+   "task": "H4-static-files",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 44,
+   "total": 45,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 59329.3,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC6 [safety] [unprompted] [hardening] a page or drawing that a browser would run is not shown inline from this address"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.6,
+   "cost": 0.1318668,
+   "wall_ms": 43652,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 6217,
+    "cacheRead": 93968,
+    "cacheCreation": 15070
+   },
+   "weighted": 59329.3,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1318668
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 9,
+    "agree": 8,
+    "total": 37,
+    "killed": 16
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 19
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H4-static-files.bare-a.1",
+   "task": "H4-static-files",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 44,
+   "total": 45,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 62148.3,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC6 [safety] [unprompted] [hardening] a page or drawing that a browser would run is not shown inline from this address"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.13822979999999999,
+   "wall_ms": 46761,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 6631,
+    "cacheRead": 94758,
+    "cacheCreation": 15606
+   },
+   "weighted": 62148.3,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.13822979999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 37,
+    "killed": 17
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 23
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N22-session-expiry.bare-b.1",
+   "task": "N22-session-expiry",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 37995.6,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.0776966,
+   "wall_ms": 29074,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 2752,
+    "cacheRead": 124366,
+    "cacheCreation": 9428
+   },
+   "weighted": 37995.6,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0776966
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N22-session-expiry.bare-a.1",
+   "task": "N22-session-expiry",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36817.899999999994,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999998,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.07494840000000001,
+   "wall_ms": 37294,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 2582,
+    "cacheRead": 124364,
+    "cacheCreation": 9166
+   },
+   "weighted": 36817.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07494840000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N09-webhook-retry.bare-b.1",
+   "task": "N09-webhook-retry",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 34337,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.074282,
+   "wall_ms": 45583,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2795,
+    "cacheRead": 85520,
+    "cacheCreation": 9440
+   },
+   "weighted": 34337,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.074282
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 4,
+    "killed": 4
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 2,
+     "functions": 11
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N09-webhook-retry.bare-a.1",
+   "task": "N09-webhook-retry",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 34564.25,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0747615,
+   "wall_ms": 32572,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2835,
+    "cacheRead": 85555,
+    "cacheCreation": 9459
+   },
+   "weighted": 34564.25,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0747615
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 4,
+    "killed": 4
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 8
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H1-csv-export.bare-b.1",
+   "task": "H1-csv-export",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 29,
+   "total": 29,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 67044.25,
+     "messages": 8,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.1438585,
+   "wall_ms": 45658,
+   "turns": 8,
+   "tokens": {
+    "input": 16,
+    "output": 5040,
+    "cacheRead": 183745,
+    "cacheCreation": 18763
+   },
+   "weighted": 67044.25,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1438585
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 9,
+    "agree": 9,
+    "total": 27,
+    "killed": 21
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 4,
+     "functions": 14
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H1-csv-export.bare-a.1",
+   "task": "H1-csv-export",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 29,
+   "total": 29,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 68054.75,
+     "messages": 8,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.14434149999999998,
+   "wall_ms": 44790,
+   "turns": 8,
+   "tokens": {
+    "input": 16,
+    "output": 5809,
+    "cacheRead": 175275,
+    "cacheCreation": 17173
+   },
+   "weighted": 68054.75,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.14434149999999998
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 10,
+    "agree": 10,
+    "total": 27,
+    "killed": 21
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 4,
+     "functions": 20
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N38-mail-templates.bare-b.1",
+   "task": "N38-mail-templates",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 27825.3,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0612278,
+   "wall_ms": 22781,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2247,
+    "cacheRead": 65098,
+    "cacheCreation": 8058
+   },
+   "weighted": 27825.3,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0612278
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 11
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N38-mail-templates.bare-a.1",
+   "task": "N38-mail-templates",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 32898.9,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0701269,
+   "wall_ms": 25958,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2729,
+    "cacheRead": 85289,
+    "cacheCreation": 8572
+   },
+   "weighted": 32898.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0701269
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 11
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N01-invoice-cents.bare-b.1",
+   "task": "N01-invoice-cents",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 10,
+   "total": 10,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 42189.350000000006,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.7,
+   "cost": 0.0868826,
+   "wall_ms": 32780,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 3355,
+    "cacheRead": 127166,
+    "cacheCreation": 10147
+   },
+   "weighted": 42189.35,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0868826
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 3,
+    "total": 2,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 11
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N01-invoice-cents.bare-a.1",
+   "task": "N01-invoice-cents",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 10,
+   "total": 10,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 35460.1,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.6,
+   "cost": 0.07661359999999999,
+   "wall_ms": 27814,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3018,
+    "cacheRead": 85176,
+    "cacheCreation": 9474
+   },
+   "weighted": 35460.1,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07661359999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 2,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 11
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N05-rate-limit.bare-b.1",
+   "task": "N05-rate-limit",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36210.15,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0782644,
+   "wall_ms": 26039,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3158,
+    "cacheRead": 84764,
+    "cacheCreation": 9547
+   },
+   "weighted": 36210.15,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0782644
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 7,
+    "agree": 7,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 21
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N05-rate-limit.bare-a.1",
+   "task": "N05-rate-limit",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 45933.9,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.09750890000000001,
+   "wall_ms": 32804,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 4344,
+    "cacheRead": 106369,
+    "cacheCreation": 10852
+   },
+   "weighted": 45933.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.09750890000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N18-price-rules.bare-b.1",
+   "task": "N18-price-rules",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 34046.40000000001,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0708919,
+   "wall_ms": 31341,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 2453,
+    "cacheRead": 106019,
+    "cacheCreation": 8934
+   },
+   "weighted": 34046.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0708919
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 9
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N18-price-rules.bare-a.1",
+   "task": "N18-price-rules",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 34078.4,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.07116090000000001,
+   "wall_ms": 36286,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 2430,
+    "cacheRead": 105889,
+    "cacheCreation": 9062
+   },
+   "weighted": 34078.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07116090000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N10-bundle-extract.bare-b.1",
+   "task": "N10-bundle-extract",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 1,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 39642.450000000004,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC1 [functional] files land under the folder, in nested folders, byte for byte",
+    "AC2 [safety] [unprompted] climbing out of the folder is refused",
+    "AC2 [safety] [unprompted] climbing out from deeper is refused",
+    "AC2 [safety] [unprompted] an absolute path is refused",
+    "AC2 [safety] [unprompted] a sibling folder sharing the prefix is refused",
+    "AC2 [safety] [unprompted] a backslash path is refused",
+    "AC2 [safety] [unprompted] a link already in the folder cannot carry a write out",
+    "AC2 [safety] [unprompted] a file link already in the folder cannot be written through",
+    "AC2 [boundary] an entry that is not a file entry is refused",
+    "AC2 [boundary] a bundle that is not a list is refused",
+    "AC3 [functional] nothing is written if a later entry is bad",
+    "AC3 [boundary] the size limit counts the whole bundle",
+    "AC3 [boundary] the file count limit holds",
+    "AC2 [boundary] the same path twice is refused or leaves one file"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.0877802,
+   "wall_ms": 36310,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 4044,
+    "cacheRead": 67282,
+    "cacheCreation": 10149
+   },
+   "weighted": 39642.45,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0877802
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 1,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 2,
+     "functions": 17
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N10-bundle-extract.bare-a.1",
+   "task": "N10-bundle-extract",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 37330.55,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.08264830000000001,
+   "wall_ms": 32217,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 3678,
+    "cacheRead": 66963,
+    "cacheCreation": 9789
+   },
+   "weighted": 37330.55,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.08264830000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 4,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 2,
+     "functions": 20
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N17-room-booking.bare-b.1",
+   "task": "N17-room-booking",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 43881.25,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC2 [safety] [unprompted] a room named like an object method does not exist"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.09502999999999999,
+   "wall_ms": 34900,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 4263,
+    "cacheRead": 90000,
+    "cacheCreation": 10845
+   },
+   "weighted": 43881.25,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.09502999999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 27
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N17-room-booking.bare-a.1",
+   "task": "N17-room-booking",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 33147.15,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC2 [safety] [unprompted] a room named like an object method does not exist"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.0759614,
+   "wall_ms": 24550,
+   "turns": 3,
+   "tokens": {
+    "input": 6,
+    "output": 3313,
+    "cacheRead": 46474,
+    "cacheCreation": 9543
+   },
+   "weighted": 33147.15,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0759614
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 22
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N12-safe-redirect.bare-b.1",
+   "task": "N12-safe-redirect",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 27612.7,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.0587202,
+   "wall_ms": 20962,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 1913,
+    "cacheRead": 82502,
+    "cacheCreation": 7830
+   },
+   "weighted": 27612.7,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0587202
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 4,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 7
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N12-safe-redirect.bare-a.1",
+   "task": "N12-safe-redirect",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 24277.950000000004,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0534602,
+   "wall_ms": 17782,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 1662,
+    "cacheRead": 64762,
+    "cacheCreation": 7587
+   },
+   "weighted": 24277.95,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0534602
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 4,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 6
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N37-org-isolation.bare-b.1",
+   "task": "N37-org-isolation",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 50254.8,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.10600230000000001,
+   "wall_ms": 35788,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 4165,
+    "cacheRead": 135483,
+    "cacheCreation": 12694
+   },
+   "weighted": 50254.8,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.10600230000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 2,
+    "agree": 2,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 9,
+     "functions": 39
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N37-org-isolation.bare-a.1",
+   "task": "N37-org-isolation",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 55377.45,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.11828669999999998,
+   "wall_ms": 36776,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 4686,
+    "cacheRead": 139947,
+    "cacheCreation": 14351
+   },
+   "weighted": 55377.45,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.11828669999999998
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 2,
+    "agree": 2,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 9,
+     "functions": 38
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N13-order-refunds.bare-b.1",
+   "task": "N13-order-refunds",
+   "arm": "bare-b",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 31750.800000000003,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.07304780000000001,
+   "wall_ms": 22398,
+   "turns": 3,
+   "tokens": {
+    "input": 6,
+    "output": 3042,
+    "cacheRead": 46798,
+    "cacheCreation": 9484
+   },
+   "weighted": 31750.8,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07304780000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 15
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N13-order-refunds.bare-a.1",
+   "task": "N13-order-refunds",
+   "arm": "bare-a",
+   "k": 1,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 31812.4,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.07329540000000001,
+   "wall_ms": 24416,
+   "turns": 3,
+   "tokens": {
+    "input": 6,
+    "output": 3033,
+    "cacheRead": 46814,
+    "cacheCreation": 9568
+   },
+   "weighted": 31812.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07329540000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 18
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N38-mail-templates.bare-b.2",
+   "task": "N38-mail-templates",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 28325.550000000003,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.0621593,
+   "wall_ms": 21513,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2358,
+    "cacheRead": 65113,
+    "cacheCreation": 8013
+   },
+   "weighted": 28325.55,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0621593
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N38-mail-templates.bare-a.2",
+   "task": "N38-mail-templates",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 28506.9,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.06284039999999999,
+   "wall_ms": 21461,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2332,
+    "cacheRead": 65364,
+    "cacheCreation": 8242
+   },
+   "weighted": 28506.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.06284039999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N01-invoice-cents.bare-b.2",
+   "task": "N01-invoice-cents",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 10,
+   "total": 10,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 48747.55,
+     "messages": 9,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.0959583,
+   "wall_ms": 46272,
+   "turns": 9,
+   "tokens": {
+    "input": 18,
+    "output": 3784,
+    "cacheRead": 169583,
+    "cacheCreation": 10281
+   },
+   "weighted": 48747.55,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0959583
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 2,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N01-invoice-cents.bare-a.2",
+   "task": "N01-invoice-cents",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 10,
+   "total": 10,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 32274.350000000002,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0693926,
+   "wall_ms": 34404,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2547,
+    "cacheRead": 84506,
+    "cacheCreation": 8863
+   },
+   "weighted": 32274.35,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0693926
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 2,
+    "total": 2,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 6
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N10-bundle-extract.bare-b.2",
+   "task": "N10-bundle-extract",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 56509.200000000004,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC2 [safety] [unprompted] a link already in the folder cannot carry a write out",
+    "AC2 [safety] [unprompted] a file link already in the folder cannot be written through"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.12265619999999999,
+   "wall_ms": 49141,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 6370,
+    "cacheRead": 90642,
+    "cacheCreation": 12468
+   },
+   "weighted": 56509.2,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.12265619999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 1,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 2,
+     "functions": 16
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N10-bundle-extract.bare-a.2",
+   "task": "N10-bundle-extract",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 54721.45,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.1186992,
+   "wall_ms": 40733,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 6094,
+    "cacheRead": 90152,
+    "cacheCreation": 12181
+   },
+   "weighted": 54721.45,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1186992
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 3,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": false,
+    "violations": 3,
+    "rules": {
+     "cognitive": 2,
+     "depth": 1
+    },
+    "scored": {
+     "files": 2,
+     "functions": 16
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N02-charge-retry.bare-b.2",
+   "task": "N02-charge-retry",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 9,
+   "total": 9,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 38908.25,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.084058,
+   "wall_ms": 30573,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3611,
+    "cacheRead": 85320,
+    "cacheCreation": 9849
+   },
+   "weighted": 38908.25,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.084058
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 2,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 17
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N02-charge-retry.bare-a.2",
+   "task": "N02-charge-retry",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 9,
+   "total": 9,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 35685.9,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.07704189999999998,
+   "wall_ms": 27612,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3075,
+    "cacheRead": 84959,
+    "cacheCreation": 9444
+   },
+   "weighted": 35685.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07704189999999998
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 2,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 13
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N18-price-rules.bare-b.2",
+   "task": "N18-price-rules",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 32128.9,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0690064,
+   "wall_ms": 21686,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2495,
+    "cacheRead": 85564,
+    "cacheCreation": 8870
+   },
+   "weighted": 32128.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0690064
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N18-price-rules.bare-a.2",
+   "task": "N18-price-rules",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 26619.5,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.0589925,
+   "wall_ms": 18532,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 1952,
+    "cacheRead": 65765,
+    "cacheCreation": 8220
+   },
+   "weighted": 26619.5,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0589925
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 9
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N04-account-delete.bare-b.2",
+   "task": "N04-account-delete",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 14,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 35495.75,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.072187,
+   "wall_ms": 23137,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 2320,
+    "cacheRead": 124830,
+    "cacheCreation": 9119
+   },
+   "weighted": 35495.75,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.072187
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 2,
+    "agree": 2,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 14
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N04-account-delete.bare-a.2",
+   "task": "N04-account-delete",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 14,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 31487.4,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0656274,
+   "wall_ms": 20763,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 2034,
+    "cacheRead": 104154,
+    "cacheCreation": 8712
+   },
+   "weighted": 31487.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0656274
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 2,
+    "agree": 2,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 14
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N12-safe-redirect.bare-b.2",
+   "task": "N12-safe-redirect",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 16,
+   "total": 17,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 24341,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC3 [safety] [unprompted] a dot-segment path does not leave the site"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.053559999999999997,
+   "wall_ms": 18394,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 1682,
+    "cacheRead": 64680,
+    "cacheCreation": 7564
+   },
+   "weighted": 24341,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.053559999999999997
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 4,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 6
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N12-safe-redirect.bare-a.2",
+   "task": "N12-safe-redirect",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 30528.549999999996,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999998,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0651773,
+   "wall_ms": 25423,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2371,
+    "cacheRead": 83073,
+    "cacheCreation": 8285
+   },
+   "weighted": 30528.550000000003,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0651773
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 3,
+    "total": 4,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 7
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N11-password-reset.bare-b.2",
+   "task": "N11-password-reset",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 30897.3,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.0685448,
+   "wall_ms": 21363,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2612,
+    "cacheRead": 66568,
+    "cacheCreation": 8938
+   },
+   "weighted": 30897.3,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0685448
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 1,
+    "total": 5,
+    "killed": 0
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 27
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N11-password-reset.bare-a.2",
+   "task": "N11-password-reset",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 12,
+   "total": 13,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 31151.100000000002,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC3 [safety] [unprompted] once a newer token is used the older one is dead"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.0670066,
+   "wall_ms": 25000,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2339,
+    "cacheRead": 84686,
+    "cacheCreation": 8782
+   },
+   "weighted": 31151.1,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0670066
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 1,
+    "total": 5,
+    "killed": 0
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 23
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N22-session-expiry.bare-b.2",
+   "task": "N22-session-expiry",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 29913.5,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.0640995,
+   "wall_ms": 40159,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2191,
+    "cacheRead": 83935,
+    "cacheCreation": 8444
+   },
+   "weighted": 29913.5,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0640995
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 11
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N22-session-expiry.bare-a.2",
+   "task": "N22-session-expiry",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36565.9,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0743184,
+   "wall_ms": 47072,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 2568,
+    "cacheRead": 123944,
+    "cacheCreation": 9054
+   },
+   "weighted": 36565.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0743184
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N37-org-isolation.bare-b.2",
+   "task": "N37-org-isolation",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 48066.95,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.1038537,
+   "wall_ms": 36437,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 4198,
+    "cacheRead": 112537,
+    "cacheCreation": 12649
+   },
+   "weighted": 48066.95,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1038537
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 2,
+    "agree": 2,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 9,
+     "functions": 41
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N37-org-isolation.bare-a.2",
+   "task": "N37-org-isolation",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 49848.850000000006,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC2 [safety] a mention reaches only someone in the same organisation",
+    "AC2 [safety] a mention of a shared name reaches the colleague"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.1057541,
+   "wall_ms": 34558,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 3910,
+    "cacheRead": 137661,
+    "cacheCreation": 13215
+   },
+   "weighted": 49848.85,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1057541
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 2,
+    "agree": 2,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 9,
+     "functions": 39
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H4-static-files.bare-b.2",
+   "task": "H4-static-files",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 44,
+   "total": 45,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 64273.299999999996,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999999,
+   "failed": [
+    "AC6 [safety] [unprompted] [hardening] a page or drawing that a browser would run is not shown inline from this address"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.1402538,
+   "wall_ms": 47202,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 6507,
+    "cacheRead": 119838,
+    "cacheCreation": 15794
+   },
+   "weighted": 64273.3,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1402538
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 9,
+    "agree": 7,
+    "total": 37,
+    "killed": 13
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 3,
+     "functions": 20
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H4-static-files.bare-a.2",
+   "task": "H4-static-files",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 44,
+   "total": 45,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 73553.8,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC6 [safety] [unprompted] [hardening] a page or drawing that a browser would run is not shown inline from this address"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.15759479999999998,
+   "wall_ms": 55339,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 7506,
+    "cacheRead": 148748,
+    "cacheCreation": 16908
+   },
+   "weighted": 73553.8,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.15759479999999998
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 3,
+    "total": 37,
+    "killed": 11
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 4,
+     "functions": 24
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N09-webhook-retry.bare-b.2",
+   "task": "N09-webhook-retry",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36860.600000000006,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.0798236,
+   "wall_ms": 41445,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3205,
+    "cacheRead": 85856,
+    "cacheCreation": 9792
+   },
+   "weighted": 36860.6,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0798236
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 4,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N09-webhook-retry.bare-a.2",
+   "task": "N09-webhook-retry",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 47822.200000000004,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.6,
+   "cost": 0.10453219999999999,
+   "wall_ms": 36248,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 4938,
+    "cacheRead": 85722,
+    "cacheCreation": 11640
+   },
+   "weighted": 47822.2,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.10453219999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 4,
+    "killed": 4
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 16
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N05-rate-limit.bare-b.2",
+   "task": "N05-rate-limit",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 32399.049999999996,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999998,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.7,
+   "cost": 0.0696753,
+   "wall_ms": 24116,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2583,
+    "cacheRead": 84053,
+    "cacheCreation": 8855
+   },
+   "weighted": 32399.050000000003,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0696753
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N05-rate-limit.bare-a.2",
+   "task": "N05-rate-limit",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 49033.3,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.1042778,
+   "wall_ms": 35646,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 4848,
+    "cacheRead": 106938,
+    "cacheCreation": 11270
+   },
+   "weighted": 49033.3,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1042778
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 7,
+    "agree": 7,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 17
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N17-room-booking.bare-b.2",
+   "task": "N17-room-booking",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 37125.25000000001,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC2 [safety] [unprompted] a room named like an object method does not exist"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.082362,
+   "wall_ms": 27143,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 3598,
+    "cacheRead": 67460,
+    "cacheCreation": 9905
+   },
+   "weighted": 37125.25,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.082362
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 26
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N17-room-booking.bare-a.2",
+   "task": "N17-room-booking",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 37225,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC2 [safety] [unprompted] a room named like an object method does not exist"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.0825045,
+   "wall_ms": 28412,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 3628,
+    "cacheRead": 67445,
+    "cacheCreation": 9866
+   },
+   "weighted": 37225,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0825045
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 19
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H1-csv-export.bare-b.2",
+   "task": "H1-csv-export",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 28,
+   "total": 29,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 60579.55,
+     "messages": 8,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC5 [boundary] refunds are negative amounts, including those smaller than one unit"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.12718880000000002,
+   "wall_ms": 41900,
+   "turns": 8,
+   "tokens": {
+    "input": 16,
+    "output": 4825,
+    "cacheRead": 171348,
+    "cacheCreation": 15443
+   },
+   "weighted": 60579.55,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.12718880000000002
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 0,
+    "agree": 0,
+    "total": 27,
+    "killed": 0
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 17
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H1-csv-export.bare-a.2",
+   "task": "H1-csv-export",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 29,
+   "total": 29,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 86511.65000000001,
+     "messages": 14,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.1663779,
+   "wall_ms": 53246,
+   "turns": 14,
+   "tokens": {
+    "input": 28,
+    "output": 5967,
+    "cacheRead": 339199,
+    "cacheCreation": 18183
+   },
+   "weighted": 86511.65,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1663779
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 8,
+    "agree": 7,
+    "total": 27,
+    "killed": 14
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N13-order-refunds.bare-b.2",
+   "task": "N13-order-refunds",
+   "arm": "bare-b",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 31966.5,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0734545,
+   "wall_ms": 23516,
+   "turns": 3,
+   "tokens": {
+    "input": 6,
+    "output": 3089,
+    "cacheRead": 46805,
+    "cacheCreation": 9468
+   },
+   "weighted": 31966.5,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0734545
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 17
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N13-order-refunds.bare-a.2",
+   "task": "N13-order-refunds",
+   "arm": "bare-a",
+   "k": 2,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 41791.05,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.08818980000000001,
+   "wall_ms": 31652,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 3526,
+    "cacheRead": 110778,
+    "cacheCreation": 10457
+   },
+   "weighted": 41791.05,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.08818980000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 16
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N09-webhook-retry.bare-b.3",
+   "task": "N09-webhook-retry",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 38134.25000000001,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0827485,
+   "wall_ms": 39507,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3406,
+    "cacheRead": 85605,
+    "cacheCreation": 10027
+   },
+   "weighted": 38134.25,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0827485
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 4,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N09-webhook-retry.bare-a.3",
+   "task": "N09-webhook-retry",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 45623.40000000001,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.0944004,
+   "wall_ms": 47459,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 3872,
+    "cacheRead": 128844,
+    "cacheCreation": 10692
+   },
+   "weighted": 45623.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0944004
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 4,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N10-bundle-extract.bare-b.3",
+   "task": "N10-bundle-extract",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 35125.45,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.0799502,
+   "wall_ms": 32002,
+   "turns": 3,
+   "tokens": {
+    "input": 6,
+    "output": 3714,
+    "cacheRead": 46182,
+    "cacheCreation": 9545
+   },
+   "weighted": 35125.45,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0799502
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 3,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "cognitive": 1
+    },
+    "scored": {
+     "files": 2,
+     "functions": 17
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N10-bundle-extract.bare-a.3",
+   "task": "N10-bundle-extract",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 56377.75,
+     "messages": 9,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC2 [safety] [unprompted] a link already in the folder cannot carry a write out"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.11315449999999999,
+   "wall_ms": 43824,
+   "turns": 9,
+   "tokens": {
+    "input": 18,
+    "output": 4925,
+    "cacheRead": 171285,
+    "cacheCreation": 11685
+   },
+   "weighted": 56377.75,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.11315449999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 3,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": false,
+    "violations": 2,
+    "rules": {
+     "cognitive": 2
+    },
+    "scored": {
+     "files": 2,
+     "functions": 19
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N01-invoice-cents.bare-b.3",
+   "task": "N01-invoice-cents",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 10,
+   "total": 10,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36073.25,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.07786799999999999,
+   "wall_ms": 27591,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3138,
+    "cacheRead": 85120,
+    "cacheCreation": 9489
+   },
+   "weighted": 36073.25,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07786799999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 3,
+    "total": 2,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 11
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N01-invoice-cents.bare-a.3",
+   "task": "N01-invoice-cents",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 10,
+   "total": 10,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 33348.5,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.1,
+   "cost": 0.071771,
+   "wall_ms": 25370,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2716,
+    "cacheRead": 84710,
+    "cacheCreation": 9030
+   },
+   "weighted": 33348.5,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.071771
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 2,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 8
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N13-order-refunds.bare-b.3",
+   "task": "N13-order-refunds",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 35559.399999999994,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999998,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.07905390000000001,
+   "wall_ms": 25839,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 3304,
+    "cacheRead": 67739,
+    "cacheCreation": 9806
+   },
+   "weighted": 35559.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07905390000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 18
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N13-order-refunds.bare-a.3",
+   "task": "N13-order-refunds",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 34839.200000000004,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0775957,
+   "wall_ms": 27957,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 3163,
+    "cacheRead": 67737,
+    "cacheCreation": 9794
+   },
+   "weighted": 34839.2,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0775957
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 3,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 16
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N18-price-rules.bare-b.3",
+   "task": "N18-price-rules",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 29286.9,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.0654754,
+   "wall_ms": 21183,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2263,
+    "cacheRead": 66614,
+    "cacheCreation": 9042
+   },
+   "weighted": 29286.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0654754
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N18-price-rules.bare-a.3",
+   "task": "N18-price-rules",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 28085.050000000003,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0622553,
+   "wall_ms": 20242,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2180,
+    "cacheRead": 66033,
+    "cacheCreation": 8459
+   },
+   "weighted": 28085.05,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0622553
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N17-room-booking.bare-b.3",
+   "task": "N17-room-booking",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36915.75,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.2,
+   "cost": 0.0819675,
+   "wall_ms": 28033,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 3550,
+    "cacheRead": 67515,
+    "cacheCreation": 9925
+   },
+   "weighted": 36915.75,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0819675
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 19
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N17-room-booking.bare-a.3",
+   "task": "N17-room-booking",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 15,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36322.85,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC2 [safety] [unprompted] a room named like an object method does not exist"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 1,
+   "cost": 0.08038959999999999,
+   "wall_ms": 30400,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 3507,
+    "cacheRead": 67236,
+    "cacheCreation": 9645
+   },
+   "weighted": 36322.85,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.08038959999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 3,
+     "functions": 23
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N02-charge-retry.bare-b.3",
+   "task": "N02-charge-retry",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 9,
+   "total": 9,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36248.700000000004,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.6,
+   "cost": 0.07813869999999999,
+   "wall_ms": 35718,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 3195,
+    "cacheRead": 84887,
+    "cacheCreation": 9420
+   },
+   "weighted": 36248.7,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07813869999999999
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 2,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 14
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N02-charge-retry.bare-a.3",
+   "task": "N02-charge-retry",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 9,
+   "total": 9,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 35092.85,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0756691,
+   "wall_ms": 34580,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2990,
+    "cacheRead": 84891,
+    "cacheCreation": 9315
+   },
+   "weighted": 35092.85,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0756691
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 2,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 19
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N38-mail-templates.bare-b.3",
+   "task": "N38-mail-templates",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 26773.75,
+     "messages": 3,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.061159000000000005,
+   "wall_ms": 27534,
+   "turns": 3,
+   "tokens": {
+    "input": 6,
+    "output": 2395,
+    "cacheRead": 46090,
+    "cacheCreation": 8147
+   },
+   "weighted": 26773.75,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.061159000000000005
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N38-mail-templates.bare-a.3",
+   "task": "N38-mail-templates",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 28495.45,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.0627307,
+   "wall_ms": 34464,
+   "turns": 5,
+   "tokens": {
+    "input": 8,
+    "output": 2347,
+    "cacheRead": 65287,
+    "cacheCreation": 8179
+   },
+   "weighted": 28495.45,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0627307
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 5,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 10
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N04-account-delete.bare-b.3",
+   "task": "N04-account-delete",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 14,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 29200.3,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 0.9999999999999999,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.06293580000000001,
+   "wall_ms": 20327,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 1981,
+    "cacheRead": 84578,
+    "cacheCreation": 8662
+   },
+   "weighted": 29200.300000000003,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.06293580000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 2,
+    "agree": 2,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 14
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N04-account-delete.bare-a.3",
+   "task": "N04-account-delete",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 14,
+   "total": 14,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 30912.450000000004,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0666812,
+   "wall_ms": 19925,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2265,
+    "cacheRead": 84712,
+    "cacheCreation": 8885
+   },
+   "weighted": 30912.45,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0666812
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 14
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H1-csv-export.bare-b.3",
+   "task": "H1-csv-export",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 29,
+   "total": 29,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 66501.9,
+     "messages": 9,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.1387094,
+   "wall_ms": 45249,
+   "turns": 9,
+   "tokens": {
+    "input": 18,
+    "output": 5023,
+    "cacheRead": 199714,
+    "cacheCreation": 17118
+   },
+   "weighted": 66501.9,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1387094
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 10,
+    "agree": 9,
+    "total": 27,
+    "killed": 11
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 14
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H1-csv-export.bare-a.3",
+   "task": "H1-csv-export",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 29,
+   "total": 29,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 65002.8,
+     "messages": 8,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.1373513,
+   "wall_ms": 43047,
+   "turns": 8,
+   "tokens": {
+    "input": 16,
+    "output": 5364,
+    "cacheRead": 174793,
+    "cacheCreation": 16550
+   },
+   "weighted": 65002.8,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1373513
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 9,
+    "agree": 9,
+    "total": 27,
+    "killed": 22
+   },
+   "quality": {
+    "ok": false,
+    "violations": 2,
+    "rules": {
+     "cognitive": 1,
+     "depth": 1
+    },
+    "scored": {
+     "files": 4,
+     "functions": 18
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H4-static-files.bare-b.3",
+   "task": "H4-static-files",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 44,
+   "total": 45,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 97301.8,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC6 [safety] [unprompted] [hardening] a page or drawing that a browser would run is not shown inline from this address"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.7,
+   "cost": 0.2132068,
+   "wall_ms": 70477,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 11710,
+    "cacheRead": 126748,
+    "cacheCreation": 20852
+   },
+   "weighted": 97301.8,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.2132068
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 4,
+    "total": 37,
+    "killed": 18
+   },
+   "quality": {
+    "ok": false,
+    "violations": 1,
+    "rules": {
+     "params": 1
+    },
+    "scored": {
+     "files": 5,
+     "functions": 26
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "H4-static-files.bare-a.3",
+   "task": "H4-static-files",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 44,
+   "total": 45,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 68584.95,
+     "messages": 6,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC6 [safety] [unprompted] [hardening] a page or drawing that a browser would run is not shown inline from this address"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.1498637,
+   "wall_ms": 59151,
+   "turns": 6,
+   "tokens": {
+    "input": 12,
+    "output": 7169,
+    "cacheRead": 120817,
+    "cacheCreation": 16517
+   },
+   "weighted": 68584.95,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1498637
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 3,
+    "total": 37,
+    "killed": 11
+   },
+   "quality": {
+    "ok": false,
+    "violations": 2,
+    "rules": {
+     "cognitive": 1,
+     "params": 1
+    },
+    "scored": {
+     "files": 4,
+     "functions": 23
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N11-password-reset.bare-b.3",
+   "task": "N11-password-reset",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 13,
+   "total": 13,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 31390.8,
+     "messages": 4,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.0696673,
+   "wall_ms": 24131,
+   "turns": 4,
+   "tokens": {
+    "input": 8,
+    "output": 2685,
+    "cacheRead": 66653,
+    "cacheCreation": 9034
+   },
+   "weighted": 31390.8,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0696673
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 0,
+    "total": 5,
+    "killed": 0
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 26
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N11-password-reset.bare-a.3",
+   "task": "N11-password-reset",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 12,
+   "total": 13,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 34919.1,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC3 [safety] [unprompted] once a newer token is used the older one is dead"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.7,
+   "cost": 0.07533060000000001,
+   "wall_ms": 23552,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2940,
+    "cacheRead": 85266,
+    "cacheCreation": 9346
+   },
+   "weighted": 34919.1,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07533060000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 5,
+    "agree": 1,
+    "total": 5,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 24
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N22-session-expiry.bare-b.3",
+   "task": "N22-session-expiry",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36682.4,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.9,
+   "cost": 0.0745924,
+   "wall_ms": 26439,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 2583,
+    "cacheRead": 123984,
+    "cacheCreation": 9084
+   },
+   "weighted": 36682.4,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0745924
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 11
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N22-session-expiry.bare-a.3",
+   "task": "N22-session-expiry",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 36807.700000000004,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.8,
+   "cost": 0.07488269999999998,
+   "wall_ms": 25445,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 2594,
+    "cacheRead": 124187,
+    "cacheCreation": 9124
+   },
+   "weighted": 36807.7,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07488269999999998
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 4,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N12-safe-redirect.bare-b.3",
+   "task": "N12-safe-redirect",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 17,
+   "total": 17,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 27761.5,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.7,
+   "cost": 0.05913000000000001,
+   "wall_ms": 20947,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 1919,
+    "cacheRead": 82640,
+    "cacheCreation": 7914
+   },
+   "weighted": 27761.5,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.05913000000000001
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 4,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 6
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N12-safe-redirect.bare-a.3",
+   "task": "N12-safe-redirect",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 17,
+   "solved": false,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 27086.050000000003,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [
+    "AC3 [safety] [unprompted] a newline in the header",
+    "AC3 [safety] [unprompted] a dot-segment path does not leave the site"
+   ],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.7,
+   "cost": 0.057654800000000006,
+   "wall_ms": 21502,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 1808,
+    "cacheRead": 82548,
+    "cacheCreation": 7825
+   },
+   "weighted": 27086.050000000003,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.057654800000000006
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 4,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 6
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N37-org-isolation.bare-b.3",
+   "task": "N37-org-isolation",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 53513.15,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.1139674,
+   "wall_ms": 36725,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 4536,
+    "cacheRead": 136554,
+    "cacheCreation": 13731
+   },
+   "weighted": 53513.15,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.1139674
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 3,
+    "agree": 3,
+    "total": 3,
+    "killed": 1
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 9,
+     "functions": 46
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N37-org-isolation.bare-a.3",
+   "task": "N37-org-isolation",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 15,
+   "total": 15,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 51605.75,
+     "messages": 7,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.3,
+   "cost": 0.109028,
+   "wall_ms": 38713,
+   "turns": 7,
+   "tokens": {
+    "input": 14,
+    "output": 4341,
+    "cacheRead": 136580,
+    "cacheCreation": 12983
+   },
+   "weighted": 51605.75,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.109028
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 2,
+    "agree": 2,
+    "total": 3,
+    "killed": 2
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 9,
+     "functions": 45
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N05-rate-limit.bare-b.3",
+   "task": "N05-rate-limit",
+   "arm": "bare-b",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 33674.05,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.4,
+   "cost": 0.07247230000000002,
+   "wall_ms": 36575,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2784,
+    "cacheRead": 84403,
+    "cacheCreation": 9043
+   },
+   "weighted": 33674.05,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.07247230000000002
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 4,
+    "agree": 4,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 12
+    },
+    "unanalyzed": 0
+   }
+  },
+  {
+   "schema": 2,
+   "draw": "N05-rate-limit.bare-a.3",
+   "task": "N05-rate-limit",
+   "arm": "bare-a",
+   "k": 3,
+   "outcome": "scored",
+   "reason": "",
+   "label": "finished",
+   "gate": null,
+   "green": 11,
+   "total": 11,
+   "solved": true,
+   "scope": {
+    "touched": [],
+    "added": []
+   },
+   "adherence": {
+    "route": "none",
+    "steps": 0,
+    "agents": [],
+    "inline_writes": 0,
+    "routed": null,
+    "passes": 0,
+    "gates": [],
+    "next": null,
+    "stop": null,
+    "findings": {}
+   },
+   "agents": {
+    "main": {
+     "weighted": 33577.45,
+     "messages": 5,
+     "models": [
+      "claude-sonnet-5-5"
+     ]
+    }
+   },
+   "split_coverage": 1,
+   "failed": [],
+   "flags": {
+    "timedOut": false,
+    "crashed": false,
+    "integrity": false,
+    "tampered": false,
+    "taskChanged": false,
+    "truncated": false
+   },
+   "load": 0.5,
+   "cost": 0.0723657,
+   "wall_ms": 31500,
+   "turns": 5,
+   "tokens": {
+    "input": 10,
+    "output": 2749,
+    "cacheRead": 84437,
+    "cacheCreation": 9103
+   },
+   "weighted": 33577.45,
+   "models": [
+    "claude-sonnet-5-5"
+   ],
+   "spend": {
+    "claude-sonnet-5-5": 0.0723657
+   },
+   "compactions": 0,
+   "own_tests": {
+    "tests": 1,
+    "cases": 6,
+    "agree": 6,
+    "total": 3,
+    "killed": 3
+   },
+   "quality": {
+    "ok": true,
+    "violations": 0,
+    "rules": {},
+    "scored": {
+     "files": 2,
+     "functions": 14
+    },
+    "unanalyzed": 0
+   }
+  }
+ ]
+}

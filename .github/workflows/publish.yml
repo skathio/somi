@@ -32,7 +32,7 @@
 # to deploy the page with no npm release; this file only calls it. Order is
 # deliberate: `site` waits for `publish`, so a release's page never goes out
 # ahead of its package, and the Pages artifact (kept one day) is built after the
-# production approval rather than waiting on it. validate.sh in `version` also
+# production approval rather than waiting on it. npm test in `version` also
 # refuses a CHANGELOG release the roadmap does not cover, before anything is
 # published.
 #
@@ -40,10 +40,10 @@
 # ## `version` re-validates anyway (pass-1 review correction)
 #
 # Pre-6.2, `version`/`publish` declared `needs: ci` against a hand-rolled
-# in-file job that ran `scripts/validate.sh` + `npm publish --dry-run`
+# in-file job that ran `npm test` + `npm publish --dry-run`
 # directly. Iteration 6.2 added a SEPARATE workflow, `.github/workflows/
 # ci.yml`, which runs on every PR/push to `main` and covers both checks
-# (`validate.sh` via its `test` job's `test_command` default of `npm test`;
+# (`npm test` via its `test` job's `test_command` default of `npm test`;
 # the dry-run via its own `publish-dry-run` custom job) — see ci.yml's
 # top-of-file comment for the full enumerated comparison. The richer parts
 # of `ci.yml` (`lint`/`scan-suite`/`coverage-report`) genuinely don't need
@@ -60,7 +60,7 @@
 # (`ci.yml`'s push trigger is `branches: [main]` only, so a feature/release
 # branch tip may never have run `ci.yml` at all) or a historical commit that
 # predates `ci.yml`'s existence — neither is anything branch protection ever
-# touched. So the `version` job below re-runs `scripts/validate.sh` +
+# touched. So the `version` job below re-runs `npm test` +
 # `npm publish --dry-run` itself, against the ACTUAL dispatched ref, before
 # resolving a version or packing anything — restoring the one ref-local
 # guarantee that matters at release time, regardless of whether `ci.yml` was
@@ -74,7 +74,7 @@
 # reaches the registry — but it is a backstop, not a substitute for the
 # ref-local validation above; a human approving a deployment is not the same
 # guarantee as the dispatched ref having been mechanically checked.
-# `scripts/validate.sh` itself is NOT deleted — it remains somi's local dev
+# `npm test` itself is NOT deleted — it remains somi's local dev
 # tool (`npm test`) and is what BOTH `ci.yml`'s `test` job AND this job run;
 # only the old SEPARATE in-file `ci` job (as its own job, gating via
 # `needs:`) is retired in favor of running the same check inline here.
@@ -173,18 +173,16 @@ jobs:
       # targets. A dispatch could select a non-`main` branch tip (`ci.yml`'s
       # push trigger is `branches: [main]` only, so such a tip may never have
       # run `ci.yml` at all) or a historical commit that predates `ci.yml`'s
-      # existence. Re-running `validate.sh` + the publishability dry-run
+      # existence. Re-running `npm test` + the publishability dry-run
       # HERE, against the actual dispatched ref, restores the ref-local
       # guarantee the old in-file `ci` job's `needs:` edge used to provide —
       # not a redundant re-run of routine PR/push CI, but the one check that
       # specifically must hold for *this* ref, *this* dispatch, regardless of
       # whether `ci.yml` ever touched it. Cheap: this only runs on an actual
       # release dispatch (a few times a month), not on every PR/push.
-      # No tooling install needed: validate.sh (node-runtime-port) validates JSON via
-      # `node -e JSON.parse` and source syntax via `node --check` — no jq, no shellcheck.
-      # `node` is already provisioned by this job's setup-node (for `npm publish`).
+      # `node` is already provisioned by this job's setup-node.
       - name: Ref-local validation (restores the gate workflow_dispatch can bypass)
-        run: bash scripts/validate.sh
+        run: npm test
       - name: Ref-local publishability gate (restores the gate workflow_dispatch can bypass)
         run: npm publish --dry-run
 

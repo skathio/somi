@@ -1,0 +1,72 @@
+{
+  "version": 4,
+  "status": "decisions recorded; the task set is not bound yet",
+  "decisions": {
+    "primary_claim": "dollars per solved task, with quality held",
+    "quality_guard": "hidden-test share at -5 points, and solved rate at -20 points",
+    "tier": "sonnet is the session model and the top model of every recording; opus never runs in a benchmark",
+    "review_tier": "high is mapped to the session model in recordings, so the security reviewer runs on it and nothing here measures a stronger one",
+    "task_count_and_draws": "16 tasks; 6 draws on bare and 5.0, in separate recordings; a one-draw bare re-check with 5.0. 4.1 is not recorded: it wrote code on the Haiku low tier, so it would measure a cheap model, not a workflow (2026-11-08)",
+    "ablation_set": "review, digest and planning factorial, one draw per task and cell, plus always-on review",
+    "minimum_effect": "25% for a release, 30% for a part",
+    "budget_per_recording": "set for each run, which gets its own go-ahead",
+    "task_mix": "mixed: 5 in the band, 2 near-miss floor tasks and 9 ceiling tasks, because the claim is cost with quality held. The design wanted 4, 4 and 8. After an independent fairness review removed unfair tests, six more hard tasks were written and probed, and the session model solved nearly all of them, so only 2 fair floor tasks exist. Fixed before any draw on the set."
+  },
+  "question": "Does routing through the 5.0 coordinator cost no more than 1.5 times a bare agent per solved task, without losing quality?",
+  "primary": "dollars per solved task, somi5 over bare, on the same tasks and model, from each result's billing; tokens, time and window share are reported beside it",
+  "k": 6,
+  "aa_k": 3,
+  "pilot_k": 3,
+  "ablation_k": 1,
+  "arm_k": {
+    "bare-check": 1
+  },
+  "tasks_wanted": 16,
+  "mix": {
+    "band": 5,
+    "floor": 2,
+    "ceiling": 9
+  },
+  "min_boundary": 4,
+  "rule": {
+    "max_cost_ratio": 1.5,
+    "test_share_margin": -0.05,
+    "solved_rate_margin": -0.2,
+    "confidence": 0.95,
+    "min_effect_release": 0.25,
+    "min_effect_part": 0.3,
+    "escalated_lane_claim": "needs a positive lower bound on the hard subset"
+  },
+  "noise_floor": "A/A, bare versus bare, same tasks and k; its interval must contain zero; re-run whenever the model pin changes",
+  "solved": "finished, every hidden test green, no scorer flag, and no existing file changed outside what the task names",
+  "labels": [
+    "finished",
+    "stopped-at-gate",
+    "asked-user",
+    "timed-out",
+    "invalid"
+  ],
+  "secondary": [
+    "pass^k",
+    "pass@1",
+    "weighted tokens per solved task",
+    "wall time per solved task",
+    "main-thread turns",
+    "spend by model"
+  ],
+  "tiers": {
+    "session": "sonnet, by full model id",
+    "low": "haiku, by full model id",
+    "medium": "the session model",
+    "high": "the session model, because benchmarks never run on opus"
+  },
+  "stops": {
+    "chunk_draws": 24,
+    "window_share": 0.6,
+    "abandon_after_exhaustions": 2
+  },
+  "task_set_sha256": "a5fc161e0c910ec09a79148d2999cb3d2035e24e3901046227038fc3f31d0203",
+  "trial_k": 2,
+  "large_k": 3,
+  "tight_k": 2
+}

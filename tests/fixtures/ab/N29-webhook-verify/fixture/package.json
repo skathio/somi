@@ -1,0 +1,8 @@
+{
+  "name": "n29-webhook-verify",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

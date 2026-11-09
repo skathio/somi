@@ -2,21 +2,23 @@
 // fails when this list and the registrations disagree.
 
 export const HOOKS: Record<string, string> = {
-  'block-dangerous-bash': '**Dangerous shell:** `rm -rf /`, force-push to protected branches, `curl | sh`.',
-  'block-secret-writes': '**Secret writes:** `.env`, `*.pem`, `id_rsa`, in the write-tool shapes of both hosts.',
-  'guard-protected-paths': '**Protected paths:** `.git/`, `.claude/`, `node_modules/`.',
+  'block-dangerous-bash': '**Dangerous shell:** recursive deletes of the root or home, force-push to protected branches, piping a download into a shell, shell writes to SoMi state.',
+  'block-secret-writes': '**Secret writes:** environment files, private keys and certificates, in the write-tool shapes of both hosts.',
+  'guard-protected-paths': '**Protected paths:** `.git/`, `node_modules/`, SoMi state.',
   'gate-dep-install': '**Dependency installs** need your acknowledgement.',
-  'guard-cost-lowering': '**Cost lowering and remaps** wait for your confirmation.',
   'audit-log': '**Audit log** of every tool call in `.somi/audit.log`.',
-  'lint-changed-files': '**Lint** of the changed files.',
-  'ensure-default-config': '**Default cost config** written if missing.',
-  'detect-repo-instructions': "**Repo awareness:** the repo's own CLAUDE.md and AGENTS.md are surfaced, bounded, and a hostile folder name is never echoed.",
-  'inject-workflow-context': '**Workflow reminders** are injected on every prompt.',
+  'inject-digest': '**Rules digest and decision ledger** at session start and after compaction, with a loud warning when the sandbox is off.',
+  'apply-tier': '**Model tiers** set on every subagent, so they do not depend on an agent remembering.',
+  'reviewers-read-only': '**Reviewers stay read-only** on both hosts. The main agent and workers write freely.',
+  'capture-prompt': '**Your own words** are kept, so SoMi\'s tools read what you asked and not only the agent\'s summary of it.',
+  'review-due': '**The quality gate and a review that is due** are checked before the turn ends, once per change: code over the quality limits goes back to be fixed, and a review is asked for when the diff calls for one and none covers it.',
+  'guard-tier-config': '**Changes to the tier models or the quality limits** ask you first.',
 };
 
 export const HOOK_EVENTS: Record<string, string> = {
   PreToolUse: 'Before a tool runs',
   PostToolUse: 'After a tool runs',
   SessionStart: 'At session start',
-  UserPromptSubmit: 'On every prompt',
+  UserPromptSubmit: 'When you send a message',
+  Stop: 'Before a turn ends',
 };

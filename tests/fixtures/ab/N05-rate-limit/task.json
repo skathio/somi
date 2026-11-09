@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "A few clients are hammering the API. Limit clients to 100 requests per minute.",
+    "A client over the limit gets the service's usual error shape with status 429 and a code of rate_limited, plus a header saying how many seconds to wait.",
+    "Time comes from the clock passed to createApp. Everything that exists today keeps working exactly as it does now.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N05-6f895e29eb0863f5",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add the request limit to the service, as the numbered statements describe. Follow the conventions already in the code and repository and change only what the ticket needs."
+}

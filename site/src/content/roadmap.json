@@ -1,5 +1,5 @@
 {
-  "intro": "The first release in May 2026 had three workflows and human gates. Today SoMi has {commands} commands, cost tiers enforced at dispatch, and loops whose limits are enforced by tested scripts.",
+  "intro": "The first release in May 2026 had three workflows and human gates. 4.x grew to measure itself, and the measurements said most of the ceremony was pure cost. 5.0 keeps the parts that pay, with {commands} commands.",
   "eras": [
     {
       "label": "Where it started",
@@ -77,7 +77,7 @@
       ]
     },
     {
-      "label": "Where it is now",
+      "label": "Measuring itself",
       "entries": [
         {
           "version": "4.0.1",
@@ -113,7 +113,36 @@
           "body": "The `somi` agent no longer runs procedures itself: it picks one workflow and hands it to the `somi-flow` runner, or to `somi-general` when nothing fits, and relays the runner's questions to you as checkpoints. Every workflow's procedure is now one flow skill shared by its command and the runner, and the largest agents load their procedures from role skills. 4.1.1 lets the loops read plan files saved with CRLF on Windows and take review findings from a file."
         }
       ]
+    },
+    {
+      "label": "Where it is now",
+      "entries": [
+        {
+          "version": "5.0.0",
+          "covers": ["5.0.0"],
+          "title": "Your agent in charge, SoMi advising",
+          "major": true,
+          "highlights": [
+            {
+              "title": "Routing that costs less",
+              "items": [
+                "**Your agent holds the conversation** on medium, as a bare agent would, and asks `somi_route` for the workflow when a ticket, large work or an unclear request needs one. SoMi keeps no workflow state, so nothing refuses your next request.",
+                "**Six commands, everything else in the chat:** `/somi`, `/somi-deliver` for large work in stages, `/somi-review`, `/somi-quality`, `/somi-status` and `/somi-config`.",
+                "**Shards** connect another plugin's skill, agent or tool to a named step."
+              ]
+            },
+            {
+              "title": "Better code, measured",
+              "items": [
+                "**A quality gate** scores what a change adds for complexity, nesting, length, parameters, copies and suppressions. When a turn that changed code ends, anything over a limit goes back to be fixed, on Claude Code and Copilot CLI.",
+                "**One reviewer per change,** decided from the real diff: the security reviewer alone on a boundary.",
+                "**On the registered benchmark,** 90 of 96 draws solved against bare's 72, at 1.28x bare's cost per solved task."
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
-  "open": "These are known gaps, not commitments: `/code-parallel` is not yet measured (there is no parallel-eligible fixture), human effort and escaped defects are not measured, VS Code Copilot Chat is not a supported dispatch host, and a live check of a mapped model on Copilot CLI is still pending."
+  "open": "Routing has not yet been measured on work large enough to need it: on single-change tasks the agent rarely routes, and the router misses most bug reports written in new words. That comes next."
 }

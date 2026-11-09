@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Shops now sell in several currencies. Add cartTotal(lines, target, rates) to src/cart.mjs. Each line is { amount, currency }, in that currency's minor units. It returns { total, currency, display }, with total in the target's minor units and display from formatMoney.",
+    "rates gives the value of one major unit of a currency in US dollars, for example { USD: 1, EUR: 1.25 }. A currency missing from rates or from the currency table throws HttpError 422 unknown_currency.",
+    "The conversion rule is in the README. Amounts must display correctly for every currency in the table.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N16-4965ec5f0738067b",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add multi-currency cart totals, as the numbered statements describe. The README holds the conversion rule. Follow the conventions already in the code and change only what the ticket needs."
+}

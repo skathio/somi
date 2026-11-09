@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Our API client gives up too easily when the partner API is busy. Make send(request, deps) in src/client.mjs try again when it answers 429 or 503, following what the partner's documentation in the README says.",
+    "Time comes from deps.clock and waiting goes through deps.sleep(ms). The result stays the partner's response, and a response that will not be retried comes back as it is.",
+    "Everything that exists today keeps working exactly as it does now. The new behaviour has tests in test/."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N32-253539dea3f36411",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add retries to the API client, as the numbered statements describe. The README holds the partner's documentation. Follow the conventions already in the code and change only what the ticket needs."
+}

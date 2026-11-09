@@ -1,0 +1,20 @@
+[
+ {
+  "name": "first-forwarded-entry",
+  "file": "src/limit.mjs",
+  "find": "const ip = forwarded.split(',').at(-1).trim();",
+  "replace": "const ip = forwarded.split(',')[0].trim();"
+ },
+ {
+  "name": "any-key-is-a-bucket",
+  "file": "src/limit.mjs",
+  "find": "if (key && keys.has(key)) return `key:${key}`;",
+  "replace": "if (key) return `key:${key}`;"
+ },
+ {
+  "name": "health-counted",
+  "file": "src/app.mjs",
+  "find": "if (req.path !== '/health' && !limiter.allow(req))",
+  "replace": "if (!limiter.allow(req))"
+ }
+]

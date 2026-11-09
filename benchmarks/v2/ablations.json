@@ -1,0 +1,59 @@
+{
+  "note": "Each arm is the packed plugin with these edits applied to its private copy. The shipped plugin has no switch for turning a part off, so a project's config can never do it. Sizing is gone in 5.0, so it has no factor. Escalation is the choice between signal-fired and always-on review.",
+  "patches": {
+    "review-off": {
+      "file": "scripts/lib/reviews.mjs",
+      "find": "const empty = signals.facts.files === 0;",
+      "replace": "const empty = true;"
+    },
+    "review-always": {
+      "file": "scripts/lib/reviews.mjs",
+      "find": "else if (!empty && (fired.length > 0 || always)) agents.push(REVIEWER);",
+      "replace": "else if (!empty) agents.push(REVIEWER);"
+    },
+    "digest-off": {
+      "file": "hooks/session-start/inject-digest.mjs",
+      "find": "const parts = [fs.readFileSync(path.join(root, 'rules', 'digest.md'), 'utf8').trim()];",
+      "replace": "const parts = [];"
+    },
+    "planning-on": {
+      "file": "library/roles/build.md",
+      "find": "You build one small, clear change.",
+      "replace": "First write a short plan with a test or command that proves each milestone, and pipe it to `somi plan`. Then build it. You build one small, clear change."
+    }
+  },
+  "cells": {
+    "somi5": [],
+    "abl-review-off": [
+      "review-off"
+    ],
+    "abl-digest-off": [
+      "digest-off"
+    ],
+    "abl-planning-on": [
+      "planning-on"
+    ],
+    "abl-review-off-digest-off": [
+      "review-off",
+      "digest-off"
+    ],
+    "abl-review-off-planning-on": [
+      "review-off",
+      "planning-on"
+    ],
+    "abl-digest-off-planning-on": [
+      "digest-off",
+      "planning-on"
+    ],
+    "abl-review-off-digest-off-planning-on": [
+      "review-off",
+      "digest-off",
+      "planning-on"
+    ],
+    "abl-review-always": [
+      "review-always"
+    ]
+  },
+  "large_cells": {},
+  "large_note": "The large phases ask whether fresh context per milestone pays. The plain arm routes a long ticket to one worker, which can split it, and the lane arm asks for a plan first, the way a maintainer can."
+}

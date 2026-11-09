@@ -1,0 +1,20 @@
+[
+ {
+  "name": "no-invalidate",
+  "file": "src/admin.mjs",
+  "find": "store.cache.delete(flag.name);",
+  "replace": ""
+ },
+ {
+  "name": "bucket-ignores-flag",
+  "file": "src/flags.mjs",
+  "find": ".update(`${name}:${userId}`)",
+  "replace": ".update(`x:${userId}`)"
+ },
+ {
+  "name": "allow-beats-deny",
+  "file": "src/flags.mjs",
+  "find": "if ((flag.deny ?? []).includes(userId)) return false;\n  if ((flag.allow ?? []).includes(userId)) return true;",
+  "replace": "if ((flag.allow ?? []).includes(userId)) return true;\n  if ((flag.deny ?? []).includes(userId)) return false;"
+ }
+]

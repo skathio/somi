@@ -1,0 +1,13 @@
+Plan: 1 of 3 milestones done
+Next: invoices
+
+Last review: somi-reviewer: approve-with-comments
+
+Logged findings:
+- Minor src/a.js:3: The name is unclear.
+
+Decisions and limits:
+- decision: money is whole cents
+- constraint: no new dependencies
+
+Last check: passed (full suite)

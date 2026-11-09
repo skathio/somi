@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "We are adding CSV import and export to the product catalog in this repository over a few messages. Keep everything working as you go. The decisions below hold for all of it.",
+    "Decision A: an import is all or nothing. If any row is refused, nothing in the catalog changes, and the result is { ok: false, error: { code: 'invalid_rows', rows } }, where rows lists every refused row as { line, code } in order. line is the record number: the header is record 1, and a quoted line break does not start a new record.",
+    "Decision B: the file is untrusted. A file over 65536 bytes, or with more than 1000 rows after the header, has code too_large and changes nothing. A sku is 1 to 32 characters from A-Z, 0-9 and the dash, or the row has code invalid_sku. A name is 1 to 200 characters, or the row has code invalid_name.",
+    "Decision C: money is whole cents in integers. A price in the file is a plain decimal with at most two decimal places, such as 19.99 or 5, and it becomes cents exactly, never through floating point. Anything else has code invalid_price.",
+    "First, add importCsv(store, text) in a new src/import.mjs. The first record is the header sku,name,price,stock, or the result has code invalid_header. Fields follow RFC 4180: a field may be quoted, and a quoted field may hold commas, line breaks and doubled quotes. Lines end with LF or CRLF. A record without four fields has code invalid_row. stock is a whole number and may be negative for back orders, or the row has code invalid_stock.",
+    "A successful import adds every row and returns { ok: true, value: { added, updated } }. A sku that appears twice in one file has code duplicate on its second row, and so does a sku already in the catalog. The new behaviour has tests in test/."
+  ],
+  "turns": [
+    "Next, a sku that is already in the catalog no longer counts as a duplicate: its row replaces that product's name, price and stock, and counts as updated. A sku that appears twice in the same file is still a duplicate row.",
+    "Next, add exportCsv(store) in a new src/export.mjs. It returns the whole catalog as CSV with the same header, one product per line in sku order, each line ended by LF. Prices are written with two decimal places. A field is quoted only when it holds a comma, a quote or a line break. A name that starts with =, +, - or @ is written with a single quote in front, so a spreadsheet never runs it as a formula. The stored name does not change.",
+    "The warehouse has changed one rule. Negative stock is now refused with code invalid_stock, and a blank stock means unknown and is stored as null. An unknown stock is exported as an empty field. Change the code and the tests to match, and keep everything else as it is."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-M03-522283907fe02c13",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add CSV import and export to the product catalog over the messages that follow, treating every file as untrusted and keeping the decisions in the first message binding throughout. Follow the conventions already in the code and the README, and change only what the work needs."
+}

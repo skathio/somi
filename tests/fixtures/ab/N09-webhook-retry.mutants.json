@@ -1,0 +1,26 @@
+[
+ {
+  "name": "signs-once",
+  "file": "src/deliver.mjs",
+  "find": "const signed = signEvent(ev.payload, deps.secret, now);",
+  "replace": "const signed = ev.signed ?? (ev.signed = signEvent(ev.payload, deps.secret, now));"
+ },
+ {
+  "name": "429-is-final",
+  "file": "src/deliver.mjs",
+  "find": "status >= 400 && status < 500 && status !== 429",
+  "replace": "status >= 400 && status < 500"
+ },
+ {
+  "name": "not-doubling",
+  "file": "src/deliver.mjs",
+  "find": "ev.dueAt = now + 60000 * 2 ** (ev.attempts - 1);",
+  "replace": "ev.dueAt = now + 60000;"
+ },
+ {
+  "name": "bookkeeping-in-body",
+  "file": "src/deliver.mjs",
+  "find": "body: signed.body,",
+  "replace": "body: JSON.stringify({ ...JSON.parse(signed.body), attempts: ev.attempts }),"
+ }
+]

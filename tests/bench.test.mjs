@@ -1,0 +1,700 @@
+import { scoreOwnTests } from './evals/lib/own-tests.mjs';
+import { RESUME_PROMPT, claudeArgv, looksPaused, prepareWorkspace, runDraw } from './evals/lib/ab-draw.mjs';
+import { validateTaskJson } from './evals/lib/task-store.mjs';
+import { globalConfigPath } from '../scripts/lib/config-files.mjs';
+import { resolveSpawn } from '../scripts/lib/tiers.mjs';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { REPO, makeRepo, writeFiles } from './helpers.mjs';
+import { armSummary, callRatio, testShare, costDrawsPerArm, evaluateAa, evaluateRelease, holm, logRatio, nonInferiorityDrawsPerArm, nonInferiorityPower, pairedDifference, passDrawsPerArm, selectTasks, tCritical95, weightedTokens } from '../benchmarks/v2/stats.mjs';
+import { COST_TIE, TEST_VALIDITY_KILL, rankArms, resultScore, scoreQuality, WINDOW_ENV, WINDOW_SETTINGS, hostStop, hostWindows, pilotRows, liveCandidates, openDecisions, abandonedArms, armPrompt, armsFor, buildPlan, comparableRecordings, findLeaks, isFullModelId, isQuiet, preregProblem, servedAsPinned, sha256, streamUsage, timeoutFromPilot } from '../benchmarks/v2/bench.mjs';
+import { adherence, agentSplit, labelDraw, reviewFacts, scopeCheck } from '../benchmarks/v2/telemetry.mjs';
+
+// Three draws per task for one arm, from a list of solved counts per task. A solved draw passes all its tests, and another passes 90%.
+function drawsFor(arm, solvedCounts, { weighted = 100, missed = 1 } = {}) {
+  return solvedCounts.flatMap((solved, i) => [1, 2, 3].map((draw) => ({ task: `t${i}`, arm, draw, solved: draw <= solved, label: 'finished', green: draw <= solved ? 10 : 10 - missed, total: 10, weighted, cost: weighted / 1000, wall_ms: 1000, turns: 5 })));
+}
+const RULE = { min_tasks: 20, k: 3, aa_k: 3, max_cost_ratio: 1.5, test_share_margin: -0.05, solved_rate_margin: -0.2 };
+const twenty = (values) => Array.from({ length: 20 }, (_, i) => values[i % values.length]);
+
+test('the paired difference matches a hand calculation', () => {
+  const rows = [...drawsFor('a', [3, 2, 1, 0]), ...drawsFor('b', [2, 2, 0, 0])];
+  const d = pairedDifference(rows, ['a', 'b']);
+  assert.equal(d.n, 4);
+  assert.ok(Math.abs(d.mean - 1 / 6) < 1e-9);
+  // Differences 1/3, 0, 1/3, 0: sample sd = 1/(2*sqrt(3)*... ) computed directly below.
+  const diffs = [1 / 3, 0, 1 / 3, 0];
+  const sd = Math.sqrt(diffs.reduce((s, x) => s + (x - 1 / 6) ** 2, 0) / 3);
+  assert.ok(Math.abs(d.se - sd / 2) < 1e-9);
+  assert.ok(Math.abs(d.lower - (d.mean - 3.182 * d.se)) < 1e-9);
+});
+
+test('tasks with missing draws do not pair, and are named', () => {
+  const rows = [...drawsFor('a', [3, 2, 1]), ...drawsFor('b', [2, 2, 0]).filter((r) => !(r.task === 't2' && r.draw === 3))];
+  const d = pairedDifference(rows, ['a', 'b']);
+  assert.equal(d.n, 2);
+  assert.deepEqual(d.unpaired, ['t2']);
+});
+
+test('the t table covers small samples and falls back for large ones', () => {
+  assert.equal(tCritical95(19), 2.093);
+  assert.equal(tCritical95(200), 1.96);
+  assert.equal(tCritical95(0), Infinity);
+});
+
+test('an A/A run of identical arms contains zero; a biased instrument does not', () => {
+  assert.equal(evaluateAa([...drawsFor('bare-a', twenty([1, 2])), ...drawsFor('bare-b', twenty([2, 1]))]).contains_zero, true);
+  const biased = [...drawsFor('bare-a', twenty([3, 3, 2, 3])), ...drawsFor('bare-b', twenty([1, 0, 1, 1]))];
+  assert.equal(evaluateAa(biased).contains_zero, false);
+  assert.equal(evaluateAa([]).contains_zero, false, 'a missing floor is not a passing floor');
+});
+
+test('pass^k, pass@1 and tokens per solved task', () => {
+  const s = armSummary(drawsFor('a', [3, 1, 0]), 'a');
+  assert.ok(Math.abs(s.pass_all_k - 1 / 3) < 1e-9);
+  assert.ok(Math.abs(s.pass_at_1 - 2 / 3) < 1e-9);
+  assert.equal(s.weighted_per_solved, (9 * 100) / 4);
+  assert.equal(armSummary(drawsFor('a', [0]), 'a').weighted_per_solved, null);
+  assert.equal(weightedTokens({ input: 10, output: 1, cacheRead: 100, cacheCreation: 4 }), 10 + 5 + 10 + 5);
+});
+
+const aaOk = [...drawsFor('bare-a', twenty([1, 2])), ...drawsFor('bare-b', twenty([2, 1]))];
+const bareRows = drawsFor('bare', twenty([1, 2]), { weighted: 100 });
+
+test('the release rule ships a non-inferior, affordable lane', () => {
+  const v = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 140 })] });
+  assert.equal(v.ships, true, v.reasons.join('; '));
+  assert.ok(Math.abs(v.cost_ratio - 1.4) < 1e-9);
+});
+
+test('the release rule refuses each failure, and says which', () => {
+  const costly = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 151 })] });
+  assert.equal(costly.ships, false);
+  assert.match(costly.reasons.join(), /dollars per solved/);
+
+  const worse = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([0, 0]), { weighted: 100 })] });
+  assert.equal(worse.ships, false);
+  assert.match(worse.reasons.join(), /solved-rate/);
+
+  const thinner = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 100, missed: 5 })] });
+  assert.equal(thinner.ships, false);
+  assert.match(thinner.reasons.join(), /hidden-test share/);
+  assert.doesNotMatch(thinner.reasons.join(), /solved-rate/);
+
+  const noFloor = evaluateRelease({ rule: RULE, aa: [], main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 100 })] });
+  assert.equal(noFloor.ships, false);
+  assert.match(noFloor.reasons.join(), /A\/A/);
+
+  const small = evaluateRelease({ rule: RULE, aa: aaOk, main: [...drawsFor('bare', [1, 2, 1]), ...drawsFor('somi5', [1, 2, 1])] });
+  assert.equal(small.ships, false);
+  assert.match(small.reasons.join(), /only 3 tasks/);
+
+  const gaveUp = evaluateRelease({ rule: RULE, aa: aaOk, main: [...bareRows, ...drawsFor('somi5', twenty([1, 2]), { weighted: 100 }).map((r) => ({ ...r, abandoned: true }))] });
+  assert.equal(gaveUp.ships, false);
+  assert.match(gaveUp.reasons.join(), /no valid score/);
+});
+
+test('selection fills each part of the mix, boundary tasks first, and names shortfalls', () => {
+  const candidates = [{ id: 't0', stratum: 'a' }, { id: 't1', boundary: true, stratum: 'a' }, { id: 't2', stratum: 'a' }, { id: 't3', stratum: 'a' }, { id: 't4', stratum: 'a' }];
+  const pilot = [...drawsFor('bare', [3, 2, 0, 1]), ...drawsFor('bare', [0, 0, 0, 0, 0], { missed: 8 }).filter((r) => r.task === 't4')];
+  const picked = selectTasks(pilot, candidates, { mix: { band: 1, floor: 2, ceiling: 1 } });
+  assert.deepEqual(picked.tasks.map((t) => t.id), ['t1', 't2', 't0']);
+  assert.deepEqual(picked.shortfalls, ['1 floor tasks, 2 wanted', '1 trust-boundary tasks, 4 wanted']);
+  assert.deepEqual(picked.hardest, ['t2', 't1', 't0']);
+});
+
+test('selection lets kinds take turns', () => {
+  const candidates = [{ id: 'a1', stratum: 'a' }, { id: 'a2', stratum: 'a' }, { id: 'b1', stratum: 'b' }];
+  const rows = ['a1', 'a2', 'b1'].flatMap((task) => drawsFor('bare', [3]).map((r) => ({ ...r, task })));
+  assert.deepEqual(selectTasks(rows, candidates, { mix: { ceiling: 2 } }).tasks.map((t) => t.id), ['a1', 'b1']);
+});
+
+test('a later pilot replaces an earlier one task by task', () => {
+  const dirs = { old: [{ task: 'x', solved: false }, { task: 'y', solved: true }], new: [{ task: 'x', solved: true }] };
+  assert.deepEqual(pilotRows(['old', 'new'], (d) => dirs[d]).map((r) => [r.task, r.solved]), [['x', true], ['y', true]]);
+});
+
+test('a paid recording cannot run part of its plan, and only a pilot or a smoke can', () => {
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'aa', '--out', 'x', '--model', 'claude-x-5-5', '--budget-total', '1', '--go', '--tasks', 'a'], { encoding: 'utf8' });
+  assert.match(r.stderr, /--tasks is for a pilot, a smoke or a stub/);
+});
+
+test('the candidate plan re-checks bare with one draw', () => {
+  const plan = buildPlan('candidate', [{ id: 't', dir: 'd' }], { seed: 1, k: 6, armK: { 'bare-check': 1 } });
+  const count = (arm) => plan.filter((d) => d.arm === arm).length;
+  assert.deepEqual([count('somi5'), count('bare-check')], [6, 1]);
+});
+
+test('a benchmark never runs on opus', () => {
+  for (const flags of [['--model', 'claude-opus-5-5'], ['--model', 'claude-sonnet-5-5', '--worker-model', 'claude-opus-5-5']]) {
+    const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'pilot', '--out', 'x', ...flags, '--budget-total', '1', '--go'], { encoding: 'utf8' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /never run on opus/);
+  }
+  assert.equal(servedAsPinned(['claude-opus-5-5'], ['claude-sonnet-5-5', 'claude-haiku-5-5']), false);
+});
+
+test('the router clears a floor on the labelled set', async () => {
+  const { scoreRouter } = await import('../benchmarks/v2/routing-score.mjs');
+  const { items } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/routes.json'), 'utf8'));
+  assert.ok(items.length >= 200, `${items.length} items`);
+  assert.ok(scoreRouter(items).accuracy >= 0.8);
+});
+
+test('plans are paired, seeded and repeatable', () => {
+  const tasks = [{ id: 'a', dir: 'x/a' }, { id: 'b', dir: 'x/b' }];
+  const plan = buildPlan('candidate', tasks, { seed: 7 });
+  assert.equal(plan.length, 2 * 3 * 2);
+  assert.deepEqual(plan, buildPlan('candidate', tasks, { seed: 7 }));
+  assert.notDeepEqual(plan.map((d) => d.id), buildPlan('candidate', tasks, { seed: 8 }).map((d) => d.id));
+  assert.equal(buildPlan('baseline', tasks).length, 2 * 3, 'the baseline is bare alone');
+  assert.equal(buildPlan('aa', tasks).length, 12);
+  const round = plan.slice(0, 2).map((d) => d.task);
+  assert.equal(new Set(round).size, 1, 'all arms of a task run in the same round');
+});
+
+test('each arm gets the same plain request, so the routing is what gets measured', () => {
+  for (const arm of ['bare', 'bare-a', 'somi5', 'somi41', 'abl-review-off']) assert.equal(armPrompt(arm, 'do it'), 'do it');
+});
+
+test('a recording counts the machine as quiet only under half its cores', () => {
+  assert.equal(isQuiet(3.9, 8), true);
+  assert.equal(isQuiet(4, 8), true);
+  assert.equal(isQuiet(22.9, 8), false);
+});
+
+test('an arm is abandoned after two window exhaustions in a row', () => {
+  const hit = { arm: 'somi5', halted: 'account-limit' };
+  const ok = { arm: 'somi5', solved: true };
+  assert.equal(abandonedArms([hit]).has('somi5'), false);
+  assert.equal(abandonedArms([hit, ok, hit]).has('somi5'), false);
+  assert.equal(abandonedArms([hit, hit]).has('somi5'), true);
+});
+
+test('usage takes the last of a run of results, and adds across resumes', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-usage-'));
+  try {
+    const usage = (inputTokens) => ({ m: { inputTokens, outputTokens: 1, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } });
+    const lines = [{ type: 'result', num_turns: 2, modelUsage: usage(10) }, { type: 'result', num_turns: 1, modelUsage: usage(15) }, { type: 'assistant' }, { type: 'result', num_turns: 3, modelUsage: usage(5) }];
+    const file = path.join(dir, 's.jsonl');
+    fs.writeFileSync(file, `${lines.map((l) => JSON.stringify(l)).join('\n')}\nnot json\n`);
+    const u = streamUsage(file);
+    assert.equal(u.tokens.input, 20);
+    assert.equal(u.tokens.output, 2);
+    assert.equal(u.turns, 6);
+    assert.deepEqual(u.models, ['m']);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a resumed session reports its whole cost so far, so each session counts once at its latest result', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-usage-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const usage = (costUSD, outputTokens) => ({ m: { costUSD, inputTokens: 0, outputTokens, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } });
+  // The shape a live three-message session wrote: output 4, 8 and 12 tokens across resumes of one session.
+  const lines = [{ type: 'result', session_id: 's1', num_turns: 1, modelUsage: usage(0.1, 4) }, { type: 'user' }, { type: 'result', session_id: 's1', num_turns: 1, modelUsage: usage(0.15, 8) }, { type: 'user' }, { type: 'result', session_id: 's1', num_turns: 1, modelUsage: usage(0.18, 12) }, { type: 'user' }, { type: 'result', session_id: 's2', num_turns: 2, modelUsage: usage(0.05, 3) }];
+  const file = path.join(dir, 's.jsonl');
+  fs.writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n'));
+  const u = streamUsage(file);
+  assert.equal(u.tokens.output, 15, 'the latest of s1, plus s2');
+  assert.ok(Math.abs(u.spend.m - 0.23) < 1e-9);
+  assert.equal(u.turns, 5, 'each process reports its own turns');
+});
+
+test('registration holds only for a committed, matching task set', (t) => {
+  const repo = makeRepo(t);
+  const dir = path.join(repo, 'benchmarks', 'v2');
+  fs.mkdirSync(dir, { recursive: true });
+  assert.match(preregProblem(repo, dir), /must both exist/);
+  const set = '{"tasks":[]}\n';
+  writeFiles(dir, { 'task-set.json': set, 'prereg.json': JSON.stringify({ task_set_sha256: 'wrong' }) });
+  assert.match(preregProblem(repo, dir), /does not name/);
+  writeFiles(dir, { 'prereg.json': JSON.stringify({ task_set_sha256: sha256(set) }) });
+  assert.match(preregProblem(repo, dir), /must be committed/);
+  const git = (...a) => execFileSync('git', a, { cwd: repo, stdio: 'ignore', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } });
+  git('add', '-A');
+  git('commit', '-q', '-m', 'register');
+  assert.equal(preregProblem(repo, dir), null);
+  writeFiles(dir, { 'prereg.json': JSON.stringify({ task_set_sha256: sha256(set), note: 'edited after' }) });
+  assert.match(preregProblem(repo, dir), /uncommitted/);
+});
+
+test('a paid run refuses without --go, and the registration is sealed in the file', () => {
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'pilot', '--out', 'x', '--model', 'm', '--budget-total', '1'], { encoding: 'utf8' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--go/);
+  const prereg = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/prereg.json'), 'utf8'));
+  assert.equal(prereg.rule.test_share_margin, -0.05);
+  assert.equal(prereg.rule.solved_rate_margin, -0.2);
+  assert.equal(prereg.rule.max_cost_ratio, 1.5);
+  assert.equal(prereg.k, 6);
+  assert.equal(prereg.arm_k['bare-check'], 1);
+  assert.ok(Object.values(prereg.decisions).every((v) => typeof v === 'string'));
+});
+
+test('every candidate task exists and is well formed', () => {
+  const { tasks } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/candidates.json'), 'utf8'));
+  assert.ok(tasks.length > 0);
+  for (const task of tasks) {
+    const spec = JSON.parse(fs.readFileSync(path.join(REPO, task.dir, 'task.json'), 'utf8'));
+    assert.ok(Array.isArray(spec.statements) && spec.statements.length > 0, task.id);
+    assert.ok(fs.existsSync(path.join(REPO, task.dir, 'hidden')), task.id);
+  }
+});
+
+test('a ratio is blocked by task, and arm sets give a main effect', () => {
+  const row = (task, arm, weighted) => ({ task, arm, weighted });
+  const rows = [row('t1', 'a', 200), row('t1', 'b', 100), row('t2', 'a', 80), row('t2', 'b', 40), row('t3', 'a', 660), row('t3', 'b', 300)];
+  const r = logRatio(rows, 'a', 'b');
+  assert.equal(r.n, 3);
+  assert.ok(r.ratio > 2 && r.ratio < 2.1);
+  assert.ok(r.lower <= r.ratio && r.upper >= r.ratio);
+  const effect = logRatio([...rows, row('t1', 'c', 200), row('t2', 'c', 80), row('t3', 'c', 660), row('t1', 'd', 100), row('t2', 'd', 40), row('t3', 'd', 300)], ['a', 'c'], ['b', 'd']);
+  assert.ok(Math.abs(effect.ratio - r.ratio) < 1e-9);
+  assert.equal(logRatio([row('t1', 'a', 0), row('t1', 'b', 1)], 'a', 'b').dropped, 1);
+});
+
+test('a stopped draw scores no test share, and a ratio is called only when its whole interval clears the effect', () => {
+  assert.equal(testShare({ label: 'finished', green: 9, total: 10 }), 0.9);
+  assert.equal(testShare({ label: 'stopped-at-gate', green: 10, total: 10 }), 0);
+  assert.equal(callRatio({ ratio: 0.6, lower: 0.5, upper: 0.74 }, 0.25), 'lower');
+  assert.equal(callRatio({ ratio: 0.6, lower: 0.5, upper: 0.8 }, 0.25), 'inconclusive');
+  assert.equal(callRatio({ ratio: 1.6, lower: 1.34, upper: 2 }, 0.25), 'higher');
+  assert.equal(callRatio({ ratio: null }, 0.25), 'no estimate');
+});
+
+test('Holm stops at the first test that misses its share of alpha', () => {
+  const out = holm([{ name: 'a', p: 0.01 }, { name: 'b', p: 0.04 }, { name: 'c', p: 0.03 }]);
+  assert.deepEqual(out.map((t) => [t.name, t.significant]), [['a', true], ['c', false], ['b', false]]);
+});
+
+test('the power figures match hand calculations', () => {
+  // (1.645 + 0.842)^2 * (0.15^2 + 0.41^2) / ln(0.7)^2 = 9.3, plus 2 for the t correction, rounded up.
+  assert.equal(costDrawsPerArm({ sigmaA: 0.15, sigmaB: 0.41, effect: 0.3 }), 12);
+  assert.equal(passDrawsPerArm({ p1: 0.5, p2: 0.6 }), 385);
+  assert.equal(nonInferiorityDrawsPerArm({ margin: -0.05, sd: 0.5 }), 1571);
+  assert.ok(Math.abs(nonInferiorityPower({ margin: -0.05, drawsPerArm: 60 }) - 0.079) < 0.002);
+  assert.ok(Math.abs(nonInferiorityPower({ margin: -0.2, drawsPerArm: 99 }) - 0.8) < 0.01);
+});
+
+const line = (o) => JSON.stringify(o);
+
+test('the per-agent split joins the stream to the final figures in the transcripts', () => {
+  const stream = [
+    line({ type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', usage: { output_tokens: 1 }, content: [{ type: 'tool_use', id: 'tu1', name: 'Agent', input: { subagent_type: 'somi-reviewer', model: 'x' } }] } }),
+    line({ type: 'assistant', parent_tool_use_id: 'tu1', message: { id: 'm2', usage: { output_tokens: 1 }, content: [] } }),
+  ].join('\n');
+  const transcripts = [line({ type: 'assistant', message: { id: 'm1', model: 'x', usage: { output_tokens: 100 } } }), line({ type: 'assistant', isSidechain: true, message: { id: 'm2', model: 'x', usage: { input_tokens: 40, output_tokens: 10 } } })];
+  const { agents, coverage } = agentSplit(stream, transcripts, 1180);
+  assert.equal(agents.main.weighted, 500);
+  assert.equal(agents['somi-reviewer'].weighted, 90);
+  assert.equal(coverage, 590 / 1180);
+  assert.equal(agentSplit(stream, [], 100).coverage, 0);
+});
+
+test('adherence reads the route, the agents and the review record', () => {
+  const step = (name, input) => line({ type: 'assistant', parent_tool_use_id: null, message: { id: name, content: [{ type: 'tool_use', id: name, name, input }] } });
+  const answer = line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'mcp__somi__somi_route', content: [{ type: 'text', text: '{"route":"debug","tier":"medium"}' }] }] } });
+  const reviews = line({ pass: 1, findings: [{ severity: 'Major' }, { severity: 'Minor' }], blocking: ['x'] });
+  const a = adherence([step('mcp__somi__somi_route', {}), answer, step('Bash', { command: 'node "x/somi.mjs" review --record' }), step('Agent', { subagent_type: 'somi-reviewer', model: 'r' })].join('\n'), reviews);
+  assert.equal(a.route, 'mixed');
+  assert.equal(a.routed, 'debug');
+  assert.deepEqual(a.agents, [{ type: 'somi-reviewer', model: 'r' }]);
+  assert.equal(a.passes, 1);
+  assert.deepEqual(a.findings, { Major: 1, Minor: 1 });
+  assert.deepEqual(a.gates, ['open-blocking']);
+  assert.equal(a.next, 'ask');
+  assert.equal(adherence('', '').route, 'none');
+  assert.equal(reviewFacts('not json\n').passes, 0);
+  assert.equal(reviewFacts(line({ pass: 2, findings: [], blocking: [] })).next, null);
+});
+
+test('both arms run on the session model, and a smoke run takes named tasks only', () => {
+  const argv = claudeArgv({ arm: 'somi', prompt: 'x', budget: 1, plugin: 'p', model: 'm' });
+  assert.equal(argv[argv.indexOf('--model') + 1], 'm');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8')).patches['cheap-main'], undefined);
+  assert.deepEqual(armsFor('smoke'), ['bare', 'somi5', 'somi5-hooks', 'somi5-deliver']);
+  const hooks = claudeArgv({ arm: 'somi-hooks', prompt: 'x', budget: 1, plugin: 'p', model: 'm' });
+  assert.equal(hooks.includes('--agent'), false, 'the small path runs with no SoMi agent');
+  assert.ok(hooks.includes('--plugin-dir'));
+});
+
+test('a draw\'s own tests are scored on the reference and on its mutants', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-own-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  write('task/fixture/src/add.mjs', 'export const add = () => 0;\n');
+  write('task/fixture/test/old.test.mjs', 'import test from "node:test";\ntest("old", () => {});\n');
+  write('task/oracle/src/add.mjs', 'export const add = (a, b) => a + b;\n');
+  const task = { runner: 'node-test', test_dir: 'test' };
+  const mutants = [{ name: 'minus', file: 'src/add.mjs', find: 'a + b', replace: 'a - b' }, { name: 'gone', file: 'src/add.mjs', find: 'not there', replace: 'x' }];
+  write('ws/test/old.test.mjs', 'import test from "node:test";\ntest("old", () => {});\n');
+  const taskDir = path.join(root, 'task');
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 0 }, 'an unchanged fixture test is not the draw\'s');
+  write('ws/test/add.test.mjs', 'import test from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "../src/add.mjs";\ntest("adds", () => assert.equal(add(2, 2), 4));\n');
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 1, agree: 1, killed: 1, total: 2 });
+  write('ws/test/add.test.mjs', 'import test from "node:test";\nimport assert from "node:assert/strict";\ntest("wrong", () => assert.equal(1, 2));\n');
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 1, agree: 0, killed: 0, total: 2 }, 'a test that fails on the reference counts for nothing');
+  const mixed = 'import test from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "../src/add.mjs";\n';
+  write('ws/test/add.test.mjs', `${mixed}test("pins a detail the reference does differently", () => assert.equal(add(1, 1), 3));\ntest("adds", () => assert.equal(add(2, 2), 4));\ntest.skip("later", () => {});\n`);
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 3, agree: 1, killed: 1, total: 2 }, 'a case that disagrees with the reference, or is skipped, is left out; the agreeing case still catches the mutant');
+  write('ws/test/add.test.mjs', `${mixed}test("disagrees", () => assert.equal(add(1, 1), 3));\ntest("always passes", () => assert.ok(true));\n`);
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 2, agree: 1, killed: 0, total: 2 }, 'a mutant is killed only by a case that agreed with the reference');
+  write('task/hidden/setup.mjs', 'import fs from "node:fs";\nfs.writeFileSync(process.argv[2] + "/made.txt", "made");\n');
+  write('ws/test/add.test.mjs', `${mixed}import fs from "node:fs";\ntest("the setup ran", () => assert.equal(fs.readFileSync("made.txt", "utf8"), "made"));\n`);
+  assert.equal(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }).agree, 1, 'the task\'s setup makes its files in the reference copy first');
+  write('task/hidden/setup.mjs', 'process.exit(1);\n');
+  assert.equal(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }).error, 'setup', 'a setup that fails scores nothing');
+  fs.rmSync(path.join(root, 'task', 'hidden'), { recursive: true });
+  write('ws/test/add.test.mjs', 'this is not javascript(');
+  assert.deepEqual(scoreOwnTests({ workspace: path.join(root, 'ws'), taskDir, task, mutants }), { tests: 1, cases: 0, agree: 0, killed: 0, total: 2 }, 'a file that does not load runs no case');
+});
+
+test('every draw gets one label, and a stopped loop is never finished', () => {
+  const none = { next: null };
+  assert.deepEqual(labelDraw({ outcome: 'scored', facts: { next: 'ask', stop: 'max-passes' } }), { label: 'stopped-at-gate', gate: 'max-passes' });
+  assert.deepEqual(labelDraw({ outcome: 'over-budget', facts: none }), { label: 'stopped-at-gate', gate: 'budget' });
+  assert.equal(labelDraw({ outcome: 'invalid', reason: 'timeout', facts: none }).label, 'timed-out');
+  assert.equal(labelDraw({ outcome: 'invalid', reason: 'tampered', facts: none }).label, 'invalid');
+  assert.equal(labelDraw({ outcome: 'paused', facts: none }).label, 'asked-user');
+  assert.equal(labelDraw({ outcome: 'scored', facts: none, paused: true, changed: false }).label, 'asked-user');
+  assert.equal(labelDraw({ outcome: 'scored', facts: none, paused: true, changed: true }).label, 'finished');
+  assert.equal(labelDraw({ outcome: 'scored', facts: { next: 'close' } }).label, 'finished');
+});
+
+test('the scope check separates a touched existing file from a new stray one', () => {
+  const task = { source: ['src/'], test_dir: 'test', root_files: ['README.md'] };
+  const before = [['src/a.js', '1'], ['README.md', '2'], ['lib/keep.js', '3'], ['.somi/config.json', '4']];
+  const after = [['src/a.js', '9'], ['README.md', '8'], ['lib/keep.js', '7'], ['.somi/config.json', '6'], ['test/new.js', '5'], ['notes.md', '5'], ['.somi/state/journal.jsonl', '5']];
+  assert.deepEqual(scopeCheck(before, after, task), { touched: ['lib/keep.js'], added: ['notes.md'] });
+  assert.deepEqual(scopeCheck(before, before.slice(0, 2).concat(before[3]), task).touched, ['lib/keep.js']);
+});
+
+test('a reference solution never trips the scope check', () => {
+  const { tasks } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/candidates.json'), 'utf8'));
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  for (const t of tasks) {
+    const dir = path.join(REPO, t.dir);
+    const spec = JSON.parse(fs.readFileSync(path.join(dir, 'task.json'), 'utf8'));
+    const list = (sub) => walk(path.join(dir, sub)).map((f) => [path.relative(path.join(dir, sub), f), '1']);
+    const changed = list('oracle').map(([p]) => [p, '2']);
+    assert.deepEqual(scopeCheck(list('fixture'), [...list('fixture').filter(([p]) => !changed.some(([q]) => q === p)), ...changed], spec), { touched: [], added: [] }, t.id);
+  }
+});
+
+test('a run is pinned to a full id, and an alias or a near match is refused', () => {
+  assert.equal(isFullModelId('claude-x-5-5'), true);
+  assert.equal(isFullModelId('sonnet'), false);
+  assert.equal(servedAsPinned(['claude-x-5-5'], ['claude-x-5-5']), true);
+  assert.equal(servedAsPinned(['claude-x-5-5-20261001'], ['claude-x-5-5']), true);
+  assert.equal(servedAsPinned(['claude-x-5-5-experimental'], ['claude-x-5-5']), false);
+  assert.equal(servedAsPinned(['my-claude-x-5-5'], ['claude-x-5-5']), false);
+  assert.equal(servedAsPinned(['claude-y-5-5'], ['claude-x-5-5']), false);
+  assert.equal(servedAsPinned(['<synthetic>', 'claude-x-5-5'], ['claude-x-5-5']), true);
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'pilot', '--out', 'x', '--model', 'sonnet', '--budget-total', '1', '--go'], { encoding: 'utf8' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /full model id/);
+});
+
+test('the privacy scan names the kind and place, never the value', () => {
+  assert.deepEqual(findLeaks({ ok: 'plain', p: `${['', 'home', 'someone'].join('/')}/x` }, 'r', 'nohost'), [{ at: 'r.p', kind: 'home path' }]);
+  assert.deepEqual(findLeaks([`sk-${'a'.repeat(20)}`], 'r', 'nohost'), [{ at: 'r[0]', kind: 'token-like string' }]);
+  assert.deepEqual(findLeaks('built on my-laptop', 'r', 'my-laptop'), [{ at: 'r', kind: 'hostname' }]);
+  assert.deepEqual(findLeaks({ a: 1, b: ['fine'] }, 'r', 'nohost'), []);
+});
+
+test('the timeout comes from the pilot and leaves room for a workflow arm', () => {
+  assert.equal(timeoutFromPilot([]), null);
+  const rows = Array.from({ length: 20 }, (_, i) => ({ wall_ms: (i + 1) * 60000 }));
+  assert.deepEqual(timeoutFromPilot(rows), { bare_min: 29, workflow_min: 200 });
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'run', '--phase', 'aa', '--out', 'x', '--model', 'claude-x-5-5', '--budget-total', '1', '--go'], { encoding: 'utf8' });
+  assert.match(r.stderr, /--timeout-min is required/);
+});
+
+test('every ablation patch still matches the shipped file exactly once', () => {
+  const { patches, cells } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/ablations.json'), 'utf8'));
+  for (const [name, { file, find }] of Object.entries(patches)) assert.equal(fs.readFileSync(path.join(REPO, file), 'utf8').split(find).length, 2, name);
+  for (const [cell, list] of Object.entries(cells)) for (const name of list) assert.ok(patches[name], `${cell}: ${name}`);
+  assert.ok(armsFor('ablation').includes('bare') && armsFor('ablation').includes('somi5'));
+  assert.deepEqual(armsFor('pilot'), ['bare']);
+});
+
+test('recordings on another model or rule cannot be compared', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-compare-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const write = (name, plan) => { fs.mkdirSync(path.join(dir, name)); fs.writeFileSync(path.join(dir, name, 'plan.json'), JSON.stringify(plan)); };
+  const same = { phase: 'aa', model: 'm', review_model: null, rule: 'r', host: { cores: 8 } };
+  write('a', same);
+  write('b', { ...same, phase: 'main' });
+  write('c', { ...same, model: 'other' });
+  assert.equal(comparableRecordings(path.join(dir, 'a'), path.join(dir, 'b')), null);
+  assert.match(comparableRecordings(path.join(dir, 'a'), path.join(dir, 'c')), /differ/);
+});
+
+test('a task that failed its probe stays out of later pilots', () => {
+  assert.deepEqual(liveCandidates([{ id: 'a', retired: 'at the ceiling' }, { id: 'b' }]).map((t) => t.id), ['b']);
+});
+
+test('every candidate names a known kind of task', () => {
+  const { tasks } = JSON.parse(fs.readFileSync(path.join(REPO, 'benchmarks/v2/candidates.json'), 'utf8'));
+  const kinds = ['multi-file', 'misleading-bug', 'security', 'ambiguous-spec', 'refactor', 'planted-trap', 'algorithm', 'multi-turn'];
+  for (const t of tasks) assert.ok(kinds.includes(t.stratum), t.id);
+});
+
+test('registration refuses while a decision is open', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-prereg-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  assert.equal(openDecisions({ decisions: { tier: 'medium', budget: null } }).join(), 'budget');
+  assert.deepEqual(openDecisions({ decisions: { tier: 'medium' } }), []);
+});
+
+// The free smoke: the whole pipeline on one small real task with a stub agent. It plans, runs, scores with the real scorer, labels,
+// reports and writes the record. It spends nothing.
+function stubAgent(dir, { journal = null } = {}) {
+  const oracle = path.join(REPO, 'tests/fixtures/ab/T1-proration/oracle');
+  const events = [
+    { type: 'system', subtype: 'init', session_id: 's' },
+    { type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', model: 'stub-1', content: [{ type: 'text', text: 'Done.' }], usage: { output_tokens: 1 } } },
+    { type: 'result', subtype: 'success', session_id: 's', result: 'Done.', num_turns: 1, total_cost_usd: 0.01, modelUsage: { 'stub-1': { inputTokens: 10, outputTokens: 20, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } } },
+  ];
+  const file = path.join(dir, journal ? 'stub-gate' : 'stub');
+  const body = [
+    '#!/usr/bin/env node',
+    "const fs = require('node:fs');",
+    // The reference solution carries the task's canary, and the leak guard rightly refuses a silent copy, so the stub writes it without.
+    `for (const f of fs.readdirSync(${JSON.stringify(oracle)}, { recursive: true, withFileTypes: true })) { if (!f.isFile()) continue; const from = require('node:path').join(f.parentPath, f.name); const to = require('node:path').relative(${JSON.stringify(oracle)}, from); fs.mkdirSync(require('node:path').dirname(to), { recursive: true }); fs.writeFileSync(to, fs.readFileSync(from, 'utf8').replace(/SOMI-CANARY-[A-Za-z0-9-]+/g, '')); }`,
+    ...(journal ? [`fs.mkdirSync('.somi/state', { recursive: true }); fs.writeFileSync('.somi/state/reviews.jsonl', ${JSON.stringify(journal)});`] : []),
+    `for (const e of ${JSON.stringify(events)}) console.log(JSON.stringify(e));`,
+  ].join('\n');
+  fs.writeFileSync(file, body, { mode: 0o755 });
+  return file;
+}
+
+test('the smoke runs the whole pipeline with a stub agent, and a stopped loop does not count as solved', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-smoke-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const envFile = path.join(dir, 'eval.env');
+  fs.writeFileSync(envFile, `CLAUDE_CODE_OAUTH_TOKEN=stub-token-${sha256('smoke').slice(0, 40)}\n`, { mode: 0o600 });
+  const { CLAUDE_CODE_OAUTH_TOKEN: _drop, ...env } = process.env;
+  const bench = (args) => spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), ...args], { encoding: 'utf8', env, timeout: 120000 });
+  const common = ['--phase', 'pilot', '--model', 'stub-1', '--budget-total', '1', '--budget-draw', '0.1', '--go', '--no-sandbox', '--tasks', 'T1-proration', '--env-file', envFile];
+
+  const out = path.join(dir, 'solved');
+  const records = path.join(dir, 'records');
+  const r = bench(['record', ...common, '--claude', stubAgent(dir), '--out', out, '--write', records]);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /worst case: 3 draws/);
+  const rows = fs.readFileSync(path.join(out, 'results.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(rows.length, 3);
+  for (const row of rows) {
+    assert.equal(row.solved, true, JSON.stringify(row));
+    assert.equal(row.label, 'finished');
+    assert.deepEqual(row.scope, { touched: [], added: [] });
+    assert.equal(row.adherence.route, 'none');
+  }
+  const written = fs.readdirSync(records).sort();
+  assert.equal(written.length, 2);
+  const report = fs.readFileSync(path.join(records, written[1]), 'utf8');
+  assert.match(report, /\| bare \| 3 \| 3 \|/);
+  assert.match(report, /finished/);
+  assert.deepEqual(findLeaks(JSON.parse(fs.readFileSync(path.join(records, written[0]), 'utf8'))), []);
+
+  assert.match(bench(['run', ...common, '--claude', stubAgent(dir), '--out', out]).stdout, /ran 0 draws; 0 remain/);
+
+  const short = bench(['run', ...common.map((a) => (a === '1' ? '0.05' : a)), '--claude', stubAgent(dir), '--out', path.join(dir, 'short')]);
+  assert.equal(short.status, 1);
+  assert.match(short.stdout, /budget stop/);
+  assert.equal(fs.existsSync(path.join(dir, 'short', 'results.jsonl')), false);
+
+  const slow = path.join(dir, 'stub-slow');
+  fs.writeFileSync(slow, '#!/usr/bin/env node\nsetTimeout(() => {}, 60000);\n', { mode: 0o755 });
+  const late = path.join(dir, 'late');
+  assert.equal(bench(['run', ...common, '--claude', slow, '--timeout-min', '0.01', '--out', late]).status, 0);
+  const lateRows = fs.readFileSync(path.join(late, 'results.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(lateRows.length, 3);
+  for (const row of lateRows) {
+    assert.equal(row.label, 'timed-out');
+    assert.equal(row.solved, false);
+  }
+
+  const gated = path.join(dir, 'gated');
+  const journal = `${JSON.stringify({ pass: 2, findings: [], blocking: ['open'] })}\n`;
+  assert.equal(bench(['run', ...common, '--claude', stubAgent(dir, { journal }), '--out', gated]).status, 0);
+  for (const row of fs.readFileSync(path.join(gated, 'results.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))) {
+    assert.equal(row.green, row.total, 'the hidden suite passes');
+    assert.equal(row.solved, false, 'but the loop stopped');
+    assert.equal(row.gate, 'open-blocking');
+  }
+});
+
+test('plan prints the draws and spends nothing', () => {
+  const r = spawnSync(process.execPath, [path.join(REPO, 'benchmarks/v2/bench.mjs'), 'plan', '--phase', 'pilot'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /draws across \d+ tasks; chunks of at most 24; no spend/);
+});
+
+test('a planner asking for choices counts as paused, and a finished report does not', () => {
+  assert.equal(looksPaused('The planner needs five design decisions from you. Reply with a choice for each question, or "take the recommendations".'), true);
+  assert.equal(looksPaused('All six milestones are in, and the full suite passes. I made the decisions you listed binding.'), false);
+  assert.match(RESUME_PROMPT, /recommended option/);
+});
+
+test('a recording pins the tiers in the user layer too, because reviewers read only that', (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-bench-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const config = { tiers: { claude: { low: 'haiku', medium: 'sonnet', high: 'sonnet' } } };
+  prepareWorkspace({ taskDir: path.join(REPO, 'tests/fixtures/ab/L1-shop-platform'), tmp, config, globalConfig: config });
+  const file = globalConfigPath({ HOME: tmp }, 'linux', tmp);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), config);
+  assert.equal(resolveSpawn(JSON.parse(fs.readFileSync(file, 'utf8')), 'claude', 'high').model, 'sonnet');
+});
+
+test('the lane arm asks for a plan first, the tight phase has a small window, and compactions are counted', (t) => {
+  assert.match(armPrompt('somi5-lane', 'do it'), /plan first[\s\S]*do it/);
+  assert.equal(armPrompt('somi5-deliver', 'do it'), '/somi:somi-deliver do it', 'the user asks for the staged workflow');
+  assert.equal(armPrompt('somi5', 'do it'), 'do it');
+  assert.deepEqual(armsFor('tight'), ['bare', 'somi5', 'somi5-lane']);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-usage-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'stream.jsonl');
+  fs.writeFileSync(file, `${JSON.stringify({ type: 'system', subtype: 'compact_boundary' })}\n${JSON.stringify({ type: 'result', num_turns: 2, modelUsage: {} })}\n`);
+  assert.equal(streamUsage(file).compactions, 1);
+});
+
+test('every compaction window is one the host accepts, because it ignores any other', () => {
+  for (const { autoCompactWindow } of Object.values(WINDOW_SETTINGS)) assert.ok(autoCompactWindow >= 100000 && autoCompactWindow <= 1000000, String(autoCompactWindow));
+  const pct = Number(WINDOW_ENV.tight.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE);
+  assert.ok(pct > 0 && pct < 100);
+});
+
+test('a menu of choices counts as paused', () => {
+  assert.equal(looksPaused('**How would you like to proceed?**\n- `approve` (recommended): run the loop.\n- `revise <notes>`: send it back.\n- `abort`: stop here.'), true, 'a menu across lines is a pause');
+});
+
+test("a recording stops on the host's reported usage, and a window past its reset no longer counts", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-host-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'stream.jsonl');
+  const event = (five, week) => JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { unifiedWindows: { five_hour: { utilization: five, resetsAt: 2000 }, seven_day: { utilization: week, resetsAt: 9000 } } } });
+  fs.writeFileSync(file, `${event(0.2, 0.3)}\n{"cut\n${event(0.95, 0.4)}\n`);
+  const windows = hostWindows(file);
+  assert.equal(windows.five_hour.utilization, 0.95, 'the last report wins');
+  assert.deepEqual(hostStop(windows, 1000 * 1000), { name: 'five_hour', resetsAt: 2000, share: 0.85 });
+  assert.equal(hostStop(windows, 1000 * 1000, { five_hour: 0.96, seven_day: 0.96 }), null, 'a raised stop lets the run go on');
+  assert.equal(hostStop(windows, 3000 * 1000), null, 'it has reset');
+  assert.equal(hostStop(null), null);
+  assert.equal(hostStop({ five_hour: { utilization: 0.84, resetsAt: 2000 } }, 0), null);
+  assert.equal(hostStop({ five_hour: { utilization: 0.95, resetsAt: 2000 }, seven_day: { utilization: 0.91, resetsAt: 9000 } }, 0).name, 'seven_day');
+  fs.writeFileSync(file, '{"type":"result"}\n');
+  assert.equal(hostWindows(file), null);
+});
+
+
+test('a task\'s follow-up messages are sent in order on the same session, after any question is answered', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-turns-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const log = path.join(dir, 'argv.jsonl');
+  const stub = path.join(dir, 'claude-stub');
+  // The first answer asks a question, so the fixed approval goes first and the scripted messages follow it. Each result reports the
+  // session's running cost, as the CLI does on a resume.
+  fs.writeFileSync(stub, [
+    '#!/usr/bin/env node',
+    "const fs = require('node:fs');",
+    `fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + '\\n');`,
+    `const n = fs.readFileSync(${JSON.stringify(log)}, 'utf8').trim().split('\\n').length;`,
+    "const text = n === 1 ? 'Which option would you like? Shall I proceed?' : 'Done.';",
+    "for (const e of [{ type: 'system', subtype: 'init', session_id: 's1' }, { type: 'assistant', parent_tool_use_id: null, message: { id: 'm' + n, model: 'stub-1', content: [{ type: 'text', text }], usage: { output_tokens: 1 } } }, { type: 'result', subtype: 'success', session_id: 's1', result: text, num_turns: 1, total_cost_usd: 0.01 * n, modelUsage: { 'stub-1': {} } }]) console.log(JSON.stringify(e));",
+  ].join('\n'), { mode: 0o755 });
+  const drawDir = path.join(dir, 'draw');
+  fs.mkdirSync(drawDir);
+  const run = await runDraw({ followUps: ['Now rename it.', 'What did you change?'], model: 'stub-1', arm: 'bare', prompt: 'Build it.', budget: 1, timeoutMs: 60000, claude: stub, env: { PATH: process.env.PATH }, cwd: dir, drawDir, token: 'not-a-real-token-value', canary: 'CANARYcanary0123456789', task: 'T-x', absAb: path.join(dir, 'ab'), ownTmp: dir, kills: new Set() });
+  const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const prompts = calls.map((a) => a[a.indexOf('--print') + 1]);
+  assert.deepEqual(prompts, ['Build it.', RESUME_PROMPT, 'Now rename it.', 'What did you change?']);
+  assert.ok(calls.slice(1).every((a) => a[a.indexOf('--resume') + 1] === 's1'), 'every later turn resumes the same session');
+  assert.equal(run.resumes, 1);
+  assert.equal(run.followUps, 2);
+  assert.ok(Math.abs(run.cost - 0.04) < 1e-9, 'a resumed session reports its running total, so the draw costs the latest one');
+});
+
+test('a task may carry scripted follow-ups, and they are held to the same text rules', () => {
+  const base = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/fixtures/ab/T1-proration/task.json'), 'utf8'));
+  assert.deepEqual(validateTaskJson(base).task.turns, []);
+  assert.deepEqual(validateTaskJson({ ...base, turns: ['Now the second part.'] }).task.turns, ['Now the second part.']);
+  assert.equal(validateTaskJson({ ...base, turns: [] }).ok, false);
+  assert.equal(validateTaskJson({ ...base, turns: ['a‮b'] }).ok, false);
+  assert.equal(validateTaskJson({ ...base, turns: Array.from({ length: 17 }, (_, i) => `turn ${i}`) }).ok, false);
+});
+
+test('a draw scores on results first: hidden tests, then tests that are valid, then the gate', () => {
+  const own = (tests, agree, killed, total) => ({ tests, cases: agree + 1, agree, killed, total });
+  assert.deepEqual(resultScore({ solved: true, own_tests: own(3, 2, 4, 6) }), { P: 1, V: 1, G: null, strict: 1 });
+  assert.equal(resultScore({ solved: true, own_tests: own(3, 2, 3, 6) }).V, 0, `under ${TEST_VALIDITY_KILL * 100}% of mutants killed`);
+  assert.equal(resultScore({ solved: true, own_tests: own(3, 0, 6, 6) }).V, 0, 'no case that agrees with correct code is not valid');
+  assert.equal(resultScore({ solved: true, own_tests: own(0, 1, 0, 0) }).V, 0, 'no tests is not valid tests');
+  assert.equal(resultScore({ solved: true, own_tests: { tests: 1, oracle_pass: true, killed: 6, total: 6 } }).V, 1, 'a row recorded before cases were counted still scores');
+  assert.equal(resultScore({ solved: true, own_tests: { tests: 1, oracle_pass: false, killed: 0, total: 6 } }).V, 0);
+  assert.equal(resultScore({ solved: false, own_tests: own(3, true, 6, 6) }).strict, 0, 'valid tests do not rescue failed work');
+  assert.equal(resultScore({ solved: true, own_tests: own(3, true, 6, 6), quality: { ok: false } }).strict, 0, 'a failed quality gate is not a strict success');
+  assert.equal(resultScore({ solved: true, own_tests: own(3, true, 6, 6), gate: 'budget' }).G, null, 'the stop reason named gate is not the quality gate');
+  assert.equal(resultScore({ solved: true }).V, null, 'with no reference to check against, validity is unknown');
+});
+
+test('arms rank by results before cost, a cost within the tie band never decides, and the cost front is marked', () => {
+  const own = { tests: 2, cases: 3, agree: 3, killed: 6, total: 6 };
+  const rows = [
+    ...[1, 2, 3].map(() => ({ arm: 'careful', solved: true, own_tests: own, cost: 0.9 })),
+    ...[1, 2, 3].map((i) => ({ arm: 'cheap', solved: i < 3, own_tests: own, cost: 0.2 })),
+    ...[1, 2].map(() => ({ arm: 'cheap-twin', solved: true, own_tests: own, cost: 0.21 })), { arm: 'cheap-twin', solved: false, own_tests: own, cost: 0.21 },
+  ];
+  const ranked = rankArms(rows);
+  assert.deepEqual(ranked.map((a) => a.arm), ['careful', 'cheap', 'cheap-twin'], 'three successes beat two however cheap; a 5% cost gap is a tie, settled by name');
+  assert.deepEqual(ranked.map((a) => a.front), [true, true, true], 'within the tie band neither cheap arm dominates the other');
+  const dominated = rankArms([...rows, ...[1, 2, 3].map(() => ({ arm: 'pricey', solved: true, own_tests: own, cost: 2 }))]);
+  assert.equal(dominated.find((a) => a.arm === 'pricey').front, false, 'as many successes for more money is off the front');
+  assert.ok(COST_TIE > 0 && COST_TIE < 1);
+});
+
+test('a draw\'s quality is measured from the workspace\'s first commit, so committing its own work does not hide it', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-q-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: dir, stdio: 'ignore' });
+  git('init', '-q');
+  fs.writeFileSync(path.join(dir, 'a.js'), 'export const a = 1;\n');
+  git('add', '-A'); git('commit', '-qm', 'initial');
+  fs.writeFileSync(path.join(dir, 'a.js'), 'export function f(a, b, c, d, e) {\n  if (a) { if (b) { if (c) { if (d) { if (e) { return 1; } } } } }\n  return 0;\n}\n');
+  git('add', '-A'); git('commit', '-qm', 'the agent committed it');
+  const q = await scoreQuality(dir);
+  assert.equal(q.ok, false);
+  assert.ok(q.rules.depth >= 1 && q.rules.params >= 1);
+  assert.equal((await scoreQuality(path.join(dir, 'missing'))).ok, false, 'a gate that cannot run is not a pass');
+});
+
+test('a draw\'s directory is removed even when it holds a directory nobody may read', async (t) => {
+  const { removeTree } = await import('../benchmarks/v2/run.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-remove-'));
+  t.after(() => { if (fs.existsSync(dir)) { fs.chmodSync(path.join(dir, 'cfg', 'hide'), 0o700); fs.rmSync(dir, { recursive: true, force: true }); } });
+  fs.mkdirSync(path.join(dir, 'cfg', 'hide'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'cfg', 'hide', 'copy.txt'), 'secret');
+  fs.chmodSync(path.join(dir, 'cfg', 'hide'), 0o000);
+  removeTree(dir);
+  assert.equal(fs.existsSync(dir), false);
+});
+
+test('the routing phase sends the ticket as a user would, to both arms, on pool tasks whose right route is not build', async () => {
+  const { ROUTING_TASKS, ROUTING_K, requestText, tasksFor } = await import('../benchmarks/v2/config.mjs');
+  const ids = tasksFor('routing').map((t) => t.id).sort();
+  assert.deepEqual(ids, Object.values(ROUTING_TASKS).flat().sort());
+  const task = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/fixtures/ab/N03-business-day/task.json'), 'utf8'));
+  const text = requestText('routing', task);
+  assert.ok(!text.includes('Implement the following'));
+  assert.ok(text.startsWith(task.statements[0]));
+  assert.match(text.split('\n').at(-1), /^Declared scope: /);
+  assert.match(requestText('candidate', task), /^Implement the following/);
+  const plan = buildPlan('routing', tasksFor('routing'), { k: ROUTING_K });
+  assert.deepEqual([...new Set(plan.map((d) => d.arm))].sort(), ['bare', 'somi5']);
+  assert.equal(plan.length, ids.length * 2 * ROUTING_K);
+});

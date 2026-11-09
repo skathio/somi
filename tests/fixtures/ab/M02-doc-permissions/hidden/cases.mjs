@@ -1,0 +1,44 @@
+// SOMI-CANARY-M02-62b47d0a708fba91
+const AT = '2031-09-01T00:00:00Z';
+const USERS = [
+  { id: 'olga', orgId: 'o1', roles: ['editor'] },
+  { id: 'ed', orgId: 'o1', roles: ['editor'] },
+  { id: 'vic', orgId: 'o1', roles: ['viewer'] },
+  { id: 'ada', orgId: 'o1', roles: ['admin'] },
+  { id: 'nora', orgId: 'o1', roles: [] },
+  { id: 'xena', orgId: 'o2', roles: ['admin', 'editor'] },
+];
+const world = async (load) => {
+  const { createStore } = await load('src/store.mjs');
+  const docs = await load('src/docs.mjs');
+  const store = createStore({ clock: () => AT, users: USERS });
+  const id = docs.createDoc(store, 'olga', { title: 'Plan', body: 'text' }).value.id;
+  return { store, docs, id, can: async () => (await load('src/policy.mjs')).can };
+};
+const codeOf = (r) => (r.ok ? 'ok' : r.error.code);
+
+export const cases = [
+  { name: 'AC5 [regression] a viewer in the organisation reads a document', run: async (load) => { const w = await world(load); return w.docs.readDoc(w.store, 'vic', w.id).value.title; }, expect: 'Plan' },
+  { name: 'AC5 [regression] an editor updates a document', run: async (load) => { const w = await world(load); return w.docs.updateDoc(w.store, 'ed', w.id, { body: 'new' }).value.body; }, expect: 'new' },
+  { name: 'AC5 [regression] the owner deletes their own document', run: async (load) => { const w = await world(load); return w.docs.deleteDoc(w.store, 'olga', w.id); }, expect: { ok: true, value: { deleted: 'doc-1' } } },
+  { name: 'AC5 [regression] a viewer cannot create a document', run: async (load) => { const w = await world(load); return codeOf(w.docs.createDoc(w.store, 'vic', { title: 'x', body: '' })); }, expect: 'forbidden' },
+  { name: 'AC3 [regression] a document that does not exist has code not_found', run: async (load) => { const w = await world(load); return codeOf(w.docs.readDoc(w.store, 'vic', 'doc-99')); }, expect: 'not_found' },
+  { name: 'AC3 [safety] a document in another organisation has code not_found for every action', run: async (load) => { const w = await world(load); return [w.docs.readDoc(w.store, 'xena', w.id), w.docs.updateDoc(w.store, 'xena', w.id, { body: 'x' }), w.docs.deleteDoc(w.store, 'xena', w.id)].map(codeOf); }, expect: ['not_found', 'not_found', 'not_found'] },
+  { name: 'AC3 [regression] a user in the organisation with no right has code forbidden', run: async (load) => { const w = await world(load); return [w.docs.readDoc(w.store, 'nora', w.id), w.docs.updateDoc(w.store, 'vic', w.id, { body: 'x' }), w.docs.deleteDoc(w.store, 'ed', w.id)].map(codeOf); }, expect: ['forbidden', 'forbidden', 'forbidden'] },
+  { name: 'AC3 [regression] an unknown actor has code forbidden', run: async (load) => { const w = await world(load); return [w.docs.readDoc(w.store, 'ghost', w.id), w.docs.createDoc(w.store, 'ghost', { title: 'x', body: '' })].map(codeOf); }, expect: ['forbidden', 'forbidden'] },
+  { name: 'AC2 [functional] can answers for each action from src/policy.mjs', run: async (load) => { const w = await world(load); const can = await w.can(); const doc = w.store.docs.get(w.id); return [can(w.store, 'vic', 'read', doc), can(w.store, 'vic', 'update', doc), can(w.store, 'ed', 'update', doc), can(w.store, 'ed', 'delete', doc), can(w.store, 'olga', 'delete', doc), can(w.store, 'ed', 'create'), can(w.store, 'xena', 'read', doc)]; }, expect: [true, false, true, false, true, true, false] },
+  { name: 'AC4 [functional] each refused action is recorded once, with who, what and when', run: async (load) => { const w = await world(load); w.docs.updateDoc(w.store, 'vic', w.id, { body: 'x' }); w.docs.readDoc(w.store, 'xena', w.id); w.docs.createDoc(w.store, 'vic', { title: 'x', body: '' }); return w.store.denials; }, expect: [{ action: 'update', by: 'vic', id: 'doc-1', at: AT }, { action: 'read', by: 'xena', id: 'doc-1', at: AT }, { action: 'create', by: 'vic', id: null, at: AT }] },
+  { name: 'AC4 [functional] an allowed action and a missing document record nothing, and a refused one does', run: async (load) => { const w = await world(load); w.docs.readDoc(w.store, 'vic', w.id); w.docs.updateDoc(w.store, 'ed', w.id, { body: 'y' }); w.docs.readDoc(w.store, 'vic', 'doc-99'); w.docs.deleteDoc(w.store, 'vic', w.id); return w.store.denials.map((d) => d.action); }, expect: ['delete'] },
+  { name: 'AC7 [functional] a document shared to read can be read but not changed by someone with no role', run: async (load) => { const w = await world(load); const s = w.docs.shareDoc(w.store, 'olga', w.id, { userId: 'nora', access: 'read' }); return [s, codeOf(w.docs.readDoc(w.store, 'nora', w.id)), codeOf(w.docs.updateDoc(w.store, 'nora', w.id, { body: 'x' }))]; }, expect: [{ ok: true, value: { docId: 'doc-1', userId: 'nora', access: 'read' } }, 'ok', 'forbidden'] },
+  { name: 'AC7 [functional] a document shared to edit can be changed', run: async (load) => { const w = await world(load); w.docs.shareDoc(w.store, 'olga', w.id, { userId: 'nora', access: 'edit' }); return w.docs.updateDoc(w.store, 'nora', w.id, { body: 'shared' }).value?.body; }, expect: 'shared' },
+  { name: 'AC7 [functional] only the owner or an admin may share', run: async (load) => { const w = await world(load); return [w.docs.shareDoc(w.store, 'ed', w.id, { userId: 'nora', access: 'read' }), w.docs.shareDoc(w.store, 'ada', w.id, { userId: 'nora', access: 'read' })].map(codeOf); }, expect: ['forbidden', 'ok'] },
+  { name: 'AC7 [safety] sharing with a user in another organisation or with an unknown access has code invalid', run: async (load) => { const w = await world(load); return [w.docs.shareDoc(w.store, 'olga', w.id, { userId: 'xena', access: 'read' }), w.docs.shareDoc(w.store, 'olga', w.id, { userId: 'nora', access: 'owner' }), w.docs.shareDoc(w.store, 'olga', w.id, { userId: 'ghost', access: 'read' })].map(codeOf); }, expect: ['invalid', 'invalid', 'invalid'] },
+  { name: 'AC2 [functional] can knows about sharing', run: async (load) => { const w = await world(load); w.docs.shareDoc(w.store, 'olga', w.id, { userId: 'nora', access: 'edit' }); const can = await w.can(); const doc = w.store.docs.get(w.id); return [can(w.store, 'nora', 'read', doc), can(w.store, 'nora', 'update', doc), can(w.store, 'nora', 'delete', doc)]; }, expect: [true, true, false] },
+  { name: 'AC8 [functional] the owner or an admin archives, and an archived document is still readable', run: async (load) => { const w = await world(load); return [codeOf(w.docs.archiveDoc(w.store, 'ed', w.id)), w.docs.archiveDoc(w.store, 'olga', w.id).value?.archived, codeOf(w.docs.readDoc(w.store, 'vic', w.id))]; }, expect: ['forbidden', true, 'ok'] },
+  { name: 'AC8 [functional] nobody updates, shares or archives an archived document', run: async (load) => { const w = await world(load); w.docs.archiveDoc(w.store, 'olga', w.id); return [w.docs.updateDoc(w.store, 'olga', w.id, { body: 'x' }), w.docs.updateDoc(w.store, 'ed', w.id, { body: 'x' }), w.docs.shareDoc(w.store, 'olga', w.id, { userId: 'nora', access: 'read' }), w.docs.archiveDoc(w.store, 'ada', w.id)].map(codeOf); }, expect: ['forbidden', 'forbidden', 'forbidden', 'forbidden'] },
+  { name: 'AC8 [functional] an archived document can still be deleted', run: async (load) => { const w = await world(load); w.docs.archiveDoc(w.store, 'olga', w.id); return codeOf(w.docs.deleteDoc(w.store, 'ada', w.id)); }, expect: 'ok' },
+  { name: 'AC9 [safety] an admin no longer reads or changes someone else\'s document by being an admin', run: async (load) => { const w = await world(load); return [w.docs.readDoc(w.store, 'ada', w.id), w.docs.updateDoc(w.store, 'ada', w.id, { body: 'x' })].map(codeOf); }, expect: ['forbidden', 'forbidden'] },
+  { name: 'AC9 [functional] an admin keeps delete, share and archive', run: async (load) => { const w = await world(load); const id2 = w.docs.createDoc(w.store, 'olga', { title: 'Two', body: '' }).value.id; return [w.docs.shareDoc(w.store, 'ada', w.id, { userId: 'nora', access: 'read' }), w.docs.archiveDoc(w.store, 'ada', w.id), w.docs.deleteDoc(w.store, 'ada', id2)].map(codeOf); }, expect: ['ok', 'ok', 'ok'] },
+  { name: 'AC9 [functional] an admin reads a document shared with them, and their own', run: async (load) => { const w = await world(load); w.docs.shareDoc(w.store, 'olga', w.id, { userId: 'ada', access: 'read' }); const own = w.docs.createDoc(w.store, 'ada', { title: 'Mine', body: '' }).value.id; return [w.docs.readDoc(w.store, 'ada', w.id), w.docs.readDoc(w.store, 'ada', own)].map(codeOf); }, expect: ['ok', 'ok'] },
+  { name: 'AC2 [functional] can follows the admin rule too', run: async (load) => { const w = await world(load); const can = await w.can(); const doc = w.store.docs.get(w.id); return [can(w.store, 'ada', 'read', doc), can(w.store, 'ada', 'delete', doc), can(w.store, 'ada', 'create')]; }, expect: [false, true, true] },
+];

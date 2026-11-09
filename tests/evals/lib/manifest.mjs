@@ -1,4 +1,4 @@
-// Scope manifest (FR-8c, FR-39): what changed in a draw's workspace, and is it inside the declared scope?
+// Scope manifest (FR-8c, FR-39): what changed in a draw's workspace. The bench's scopeCheck (benchmarks/v2/telemetry.mjs) judges it against the declared scope.
 // Read-only: no child process, no network, nothing written, no candidate file parsed or run (only hashed).
 // The directory is hostile data (a bypassPermissions agent wrote it): every doubt is a refusal.
 //
@@ -16,7 +16,7 @@
 //   C0/C1 control, format (bidi, zero-width, BOM) or line-separator character, no backslash; case variants stay
 //   distinct. A file with setuid, setgid or world-writable bits (unsafe-mode), a directory on another device than
 //   the root (mount-point) and a repeated name are refused. Every `path` and reason is display text, printable
-//   ASCII through esc (bytes as %XX; scopeVerdict escapes again): show it only as given, never raw.
+//   ASCII through esc (bytes as %XX): show it only as given, never raw.
 //   Guarantees: no link is followed and no special file is opened. Does NOT guarantee: (1) a hard link to an
 //   outside file is a regular file to lstat, so only the container boundary stops it; (2) a concurrent writer
 //   can swap a directory for a link after it was checked (each directory is re-checked after listing and the
@@ -26,15 +26,7 @@
 //   process in its cgroup is gone (O_NOFOLLOW covers the last component only); mount the workspace nodev; map
 //   uids (no host-visible setuid root); never run git or hooks on the after-workspace (.git and .somi are
 //   ignored by design).
-//
-// scopeVerdict({before, after, declared}) -> {verdict: 'in-scope' | 'out-of-scope', reason, path?}, or null.
-//   declared = {source: {files: [path], dirs: [path]}, testDir: path, rootFiles: [name]}, all repo-relative.
-//   A path is 1..1024 bytes, '/'-separated, no empty, '.' or '..' segment, no leading or trailing '/', the name
-//   rule per segment; anything else is null (never normalised). A file entry covers exactly that path; a dir
-//   entry and testDir cover their subtree only; rootFiles are single-segment names; the subtree of `.somi` is
-//   always tolerated (the entry `.somi` itself is not). A null result is a failure, never a pass. Matching is by exact bytes: `src` does not cover
-//   `SRC/x` or `src2/x`. Changed = added, removed or modified; the first changed path (sorted) outside the
-//   scope names the failure. A null or refused manifest on either side is out-of-scope. Source is non-empty.
+
 
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -45,10 +37,8 @@ export const MAX_FILE_BYTES = 16 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 const MAX_NAME_BYTES = 255;
 const MAX_PATH_BYTES = 1024;
-const MAX_LIST = 1024;
 const BAD_CHARS = /[\u0000-\u001f\u007f-\u009f\\\p{Cf}\p{Zl}\p{Zp}]/u;
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
-const HEX = /^[0-9a-f]{64}$/;
 const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const byBytes = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 // Printable ASCII only, so a hostile name can never inject a control character into a reason.
@@ -62,164 +52,132 @@ function validName(s) {
 }
 export const validPath = (p) => typeof p === 'string' && Buffer.byteLength(p) <= MAX_PATH_BYTES && p.split('/').every(validName);
 const sameKeys = (o, keys) => { const k = Reflect.ownKeys(o); return k.length === keys.length && keys.every((x) => k.includes(x)); };
-// Dense plain copy (`length` and each slot read once), or null.
-function dense(arr, max = MAX_LIST) {
-  if (!Array.isArray(arr)) return null;
-  const n = arr.length;
-  if (n > max) return null;
-  const list = [];
-  for (let i = 0; i < n; i++) { if (!Object.hasOwn(arr, i)) return null; list.push(arr[i]); }
-  return list;
-}
 const FS_METHODS = ['lstatSync', 'opendirSync', 'openSync', 'fstatSync', 'readSync', 'closeSync'];
+
+// The root without its trailing slashes and the fs to read it with (bound copies of the methods used), or null for a malformed argument.
+function fsFrom(opts) {
+  const f = opts === undefined ? fs : isObject(opts) && sameKeys(opts, ['fs']) ? opts.fs : null;
+  return isObject(f) && FS_METHODS.every((m) => typeof f[m] === 'function') && isObject(f.constants) ? f : null;
+}
+function readArgs(root, opts) {
+  try {
+    if (typeof root !== 'string' || root === '' || root.includes('\0')) return null;
+    const f = fsFrom(opts);
+    return f && { root: root.replace(/\/+$/, '') || '/', f: { ...Object.fromEntries(FS_METHODS.map((m) => [m, f[m].bind(f)])), constants: f.constants } };
+  } catch { return null; }
+}
+
+// The walk's state is one context: the root, the fs, the files found so far and the running entry and byte counts.
+const abs = (ctx, rel) => (rel === '' ? ctx.root : `${ctx.root}/${rel}`);
+const here = (rel) => rel || '.';
+const io = (rel, fn) => { try { return fn(); } catch (e) { if (e instanceof Refusal) throw e; return stop('io-error', here(rel)); } };
+const lstat = (ctx, rel) => io(rel, () => ctx.f.lstatSync(abs(ctx, rel), { bigint: true }));
+const same = (a, b) => a.dev === b.dev && a.ino === b.ino;
+const decoded = (raw) => { try { return new TextDecoder('utf-8', { fatal: true }).decode(raw); } catch { return null; } };
+
+// One directory's names, sorted by bytes. Refused when there are too many, when it was swapped while it was listed, or when a name repeats.
+function namesIn(ctx, dirRel, dirSt) {
+  const names = [];
+  io(dirRel, () => {
+    const dir = ctx.f.opendirSync(abs(ctx, dirRel), { encoding: 'buffer' });
+    try {
+      for (let e = dir.readSync(); e !== null; e = dir.readSync()) {
+        names.push(Buffer.from(e.name));
+        if (ctx.entries + names.length > MAX_ENTRIES) stop('too-many-entries', here(dirRel));
+      }
+    } finally { dir.closeSync(); }
+  });
+  // A directory swapped for a link while it was listed is not the directory that was checked.
+  if (!same(lstat(ctx, dirRel), dirSt)) stop('changed', here(dirRel));
+  names.sort(Buffer.compare);
+  if (names.some((n, i) => i > 0 && n.equals(names[i - 1]))) stop('duplicate', here(dirRel));
+  return names;
+}
+
+// An entry's name and path, once the name passes the name rule and the path its length and the entry cap.
+function entryOf(ctx, dirRel, raw) {
+  const name = decoded(raw);
+  const shown = dirRel === '' ? raw : Buffer.concat([Buffer.from(`${dirRel}/`), raw]);
+  if (name === null || !validName(name)) stop('bad-name', shown);
+  const rel = dirRel === '' ? name : `${dirRel}/${name}`;
+  if (Buffer.byteLength(rel) > MAX_PATH_BYTES) stop('path-too-long', shown);
+  if (++ctx.entries > MAX_ENTRIES) stop('too-many-entries', rel);
+  return { name, rel };
+}
+
+function addFile(ctx, rel, st) {
+  if ((st.mode & 0o6002n) !== 0n) stop('unsafe-mode', rel);
+  if (st.size > BigInt(MAX_FILE_BYTES)) stop('file-too-large', rel);
+  ctx.total += Number(st.size);
+  if (ctx.total > MAX_TOTAL_BYTES) stop('too-large', rel);
+  ctx.files.push([rel, st]);
+}
+
+// One entry: a link is refused, the root-level .git (a directory or a file) is skipped, a directory is walked, a file is listed.
+function visit(ctx, { dirRel, name, rel, depth }) {
+  const st = lstat(ctx, rel);
+  if (st.isSymbolicLink()) stop('symlink', rel);
+  if (dirRel === '' && name === '.git') {
+    if (!st.isDirectory() && !st.isFile()) stop('special-file', rel);
+  } else take(ctx, { rel, depth }, st);
+}
+function take(ctx, { rel, depth }, st) {
+  if (!st.isDirectory()) return st.isFile() ? addFile(ctx, rel, st) : stop('special-file', rel);
+  if (st.dev !== ctx.rootDev) stop('mount-point', rel);
+  return walk(ctx, rel, depth + 1, st);
+}
+
+function walk(ctx, dirRel, depth, dirSt) {
+  if (depth > MAX_DEPTH) stop('too-deep', dirRel);
+  for (const raw of namesIn(ctx, dirRel, dirSt)) visit(ctx, { dirRel, ...entryOf(ctx, dirRel, raw), depth });
+}
+
+// The hash of what one descriptor holds, which must be exactly `size` bytes: growth or shrinkage is a change.
+function digestOf(ctx, fd, size, rel) {
+  const h = createHash('sha256');
+  const buf = Buffer.allocUnsafe(Math.min(size + 1, 65536));
+  let got = 0;
+  for (let n = ctx.f.readSync(fd, buf, 0, buf.length, null); n > 0; n = ctx.f.readSync(fd, buf, 0, buf.length, null)) {
+    got += n;
+    if (got > size) stop('changed', rel);
+    h.update(buf.subarray(0, n));
+  }
+  if (got !== size) stop('changed', rel);
+  return h.digest('hex');
+}
+
+const refusalFor = (e, rel) => { if (e instanceof Refusal) throw e; return stop(e?.code === 'ELOOP' ? 'symlink' : 'io-error', rel); };
+const closeQuietly = (f, fd) => { try { f.closeSync(fd); } catch { /* a read-only handle: nothing to undo */ } };
+const unchanged = (s, st) => s.isFile() && same(s, st) && s.size === st.size && s.ctimeNs === st.ctimeNs;
+// Phase 2: one file through one descriptor, which must still be the regular file the walk saw.
+function hashFile(ctx, rel, st) {
+  const c = ctx.f.constants;
+  let fd = null;
+  try {
+    fd = ctx.f.openSync(abs(ctx, rel), c.O_RDONLY | (c.O_NOFOLLOW ?? 0) | (c.O_NONBLOCK ?? 0));
+    if (!unchanged(ctx.f.fstatSync(fd, { bigint: true }), st)) stop('changed', rel);
+    return digestOf(ctx, fd, Number(st.size), rel);
+  } catch (e) {
+    return refusalFor(e, rel);
+  } finally {
+    if (fd !== null) closeQuietly(ctx.f, fd);
+  }
+}
 
 /** `root` -> `{ok: true, files: [[path, sha256]]}`, `{ok: false, reason, path}`, or `null` (malformed argument). */
 export function lstatManifest(root, opts) {
-  let f;
+  const args = readArgs(root, opts);
+  if (!args) return null;
+  const ctx = { ...args, files: [], entries: 0, total: 0, rootDev: undefined };
   try {
-    if (typeof root !== 'string' || root === '' || root.includes('\0')) return null;
-    root = root.replace(/\/+$/, '') || '/';
-    if (opts === undefined) f = fs;
-    else {
-      if (!isObject(opts) || !sameKeys(opts, ['fs'])) return null;
-      f = opts.fs;
-    }
-    if (!isObject(f) || !FS_METHODS.every((m) => typeof f[m] === 'function') || !isObject(f.constants)) return null;
-    f = { ...Object.fromEntries(FS_METHODS.map((m) => [m, f[m].bind(f)])), constants: f.constants };
-  } catch { return null; }
-
-  const abs = (rel) => (rel === '' ? root : `${root}/${rel}`);
-  const io = (rel, fn) => { try { return fn(); } catch (e) { if (e instanceof Refusal) throw e; return stop('io-error', rel || '.'); } };
-  const lstat = (rel) => io(rel, () => f.lstatSync(abs(rel), { bigint: true }));
-  const same = (a, b) => a.dev === b.dev && a.ino === b.ino;
-  const files = [];
-  let entries = 0;
-  let total = 0; let rootDev;
-
-  function walk(dirRel, depth, dirSt) {
-    if (depth > MAX_DEPTH) stop('too-deep', dirRel);
-    const names = [];
-    io(dirRel, () => {
-      const dir = f.opendirSync(abs(dirRel), { encoding: 'buffer' });
-      try {
-        for (let e = dir.readSync(); e !== null; e = dir.readSync()) {
-          names.push(Buffer.from(e.name));
-          if (entries + names.length > MAX_ENTRIES) stop('too-many-entries', dirRel || '.');
-        }
-      } finally { dir.closeSync(); }
-    });
-    // A directory swapped for a link while it was listed is not the directory that was checked.
-    if (!same(lstat(dirRel), dirSt)) stop('changed', dirRel || '.');
-    names.sort(Buffer.compare);
-    if (names.some((n, i) => i > 0 && n.equals(names[i - 1]))) stop('duplicate', dirRel || '.');
-    for (const raw of names) {
-      let name;
-      try { name = new TextDecoder('utf-8', { fatal: true }).decode(raw); } catch { name = null; }
-      const shown = dirRel === '' ? raw : Buffer.concat([Buffer.from(`${dirRel}/`), raw]);
-      if (name === null || !validName(name)) stop('bad-name', shown);
-      const rel = dirRel === '' ? name : `${dirRel}/${name}`;
-      if (Buffer.byteLength(rel) > MAX_PATH_BYTES) stop('path-too-long', shown);
-      if (++entries > MAX_ENTRIES) stop('too-many-entries', rel);
-      const st = lstat(rel);
-      if (st.isSymbolicLink()) stop('symlink', rel);
-      if (dirRel === '' && name === '.git') {
-        if (!st.isDirectory() && !st.isFile()) stop('special-file', rel);
-      } else if (st.isDirectory()) { if (st.dev !== rootDev) stop('mount-point', rel); walk(rel, depth + 1, st); }
-      else if (st.isFile()) {
-        if ((st.mode & 0o6002n) !== 0n) stop('unsafe-mode', rel);
-        if (st.size > BigInt(MAX_FILE_BYTES)) stop('file-too-large', rel);
-        total += Number(st.size);
-        if (total > MAX_TOTAL_BYTES) stop('too-large', rel);
-        files.push([rel, st]);
-      } else stop('special-file', rel);
-    }
-  }
-
-  function hash(rel, st) {
-    const c = f.constants;
-    let fd = null;
-    try {
-      fd = f.openSync(abs(rel), c.O_RDONLY | (c.O_NOFOLLOW ?? 0) | (c.O_NONBLOCK ?? 0));
-      const s = f.fstatSync(fd, { bigint: true });
-      if (!s.isFile() || !same(s, st) || s.size !== st.size || s.ctimeNs !== st.ctimeNs) stop('changed', rel);
-      const size = Number(st.size);
-      const h = createHash('sha256');
-      const buf = Buffer.allocUnsafe(Math.min(size + 1, 65536));
-      let got = 0;
-      for (let n = f.readSync(fd, buf, 0, buf.length, null); n > 0; n = f.readSync(fd, buf, 0, buf.length, null)) {
-        got += n;
-        if (got > size) stop('changed', rel);
-        h.update(buf.subarray(0, n));
-      }
-      if (got !== size) stop('changed', rel);
-      return h.digest('hex');
-    } catch (e) {
-      if (e instanceof Refusal) throw e;
-      return stop(e?.code === 'ELOOP' ? 'symlink' : 'io-error', rel);
-    } finally {
-      if (fd !== null) try { f.closeSync(fd); } catch { /* a read-only handle: nothing to undo */ }
-    }
-  }
-  try {
-    const rootSt = lstat('');
+    const rootSt = lstat(ctx, '');
     if (rootSt.isSymbolicLink()) stop('symlink', '.');
     if (!rootSt.isDirectory()) stop('not-a-directory', '.');
-    rootDev = rootSt.dev;
-    walk('', 0, rootSt);
-    const out = files.map(([rel, st]) => [rel, hash(rel, st)]);
+    ctx.rootDev = rootSt.dev;
+    walk(ctx, '', 0, rootSt);
+    const out = ctx.files.map(([rel, st]) => [rel, hashFile(ctx, rel, st)]);
     return { ok: true, files: out.sort((a, b) => byBytes(a[0], b[0])) };
   } catch (e) {
     return e instanceof Refusal ? { ok: false, reason: e.reason, path: esc(e.path) } : { ok: false, reason: 'io-error', path: '.' };
   }
-}
-
-// A manifest as scopeVerdict sees it: {map} to compare, {fail, path?} when it is null or refused (never
-// in scope), or null when it is not a manifest at all.
-function readManifest(m, side) {
-  if (m === null) return { fail: `${side} manifest unavailable` };
-  if (!isObject(m)) return null;
-  if (m.ok === false) {
-    if (!sameKeys(m, ['ok', 'reason', 'path'])) return null;
-    const { reason, path } = m;
-    return typeof reason === 'string' && typeof path === 'string' ? { fail: `${side} manifest refused: ${esc(reason)} at ${esc(path)}`, path: esc(path) } : null;
-  }
-  if (m.ok !== true || !sameKeys(m, ['ok', 'files'])) return null;
-  const list = dense(m.files, MAX_ENTRIES);
-  if (!list) return null;
-  const map = new Map();
-  for (const entry of list) {
-    const pair = dense(entry);
-    if (!pair || pair.length !== 2 || !validPath(pair[0]) || typeof pair[1] !== 'string' || !HEX.test(pair[1]) || map.has(pair[0])) return null;
-    map.set(pair[0], pair[1]);
-  }
-  return { map };
-}
-
-function readDeclared(d) {
-  if (!isObject(d) || !sameKeys(d, ['source', 'testDir', 'rootFiles'])) return null;
-  const { source, testDir, rootFiles } = d;
-  if (!isObject(source) || !sameKeys(source, ['files', 'dirs'])) return null;
-  const srcFiles = dense(source.files);
-  const srcDirs = dense(source.dirs);
-  const roots = dense(rootFiles);
-  if (!srcFiles || !srcDirs || !roots || srcFiles.length + srcDirs.length === 0) return null;
-  if (![...srcFiles, ...srcDirs, ...roots, testDir].every(validPath) || roots.some((p) => p.includes('/'))) return null;
-  return { exact: new Set([...srcFiles, ...roots]), dirs: [...srcDirs, testDir, '.somi'] };
-}
-
-/** `{before, after, declared}` -> `{verdict, reason, path?}`, or `null` for a malformed argument. */
-export function scopeVerdict(args) {
-  try {
-    if (!isObject(args) || !sameKeys(args, ['before', 'after', 'declared'])) return null;
-    const { before, after, declared } = args;
-    const decl = readDeclared(declared);
-    const b = readManifest(before, 'before');
-    const a = readManifest(after, 'after');
-    if (!decl || !b || !a) return null;
-    for (const m of [b, a]) if (m.fail) return { verdict: 'out-of-scope', reason: m.fail, ...(m.path === undefined ? {} : { path: m.path }) };
-    const changed = [...new Set([...b.map.keys(), ...a.map.keys()])].filter((p) => b.map.get(p) !== a.map.get(p)).sort(byBytes);
-    const bad = changed.find((p) => !decl.exact.has(p) && !decl.dirs.some((d) => p.startsWith(`${d}/`)));
-    if (bad !== undefined) return { verdict: 'out-of-scope', reason: `out of scope: ${esc(bad)} changed`, path: esc(bad) };
-    return { verdict: 'in-scope', reason: `${changed.length} changed path(s), all within the declared scope` };
-  } catch { return null; }
 }

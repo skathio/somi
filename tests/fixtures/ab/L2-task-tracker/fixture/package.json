@@ -1,0 +1,8 @@
+{
+  "name": "l2-task-tracker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

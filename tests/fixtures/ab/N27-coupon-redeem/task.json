@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Add redeem(store, code, userId, orderId, now) to src/coupons.mjs. It records a redemption and returns the coupon's percent.",
+    "The coupon rules are in the README. A coupon that cannot be used throws HttpError 422, with code unknown_coupon, coupon_expired, coupon_used_up or coupon_limit_reached.",
+    "Everything that exists today keeps working exactly as it does now, apart from what the rules require. The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N27-e6a280c99c5f7110",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add coupon redemption, as the numbered statements describe. Follow the conventions already in the code and change only what the ticket needs."
+}

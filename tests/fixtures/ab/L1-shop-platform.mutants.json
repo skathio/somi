@@ -1,0 +1,20 @@
+[
+ {
+  "name": "refund-limit-per-refund",
+  "file": "src/refunds.mjs",
+  "find": "if (already + amount > order.total)",
+  "replace": "if (amount > order.total)"
+ },
+ {
+  "name": "reservation-blocks-owner",
+  "file": "src/inventory.mjs",
+  "find": "r.customerId !== customerId",
+  "replace": "true"
+ },
+ {
+  "name": "statement-order-month-refunds",
+  "file": "src/statements.mjs",
+  "find": "const refunds = store.refunds.filter((r) => inMonth(r.at))",
+  "replace": "const refunds = store.refunds.filter((r) => inMonth(store.orders.find((o) => o.id === r.orderId).at))"
+ }
+]

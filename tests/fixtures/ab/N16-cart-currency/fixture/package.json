@@ -1,0 +1,8 @@
+{
+  "name": "n16-cart-currency",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

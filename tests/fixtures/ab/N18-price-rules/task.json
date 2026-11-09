@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "priceCart in src/price.mjs keeps growing. Move its discounts into an ordered list exported as rules from src/rules.mjs, each rule { name, apply(cart, subtotal, discount) } returning the new discount, and have priceCart walk that list.",
+    "Then add one rule named loyalty: a cart with years of 3 or more gets a further 2% of the subtotal, rounded down, on top of every other discount.",
+    "Apart from that new rule, every answer priceCart gives today stays exactly the same. Other teams depend on it, including on the applied list.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N18-6f814399f074279e",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Split the discounts in priceCart into a rule list and add the loyalty rule, as the numbered statements describe. Nothing else may change. Follow the conventions already in the code."
+}

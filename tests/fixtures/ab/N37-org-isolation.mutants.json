@@ -1,0 +1,20 @@
+[
+ {
+  "name": "move-unchecked",
+  "file": "src/tasks.mjs",
+  "find": "if (changes.projectId !== undefined) inOrg(store, ctx, 'projects', changes.projectId);",
+  "replace": ""
+ },
+ {
+  "name": "bulk-partial",
+  "file": "src/tasks.mjs",
+  "find": "const found = ids.map((id) => taskFor(store, ctx, id));",
+  "replace": "const found = ids.flatMap((id) => { try { return [taskFor(store, ctx, id)]; } catch { return []; } });"
+ },
+ {
+  "name": "mention-global",
+  "file": "src/comments.mjs",
+  "find": "const user = store.users.find((u) => u.name === name && u.orgId === org(store, ctx));",
+  "replace": "const user = store.users.find((u) => u.name === name);"
+ }
+]

@@ -6,6 +6,68 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+## [5.0.0] — 2026-11-09 — feat!: your agent stays in charge and SoMi advises, with six commands, a quality gate and one reviewer per change
+
+**Major — breaking.** A ground-up rebuild of how SoMi runs, keeping what it is for: pass any request or ticket, and it picks the right workflow at the lowest cost that does the job well. Remove a 4.x install before installing 5.0, and see [the migration guide](docs/MIGRATING-TO-5.md).
+
+### Measured
+
+On the pre-registered benchmark (Sonnet, 16 tasks, 96 draws an arm, rule 7d7837121fdb, [`docs/BENCHMARK.md`](docs/BENCHMARK.md)), 5.0 solved 90 draws against a bare agent's 72, passed the quality gate on all 96 against 84, and had 62 strict successes against 46. It cost 1.28 times bare per solved task, under the registered 1.5, and `decide` passes it. Two earlier 5.0 candidates solved more than bare too but cost 1.68 and 1.74 times as much, and their records are in the git history. On these tasks the agent rarely routes, so the gain comes from the rules digest, the quality gate and the review; routing has not been measured on work large enough to need it.
+
+### Breaking changes
+
+- **Six commands, and everything else in the chat.** The 4.x commands are gone. Ask for a change, a fix, a refactor, a plan, a review or the pull request text in plain words, or paste a ticket. What remains is `/somi`, `/somi-deliver`, `/somi-review`, `/somi-quality`, `/somi-status` and `/somi-config`, each prefixed because Copilot does not namespace a plugin's skills and its own `/review` and `/pr` hid SoMi's.
+  - **Migration:** see the command table in [MIGRATING-TO-5.md](docs/MIGRATING-TO-5.md).
+- **Six agents:** `somi`, three workers named for their tier, `somi-reviewer` and `somi-security-reviewer`. The other 4.x specialists are role text that `somi_route` returns.
+  - **Migration:** start with `--agent somi:somi` to route plain prompts.
+- **Six MCP tools:** `somi_route`, `somi_review`, `somi_quality`, `somi_note`, `somi_plan` and `somi_pr`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
+- **New state.** `.somi/plans/*` and `.somi/reviews/*` are no longer read or written; there are no progress or diary files.
+  - **Migration:** ask the agent to run `somi migrate` once, which copies open findings and decisions over and changes no old file.
+- **Config.** Per-agent `cost.*` settings no longer apply: tiers are set per host, with `main` for the conversation and `ceiling` to cap them. `sizing.*` keys are now `signals.*`, and `.somi/rules/99-overrides.md` is no longer read.
+  - **Migration:** see the config section of [MIGRATING-TO-5.md](docs/MIGRATING-TO-5.md).
+- **Copilot hooks come from the plugin.** Copilot CLI runs Claude-format plugin hooks, so `somi init --host copilot` writes only the extension that registers `/somi-deliver`.
+  - **Migration:** delete a `.github/hooks/somi.json` from an earlier init, or every hook runs twice. `somi init` and the doctor say so.
+
+### Changed
+
+- **Your agent stays in charge, and SoMi advises.** The agent holding the conversation can read, answer, edit and ask at any point. A small, clear change it does itself, as a bare agent would; for a ticket, large work or a request that fits no obvious workflow it asks `somi_route` once and gets the workflow as steps, each with its tier and whether it runs here or on a subagent. SoMi keeps no workflow state, so nothing refuses your next request. A release candidate built on a step engine proved too restrictive in real use and is gone.
+- **The conversation and code run on medium, as a bare agent's do.** On the low tier, builds broke rules and fell below the quality bar, and fixing them cost more than the low tier saved. The low tier finds files and runs checks, and work that needs more, such as design, goes up to a worker on the high tier. `somi setup` puts the conversation on another tier if you want.
+- **The quality gate runs when a turn that changed code ends,** on Claude Code and Copilot CLI alike, and sends anything over a limit back to the agent before any review. The agent never adds an exemption to get past it. On the three benchmark tasks where the gate fires, SoMi went from 7 of 18 draws within the limits to 17 of 17, at about the same cost.
+- **One reviewer per change, chosen from the real diff.** No signal, no review. A signal gets the code reviewer on medium, and a trust boundary gets the security reviewer alone, on the high tier, reviewing the rest of the change too; any fix stays in the conversation. In the ablation two reviewers were most of SoMi's extra cost. A changed interface, a large diff or several modules no longer call for a review on their own, and a clean review is not asked for again while it still covers the change.
+- **Only a Blocker, or a Major confirmed on a trust boundary, blocks a change,** and after two passes the question goes to you.
+- **The pull request gate.** `somi_pr` refuses clean text for a change that needed a review and has none, that has an open blocking finding, or that fails the quality gate. Going ahead without the review writes a label at the top; nothing goes ahead below the quality bar.
+- **The router reads tickets the way people write them.** A bug is known by its symptom and its guess at the cause, a refactor by the shape it fixes, "error" in a spec is not a bug, and a long ticket is routed by its opening. Keyword rules still miss most bug reports written in new words: 11 of 24 fresh tickets were routed right, and the router's labelled set scores 85%. A request no rule places goes to build, and the answer names the other routes.
+- **Work handed down keeps the conversation's decisions.** A worker's brief and each workflow stage get your earlier messages in the session, quoted as data, so a rule set in the first message still holds in the fourth.
+- **State is a small ledger and a review record, both written by the tools,** plus one plain plan file, `.somi/plan.md`. The ledger comes back at every session start, after compaction and with every route.
+- **Rules arrive at session start and after compaction,** as a short digest, not on every prompt.
+- **The OS sandbox is the security boundary on both hosts.** `somi doctor` proves it with vendor probes, and also warns about tiers with no model, Copilot's Auto, hooks that seem not to be running and hooks registered twice. Hooks are tripwires, and the policy-file guard is frozen.
+- **A hook gives SoMi's workers and reviewers their tier's model** from the agent's name, and keeps them in the foreground on Claude Code.
+- **Hook denials exit 2,** and hook output carries both hosts' fields.
+- **Benchmark v2:** both arms on the same session model, hidden tests, a score for the tests each draw writes against the task's recorded mutants, the quality gate, every arm given the same plain request through its real entry point, dollars per solved task from billing, an A/A control and a mechanical release rule. Draws rank on results first: a strict success needs the hidden tests, valid own tests and the quality gate.
+
+### Added
+
+- **A quality gate for the code a change adds.** `somi_quality` and `/somi-quality` score new and changed functions in JavaScript, TypeScript, TSX and CSS for cognitive complexity, nesting, length and parameters, and check copied code, newly added suppressions, and how much complexity one change adds to a file. It runs per commit, per pull request, or on the whole codebase for a cleanup. Old code is not failed, but it may not get worse, and a function moved unchanged between files is not added complexity. It is calibrated on 12 well-kept projects: it catches about 97% of injected smells and fails about 15% of their own recent commits. You set the limits in your global config, and a project can only tighten them. `somi check` runs it at commit scope and `somi check --full` at branch scope.
+- **`/somi-deliver` runs large work as a staged workflow,** on Claude Code and Copilot CLI: a scout on low, your rules written as tests on medium, a build on medium that steps up a tier when the checks, the gate or the rule tests fail, the checks, and the review the diff needs. Only you start it. On Copilot, `/somi-config` registers it, and it runs in experimental mode.
+- **Shards:** `somi slot <step> <plugin:component>` connects another plugin's skill, agent or tool to a named step. Shards keep working when a plugin updates and say so, and anything that writes outward asks first.
+- **An `access-control` signal** on changed role, permission, owner and tenant checks, added or removed.
+- **Six expertise skills, loaded when work calls for them:** secure coding, threat modeling, a testing checklist, CI and infrastructure gotchas, a performance method, and accessibility, plus `perf`, `migrate` and `accessibility` routes.
+- **`/somi-config` does the setup from the chat:** it checks the setup, writes the agent for `tiers.main`, and connects shards, by running SoMi's own commands for you.
+- **An update notice** that tells you a newer version exists, and never updates anything.
+- `somi setup`, `somi migrate` and `somi init --host copilot`.
+
+### Removed
+
+- The 4.x commands, specialists, flow skills, the `somi-flow` runner and `somi-general`.
+- `clean-code`, `solid-principles`, `reasoning-craft` and the general `observability` skill, as the evidence shows they do not pay.
+- Pre-code sizing, the design and planning document chain, parallel orchestration, bounded loops and their state, and the diary and progress files.
+
+### Fixed
+
+- **The security reviewer no longer runs for a regex or a comment.** A regex's own `.exec(` is not a shell call, and a whole-line comment naming `fetch`, a sink or a permission does not count. Any other `exec`, a call with a comment after it, and a key pasted into a comment still fire.
+- **The mutation check no longer reports a partial run as a pass.** It runs every mutant, says how many ran of how many, and fails when any was left out, timed out or had no mapped tests.
+- **A field the model made up in a tool call** is named back to it, instead of reading as an empty request.
+
 ## [4.1.1] — 2026-11-04 — fix: loop plan files saved with CRLF on Windows, comma-joined `--files`, `--findings` from PowerShell
 
 **Patch — fixes only.** A stopgap for the parts of issue #46 that are bugs in 4.1 and small to fix; the loop

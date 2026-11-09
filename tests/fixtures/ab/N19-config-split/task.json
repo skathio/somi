@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "src/config.mjs mixes reading lines and filling in variables. Move the reading into parseLines(text) in src/parse.mjs, which returns a list of { key, value, line }, and the filling in into interpolate(entries, env) in src/interpolate.mjs, which returns the finished object. parseConfig(text, env) stays in src/config.mjs and composes them.",
+    "Every answer and every error parseConfig gives today stays exactly the same. Other teams depend on it.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N19-24153f614e864a8e",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Split the config parser into a reading step and an interpolation step, as the numbered statements describe. Nothing about parseConfig may change. Follow the conventions already in the code."
+}

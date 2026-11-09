@@ -1,0 +1,1 @@
+Use when a review should judge structure. Check dependency direction, new public contracts, what would be hard to reverse, and whether the change fits the boundaries already there. Raise a finding only for a concrete cost.

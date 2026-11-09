@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Add percentage rollouts and per-user lists to feature flags, following the rules in the README. A flag can now carry percent, allow and deny.",
+    "isEnabled(store, name, userId) in src/flags.mjs answers by those rules. setFlag(store, flag, actor, now) in src/admin.mjs saves a flag.",
+    "setFlag refuses a percent that is not a whole number from 0 to 100, or lists that are not arrays, with HttpError 400 invalid_flag.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N14-2151bb3314e52d28",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add percentage rollouts and user lists to the feature flags, as the numbered statements describe. Follow the conventions already in the code and change only what the ticket needs."
+}

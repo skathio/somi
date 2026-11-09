@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Marketing writes email templates with placeholders, and customer data fills them in. Add render(template, values) in src/templates.mjs, returning { html, missing }.",
+    "A placeholder is {{name}}, with optional spaces inside the braces, and a dotted path such as {{user.name}} goes through nested objects. Marketing's templates are trusted, but values come from customers, and the result is HTML.",
+    "A placeholder with no value renders as nothing, and its name goes in `missing` once, in the order first seen. Zero and false are values and render as text. Null and undefined count as no value.",
+    "Write \\\\{{ in a template to get a literal {{ in the output, with no placeholder. Add no dependency."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N38-870c1422ee704ede",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add the email template renderer the ticket describes, safely, since its values come from customers."
+}

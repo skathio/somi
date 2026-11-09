@@ -1,0 +1,8 @@
+{
+  "name": "n20-import-unify",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

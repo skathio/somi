@@ -7,11 +7,12 @@
 //   Not covered: reversed or re-encoded forms (base64, hex), and fragments shorter than 12 characters.
 // Sink (createSink): stdout goes to disk line by line, redacted. The scan flags the task canary, the token, a
 //   `sk-ant-` prefix and, in assistant and user events only (what the agent did and saw), the repository's
-//   tests/evals/ab path, the task's hidden and oracle paths, another draw's temp directory and the env file name.
+//   tests/fixtures/ab path, the task's hidden and oracle paths, another draw's temp directory and the env file name.
 // Inspection (inspectDraw, run after the child is gone): the canary in any file of the after manifest (a silent copy of
 //   the oracle), the canary, the repository path and the token in the session transcripts under cfg/projects (then
 //   deleted, a redacted copy kept when small), and the token redacted in place in every regular file of the workspace and
-//   the config directory. Links are never followed. Git objects are compressed and are not searched for the canary.
+//   the config directory. Links are never followed. A directory the walk cannot read is not called clean: what it holds could not be
+//   searched or redacted, so the scan reports it unscanned. Git objects are compressed and are not searched for the canary.
 // Sweep (sweepProcesses): SIGKILL every process whose environment holds the draw's unique config directory entry, so a
 //   process that left the process group (setsid) cannot outlive the draw. Linux /proc only; elsewhere it does nothing.
 
@@ -55,35 +56,59 @@ export function redactToken(text, token) {
 
 const parse = (l) => { try { const v = JSON.parse(l); return typeof v === 'object' && v !== null ? v : null; } catch { return null; } };
 
+function limitText(s, t) {
+  if (typeof t !== 'string' || !LIMIT_TEXT.test(t)) return;
+  s.limit = true;
+  s.reset ??= RESET_TEXT.exec(t)?.[0].replace(/^resets /i, '').trim() ?? null;
+}
+
+// The system events list the plugin's own files; only what the agent did and saw is scanned for paths.
+function agentPathLeaks(k, raw) {
+  for (const [name, needle] of k.paths) if (raw.includes(needle)) k.s.leaks.add(name);
+  // The own directory also shows up in its relative form (Node's "Did you mean to import ./ab-draw-X/..." hint), so
+  // both spellings are removed before looking for another draw's directory.
+  const own = k.ownTmp ? k.ownTmp.slice(k.ownTmp.lastIndexOf('/')) : null;
+  if ((k.ownTmp ? raw.split(k.ownTmp).join('').split(own).join('') : raw).includes('/ab-draw-')) k.s.leaks.add('other-draw');
+}
+
+function scanLeaks(k, raw, ev) {
+  if (tokenHit(raw, k.token)) k.s.leaks.add('token');
+  if (raw.includes(k.canary)) k.s.leaks.add('canary');
+  if (raw.includes('sk-ant-')) k.s.leaks.add('sk-ant-');
+  if (!ev || ev.type === 'assistant' || ev.type === 'user') agentPathLeaks(k, raw);
+}
+
+// A call ends in one result event per background wait: the last carries the call's cumulative cost, turns are per event.
+function readResult(s, ev) {
+  s.result = ev;
+  if (Number.isInteger(ev.num_turns) && ev.num_turns >= 0) s.turns += ev.num_turns;
+  limitText(s, ev.result);
+}
+function readAssistant(s, ev) {
+  const t = ev.message.content.filter((b) => b?.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
+  if (t === '') return;
+  s.text = t;
+  limitText(s, t);
+}
+function readEvent(s, raw, ev) {
+  if (ev?.type === 'rate_limit_event' && /"status":"rejected"/.test(raw)) s.limit = true;
+  if (ev?.type === 'result') readResult(s, ev);
+  if (ev?.type === 'assistant' && Array.isArray(ev.message?.content)) readAssistant(s, ev);
+}
+
 /** Disk sink for one draw's stdout: feed(chunk) per read, turn() between claude invocations, end() at the close. */
 export function createSink(file, { token, canary, task, absAb, ownTmp, maxBytes = MAX_STREAM_BYTES }) {
   const fd = fs.openSync(file, 'a', 0o600);
   let dec = new StringDecoder('utf8');
   const s = { bytes: 0, capped: false, leaks: new Set(), result: null, turns: 0, text: '', limit: false, reset: null };
-  const limitText = (t) => { if (typeof t === 'string' && LIMIT_TEXT.test(t)) { s.limit = true; s.reset ??= RESET_TEXT.exec(t)?.[0].replace(/^resets /i, '').trim() ?? null; } };
   let pending = '';
-  const paths = [['ab-path', 'tests/evals/ab'], ['task-hidden', `${task}/hidden`], ['task-oracle', `${task}/oracle`], ['eval-env', '.somi/eval.env']];
+  const paths = [['ab-path', 'tests/fixtures/ab'], ['task-hidden', `${task}/hidden`], ['task-oracle', `${task}/oracle`], ['eval-env', '.somi/eval.env']];
   if (absAb) paths.push(['ab-path', absAb]);
+  const k = { s, token, canary, paths, ownTmp };
   function line(raw) {
     const ev = parse(raw);
-    if (tokenHit(raw, token)) s.leaks.add('token');
-    if (raw.includes(canary)) s.leaks.add('canary');
-    if (raw.includes('sk-ant-')) s.leaks.add('sk-ant-');
-    // The system events list the plugin's own files; only what the agent did and saw is scanned for paths.
-    if (!ev || ev.type === 'assistant' || ev.type === 'user') {
-      for (const [name, needle] of paths) if (raw.includes(needle)) s.leaks.add(name);
-      // The own directory also shows up in its relative form (Node's "Did you mean to import ./ab-draw-X/..." hint), so
-      // both spellings are removed before looking for another draw's directory.
-      const own = ownTmp ? ownTmp.slice(ownTmp.lastIndexOf('/')) : null;
-      if ((ownTmp ? raw.split(ownTmp).join('').split(own).join('') : raw).includes('/ab-draw-')) s.leaks.add('other-draw');
-    }
-    if (ev?.type === 'rate_limit_event' && /"status":"rejected"/.test(raw)) s.limit = true;
-    // A call ends in one result event per background wait: the last carries the call's cumulative cost, turns are per event.
-    if (ev?.type === 'result') { s.result = ev; if (Number.isInteger(ev.num_turns) && ev.num_turns >= 0) s.turns += ev.num_turns; limitText(ev.result); }
-    if (ev?.type === 'assistant' && Array.isArray(ev.message?.content)) {
-      const t = ev.message.content.filter((b) => b?.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
-      if (t !== '') { s.text = t; limitText(t); }
-    }
+    scanLeaks(k, raw, ev);
+    readEvent(s, raw, ev);
     fs.writeSync(fd, `${redactToken(raw, token)}\n`);
   }
   const drain = (final) => {
@@ -117,20 +142,25 @@ function readNoFollow(file, max = MAX_FILE) {
     return st.isFile() && st.size <= max ? fs.readFileSync(fd) : null;
   } catch { return null; } finally { if (fd !== null) try { fs.closeSync(fd); } catch { /* read-only handle */ } }
 }
-/** Regular files under `root` (links and special files skipped, never followed), or null when the walk exceeded its cap. */
+/** Regular files under `root` (links and special files skipped, never followed), or null when the walk exceeded its cap or met a
+ * directory it could not read. */
 function filesUnder(root) {
-  const out = []; let n = 0;
-  const walk = (dir, depth) => {
-    if (depth > 32) return false;
-    let names; try { names = fs.readdirSync(dir); } catch { return true; }
-    for (const name of names) {
-      if (++n > MAX_WALK) return false;
-      const p = path.join(dir, name); let st; try { st = fs.lstatSync(p); } catch { continue; }
-      if (st.isDirectory()) { if (!walk(p, depth + 1)) return false; } else if (st.isFile()) out.push(p);
-    }
-    return true;
-  };
-  return walk(root, 0) ? out : null;
+  const ctx = { out: [], n: 0 };
+  return walkFiles(ctx, root, 0) ? ctx.out : null;
+}
+function walkFiles(ctx, dir, depth) {
+  if (depth > 32) return false;
+  let names; try { names = fs.readdirSync(dir); } catch { return false; }
+  for (const name of names) {
+    if (++ctx.n > MAX_WALK || !walkEntry(ctx, path.join(dir, name), depth)) return false;
+  }
+  return true;
+}
+function walkEntry(ctx, p, depth) {
+  let st; try { st = fs.lstatSync(p); } catch { return true; }
+  if (st.isDirectory()) return walkFiles(ctx, p, depth + 1);
+  if (st.isFile()) ctx.out.push(p);
+  return true;
 }
 function redactInPlace(file, token) {
   const buf = readNoFollow(file);
@@ -141,34 +171,71 @@ function redactInPlace(file, token) {
   return true;
 }
 
+// The canary in any file of the after manifest is a silent copy of the oracle.
+function workspaceLeaks(leaks, { ws, after, canary }) {
+  if (!after?.ok) return leaks.add('unscanned-workspace');
+  for (const [rel] of after.files) {
+    const b = readNoFollow(path.join(ws, rel));
+    if (b === null) leaks.add('unscanned-workspace');
+    else if (b.includes(canary)) leaks.add('canary-in-file');
+  }
+  return leaks;
+}
+
+function keepCopy(o, text, n) {
+  fs.mkdirSync(path.join(o.drawDir, 'transcripts'), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(o.drawDir, 'transcripts', `${n}.jsonl`), redactToken(text, o.token), { mode: 0o600 });
+}
+function scanTranscript(leaks, f, o, kept) {
+  const b = readNoFollow(f);
+  if (b === null) return leaks.add('unscanned-transcript');
+  const text = b.toString('latin1');
+  if (text.includes(o.canary)) leaks.add('canary-in-transcript');
+  if (o.absAb && text.includes(o.absAb)) leaks.add('ab-path-in-transcript');
+  if (tokenHit(text, o.token)) leaks.add('token');
+  if (b.length <= KEEP_COPY) keepCopy(o, text, ++kept.n);
+  return leaks;
+}
+// A directory nobody may read or write cannot be emptied, so each one is opened to its owner first (links are not followed).
+function unlockDirs(dir, depth = 0) {
+  if (depth > 32) return;
+  try { fs.chmodSync(dir, 0o700); } catch { return; }
+  let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const e of entries.filter((x) => x.isDirectory())) unlockDirs(path.join(dir, e.name), depth + 1);
+}
+function removeUnlocked(dir) {
+  unlockDirs(dir);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// The session transcripts are scanned, kept redacted when small, then deleted; a projects entry that is not a directory is removed.
+function transcriptLeaks(leaks, o) {
+  const proj = path.join(o.cfg, 'projects');
+  let st = null; try { st = fs.lstatSync(proj); } catch { /* no transcripts */ }
+  if (st === null) return;
+  if (!st.isDirectory()) return fs.rmSync(proj, { force: true });
+  const list = filesUnder(proj);
+  if (list === null) leaks.add('unscanned-transcript');
+  const kept = { n: 0 };
+  for (const f of (list ?? []).filter((x) => x.endsWith('.jsonl'))) scanTranscript(leaks, f, o, kept);
+  return removeUnlocked(proj);
+}
+
+// The token is redacted in place in every regular file of the workspace and the config directory.
+function redactRoots(leaks, roots, token) {
+  for (const root of roots) {
+    const list = filesUnder(root);
+    if (list === null) leaks.add('unscanned-workspace');
+    else if (list.filter((f) => redactInPlace(f, token)).length > 0) leaks.add('token');
+  }
+}
+
 /** After the child is gone -> the set of leak names found on disk; transcripts are deleted, token copies redacted. */
 export function inspectDraw({ ws, cfg, after, drawDir, token, canary, absAb }) {
   const leaks = new Set();
-  if (!after?.ok) leaks.add('unscanned-workspace');
-  else for (const [rel] of after.files) { const b = readNoFollow(path.join(ws, rel)); if (b === null) leaks.add('unscanned-workspace'); else if (b.includes(canary)) leaks.add('canary-in-file'); }
-  const proj = path.join(cfg, 'projects');
-  let st = null; try { st = fs.lstatSync(proj); } catch { /* no transcripts */ }
-  if (st?.isDirectory()) {
-    const list = filesUnder(proj);
-    if (list === null) leaks.add('unscanned-transcript');
-    let k = 0;
-    for (const f of list ?? []) {
-      if (!f.endsWith('.jsonl')) continue;
-      const b = readNoFollow(f);
-      if (b === null) { leaks.add('unscanned-transcript'); continue; }
-      const text = b.toString('latin1');
-      if (text.includes(canary)) leaks.add('canary-in-transcript');
-      if (absAb && text.includes(absAb)) leaks.add('ab-path-in-transcript');
-      if (tokenHit(text, token)) leaks.add('token');
-      if (b.length <= KEEP_COPY) { fs.mkdirSync(path.join(drawDir, 'transcripts'), { recursive: true, mode: 0o700 }); fs.writeFileSync(path.join(drawDir, 'transcripts', `${++k}.jsonl`), redactToken(text, token), { mode: 0o600 }); }
-    }
-    fs.rmSync(proj, { recursive: true, force: true });
-  } else if (st !== null) fs.rmSync(proj, { force: true });
-  for (const root of [ws, cfg]) {
-    const list = filesUnder(root);
-    if (list === null) { leaks.add('unscanned-workspace'); continue; }
-    for (const f of list) if (redactInPlace(f, token)) leaks.add('token');
-  }
+  workspaceLeaks(leaks, { ws, after, canary });
+  transcriptLeaks(leaks, { cfg, drawDir, token, canary, absAb });
+  redactRoots(leaks, [ws, cfg], token);
   return [...leaks].sort();
 }
 
@@ -176,12 +243,20 @@ export function inspectDraw({ ws, cfg, after, drawDir, token, canary, absAb }) {
 export async function sweepProcesses(entry, capMs = 2000) {
   const needle = Buffer.from(`\0${entry}\0`); const end = Date.now() + capMs;
   for (;;) {
-    let killed = 0;
-    let pids; try { pids = fs.readdirSync('/proc').filter((n) => /^\d+$/.test(n) && Number(n) !== process.pid); } catch { return; }
-    for (const pid of pids) {
-      try { if (Buffer.concat([Buffer.from('\0'), fs.readFileSync(`/proc/${pid}/environ`)]).includes(needle)) { process.kill(Number(pid), 'SIGKILL'); killed++; } } catch { /* gone or not ours */ }
-    }
-    if (killed === 0 || Date.now() > end) return;
+    const killed = killHolding(needle);
+    if (killed === null || killed === 0 || Date.now() > end) return;
     await new Promise((r) => setTimeout(r, 50));
   }
+}
+// SIGKILL to every process whose environment holds `needle`: how many there were, or null where there is no /proc.
+function killHolding(needle) {
+  let pids; try { pids = fs.readdirSync('/proc').filter((n) => /^\d+$/.test(n) && Number(n) !== process.pid); } catch { return null; }
+  return pids.filter((pid) => killIfHolding(pid, needle)).length;
+}
+function killIfHolding(pid, needle) {
+  try {
+    if (!Buffer.concat([Buffer.from('\0'), fs.readFileSync(`/proc/${pid}/environ`)]).includes(needle)) return false;
+    process.kill(Number(pid), 'SIGKILL');
+    return true;
+  } catch { return false; /* gone or not ours */ }
 }

@@ -1,0 +1,8 @@
+{
+  "name": "n32-retry-after",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,196 @@
+{
+  "budget_s": 60,
+  "full_cmd": "npm test",
+  "always": [
+    "tests/goldens.test.mjs"
+  ],
+  "model_name_gate": true,
+  "gate_exclude": [
+    "CHANGELOG.md",
+    "tests/",
+    "site/",
+    "benchmarks/",
+    "scripts/lib/gates.mjs",
+    "profiles/",
+    "docs/"
+  ],
+  "map": {
+    "scripts/somi.mjs": [
+      "tests/reviews.test.mjs",
+      "tests/check.test.mjs",
+      "tests/quality.test.mjs"
+    ],
+    "scripts/somi-mcp.mjs": [
+      "tests/mcp.test.mjs"
+    ],
+    "scripts/check-links.mjs": [
+      "tests/surface.test.mjs"
+    ],
+    "scripts/check-frontmatter.mjs": [
+      "tests/surface.test.mjs"
+    ],
+    "scripts/lib/policy.mjs": [
+      "tests/reviews.test.mjs"
+    ],
+    "scripts/lib/tiers.mjs": [
+      "tests/advisor.test.mjs",
+      "tests/reviews.test.mjs"
+    ],
+    "scripts/lib/git-tree.mjs": [
+      "tests/reviews.test.mjs",
+      "tests/signals.test.mjs",
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/signals.mjs": [
+      "tests/signals.test.mjs"
+    ],
+    "scripts/lib/path-facts.mjs": [
+      "tests/signals.test.mjs"
+    ],
+    "scripts/lib/path-safety.mjs": [
+      "tests/signals.test.mjs"
+    ],
+    "scripts/lib/check.mjs": [
+      "tests/check.test.mjs",
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/gates.mjs": [
+      "tests/check.test.mjs"
+    ],
+    "scripts/lib/doctor.mjs": [
+      "tests/doctor.test.mjs"
+    ],
+    "scripts/lib/init.mjs": [
+      "tests/doctor.test.mjs"
+    ],
+    "scripts/lib/views.mjs": [
+      "tests/goldens.test.mjs"
+    ],
+    "scripts/lib/migrate.mjs": [
+      "tests/reviews.test.mjs"
+    ],
+    "scripts/lib/config-files.mjs": [
+      "tests/signals.test.mjs"
+    ],
+    "scripts/lib/mcp-project-root.mjs": [
+      "tests/mcp.test.mjs"
+    ],
+    "hooks/": [
+      "tests/hooks.test.mjs",
+      "tests/advisor.test.mjs"
+    ],
+    "agents/": [
+      "tests/surface.test.mjs"
+    ],
+    "commands/": [
+      "tests/surface.test.mjs"
+    ],
+    "skills/": [
+      "tests/surface.test.mjs"
+    ],
+    "rules/": [
+      "tests/surface.test.mjs"
+    ],
+    "benchmarks/v2/": [
+      "tests/bench.test.mjs"
+    ],
+    "scripts/lib/routes.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/workflows.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/ledger.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/shards.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/update-notice.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "library/": [
+      "tests/advisor.test.mjs",
+      "tests/surface.test.mjs"
+    ],
+    "scripts/lib/advisor.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/reviews.mjs": [
+      "tests/reviews.test.mjs"
+    ],
+    "scripts/lib/plan.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/setup.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/state.mjs": [
+      "tests/reviews.test.mjs"
+    ],
+    "scripts/lib/prompt.mjs": [
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/pr.mjs": [
+      "tests/reviews.test.mjs",
+      "tests/mcp.test.mjs",
+      "tests/quality.test.mjs"
+    ],
+    "workflows/": [
+      "tests/workflows.test.mjs"
+    ],
+    "scripts/lib/copilot-workflow.mjs": [
+      "tests/workflows.test.mjs",
+      "tests/doctor.test.mjs",
+      "tests/advisor.test.mjs"
+    ],
+    "scripts/lib/quality/parse.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/metrics.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/clones.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/css.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/limits.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/gate.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "tests/evals/lib/task-store.mjs": [
+      "tests/task-store.test.mjs",
+      "tests/canary.test.mjs"
+    ],
+    "scripts/lib/quality/run.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "scripts/lib/quality/repo.mjs": [
+      "tests/quality.test.mjs"
+    ],
+    "tests/evals/lib/manifest.mjs": [
+      "tests/manifest.test.mjs",
+      "tests/task-store.test.mjs"
+    ],
+    "tests/evals/lib/score-hidden.mjs": [
+      "tests/score-hidden.test.mjs"
+    ],
+    "tests/evals/lib/admit.mjs": [
+      "tests/admit.test.mjs"
+    ],
+    "tests/evals/lib/ab-stream.mjs": [
+      "tests/ab-stream.test.mjs"
+    ],
+    "tests/evals/lib/ab-draw.mjs": [
+      "tests/ab-draw.test.mjs",
+      "tests/bench.test.mjs"
+    ],
+    "tests/evals/lib/ab-sandbox.mjs": [
+      "tests/bench.test.mjs"
+    ]
+  }
+}

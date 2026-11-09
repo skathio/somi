@@ -1,0 +1,26 @@
+[
+ {
+  "name": "reserializes",
+  "file": "src/inbound.mjs",
+  "find": ".update(Buffer.concat([Buffer.from(`${t}.`), rawBody]))",
+  "replace": ".update(`${t}.${JSON.stringify(JSON.parse(rawBody.toString('utf8')))}`)"
+ },
+ {
+  "name": "one-sided-window",
+  "file": "src/inbound.mjs",
+  "find": "Math.abs(now - t * 1000) > WINDOW",
+  "replace": "now - t * 1000 > WINDOW"
+ },
+ {
+  "name": "seen-before-check",
+  "file": "src/inbound.mjs",
+  "find": "if (deps.seen.has(event.id)) throw new HttpError(409, 'replayed', 'already accepted');\n  deps.seen.set(event.id, now);",
+  "replace": "deps.seen.set(event.id, now);"
+ },
+ {
+  "name": "first-v1-only",
+  "file": "src/inbound.mjs",
+  "find": "const ok = given.some((sig) => deps.secrets.some((secret) => matches(sig, secret, t, rawBody)));",
+  "replace": "const ok = deps.secrets.some((secret) => matches(given[0], secret, t, rawBody));"
+ }
+]

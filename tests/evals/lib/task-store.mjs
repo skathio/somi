@@ -17,6 +17,8 @@
 //   root_files      array of 0..64 distinct tolerated root file names (single segment).
 //   brief           the fixed brief: 1..8192 UTF-16 units, the same character rule as statements except that
 //                   newline and tab are allowed, and not only whitespace.
+//   turns           optional: an array of 1..16 distinct follow-up messages, sent in order after the first turn ends, the
+//                   same character rule as statements. They let a task test what a session keeps across a conversation.
 //   Every other key is refused (the reason is `task.json: unknown key <key>`, the key escaped and cut to 64
 //   bytes). `.git` and `.somi` and their subpaths cannot be declared. A path is relative and obeys the manifest path rule (no leading '/', no empty, '.'
 //   or '..' segment, no backslash, NFC, the manifest name rule per segment).
@@ -24,8 +26,6 @@
 // task.json holds the canary, so the runner must take `brief` out of it and
 // never mount task.json where the candidate can read it (the task standard wins over a candidate-visible
 // fixture reading of the brief). validateTaskJson returns `{ok: false, reason}`, not null, so the field is named.
-//
-// declaredScope(task) -> the `declared` argument of scopeVerdict: {source: {files, dirs}, testDir, rootFiles}.
 //
 // taskHash(dir, {fs}) -> {ok: true, hash, task} or {ok: false, reason}; `fs` is for tests only. The directory must
 // hold a valid `task.json` at its root and pass lstatManifest (a link, special file, bad name or cap anywhere is
@@ -64,6 +64,7 @@ const MAX_JSON_BYTES = 256 * 1024;
 const HIDDEN_DIRS = ['hidden', 'oracle', 'oracle2'];
 const LAYOUT = ['fixture', ...HIDDEN_DIRS];
 const KEYS = ['schema_version', 'statements', 'runner', 'canary', 'source', 'test_dir', 'root_files', 'brief'];
+const OPTIONAL = ['turns'];
 const RUNNERS = ['node-test', 'playwright'];
 const CANARY = /^[A-Za-z0-9_-]{16,64}$/;
 const UNSAFE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\u2028\u2029\u3164\u115f\u1160\uffa0\u2800]/u;
@@ -106,10 +107,11 @@ const dirPath = (p, field) => {
   return p;
 };
 
-function readTask(obj) {
+// Every required key, each read once as a plain data property; an unknown key or a missing one is refused.
+function rawFields(obj) {
   plainObject(obj, 'task.json');
   const keys = Reflect.ownKeys(obj);
-  const extra = keys.find((k) => !KEYS.includes(k));
+  const extra = keys.find((k) => !KEYS.includes(k) && !OPTIONAL.includes(k));
   // The key is hostile text: bounded before it is escaped, so the reason stays printable ASCII and short.
   if (extra !== undefined) bad('task.json', `unknown key ${esc(String(extra).slice(0, 64)).slice(0, 64)}`);
   const raw = {};
@@ -117,37 +119,55 @@ function readTask(obj) {
     if (!keys.includes(k)) bad(k, 'missing');
     raw[k] = own(obj, k, k);
   }
-  if (raw.schema_version !== 1) bad('schema_version', 'must be 1');
-  const statements = distinct(list(raw.statements, 'statements', 1), 'statements');
-  if (!statements.every(isText)) bad('statements', 'a line is not plain 1..512-unit text');
-  if (!RUNNERS.includes(raw.runner)) bad('runner', `must be one of ${RUNNERS.join(', ')}`);
-  if (typeof raw.canary !== 'string' || !CANARY.test(raw.canary)) bad('canary', 'must match [A-Za-z0-9_-]{16,64}');
+  return { raw, keys };
+}
+
+const textLines = (v, field, why) => {
+  const lines = distinct(list(v, field, 1), field);
+  if (!lines.every(isText)) bad(field, why);
+  return lines;
+};
+
+// The declared scope: source entries (a trailing '/' marks a directory), the test directory and the root files.
+function readScope(raw) {
   const source = list(raw.source, 'source', 1);
-  // A trailing '/' marks a directory; "src" and "src/" name the same path, so they are duplicates.
+  // "src" and "src/" name the same path, so they are duplicates.
   const bare = source.map((p) => dirPath(typeof p === 'string' && p.endsWith('/') ? p.slice(0, -1) : p, 'source'));
   distinct(bare, 'source');
   const testDir = dirPath(raw.test_dir, 'test_dir');
   const rootFiles = distinct(list(raw.root_files, 'root_files', 0), 'root_files');
   if (!rootFiles.every((p) => typeof p === 'string' && validPath(p) && !p.includes('/') && !reserved(p))) bad('root_files', 'a name is not a single valid path segment');
+  return { source, test_dir: testDir, root_files: rootFiles };
+}
+
+function readTurns(obj, keys) {
+  const turns = keys.includes('turns') ? distinct(list(own(obj, 'turns', 'turns'), 'turns', 1), 'turns') : [];
+  if (turns.length > 16 || !turns.every(isText)) bad('turns', 'must be 1..16 lines of plain 1..512-unit text');
+  return turns;
+}
+
+// The fields are checked in a fixed order, so the first rule a task breaks is the one its refusal names.
+function readTask(obj) {
+  const { raw, keys } = rawFields(obj);
+  if (raw.schema_version !== 1) bad('schema_version', 'must be 1');
+  const statements = textLines(raw.statements, 'statements', 'a line is not plain 1..512-unit text');
+  if (!RUNNERS.includes(raw.runner)) bad('runner', `must be one of ${RUNNERS.join(', ')}`);
+  if (typeof raw.canary !== 'string' || !CANARY.test(raw.canary)) bad('canary', 'must match [A-Za-z0-9_-]{16,64}');
+  const scope = readScope(raw);
   if (!isBrief(raw.brief)) bad('brief', 'must be 1..8192 units of plain text');
-  return { schema_version: 1, statements, runner: raw.runner, canary: raw.canary, source, test_dir: testDir, root_files: rootFiles, brief: raw.brief };
+  const turns = readTurns(obj, keys);
+  return { schema_version: 1, statements, runner: raw.runner, canary: raw.canary, ...scope, brief: raw.brief, turns };
 }
 
 /** A parsed `task.json` value -> `{ok: true, task}` (deep-frozen plain copy) or `{ok: false, reason}` naming the field. */
 export function validateTaskJson(obj) {
   try {
     const t = readTask(obj);
-    for (const k of ['statements', 'source', 'root_files']) Object.freeze(t[k]);
+    for (const k of ['statements', 'source', 'root_files', 'turns']) Object.freeze(t[k]);
     return { ok: true, task: Object.freeze(t) };
   } catch (e) {
     return e instanceof Bad ? refuse(e.field, e.message) : refuse('task.json', 'unreadable');
   }
-}
-
-/** A validated task -> the `declared` argument of `scopeVerdict`: a source entry ending in '/' is a directory. */
-export function declaredScope(task) {
-  const dirs = task.source.filter((p) => p.endsWith('/')).map((p) => p.slice(0, -1));
-  return { source: { files: task.source.filter((p) => !p.endsWith('/')), dirs }, testDir: task.test_dir, rootFiles: [...task.root_files] };
 }
 
 // Bytes of `file` (a regular file of at most `max` bytes, opened without following a link or blocking), or null.
@@ -166,23 +186,35 @@ function readSmall(f, file, max = MAX_JSON_BYTES) {
 // The first thing the manifest does not cover that a task must not have, as a reason, or null: a root `.git`, a
 // file with an execute bit, an empty directory. Also refuses a file the manifest did not list (changed since).
 function strayReason(f, root, listed) {
-  const seen = new Set();
-  const walk = (rel) => {
-    const names = f.readdirSync(rel === '' ? root : `${root}/${rel}`);
-    if (names.length === 0 && rel !== '') return `empty directory at ${esc(rel)}`;
-    for (const name of names) {
-      const p = rel === '' ? name : `${rel}/${name}`;
-      if (rel === '' && name === '.git') return `root .git entry at ${esc(p)}`;
-      const st = f.lstatSync(`${root}/${p}`);
-      if (st.isDirectory()) { const r = walk(p); if (r) return r; } else if (st.isFile()) {
-        if ((st.mode & 0o111) !== 0) return `execute bit at ${esc(p)}`;
-        seen.add(p);
-      } else return `changed since it was listed at ${esc(p)}`;
-    }
-    return null;
-  };
-  const r = walk('');
-  return r ?? (seen.size === listed.size && [...seen].every((p) => listed.has(p)) ? null : 'changed since it was listed');
+  const ctx = { f, root, seen: new Set() };
+  const r = strayIn(ctx, '');
+  return r ?? (ctx.seen.size === listed.size && [...ctx.seen].every((p) => listed.has(p)) ? null : 'changed since it was listed');
+}
+function strayIn(ctx, rel) {
+  const names = ctx.f.readdirSync(rel === '' ? ctx.root : `${ctx.root}/${rel}`);
+  if (names.length === 0 && rel !== '') return `empty directory at ${esc(rel)}`;
+  for (const name of names) {
+    const r = strayEntry(ctx, rel, name);
+    if (r) return r;
+  }
+  return null;
+}
+function strayEntry(ctx, rel, name) {
+  const p = rel === '' ? name : `${rel}/${name}`;
+  if (rel === '' && name === '.git') return `root .git entry at ${esc(p)}`;
+  const st = ctx.f.lstatSync(`${ctx.root}/${p}`);
+  if (st.isDirectory()) return strayIn(ctx, p);
+  if (!st.isFile()) return `changed since it was listed at ${esc(p)}`;
+  if ((st.mode & 0o111) !== 0) return `execute bit at ${esc(p)}`;
+  ctx.seen.add(p);
+  return null;
+}
+
+// task.json as JSON, read again and checked against the hash the manifest took.
+function readTaskJson(f, root, hash) {
+  const bytes = readSmall(f, `${root}/task.json`);
+  if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== hash) return refuse('task.json', 'unreadable, too large or changed since it was hashed');
+  try { return { ok: true, value: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) }; } catch { return refuse('task.json', 'not valid UTF-8 JSON'); }
 }
 
 // The shared start of taskHash and canaryCheck: the manifest, the validated task and the injected-or-real fs.
@@ -194,11 +226,9 @@ function load(dir, opts) {
   if (!entry) return refuse('task.json', 'missing');
   const root = dir.replace(/\/+$/, '') || '/';
   const f = opts === undefined ? fs : opts.fs;
-  const bytes = readSmall(f, `${root}/task.json`);
-  if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== entry[1]) return refuse('task.json', 'unreadable, too large or changed since it was hashed');
-  let parsed;
-  try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { return refuse('task.json', 'not valid UTF-8 JSON'); }
-  const v = validateTaskJson(parsed);
+  const parsed = readTaskJson(f, root, entry[1]);
+  if (!parsed.ok) return parsed;
+  const v = validateTaskJson(parsed.value);
   if (!v.ok) return v;
   const stray = strayReason(f, root, new Set(m.files.map((e) => e[0])));
   return stray === null ? { ok: true, m, task: v.task, f, root } : refuse('dir', stray);
@@ -220,28 +250,42 @@ export function taskHash(dir, opts) {
 }
 
 /** A task directory -> `{ok: true}` or `{ok: false, reason}` naming the first offending file; the rules are in the header. */
+// The task's own text and declared paths, which a candidate sees, must not hold the canary.
+function declaredLeak(task, canary) {
+  const declared = [['source', task.source], ['test_dir', [task.test_dir]], ['root_files', task.root_files]];
+  const leak = declared.find(([, paths]) => paths.some((x) => x.includes(canary)));
+  if (leak) return refuse(leak[0], 'a declared path contains the canary');
+  if (task.brief.includes(canary)) return refuse('brief', 'contains the canary');
+  if (task.statements.some((s) => s.includes(canary))) return refuse('statements', 'a line contains the canary');
+  if (task.turns.some((s) => s.includes(canary))) return refuse('turns', 'a line contains the canary');
+  return null;
+}
+
+// One file under the task: where it may sit, that it still matches its hash, and that the canary is in every hidden file and in no
+// file a candidate sees.
+function fileProblem(l, p, fileHash, canary) {
+  const top = p.split('/')[0];
+  if (!p.includes('/') || !LAYOUT.includes(top)) return refuse('dir', `unexpected top-level entry at ${esc(p)}`);
+  if (p.includes(canary)) return refuse(esc(p), 'the path contains the canary');
+  const bytes = readSmall(l.f, `${l.root}/${p}`, MAX_FILE_BYTES);
+  if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== fileHash) return refuse(esc(p), 'unreadable, too large or changed since it was hashed');
+  // A file a candidate sees must lack the canary and a hidden one must have it, so a file fails when the two agree.
+  const visible = top === 'fixture';
+  if (visible === bytes.includes(Buffer.from(canary))) return refuse(esc(p), visible ? 'candidate-visible file contains the canary' : 'missing the canary');
+  return null;
+}
+
 export function canaryCheck(dir, opts) {
   try {
     const l = load(dir, opts);
     if (!l.ok) return l;
-    const { canary, brief, statements } = l.task;
-    const declared = [['source', l.task.source], ['test_dir', [l.task.test_dir]], ['root_files', l.task.root_files]];
-    const leak = declared.find(([, paths]) => paths.some((x) => x.includes(canary)));
-    if (leak) return refuse(leak[0], 'a declared path contains the canary');
-    const needle = Buffer.from(canary);
-    if (brief.includes(canary)) return refuse('brief', 'contains the canary');
-    if (statements.some((t) => t.includes(canary))) return refuse('statements', 'a line contains the canary');
+    const leak = declaredLeak(l.task, l.task.canary);
+    if (leak) return leak;
     const found = new Set();
-    for (const [p, fileHash] of l.m.files) {
-      const top = p.split('/')[0];
-      if (p === 'task.json') continue;
-      if (!p.includes('/') || !LAYOUT.includes(top)) return refuse('dir', `unexpected top-level entry at ${esc(p)}`);
-      if (p.includes(canary)) return refuse(esc(p), 'the path contains the canary');
-      const bytes = readSmall(l.f, `${l.root}/${p}`, MAX_FILE_BYTES);
-      if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== fileHash) return refuse(esc(p), 'unreadable, too large or changed since it was hashed');
-      const has = bytes.includes(needle);
-      if (top === 'fixture' ? has : !has) return refuse(esc(p), top === 'fixture' ? 'candidate-visible file contains the canary' : 'missing the canary');
-      found.add(top);
+    for (const [p, fileHash] of l.m.files.filter(([name]) => name !== 'task.json')) {
+      const problem = fileProblem(l, p, fileHash, l.task.canary);
+      if (problem) return problem;
+      found.add(p.split('/')[0]);
     }
     const none = HIDDEN_DIRS.find((d) => !found.has(d));
     return none === undefined ? { ok: true, hash: digest(l.m.files) } : refuse(`${none}/`, 'has no files (a check over nothing proves nothing)');

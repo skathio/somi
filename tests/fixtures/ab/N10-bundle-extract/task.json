@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "statements": [
+    "Customers upload a bundle of templates, a JSON list of { path, content } entries, with content in base64. Add extractBundle(bundle, dest) to src/bundles.mjs, which writes the files under the folder dest, creating folders as needed. It returns the number of files written.",
+    "A bundle the service will not take throws HttpError 400 with code invalid_bundle.",
+    "A bundle goes in completely or not at all. Limits are in src/config.mjs.",
+    "The new behaviour has tests in test/. Keep the change focused on what this ticket needs."
+  ],
+  "runner": "node-test",
+  "canary": "SOMI-CANARY-N10-34f2bdc2a292be12",
+  "source": [
+    "src/"
+  ],
+  "test_dir": "test",
+  "root_files": [
+    "README.md"
+  ],
+  "brief": "Add bundle extraction to the templates service, as the numbered statements describe. Follow the conventions already in the code and change only what the ticket needs."
+}

@@ -1,0 +1,8 @@
+{
+  "name": "n39-hide-email",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

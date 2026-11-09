@@ -1,0 +1,8 @@
+{
+  "name": "l1-shop-platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

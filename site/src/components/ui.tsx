@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { Tier } from '../lib/resolver';
 
 /** Renders the two inline marks content strings use: `code` and **bold** (which may contain `code`). */
 export function Rich({ text }: { text: string }) {
@@ -58,16 +57,6 @@ export function Card({ title, children, className = '' }: { title?: ReactNode; c
       <div className="text-muted">{children}</div>
     </div>
   );
-}
-
-const TIER_CLASS: Record<Tier, string> = {
-  low: 'bg-low-soft text-low',
-  medium: 'bg-medium-soft text-medium',
-  high: 'bg-high-soft text-high',
-};
-
-export function TierBadge({ tier }: { tier: Tier }) {
-  return <span className={`inline-block rounded-full px-2 py-px text-[0.7rem] font-bold normal-case tracking-normal ${TIER_CLASS[tier]}`}>{tier}</span>;
 }
 
 export function Bullets({ items }: { items: string[] }) {

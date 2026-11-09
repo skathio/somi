@@ -1,0 +1,8 @@
+{
+  "name": "n07-bulk-import",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
