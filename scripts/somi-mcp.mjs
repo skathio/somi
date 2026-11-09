@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// somi-mcp.mjs: a zero-dependency stdio MCP server with five tools. They give advice and keep a small record, and none of them holds up the
+// somi-mcp.mjs: a zero-dependency stdio MCP server with six tools. They give advice and keep a small record, and none of them holds up the
 // conversation: a question, a follow-up or a change of mind never needs to go through here.
 //
-// MCP servers run outside the OS sandbox on Claude Code, so this path never executes project commands. It only reads git and SoMi's own files.
+// MCP servers run outside the OS sandbox on Claude Code, so this path never executes project commands. It only reads git and SoMi's own files,
+// and runs SoMi's own quality gate, which parses them.
 //
 // Framing is newline-delimited JSON-RPC 2.0. Nothing but JSON-RPC reaches stdout; diagnostics go to stderr.
 
@@ -18,6 +19,8 @@ import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
 import { closePlan, markMilestoneDone, planStatus, savePlan } from './lib/plan.mjs';
 import { pullRequest } from './lib/pr.mjs';
+import { CHANGE_SCOPES, SCOPES } from './lib/quality/limits.mjs';
+import { describeAll, runQuality } from './lib/quality/run.mjs';
 import { readPrompt } from './lib/prompt.mjs';
 import { recordReviews, reviewPlan } from './lib/reviews.mjs';
 import { ShardError } from './lib/shards.mjs';
@@ -70,7 +73,7 @@ const TOOLS = [
         request: { type: 'string', description: 'The work: what the user wants, plus anything from the conversation it depends on, so that it reads on its own.' },
         hint: { type: 'string', description: 'A route name, when the user or an earlier answer named one.' },
         sensitive: { type: 'boolean', description: 'True only when the user has said this work is security-sensitive. Otherwise SoMi decides from the diff once the work is done.' },
-        staged: { type: 'boolean', description: 'True only when the user typed /somi:deliver, asking for this work to run as the staged workflow.' },
+        staged: { type: 'boolean', description: 'True only when the user typed /somi-deliver, asking for this work to run as the staged workflow.' },
         ticket: { type: 'object' },
         project_dir: PROJECT_DIR,
       },
@@ -109,6 +112,15 @@ const TOOLS = [
       type: 'object',
       additionalProperties: false,
       properties: { text: { type: 'string' }, done: { type: 'integer', minimum: 1 }, close: { type: 'boolean' }, project_dir: PROJECT_DIR },
+    },
+  },
+  {
+    name: 'somi_quality',
+    description: 'Checks code against the quality limits: the branch by default, one commit, or the whole codebase for a cleanup. Use when the user asks about code quality.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { scope: { type: 'string', enum: [...SCOPES], description: 'pr, the default, is the branch; commit is what a commit adds; repo is the whole codebase.' }, project_dir: PROJECT_DIR },
     },
   },
   {
@@ -167,6 +179,18 @@ function prTool(ctx, a) {
   return textResult(result.ok ? { ...result, ...shardAdvice(ctx, 'pr.open') } : result, !result.ok);
 }
 
+const QUALITY_ADVICE = 'Tell the user what failed, worst first, in a few lines. Fix it only if they ask, or if it is code you changed in this conversation: refactor until it passes with the tests still green, and never add a somi-gate-allow exemption to get past it. To change a limit, the user sets it under quality in their own config, which somi_route with hint config explains.';
+
+function qualityTool(ctx, a) {
+  const scope = a.scope ?? 'pr';
+  if (!SCOPES.includes(scope)) return textResult(`scope is one of ${SCOPES.join(', ')}.`, true);
+  const r = runQuality(ctx.root, { scope, env: ctx.env });
+  if (r.error) return textResult(r.error, true);
+  const worst = CHANGE_SCOPES.includes(scope) ? {} : { most_complex: r.summary.most_complex.slice(0, 5), most_findings: r.summary.most_findings.slice(0, 5) };
+  const ignored = r.ignored_config ? { ignored_config: r.ignored_config } : {};
+  return textResult({ ok: r.ok, scope, failures: describeAll(r.violations, scope), scored: r.scored, unanalyzed: r.unanalyzed.length, ...worst, ...ignored, advice: r.ok ? 'Everything is within the limits. Say so in one line.' : QUALITY_ADVICE });
+}
+
 function reviewAdvice(plan) {
   if (plan.covered) return 'An earlier review still covers this change, and nothing since calls for another. Do not run the reviewers again. Carry on.';
   if (plan.needed) return 'Start each listed reviewer as a fresh agent on its model, in the foreground, with its brief unchanged and nothing added. Start them together if the host allows it. Then call somi_review with reviews set to an array of every reviewer\'s JSON unchanged, and tree set to the tree above.';
@@ -188,6 +212,7 @@ const TOOL_HANDLERS = {
   somi_note: (ctx, a) => textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env)),
   somi_plan: planTool,
   somi_pr: prTool,
+  somi_quality: qualityTool,
   somi_review: reviewTool,
 };
 

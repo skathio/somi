@@ -48,8 +48,8 @@ async function main() {
   const facts = {
     version: releases[0].version,
     releases,
-    // An older command name still works but is not listed, so it stays off the page too.
-    commands: stems('commands', '.md').filter((c) => !/^disable-model-invocation: true$/m.test(fs.readFileSync(at('commands', `${c}.md`), 'utf8'))),
+    // Copilot lists every command, whether or not the model may start it.
+    commands: stems('commands', '.md'),
     agents: stems('agents', '.md'),
     skills: fs.readdirSync(at('skills')).filter((d) => fs.existsSync(at('skills', d, 'SKILL.md'))).sort(),
     hooks: hookFacts(),

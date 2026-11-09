@@ -2,17 +2,10 @@
 // commands disagree, so a new or removed command forces an update here.
 
 export const COMMANDS: Record<string, string> = {
-  somi: 'The default. Give it any request or ticket, and it routes the work to the right workflow.',
-  code: 'Build one clear change, with a review only if the diff calls for it.',
-  debug: 'Fix a bug whose cause is unknown, starting from a failing test.',
-  refactor: 'Change structure and keep behaviour, under green tests.',
-  plan: 'Split large work into milestones that each get fresh context.',
-  design: 'Settle an expensive-to-reverse choice, with options and reversal costs.',
-  review: 'Review the current changes or a named diff once.',
-  'security-review': 'Review for security on the strong tier, tracing input to each sink.',
-  upgrade: 'Upgrade a dependency from its real changelog and migrate its uses.',
-  incident: 'Restore a broken production service first, then record the follow-up.',
-  'a11y-check': 'Build or fix interface against an accessibility checklist and checker.',
-  ship: 'Run the full suite, then write the pull request text.',
-  'somi-config': 'Show which model each tier uses in this environment.',
+  somi: 'Routes anything, the way the agent does with plain words. Everything else is asked for in the chat.',
+  'somi-deliver': 'Runs large work as the staged workflow: scout, build, verify and review, each on its tier. Only you start it.',
+  'somi-review': 'Reviews the current changes, whether or not the diff calls for it.',
+  'somi-quality': 'Checks the code against the quality limits: the branch, one commit, or the whole codebase.',
+  'somi-status': 'Shows the open plan, decisions and findings.',
+  'somi-config': 'Shows and changes the models each tier uses and the quality limits, and checks the setup.',
 };

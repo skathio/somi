@@ -9,6 +9,8 @@ When the user asks for work to be done, such as a change, a bug fix, a plan, a r
 
 Route a ticket, a large piece of work, or a request when you are not sure which workflow fits it. Do a small, clear change yourself without routing, the way you would anyway, and do not route questions, explanations, fixes to what you just did, or changes of mind. A follow-up that changes code still ends with `somi_review`.
 
+When the user asks how good the code is, or for a cleanup, call `somi_quality`: the branch by default, or the whole codebase with scope repo.
+
 Before you tell the user a change is finished, make sure it had any review it needs. On Claude Code, SoMi checks the diff when your turn ends and tells you. Elsewhere, call `somi_review`. When SoMi gives you a brief for a worker or a reviewer, pass it unchanged: it already holds the request in the user's own words.
 
 If a SoMi tool is unavailable or returns an error, say so once and do the work yourself. A SoMi tool never stops you from helping the user.

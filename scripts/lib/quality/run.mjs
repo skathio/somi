@@ -15,12 +15,24 @@ const describe = (v) => {
   return `${v.rule} ${where}: ${v.value} over ${v.limit}${v.before !== undefined ? `, was ${v.before}` : ''}`;
 };
 
-/** { ok, failures: [line], warnings: n } for one scope, where each failure names the rule, the place and the numbers. */
-export function qualityStep(root, { scope, env = process.env }) {
+/** The gate's own report for one scope, or { error } when it could not run. */
+export function runQuality(root, { scope, env = process.env }) {
   const r = spawnSync(process.execPath, [CLI, 'quality', '--scope', scope], { cwd: root, env, encoding: 'utf8', timeout: QUALITY_TIMEOUT_MS, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024 });
   let result = null;
   try { result = JSON.parse(r.stdout); } catch { /* reported below */ }
-  if (!result || (r.status !== 0 && r.status !== 1)) return { ok: false, failures: [`the quality gate could not run: ${(r.stderr || r.error?.message || 'no output').trim().split('\n')[0].slice(0, 200)}`], warnings: 0 };
-  const failures = result.violations.map(describe);
-  return { ok: result.ok, failures: failures.length > MAX_SHOWN ? [...failures.slice(0, MAX_SHOWN), `and ${failures.length - MAX_SHOWN} more: run somi quality --scope ${scope}`] : failures, warnings: result.warnings.length };
+  if (!result || (r.status !== 0 && r.status !== 1)) return { error: `the quality gate could not run: ${(r.stderr || r.error?.message || 'no output').trim().split('\n')[0].slice(0, 200)}` };
+  return result;
+}
+
+/** Each violation as one line naming the rule, the place and the numbers, at most MAX_SHOWN of them. */
+export function describeAll(violations, scope) {
+  const lines = violations.map(describe);
+  return lines.length > MAX_SHOWN ? [...lines.slice(0, MAX_SHOWN), `and ${lines.length - MAX_SHOWN} more: run somi quality --scope ${scope}`] : lines;
+}
+
+/** { ok, failures: [line], warnings: n } for one scope, where each failure names the rule, the place and the numbers. */
+export function qualityStep(root, { scope, env = process.env }) {
+  const result = runQuality(root, { scope, env });
+  if (result.error) return { ok: false, failures: [result.error], warnings: 0 };
+  return { ok: result.ok, failures: describeAll(result.violations, scope), warnings: result.warnings.length };
 }

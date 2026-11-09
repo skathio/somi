@@ -11,8 +11,8 @@ the user talks to one agent, on the tier set by tiers.main: medium by default, t
        it returns the workflow as steps, each with where it runs, main or a subagent, and on which tier
        rules decide a clear request; with no rule to go on, it is new work and goes to build
   -> code work: done here on medium, as a bare agent would, and for large work the agent tells the user
-       that /somi:deliver runs it in stages
-  -> /somi:deliver: somi_route with staged true returns the deliver-stages workflow and its args, and the
+       that /somi-deliver runs it in stages
+  -> /somi-deliver: somi_route with staged true returns the deliver-stages workflow and its args, and the
        agent starts it, because the user asked; where the host cannot run it, the steps stand
   -> the user said it is security-sensitive, or it is at the conversation's tier: done here
   -> above it: up to a worker, with a brief somi_route built
@@ -145,7 +145,7 @@ The sandbox is recommended, not required: session start warns loudly when it is 
 |---|---|---|---|
 | Default lane and CLI | Yes | Yes | Instructions only, CLI in a terminal |
 | Tripwire hooks | Plugin `hooks/hooks.json` | The same plugin file, or `somi init --host copilot` for `.github/hooks/somi.json` | Not assumed in VS Code |
-| Staged workflow | `/somi:deliver`, from the plugin's `workflows/` | `/somi:deliver`, after `somi init --host copilot`, in experimental mode | Steps only |
+| Staged workflow | `/somi-deliver`, from the plugin's `workflows/` | `/somi-deliver`, after `/somi-config` turns it on (`somi init --host copilot`), in experimental mode | Steps only |
 | OS sandbox | `/sandbox`, profile in `profiles/claude.json` | `/sandbox enable` | Host settings |
 | Reviewer model tier | Per subagent | Host default unless config names one | Host default |
 

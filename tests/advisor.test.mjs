@@ -42,7 +42,7 @@ test('large code work stays on medium in the conversation, and SoMi offers the s
   assert.equal(r.where, 'here', 'code is not handed down to the low tier');
   assert.equal(r.worker, undefined);
   assert.equal(r.workflow, undefined, 'only the user starts the staged workflow');
-  assert.match(r.advice, /typing \/somi:deliver/, 'so SoMi tells the agent to offer it');
+  assert.match(r.advice, /typing \/somi-deliver/, 'so SoMi tells the agent to offer it');
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'main', 'medium'], ['review', 'subagent', null]]);
   assert.match(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /review is due or run the quality gate: when your turn ends, SoMi checks the diff and tells you what to fix/, 'on Claude Code the stop hook checks for a review and the gate');
   assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG }).advice, /run `node "[^"]+somi\.mjs" quality --scope pr` and fix what it reports without a somi-gate-allow exemption, then call somi_review/, 'elsewhere the agent runs both');
@@ -152,13 +152,13 @@ test('each workflow comes back as steps that say where each runs and on which ti
   assert.deepEqual(design.steps.map((s) => [s.step, s.run_on, s.tier]), [['design', 'subagent', 'high']]);
 });
 
-test('work the user sends with /somi:deliver runs as the staged workflow on either host, with the user\'s models in its args', (t) => {
+test('work the user sends with /somi-deliver runs as the staged workflow on either host, with the user\'s models in its args', (t) => {
   const ctx = makeCtx(makeRepo(t));
   const r = advise(ctx, { request: 'Add an export of all orders as CSV', staged: true });
   assert.equal(r.workflow.name, 'somi:deliver-stages');
   assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
   assert.equal(r.workflow.args.request, 'Add an export of all orders as CSV');
-  assert.match(r.advice, /typed \/somi:deliver[\s\S]*Workflow tool[\s\S]*without staged for the steps/);
+  assert.match(r.advice, /typed \/somi-deliver[\s\S]*Workflow tool[\s\S]*without staged for the steps/);
   assert.equal(r.steps, undefined, 'the steps would repeat the workflow\'s payload');
   assert.ok(advise(ctx, { request: 'Add an export of all orders as CSV' }).steps, 'asked again without staged, they come back');
   assert.match(r.advice, /no script and no authoring guide/);
@@ -502,7 +502,7 @@ test('the session\'s earlier messages go with work handed down, the first one al
   const staged = advise(ctx, { request: 'Add an export', staged: true }).workflow.args;
   assert.equal(staged.earlier_file, file);
   assert.equal(staged.route, 'build');
-  savePrompt(ctx.root, '/somi:deliver Add an export', ctx.env, { session: 'a' });
+  savePrompt(ctx.root, '/somi-deliver Add an export', ctx.env, { session: 'a' });
   assert.equal(advise(ctx, { request: 'Add an export', staged: true }).workflow.args.said, undefined, 'the command typed before the request is not new words');
   savePrompt(ctx.root, 'A new conversation.', ctx.env, { session: 'b' });
   assert.deepEqual(earlierPrompts(ctx.root, ctx.env), [], 'another session carries nothing over');
@@ -569,4 +569,6 @@ test('the config route shows the quality limits, which project values were ignor
   assert.deepEqual([r.quality.commit.file.added_cognitive, r.quality.pr.file.added_cognitive], [25, 100], 'both scopes are shown');
   assert.equal(r.quality_ignored[0].key, 'quality.function.cognitive');
   assert.match(r.advice, /quality\.commit or quality\.pr for one scope[\s\S]*never in the project's \.somi\/config\.json[\s\S]*looser than the current limit, ask the user/);
+  assert.match(r.advice, /run `node "[^"]+somi\.mjs" doctor`[\s\S]*run `node "[^"]+somi\.mjs" setup`\.$/, 'the setup is done from the chat, by the full path');
+  assert.match(advise({ ...ctx, host: 'copilot' }, { request: 'x', hint: 'config' }).advice, /run `node "[^"]+somi\.mjs" init --host copilot` once the user says yes\.$/, 'and Copilot\'s hooks and staged workflow too');
 });

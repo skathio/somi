@@ -554,7 +554,7 @@ test('a recording pins the tiers in the user layer too, because reviewers read o
 
 test('the lane arm asks for a plan first, the tight phase has a small window, and compactions are counted', (t) => {
   assert.match(armPrompt('somi5-lane', 'do it'), /plan first[\s\S]*do it/);
-  assert.equal(armPrompt('somi5-deliver', 'do it'), '/somi:deliver do it', 'the user asks for the staged workflow');
+  assert.equal(armPrompt('somi5-deliver', 'do it'), '/somi:somi-deliver do it', 'the user asks for the staged workflow');
   assert.equal(armPrompt('somi5', 'do it'), 'do it');
   assert.deepEqual(armsFor('tight'), ['bare', 'somi5', 'somi5-lane']);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-usage-'));

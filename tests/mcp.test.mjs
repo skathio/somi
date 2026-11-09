@@ -34,12 +34,12 @@ const call = async (rpc, name, args) => {
   return { error: r.result.isError === true, text: r.result.content[0].text };
 };
 
-test('five tools, which advise, record and never run project commands', async (t) => {
+test('six tools, which advise, record and never run project commands', async (t) => {
   const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n', 'somi.check.json': JSON.stringify({ fast_cmd: 'touch ran-marker' }), '.gitignore': '.somi\nran-marker\n' });
   const rpc = startServer(t, dir);
   await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
   const { result } = await rpc('tools/list', {});
-  assert.deepEqual(result.tools.map((x) => x.name), ['somi_route', 'somi_review', 'somi_note', 'somi_plan', 'somi_pr']);
+  assert.deepEqual(result.tools.map((x) => x.name), ['somi_route', 'somi_review', 'somi_note', 'somi_plan', 'somi_quality', 'somi_pr']);
 
   assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Add a helper' })).text).where, 'here', 'a small change stays in the conversation');
   assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Now fix the crash in the parser' })).text).route, 'debug', 'another request while work is under way is simply answered');
@@ -62,6 +62,27 @@ test('five tools, which advise, record and never run project commands', async (t
 
   assert.equal(JSON.parse((await call(rpc, 'somi_note', { kind: 'decision', text: 'use postgres' })).text).added, true);
   assert.match((await call(rpc, 'somi_route', { request: 'Add a helper' })).text, /use postgres/);
+});
+
+test('the quality gate runs from the chat at every scope, and says what to do with what it found', async (t) => {
+  const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n' });
+  const rpc = startServer(t, dir);
+  await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
+  const clean = JSON.parse((await call(rpc, 'somi_quality', {})).text);
+  assert.deepEqual([clean.ok, clean.scope, clean.failures], [true, 'pr', []]);
+  assert.match(clean.advice, /within the limits/);
+  writeFiles(dir, { 'src/app.js': 'export const pick = (a, b, c, d, e, f) => [a, b, c, d, e, f];\n' });
+  const branch = JSON.parse((await call(rpc, 'somi_quality', {})).text);
+  assert.equal(branch.ok, false);
+  assert.deepEqual(branch.failures, ['params src/app.js:1 pick: 6 over 4']);
+  assert.equal(branch.most_complex, undefined, 'a change is not ranked against the codebase');
+  assert.match(branch.advice, /worst first[\s\S]*code you changed in this conversation[\s\S]*never add a somi-gate-allow exemption[\s\S]*hint config/);
+  assert.equal(JSON.parse((await call(rpc, 'somi_quality', { scope: 'commit' })).text).failures.length, 1);
+  const repo = JSON.parse((await call(rpc, 'somi_quality', { scope: 'repo' })).text);
+  assert.deepEqual([repo.scope, repo.ok, repo.failures, repo.most_findings[0].file], ['repo', false, ['params src/app.js:1 pick: 6 over 4'], 'src/app.js'], 'the codebase as it stands, uncommitted work included, worst first');
+  const wrong = await call(rpc, 'somi_quality', { scope: 'everything' });
+  assert.equal(wrong.error, true);
+  assert.match(wrong.text, /scope is one of commit, pr, repo/);
 });
 
 test('a refused input is a tool error that names the reason, and an unknown tool is a protocol error', async (t) => {

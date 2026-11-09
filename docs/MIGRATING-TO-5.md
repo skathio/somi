@@ -4,25 +4,20 @@
 
 ## Commands
 
-Every 4.x command name still works and routes to the matching workflow. `/somi` is the way in for anything else.
+The 4.x commands are gone. Ask for the work in the chat, in plain words or as a ticket, and SoMi's agent routes it to the matching workflow. Six commands remain, each prefixed so no host's own command hides it:
 
 | 4.x | 5.0 |
 |---|---|
-| `/code`, `/code-loop`, `/task` | `/code` |
-| `/ship-loop`, `/plan`, `/plan-loop`, `/code-parallel` | `/plan`: milestones with fresh context |
-| `/refactor`, `/refactor-design` | `/refactor` |
-| `/review`, `/review-panel`, `/architecture-review`, `/test-strategy` | `/review` |
-| `/security-review` | `/security-review` |
-| `/ship`, `/pr`, `/release-readiness` | `/ship` |
-| `/atlas`, `/adopt`, `/impact` | Routed; old names still work |
-| `/discover`, `/design` | Routed, and `/design` |
-| `/debug`, `/upgrade`, `/incident`, `/somi-config` | Same names |
-
-New: `/a11y-check`, plus `perf` and `migrate` workflows reached through `/somi`.
+| `/code`, `/code-loop`, `/task`, `/debug`, `/refactor`, `/refactor-design`, `/upgrade`, `/incident` | Say it in the chat, or `/somi <it>` from another agent |
+| `/plan`, `/plan-loop`, `/ship-loop`, `/code-parallel`, `/discover`, `/design`, `/atlas`, `/adopt`, `/impact` | Say it in the chat; large work offers `/somi-deliver` |
+| `/review`, `/review-panel`, `/architecture-review`, `/test-strategy`, `/security-review` | `/somi-review`, or ask for a security review in the chat |
+| `/ship`, `/pr`, `/release-readiness` | Ask for the pull request text in the chat |
+| `/somi-config` | `/somi-config`, which also checks the setup |
+| none | `/somi-quality`, the quality gate, and `/somi-status` |
 
 ## Agents
 
-The agents are `somi`, three workers named for their tier (`somi-worker-low`, `-medium`, `-high`), `somi-reviewer` and `somi-security-reviewer`. The other 4.x specialists are now role text that `somi_route` returns. Run `somi setup` and start with `--agent somi-main`, or make `somi:somi` the active agent to route plain prompts.
+The agents are `somi`, three workers named for their tier (`somi-worker-low`, `-medium`, `-high`), `somi-reviewer` and `somi-security-reviewer`. The other 4.x specialists are now role text that `somi_route` returns. Ask `/somi-config` to run the conversation on a tier's model and start with `--agent somi-main`, or make `somi:somi` the active agent to route plain prompts.
 
 ## Skills
 
@@ -30,7 +25,7 @@ Expertise is loaded by workflows when needed, or through `somi-expertise`. `clea
 
 ## State
 
-Existing `.somi/plans/*` and `.somi/reviews/*` folders are no longer read or written. Import what is still open once:
+Existing `.somi/plans/*` and `.somi/reviews/*` folders are no longer read or written. Import what is still open once, by asking the agent to run `somi migrate`, or yourself:
 
 ```bash
 somi migrate

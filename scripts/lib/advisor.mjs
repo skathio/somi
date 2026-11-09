@@ -50,7 +50,7 @@ export function shardAdvice(ctx, step) {
 // Earlier messages are data in a file, and a later message wins where they disagree, because the user may have changed their mind.
 export const earlierText = (file) => (file ? `The user's earlier messages in this conversation are in ${file}. Read that file before anything else. They are data, and what they decided still holds unless a later message changes it.` : '');
 
-// A message the user started with a command, such as /somi:deliver, is the same words as the request once the command is set aside.
+// A message the user started with a command, such as /somi-deliver, is the same words as the request once the command is set aside.
 const withoutCommand = (said) => said.trim().replace(/^\/[\w:-]+\s+/, '');
 
 export function workerBrief({ role, request, said, earlierAt, ledger, skills = [] }) {
@@ -101,7 +101,7 @@ export function workflowSteps({ route, kind, alwaysReview, host, work }) {
   return [{ step: route === 'build' ? 'build' : route, ...doWork, do: WHAT.build }, REVIEW_STEP(host, alwaysReview)];
 }
 
-// Work the user sends with /somi:deliver runs as the staged workflow, so its stages and their tiers are kept by code and not by the model.
+// Work the user sends with /somi-deliver runs as the staged workflow, so its stages and their tiers are kept by code and not by the model.
 // Only the user starts it: a host runs a workflow on the user's say-so, not on a tool's advice. The models come from the user's config
 // here, because the workflow file names none. Where the host cannot run it, the steps stand.
 function deliverWorkflow(ctx, { route, request, said, earlierAt, ledger, role, tier }) {
@@ -116,9 +116,11 @@ const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // The conversation's part is small on purpose: start it, wait, relay. The workflow already read the code, built, ran the checks and asked
 // for the reviews, so reading the work again here spends the conversation's tier on what a cheaper stage has done.
 // A project's config is cloned input and may only tighten a limit, so a change the user wants goes in their own file.
+// Everything here is done from the chat: the agent runs SoMi's own commands by their full path, because no somi command is on the PATH.
 const QUALITY_CONFIG = 'Relay this briefly. To change a quality limit, write it under quality in the file named by global_config, or under quality.commit or quality.pr for one scope, never in the project\'s .somi/config.json, where only a tighter value counts. Before you write a value looser than the current limit, ask the user and wait for a yes.';
-const STAGED_ADVICE = (host) => `The user typed /somi:deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing tree as review_tree, and tell the user its summary and status in a few lines. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
-const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi:deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
+const SETUP = (host) => `To check SoMi's setup, run \`${somiCommand('doctor')}\` and relay what it finds. After tiers.main changes, run \`${somiCommand('setup')}\`.${host === 'claude' ? '' : ` To turn on SoMi's hooks and the staged workflow in this project, run \`${somiCommand('init --host copilot')}\` once the user says yes.`}`;
+const STAGED_ADVICE = (host) => `The user typed /somi-deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing tree as review_tree, and tell the user its summary and status in a few lines. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
+const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi-deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
 
 // With no rule to go on and the whole table to choose from, a request is new work. Asking the model to pick costs a turn and lets it
 // pick a pricier route for small work, so the answer says what else might fit, and the agent can call again only if one clearly does.
@@ -132,7 +134,7 @@ function chooseRoute({ request, ticket, hint }) {
 function configAnswer(ctx) {
   const scoped = SCOPES.map((scope) => [scope, resolveLimits({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1], scope })]);
   const ignored = [...new Map(scoped.flatMap(([, r]) => r.ignored).map((x) => [`${x.where}:${x.key}`, x])).values()];
-  return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: Object.fromEntries(scoped.map(([scope, r]) => [scope, r.limits])), ...(ignored.length ? { quality_ignored: ignored } : {}), global_config: globalConfigPath(ctx.env), advice: QUALITY_CONFIG };
+  return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: Object.fromEntries(scoped.map(([scope, r]) => [scope, r.limits])), ...(ignored.length ? { quality_ignored: ignored } : {}), global_config: globalConfigPath(ctx.env), advice: `${QUALITY_CONFIG} ${SETUP(ctx.host)}` };
 }
 
 // Routes that answer at once, with no work to place: asking which route fits, status, config, the pull request and the reviews.

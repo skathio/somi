@@ -13,7 +13,8 @@ const json = (rel) => JSON.parse(read(rel));
 const FLOW_FILES = [...list('commands').map((f) => `commands/${f}`), ...list('agents').map((f) => `agents/${f}`), 'rules/digest.md'];
 
 const description = (text) => /^description: "?(.*?)"?$/m.exec(text)?.[1] ?? '';
-const listedCommands = () => list('commands').filter((f) => !/^disable-model-invocation: true$/m.test(read(`commands/${f}`)));
+// Copilot lists every command as a skill, whether or not the model may start it, so every one counts.
+const listedCommands = () => list('commands');
 const workflowDescription = (f) => /description: '([^']*)'/.exec(read(`workflows/${f}`))?.[1] ?? '';
 const listed = () => [...listedCommands().map((f) => [f.replace('.md', ''), description(read(`commands/${f}`))]), ...list('skills').map((s) => [s, description(read(`skills/${s}/SKILL.md`))]), ...list('workflows').map((f) => [f.replace('.js', ''), workflowDescription(f)])];
 
@@ -37,7 +38,8 @@ test('expertise stays behind the tools, focused and free of version templates', 
   assert.deepEqual(list('skills'), ['somi-expertise']);
   for (const f of list('library/skills')) assert.ok(read(`library/skills/${f}`).split('\n').length < 100, f);
 });
-test('the Copilot manifest lists exactly the listed commands', () => {
+test('a few commands, each prefixed so no host\'s own command hides it, and the Copilot manifest lists exactly them', () => {
+  assert.deepEqual(listedCommands().sort(), ['somi-config.md', 'somi-deliver.md', 'somi-quality.md', 'somi-review.md', 'somi-status.md', 'somi.md']);
   assert.deepEqual(json('.copilot-extension/extension.json').commands.map((c) => c.name).sort(), listedCommands().map((f) => f.replace('.md', '')).sort());
 });
 test('the digest is at most 150 lines', () => {

@@ -46,8 +46,8 @@ export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 export const isBare = (arm) => arm.startsWith('bare');
 // Every arm gets the same plain request. The SoMi arms go through their own front door, so routing is what gets measured, not a flow
 // the benchmark picked for them. The one exception asks for a plan, as a maintainer can, because that is how the milestone lane is reached.
-// somi5-deliver is SoMi with each message sent as /somi:deliver, the way a user asks for the staged workflow, which only they can start.
-export const armPrompt = (arm, text) => (arm === 'somi5-lane' ? `Show me a plan first, then build it.\n${text}` : arm === 'somi5-deliver' ? `/somi:deliver ${text}` : text);
+// somi5-deliver is SoMi with each message sent as /somi:somi-deliver, the way a user asks for the staged workflow, which only they can start.
+export const armPrompt = (arm, text) => (arm === 'somi5-lane' ? `Show me a plan first, then build it.\n${text}` : arm === 'somi5-deliver' ? `/somi:somi-deliver ${text}` : text);
 // The hooks arm is SoMi's small path: the plugin's hooks and an Explore agent on the low tier, with no SoMi agent and no routing call.
 export const engineArm = (arm) => (isBare(arm) ? 'bare' : arm === 'somi5-hooks' ? 'somi-hooks' : 'somi');
 export const armsFor = (phase, cells = readJson(ABLATIONS).cells) => (phase === 'ablation' ? [...PHASE_ARMS.ablation, ...Object.keys(cells)] : PHASE_ARMS[phase]);

@@ -26,56 +26,28 @@
   },
   "commands": [
     {
-      "name": "a11y-check",
-      "description": "Build or fix interface against an accessibility checklist and checker."
+      "name": "somi-config",
+      "description": "Show and change the models each tier uses, the quality limits, and check the setup."
     },
     {
-      "name": "code",
-      "description": "Build one clear change, with a review only if the diff calls for it."
+      "name": "somi-deliver",
+      "description": "Run a piece of work as SoMi's staged workflow: scout, build, verify and review, each on its cost tier, through to the end."
     },
     {
-      "name": "debug",
-      "description": "Fix a bug whose cause is unknown, starting from a failing test."
+      "name": "somi-quality",
+      "description": "Check code against SoMi's quality limits: this branch by default, or the whole codebase."
     },
     {
-      "name": "design",
-      "description": "Settle an expensive-to-reverse choice, with options and reversal costs."
-    },
-    {
-      "name": "incident",
-      "description": "Restore a broken production service first, then record the follow-up."
-    },
-    {
-      "name": "plan",
-      "description": "Split large work into milestones that each get fresh context."
-    },
-    {
-      "name": "refactor",
-      "description": "Change structure and keep behaviour, under green tests."
-    },
-    {
-      "name": "review",
+      "name": "somi-review",
       "description": "Review the current changes or a named diff once."
     },
     {
-      "name": "security-review",
-      "description": "Review for security on the strong tier, tracing input to each sink."
-    },
-    {
-      "name": "ship",
-      "description": "Run the full suite, then write the pull request text."
-    },
-    {
-      "name": "somi-config",
-      "description": "Show which model each tier uses in this environment."
+      "name": "somi-status",
+      "description": "Show open work, findings and decisions."
     },
     {
       "name": "somi",
       "description": "Give SoMi any request or ticket, and it routes the work to the right workflow."
-    },
-    {
-      "name": "upgrade",
-      "description": "Upgrade a dependency from its real changelog and migrate its uses."
     }
   ]
 }

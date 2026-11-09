@@ -1,5 +1,5 @@
 ---
-description: "Show which model each tier uses in this environment."
+description: "Show and change the models each tier uses, the quality limits, and check the setup."
 argument-hint: ""
 ---
 
