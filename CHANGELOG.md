@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+## [5.0.2] — 2026-11-09 — fix: a turn that changed nothing no longer runs the quality gate, and the gate is faster on large branches
+
+**Patch — fixes only.** No migration action required.
+
 ### Fixed
 
 - **A turn that changed nothing no longer runs the quality gate.** The end-of-turn check scored the whole branch whenever the tree differed from the last one it had checked, so a question asked after you edited a file yourself, or after the host had cut the check off, waited for a full scan of the branch. The prompt hook now notes the tree as the turn starts, and a turn that leaves it as it found it ends at once. A background task's notice carries on the turn before it, so what the task changed is still checked. The tree is also marked before the gate starts, so a check the host stops part way is not started again on every later turn.

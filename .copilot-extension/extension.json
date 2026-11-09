@@ -1,7 +1,7 @@
 {
   "name": "somi",
   "displayName": "SoMi",
-  "version": "5.0.1",
+  "version": "5.0.2",
   "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it picks the right workflow and keeps the cost down, while your agent stays in charge.",
   "keywords": [
     "workflow",
