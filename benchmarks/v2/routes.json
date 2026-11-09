@@ -1,5 +1,5 @@
 {
- "note": "Labelled by the rule author before any scoring, so treat the score as an upper bound. Real tickets from outside this project have not been scored. A later reader should add some.",
+ "note": "Labelled by the rule author before any scoring, so treat the score as an upper bound. Real tickets from outside this project have not been scored. A later reader should add some. The last 24 were written on 2026-11-09 in the style of real tickets, after the rules were tuned on the task pool, and scored once without changing a rule: the router got 11 right, and every bug report and refactor it missed fell through to build.",
  "items": [
   {
    "text": "Add a dark mode toggle to the settings page",
@@ -885,6 +885,102 @@
   {
    "text": "Is the new SQL safe from injection? Security review please",
    "route": "security-review"
+  },
+  {
+   "text": "Ops noticed the nightly export sometimes skips the last customer. It might be the pagination. Please look into it.",
+   "route": "debug"
+  },
+  {
+   "text": "Users in Sydney see yesterday's date on their dashboard until about 10am.",
+   "route": "debug"
+  },
+  {
+   "text": "The search box returns nothing when the query has an apostrophe, e.g. O'Brien.",
+   "route": "debug"
+  },
+  {
+   "text": "Since Tuesday's deploy, about 1 in 50 uploads end up as zero-byte files.",
+   "route": "debug"
+  },
+  {
+   "text": "QA reports the cart badge shows 3 items while the cart page lists 2.",
+   "route": "debug"
+  },
+  {
+   "text": "Invoices for Swiss customers are rounded to the wrong 5 cents. Accounting thinks it is the currency table.",
+   "route": "debug"
+  },
+  {
+   "text": "Our CI run is red on main and nobody knows why; the failing test is test/orders.test.mjs.",
+   "route": "debug"
+  },
+  {
+   "text": "When two admins edit the same page at once, one of the edits silently disappears.",
+   "route": "debug"
+  },
+  {
+   "text": "The notification service is copy-pasted across three handlers. Pull the common part into one module without changing what any handler sends.",
+   "route": "refactor"
+  },
+  {
+   "text": "src/billing.mjs is 900 lines and mixes tax, discounts and formatting. Break it into smaller modules, keeping every export working as before.",
+   "route": "refactor"
+  },
+  {
+   "text": "Replace the chain of if/else on order status with a lookup table. Behaviour must stay the same.",
+   "route": "refactor"
+  },
+  {
+   "text": "Rename `usr` to `user` throughout the auth code.",
+   "route": "refactor"
+  },
+  {
+   "text": "The validation helpers in forms/ and api/ do the same thing in two slightly different ways. Merge them into one.",
+   "route": "refactor"
+  },
+  {
+   "text": "Turn the callback-based mailer into async/await, same behaviour.",
+   "route": "refactor"
+  },
+  {
+   "text": "Let admins export the audit log as CSV, filtered by date range. Invalid dates return a 400 with code bad_range.",
+   "route": "build"
+  },
+  {
+   "text": "We need a /health endpoint that reports the database and cache status as JSON.",
+   "route": "build"
+  },
+  {
+   "text": "Customers should be able to pause a subscription for up to three months. A paused subscription is not billed, and resuming bills from the resume date. Paused subscriptions that pass three months resume on their own.",
+   "route": "build"
+  },
+  {
+   "text": "Add an optional note field to orders, up to 500 characters. Longer notes are rejected with a 422 error.",
+   "route": "build"
+  },
+  {
+   "text": "Webhooks: sign every outgoing payload with HMAC-SHA256 and put the signature in X-Signature. Receivers that fail verification should get documentation on how to check it.",
+   "route": "build"
+  },
+  {
+   "text": "Introduce per-team API quotas. Over-quota calls get a 429 error with a Retry-After header. Everything else keeps working exactly as it does now.",
+   "route": "build"
+  },
+  {
+   "text": "Show a banner to users whose password is older than a year, linking to the change-password page.",
+   "route": "build"
+  },
+  {
+   "text": "Support SSO login via Google for workspace accounts.",
+   "route": "build"
+  },
+  {
+   "text": "Make the export job resumable so a crash halfway through does not start from scratch.",
+   "route": "build"
+  },
+  {
+   "text": "Teams want a weekly digest email listing open tasks per assignee, sent Monday 8am in each user's time zone.",
+   "route": "build"
   }
  ]
 }

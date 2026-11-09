@@ -1,8 +1,12 @@
 // routing-score.mjs: how well the deterministic router does on a labelled set. Macro-F1 weights rare routes equally, because a misroute
 // is costly whichever route it hits. A request that goes to the coordinator to choose counts as covered when the right route is offered,
-// and is reported on its own, because it costs one extra coordinator turn.
+// and is reported on its own, because it costs one extra coordinator turn. A choice over the whole table is not offered: the advisor answers
+// it with build, so it is scored as build.
 
-import { classify } from '../../scripts/lib/routes.mjs';
+import { WHEN, classify } from '../../scripts/lib/routes.mjs';
+
+const ALL = Object.keys(WHEN).length;
+const asAdvised = (r) => (r.via === 'choose' && r.choices.length === ALL ? { route: 'build', via: 'default' } : r);
 
 export function scoreRouter(items) {
   const labels = [...new Set(items.map((i) => i.route))].sort();
@@ -12,7 +16,7 @@ export function scoreRouter(items) {
   let choose = 0;
   let chooseCovered = 0;
   for (const item of items) {
-    const r = classify({ request: item.text, ticket: item.ticket });
+    const r = asAdvised(classify({ request: item.text, ticket: item.ticket }));
     if (r.via === 'choose') {
       choose++;
       if (r.choices.includes(item.route)) { chooseCovered++; tally[item.route].tp++; } else { tally[item.route].fn++; wrong.push({ text: item.text.slice(0, 70), want: item.route, got: r.choices.join('|') }); }

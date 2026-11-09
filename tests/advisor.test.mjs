@@ -200,6 +200,25 @@ test('a long ticket is not routed by stray words deep inside it', () => {
   assert.equal(classify({ request: 'Plan first, then add a page' }).route, 'plan');
 });
 
+test('a long ticket is routed by what its opening says it is about', () => {
+  const detail = 'Some detail about the work. '.repeat(30);
+  assert.equal(classify({ request: `Bug report from support: now and then an invoice lists a line twice.\n${detail}` }).route, 'debug');
+  assert.equal(classify({ request: `src/pricing.mjs has grown into one function nobody dares to touch. Restructure it.\n${detail}` }).route, 'refactor');
+  // A long ticket carries its own milestones, so it is build work, not a request for a plan.
+  assert.equal(classify({ request: `This is a long piece of work. Do the milestones in order.\n${detail}` }).via, 'choose');
+});
+
+test('a ticket is known by its symptom and its guess at the cause, and a spec\'s errors are not symptoms', () => {
+  for (const request of ['Finance says totals disagree with the ledger. One person thinks the formatter is at fault. Find the real cause.', 'People get signed out at random while they work.', 'The digest goes out at the wrong hour for most customers.']) assert.equal(classify({ request }).route, 'debug', request);
+  for (const request of ['A client over the limit gets the usual error shape with status 429.', 'Asking for more than is available throws the usual out_of_stock error.', 'Webhook deliveries are lost when an endpoint is down. Add retries: a delivery that fails waits and tries again.']) assert.notEqual(classify({ request }).route, 'debug', request);
+  assert.notEqual(classify({ request: 'Support keeps seeing customers charged twice for one order.' }).route, 'build');
+});
+
+test('a refactor is known by the shape it fixes or the behaviour it keeps, and a feature\'s guard is not one', () => {
+  for (const request of ['importOrders and importRefunds are nearly the same. Pull what they share into importRows.', 'src/config.mjs mixes reading and filling in. Every answer and every error it gives today stays exactly the same.']) assert.equal(classify({ request }).route, 'refactor', request);
+  assert.notEqual(classify({ request: 'Let users search their notes. Everything that exists today keeps working exactly as it does now.' }).route, 'refactor');
+});
+
 test('every route names a workflow, and every workflow has its role text', () => {
   for (const [name, wf] of Object.entries(WORKFLOWS)) if (wf.role) assert.ok(roleBrief(wf.role).length > 0, name);
 });

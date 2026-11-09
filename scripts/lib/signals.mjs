@@ -24,6 +24,12 @@ const SINK = [
   /\b(pickle\.loads?|yaml\.load|unserialize|Marshal\.load|ObjectInputStream|deserialize\w*)\b/,
   /\bnew\s+RegExp\s*\(|\bre\.compile\s*\(/,
 ];
+// A regex's own exec runs nothing: a regex literal, or a name that says it is one. Any other receiver still counts, so cp.exec(cmd) fires,
+// and so does exec(cmd) on its own.
+const REGEX_EXEC = /(\/(?:\\.|[^/\\\n])+\/[dgimsuyv]*|\b(?:re|regexp?|pattern|[\w$]*(?:_RE|_REGEXP?|_PATTERN|Re|Regexp?|RegExp|Pattern)|RE|REGEXP?|PATTERN))\.exec\s*\(/g;
+// A whole-line comment runs nothing either, so a sink, a call out or an access check named in one does not count. Secrets are still read
+// there, because a key pasted into a comment is still out.
+const COMMENT_LINE = /^\s*(\/\/|\/\*|\*(\s|\/|$)|#(\s|$)|--\s)/;
 // No word boundaries: hashPassword and resetToken are the same thing as password and token, and a false alarm here costs one review.
 const SECRETS = /password|passwd|secret|credential|private[_-]?key|api[_-]?key|(auth|access|bearer|refresh|reset|session|id)[_-]?token/i;
 const NETWORK = /\b(fetch|axios|XMLHttpRequest|WebSocket|urllib\w*|requests\.(get|post|put|delete)|https?\.(request|get)|net\.(connect|createConnection))\b/;
@@ -79,15 +85,17 @@ function reviewSignals({ rows, lines, files, all, production, changed }) {
 }
 
 // Patterns read on added code. Access checks are read on any changed code, because removing one is as much a change to access.
-const ADDED_CODE_SIGNALS = [['sink', (t) => SINK.some((p) => p.test(t))], ['secrets', (t) => SECRETS.test(t)], ['network', (t) => NETWORK.test(t)], ['repo-content', (t) => REPO_CONTENT.test(t)]];
+const isSink = (t) => { const code = t.replace(REGEX_EXEC, ''); return SINK.some((p) => p.test(code)); };
+const ADDED_CODE_SIGNALS = [['sink', isSink, true], ['secrets', (t) => SECRETS.test(t), false], ['network', (t) => NETWORK.test(t), true], ['repo-content', (t) => REPO_CONTENT.test(t), false]];
+const runs = (l) => !COMMENT_LINE.test(l.text);
 
 function securitySignals({ lines, files, production }) {
   const security = new Set();
   if (production.sensitive.length + production.boundary.length > 0 || files.some(denyListed)) security.add('sensitive-path');
   if (files.some(isPolicyFile)) security.add('policy-file');
   const addedCode = lines.filter((l) => l.sign === '+' && isCode(l.file));
-  for (const [name, test] of ADDED_CODE_SIGNALS) if (hits(addedCode, test)) security.add(name);
-  if (hits(lines.filter((l) => isCode(l.file)), (t) => ACCESS.test(t))) security.add('access-control');
+  for (const [name, test, codeOnly] of ADDED_CODE_SIGNALS) if (hits(codeOnly ? addedCode.filter(runs) : addedCode, test)) security.add(name);
+  if (hits(lines.filter((l) => isCode(l.file) && runs(l)), (t) => ACCESS.test(t))) security.add('access-control');
   return security;
 }
 
