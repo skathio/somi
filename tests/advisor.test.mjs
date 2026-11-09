@@ -591,6 +591,9 @@ test('the config route shows the quality limits, which project values were ignor
   assert.equal(r.quality.commit.function.depth, 3, 'the project tightened it');
   assert.deepEqual([r.quality.commit.file.added_cognitive, r.quality.pr.file.added_cognitive], [25, 100], 'both scopes are shown');
   assert.equal(r.quality_ignored[0].key, 'quality.function.cognitive');
+  assert.equal(r.quality_timeout_seconds, 300, 'how long the gate may run is shown too');
+  assert.equal(advise({ ...ctx, configLayers: [{ quality: { timeout_seconds: 900 } }, {}] }, { request: 'x', hint: 'config' }).quality_timeout_seconds, 900);
+  assert.match(r.advice, /quality\.timeout_seconds there, a whole number from 10 to 1800/);
   assert.match(r.advice, /quality\.commit or quality\.pr for one scope[\s\S]*never in the project's \.somi\/config\.json[\s\S]*looser than the current limit, ask the user/);
   assert.match(r.advice, /run `node "[^"]+somi\.mjs" doctor`[\s\S]*run `node "[^"]+somi\.mjs" setup`\. To connect another plugin to a step, run `node "[^"]+somi\.mjs" slot <step> <plugin:component>`[\s\S]*slot --list` to show what is connected\.$/, 'the setup and the shards are done from the chat, by the full path');
   assert.match(advise({ ...ctx, host: 'copilot' }, { request: 'x', hint: 'config' }).advice, /run `node "[^"]+somi\.mjs" init --host copilot` once the user says yes\.$/, 'and the staged workflow on Copilot too');

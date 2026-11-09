@@ -30,8 +30,12 @@ runHook(() => {
   const asked = path.join(statePaths(root).dir, 'review-asked.json');
   try { if (JSON.parse(fs.readFileSync(asked, 'utf8')).tree === plan.tree) return; } catch { /* not asked about this tree yet */ }
   const quality = qualityStep(root, { scope: 'pr', env: process.env });
+  // A gate that could not run is not a pass, and there is nothing in the code to fix for it, so the user hears why.
+  const qualityReason = quality.error
+    ? `SoMi: the quality gate could not check this change: ${quality.error}. That is not a pass. Tell the user, and do not change code for it.`
+    : `SoMi: this change is over the quality limits:\n${quality.failures.join('\n')}\nRefactor until \`${somiCommand('quality --scope pr')}\` passes, with the tests still green. Do not add a somi-gate-allow exemption to get past it: that is the user's call. If a limit cannot be met, or the code over it is not code you wrote in this conversation, tell the user which and why instead.`;
   const reasons = [
-    ...(quality.ok ? [] : [`SoMi: this change is over the quality limits:\n${quality.failures.join('\n')}\nRefactor until \`${somiCommand('quality --scope pr')}\` passes, with the tests still green. Do not add a somi-gate-allow exemption to get past it: that is the user's call. If a limit cannot be met, or the code over it is not code you wrote in this conversation, tell the user which and why instead.`]),
+    ...(quality.ok ? [] : [qualityReason]),
     ...(plan.needed ? [`SoMi: this change needs a review before it is finished (${plan.signals.join(', ')}). Call somi_review, start the reviewers it names with their briefs, and record what they return. If the user said not to review, tell them it is due and stop.`] : []),
   ];
   try { writeStateFile(root, asked, `${JSON.stringify({ tree: plan.tree })}\n`); } catch { return; }

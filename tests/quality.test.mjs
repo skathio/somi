@@ -311,3 +311,38 @@ test('the repo scope reports the whole codebase as it stands, worst first, and s
   assert.equal(spawnSync(process.execPath, [CLI, 'quality', '--scope', 'repo'], { cwd: r.dir, encoding: 'utf8', env: { ...env, SOMI_GLOBAL_CONFIG: global } }).status, 0, 'the repo scope has its own limits under quality.repo');
   assert.equal(somi('check', '--scope', 'repo').status, 64, 'somi check gates a change, not the whole codebase');
 });
+
+test('the gate\'s time comes from config: the user\'s file either way, a project\'s only to lengthen it', async () => {
+  const { QUALITY_TIMEOUT, resolveTimeout } = await import('../scripts/lib/quality/limits.mjs');
+  assert.deepEqual(resolveTimeout({}), { seconds: QUALITY_TIMEOUT.default, ignored: [] });
+  assert.equal(resolveTimeout({ global: { quality: { timeout_seconds: 60 } } }).seconds, 60);
+  assert.equal(resolveTimeout({ global: { quality: { timeout_seconds: 600 } }, project: { quality: { timeout_seconds: 900 } } }).seconds, 900);
+  const shorter = resolveTimeout({ global: { quality: { timeout_seconds: 600 } }, project: { quality: { timeout_seconds: 30 } } });
+  assert.equal(shorter.seconds, 600);
+  assert.match(shorter.ignored[0].reason, /only lengthen/);
+  for (const bad of [5, QUALITY_TIMEOUT.max + 1, 12.5, '600']) {
+    const r = resolveTimeout({ global: { quality: { timeout_seconds: bad } } });
+    assert.equal(r.seconds, QUALITY_TIMEOUT.default, String(bad));
+    assert.equal(r.ignored[0].key, 'quality.timeout_seconds');
+  }
+  // It sits beside the limits without being read as one.
+  const { ignored } = resolveLimits({ global: { quality: { timeout_seconds: 600, function: { cognitive: 20 } } } });
+  assert.deepEqual(ignored, []);
+});
+
+test('a gate that runs out of time is a failure that says how to give it longer', async () => {
+  const { gateOutcome } = await import('../scripts/lib/quality/run.mjs');
+  const out = gateOutcome({ error: Object.assign(new Error('spawnSync node ETIMEDOUT'), { code: 'ETIMEDOUT' }), status: null, stdout: '' }, 300);
+  assert.equal(out.timed_out, true);
+  assert.match(out.error, /did not finish within 300 s/);
+  assert.match(out.error, /quality\.timeout_seconds/);
+  assert.equal(gateOutcome({ status: 0, stdout: JSON.stringify({ ok: true, violations: [], warnings: [] }) }, 300).ok, true);
+  assert.match(gateOutcome({ status: 2, stdout: '', stderr: 'boom\nmore' }, 300).error, /could not run: boom/);
+});
+
+test('the end-of-turn hook has longer than the gate\'s longest time, so the host never cuts it off first', async () => {
+  const { QUALITY_TIMEOUT } = await import('../scripts/lib/quality/limits.mjs');
+  const hooks = JSON.parse(fs.readFileSync(path.join(REPO, 'hooks', 'hooks.json'), 'utf8')).hooks.Stop.flatMap((g) => g.hooks);
+  const stop = hooks.find((h) => h.command.includes('review-due.mjs'));
+  assert.ok(stop.timeout >= QUALITY_TIMEOUT.max + 60, `the Stop hook's timeout is ${stop.timeout}`);
+});

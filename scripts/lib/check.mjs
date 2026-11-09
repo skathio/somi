@@ -141,13 +141,15 @@ export function runCheck({ root, env = process.env, full = false, from = null, s
   ];
   const quality = qualityStep(root, { scope, env });
   gates.push(gate('quality', quality.failures));
+  // The gate has its own time limit, so a slow one on a large change does not use up the tests' budget.
+  const testsFrom = Date.now();
 
   if (full) {
     const command = plan.full_cmd ?? (hasNpmTest(root) ? 'npm test' : null);
     gates.push(command ? runShell(root, 'full-suite', command, undefined) : gate('full-suite', []));
   } else {
     const budget = plan.budget_s * 1000;
-    const left = () => Math.max(1, budget - (Date.now() - started));
+    const left = () => Math.max(1, budget - (Date.now() - testsFrom));
     if (plan.fast_cmd) gates.push(runShell(root, 'fast', plan.fast_cmd, left()));
     const selected = selectTests(files, plan, (f) => fs.existsSync(path.join(root, f)));
     if (selected.unmapped && plan.full_cmd) gates.push(runShell(root, 'tests', plan.full_cmd, left()));

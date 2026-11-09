@@ -96,6 +96,12 @@ Ask `/somi-config` to change one, or set your own under `quality` in the same gl
 
 A project's `.somi/config.json` can only make a limit stricter: a looser value there is ignored, and the gate says so. SoMi asks before an agent changes a limit.
 
+The gate may run for 300 seconds before it counts as failed. For a large change, set `quality.timeout_seconds`, up to 1800, in your own file, or in the project's, which may only lengthen it:
+
+```json
+{ "quality": { "timeout_seconds": 900 } }
+```
+
 For a cleanup or a refactor, `/somi-quality repo` reports on the whole codebase as it stands: every function and file over a limit, every copy in product code and every suppression with no reason. It lists the most complex functions and the files with the most findings first. Give it its own limits under `quality.repo`.
 
 You do not need to run it yourself. When a turn that changed code ends, on Claude Code and Copilot CLI alike, SoMi runs the gate and sends anything over a limit back to the agent to fix, before any review. The agent never adds an exemption to get past it: that is yours to decide. No pull request text is written while the branch fails it, and `/somi-deliver` checks each build and steps the build up a tier with the findings.
