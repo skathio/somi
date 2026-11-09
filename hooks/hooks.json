@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start/inject-digest.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start/inject-digest.mjs\""
           }
         ]
       }
@@ -18,11 +18,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-dangerous-bash.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-dangerous-bash.mjs\""
           },
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/gate-dep-install.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/gate-dep-install.mjs\""
           }
         ]
       },
@@ -31,19 +31,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-secret-writes.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/block-secret-writes.mjs\""
           },
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-protected-paths.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-protected-paths.mjs\""
           },
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-tier-config.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/guard-tier-config.mjs\""
           },
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/reviewers-read-only.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/reviewers-read-only.mjs\""
           }
         ]
       },
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/apply-tier.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool/apply-tier.mjs\""
           }
         ]
       }
@@ -63,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool/audit-log.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool/audit-log.mjs\""
           }
         ]
       }
@@ -73,7 +73,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/user-prompt/capture-prompt.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/user-prompt/capture-prompt.mjs\""
           }
         ]
       }
@@ -83,7 +83,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/stop/review-due.mjs"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/stop/review-due.mjs\""
           }
         ]
       }
