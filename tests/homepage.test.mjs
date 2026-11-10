@@ -33,11 +33,21 @@ test('the homepage manifest exists and is JSON', () => {
 // is dropped from the tile with a warning, so these checks catch that here, before it ships.
 test('the manifest uses only the fields the homepage reads, within its limits', () => {
   const m = JSON.parse(read(MANIFEST));
-  const known = ['name', 'tagline', 'colour', 'image', 'links', 'listed'];
+  const known = ['name', 'tagline', 'kind', 'tags', 'colour', 'image', 'links', 'listed'];
   for (const key of Object.keys(m)) assert.ok(known.includes(key), `unknown field ${key}`);
   assert.ok(typeof m.name === 'string' && m.name.trim() && m.name.length <= 40, 'name: 1-40 characters');
   assert.ok(typeof m.tagline === 'string' && m.tagline.trim() && m.tagline.length <= 160, 'tagline: 1-160 characters');
   assert.match(m.colour, /^#[0-9a-f]{6}$/i, 'colour is #rrggbb');
+});
+
+const shortText = (v, max) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+
+test('the card kind and tags fit the homepage limits', () => {
+  const m = JSON.parse(read(MANIFEST));
+  if ('kind' in m) assert.ok(shortText(m.kind, 24), 'kind: 1-24 characters');
+  if (!('tags' in m)) return;
+  assert.ok(Array.isArray(m.tags) && m.tags.length <= 5, 'tags: a list of at most 5');
+  for (const t of m.tags) assert.ok(shortText(t, 20), `tag "${t}": 1-20 characters`);
 });
 
 test('the branding image is a file in this repo, of a type and size the homepage takes', () => {

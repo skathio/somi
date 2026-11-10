@@ -1,7 +1,13 @@
 {
   "name": "SoMi",
-  "tagline": "A workflow plugin for coding agents: it routes the work and keeps the cost down, while your agent stays in charge.",
-  "colour": "#b80f0f",
+  "kind": "Agent plugin",
+  "tagline": "Routes each request to the right workflow and model tier, runs the quality gate when a turn ends, and asks for a reviewer only when the diff calls for one.",
+  "tags": [
+    "Claude Code",
+    "Copilot CLI",
+    "Node"
+  ],
+  "colour": "#ff4d4d",
   "image": "site/brand/somi-icon-800.png",
   "links": {
     "npm": "https://www.npmjs.com/package/@skathio/somi"
