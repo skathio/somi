@@ -155,6 +155,8 @@ test('a page-only deploy waits for the production approval before anything build
   assert.match(j.build, /needs: gate/);
   assert.match(j.build, /needs\.gate\.result == 'success' \|\| \(needs\.gate\.result == 'skipped' && inputs\.released\)/);
   assert.match(j.deploy, /needs\.build\.result == 'success'/);
+  // `!cancelled()`, not `always()`: a cancelled run must not deploy.
+  assert.doesNotMatch(code(read(SITE)), /\$\{\{ always\(\)/);
 });
 
 test('only the release skips that gate, and only after publish', () => {

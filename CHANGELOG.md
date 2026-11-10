@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Changed
+
+- **A page-only site deploy needs the production approval.** Running `site.yml` by hand now waits at a `gate` job for the `production` Environment's owner approval, the same single approval a release needs at `publish`. A release still asks once: its page deploy runs after `publish` and skips the gate. A cancelled run now also stops the page deploy.
+
 ### Added
 
 - **A tile on the skathio homepage.** `.github/homepage.json` describes SoMi's card on https://skathio.github.io/: its name, kind, description, tags, colour and branding image. After a release, `publish.yml` asks the homepage to rebuild, and `homepage.yml` does the same when the manifest or the image changes. Both use the secret `HOMEPAGE_DISPATCH_TOKEN`, and both skip the ping without failing when the secret is not set.

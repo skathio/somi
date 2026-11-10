@@ -52,7 +52,7 @@ jobs:
     name: build
     needs: gate
     # Runs after the approval at `gate`, or, from publish.yml, with `gate` skipped.
-    if: ${{ always() && (needs.gate.result == 'success' || (needs.gate.result == 'skipped' && inputs.released)) }}
+    if: ${{ !cancelled() && (needs.gate.result == 'success' || (needs.gate.result == 'skipped' && inputs.released)) }}
     uses: skathio/hashira/.github/workflows/static-webapp-ci.yml@v2 # rolling major tag — same ref as publish.yml's hashira pins
     # Grants mirror static-webapp-ci's documented matrix (hashira docs/flows/static-webapp.md §6);
     # a reusable workflow can only narrow these. pull-requests/security-events go unused here (no PR
@@ -77,8 +77,9 @@ jobs:
   deploy:
     name: deploy
     needs: build
-    # `always()` because a skipped `gate` upstream would otherwise skip this job too.
-    if: ${{ always() && needs.build.result == 'success' }}
+    # `!cancelled()` because a skipped `gate` upstream would otherwise skip this job too; unlike
+    # `always()` it still stops on a cancelled run.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
