@@ -133,3 +133,34 @@ test('homepage.yml runs only on pushes to main and by hand, never on PR or comme
   assert.deepEqual(triggers, ['push', 'workflow_dispatch']);
   assert.match(on, /branches: \[main\]/);
 });
+
+// One release, one approval: every deploy of the page passes the production Environment's owner
+// approval exactly once, at `publish` for a release, or at site.yml's `gate` for a page-only run.
+const SITE = '.github/workflows/site.yml';
+const siteJobs = () => {
+  const body = read(SITE).slice(read(SITE).search(/^jobs:\s*$/m));
+  const out = {};
+  let name = null;
+  for (const line of body.split('\n').slice(1)) {
+    const m = /^  ([A-Za-z0-9_-]+):\s*$/.exec(line);
+    if (m) { name = m[1]; out[name] = ''; } else if (name) out[name] += line + '\n';
+  }
+  return out;
+};
+
+test('a page-only deploy waits for the production approval before anything builds', () => {
+  const j = siteJobs();
+  assert.match(j.gate, /environment: production/);
+  assert.match(j.gate, /if: \$\{\{ !inputs\.released \}\}/);
+  assert.match(j.build, /needs: gate/);
+  assert.match(j.build, /needs\.gate\.result == 'success' \|\| \(needs\.gate\.result == 'skipped' && inputs\.released\)/);
+  assert.match(j.deploy, /needs\.build\.result == 'success'/);
+});
+
+test('only the release skips that gate, and only after publish', () => {
+  const site = jobs().site;
+  assert.match(site, /needs: publish/);
+  assert.match(site, /released: true/);
+  assert.match(jobs().publish, /environment: production/);
+  for (const [name, body] of Object.entries(jobs())) if (name !== 'site') assert.doesNotMatch(body, /released: true/, name);
+});
