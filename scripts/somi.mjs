@@ -12,20 +12,24 @@
 //   somi status | migrate
 //   somi setup [--host claude|copilot]                  makes SoMi the session agent, on the model set for its tier
 //   somi doctor [--host claude|copilot] [--profile]
-//   somi init --host copilot                          registers the staged workflow with Copilot CLI
+//   somi init --host copilot                          registers the staged workflow with Copilot CLI, once for every project
+//   somi launch claude|copilot [args...]              starts the host with SoMi's agent, on the model set for its tier
 //
 // Exit codes: 0 done, 1 a check, the doctor or the pull request gate failed, 64 the request was refused.
 
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { advise } from './lib/advisor.mjs';
 import { runCheck } from './lib/check.mjs';
-import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
+import { ConfigFileError, globalConfigPath, loadConfig, readConfigFile } from './lib/config-files.mjs';
 import { duplicateHookWarnings, runDoctor } from './lib/doctor.mjs';
 import { commitBase, listFiles, repoRoot, resolveRef, snapshotTree, stateIsTracked, workBase } from './lib/git-tree.mjs';
-import { writeCopilotExtension } from './lib/init.mjs';
+import { installCopilotExtension, projectExtensionWarnings } from './lib/init.mjs';
+import { LAUNCH_HOSTS, launchPlan, spawnPlan } from './lib/launch.mjs';
 import { addToLedger, readLedger } from './lib/ledger.mjs';
 import { migrate } from './lib/migrate.mjs';
 import { lastCheck, migratedFindings, pullRequest } from './lib/pr.mjs';
@@ -125,9 +129,9 @@ function doctor(args) {
   }
   let root = process.cwd();
   try { root = repoRoot(root); } catch { /* not in a repository */ }
-  let config = {};
-  try { config = loadConfig(root).config ?? {}; } catch { /* reported elsewhere */ }
-  const report = runDoctor({ root, host, config });
+  let loaded = null;
+  try { loaded = loadConfig(root); } catch { /* reported elsewhere */ }
+  const report = runDoctor({ root, host, config: loaded?.config ?? {}, globalConfig: loaded?.global.config ?? {} });
   print(report);
   return report.ok ? 0 : 1;
 }
@@ -142,13 +146,40 @@ function slotCommand(ctx, args) {
   return 0;
 }
 
+// The session-start hook does this on its own, so init is for a session that started before the plugin was installed.
 function initCommand(ctx, args) {
   const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
   if (values.host !== 'copilot') throw new StateError('init takes --host copilot; the Claude Code plugin needs no setup');
-  const extension = writeCopilotExtension(ctx.root, PLUGIN_ROOT);
-  const [duplicate] = duplicateHookWarnings(ctx.root);
-  print({ extension, workflows: 'Copilot runs workflows in experimental mode: start it with --experimental, or turn it on with /experimental.', ...(duplicate ? { warning: duplicate } : {}) });
-  return extension.written ? 0 : 1;
+  const extension = installCopilotExtension({ pluginRoot: PLUGIN_ROOT, env: ctx.env });
+  const warnings = [...duplicateHookWarnings(ctx.root), ...projectExtensionWarnings(ctx.root)];
+  print({ extension, workflows: 'Copilot loads it at the next session start or after /clear, and runs workflows in experimental mode: start with --experimental, or turn it on with /experimental.', ...(warnings.length ? { warnings } : {}) });
+  return extension.written || extension.current ? 0 : 1;
+}
+
+function globalConfig() {
+  const file = globalConfigPath();
+  try { return (file && readConfigFile(file)) ?? {}; } catch (e) {
+    if (!(e instanceof ConfigFileError)) throw e;
+    process.stderr.write('somi: ignoring an unreadable global config; the built-in tiers apply\n');
+    return {};
+  }
+}
+
+// The host owns the terminal while it runs. Ctrl-C reaches it from the terminal directly, so this process only waits for it.
+function launch(args) {
+  const [host, ...extra] = args;
+  if (!LAUNCH_HOSTS.includes(host)) throw new StateError(`launch takes ${LAUNCH_HOSTS.join(' or ')}, then any arguments for it`);
+  const plan = launchPlan({ host, config: globalConfig(), extra });
+  for (const w of plan.warnings) process.stderr.write(`somi: ${w}\n`);
+  const run = spawnPlan(plan.command, plan.args);
+  if (!run) throw new StateError(`${host} is not on the PATH`);
+  for (const sig of ['SIGINT', 'SIGQUIT']) process.on(sig, () => {});
+  return new Promise((resolve, reject) => {
+    const child = spawn(run.file, run.args, { stdio: 'inherit', ...run.options });
+    for (const sig of ['SIGTERM', 'SIGHUP']) process.on(sig, () => child.kill(sig));
+    child.on('error', (e) => reject(e.code === 'ENOENT' ? new StateError(`${host} is not on the PATH`) : e));
+    child.on('exit', (code, signal) => resolve(code ?? 128 + (os.constants.signals[signal] ?? 0)));
+  });
 }
 
 const printed = (value, ok = true) => { print(value); return ok ? 0 : 1; };
@@ -190,8 +221,9 @@ const COMMANDS = {
 function main(argv) {
   const [command, ...args] = argv;
   if (command === 'doctor') return doctor(args);
+  if (command === 'launch') return launch(args);
   const run = Object.hasOwn(COMMANDS, command ?? '') ? COMMANDS[command] : null;
-  if (!run) throw new StateError('somi takes route, review, check, quality, status, pr, plan, setup, slot, ledger, migrate, doctor or init');
+  if (!run) throw new StateError('somi takes route, review, check, quality, status, pr, plan, setup, slot, ledger, migrate, doctor, init or launch');
   return run(makeContext(), args);
 }
 

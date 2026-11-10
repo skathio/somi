@@ -614,6 +614,8 @@ test('the config route shows the quality limits, which project values were ignor
   assert.equal(advise({ ...ctx, configLayers: [{ quality: { timeout_seconds: 900 } }, {}] }, { request: 'x', hint: 'config' }).quality_timeout_seconds, 900);
   assert.match(r.advice, /quality\.timeout_seconds there, a whole number from 10 to 1800/);
   assert.match(r.advice, /quality\.commit or quality\.pr for one scope[\s\S]*never in the project's \.somi\/config\.json[\s\S]*looser than the current limit, ask the user/);
-  assert.match(r.advice, /run `node "[^"]+somi\.mjs" doctor`[\s\S]*run `node "[^"]+somi\.mjs" setup`\. To connect another plugin to a step, run `node "[^"]+somi\.mjs" slot <step> <plugin:component>`[\s\S]*slot --list` to show what is connected\.$/, 'the setup and the shards are done from the chat, by the full path');
-  assert.match(advise({ ...ctx, host: 'copilot' }, { request: 'x', hint: 'config' }).advice, /run `node "[^"]+somi\.mjs" init --host copilot` once the user says yes\.$/, 'and the staged workflow on Copilot too');
+  assert.match(r.advice, /run `node "[^"]+somi\.mjs" doctor`[\s\S]*run `node "[^"]+somi\.mjs" setup`\. To connect another plugin to a step, run `node "[^"]+somi\.mjs" slot <step> <plugin:component>`[\s\S]*slot --list` to show what is connected\. To start sessions[\s\S]*`node "[^"]+somi\.mjs" launch claude` or `node "[^"]+somi\.mjs" launch copilot` does it[\s\S]*an alias of their own\.$/, 'the setup, the shards and the launcher are done from the chat, by the full path');
+  const copilot = advise({ ...ctx, host: 'copilot' }, { request: 'x', hint: 'config' }).advice;
+  assert.match(copilot, /registers the staged workflow[^.]*for every project at session start, so there is nothing to run for it/, 'on Copilot the staged workflow needs no step from the user');
+  assert.doesNotMatch(copilot, /init --host copilot/);
 });

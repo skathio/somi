@@ -5,8 +5,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pluginRoot, projectRoot, readPayload, runHook } from '../lib/common.mjs';
+import { globalConfigPath, readConfigFile } from '../../scripts/lib/config-files.mjs';
 import { sandboxSettings, settingsWarnings } from '../../scripts/lib/doctor.mjs';
 import { stateIsTracked } from '../../scripts/lib/git-tree.mjs';
+import { copilotWorkflowsOn, installCopilotExtension, isInside } from '../../scripts/lib/init.mjs';
 import { readLedger } from '../../scripts/lib/ledger.mjs';
 import { planStatus } from '../../scripts/lib/plan.mjs';
 import { listShards } from '../../scripts/lib/shards.mjs';
@@ -28,6 +30,19 @@ function projectParts(project) {
   return parts;
 }
 
+// Copilot loads a workflow only from an extension, so the user's copy is written here, where a missing step would otherwise surface
+// as /somi-deliver failing. It is said only when it was written, because a session that started before then does not have it yet.
+// A copy inside the project, such as a vendored one, serves only that project, so it does not become every project's.
+function copilotWorkflows(root, project) {
+  if (isInside(project, root)) return [];
+  try {
+    const file = globalConfigPath();
+    if (!copilotWorkflowsOn(file ? readConfigFile(file) : null)) return [];
+    const { written } = installCopilotExtension({ pluginRoot: root });
+    return written ? ['SoMi just registered its staged workflow, /somi-deliver, with Copilot CLI for every project. It loads from the next session or after /clear. Mention it only if the user asks for /somi-deliver.'] : [];
+  } catch { return []; }
+}
+
 runHook(() => {
   const payload = readPayload();
   const root = pluginRoot();
@@ -38,6 +53,7 @@ runHook(() => {
   const warnings = settingsWarnings(host, sandboxSettings({ host, root: projectRoot() }));
   if (warnings.length > 0) parts.push(`WARNING: the OS sandbox, SoMi's security boundary, needs attention: ${warnings[0]}. Hooks are tripwires, not a boundary. Tell the user once, in one line, and do not repeat it. If they ask for the detail, run \`somi doctor\` and relay it.`);
   parts.push(...projectParts(projectRoot()));
+  if (host === 'copilot') parts.push(...copilotWorkflows(root, projectRoot()));
   const notice = updateNotice();
   if (notice) parts.push(notice);
   // Claude Code names the active agent here. Copilot CLI does not, so there the model is told how to tell from its own instructions.
