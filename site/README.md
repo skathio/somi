@@ -46,8 +46,10 @@ build and tests in `ci.yml`'s `site` job, without deploying.
 
 ## Brand
 
-[`brand/somi-icon-800.png`](brand/somi-icon-800.png) is the master icon (the repository's GitHub
-icon; no vector version exists). Every size the page uses is a straight downscale of it, committed:
+[`brand/somi-mark.svg`](brand/somi-mark.svg) is the master: the SoMi eye in the skathio family style
+(a dark disc, a deep red ring, three tomoe and the pupil glowing red). Every PNG is rendered from it at
+its exact size, committed: [`brand/somi-icon-800.png`](brand/somi-icon-800.png) (the repository's GitHub
+icon and the homepage card), `.claude-plugin/icon.png` (800, the plugin's icon) and these:
 
 | File | Size | Used for |
 |---|---|---|
@@ -58,8 +60,8 @@ icon; no vector version exists). Every size the page uses is a straight downscal
 | `src/assets/somi-icon.png` | 480 | the header and hero logo (shown at up to 240 px, so sharp at 2×) |
 
 The accent colour is the icon's red (`#cc1111`), darkened to `#b80f0f` on the light theme for text
-contrast. When the icon changes, replace the master and regenerate the sizes with any image tool
-(Lanczos downscale, PNG); `check-dist` fails a build without a favicon or with a preview image the
+contrast. When the icon changes, edit the master and render each size from it with a headless
+browser (transparent background; the apple-touch icon on the dark canvas `#101216`); `check-dist` fails a build without a favicon or with a preview image the
 build did not emit.
 
 ## Rules the build enforces

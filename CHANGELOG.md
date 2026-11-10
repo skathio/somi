@@ -8,6 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ### Changed
 
+- **The SoMi mark in the skathio family style.** The eye is redrawn as a vector, `site/brand/somi-mark.svg`: three tomoe sweeping around the pupil, glowing in SoMi's red in a dark disc with a deep red ring, matching the other skathio marks. Every icon size, the plugin icon and the homepage card image are rendered from it.
 - **A page-only site deploy needs the production approval.** Running `site.yml` by hand now waits at a `gate` job for the `production` Environment's owner approval, the same single approval a release needs at `publish`. A release still asks once: its page deploy runs after `publish` and skips the gate. A cancelled run now also stops the page deploy.
 
 ### Added
