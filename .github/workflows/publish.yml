@@ -159,12 +159,12 @@ jobs:
     steps:
       # Full tag history (not the shallow default) so the resolver can see
       # the real tag list via `git tag --list` below.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
 
@@ -195,7 +195,7 @@ jobs:
       # consumers"; auto-advances to future `v2.x.y` releases). Must match
       # the `npm-release@v2` pin below (dual-pin invariant, D9).
       - name: Checkout hashira library (D14)
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: skathio/hashira
           ref: v2
@@ -256,7 +256,7 @@ jobs:
           echo "publish: packed tarball stamped with version ${RESOLVED_VERSION} at ${RUNNER_TEMP}/somi-pack-output" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload packed tarball (same-run artifact handoff for npm-release)
-        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # npm-release@v2 downloads this exact artifact name unconditionally
           # — it has no mechanism to produce or re-pack it itself. Must match
@@ -306,7 +306,7 @@ jobs:
       # adoption doc names it as required; not carried over from
       # semantic-release's now-deleted tag-push behavior (the v1-era
       # justification this comment used to cite).
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: true
 
