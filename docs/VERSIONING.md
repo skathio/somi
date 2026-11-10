@@ -126,9 +126,11 @@ hand; the one thing you **do** update by hand is the set of version files above 
    for a manual CI-only re-run that isn't cutting a release.
 
 **Deploying the page without a release.** Run [`site.yml`](../.github/workflows/site.yml) by hand on
-`main` (Actions → site → Run workflow, or `gh workflow run site.yml --ref main`). It builds, tests and
-deploys the page from `main` and touches nothing on npm. The `github-pages` Environment only accepts
-deployments from `main`, so what goes out is merged, reviewed content. Don't date a CHANGELOG
+`main` (Actions → site → Run workflow, or `gh workflow run site.yml --ref main`). It first waits at its
+`gate` job for the `production` Environment's owner approval, the same single approval a release
+needs, then builds, tests and deploys the page from `main` and touches nothing on npm. A release
+asks for that approval once, at `publish`, and its page deploy does not ask again. The `github-pages`
+Environment only accepts deployments from `main`, so what goes out is merged, reviewed content. Don't date a CHANGELOG
 release heading on `main` before that release is published if you plan a page-only deploy in between:
 the page would show it as released.
 

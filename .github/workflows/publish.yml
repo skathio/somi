@@ -324,8 +324,11 @@ jobs:
     needs: publish
     # Same gate as `version`; also skipped whenever `publish` did not succeed.
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
-    # The same workflow a page-only deploy runs by hand; see its header.
+    # The same workflow a page-only deploy runs by hand; see its header. `released: true` skips
+    # site.yml's own approval gate: `publish` above already passed production's approval.
     uses: ./.github/workflows/site.yml
+    with:
+      released: true
     # site.yml's jobs need these (hashira's static-webapp-ci matrix, then deploy-pages); a called
     # workflow can only narrow what its caller grants.
     permissions:
