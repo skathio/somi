@@ -124,3 +124,12 @@ test('an expired token or API error on the ping never fails the run', () => {
   assert.match(ping, /continue-on-error: true/, 'publish.yml ping step');
   assert.match(read('.github/workflows/homepage.yml'), /continue-on-error: true/, 'homepage.yml ping step');
 });
+
+// The ping holds a cross-repo token, so no trigger may run it on code or text an outsider controls.
+test('homepage.yml runs only on pushes to main and by hand, never on PR or comment events', () => {
+  const wf = code(read('.github/workflows/homepage.yml'));
+  const on = wf.slice(wf.search(/^on:\s*$/m), wf.search(/^permissions:/m));
+  const triggers = [...on.matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(triggers, ['push', 'workflow_dispatch']);
+  assert.match(on, /branches: \[main\]/);
+});
