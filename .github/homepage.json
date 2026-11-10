@@ -1,0 +1,9 @@
+{
+  "name": "SoMi",
+  "tagline": "A workflow plugin for coding agents: it routes the work and keeps the cost down, while your agent stays in charge.",
+  "colour": "#b80f0f",
+  "image": "site/brand/somi-icon-800.png",
+  "links": {
+    "npm": "https://www.npmjs.com/package/@skathio/somi"
+  }
+}
