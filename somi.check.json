@@ -18,7 +18,9 @@
     "scripts/somi.mjs": [
       "tests/reviews.test.mjs",
       "tests/check.test.mjs",
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/doctor.test.mjs",
+      "tests/launch.test.mjs"
     ],
     "scripts/somi-mcp.mjs": [
       "tests/mcp.test.mjs"
@@ -58,10 +60,15 @@
       "tests/check.test.mjs"
     ],
     "scripts/lib/doctor.mjs": [
-      "tests/doctor.test.mjs"
+      "tests/doctor.test.mjs",
+      "tests/copilot-extension.test.mjs"
     ],
     "scripts/lib/init.mjs": [
-      "tests/doctor.test.mjs"
+      "tests/doctor.test.mjs",
+      "tests/copilot-extension.test.mjs"
+    ],
+    "scripts/lib/launch.mjs": [
+      "tests/launch.test.mjs"
     ],
     "scripts/lib/views.mjs": [
       "tests/goldens.test.mjs"
@@ -77,7 +84,8 @@
     ],
     "hooks/": [
       "tests/hooks.test.mjs",
-      "tests/advisor.test.mjs"
+      "tests/advisor.test.mjs",
+      "tests/copilot-extension.test.mjs"
     ],
     "agents/": [
       "tests/surface.test.mjs"

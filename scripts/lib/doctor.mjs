@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { copilotExtensionFile, copilotWorkflowsOn, projectExtensionWarnings } from './init.mjs';
 import { resolveSpawn } from './tiers.mjs';
 
 const WSL_REMEDY = 'Native Windows has no OS sandbox for agents. Run the agent inside WSL2 and run this again there.';
@@ -64,6 +65,14 @@ export function duplicateHookWarnings(root) {
   return fs.existsSync(file) ? [`${file} was written by an earlier somi init, and Copilot CLI now runs the plugin's own hooks, so every SoMi hook runs twice; delete that file`] : [];
 }
 
+// The session-start hook writes the user's copy, so none there means the hooks did not run or the global config turned it off. Only the
+// global config says it is off, as only it can turn it off.
+export function copilotWorkflowWarnings(host, root, { config = {}, home = os.homedir(), env = process.env } = {}) {
+  if (host !== 'copilot' || !copilotWorkflowsOn(config)) return [];
+  const missing = fs.existsSync(copilotExtensionFile(env, home)) ? [] : [`${copilotExtensionFile(env, home)} is missing, so /somi-deliver has no workflow to run; start a new session, or run \`somi init --host copilot\``];
+  return [...missing, ...projectExtensionWarnings(root)];
+}
+
 // A plugin's hooks can fail to load without any error. The audit hook runs on every tool call, so a log with nothing recent means none of them ran.
 export function hookWarnings(root, { now = Date.now(), env = process.env } = {}) {
   const log = env.SOMI_AUDIT_LOG || path.join(root, '.somi', 'audit.log');
@@ -71,7 +80,7 @@ export function hookWarnings(root, { now = Date.now(), env = process.env } = {})
   return ['no hook has logged a tool call here in the last hour, so the tripwire hooks may not be running on this host; run this from inside an agent session, and check that the SoMi plugin is enabled'];
 }
 
-export function runDoctor({ root, host, config = {}, platform = process.platform, env = process.env, home = os.homedir(), exec = defaultExec, removeFile = fs.rmSync, pid = process.pid }) {
+export function runDoctor({ root, host, config = {}, globalConfig = {}, platform = process.platform, env = process.env, home = os.homedir(), exec = defaultExec, removeFile = fs.rmSync, pid = process.pid }) {
   if (platform === 'win32') return { ok: false, verdict: 'FAIL', host, remedy: WSL_REMEDY, probes: [], warnings: [] };
   const probePath = path.join(home, `.somi-sandbox-probe-${pid}`);
   const touch = exec('touch', [probePath]);
@@ -85,7 +94,7 @@ export function runDoctor({ root, host, config = {}, platform = process.platform
   const ok = probes.every((p) => p.blocked);
   return {
     ok, verdict: ok ? 'PASS' : 'FAIL', host, probes,
-    warnings: [...settingsWarnings(host, sandboxSettings({ host, root, home, env })), ...tierWarnings(config, host), ...autoWarnings(host, { home, env }), ...hookWarnings(root, { env }), ...duplicateHookWarnings(root)],
+    warnings: [...settingsWarnings(host, sandboxSettings({ host, root, home, env })), ...tierWarnings(config, host), ...autoWarnings(host, { home, env }), ...hookWarnings(root, { env }), ...duplicateHookWarnings(root), ...copilotWorkflowWarnings(host, root, { config: globalConfig, home, env })],
     remedy: ok ? undefined : 'Enable the sandbox: `somi doctor --profile` prints the settings to merge into the host\'s own. Then check again from inside an agent session, because a command typed at a `!` prompt usually bypasses the sandbox.',
   };
 }

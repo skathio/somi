@@ -6,14 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+## [5.0.3] — 2026-11-10 — fix: `/somi-deliver` works on Copilot CLI without a setup step
+
+**Patch.** Fixes for Copilot CLI, and `somi launch`, a CLI helper outside the public surface. One optional clean-up: a project that ran an earlier `somi init` should delete `.github/extensions/somi/`.
+
+### Fixed
+
+- **`/somi-deliver` works on Copilot CLI without a setup step.** Copilot loads a workflow only from an extension, and SoMi wrote that extension only into a project where someone ran `somi init --host copilot`, so everywhere else the agent was told to run init, and `/somi-deliver` failed with `No workflow registered with name "somi-deliver-stages"`. The session-start hook now writes one extension for every project in the user's Copilot folder, `$COPILOT_HOME/extensions/somi/extension.mjs`, and keeps it pointing at the installed plugin. A session that was open before then gets it after `/clear`. It never overwrites an `extension.mjs` SoMi did not write, it loads with nothing registered once the plugin is uninstalled, and `"copilot": { "workflows": false }` in the global config turns it off. `somi init --host copilot` now writes the same file, for a session that started before the plugin was installed, and `somi doctor` says when it is missing.
+  - **Migration:** delete a `.github/extensions/somi/` folder that an earlier `somi init` wrote into a project, or the workflow is registered twice there. `somi init` and the doctor say so.
+- **The docs say `/somi-deliver` on Copilot.** Copilot lists plugin commands by their plain names only, so `/somi:somi-deliver`, the Claude Code form, answered `Skill not found`.
+
+### Added
+
+- **`somi launch`.** `somi launch claude|copilot` starts the host with `--agent somi:somi` and the model the global config sets for the conversation's tier, medium unless `tiers.main` says otherwise, and Copilot in experimental mode; anything after it goes to the host, and a flag you pass yourself is not added again. A project's config does not choose the model here. Wrap it in an alias of your own. On Windows, `somi launch` finds the host by `PATH` and `PATHEXT`, and starts an npm `.cmd` shim through `cmd.exe` with each argument quoted for it.
+- **A tile on the skathio homepage.** `.github/homepage.json` describes SoMi's card on https://skathio.github.io/: its name, kind, description, tags, colour and branding image. After a release, `publish.yml` asks the homepage to rebuild, and `homepage.yml` does the same when the manifest or the image changes. Both use the secret `HOMEPAGE_DISPATCH_TOKEN`, and both skip the ping without failing when the secret is not set.
+
 ### Changed
 
 - **The SoMi mark in the skathio family style.** The eye is redrawn as a vector, `site/brand/somi-mark.svg`: three tomoe sweeping around the pupil, glowing in SoMi's red in a dark disc with a deep red ring, matching the other skathio marks. Every icon size, the plugin icon and the homepage card image are rendered from it.
 - **A page-only site deploy needs the production approval.** Running `site.yml` by hand now waits at a `gate` job for the `production` Environment's owner approval, the same single approval a release needs at `publish`. A release still asks once: its page deploy runs after `publish` and skips the gate. A cancelled run now also stops the page deploy.
-
-### Added
-
-- **A tile on the skathio homepage.** `.github/homepage.json` describes SoMi's card on https://skathio.github.io/: its name, kind, description, tags, colour and branding image. After a release, `publish.yml` asks the homepage to rebuild, and `homepage.yml` does the same when the manifest or the image changes. Both use the secret `HOMEPAGE_DISPATCH_TOKEN`, and both skip the ping without failing when the secret is not set.
 
 ## [5.0.2] — 2026-11-09 — fix: a turn that changed nothing no longer runs the quality gate, and the gate is faster on large branches
 

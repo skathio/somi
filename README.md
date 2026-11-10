@@ -57,18 +57,20 @@ Start with SoMi as the session's agent and just talk to it:
 claude --agent somi:somi    # or: copilot --agent somi:somi
 ```
 
+To start that way with the model your config sets for the conversation's tier, `somi launch claude` or `somi launch copilot` starts the host with `--agent somi:somi` and that model, and Copilot in experimental mode for `/somi-deliver`. Anything after it goes to the host. Ask `/somi-config` for the full command, and wrap it in an alias or function of your own, on Linux, macOS or Windows.
+
 Everything is done from the chat. Ask for a change, a bug fix, a refactor, a plan, a design, a review, an upgrade or the pull request text in plain words, or paste a ticket, and SoMi's agent picks the workflow. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start. In a Copilot session already running, `/agent somi` switches to it. Six commands do the rest:
 
 | Command | What it does |
 |---|---|
 | `/somi <anything>` | Routes anything, the way the agent does with plain words. Use it from another agent. |
-| `/somi-deliver <work or ticket>` | Runs large work as SoMi's staged workflow. Only you can start it. On Copilot, ask `/somi-config` to register it once, and turn on `/experimental`. |
+| `/somi-deliver <work or ticket>` | Runs large work as SoMi's staged workflow. Only you can start it. On Copilot, it needs `/experimental`; SoMi registers it at session start, so a session already open gets it after `/clear`. |
 | `/somi-review` | Reviews the current changes, whether or not the diff calls for it. |
 | `/somi-quality [commit \| repo]` | Checks the code against the quality limits: the branch, one commit, or the whole codebase. |
 | `/somi-status` | Shows the open plan, decisions and findings. |
 | `/somi-config` | Shows and changes the models each tier uses and the quality limits, and checks the setup. |
 
-On Claude Code they also answer to `/somi:somi-review` and so on. On Copilot, SoMi's commands are listed as skills.
+On Claude Code they also answer to `/somi:somi-review` and so on. On Copilot, SoMi's commands are listed as skills, by their plain names only: type `/somi-deliver`, not `/somi:somi-deliver`.
 
 ## Set your tiers
 
