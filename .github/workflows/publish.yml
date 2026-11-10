@@ -334,3 +334,32 @@ jobs:
       pages: write
       pull-requests: write
       security-events: write
+
+  # Tells the org homepage (skathio/skathio.github.io) to rebuild so its SoMi tile shows this release.
+  # npm-release creates the GitHub Release with GITHUB_TOKEN, which does not fire the `release`
+  # event, so homepage.yml cannot catch it: this job sends the ping. Runs only after `publish`,
+  # behind the same gate as the release. The token is the repo secret HOMEPAGE_DISPATCH_TOKEN (a
+  # fine-grained token limited to skathio/skathio.github.io with Contents read and write,
+  # documented in that repo's README); no token is ever committed. Without the secret the job
+  # notes that and succeeds, and the step is continue-on-error, so neither a missing nor an
+  # expired token marks a good release as failed.
+  homepage-ping:
+    name: homepage-ping
+    needs: publish
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Send repository_dispatch to the homepage
+        # A ping is a courtesy: an expired token or an API error must not fail the run.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.HOMEPAGE_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::notice::HOMEPAGE_DISPATCH_TOKEN is not set; the homepage picks this release up on its next scheduled build."
+            exit 0
+          fi
+          gh api repos/skathio/skathio.github.io/dispatches \
+            -f event_type=project-released -f 'client_payload[repo]=skathio/somi'

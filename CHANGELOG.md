@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **A tile on the skathio homepage.** `.github/homepage.json` describes SoMi's card on https://skathio.github.io/: its name, kind, description, tags, colour and branding image. After a release, `publish.yml` asks the homepage to rebuild, and `homepage.yml` does the same when the manifest or the image changes. Both use the secret `HOMEPAGE_DISPATCH_TOKEN`, and both skip the ping without failing when the secret is not set.
+
 ## [5.0.2] — 2026-11-09 — fix: a turn that changed nothing no longer runs the quality gate, and the gate is faster on large branches
 
 **Patch — fixes only.** No migration action required.
