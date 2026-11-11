@@ -88,6 +88,10 @@ test('a bare init works: it finds Copilot by its folder or environment, and on C
   assert.equal(copilot.status, 0, copilot.stderr);
   assert.equal(fs.existsSync(path.join(home, '.copilot', 'extensions', 'somi', 'extension.mjs')), true);
   assert.match(copilot.json.workflows, /reload/i, 'a file that is current is not a loaded extension; the reload is named');
+  const named = somi(dir, ['init'], { env: { HOME: home, USERPROFILE: home, SOMI_HOST: 'claude' } });
+  assert.equal(named.json.host, 'claude', 'a named host wins over the folder');
+  assert.equal(somi(dir, ['init', '--host', 'claude'], { env: { HOME: home, USERPROFILE: home, SOMI_HOST: '' } }).json.host, 'claude');
+  assert.equal(somi(dir, ['init', '--host', 'nope'], { env: { SOMI_HOST: '' } }).status, 64);
   const bare = path.join(dir, '.git', 'bare-home');
   fs.mkdirSync(bare);
   const claude = somi(dir, ['init'], { env: { HOME: bare, USERPROFILE: bare, SOMI_HOST: '' } });

@@ -152,7 +152,9 @@ const RELOAD = 'A file that is current is not yet a loaded extension. In the ope
 function initCommand(ctx, args) {
   const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
   if (values.host !== undefined && values.host !== 'copilot' && values.host !== 'claude') throw new StateError('init takes --host copilot or --host claude');
-  const host = values.host ?? (detectHost(ctx.env) === 'copilot' || copilotHomeExists(ctx.env) ? 'copilot' : 'claude');
+  // An explicit SOMI_HOST wins; the folder is only a guess for when nothing says which host this is.
+  const named = ctx.env.SOMI_HOST === 'claude' || ctx.env.SOMI_HOST === 'copilot';
+  const host = values.host ?? (detectHost(ctx.env) === 'copilot' || (!named && copilotHomeExists(ctx.env)) ? 'copilot' : 'claude');
   if (host === 'claude') { print({ host, extension: null, workflows: 'The Claude Code plugin needs no setup.' }); return 0; }
   const extension = installCopilotExtension({ pluginRoot: PLUGIN_ROOT, env: ctx.env });
   const warnings = [...duplicateHookWarnings(ctx.root), ...projectExtensionWarnings(ctx.root)];
