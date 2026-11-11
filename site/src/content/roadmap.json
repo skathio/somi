@@ -118,9 +118,9 @@
       "label": "Where it is now",
       "entries": [
         {
-          "version": "5.0.3",
+          "version": "5.0.4",
           "label": "5.0",
-          "covers": ["5.0.0", "5.0.1", "5.0.2", "5.0.3"],
+          "covers": ["5.0.0", "5.0.1", "5.0.2", "5.0.3", "5.0.4"],
           "title": "Your agent in charge, SoMi advising",
           "major": true,
           "highlights": [
@@ -140,7 +140,8 @@
                 "**On the registered benchmark,** 90 of 96 draws solved against bare's 72, at 1.28x bare's cost per solved task.",
                 "**5.0.1** gives the quality gate a time limit you can set, so a large change is checked instead of cut off.",
                 "**5.0.2** skips the gate on a turn that changed nothing, and reads files in batches, about three times faster on a large branch.",
-                "**5.0.3** registers `/somi-deliver` with Copilot CLI once for every project, so nothing needs `somi init`, and adds `somi launch` to start Claude Code or Copilot on SoMi's agent and your tier's model, on Linux, macOS and Windows."
+                "**5.0.3** registers `/somi-deliver` with Copilot CLI once for every project, so nothing needs `somi init`, and adds `somi launch` to start Claude Code or Copilot on SoMi's agent and your tier's model, on Linux, macOS and Windows.",
+                "**5.0.4** makes a bare `somi init` find Copilot CLI by itself, and says how to load the workflow into an open session without losing the conversation."
               ]
             }
           ]

@@ -13,6 +13,8 @@ const PROJECT_MARK = '// Written by somi init:';
 
 const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
 
+export const copilotHomeExists = (env = process.env, home = os.homedir()) => fs.existsSync(env.COPILOT_HOME || path.join(home, '.copilot'));
+
 export const copilotExtensionFile = (env = process.env, home = os.homedir()) => path.join(env.COPILOT_HOME || path.join(home, '.copilot'), 'extensions', 'somi', 'extension.mjs');
 
 // A few lines that load SoMi's own module from the plugin. When the plugin is gone, it joins with nothing rather than failing to load.

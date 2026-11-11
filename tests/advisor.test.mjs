@@ -619,3 +619,8 @@ test('the config route shows the quality limits, which project values were ignor
   assert.match(copilot, /registers the staged workflow[^.]*for every project at session start, so there is nothing to run for it/, 'on Copilot the staged workflow needs no step from the user');
   assert.doesNotMatch(copilot, /init --host copilot/);
 });
+
+test('on Copilot, staged advice names the reload that registers the workflow without losing the conversation', (t) => {
+  const r = advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG, staged: true });
+  assert.match(r.advice, /reload (the )?extensions[\s\S]*\/clear/i);
+});

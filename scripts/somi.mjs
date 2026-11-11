@@ -12,7 +12,7 @@
 //   somi status | migrate
 //   somi setup [--host claude|copilot]                  makes SoMi the session agent, on the model set for its tier
 //   somi doctor [--host claude|copilot] [--profile]
-//   somi init --host copilot                          registers the staged workflow with Copilot CLI, once for every project
+//   somi init [--host copilot]                         registers the staged workflow with Copilot CLI, once for every project
 //   somi launch claude|copilot [args...]              starts the host with SoMi's agent, on the model set for its tier
 //
 // Exit codes: 0 done, 1 a check, the doctor or the pull request gate failed, 64 the request was refused.
@@ -28,7 +28,7 @@ import { runCheck } from './lib/check.mjs';
 import { ConfigFileError, globalConfigPath, loadConfig, readConfigFile } from './lib/config-files.mjs';
 import { duplicateHookWarnings, runDoctor } from './lib/doctor.mjs';
 import { commitBase, listFiles, repoRoot, resolveRef, snapshotTree, stateIsTracked, workBase } from './lib/git-tree.mjs';
-import { installCopilotExtension, projectExtensionWarnings } from './lib/init.mjs';
+import { copilotHomeExists, installCopilotExtension, projectExtensionWarnings } from './lib/init.mjs';
 import { LAUNCH_HOSTS, launchPlan, spawnPlan } from './lib/launch.mjs';
 import { addToLedger, readLedger } from './lib/ledger.mjs';
 import { migrate } from './lib/migrate.mjs';
@@ -146,13 +146,19 @@ function slotCommand(ctx, args) {
   return 0;
 }
 
-// The session-start hook does this on its own, so init is for a session that started before the plugin was installed.
+// The session-start hook does this on its own, so init is for a session that started before the plugin was installed. Without --host it
+// finds Copilot CLI by its environment or its folder, and on Claude Code it has nothing to do.
+const RELOAD = 'A file that is current is not yet a loaded extension. In the open session, reload extensions (the extensions reload tool) to register the workflow without losing the conversation, or start a new session or /clear. Copilot runs workflows in experimental mode: start with --experimental, or turn it on with /experimental.';
 function initCommand(ctx, args) {
   const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
-  if (values.host !== 'copilot') throw new StateError('init takes --host copilot; the Claude Code plugin needs no setup');
+  if (values.host !== undefined && values.host !== 'copilot' && values.host !== 'claude') throw new StateError('init takes --host copilot or --host claude');
+  // An explicit SOMI_HOST wins; the folder is only a guess for when nothing says which host this is.
+  const named = ctx.env.SOMI_HOST === 'claude' || ctx.env.SOMI_HOST === 'copilot';
+  const host = values.host ?? (detectHost(ctx.env) === 'copilot' || (!named && copilotHomeExists(ctx.env)) ? 'copilot' : 'claude');
+  if (host === 'claude') { print({ host, extension: null, workflows: 'The Claude Code plugin needs no setup.' }); return 0; }
   const extension = installCopilotExtension({ pluginRoot: PLUGIN_ROOT, env: ctx.env });
   const warnings = [...duplicateHookWarnings(ctx.root), ...projectExtensionWarnings(ctx.root)];
-  print({ extension, workflows: 'Copilot loads it at the next session start or after /clear, and runs workflows in experimental mode: start with --experimental, or turn it on with /experimental.', ...(warnings.length ? { warnings } : {}) });
+  print({ host, extension, workflows: RELOAD, ...(warnings.length ? { warnings } : {}) });
   return extension.written || extension.current ? 0 : 1;
 }
 
