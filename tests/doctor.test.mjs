@@ -80,6 +80,22 @@ test('Copilot CLI runs the plugin\'s own hooks, so init writes none, and an old 
   assert.match(somi(dir, ['init', '--host', 'copilot'], { env }).json.warnings[0], /runs twice/, 'init says so too');
 });
 
+test('a bare init works: it finds Copilot by its folder or environment, and on Claude Code it says nothing is needed', (t) => {
+  const dir = makeRepo(t);
+  const home = path.join(dir, '.git', 'home');
+  fs.mkdirSync(path.join(home, '.copilot'), { recursive: true });
+  const copilot = somi(dir, ['init'], { env: { HOME: home, USERPROFILE: home, SOMI_HOST: '' } });
+  assert.equal(copilot.status, 0, copilot.stderr);
+  assert.equal(fs.existsSync(path.join(home, '.copilot', 'extensions', 'somi', 'extension.mjs')), true);
+  assert.match(copilot.json.workflows, /reload/i, 'a file that is current is not a loaded extension; the reload is named');
+  const bare = path.join(dir, '.git', 'bare-home');
+  fs.mkdirSync(bare);
+  const claude = somi(dir, ['init'], { env: { HOME: bare, USERPROFILE: bare, SOMI_HOST: '' } });
+  assert.equal(claude.status, 0, claude.stderr);
+  assert.match(claude.json.host, /claude/);
+  assert.equal(fs.existsSync(path.join(bare, '.copilot')), false, 'nothing is written for Claude Code');
+});
+
 test('the extension points at a module that exists and exports the entry', async () => {
   const url = /new URL\(("[^"]+")\)/.exec(copilotExtension(REPO))[1];
   const lib = await import(JSON.parse(url));

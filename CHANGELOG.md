@@ -6,6 +6,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+## [5.0.4] — 2026-11-11 — fix: `somi init` finds the host, and the workflow loads into an open Copilot session
+
+**Patch — fixes only.** No migration action required. Closes #60.
+
+### Fixed
+
+- **A bare `somi init` works.** It used to stop with `init takes --host copilot` and exit 64. It now finds Copilot CLI by its environment or its `~/.copilot` folder (or `COPILOT_HOME`) and registers the workflow, and on Claude Code it says the plugin needs no setup and exits 0. `--host claude|copilot` still decides it when given.
+- **"Current" no longer reads as "loaded".** The init result and the staged-workflow advice now say that an up-to-date extension file is not yet a loaded extension, and name the recovery that keeps the conversation: reload extensions in the open session, then start the workflow again; `/clear` or a new session is the fallback, and Copilot must be in experimental mode.
+
 ## [5.0.3] — 2026-11-10 — fix: `/somi-deliver` works on Copilot CLI without a setup step
 
 **Patch.** Fixes for Copilot CLI, and `somi launch`, a CLI helper outside the public surface. One optional clean-up: a project that ran an earlier `somi init` should delete `.github/extensions/somi/`.
