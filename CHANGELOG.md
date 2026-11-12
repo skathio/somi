@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+## [5.1.1] — 2026-11-12 — fix: a staged run's security review is recorded, not rejected as missing
+
+**Patch.** A fix, and a change to the release workflows. No migration action for users. The maintainer keeps `HOMEPAGE_DISPATCH_TOKEN` as a secret of the `homepage` environment.
+
 ### Fixed
 
 - **A security review that `/somi-deliver` ran is recorded instead of rejected as missing.** On Copilot CLI a staged run ended with `somi_review` refusing it: `no review from: somi-security-reviewer`. A reviewer's report over the 2,048-byte cap was refused whole. The session cannot shorten a reviewer's report, so it sent none, and a missing security review is refused. Now a report over the cap loses its Nits and then its Minors, last first, until it fits. The answer says how many were dropped. A Blocker or Major is never dropped, and a report still over the cap without its Minors and Nits is refused with advice to run that reviewer again. The workflow now asks each reviewer for its report in the shape `somi_review` records, because without one a host hands back text. A reviewer that returns nothing is listed in `reviews_missing` and the run reports `needs-attention`, so the session runs that reviewer instead of recording an empty set. The advice for a finished run now says to pass its `review_tree` as `tree`; it had the two names the wrong way round.
@@ -54,7 +58,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [5.0.2] — 2026-11-09 — fix: a turn that changed nothing no longer runs the quality gate, and the gate is faster on large branches
 
-**Patch — fixes only.** No migration action required.
+**Patch.** A fix, and a change to the release workflows. No migration action for users. The maintainer keeps `HOMEPAGE_DISPATCH_TOKEN` as a secret of the `homepage` environment.
 
 ### Fixed
 
