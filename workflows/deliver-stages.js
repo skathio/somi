@@ -28,6 +28,9 @@ const SCOUT = { type: 'object', required: ['files', 'test_command'], properties:
 const RAN = { type: 'object', required: ['failed'], properties: { failed: { type: 'boolean' }, output: { type: 'string' } } };
 const BUILT = { type: 'object', required: ['status', 'summary'], properties: { status: { type: 'string', enum: ['done', 'blocked'] }, summary: { type: 'string' } } };
 const GATE = { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' }, failures: { type: 'array', items: { type: 'string' } } } };
+// somi_review takes a reviewer's report as an object. Asked without a schema, a host returns the reviewer's text instead.
+const FINDING = { type: 'object', required: ['severity', 'file', 'claim'], properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Blocker', 'Major', 'Minor', 'Nit'] }, boundary: { type: 'boolean' }, file: { type: 'string' }, line: { type: 'integer' }, claim: { type: 'string' }, evidence: { type: 'string' } } };
+const REVIEW = { type: 'object', required: ['verdict', 'findings'], properties: { verdict: { type: 'string', enum: ['approve', 'approve-with-comments', 'request-changes'] }, tests_run: { type: 'array', items: { type: 'string' } }, findings: { type: 'array', items: FINDING } } };
 const PLAN = { type: 'object', required: ['needed'], properties: { needed: { type: 'boolean' }, tree: { type: 'string' }, reviewers: { type: 'array', items: { type: 'object', properties: { agent: { type: 'string' }, model: { type: 'string' }, brief: { type: 'string' } } } } } };
 
 await runShards('work-item.start');
@@ -74,8 +77,17 @@ for (const tier of ladder) {
 
 phase('Review');
 const plan = await agent(`Run \`${cli} review\` and return what it prints, unchanged, as the fields asked for. Change nothing.`, onTier('low', { label: 'review plan', schema: PLAN }));
-// A first stage gets the item itself on one host and (previous, item) on another, so it reads the item from either.
-const reviews = plan?.needed ? (await pipeline(plan.reviewers ?? [], (prev, item) => { const r = item ?? prev; return agent(r.brief, { label: r.agent, agentType: r.agent, ...(r.model ? { model: r.model } : {}) }); })).filter(Boolean) : [];
+// A first stage gets the item itself on one host and (previous, item) on another, so it reads the item from either. A report is filed
+// under the name it was dispatched as, not the one it gives itself. A reviewer that returns nothing is named, never dropped: somi_review
+// refuses a set without it, because a missing security review must not read as a clean one.
+const seats = plan?.needed ? plan.reviewers ?? [] : [];
+const returned = await pipeline(seats, (prev, item) => {
+  const r = item ?? prev;
+  return agent(r.brief, { label: r.agent, agentType: r.agent, schema: REVIEW, ...(r.model ? { model: r.model } : {}) }).then((v) => (v && typeof v === 'object' ? { ...v, agent: r.agent } : null));
+});
+const reviews = seats.map((_, i) => returned?.[i]).filter(Boolean);
+const reviewsMissing = seats.filter((s) => !reviews.some((v) => v.agent === s.agent)).map((s) => s.agent);
 await runShards('review.done');
 
-return { status: built?.status === 'done' && gate?.ok ? 'done' : 'needs-attention', summary: built?.summary ?? null, checks: gate, rules: rules?.rules ?? [], rules_file: rules?.file ?? null, review_tree: plan?.tree ?? null, reviews, handoff_kept_repro: Boolean(repro) };
+const done = built?.status === 'done' && gate?.ok && reviewsMissing.length === 0;
+return { status: done ? 'done' : 'needs-attention', summary: built?.summary ?? null, checks: gate, rules: rules?.rules ?? [], rules_file: rules?.file ?? null, review_tree: plan?.tree ?? null, reviews, reviews_missing: reviewsMissing, handoff_kept_repro: Boolean(repro) };

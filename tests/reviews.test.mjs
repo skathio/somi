@@ -122,6 +122,16 @@ test('blocking findings still open after the pass limit go to the user', (t) => 
   assert.equal(r.stop, 'max-passes');
 });
 
+test('the answer says how many findings were dropped to fit a report, so the session can tell the user', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  writeFiles(ctx.root, SINK);
+  const nits = Array.from({ length: 8 }, (_, i) => ({ severity: 'Nit', file: 'src/app.js', line: i + 1, claim: 'x'.repeat(300) }));
+  const r = recordReviews(ctx, { reviews: [review('somi-reviewer'), review('somi-security-reviewer', nits)] });
+  assert.equal(r.verdict, 'clear');
+  assert.deepEqual(r.trimmed, [{ agent: 'somi-security-reviewer', dropped: 3 }]);
+  assert.equal(recordReviews(ctx, { reviews: [review('somi-reviewer'), review('somi-security-reviewer')] }).trimmed, undefined);
+});
+
 test('reviewers\' absolute paths and long claims do not cost a whole review', (t) => {
   const ctx = makeCtx(makeRepo(t));
   writeFiles(ctx.root, SINK);
@@ -141,7 +151,26 @@ test('review input is validated as untrusted', () => {
   bad([{ agent: 'somi-reviewer', verdict: 'approve', findings: [{ severity: 'Fatal', file: 'a', claim: 'b' }] }]);
   bad([{ agent: 'somi-reviewer', verdict: 'approve', findings: [{ severity: 'Minor', file: '../../etc/passwd', claim: 'b' }] }]);
   bad([{ agent: 'somi-reviewer', verdict: 'approve', findings: [{ severity: 'Minor', file: 'a.js', claim: 12 }] }]);
-  bad([{ agent: 'somi-reviewer', verdict: 'approve', findings: Array(40).fill({ severity: 'Nit', file: 'a.js', claim: 'x'.repeat(100) }) }]);
+});
+
+// A report over the cap used to be refused whole, and a session that cannot shorten a reviewer's report then sent none, which read as a
+// missing security review. So the least severe findings go first, and the ones that can block are never dropped.
+test('a report over the size cap loses its Nits, then its Minors, and keeps every Blocker and Major', () => {
+  const finding = (severity, i) => ({ id: `s${i}`, severity, file: 'src/features/RequestOwnership.tsx', line: i + 1, claim: `${severity} ${'x'.repeat(200)}`, evidence: 'y'.repeat(120) });
+  const severities = ['Major', 'Minor', 'Nit', 'Minor', 'Nit', 'Blocker', 'Minor'];
+  const review = { agent: 'somi-security-reviewer', verdict: 'request-changes', findings: severities.map(finding) };
+  assert.ok(Buffer.byteLength(JSON.stringify(review)) > 2048);
+  const { findings, verdicts } = parseReviews([review], [{ agent: 'somi-security-reviewer' }]);
+  assert.deepEqual(findings.map((f) => f.id), ['s0', 's1', 's3', 's5'], 'both Nits go before a Minor, then the last Minor, and no more than it takes');
+  assert.equal(verdicts[0].trimmed, 3);
+  assert.equal(parseReviews([{ ...review, findings: review.findings.slice(0, 2) }], [{ agent: 'somi-security-reviewer' }]).verdicts[0].trimmed, undefined, 'a report that fits is kept whole');
+  const many = parseReviews([{ agent: 'somi-reviewer', verdict: 'approve', findings: Array(40).fill({ severity: 'Nit', file: 'a.js', claim: 'x'.repeat(100) }) }], [{ agent: 'somi-reviewer' }]);
+  assert.ok(many.findings.length > 0 && many.findings.length < 40);
+});
+
+test('a report still over the cap with only its Blockers and Majors is refused, and the session is told to re-run that reviewer', () => {
+  const big = { agent: 'somi-security-reviewer', verdict: 'request-changes', findings: Array(8).fill({ severity: 'Major', file: 'a.js', claim: 'x'.repeat(300) }) };
+  assert.throws(() => parseReviews([big], [{ agent: 'somi-security-reviewer' }]), /somi-security-reviewer.*over 2048 bytes.*re-run/);
 });
 
 test('a reviewer\'s ids and model name are kept only when they hold no control characters, and the boundary flag is read exactly', () => {

@@ -27,7 +27,7 @@ function load(name) {
 }
 
 const MODELS = { low: 'cheap', medium: 'everyday', high: 'strong' };
-const answers = ({ gateOk = [true], reproFails = true, needed = false } = {}) => {
+const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer } = {}) => {
   let gates = 0;
   return (prompt, opts) => {
     if (opts.label === 'scout') return { files: ['src/a.js'], test_command: 'node --test', repro_test: 'test/repro.test.js', repro_command: 'node --test test/repro.test.js' };
@@ -36,9 +36,16 @@ const answers = ({ gateOk = [true], reproFails = true, needed = false } = {}) =>
     if (opts.label?.startsWith('build on')) return { status: 'done', summary: 'built' };
     if (opts.label === 'check') return { ok: gateOk[Math.min(gates++, gateOk.length - 1)], failures: ['tests: 1 failed'] };
     if (opts.label === 'review plan') return needed ? { needed: true, tree: 't', reviewers: [{ agent: 'somi:somi-security-reviewer', model: 'strong', brief: 'Review this diff.' }] } : { needed: false };
-    return { verdict: 'approve', findings: [] };
+    return reviewAnswer(opts, reviewer);
   };
 };
+
+// A host returns an object only for a call that declares a schema; otherwise it hands back the agent's text.
+function reviewAnswer(opts, reviewer) {
+  if (reviewer !== undefined) return reviewer;
+  const review = { agent: 'somi-security-reviewer', verdict: 'approve', findings: [] };
+  return opts.schema ? review : JSON.stringify(review);
+}
 
 test('the workflow names no model and lists its phases in meta', () => {
   const { meta } = load('deliver-stages');
@@ -94,6 +101,22 @@ test('reviewers run only when the diff calls for them, each as its own agent on 
   assert.equal(reviewer.model, 'strong');
   assert.equal(value.reviews.length, 1);
   assert.equal(value.review_tree, 't');
+});
+
+test('a reviewer returns its report in the shape somi_review records, under the name it was dispatched as', async () => {
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ needed: true }));
+  const schema = calls.find((c) => c.label === 'somi:somi-security-reviewer').schema;
+  assert.deepEqual(schema?.required, ['verdict', 'findings'], 'without a schema the host hands back text, which somi_review cannot record');
+  assert.deepEqual(value.reviews, [{ agent: 'somi:somi-security-reviewer', verdict: 'approve', findings: [] }]);
+  assert.deepEqual(value.reviews_missing, []);
+  assert.equal(value.status, 'done');
+});
+
+test('a reviewer that returns nothing is named as missing, and the work is not reported done', async () => {
+  const { value } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ needed: true, reviewer: null }));
+  assert.deepEqual(value.reviews, []);
+  assert.deepEqual(value.reviews_missing, ['somi:somi-security-reviewer']);
+  assert.equal(value.status, 'needs-attention');
 });
 
 test('the request reaches every agent as quoted data, and shards run at their named steps', async () => {

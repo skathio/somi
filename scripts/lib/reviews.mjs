@@ -98,6 +98,7 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
   const record = { v: 1, at: ctx.now(), base: plan.base, tree, pass, verdicts, findings, blocking: blocking.map((f) => f.fingerprint) };
   appendStateFile(ctx.root, statePaths(ctx.root, ctx.env).reviews, `${JSON.stringify(record)}\n`, ctx.env);
   const logged = findings.filter((f) => !isBlocking(f));
+  const trimmed = verdicts.filter((v) => v.trimmed).map((v) => ({ agent: v.agent, dropped: v.trimmed }));
   return {
     verdict: decision.next === 'close' ? 'clear' : decision.next === 'fix' ? 'fix' : 'ask-user',
     pass,
@@ -105,6 +106,7 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
     logged,
     advice: decision.next === 'fix' && securityFired ? ADVICE.fixHere : ADVICE[decision.next],
     ...(decision.stop ? { stop: decision.stop } : {}),
+    ...(trimmed.length ? { trimmed, trimmed_note: 'These reports were over the size cap, so their least severe findings were dropped to fit. Tell the user how many.' } : {}),
   };
 }
 
