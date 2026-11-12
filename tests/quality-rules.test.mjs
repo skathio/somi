@@ -116,3 +116,59 @@ test('the clone comparison says when it stopped short of the whole repository', 
   const result = await gate(r, { maxRepoFiles: 2 });
   assert.deepEqual(result.warnings.filter((w) => w.rule === 'clone-scope').map((w) => [w.value, w.limit]), [[4, 2]]);
 });
+
+const ACCESS = `export function readDoc(store, actorId, id) {
+  const user = store.users.get(actorId);
+  const doc = store.docs.get(id);
+  if (!doc) return fail('not_found');
+  if (!user || user.orgId !== doc.orgId) return fail('not_found');
+  if (doc.ownerId !== user.id && !user.roles.includes('admin')) return fail('forbidden');
+  const shared = doc.shares.filter((s) => s.userId === user.id && !s.revoked);
+  if (doc.locked && shared.length === 0) return fail('locked');
+  audit.log({ actor: user.id, doc: doc.id, action: 'read', at: clock.now() });
+  return ok({ ...doc, owner: user.name, shared: shared.length });
+}
+`;
+
+test('a copy with a line changed and one inserted is still one copy, and unrelated code is not', async (t) => {
+  const r = repo(t);
+  r.write('src/read.js', ACCESS);
+  r.write('src/total.js', 'export function total(items) {\n  return items.reduce((s, i) => s + i.cents, 0);\n}\n');
+  r.commit();
+  const edited = ACCESS.replace('readDoc', 'updateDoc').replace("'read'", "'update'").replace("  if (doc.locked", "  if (doc.archived) return fail('archived');\n  if (doc.locked").replace('!s.revoked', 's.canWrite');
+  r.write('src/update.js', edited);
+  const [copy] = (await gate(r)).violations.filter((v) => v.rule === 'clone');
+  assert.equal(copy?.file, 'src/update.js');
+  assert.equal(copy.other.file, 'src/read.js');
+  assert.ok(copy.similarity < 1 && copy.similarity >= 0.8, `similarity ${copy.similarity}`);
+  r.write('src/update.js', 'export function update(store, id, patch) {\n  return store.docs.set(id, { ...store.docs.get(id), ...patch });\n}\n');
+  assert.ok(!(await gate(r)).violations.some((v) => v.rule === 'clone'));
+});
+
+test('C# copies are found among C# files, and never matched against JavaScript', async (t) => {
+  const r = repo(t);
+  const method = (name) => `namespace App {\n  public class Orders {\n    public Result ${name}(Store store, int actorId, int id) {\n      var user = store.Users.Get(actorId);\n      var order = store.Orders.Get(id);\n      if (order == null) return Fail("not_found");\n      if (user == null || user.OrgId != order.OrgId) return Fail("not_found");\n      if (order.OwnerId != user.Id && !user.Roles.Contains("admin")) return Fail("forbidden");\n      var lines = order.Lines.Where(l => l.Active && l.Quantity > 0).ToList();\n      Audit.Log(user.Id, order.Id, "read", Clock.Now());\n      return Ok(order, user.Name, lines.Count);\n    }\n  }\n}\n`;
+  r.write('src/Read.cs', method('Read'));
+  r.write('src/read.js', ACCESS);
+  r.commit();
+  r.write('src/Update.cs', method('Update').replace('class Orders', 'class OrderUpdates'));
+  const clones = (await gate(r)).violations.filter((v) => v.rule === 'clone');
+  assert.deepEqual(clones.map((c) => [c.file, c.other.file]), [['src/Update.cs', 'src/Read.cs']]);
+});
+
+test('code nested deeper than the measuring walk can follow is unanalyzed, and the gate still runs', async (t) => {
+  const r = repo(t);
+  r.write('src/a.js', 'export const a = 1;\n');
+  r.commit();
+  r.write('src/deep.js', `export const deep = ${'['.repeat(12000)}${']'.repeat(12000)};\n`);
+  const result = await gate(r);
+  assert.ok(result.unanalyzed.some((u) => u.file === 'src/deep.js'), JSON.stringify(result.unanalyzed));
+});
+
+test('a file nested too deeply elsewhere in the repository is left out of the copy comparison', async (t) => {
+  const r = repo(t);
+  r.write('src/deep.js', `export function deep() { return ${'['.repeat(12000)}${']'.repeat(12000)}; }\n`);
+  r.commit();
+  r.write('src/a.js', 'export function a(x) {\n  return x + 1;\n}\n');
+  assert.equal((await gate(r)).ok, true);
+});

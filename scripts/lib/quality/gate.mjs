@@ -27,7 +27,10 @@ const GENERATED = /@generated\b|Code generated .* DO NOT EDIT/;
 // Source files in a language the gate has no grammar for. A change made only of these passes with nothing scored, so it says so.
 const UNCOVERED = /\.(py|go|rs|java|kt|kts|rb|php|swift|scala|c|cc|cpp|cxx|h|hpp|m|mm|dart|lua|ex|exs|clj|fs|vb|sh|ps1|sql|vue|svelte)$/i;
 export const JS_FAMILY = new Set(['javascript', 'typescript', 'tsx']);
+// Copies are compared within one family of languages: JavaScript with TypeScript, and C# with C#.
+export const familyOf = (language) => (JS_FAMILY.has(language) ? 'js' : language === 'c-sharp' ? 'cs' : null);
 export const MAX_REPO_FILES = 3000;
+export const TOO_DEEP = 'nested too deeply to measure';
 
 const touches = (unit, ranges) => overlaps(ranges, unit.start, unit.end);
 export const isTest = (file) => TEST_FILE.test(file);
@@ -76,7 +79,7 @@ async function previousVersion(ctx, file, status, test) {
   return withTree(file, text, (parsed) => {
     if (!parsed?.tree) return NO_VERSION;
     const units = unitsOf(parsed.tree, { file, isTest: test });
-    return { units, keys: units.map((u) => keyOf(lines, u)), totals: totalsOf(parsed.tree, units), tokens: JS_FAMILY.has(parsed.language) && !test ? tokensOf(parsed.tree) : null };
+    return { units, keys: units.map((u) => keyOf(lines, u)), totals: totalsOf(parsed.tree, units), tokens: familyOf(parsed.language) && !test ? tokensOf(parsed.tree) : null };
   });
 }
 
@@ -98,10 +101,11 @@ async function scoreCode(ctx, { file, status, added, hunks, lines, tree, languag
   if (errors.length === 0) ctx.totals.push({ file, now: totalsOf(tree, units), was: old.totals, units: keyed, own: new Set(old.keys) });
   // Copies are looked for in product code. Copied setup between tests is mostly benign (Kapser and Godfrey), and it was most of the
   // false alarms on known-good projects.
-  if (!JS_FAMILY.has(language) || test) return;
+  const family = familyOf(language);
+  if (!family || test) return;
   const size = ctx.limits.clones.tokens;
-  ctx.cloneAfter.push({ file, tokens: tokensOf(tree), size });
-  if (old.tokens) ctx.cloneBefore.push({ file, tokens: old.tokens, size });
+  ctx.cloneAfter.push({ file, family, tokens: tokensOf(tree), size });
+  if (old.tokens) ctx.cloneBefore.push({ file, family, tokens: old.tokens, size });
 }
 
 async function scoreFile(ctx, file, { status, added, hunks }) {
@@ -111,8 +115,16 @@ async function scoreFile(ctx, file, { status, added, hunks }) {
   if (text === null || skipFile(ctx, file, text, status)) return;
   const lines = text.split('\n');
   const parsed = await parseSource(file, text);
-  if (parsed?.tree) scoreComments(ctx, file, parsed.tree, added); else scoreLines(ctx, file, lines, added);
-  try { await scoreParsed(ctx, { file, status, added, hunks, lines, parsed }); } finally { parsed?.tree?.delete(); }
+  try {
+    if (parsed?.tree) scoreComments(ctx, file, parsed.tree, added); else scoreLines(ctx, file, lines, added);
+    await scoreParsed(ctx, { file, status, added, hunks, lines, parsed });
+  } catch (e) {
+    // Code nested deeper than the measuring walks can follow is unanalyzed, as a parse that never finished is, rather than the gate
+    // failing to run at all.
+    if (!(e instanceof RangeError)) throw e;
+    ctx.unanalyzed.push({ file, reason: TOO_DEEP });
+    report(ctx, { rule: 'unanalyzed', file, line: 1, value: 1, limit: 0, reason: TOO_DEEP });
+  } finally { parsed?.tree?.delete(); }
 }
 
 async function scoreParsed(ctx, { file, status, added, hunks, lines, parsed }) {
@@ -134,7 +146,8 @@ async function scoreParsed(ctx, { file, status, added, hunks, lines, parsed }) {
 async function cachedTokens(cache, file, text) {
   const key = cache ? `${file}\0${crypto.createHash('sha1').update(text).digest('hex')}` : null;
   if (key && cache.has(key)) return cache.get(key);
-  const tokens = await withTree(file, text, (parsed) => (parsed?.tree ? tokensOf(parsed.tree) : null));
+  // A file nested too deeply to walk is left out of the comparison, as one the parser could not read is.
+  const tokens = await withTree(file, text, (parsed) => { try { return parsed?.tree ? tokensOf(parsed.tree) : null; } catch (e) { if (e instanceof RangeError) return null; throw e; } });
   if (key) cache.set(key, tokens);
   return tokens;
 }
@@ -144,12 +157,13 @@ async function cachedTokens(cache, file, text) {
 // rest is not read, and the report says so, since a copy of a file beyond it would be missed.
 async function restOfRepo(ctx, touched) {
   const rest = [];
-  const candidates = ctx.repoFiles.filter((f) => JS_FAMILY.has(languageOf(f)) && !touched.has(f) && !isTest(f) && !SKIPPED.test(f) && !MINIFIED.test(f));
+  const families = new Set(ctx.cloneAfter.map((f) => f.family));
+  const candidates = ctx.repoFiles.filter((f) => families.has(familyOf(languageOf(f))) && !touched.has(f) && !isTest(f) && !SKIPPED.test(f) && !MINIFIED.test(f));
   if (candidates.length > ctx.maxRepoFiles) ctx.warnings.push({ rule: 'clone-scope', file: '.', line: 1, value: candidates.length, limit: ctx.maxRepoFiles });
   for (const [file, text] of filesAt(ctx.root, ctx.to, candidates.slice(0, ctx.maxRepoFiles))) {
     if (skipped(file, text)) continue;
     const tokens = await cachedTokens(ctx.cache, file, text);
-    if (tokens) rest.push({ file, tokens, size: ctx.limits.clones.tokens });
+    if (tokens) rest.push({ file, family: familyOf(languageOf(file)), tokens, size: ctx.limits.clones.tokens });
   }
   return rest;
 }
@@ -169,7 +183,10 @@ export async function qualityGate(root, { from, to, limits, now = new Date().toI
   scoreTotals(ctx);
   // A copy is only reported in code the change holds, so with none of that the rest of the repository is not read.
   const rest = ctx.cloneAfter.length > 0 ? await restOfRepo(ctx, new Set(changed.keys())) : [];
-  for (const c of findClones({ after: ctx.cloneAfter, before: ctx.cloneBefore, rest })) ctx.violations.push({ rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other });
+  for (const family of new Set(ctx.cloneAfter.map((f) => f.family))) {
+    const of = (files) => files.filter((f) => f.family === family);
+    for (const c of findClones({ after: of(ctx.cloneAfter), before: of(ctx.cloneBefore), rest: of(rest) })) ctx.violations.push({ rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other, similarity: c.similarity });
+  }
   const { violations, warnings, exemptions, scored, unanalyzed, skipped: notScored, uncovered } = ctx;
   return { ok: violations.length === 0, violations, warnings, exemptions, scored, unanalyzed, skipped: notScored, uncovered };
 }

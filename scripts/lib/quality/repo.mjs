@@ -5,7 +5,7 @@
 import { fileAt, listFiles } from '../git-tree.mjs';
 import { findClones, tokensOf } from './clones.mjs';
 import { report } from './findings.mjs';
-import { JS_FAMILY, METRICS, exemption, isTest, scoreComments, scoreCss, skipped, total, withTree } from './gate.mjs';
+import { METRICS, TOO_DEEP, familyOf, exemption, isTest, scoreComments, scoreCss, skipped, total, withTree } from './gate.mjs';
 import { codeLines, topLevelCognitive, unitsOf } from './metrics.mjs';
 import { languageOf } from './parse.mjs';
 
@@ -35,7 +35,8 @@ function codeFindings(ctx, { file, lines, parsed }) {
   for (const measure of parsed.errors.length === 0 ? Object.keys(sums) : []) {
     if (sums[measure] > ctx.limits.file[measure]) report(ctx, { rule: `file-${measure}`, file, line: 1, value: sums[measure], limit: ctx.limits.file[measure] });
   }
-  if (JS_FAMILY.has(parsed.language) && !test) ctx.cloneFiles.push({ file, tokens: tokensOf(parsed.tree), size: ctx.limits.clones.tokens });
+  const family = familyOf(parsed.language);
+  if (family && !test) ctx.cloneFiles.push({ file, family, tokens: tokensOf(parsed.tree), size: ctx.limits.clones.tokens });
 }
 
 function scoreParsed(ctx, { file, text, parsed }) {
@@ -45,6 +46,14 @@ function scoreParsed(ctx, { file, text, parsed }) {
   scoreComments(ctx, file, parsed.tree, EVERY_LINE);
   if (parsed.language === 'css') scoreCss(ctx, file, parsed.tree, EVERY_LINE);
   else codeFindings(ctx, { file, lines: text.split('\n'), parsed });
+}
+
+// Code nested deeper than the measuring walks can follow is unanalyzed rather than ending the report.
+function measured(ctx, file, run) {
+  try { run(); } catch (e) {
+    if (!(e instanceof RangeError)) throw e;
+    ctx.unanalyzed.push({ file, reason: TOO_DEEP });
+  }
 }
 
 function summary(ctx) {
@@ -68,8 +77,10 @@ export async function repoQuality(root, { rev, limits, now = new Date().toISOStr
   const ctx = { limits, now, mode: 'project', violations: [], warnings: [], exemptions: [], unanalyzed: [], functions: [], cloneFiles: [], scored: { files: 0, functions: 0 } };
   for (const file of listFiles(root, rev).filter((f) => languageOf(f))) {
     const text = fileAt(root, rev, file);
-    if (text !== null && !skipped(file, text)) await withTree(file, text, (parsed) => scoreParsed(ctx, { file, text, parsed }));
+    if (text !== null && !skipped(file, text)) await withTree(file, text, (parsed) => measured(ctx, file, () => scoreParsed(ctx, { file, text, parsed })));
   }
-  for (const c of findClones({ after: ctx.cloneFiles })) ctx.violations.push({ rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other });
+  for (const family of new Set(ctx.cloneFiles.map((f) => f.family))) {
+    for (const c of findClones({ after: ctx.cloneFiles.filter((f) => f.family === family) })) ctx.violations.push({ rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other, similarity: c.similarity });
+  }
   return { ok: ctx.violations.length === 0, violations: ctx.violations, warnings: ctx.warnings, exemptions: ctx.exemptions, unanalyzed: ctx.unanalyzed, scored: ctx.scored, summary: summary(ctx) };
 }

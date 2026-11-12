@@ -48,7 +48,7 @@ for (const file of files) {
   if (text === null || /@generated\b|Code generated .* DO NOT EDIT/.test(text.slice(0, 500))) continue;
   const parsed = await parseSource(file, text);
   if (!parsed?.tree) { unanalyzed += 1; continue; }
-  for (const u of unitsOf(parsed.tree, { file, isTest: TEST_FILE.test(file) })) byKind[u.kind].push(u);
+  try { for (const u of unitsOf(parsed.tree, { file, isTest: TEST_FILE.test(file) })) byKind[u.kind].push(u); } catch (e) { if (e instanceof RangeError) unanalyzed += 1; else throw e; }
   parsed.tree.delete();
 }
 const distributions = {};
