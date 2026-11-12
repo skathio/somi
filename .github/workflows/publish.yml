@@ -349,7 +349,8 @@ jobs:
   homepage-ping:
     name: homepage-ping
     needs: publish
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
+    # The homepage environment admits main only; a release from another ref skips the ping.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: homepage
     permissions: {}
