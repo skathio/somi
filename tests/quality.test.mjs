@@ -171,6 +171,21 @@ test('the gate fails a new function over a limit, and passes an old one that did
   assert.ok(strict.violations.some((v) => v.rule === 'clone' && v.other.line === 1), 'with a stricter limit the new one copies the old one');
 });
 
+test('a new C# overload is held to the limits, not compared with an older method of the same name', async (t) => {
+  const r = repo(t);
+  const pyramid = (params) => `  public object Load(${params}) {\n    foreach (var x in xs) {\n      foreach (var y in x) {\n        if (a) { if (b) { if (y > 0) { return y; } } }\n      }\n    }\n    return null;\n  }\n`;
+  const old = pyramid('int[][] xs, bool a, bool b');
+  r.write('src/C.cs', `class C {\n${old}}\n`);
+  r.git('add', '-A'); r.git('commit', '-qm', 'base');
+  r.write('src/C.cs', `class C {\n${pyramid('string s, int[][] xs, bool a, bool b')}${old}}\n`);
+  const added = await gate(r);
+  assert.deepEqual(added.violations.filter((v) => v.rule === 'depth').map((v) => [v.name, v.line, v.before]), [['Load', 2, undefined]], 'the new overload above is new, not a worse old one');
+  assert.deepEqual(added.warnings, [], 'the old overload is untouched');
+  r.write('src/C.cs', `class C {\n${pyramid('int[][] xs, bool a, bool b, int n').replace('if (y > 0)', 'if (y > n)')}}\n`);
+  const renamed = await gate(r);
+  assert.ok(!renamed.violations.some((v) => v.rule === 'depth'), 'an old method whose parameters changed is still the same method, already over and no worse');
+});
+
 test('a change that takes a function over a limit fails, one already over that gets worse warns, and a file may not gain too much at once', async (t) => {
   const r = repo(t);
   const within = 'export function tidy(xs, a) {\n  for (const x of xs) {\n    if (a) { if (x) { return x; } }\n  }\n  return null;\n}\n';

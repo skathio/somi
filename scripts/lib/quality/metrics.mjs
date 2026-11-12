@@ -154,6 +154,8 @@ export function unitsOf(tree, { file = '', isTest = false } = {}) {
         cognitive: cognitive(node, name, start),
         depth: maxDepth(node),
         params: paramCount(node),
+        // C# overloads, and a constructor beside its destructor, share a name: the gate tells them apart by this.
+        signature: `${node.type}(${(field(node, 'parameters') ?? field(node, 'parameter'))?.text.replace(/\s+/g, ' ') ?? ''})`,
       });
       for (const c of node.namedChildren) visit(c, start);
       return;
