@@ -171,11 +171,13 @@
     ],
     "scripts/lib/quality/limits.mjs": [
       "tests/quality.test.mjs",
-      "tests/quality-rules.test.mjs"
+      "tests/quality-rules.test.mjs",
+      "tests/quality-coupling.test.mjs"
     ],
     "scripts/lib/quality/gate.mjs": [
       "tests/quality.test.mjs",
-      "tests/quality-rules.test.mjs"
+      "tests/quality-rules.test.mjs",
+      "tests/quality-coupling.test.mjs"
     ],
     "tests/evals/lib/task-store.mjs": [
       "tests/task-store.test.mjs",
@@ -224,6 +226,15 @@
     "scripts/lib/quality/totals.mjs": [
       "tests/quality.test.mjs",
       "tests/quality-rules.test.mjs"
+    ],
+    "scripts/lib/quality/coupling.mjs": [
+      "tests/quality-coupling.test.mjs"
+    ],
+    "scripts/lib/quality/imports.mjs": [
+      "tests/quality-coupling.test.mjs"
+    ],
+    "scripts/lib/quality/exports.mjs": [
+      "tests/quality-coupling.test.mjs"
     ]
   }
 }

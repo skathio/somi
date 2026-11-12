@@ -8,6 +8,8 @@ import crypto from 'node:crypto';
 import { TEST_FILE } from '../signals.mjs';
 import { addedRanges, filesAt, oldLine } from '../git-tree.mjs';
 import { findClones, tokensOf } from './clones.mjs';
+import { scoreCoupling } from './coupling.mjs';
+import { exportsAdded } from './exports.mjs';
 import { cssRules } from './css.mjs';
 import { report, overlaps } from './findings.mjs';
 import { pairUnits, scoreUnit } from './functions.mjs';
@@ -102,6 +104,8 @@ async function scoreCode(ctx, { file, status, added, hunks, lines, tree, languag
   // Copies are looked for in product code. Copied setup between tests is mostly benign (Kapser and Godfrey), and it was most of the
   // false alarms on known-good projects.
   const family = familyOf(language);
+  if (family === 'js') ctx.coupling.touched.push(file);
+  if (family === 'js' && !test) ctx.coupling.exports.push({ file, names: exportsAdded(tree, added) });
   if (!family || test) return;
   const size = ctx.limits.clones.tokens;
   ctx.cloneAfter.push({ file, family, tokens: tokensOf(tree), size });
@@ -152,16 +156,24 @@ async function cachedTokens(cache, file, text) {
   return tokens;
 }
 
+// Every scored file of the families the change touched, as it is after the change: the import graph reads all of them, and the copy
+// comparison the product files among them.
+function repoTexts(ctx) {
+  const families = new Set([...ctx.cloneAfter.map((f) => f.family), ...(ctx.coupling.touched.length ? ['js'] : [])]);
+  const wanted = ctx.repoFiles.filter((f) => families.has(familyOf(languageOf(f))) && !SKIPPED.test(f) && !MINIFIED.test(f));
+  return new Map([...filesAt(ctx.root, ctx.to, wanted)].filter(([file, text]) => !skipped(file, text)));
+}
+
 // The rest of the repository is what a copy is compared against. Test files are left out of it: copied setup in tests is often benign.
 // A caller scoring many changes in one repository can pass a cache, so files it has read once are not parsed again. Past the cap the
 // rest is not read, and the report says so, since a copy of a file beyond it would be missed.
-async function restOfRepo(ctx, touched) {
+async function restOfRepo(ctx, touched, texts) {
   const rest = [];
   const families = new Set(ctx.cloneAfter.map((f) => f.family));
-  const candidates = ctx.repoFiles.filter((f) => families.has(familyOf(languageOf(f))) && !touched.has(f) && !isTest(f) && !SKIPPED.test(f) && !MINIFIED.test(f));
+  const candidates = [...texts.keys()].filter((f) => families.has(familyOf(languageOf(f))) && !touched.has(f) && !isTest(f));
   if (candidates.length > ctx.maxRepoFiles) ctx.warnings.push({ rule: 'clone-scope', file: '.', line: 1, value: candidates.length, limit: ctx.maxRepoFiles });
-  for (const [file, text] of filesAt(ctx.root, ctx.to, candidates.slice(0, ctx.maxRepoFiles))) {
-    if (skipped(file, text)) continue;
+  for (const file of candidates.slice(0, ctx.maxRepoFiles)) {
+    const text = texts.get(file);
     const tokens = await cachedTokens(ctx.cache, file, text);
     if (tokens) rest.push({ file, family: familyOf(languageOf(file)), tokens, size: ctx.limits.clones.tokens });
   }
@@ -172,8 +184,8 @@ async function restOfRepo(ctx, touched) {
  * The gate's verdict on the change from `from` to `to`: { ok, violations, warnings, exemptions, scored, unanalyzed, skipped, uncovered }.
  * Each violation is { rule, file, line, name?, value, limit, before? }.
  */
-export async function qualityGate(root, { from, to, limits, now = new Date().toISOString(), mode = 'project', repoFiles = [], cache = null, maxRepoFiles = MAX_REPO_FILES }) {
-  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, maxRepoFiles, violations: [], warnings: [], exemptions: [], unanalyzed: [], skipped: [], uncovered: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [], totals: [], moves: { before: [], after: [] } };
+export async function qualityGate(root, { from, to, limits, now = new Date().toISOString(), mode = 'project', repoFiles = [], cache = null, maxRepoFiles = MAX_REPO_FILES, forbid = [] }) {
+  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, maxRepoFiles, forbid, isTest, coupling: { touched: [], exports: [] }, violations: [], warnings: [], exemptions: [], unanalyzed: [], skipped: [], uncovered: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [], totals: [], moves: { before: [], after: [] } };
   const changed = addedRanges(root, from, to);
   // The changed code is read up front, a batch at a time. One git process per file was most of the gate's time on a large branch.
   const code = [...changed].filter(([file]) => languageOf(file));
@@ -181,8 +193,10 @@ export async function qualityGate(root, { from, to, limits, now = new Date().toI
   ctx.after = filesAt(root, to, code.filter(([, c]) => !c.status.startsWith('D')).map(([file]) => file));
   for (const [file, change] of changed) await scoreFile(ctx, file, change);
   scoreTotals(ctx);
-  // A copy is only reported in code the change holds, so with none of that the rest of the repository is not read.
-  const rest = ctx.cloneAfter.length > 0 ? await restOfRepo(ctx, new Set(changed.keys())) : [];
+  // The rest of the repository is only read when the change holds code it is compared with.
+  const texts = ctx.cloneAfter.length > 0 || ctx.coupling.touched.length > 0 ? repoTexts(ctx) : new Map();
+  if (ctx.coupling.touched.length > 0) scoreCoupling(ctx, texts);
+  const rest = ctx.cloneAfter.length > 0 ? await restOfRepo(ctx, new Set(changed.keys()), texts) : [];
   for (const family of new Set(ctx.cloneAfter.map((f) => f.family))) {
     const of = (files) => files.filter((f) => f.family === family);
     for (const c of findClones({ after: of(ctx.cloneAfter), before: of(ctx.cloneBefore), rest: of(rest) })) ctx.violations.push({ rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other, similarity: c.similarity });

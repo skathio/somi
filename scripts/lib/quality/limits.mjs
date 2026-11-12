@@ -61,7 +61,7 @@ function apply(limits, ignored, { where, prefix, group, key, value }) {
 
 function applyLayer(limits, ignored, { where, prefix, layer }) {
   for (const [group, values] of Object.entries(layer ?? {})) {
-    if (prefix === 'quality' && (SCOPES.includes(group) || group === 'timeout_seconds')) continue;
+    if (prefix === 'quality' && (SCOPES.includes(group) || group === 'timeout_seconds' || group === FORBID_KEY)) continue;
     if (!DEFAULT_LIMITS[group]) { ignored.push({ where, key: `${prefix}.${group}`, reason: NOT_A_LIMIT }); continue; }
     for (const [key, value] of Object.entries(values ?? {})) apply(limits, ignored, { where, prefix, group, key, value });
   }
@@ -79,6 +79,28 @@ export function resolveLimits({ global = {}, project = {}, scope = 'pr' } = {}) 
     applyLayer(limits, ignored, { where, prefix: `quality.${scope}`, layer: file?.quality?.[scope] });
   }
   return { limits, ignored: [...ignored, ...resolveTimeout({ global, project }).ignored] };
+}
+
+// Folders that must not import others, as quality.forbid_imports: [{ "from": "src/ui/", "to": "src/db/" }]. Each rule only adds a
+// restriction, so both the user's file and a project's may set them, and the gate holds a change to all of them.
+const FORBID_KEY = 'forbid_imports';
+const MAX_FORBID = 100;
+const prefix = (v) => typeof v === 'string' && v.length > 0 && v.length <= 200;
+
+/** { forbid: [{ from, to }], ignored } from both files. */
+export function resolveForbidden({ global = {}, project = {} } = {}) {
+  const forbid = [];
+  const ignored = [];
+  for (const [where, file] of [['global', global], ['project', project]]) {
+    const rules = file?.quality?.[FORBID_KEY];
+    if (rules === undefined) continue;
+    if (!Array.isArray(rules) || rules.length > MAX_FORBID) { ignored.push({ where, key: `quality.${FORBID_KEY}`, reason: `not a list of at most ${MAX_FORBID} { from, to } folder rules` }); continue; }
+    for (const r of rules) {
+      if (prefix(r?.from) && prefix(r?.to)) forbid.push({ from: r.from, to: r.to });
+      else ignored.push({ where, key: `quality.${FORBID_KEY}`, reason: 'a rule needs from and to, each a path prefix' });
+    }
+  }
+  return { forbid, ignored };
 }
 
 const TIMEOUT_KEY = 'quality.timeout_seconds';
