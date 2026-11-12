@@ -76,13 +76,13 @@ test('a function already over a limit may grow a little with a warning, but not 
   r.write('src/a.js', big('      if (x) { return 1; } else if (a) { return 2; }\n'));
   r.commit();
   const branch = (n) => Array.from({ length: n }, (_, i) => `      if (x === ${i}) { return ${i}; }\n`).join('');
-  r.write('src/a.js', big(`      if (x) { return 1; } else if (a) { return 2; }\n${branch(1)}`));
+  r.write('src/a.js', big(`      if (x) { return 1; } else if (a) { return 2; }\n${branch(3)}`));
   const small = await gate(r);
-  assert.ok(!small.violations.some((v) => v.rule === 'cognitive'), 'three more is within the growth limit');
+  assert.ok(!small.violations.some((v) => v.rule === 'cognitive'), 'nine more is within the growth limit');
   assert.ok(small.warnings.some((w) => w.rule === 'cognitive' && w.name === 'legacy'));
-  r.write('src/a.js', big(`      if (x) { return 1; } else if (a) { return 2; }\n${branch(2)}`));
+  r.write('src/a.js', big(`      if (x) { return 1; } else if (a) { return 2; }\n${branch(4)}`));
   const grown = (await gate(r)).violations.find((v) => v.rule === 'cognitive');
-  assert.equal(grown.value - grown.before, 6, 'six more is past it');
+  assert.equal(grown.value - grown.before, 12, 'twelve more is past it');
   assert.equal(grown.limit, grown.before + DEFAULT_LIMITS.growth.cognitive);
 });
 
@@ -171,4 +171,30 @@ test('a file nested too deeply elsewhere in the repository is left out of the co
   r.commit();
   r.write('src/a.js', 'export function a(x) {\n  return x + 1;\n}\n');
   assert.equal((await gate(r)).ok, true);
+});
+
+test('making many copies at once does not turn them into an idiom the copy check passes over', async (t) => {
+  const r = repo(t);
+  r.write('src/a.js', 'export const a = 1;\n');
+  r.commit();
+  for (let i = 0; i < 30; i++) r.write(`src/h${i}.js`, ACCESS.replace('readDoc', `read${i}`));
+  const result = await gate(r, { mode: 'benchmark' });
+  assert.equal(result.violations.filter((v) => v.rule === 'clone').length, 29);
+});
+
+test('an anonymous test whose first line the change edited is still the old one', async (t) => {
+  const r = repo(t);
+  const body = Array.from({ length: 70 }, (_, i) => `  expect(sum(${i}, 1)).toBe(${i + 1});`).join('\n');
+  r.write('src/sum.test.js', `it('adds', () => {\n${body}\n});\n`);
+  r.commit();
+  r.write('src/sum.test.js', `it('adds two numbers', () => {\n${body}\n  expect(sum(0, 0)).toBe(0);\n});\n`);
+  const result = await gate(r, { limits: { ...limitsFor('pr'), test: { ...DEFAULT_LIMITS.test, lines: 60 } } });
+  assert.ok(!result.violations.some((v) => v.rule === 'lines'), 'it was already over and grew by one line');
+  assert.ok(result.warnings.some((w) => w.rule === 'lines' && w.before === 72 && w.value === 73));
+});
+
+test('a .NET test project and a file named test.ts are test code', async (t) => {
+  const { isTest } = await import('../scripts/lib/quality/gate.mjs');
+  for (const f of ['src/UnitTests/Bug/MapTests.cs', 'Src/Newtonsoft.Json.Tests/Serialization/X.cs', 'src/OrderServiceTests.cs', 'pkgs/core/src/format/test.ts']) assert.ok(isTest(f), f);
+  for (const f of ['src/Contests/Score.cs', 'src/latest.ts', 'src/Orders/OrderService.cs']) assert.ok(!isTest(f), f);
 });

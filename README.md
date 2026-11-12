@@ -88,7 +88,7 @@ Claude Code has those defaults. Copilot has none, because its models vary by pla
 
 ## Set your quality limits
 
-The quality gate checks what a change touched against limits on complexity, nesting, length, parameters, copied code and suppressions. The defaults are in [ARCHITECTURE.md](docs/ARCHITECTURE.md#quality-gate). Ask for it in the chat, or type `/somi-quality`. By default it scores the whole branch since it left the main branch, which is what goes into a pull request; `/somi-quality commit` scores what a commit adds to the last one. Both scopes share every limit except how much one change may add to a file: 25 in a commit and 100 in a pull request.
+The quality gate checks what a change touched against limits on complexity, nesting, length, parameters, copied code, import cycles and suppressions, and gives advice on file size, options objects, swallowed errors, leftover debugging, tests that assert nothing and names nothing uses. The defaults are in [ARCHITECTURE.md](docs/ARCHITECTURE.md#quality-gate). Ask for it in the chat, or type `/somi-quality`. By default it scores the whole branch since it left the main branch, which is what goes into a pull request; `/somi-quality commit` scores what a commit adds to the last one. Both scopes share every limit except how much one change may add to a file: 25 in a commit and 100 in a pull request.
 
 Ask `/somi-config` to change one, or set your own under `quality` in the same global file, and give either scope its own values under `quality.commit` or `quality.pr`:
 
@@ -97,6 +97,12 @@ Ask `/somi-config` to change one, or set your own under `quality` in the same gl
 ```
 
 A project's `.somi/config.json` can only make a limit stricter: a looser value there is ignored, and the gate says so. SoMi asks before an agent changes a limit.
+
+To keep layers apart, name the folders that must not import others. Either file may add rules, and a new import across one fails:
+
+```json
+{ "quality": { "forbid_imports": [{ "from": "src/ui/", "to": "src/db/" }] } }
+```
 
 The gate may run for 300 seconds before it counts as failed. For a large change, set `quality.timeout_seconds`, up to 1800, in your own file, or in the project's, which may only lengthen it:
 

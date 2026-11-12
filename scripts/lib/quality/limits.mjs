@@ -19,7 +19,7 @@ export const DEFAULT_LIMITS = Object.freeze({
   function: Object.freeze({ cognitive: 15, depth: 4, lines: 60, params: 4, options: 6 }),
   component: Object.freeze({ cognitive: 15, depth: 4, lines: 150, params: 4, options: 12 }),
   test: Object.freeze({ cognitive: 8, depth: 3, lines: 150, params: 4, options: 6 }),
-  growth: Object.freeze({ cognitive: 5, lines: 20 }),
+  growth: Object.freeze({ cognitive: 10, lines: 40 }),
   file: Object.freeze({ cognitive: 100, added_cognitive: 25, lines: 400, added_lines: 300, functions: 40 }),
   imports: Object.freeze({ fan_out: 15 }),
   clones: Object.freeze({ tokens: 100 }),

@@ -28,17 +28,20 @@ function pathBetween(graph, from, to) {
   return null;
 }
 
-// The graph before the change: every untouched file as it is now, and each touched file as it was, or gone if the change added it.
+// The graph before the change: every untouched file as it is now, each touched file as it was, gone if the change added it, and each
+// deleted file as it was. A file the change moved keeps its new name, so a loop that was only renamed is one that was already there.
 function graphBefore(ctx, after, files) {
   const before = new Map(after);
   const known = new Set(files);
-  for (const file of ctx.coupling.touched) {
+  const { touched, deleted, renames } = ctx.coupling;
+  for (const file of touched) {
     before.delete(file);
     known.delete(file);
-    if (ctx.before.has(file)) known.add(file);
   }
-  const old = new Map(ctx.coupling.touched.filter((f) => ctx.before.has(f)).map((f) => [f, ctx.before.get(f)]));
-  for (const [file, edges] of importGraph(old, known)) before.set(file, edges);
+  const old = new Map([...touched, ...deleted].filter((f) => ctx.before.has(f)).map((f) => [f, ctx.before.get(f)]));
+  for (const file of old.keys()) known.add(file);
+  const named = (f) => renames.get(f) ?? f;
+  for (const [file, edges] of importGraph(old, known)) before.set(named(file), edges.map((e) => ({ ...e, to: named(e.to) })));
   return before;
 }
 
@@ -88,7 +91,8 @@ function newEdges(file, after, before) {
 }
 
 /** Every coupling rule on the touched product modules. texts is every JavaScript and TypeScript file of the repository after the change. */
-export function scoreCoupling(ctx, texts) {
+export function scoreCoupling(ctx, texts, renames = new Map()) {
+  ctx.coupling.renames = renames;
   const files = new Set(texts.keys());
   const after = importGraph(texts, files);
   const before = graphBefore(ctx, after, files);

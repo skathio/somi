@@ -5,7 +5,16 @@
 
 import path from 'node:path';
 
-const FROM = /^[ \t]*(import|export)\s+(type\s+)?([^;'"`]*?)\s*from\s*['"]([^'"\n]+)['"]/gm;
+// A statement is found by its keyword, and its clause is the text up to the next quote, at most MAX_CLAUSE characters on. The clause
+// must have the shape of an import clause, so an `export type A = {` cannot swallow the import on the line after it. Every pattern
+// here is anchored and bounded, so a hostile file costs the same as an ordinary one.
+const STATEMENT = /^[ \t]*(import|export)\b/gm;
+const MAX_CLAUSE = 1000;
+const CLAUSES = {
+  import: /^\s*(type\s+)?((?:[\w$]+\s*,\s*)?(?:\{[^{}]*\}|\*\s*as\s+[\w$]+)|[\w$]+)\s*from\s*$/,
+  export: /^\s*(type\s+)?(\{[^{}]*\}|\*(?:\s*as\s+[\w$]+)?)\s*from\s*$/,
+};
+const SPEC = /^(['"])([^'"\n]+)\1/;
 const BARE = /^[ \t]*import\s*['"]([^'"\n]+)['"]/gm;
 const CALL = /\b(?:require|import)\(\s*['"]([^'"\n]+)['"]\s*\)/g;
 const EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
@@ -28,10 +37,19 @@ function namesOf(kind, clause) {
 
 const typeOnly = (kind, type, clause) => Boolean(type) || (/^\{[^}]*\}$/.test(clause.trim()) && clause.replace(/[{}]/g, '').split(',').every((p) => /^\s*type\s/.test(p) || !p.trim()));
 
+function fromStatement(text, m) {
+  const start = m.index + m[0].length;
+  const window = text.slice(start, start + MAX_CLAUSE);
+  const quote = window.search(/['"`]/);
+  const clause = quote < 0 ? null : CLAUSES[m[1]].exec(window.slice(0, quote));
+  const spec = clause ? SPEC.exec(window.slice(quote)) : null;
+  return spec ? { spec: spec[2], names: namesOf(m[1], clause[2]), typeOnly: typeOnly(m[1], clause[1], clause[2]) } : null;
+}
+
 /** [{ spec, names, typeOnly }] for every import of a file's text. names is null when the import may use any name. */
 export function importsOf(text) {
   const out = [];
-  for (const m of text.matchAll(FROM)) out.push({ spec: m[4], names: namesOf(m[1], m[3]), typeOnly: typeOnly(m[1], m[2], m[3]) });
+  for (const m of text.matchAll(STATEMENT)) { const found = fromStatement(text, m); if (found) out.push(found); }
   for (const m of text.matchAll(BARE)) out.push({ spec: m[1], names: [], typeOnly: false });
   for (const m of text.matchAll(CALL)) out.push({ spec: m[1], names: null, typeOnly: false });
   return out;

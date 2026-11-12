@@ -26,11 +26,7 @@ export function exemption(ctx, lines, unit, rule) {
 // old callback look new.
 export function pairUnits(before, after, toOld = (line) => line) {
   const taken = new Set();
-  const nameOf = (u) => {
-    if (!ANONYMOUS.test(u.name)) return u.name;
-    const line = toOld(u.start);
-    return line === null ? `<added:${u.start}>` : `<anonymous:${line}>`;
-  };
+  const nameOf = (u) => (ANONYMOUS.test(u.name) ? anonymousName(before, u, toOld) : u.name);
   const match = (u, key) => {
     const old = before.find((b) => !taken.has(b) && key(b, b.name) === key(u, nameOf(u)));
     if (old) taken.add(old);
@@ -40,10 +36,22 @@ export function pairUnits(before, after, toOld = (line) => line) {
   return after.map((u, i) => ({ after: u, before: exact[i] ?? match(u, (x, name) => `${x.kind}:${name}`) }));
 }
 
-function overLimit(ctx, { file, lines, after, before, metric, limit }) {
+// An anonymous function's old name. When the change edited its first line, as when a test's title changes, the first of its lines the
+// change left alone is traced back instead, and the innermost old anonymous function holding that line is the one it was.
+function anonymousName(before, u, toOld) {
+  const start = toOld(u.start);
+  if (start !== null) return `<anonymous:${start}>`;
+  let line = null;
+  for (let row = u.start + 1; row <= u.end && line === null; row++) line = toOld(row);
+  const holders = line === null ? [] : before.filter((b) => ANONYMOUS.test(b.name) && b.start <= line && b.end >= line);
+  const inner = holders.sort((x, y) => (x.end - x.start) - (y.end - y.start))[0];
+  return inner?.name ?? `<added:${u.start}>`;
+}
+
+function overLimit(ctx, { file, lines, after, before, metric, limit, grown }) {
   const allowed = exemption(ctx, lines, after, metric);
   if (allowed) return ctx.exemptions.push({ rule: metric, file, line: after.start, name: after.name, ...allowed });
-  return report(ctx, { rule: metric, file, line: after.start, name: after.name, kind: after.kind, value: after[metric], limit, ...(before ? { before: before[metric] } : {}) });
+  return report(ctx, { rule: metric, file, line: after.start, name: after.name, kind: after.kind, value: after[metric], limit, ...(before ? { before: before[metric] } : {}), ...(grown ? { grown } : {}) });
 }
 
 /** One touched function, paired with its old version or null. */
@@ -58,6 +66,6 @@ export function scoreUnit(ctx, { file, lines, after, before }) {
       ctx.warnings.push({ rule: metric, file, line: after.start, name: after.name, value: after[metric], limit, before: before[metric] });
       continue;
     }
-    overLimit(ctx, { file, lines, after, before, metric, limit: already ? before[metric] + growth : limit });
+    overLimit(ctx, { file, lines, after, before, metric, limit: already ? before[metric] + growth : limit, grown: already });
   }
 }

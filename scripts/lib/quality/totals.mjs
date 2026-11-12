@@ -15,9 +15,10 @@ const MEASURES = [
 export const keyOf = (lines, u) => lines.slice(u.start - 1, u.end).map((l) => l.trim()).join('\n');
 const countOf = (keys) => keys.reduce((m, k) => m.set(k, (m.get(k) ?? 0) + 1), new Map());
 
+// A test file grows with the code it tests, so only its complexity is held to the file limits.
 function scoreFile(ctx, { file, now, was, moved }) {
   const limits = ctx.limits.file;
-  for (const m of MEASURES) {
+  for (const m of ctx.isTest(file) ? MEASURES.slice(0, 1) : MEASURES) {
     if (now[m.measure] > limits[m.limit] && was[m.measure] <= limits[m.limit]) report(ctx, { rule: m.over, file, line: 1, value: now[m.measure], limit: limits[m.limit], before: was[m.measure] });
     const added = now[m.measure] - was[m.measure] - moved[m.measure];
     if (m.added && added > limits[m.addedLimit]) report(ctx, { rule: m.added, file, line: 1, value: added, limit: limits[m.addedLimit], ...(moved[m.measure] > 0 ? { moved: moved[m.measure] } : {}) });

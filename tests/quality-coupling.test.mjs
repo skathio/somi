@@ -124,3 +124,39 @@ test('a name a change exports from an imported module that nothing imports is ad
   assert.equal(result.ok, true);
   assert.deepEqual(found(result, 'unused-export').map((w) => `${w.file}:${w.name}`).sort(), ['src/lib.js:dropped', 'src/lib.js:spare'], 'a namespace import may use any name, and a module nothing imports may be an entry point');
 });
+
+test('an import after a semicolon-free type is still read as a runtime import, and a hostile line is read in one pass', async (t) => {
+  assert.deepEqual(importsOf("export type A = { n: number }\nimport { b } from './b'\nexport const a = () => b\n").map((i) => [i.spec, i.names, i.typeOnly]), [['./b', ['b'], false]]);
+  assert.deepEqual(importsOf(`export${' '.repeat(200000)}x`), [], 'a long run of spaces after a keyword is not backtracked over');
+  assert.deepEqual(importsOf('export const a = 1\n'.repeat(5000)), []);
+  const r = repo(t);
+  r.write('src/a.ts', 'export type A = { n: number }\nexport const a = 1\n');
+  r.write('src/b.ts', "import { a } from './a'\nexport const b = () => a\n");
+  r.commit();
+  r.write('src/a.ts', "export type A = { n: number }\nimport { b } from './b'\nexport const a = () => b\n");
+  assert.deepEqual(found(await gate(r), 'cycle').map((c) => c.file), ['src/a.ts']);
+});
+
+test('renaming a module that was already in a loop does not close a new one', async (t) => {
+  const r = repo(t);
+  r.write('src/a.js', "import { c } from './c.js';\nexport const a = () => c;\nexport const helper = 1;\nexport const more = 2;\n");
+  r.write('src/c.js', "import { a } from './a.js';\nexport const c = () => a;\n");
+  r.commit();
+  r.git('mv', 'src/a.js', 'src/b.js');
+  r.write('src/c.js', "import { a } from './b.js';\nexport const c = () => a;\n");
+  const result = await gate(r);
+  assert.deepEqual(found(result, 'cycle'), [], 'git pairs the moved file with its old name, so both imports were there before');
+  assert.equal(result.ok, true);
+});
+
+test('the import graph says when it stopped short of the whole repository, and still reads what the change touched', async (t) => {
+  const r = repo(t);
+  for (let i = 0; i < 4; i++) r.write(`src/f${i}.js`, `export const v${i} = ${i};\n`);
+  r.write('src/z.js', 'export const z = 1;\n');
+  r.commit();
+  r.write('src/z.js', "import { y } from './y.js';\nexport const z = () => y;\n");
+  r.write('src/y.js', "import { z } from './z.js';\nexport const y = () => z;\n");
+  const result = await gate(r, { maxGraphFiles: 2 });
+  assert.deepEqual(found(result, 'coupling-scope').map((w) => [w.value, w.limit]), [[6, 2]]);
+  assert.ok(found(result, 'cycle').length > 0, 'the touched files are read first');
+});

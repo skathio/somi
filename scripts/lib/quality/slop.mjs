@@ -19,7 +19,7 @@ const LOGGER = /^(console|logger|log|this\.logger|this\.log)\.\w+$/;
 const FOCUSED = /^(describe|it|test|context|suite|specify)\.only$|^(fit|fdescribe|ftest)$/;
 const SKIPPED = /^(describe|it|test|context|suite|specify)\.skip$|^(xit|xdescribe|xtest|xcontext)$/;
 const TEST = /^(it|test|specify)(\.(only|concurrent|sequential|serial))?$/;
-const ASSERTION = /^(expect|assert|should)\b|(^|\.)(expect|assert|should|verify|ensure|check)\w*$|^(t|st|tt)\.\w+$|\.(to\w*|throws|rejects|resolves|matchSnapshot)$/i;
+const ASSERTION = /\b(expect|assert|should)\b|(^|\.)(expect|assert|should|verify|ensure|check)\w*$|^(t|st|tt)\.[\w.]+$|\.(to\w*|throws|rejects|resolves|matchSnapshot)$/i;
 
 // Every node of a type under `node`.
 function nodes(node, types, out = []) {

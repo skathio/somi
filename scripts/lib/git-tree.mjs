@@ -154,10 +154,15 @@ export function readDiff(root, from, to) {
 // What a diff added, per file: { file → { status, added: [[first, last], ...] } }, with line numbers in the new version. The quality
 // gate scores only the functions these lines touch.
 function changedFiles(root, from, to) {
-  const out = new Map();
-  const status = git(root, ['diff', ...DIFF, '--name-status', '-z', from, to]).split('\0').filter(Boolean);
-  for (let i = 0; i + 1 < status.length; i += 2) out.set(status[i + 1], { status: status[i], added: [], hunks: [] });
-  return out;
+  return new Map(nameStatus(root, [...DIFF, from, to], 2).map(([status, file]) => [file, { status, added: [], hunks: [] }]));
+}
+
+// `git diff --name-status -z` as rows of `width` fields: a status and one path, or two for a rename.
+function nameStatus(root, args, width) {
+  const parts = git(root, ['diff', '--name-status', '-z', ...args]).split('\0').filter(Boolean);
+  const rows = [];
+  for (let i = 0; i + width - 1 < parts.length; i += width) rows.push(parts.slice(i, i + width));
+  return rows;
 }
 
 const HUNK = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
@@ -193,6 +198,12 @@ export function addedRanges(root, from, to) {
     else addHunk(file === null ? null : out.get(file), line);
   }
   return out;
+}
+
+/** Files a change moved, as git's rename detection pairs them at half or more alike: a Map from the old path to the new one. */
+export function renamedFiles(root, from, to) {
+  if (!OBJECT_ID.test(from) || !OBJECT_ID.test(to)) throw new Error('a recorded revision is not an object id');
+  return new Map(nameStatus(root, ['--no-ext-diff', '--no-textconv', '--no-color', '-M50%', '--diff-filter=R', from, to], 3).map(([, old, now]) => [old, now]));
 }
 
 /** Every file path in a commit or tree. */

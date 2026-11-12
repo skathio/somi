@@ -10,7 +10,7 @@ async function slop(code, { file = 'src/a.js', test = false, added = EVERY_LINE 
   const parsed = await parseSource(file, code);
   const ctx = { mode: 'project', violations: [], warnings: [] };
   try { scoreSlop(ctx, { file, tree: parsed.tree, added, language: parsed.language, test }); } finally { parsed.tree.delete(); }
-  return [...ctx.violations, ...ctx.warnings].map((f) => `${f.rule}:${f.line}${f.name ? `:${f.name}` : ''}`);
+  return [...ctx.violations, ...ctx.warnings].sort((a, b) => a.line - b.line).map((f) => `${f.rule}:${f.line}${f.name ? `:${f.name}` : ''}`);
 }
 
 test('a catch that swallows, only logs or rethrows unchanged is named, and one that says why or handles the error is not', async () => {
@@ -41,8 +41,13 @@ test('a focused or skipped test and a test that asserts nothing are named in a t
   assert.deepEqual(await slop(code, { file: 'src/a.test.js', test: true }), ['focused-test:1', 'skipped-test:3', 'test-without-assertion:4', 'skipped-test:7']);
 });
 
-test('debugging left in product code is named, and console.error is not', async () => {
+test('debugging left in product code is named, a breakpoint fails, and console.error is not', async () => {
   assert.deepEqual(await slop('export function a(x) {\n  console.log(x);\n  debugger;\n  console.error(x);\n  return x;\n}\n'), ['console:2', 'debugger:3']);
+  const parsed = await parseSource('src/a.js', 'export function a(x) {\n  debugger;\n  return x;\n}\n');
+  const ctx = { mode: 'project', violations: [], warnings: [] };
+  scoreSlop(ctx, { file: 'src/a.js', tree: parsed.tree, added: EVERY_LINE, language: parsed.language, test: false });
+  parsed.tree.delete();
+  assert.deepEqual(ctx.violations.map((v) => v.rule), ['debugger'], 'calibration found none in known-good commits, so it fails');
 });
 
 test('a local nothing reads and the parameters after the last one read are unused, and only on added lines', async () => {
