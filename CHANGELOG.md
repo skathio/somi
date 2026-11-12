@@ -6,6 +6,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **Near-miss copies, and copies in C#.** A copy with a line changed or inserted is now found, as well as an exact or renamed one. On five projects, near copies of real functions were caught 75 times out of 89, against 12 before. Copies are looked for within each language family, so C# copies are found too.
+- **Import coupling for JavaScript and TypeScript.** A change that closes a new import loop fails. A change that adds an import inside a loop that already exists is advised as `cycle-grown`. Type-only imports do not count, and a renamed file keeps its place in a loop. `quality.forbid_imports` in the config lists folders that may not import others, such as `{ "from": "src/ui/", "to": "src/db/" }`; a project may add rules but not remove the user's. Also advised: a file that imports more than 15 modules, and an added export that no file imports.
+- **Advice on code an agent tends to leave behind.** These are advised:
+  - a catch that is empty, only logs, or only rethrows
+  - a skipped test, or a test without an assertion
+  - `console` calls
+  - an unused trailing parameter or local
+  - a function that only passes its arguments on to another one
+
+  A focused test (`it.only`) and `debugger` fail the change. Neither appeared in 212 known-good commits.
+- **Options objects are counted.** A function that destructures more than 6 fields from one parameter (12 for a component) is advised, since that is a long parameter list in another form.
+- **File size advice.** A file taken over 400 lines or 40 functions, or one that gains more than 300 lines in one change, is advised. Test files are held to the complexity limits only.
+
+### Changed
+
+- **A function already over a limit may not keep growing.** It still only warns when it gets a little worse. More than 10 cognitive points or 40 lines in one change now fails.
+- **A benchmark does not trust a skip the change declared itself.** A file the change marks as generated or vendored is scored, unless its old version had the same skip. Skipped files, and changed files in a language the gate does not cover, are listed in the result.
+- **Old callbacks are not scored as new.** An anonymous function, such as a test, is paired with its old version even when the change edited its first line. On vue core this removed all 4 false failures.
+- **Tests in .NET test projects and in `test.ts` or `spec.ts` files are treated as tests.**
+
+### Fixed
+
+- **The gate no longer crashes on deeply nested code.** On prettier, a stack overflow ended the whole run. Now such a file is reported as not analyzed, which fails in a benchmark, and the gate goes on.
+
 ## [5.1.1] — 2026-11-12 — fix: a staged run's security review is recorded, not rejected as missing
 
 **Patch.** A fix, and a change to the release workflows. No migration action for users. The maintainer keeps `HOMEPAGE_DISPATCH_TOKEN` as a secret of the `homepage` environment.

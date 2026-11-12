@@ -7,9 +7,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { TEST_FILE } from '../../scripts/lib/signals.mjs';
 import { listFiles, snapshotTree } from '../../scripts/lib/git-tree.mjs';
-import { qualityGate } from '../../scripts/lib/quality/gate.mjs';
+import { isTest, qualityGate } from '../../scripts/lib/quality/gate.mjs';
 import { DEFAULT_LIMITS } from '../../scripts/lib/quality/limits.mjs';
 import { unitsOf } from '../../scripts/lib/quality/metrics.mjs';
 import { importGraph } from '../../scripts/lib/quality/imports.mjs';
@@ -51,7 +50,7 @@ const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.emai
 try {
   execFileSync('git', ['clone', '-q', '--local', '--no-hardlinks', source, dir], { stdio: 'ignore' });
   const head = git('rev-parse', 'HEAD');
-  const all = listFiles(dir, head).filter((f) => ['javascript', 'typescript'].includes(languageOf(f)) && !TEST_FILE.test(f) && !SKIPPED.test(f));
+  const all = listFiles(dir, head).filter((f) => ['javascript', 'typescript'].includes(languageOf(f)) && !isTest(f) && !SKIPPED.test(f));
   const step = Math.max(1, Math.floor(all.length / Number(values.files ?? 10)));
   const targets = all.filter((_, i) => i % step === 0).slice(0, Number(values.files ?? 10));
   // The donor for the copy is the largest function elsewhere in the repository that is valid code on its own, renamed, so it is a copy
