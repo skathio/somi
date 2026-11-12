@@ -59,6 +59,16 @@ test('a nested function is its own unit and starts at the nesting around it', as
   assert.equal(topLevelCognitive((await parseSource('t.js', 'if (a) { for (const x of y) {} }')).tree), 3);
 });
 
+test('C# shapes the JavaScript grammar does not have score as their JavaScript twins do', async () => {
+  const cs = async (body) => (await units(`class C {\n${body}\n}`, 'C.cs')).map((u) => [u.name, u.cognitive, u.params]);
+  assert.deepEqual(await cs('int F(int n) { return n > 0 ? F(n - 1) : 0; }'), [['F', 2, 1]], 'a conditional and recursion, as a ternary and a call');
+  assert.deepEqual(await cs('void G(bool a) { if (a) { Func<int, int> l = x => x > 0 ? 1 : 0; } }'), [['G', 1, 1], ['l', 2, 1]], 'a lambda is its own unit, with its one bare parameter');
+  assert.deepEqual(await cs('int H(int a) => a switch { 1 => 2, _ => a > 3 ? 4 : 5 };'), [['H', 3, 1]], 'a switch expression nests its arms');
+  assert.deepEqual(await cs('void J() { goto L; L: ; }'), [['J', 1, 0]], 'a goto breaks linear flow');
+  const [d] = await units('class C { void K(bool a, bool b) { if (a) { } else if (b) { if (a) { } } } }', 'C.cs');
+  assert.equal(d.depth, 2, 'an else-if is no deeper than the if it continues');
+});
+
 test('depth, lines, parameters and kind are measured per function', async () => {
   const [f] = await units('function f(a, { b, c }, ...rest) {\n  // a comment\n\n  if (a) {\n    while (b) { switch (c) { default: break; } }\n  }\n}');
   assert.deepEqual([f.params, f.depth, f.lines], [3, 3, 5], 'a destructured parameter counts once; comments and blank lines are not code');
@@ -159,6 +169,21 @@ test('the gate fails a new function over a limit, and passes an old one that did
   assert.ok(!result.violations.some((v) => v.rule === 'clone'), 'a copy of about 50 tokens is under the default of 100: the known gap calibration chose');
   const strict = await gate(r, { limits: { ...DEFAULT_LIMITS, clones: { tokens: 50 } } });
   assert.ok(strict.violations.some((v) => v.rule === 'clone' && v.other.line === 1), 'with a stricter limit the new one copies the old one');
+});
+
+test('a new C# overload is held to the limits, not compared with an older method of the same name', async (t) => {
+  const r = repo(t);
+  const pyramid = (params) => `  public object Load(${params}) {\n    foreach (var x in xs) {\n      foreach (var y in x) {\n        if (a) { if (b) { if (y > 0) { return y; } } }\n      }\n    }\n    return null;\n  }\n`;
+  const old = pyramid('int[][] xs, bool a, bool b');
+  r.write('src/C.cs', `class C {\n${old}}\n`);
+  r.git('add', '-A'); r.git('commit', '-qm', 'base');
+  r.write('src/C.cs', `class C {\n${pyramid('string s, int[][] xs, bool a, bool b')}${old}}\n`);
+  const added = await gate(r);
+  assert.deepEqual(added.violations.filter((v) => v.rule === 'depth').map((v) => [v.name, v.line, v.before]), [['Load', 2, undefined]], 'the new overload above is new, not a worse old one');
+  assert.deepEqual(added.warnings, [], 'the old overload is untouched');
+  r.write('src/C.cs', `class C {\n${pyramid('int[][] xs, bool a, bool b, int n').replace('if (y > 0)', 'if (y > n)')}}\n`);
+  const renamed = await gate(r);
+  assert.ok(!renamed.violations.some((v) => v.rule === 'depth'), 'an old method whose parameters changed is still the same method, already over and no worse');
 });
 
 test('a change that takes a function over a limit fails, one already over that gets worse warns, and a file may not gain too much at once', async (t) => {

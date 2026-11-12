@@ -43,10 +43,17 @@ export function exemption(ctx, lines, unit, rule) {
   return { reason: m[2], expires: m[3] };
 }
 
+// A function is paired with its old version by name and signature first, so a new overload added above an old one is new, not the
+// old one got different. What is left is paired by name alone, so a function whose parameters changed is still the same function.
 function pairUnits(before, after) {
-  const pool = new Map();
-  for (const u of before) { const k = `${u.kind}:${u.name}`; pool.set(k, [...(pool.get(k) ?? []), u]); }
-  return after.map((u) => ({ after: u, before: pool.get(`${u.kind}:${u.name}`)?.shift() ?? null }));
+  const taken = new Set();
+  const match = (u, key) => {
+    const old = before.find((b) => !taken.has(b) && key(b) === key(u));
+    if (old) taken.add(old);
+    return old ?? null;
+  };
+  const exact = after.map((u) => match(u, (x) => `${x.kind}:${x.name}:${x.signature}`));
+  return after.map((u, i) => ({ after: u, before: exact[i] ?? match(u, (x) => `${x.kind}:${x.name}`) }));
 }
 
 const inAdded = (added, line) => added.some(([a, b]) => line >= a && line <= b);
