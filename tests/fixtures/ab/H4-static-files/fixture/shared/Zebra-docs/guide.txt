@@ -1,2 +1,0 @@
-Zebra-docs/guide.txt
-shared file

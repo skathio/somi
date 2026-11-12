@@ -2,7 +2,7 @@
 // so an old codebase is not failed on day one: a change may not take a function or a file over a limit, and a file may not gain more
 // complexity in one change than its per-change limit, which is what stops a function being split apart just to pass. A function that
 // was already over and got worse is reported as a warning. Copied code, stylesheet rules and newly added suppressions are checked in
-// what the change added. A change the parser cannot follow fails, because a change that cannot be measured must not pass as clean.
+// what the change added, and so are Python's leftover debugging, swallowed errors and exports nothing imports. A change the parser cannot follow fails, because a change that cannot be measured must not pass as clean.
 
 import crypto from 'node:crypto';
 import { TEST_FILE } from '../signals.mjs';
@@ -11,20 +11,24 @@ import { findClones, tokensOf } from './clones.mjs';
 import { cssRules } from './css.mjs';
 import { unitsOf, topLevelCognitive } from './metrics.mjs';
 import { languageOf, parseSource } from './parse.mjs';
+import { scorePython, scoreUnusedExports } from './python.mjs';
 
 // Code that is not the product: dependencies, build output, test data, and docs, examples and playgrounds, which are written to be
 // read once.
 const SKIPPED = /(^|\/)(node_modules|vendor|dist|build|coverage|\.next|\.somi|fixtures?|__fixtures__|testdata|test-data|docs?|examples?|demos?|playgrounds?)\//;
 const MINIFIED = /\.min\.(js|css)$/;
 const GENERATED = /@generated\b|Code generated .* DO NOT EDIT/;
-const SUPPRESSION = /eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|NOSONAR|#\s*noqa|\/\/\s*nolint|@SuppressWarnings|#\s*type:\s*ignore|istanbul ignore|c8 ignore|stylelint-disable/;
+const SUPPRESSION = /eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|NOSONAR|#\s*noqa|\/\/\s*nolint|@SuppressWarnings|#\s*type:\s*ignore|#\s*pylint:\s*disable|istanbul ignore|c8 ignore|stylelint-disable/;
 // A suppression that says why, the way ESLint's -- description or text after @ts-expect-error does, is a decision rather than a
 // shortcut. Outside a benchmark it passes.
-const REASONED = /eslint-disable[^\n]*\s--\s+\S.{8,}|@ts-(expect-error|ignore)\s*:?\s+\S.{8,}|stylelint-disable[^\n]*\s--\s+\S.{8,}/;
+// In Python the reason is the rule it names: a bare # noqa or # type: ignore hides everything on the line, a coded one hides one thing.
+const REASONED = /eslint-disable[^\n]*\s--\s+\S.{8,}|@ts-(expect-error|ignore)\s*:?\s+\S.{8,}|stylelint-disable[^\n]*\s--\s+\S.{8,}|#\s*noqa:\s*[A-Z]+\d+|#\s*type:\s*ignore\[[\w, -]+\]|#\s*pylint:\s*disable=[\w, -]+/;
 const ALLOW = /somi-gate-allow\s+([a-z_-]+)\s+reason="([^"]{20,})"\s+expires=(\d{4}-\d{2}-\d{2})/;
 export const MAX_EXEMPTION_DAYS = 90;
 export const METRICS = ['cognitive', 'depth', 'lines', 'params'];
 export const JS_FAMILY = new Set(['javascript', 'typescript', 'tsx']);
+// The languages copies are looked for in. A copy is only ever matched within one language's own token stream.
+export const CLONED = new Set([...JS_FAMILY, 'python']);
 const MAX_REPO_FILES = 3000;
 
 const touches = (unit, ranges) => ranges.some(([a, b]) => a <= unit.end && b >= unit.start);
@@ -67,7 +71,7 @@ function scoreComment(ctx, file, line, text) {
 }
 
 // A directive opens its comment: // eslint-disable-next-line, /* @ts-nocheck */. A comment that only mentions one is prose.
-const DIRECTIVE = /^(\/\/|\/\*+|#)\s*(eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|NOSONAR|nolint|stylelint-disable|istanbul ignore|c8 ignore|somi-gate-allow)/;
+const DIRECTIVE = /^(\/\/|\/\*+|#)\s*(eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|NOSONAR|nolint|noqa|type:\s*ignore|pylint:\s*disable|stylelint-disable|istanbul ignore|c8 ignore|somi-gate-allow)/;
 
 export function scoreComments(ctx, file, tree, added) {
   const visit = (n) => {
@@ -144,7 +148,7 @@ async function previousVersion(ctx, file, status, test) {
   return withTree(file, text, (parsed) => {
     if (!parsed?.tree) return NO_VERSION;
     const units = unitsOf(parsed.tree, { file, isTest: test });
-    return { units, keys: units.map((u) => keyOf(lines, u)), total: total(units, topLevelCognitive(parsed.tree)), tokens: JS_FAMILY.has(parsed.language) && !test ? tokensOf(parsed.tree) : null };
+    return { units, keys: units.map((u) => keyOf(lines, u)), total: total(units, topLevelCognitive(parsed.tree)), tokens: CLONED.has(parsed.language) && !test ? tokensOf(parsed.tree) : null };
   });
 }
 
@@ -164,9 +168,10 @@ async function scoreCode(ctx, { file, status, added, lines, tree, language, erro
   ctx.moves.before.push(...old.keys);
   ctx.moves.after.push(...keyed.map((u) => u.key));
   if (errors.length === 0) ctx.totals.push({ file, now: total(units, topLevelCognitive(tree)), was: old.total, units: keyed, own: new Set(old.keys) });
+  if (language === 'python') scorePython(ctx, { file, tree, added, test });
   // Copies are looked for in product code. Copied setup between tests is mostly benign (Kapser and Godfrey), and it was most of the
   // false alarms on known-good projects.
-  if (!JS_FAMILY.has(language) || test) return;
+  if (!CLONED.has(language) || test) return;
   const size = ctx.limits.clones.tokens;
   ctx.cloneAfter.push({ file, tokens: tokensOf(tree), size });
   if (old.tokens) ctx.cloneBefore.push({ file, tokens: old.tokens, size });
@@ -212,7 +217,7 @@ async function cachedTokens(cache, file, text) {
 // A caller scoring many changes in one repository can pass a cache, so files it has read once are not parsed again.
 async function restOfRepo(ctx, touched) {
   const rest = [];
-  const candidates = ctx.repoFiles.filter((f) => JS_FAMILY.has(languageOf(f)) && !touched.has(f) && !isTest(f) && !SKIPPED.test(f) && !MINIFIED.test(f));
+  const candidates = ctx.repoFiles.filter((f) => CLONED.has(languageOf(f)) && !touched.has(f) && !isTest(f) && !SKIPPED.test(f) && !MINIFIED.test(f));
   for (const [file, text] of filesAt(ctx.root, ctx.to, candidates.slice(0, MAX_REPO_FILES))) {
     if (skipped(file, text)) continue;
     const tokens = await cachedTokens(ctx.cache, file, text);
@@ -226,7 +231,7 @@ async function restOfRepo(ctx, touched) {
  * { rule, file, line, name?, value, limit, before? }.
  */
 export async function qualityGate(root, { from, to, limits, now = new Date().toISOString(), mode = 'project', repoFiles = [], cache = null }) {
-  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, violations: [], warnings: [], exemptions: [], unanalyzed: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [], totals: [], moves: { before: [], after: [] } };
+  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, violations: [], warnings: [], exemptions: [], unanalyzed: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [], totals: [], moves: { before: [], after: [] }, pyExports: [] };
   const changed = addedRanges(root, from, to);
   // The changed code is read up front, a batch at a time. One git process per file was most of the gate's time on a large branch.
   const code = [...changed].filter(([file]) => languageOf(file));
@@ -234,6 +239,7 @@ export async function qualityGate(root, { from, to, limits, now = new Date().toI
   ctx.after = filesAt(root, to, code.filter(([, c]) => !c.status.startsWith('D')).map(([file]) => file));
   for (const [file, change] of changed) await scoreFile(ctx, file, change);
   scoreMoves(ctx);
+  await scoreUnusedExports(ctx, { skipped: SKIPPED, maxFiles: MAX_REPO_FILES });
   // A copy is only reported in code the change holds, so with none of that the rest of the repository is not read.
   const rest = ctx.cloneAfter.length > 0 ? await restOfRepo(ctx, new Set(changed.keys())) : [];
   for (const c of findClones({ after: ctx.cloneAfter, before: ctx.cloneBefore, rest })) flag(ctx, { rule: 'clone', file: c.file, line: c.line, value: c.lines, limit: 0, other: c.other });

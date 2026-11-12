@@ -6,9 +6,9 @@
 import crypto from 'node:crypto';
 
 const NAMES = new Set(['identifier', 'property_identifier', 'shorthand_property_identifier', 'shorthand_property_identifier_pattern', 'type_identifier', 'private_property_identifier', 'statement_identifier', 'field_identifier']);
-const LITERALS = new Set(['string', 'template_string', 'number', 'regex', 'string_fragment']);
+const LITERALS = new Set(['string', 'template_string', 'number', 'regex', 'string_fragment', 'integer', 'float']);
 
-const FUNCTIONS = new Set(['function_declaration', 'function_expression', 'function', 'arrow_function', 'method_definition', 'generator_function_declaration', 'generator_function']);
+const FUNCTIONS = new Set(['function_declaration', 'function_expression', 'function', 'arrow_function', 'method_definition', 'generator_function_declaration', 'generator_function', 'function_definition']);
 
 /**
  * [{ t, row }] for the code inside functions: names become ID, literals LIT, everything else its own text. Comments are dropped, and so

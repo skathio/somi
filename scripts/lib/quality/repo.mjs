@@ -4,9 +4,10 @@
 
 import { fileAt, listFiles } from '../git-tree.mjs';
 import { findClones, tokensOf } from './clones.mjs';
-import { JS_FAMILY, METRICS, exemption, isTest, scoreComments, scoreCss, skipped, total, withTree } from './gate.mjs';
+import { CLONED, METRICS, exemption, isTest, scoreComments, scoreCss, skipped, total, withTree } from './gate.mjs';
 import { topLevelCognitive, unitsOf } from './metrics.mjs';
 import { languageOf } from './parse.mjs';
+import { pythonFindings } from './python.mjs';
 
 const TOP = 20;
 
@@ -31,7 +32,8 @@ function codeFindings(ctx, { file, lines, parsed }) {
   for (const unit of units.filter(readable)) unitFindings(ctx, { file, lines, unit });
   const sum = total(units, topLevelCognitive(parsed.tree));
   if (parsed.errors.length === 0 && sum > ctx.limits.file.cognitive) ctx.violations.push({ rule: 'file-cognitive', file, line: 1, value: sum, limit: ctx.limits.file.cognitive });
-  if (JS_FAMILY.has(parsed.language) && !test) ctx.cloneFiles.push({ file, tokens: tokensOf(parsed.tree), size: ctx.limits.clones.tokens });
+  if (parsed.language === 'python') for (const f of pythonFindings(parsed.tree, { test }).filter((x) => x.level === 'violation')) ctx.violations.push({ rule: f.rule, file, line: f.line, name: f.name, value: 1, limit: 0 });
+  if (CLONED.has(parsed.language) && !test) ctx.cloneFiles.push({ file, tokens: tokensOf(parsed.tree), size: ctx.limits.clones.tokens });
 }
 
 function scoreParsed(ctx, { file, text, parsed }) {

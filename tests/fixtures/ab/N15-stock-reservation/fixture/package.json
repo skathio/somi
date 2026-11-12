@@ -1,8 +1,0 @@
-{
-  "name": "n15-stock-reservation",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **The quality gate reads Python.** It uses the same rules and limits as the other languages, read its own way where Python differs, and adds three checks of its own: debugging left behind, an `except` that swallows everything, and a public name nothing imports. The tree-sitter-python 0.25.0 grammar is vendored with its SHA-256 in the manifest. On eight well-kept Python projects the gate fails 8% of recent commits and catches 97.5% of planted problems ([record](benchmarks/quality/records/calibration-2026-11-12-python.md)).
+
+### Changed
+
+- **The usage benchmark moved to a private repository.** Its harness, task corpus and pre-registration are no longer part of this repository or of a plugin install, so the hidden tests and reference solutions stay out of training data. It measures this repository at a pinned commit. Published records are now in `benchmarks/records/`, and `docs/BENCHMARK.md` still describes the method and the results.
+
 ## [5.1.1] — 2026-11-12 — fix: a staged run's security review is recorded, not rejected as missing
 
 **Patch.** A fix, and a change to the release workflows. No migration action for users. The maintainer keeps `HOMEPAGE_DISPATCH_TOKEN` as a secret of the `homepage` environment.

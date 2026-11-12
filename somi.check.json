@@ -99,9 +99,6 @@
     "rules/": [
       "tests/surface.test.mjs"
     ],
-    "benchmarks/v2/": [
-      "tests/bench.test.mjs"
-    ],
     "scripts/lib/routes.mjs": [
       "tests/advisor.test.mjs"
     ],
@@ -153,13 +150,16 @@
       "tests/advisor.test.mjs"
     ],
     "scripts/lib/quality/parse.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
     "scripts/lib/quality/metrics.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
     "scripts/lib/quality/clones.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
     "scripts/lib/quality/css.mjs": [
       "tests/quality.test.mjs"
@@ -168,37 +168,31 @@
       "tests/quality.test.mjs"
     ],
     "scripts/lib/quality/gate.mjs": [
-      "tests/quality.test.mjs"
-    ],
-    "tests/evals/lib/task-store.mjs": [
-      "tests/task-store.test.mjs",
-      "tests/canary.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
     "scripts/lib/quality/run.mjs": [
       "tests/quality.test.mjs"
     ],
     "scripts/lib/quality/repo.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
-    "tests/evals/lib/manifest.mjs": [
-      "tests/manifest.test.mjs",
-      "tests/task-store.test.mjs"
+    "scripts/lib/quality/python.mjs": [
+      "tests/quality-python-gate.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
-    "tests/evals/lib/score-hidden.mjs": [
-      "tests/score-hidden.test.mjs"
+    "scripts/lib/quality/python-findings.mjs": [
+      "tests/quality-python-gate.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
-    "tests/evals/lib/admit.mjs": [
-      "tests/admit.test.mjs"
+    "scripts/lib/quality/python-exports.mjs": [
+      "tests/quality-python-gate.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
-    "tests/evals/lib/ab-stream.mjs": [
-      "tests/ab-stream.test.mjs"
-    ],
-    "tests/evals/lib/ab-draw.mjs": [
-      "tests/ab-draw.test.mjs",
-      "tests/bench.test.mjs"
-    ],
-    "tests/evals/lib/ab-sandbox.mjs": [
-      "tests/bench.test.mjs"
+    "scripts/lib/quality/python-imports.mjs": [
+      "tests/quality-python-gate.test.mjs",
+      "tests/quality-python.test.mjs"
     ]
   }
 }

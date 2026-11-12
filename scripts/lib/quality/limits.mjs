@@ -1,6 +1,8 @@
 // quality/limits.mjs: the gate's thresholds, calibrated on 12 well-kept JavaScript and TypeScript projects (benchmarks/quality/). The
 // function limits are the common SonarSource and ESLint ones, which a few percent of those projects' functions exceed. Tests may run
 // longer, and a copy has to be SonarQube's 100 tokens, about ten lines, because shorter repeated patterns were most of the false alarms.
+// Python is held to the same limits: on 8 well-kept Python projects they fail about 8% of recent commits (the Python record in the
+// same folder).
 //
 // The gate runs at two scopes. A commit is a small step, checked before it is made against the last commit. A pull request is the whole
 // branch since it left the shared history. A function over a limit is over it at either scope, so every limit is shared except how much

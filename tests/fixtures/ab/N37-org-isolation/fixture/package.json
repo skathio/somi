@@ -1,8 +1,0 @@
-{
-  "name": "n37-org-isolation",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

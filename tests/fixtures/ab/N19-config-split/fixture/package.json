@@ -1,8 +1,0 @@
-{
-  "name": "n19-config-split",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

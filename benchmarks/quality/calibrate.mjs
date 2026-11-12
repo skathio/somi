@@ -3,7 +3,7 @@
 // LOC-weighted percentiles of each (Alves, Ypma and Visser 2010: weight each function by its lines, so a few huge ones count for what
 // they hold). Then it runs the gate on the repository's recent commits, which were reviewed and merged, to see how often a known-good
 // change fails and on which rule. Writes one JSON line per repository.
-//   node benchmarks/quality/calibrate.mjs <repo> [--commits 30]
+//   node benchmarks/quality/calibrate.mjs <repo> [--commits 30] [--lang python]
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -36,11 +36,12 @@ export function weightedPercentiles(units, metric, pcts = PCTS) {
   return out;
 }
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { commits: { type: 'string' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { commits: { type: 'string' }, lang: { type: 'string' } } });
+const languages = values.lang === 'python' ? ['python'] : ['javascript', 'typescript', 'tsx'];
 const root = path.resolve(positionals[0]);
 const git = (...a) => execFileSync('git', ['-c', 'core.quotePath=false', ...a], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).trim();
 const head = git('rev-parse', 'HEAD');
-const files = listFiles(root, head).filter((f) => ['javascript', 'typescript', 'tsx'].includes(languageOf(f)) && !SKIPPED.test(f));
+const files = listFiles(root, head).filter((f) => languages.includes(languageOf(f)) && !SKIPPED.test(f));
 const byKind = { function: [], component: [], test: [] };
 let unanalyzed = 0;
 for (const file of files) {
@@ -70,7 +71,9 @@ for (const [sha, parent] of commits) {
     const r = await qualityGate(root, { from: parent, to: sha, limits: DEFAULT_LIMITS, repoFiles: listFiles(root, sha), cache });
     const rules = {};
     for (const v of r.violations) rules[v.rule] = (rules[v.rule] ?? 0) + 1;
-    changes.push({ sha: sha.slice(0, 12), ok: r.ok, functions: r.scored.functions, warnings: r.warnings.length, rules, examples: r.violations.slice(0, 3).map((v) => `${v.rule} ${v.file}:${v.line} ${v.name ?? ''} ${v.value}/${v.limit}`) });
+    const warned = {};
+    for (const v of r.warnings) warned[v.rule] = (warned[v.rule] ?? 0) + 1;
+    changes.push({ sha: sha.slice(0, 12), ok: r.ok, functions: r.scored.functions, warnings: r.warnings.length, rules, warned, examples: r.violations.slice(0, 3).map((v) => `${v.rule} ${v.file}:${v.line} ${v.name ?? ''} ${v.value}/${v.limit}`) });
   } catch (e) { changes.push({ sha: sha.slice(0, 12), error: String(e.message).slice(0, 120) }); }
 }
 const scored = changes.filter((c) => !c.error && c.functions > 0);
