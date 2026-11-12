@@ -129,10 +129,13 @@ test('an expired token or API error on the ping warns instead of failing the run
   }
 });
 
-// The token can write to the homepage repo, so only main and release tags may read it.
-test('the ping runs in the homepage environment', () => {
+// The token can write to the homepage repo, so only main may read it. The environment admits main
+// only, so the release ping also checks the ref: a release from another ref skips the ping instead
+// of failing at the environment after the release went out.
+test('the ping runs in the homepage environment, and the release ping only from main', () => {
   const ping = Object.values(jobs()).find((body) => /skathio\/skathio\.github\.io/.test(code(body)));
   assert.match(ping, /^ {4}environment: homepage$/m, 'publish.yml ping job');
+  assert.match(ping, /^ {4}if: .*github\.ref == 'refs\/heads\/main'/m, 'publish.yml ping runs only for a release from main');
   assert.match(read('.github/workflows/homepage.yml'), /^ {4}environment: homepage$/m, 'homepage.yml ping job');
 });
 
