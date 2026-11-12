@@ -39,9 +39,10 @@
       "tests/reviews.test.mjs"
     ],
     "scripts/lib/git-tree.mjs": [
+      "tests/quality-rules.test.mjs",
+      "tests/quality.test.mjs",
       "tests/reviews.test.mjs",
-      "tests/signals.test.mjs",
-      "tests/quality.test.mjs"
+      "tests/signals.test.mjs"
     ],
     "scripts/lib/signals.mjs": [
       "tests/signals.test.mjs"
@@ -153,32 +154,40 @@
       "tests/advisor.test.mjs"
     ],
     "scripts/lib/quality/parse.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "scripts/lib/quality/metrics.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "scripts/lib/quality/clones.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "scripts/lib/quality/css.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "scripts/lib/quality/limits.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "scripts/lib/quality/gate.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "tests/evals/lib/task-store.mjs": [
       "tests/task-store.test.mjs",
       "tests/canary.test.mjs"
     ],
     "scripts/lib/quality/run.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "scripts/lib/quality/repo.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "tests/evals/lib/manifest.mjs": [
       "tests/manifest.test.mjs",
@@ -199,6 +208,22 @@
     ],
     "tests/evals/lib/ab-sandbox.mjs": [
       "tests/bench.test.mjs"
+    ],
+    "scripts/lib/quality/findings.mjs": [
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
+    ],
+    "scripts/lib/quality/functions.mjs": [
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
+    ],
+    "scripts/lib/quality/suppressions.mjs": [
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
+    ],
+    "scripts/lib/quality/totals.mjs": [
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ]
   }
 }

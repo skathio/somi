@@ -156,19 +156,32 @@ export function readDiff(root, from, to) {
 function changedFiles(root, from, to) {
   const out = new Map();
   const status = git(root, ['diff', ...DIFF, '--name-status', '-z', from, to]).split('\0').filter(Boolean);
-  for (let i = 0; i + 1 < status.length; i += 2) out.set(status[i + 1], { status: status[i], added: [] });
+  for (let i = 0; i + 1 < status.length; i += 2) out.set(status[i + 1], { status: status[i], added: [], hunks: [] });
   return out;
 }
 
-const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+const HUNK = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
-// A hunk header's new side: its first line and how many lines it holds there. A hunk that only removes holds none.
+// A hunk header's new side: its first line and how many lines it holds there. A hunk that only removes holds none. How many lines it
+// held on the old side is kept too, so a line the change did not touch can be traced back to where it was.
 function addHunk(entry, line) {
   const hunk = HUNK.exec(line);
   if (!hunk || !entry) return;
-  const first = Number(hunk[1]);
-  const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
+  const first = Number(hunk[2]);
+  const count = hunk[3] === undefined ? 1 : Number(hunk[3]);
   if (count > 0) entry.added.push([first, first + count - 1]);
+  entry.hunks.push({ first, count, removed: hunk[1] === undefined ? 1 : Number(hunk[1]) });
+}
+
+/** Where a line of the new version was in the old one, from addedRanges' hunks, or null when the change added it. */
+export function oldLine(hunks, line) {
+  let shift = 0;
+  for (const h of hunks) {
+    if (h.count > 0 && line >= h.first && line < h.first + h.count) return null;
+    const before = h.count > 0 ? h.first + h.count - 1 < line : h.first < line;
+    if (before) shift += h.count - h.removed;
+  }
+  return line - shift;
 }
 
 export function addedRanges(root, from, to) {

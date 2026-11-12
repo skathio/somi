@@ -16,10 +16,12 @@ export const CHANGE_SCOPES = Object.freeze(['commit', 'pr']);
 export const SCOPES = Object.freeze([...CHANGE_SCOPES, 'repo']);
 
 export const DEFAULT_LIMITS = Object.freeze({
-  function: Object.freeze({ cognitive: 15, depth: 4, lines: 60, params: 4 }),
-  component: Object.freeze({ cognitive: 15, depth: 4, lines: 150, params: 4 }),
-  test: Object.freeze({ cognitive: 8, depth: 3, lines: 150, params: 4 }),
-  file: Object.freeze({ cognitive: 100, added_cognitive: 25 }),
+  function: Object.freeze({ cognitive: 15, depth: 4, lines: 60, params: 4, options: 6 }),
+  component: Object.freeze({ cognitive: 15, depth: 4, lines: 150, params: 4, options: 12 }),
+  test: Object.freeze({ cognitive: 8, depth: 3, lines: 150, params: 4, options: 6 }),
+  growth: Object.freeze({ cognitive: 5, lines: 20 }),
+  file: Object.freeze({ cognitive: 100, added_cognitive: 25, lines: 400, added_lines: 300, functions: 40 }),
+  imports: Object.freeze({ fan_out: 15 }),
   clones: Object.freeze({ tokens: 100 }),
   css: Object.freeze({ nesting: 3, compound: 3, ids: 0, important: 0 }),
   suppressions: Object.freeze({ added: 0 }),
@@ -32,7 +34,7 @@ export const DEFAULT_LIMITS = Object.freeze({
 // hooks/hooks.json, is set above the maximum, so the host never cuts the gate off first.
 export const QUALITY_TIMEOUT = Object.freeze({ default: 300, min: 10, max: 1800 });
 
-const SCOPE_DEFAULTS = Object.freeze({ commit: {}, pr: { file: { added_cognitive: 100 } }, repo: {} });
+const SCOPE_DEFAULTS = Object.freeze({ commit: {}, pr: { file: { added_cognitive: 100, added_lines: 1000 } }, repo: {} });
 
 /** The default limits at one scope, as a fresh object. */
 export function limitsFor(scope = 'pr') {

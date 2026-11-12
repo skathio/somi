@@ -36,12 +36,22 @@ function paramCount(node) {
   return params ? params.namedChildren.filter((c) => c.type !== 'comment').length : 0;
 }
 
+// Names a function takes through destructured parameters: `function f({ a, b, c })` takes three, though it has one parameter. A
+// large options object hides as many inputs as a long parameter list.
+const PATTERNS = new Set(['object_pattern', 'array_pattern']);
+function optionCount(node) {
+  const params = field(node, 'parameters');
+  if (!params) return 0;
+  const patternOf = (p) => (PATTERNS.has(p.type) ? p : [field(p, 'pattern'), field(p, 'left')].find((x) => x && PATTERNS.has(x.type)));
+  return params.namedChildren.map(patternOf).filter(Boolean).reduce((n, p) => n + p.namedChildren.filter((c) => c.type !== 'comment').length, 0);
+}
+
 // Lines that hold code: the start row of every token that is not a comment. A nested function's lines are its own, as its complexity
 // is, so a test file's describe block is not as long as every test inside it.
-function logicalLines(node) {
+function logicalLines(node, { nested = false } = {}) {
   const rows = new Set();
   const visit = (n) => {
-    if (n !== node && FUNCTIONS.has(n.type)) return;
+    if (!nested && n !== node && FUNCTIONS.has(n.type)) return;
     if (n.childCount === 0) { if (n.type !== 'comment' && n.text.trim() !== '') rows.add(n.startPosition.row); return; }
     for (const c of n.children) visit(c);
   };
@@ -137,7 +147,7 @@ function nestingAt(node) {
   return n;
 }
 
-/** Every function in the tree with its metrics: name, kind, lines, cognitive, depth and params, oldest-first by position. */
+/** Every function in the tree with its metrics: name, kind, lines, cognitive, depth, params and options, oldest-first by position. */
 export function unitsOf(tree, { file = '', isTest = false } = {}) {
   const units = [];
   const visit = (node, inherited) => {
@@ -154,6 +164,7 @@ export function unitsOf(tree, { file = '', isTest = false } = {}) {
         cognitive: cognitive(node, name, start),
         depth: maxDepth(node),
         params: paramCount(node),
+        options: optionCount(node),
         // C# overloads, and a constructor beside its destructor, share a name: the gate tells them apart by this.
         signature: `${node.type}(${(field(node, 'parameters') ?? field(node, 'parameter'))?.text.replace(/\s+/g, ' ') ?? ''})`,
       });
@@ -165,6 +176,9 @@ export function unitsOf(tree, { file = '', isTest = false } = {}) {
   visit(tree.rootNode, 0);
   return units;
 }
+
+/** Lines that hold code in the whole file, functions included. */
+export const codeLines = (tree) => logicalLines(tree.rootNode, { nested: true });
 
 /** Complexity of code outside any function, which counts toward the file's total. */
 export function topLevelCognitive(tree) {
