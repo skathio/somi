@@ -147,9 +147,9 @@
           ]
         },
         {
-          "version": "5.1.0",
+          "version": "5.1.1",
           "label": "5.1",
-          "covers": ["5.1.0"],
+          "covers": ["5.1.0", "5.1.1"],
           "title": "The quality gate reads C#",
           "body": "A `.cs` file is scored by the same rules and held to the same limits as JavaScript: each method, constructor, local function and lambda is a unit, for complexity, nesting, length and parameters. Copied code and `#pragma` or `[SuppressMessage]` suppressions are not checked in C# yet."
         }

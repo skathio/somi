@@ -57,11 +57,35 @@ function normalizeFinding(raw, agent, i) {
   return finding;
 }
 
+// A report over the cap loses its least severe findings, last first, until it fits: a session cannot shorten a reviewer's report, and
+// refusing it whole led a session to send no report at all. Each finding's size is counted once, so a long list costs no more than a pass.
+// A Blocker or Major is never dropped; a report still over the cap without its Minors and Nits is refused, and that reviewer runs again.
+const bytes = (v) => Buffer.byteLength(JSON.stringify(v) ?? '');
+const TRIM_ORDER = ['Nit', 'Minor'];
+function fitReview(review) {
+  if (bytes(review) <= MAX_REVIEW_BYTES) return { review, trimmed: 0 };
+  const agent = isText(review.agent, 64) && !CONTROL.test(review.agent) ? review.agent : 'a reviewer';
+  const over = () => new ReviewInputError(`the report from ${agent} is over ${MAX_REVIEW_BYTES} bytes even without its Minor and Nit findings; re-run that reviewer and ask it for fewer, shorter findings`);
+  if (!Array.isArray(review.findings)) throw over();
+  const kept = review.findings.map((f) => ({ f, size: bytes(f) + 1 }));
+  let total = bytes(review);
+  let trimmed = 0;
+  for (const severity of TRIM_ORDER) {
+    for (let i = kept.length - 1; i >= 0 && total > MAX_REVIEW_BYTES; i -= 1) {
+      if (kept[i].f?.severity !== severity) continue;
+      total -= kept[i].size;
+      kept.splice(i, 1);
+      trimmed += 1;
+    }
+  }
+  const fitted = { ...review, findings: kept.map((k) => k.f) };
+  if (bytes(fitted) > MAX_REVIEW_BYTES) throw over();
+  return { review: fitted, trimmed };
+}
+
 // The checks one review must pass, in this order. The reviewer is counted as seen before its verdict is read, so a second report from it
 // is refused as a repeat, not read again.
 function checkReview(review, dispatched, seen) {
-  if (review === null || typeof review !== 'object') throw new ReviewInputError('a review is not an object');
-  if (Buffer.byteLength(JSON.stringify(review)) > MAX_REVIEW_BYTES) throw new ReviewInputError(`a review is over ${MAX_REVIEW_BYTES} bytes; return fewer, shorter findings`);
   const { agent } = review;
   if (!dispatched.some((d) => d.agent === agent)) throw new ReviewInputError('a review names a reviewer that was not dispatched');
   if (seen.has(agent)) throw new ReviewInputError(`${agent} returned twice`);
@@ -78,9 +102,11 @@ export function parseReviews(reviews, dispatched) {
   const seen = new Set();
   const findings = [];
   const verdicts = [];
-  for (const review of reviews) {
+  for (const raw of reviews) {
+    if (raw === null || typeof raw !== 'object') throw new ReviewInputError('a review is not an object');
+    const { review, trimmed } = fitReview(raw);
     const agent = checkReview(review, dispatched, seen);
-    verdicts.push({ agent, verdict: review.verdict, model: isText(review.model, 64) && !CONTROL.test(review.model) ? review.model : null });
+    verdicts.push({ agent, verdict: review.verdict, model: isText(review.model, 64) && !CONTROL.test(review.model) ? review.model : null, ...(trimmed ? { trimmed } : {}) });
     review.findings.forEach((f, i) => findings.push(normalizeFinding(f, agent, i)));
   }
   const missing = dispatched.filter((d) => !seen.has(d.agent)).map((d) => d.agent);

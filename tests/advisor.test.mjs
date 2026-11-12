@@ -168,6 +168,9 @@ test('work the user sends with /somi-deliver runs as the staged workflow on eith
   assert.equal(copilot.workflow.name, 'somi-deliver-stages', 'the name the Copilot extension registers');
   assert.deepEqual(copilot.workflow.args.models, { low: 'm-low' });
   assert.match(copilot.advice, /experimental mode/);
+  for (const advice of [r.advice, copilot.advice]) {
+    assert.match(advice, /passing its review_tree as tree\. If reviews_missing names a reviewer, call somi_review with no reviews, run the reviewers it names[\s\S]*never record a set without them/, 'a missing reviewer is run, not left out');
+  }
   assert.equal(advise(ctx, { request: 'What does the parser do?', staged: true }).workflow, undefined, 'a question is answered, not staged');
   assert.equal(advise(ctx, { request: 'Add a helper that doubles a number' }).workflow, undefined, 'small work stays light');
   assert.match(advise(ctx, { request: 'Refactor the parser and fix the crash in it', staged: true }).advice, /staged true/, 'asked to pick, the agent keeps the user\'s choice');
