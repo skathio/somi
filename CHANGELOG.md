@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **The quality gate covers C#.** A `.cs` file is parsed with `tree-sitter-c-sharp.wasm`, vendored unchanged from @vscode/tree-sitter-wasm 0.3.1 and checked against its SHA-256 like the other grammars. Each method, constructor, local function and lambda is a unit scored by the same SoMi-CC v1 rules and held to the same limits. Copies and `#pragma`/`[SuppressMessage]` suppressions are not checked in C# yet.
+
 ## [5.0.4] — 2026-11-11 — fix: `somi init` finds the host, and the workflow loads into an open Copilot session
 
 **Patch — fixes only.** No migration action required. Closes #60.

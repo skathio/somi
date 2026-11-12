@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'vendor', 'tree-sitter');
 export const MAX_FILE_BYTES = 512 * 1024;
 export const PARSE_TIMEOUT_MS = 5000;
-const LANGUAGES = { '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript', '.jsx': 'javascript', '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript', '.tsx': 'tsx', '.css': 'css' };
+const LANGUAGES = { '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript', '.jsx': 'javascript', '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript', '.tsx': 'tsx', '.css': 'css', '.cs': 'c-sharp' };
 
 /** The grammar a file is parsed with, or null when the gate does not cover its language yet. */
 export const languageOf = (file) => LANGUAGES[path.extname(file).toLowerCase()] ?? null;

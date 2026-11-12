@@ -59,6 +59,16 @@ test('a nested function is its own unit and starts at the nesting around it', as
   assert.equal(topLevelCognitive((await parseSource('t.js', 'if (a) { for (const x of y) {} }')).tree), 3);
 });
 
+test('C# shapes the JavaScript grammar does not have score as their JavaScript twins do', async () => {
+  const cs = async (body) => (await units(`class C {\n${body}\n}`, 'C.cs')).map((u) => [u.name, u.cognitive, u.params]);
+  assert.deepEqual(await cs('int F(int n) { return n > 0 ? F(n - 1) : 0; }'), [['F', 2, 1]], 'a conditional and recursion, as a ternary and a call');
+  assert.deepEqual(await cs('void G(bool a) { if (a) { Func<int, int> l = x => x > 0 ? 1 : 0; } }'), [['G', 1, 1], ['l', 2, 1]], 'a lambda is its own unit, with its one bare parameter');
+  assert.deepEqual(await cs('int H(int a) => a switch { 1 => 2, _ => a > 3 ? 4 : 5 };'), [['H', 3, 1]], 'a switch expression nests its arms');
+  assert.deepEqual(await cs('void J() { goto L; L: ; }'), [['J', 1, 0]], 'a goto breaks linear flow');
+  const [d] = await units('class C { void K(bool a, bool b) { if (a) { } else if (b) { if (a) { } } } }', 'C.cs');
+  assert.equal(d.depth, 2, 'an else-if is no deeper than the if it continues');
+});
+
 test('depth, lines, parameters and kind are measured per function', async () => {
   const [f] = await units('function f(a, { b, c }, ...rest) {\n  // a comment\n\n  if (a) {\n    while (b) { switch (c) { default: break; } }\n  }\n}');
   assert.deepEqual([f.params, f.depth, f.lines], [3, 3, 5], 'a destructured parameter counts once; comments and blank lines are not code');
