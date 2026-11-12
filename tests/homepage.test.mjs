@@ -119,10 +119,24 @@ test('homepage.yml pings on a manifest or image change, and skips without a toke
   assert.match(wf, /if \[ -z "\$\{GH_TOKEN\}" \]; then[\s\S]*?exit 0/);
 });
 
-test('an expired token or API error on the ping never fails the run', () => {
+// A failed ping must not fail the run, but it must be seen: continue-on-error hid an expired token.
+test('an expired token or API error on the ping warns instead of failing the run', () => {
   const ping = Object.values(jobs()).find((body) => /skathio\/skathio\.github\.io/.test(code(body)));
-  assert.match(ping, /continue-on-error: true/, 'publish.yml ping step');
-  assert.match(read('.github/workflows/homepage.yml'), /continue-on-error: true/, 'homepage.yml ping step');
+  for (const [where, text] of [['publish.yml ping', ping], ['homepage.yml', read('.github/workflows/homepage.yml')]]) {
+    assert.doesNotMatch(text, /continue-on-error/, `${where}: no silent continue-on-error`);
+    assert.doesNotMatch(text, /set -e/, `${where}: a failed call must reach the warning`);
+    assert.match(text, /if ! gh api repos\/skathio\/skathio\.github\.io\/dispatches[\s\S]*?::warning/, `${where}: warns on failure`);
+  }
+});
+
+// The token can write to the homepage repo, so only main may read it. The environment admits main
+// only, so the release ping also checks the ref: a release from another ref skips the ping instead
+// of failing at the environment after the release went out.
+test('the ping runs in the homepage environment, and the release ping only from main', () => {
+  const ping = Object.values(jobs()).find((body) => /skathio\/skathio\.github\.io/.test(code(body)));
+  assert.match(ping, /^ {4}environment: homepage$/m, 'publish.yml ping job');
+  assert.match(ping, /^ {4}if: .*github\.ref == 'refs\/heads\/main'/m, 'publish.yml ping runs only for a release from main');
+  assert.match(read('.github/workflows/homepage.yml'), /^ {4}environment: homepage$/m, 'homepage.yml ping job');
 });
 
 // The ping holds a cross-repo token, so no trigger may run it on code or text an outsider controls.

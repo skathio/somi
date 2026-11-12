@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Changed
+
+- **The homepage ping is visible when it fails, and its token is limited to main.** `homepage.yml` and the `homepage-ping` job in `publish.yml` no longer hide a failed ping with `continue-on-error`: a failed call leaves a warning on the run, so an expired `HOMEPAGE_DISPATCH_TOKEN` gets noticed, and the run still succeeds. Both jobs run in the `homepage` environment, which only `main` can use; keep the token there as an environment secret. The release ping runs only for a release dispatched from `main`. A manifest or image change now sends `project-updated` instead of `project-released`.
+
 ## [5.1.0] — 2026-11-12 — feat: the quality gate covers C#
 
 **Minor — additive.** Commands, agents, skills, hooks and the MCP tools are unchanged. No migration action required.
