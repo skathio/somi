@@ -8,7 +8,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { listFiles, snapshotTree } from '../scripts/lib/git-tree.mjs';
 import { qualityGate } from '../scripts/lib/quality/gate.mjs';
-import { importsOf, resolveImport } from '../scripts/lib/quality/imports.mjs';
+import { codeOnly, importsOf, resolveImport } from '../scripts/lib/quality/imports.mjs';
 import { limitsFor, resolveForbidden } from '../scripts/lib/quality/limits.mjs';
 
 const repo = (t) => {
@@ -55,6 +55,21 @@ test('imports are read from the text: names, namespaces, type-only imports, re-e
   assert.equal(resolveImport('lodash', 'src/x.js', files), null, 'a package is not a file of the repository');
 });
 
+test('an import mentioned in a comment or a template string is not read, and a quote in a regex does not hide a real one', () => {
+  const text = [
+    "// do not require('./b.js') here",
+    '/* import { x } from "./c.js"; */',
+    'const doc = `',
+    "import { y } from './d.js';",
+    '`;',
+    "const re = /['\"]/g;",
+    "import { e } from './e.js';",
+    "const f = await import('./f.js');",
+  ].join('\n');
+  assert.deepEqual(importsOf(text).map((i) => i.spec), ['./e.js', './f.js']);
+  assert.equal(codeOnly(text).split('\n').length, text.split('\n').length, 'every line stays where it was');
+});
+
 test('a change that closes an import cycle fails, one inside a loop that was already there is advice, and a type-only one is neither', async (t) => {
   const r = repo(t);
   r.write('src/a.js', "import { b } from './b.js';\nexport const a = () => b;\n");
@@ -91,6 +106,22 @@ test('a folder a config forbids from importing another fails a change that adds 
   const odd = resolveForbidden({ global: { quality: { forbid_imports: 'src/ui' } }, project: { quality: { forbid_imports: [{ from: 'src/ui/' }] } } });
   assert.deepEqual(odd.forbid, []);
   assert.equal(odd.ignored.length, 2);
+});
+
+test('a forbidden import counts in a test file and through a tsconfig alias, and an alias closes a cycle like a relative path', async (t) => {
+  const r = repo(t);
+  r.write('tsconfig.json', '{\n  // aliases\n  "compilerOptions": { "baseUrl": ".", "paths": { "@db/*": ["src/db/*"], "@ui/*": ["src/ui/*"], }, },\n}\n');
+  r.write('src/db/store.js', 'export const store = 1;\n');
+  r.write('src/ui/view.js', 'export const view = 1;\n');
+  r.write('src/ui/view.test.js', 'export const t = 1;\n');
+  r.commit();
+  r.write('src/ui/view.js', "import { store } from '@db/store';\nexport const view = store;\n");
+  r.write('src/ui/view.test.js', "import { store } from '../db/store.js';\nexport const t = store;\n");
+  const { forbid } = resolveForbidden({ project: { quality: { forbid_imports: [{ from: 'src/ui/', to: 'src/db/' }] } } });
+  assert.deepEqual(found(await gate(r, { forbid }), 'forbidden-import').map((v) => v.file).sort(), ['src/ui/view.js', 'src/ui/view.test.js']);
+  r.commit();
+  r.write('src/db/store.js', "import { view } from '@ui/view';\nexport const store = view;\n");
+  assert.deepEqual(found(await gate(r), 'cycle').map((v) => v.file), ['src/db/store.js']);
 });
 
 test('a module others import that comes to depend on too many others is advice, and an entry point is not held to it', async (t) => {

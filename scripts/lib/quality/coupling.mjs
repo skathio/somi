@@ -41,13 +41,17 @@ function graphBefore(ctx, after, files) {
   const old = new Map([...touched, ...deleted].filter((f) => ctx.before.has(f)).map((f) => [f, ctx.before.get(f)]));
   for (const file of old.keys()) known.add(file);
   const named = (f) => renames.get(f) ?? f;
-  for (const [file, edges] of importGraph(old, known)) before.set(named(file), edges.map((e) => ({ ...e, to: named(e.to) })));
+  for (const [file, edges] of importGraph(old, known, ctx.coupling.aliases)) before.set(named(file), edges.map((e) => ({ ...e, to: named(e.to) })));
   return before;
 }
 
-function scoreEdge(ctx, { file, edge, after, before }) {
+function scoreForbidden(ctx, file, edge) {
   const rule = ctx.forbid.find((r) => file.startsWith(r.from) && edge.to.startsWith(r.to));
   if (rule) ctx.violations.push({ rule: 'forbidden-import', file, line: 1, value: 1, limit: 0, other: { file: edge.to, line: 1 }, reason: `${rule.from} may not import ${rule.to}` });
+}
+
+function scoreEdge(ctx, { file, edge, after, before }) {
+  scoreForbidden(ctx, file, edge);
   if (edge.typeOnly || ctx.isTest(edge.to)) return;
   const loop = pathBetween(after, edge.to, file);
   if (!loop) return;
@@ -90,15 +94,21 @@ function newEdges(file, after, before) {
   });
 }
 
-/** Every coupling rule on the touched product modules. texts is every JavaScript and TypeScript file of the repository after the change. */
-export function scoreCoupling(ctx, texts, renames = new Map()) {
+/**
+ * Every coupling rule on the touched modules. texts is every JavaScript and TypeScript file of the repository after the change, and
+ * aliases the root tsconfig's paths. A test is held to the folders a project forbids too; its loops and fan-out are not the product's.
+ */
+export function scoreCoupling(ctx, texts, renames = new Map(), aliases = []) {
   ctx.coupling.renames = renames;
+  ctx.coupling.aliases = aliases;
   const files = new Set(texts.keys());
-  const after = importGraph(texts, files);
+  const after = importGraph(texts, files, aliases);
   const before = graphBefore(ctx, after, files);
   const importers = importersOf(after);
-  for (const file of ctx.coupling.touched.filter((f) => after.has(f) && !ctx.isTest(f))) {
-    for (const edge of newEdges(file, after, before)) scoreEdge(ctx, { file, edge, after, before });
+  for (const file of ctx.coupling.touched.filter((f) => after.has(f))) {
+    const fresh = newEdges(file, after, before);
+    if (ctx.isTest(file)) { for (const edge of fresh) scoreForbidden(ctx, file, edge); continue; }
+    for (const edge of fresh) scoreEdge(ctx, { file, edge, after, before });
     scoreFanOut(ctx, { file, after, before, importers });
   }
   for (const { file, names } of ctx.coupling.exports) scoreExports(ctx, { file, names, importers });

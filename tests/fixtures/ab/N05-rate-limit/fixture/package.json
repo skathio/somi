@@ -1,8 +1,0 @@
-{
-  "name": "n05-rate-limit",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

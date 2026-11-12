@@ -2,19 +2,21 @@
 // so an old codebase is not failed on day one: a change may not take a function or a file over a limit, and a file may not gain more
 // complexity in one change than its per-change limit, which is what stops a function being split apart just to pass. A function that
 // was already over and got worse is reported as a warning. Copied code, stylesheet rules and newly added suppressions are checked in
-// what the change added. A change the parser cannot follow fails, because a change that cannot be measured must not pass as clean.
+// what the change added, and so are Python's leftover debugging, swallowed errors and exports nothing imports. A change the parser cannot follow fails, because a change that cannot be measured must not pass as clean.
 
 import crypto from 'node:crypto';
 import { TEST_FILE } from '../signals.mjs';
 import { addedRanges, filesAt, oldLine, renamedFiles } from '../git-tree.mjs';
 import { findClones, tokensOf } from './clones.mjs';
 import { scoreCoupling } from './coupling.mjs';
+import { aliasesFrom } from './path-aliases.mjs';
 import { exportsAdded } from './exports.mjs';
 import { cssRules } from './css.mjs';
 import { report, overlaps } from './findings.mjs';
 import { pairUnits, scoreUnit } from './functions.mjs';
 import { codeLines, unitsOf, topLevelCognitive } from './metrics.mjs';
 import { languageOf, parseSource } from './parse.mjs';
+import { scorePython, scoreUnusedExports } from './python.mjs';
 import { scoreSlop } from './slop.mjs';
 import { scoreComments, scoreLines } from './suppressions.mjs';
 import { keyOf, scoreTotals } from './totals.mjs';
@@ -28,10 +30,11 @@ const SKIPPED = /(^|\/)(node_modules|vendor|dist|build|coverage|\.next|\.somi|fi
 const MINIFIED = /\.min\.(js|css)$/;
 const GENERATED = /@generated\b|Code generated .* DO NOT EDIT/;
 // Source files in a language the gate has no grammar for. A change made only of these passes with nothing scored, so it says so.
-const UNCOVERED = /\.(py|go|rs|java|kt|kts|rb|php|swift|scala|c|cc|cpp|cxx|h|hpp|m|mm|dart|lua|ex|exs|clj|fs|vb|sh|ps1|sql|vue|svelte)$/i;
+const UNCOVERED = /\.(go|rs|java|kt|kts|rb|php|swift|scala|c|cc|cpp|cxx|h|hpp|m|mm|dart|lua|ex|exs|clj|fs|vb|sh|ps1|sql|vue|svelte)$/i;
 export const JS_FAMILY = new Set(['javascript', 'typescript', 'tsx']);
-// Copies are compared within one family of languages: JavaScript with TypeScript, and C# with C#.
-export const familyOf = (language) => (JS_FAMILY.has(language) ? 'js' : language === 'c-sharp' ? 'cs' : null);
+// Copies are compared within one family of languages: JavaScript with TypeScript, C# with C#, and Python with Python.
+const FAMILIES = { 'c-sharp': 'cs', python: 'py' };
+export const familyOf = (language) => (JS_FAMILY.has(language) ? 'js' : FAMILIES[language] ?? null);
 const MAX_REPO_FILES = 3000;
 const MAX_GRAPH_FILES = 10000;
 export const TOO_DEEP = 'nested too deeply to measure';
@@ -51,14 +54,12 @@ export const skipped = (file, text) => skipReason(file, text) !== null;
 export const total = (units, top) => units.reduce((s, u) => s + u.cognitive, 0) + top;
 const totalsOf = (tree, units) => ({ cognitive: total(units, topLevelCognitive(tree)), lines: codeLines(tree), functions: units.length });
 
-// A skip the change itself could have earned is not one in a benchmark: an agent must not pass by writing a generated marker or by
-// putting its code under examples/. A file only stays skipped there when its old version was skipped for the same reason. In a project
-// the skip holds, and is reported, so a person sees what was not scored.
-function skipFile(ctx, file, text, status) {
+// No skip holds in a benchmark: an agent must not pass by writing a generated marker, by putting its code under examples/, or by adding
+// it to a file that was skipped already. Only what the change added is new there, so the old code of such a file fails nothing. In a
+// project the skip holds, and is reported, so a person sees what was not scored.
+function skipFile(ctx, file, text) {
   const reason = skipReason(file, text);
-  if (!reason) return false;
-  const old = status.startsWith('A') ? null : ctx.before.get(file) ?? null;
-  if (ctx.mode === 'benchmark' && (old === null || skipReason(file, old) !== reason)) return false;
+  if (!reason || ctx.mode === 'benchmark') return false;
   ctx.skipped.push({ file, reason });
   return true;
 }
@@ -81,7 +82,8 @@ export async function withTree(file, text, read) {
 const NO_VERSION = Object.freeze({ units: [], keys: [], totals: { cognitive: 0, lines: 0, functions: 0 }, tokens: null });
 async function previousVersion(ctx, file, status, test) {
   const text = status.startsWith('A') ? null : ctx.before.get(file) ?? null;
-  if (text === null || skipped(file, text)) return NO_VERSION;
+  // A benchmark scores a skipped file too, so its old version is read as well: only what the change added is new.
+  if (text === null || (ctx.mode !== 'benchmark' && skipped(file, text))) return NO_VERSION;
   const lines = text.split('\n');
   return withTree(file, text, (parsed) => {
     if (!parsed?.tree) return NO_VERSION;
@@ -109,7 +111,7 @@ async function scoreCode(ctx, { file, status, added, hunks, lines, tree, languag
   if (errors.length === 0) ctx.totals.push({ file, now: totalsOf(tree, units), was: old.totals, units: keyed, own: new Set(old.keys) });
   // Copies are looked for in product code. Copied setup between tests is mostly benign (Kapser and Godfrey), and it was most of the
   // false alarms on known-good projects.
-  scoreSlop(ctx, { file, tree, added, language, test });
+  if (language === 'python') scorePython(ctx, { file, tree, added, test }); else scoreSlop(ctx, { file, tree, added, language, test });
   const family = familyOf(language);
   if (family === 'js') ctx.coupling.touched.push(file);
   if (family === 'js' && !test) ctx.coupling.exports.push({ file, names: exportsAdded(tree, added) });
@@ -123,16 +125,20 @@ async function scoreFile(ctx, file, { status, added, hunks }) {
   if (!languageOf(file)) { if (!status.startsWith('D') && UNCOVERED.test(file)) ctx.uncovered.push(file); return; }
   if (status.startsWith('D')) return recordDeleted(ctx, file, status);
   const text = ctx.after.get(file) ?? null;
-  if (text === null || skipFile(ctx, file, text, status)) return;
+  if (text === null || skipFile(ctx, file, text)) return;
   const lines = text.split('\n');
   const parsed = await parseSource(file, text);
+  let commented = false;
+  const mark = ctx.violations.length;
   try {
     if (parsed?.tree) scoreComments(ctx, file, parsed.tree, added); else scoreLines(ctx, file, lines, added);
+    commented = true;
     await scoreParsed(ctx, { file, status, added, hunks, lines, parsed });
   } catch (e) {
     // Code nested deeper than the measuring walks can follow is unanalyzed, as a parse that never finished is, rather than the gate
-    // failing to run at all.
+    // failing to run at all. Its added lines are still checked for suppressions, line by line, as when there is no tree.
     if (!(e instanceof RangeError)) throw e;
+    if (!commented) { ctx.violations.length = mark; scoreLines(ctx, file, lines, added); }
     ctx.unanalyzed.push({ file, reason: TOO_DEEP });
     report(ctx, { rule: 'unanalyzed', file, line: 1, value: 1, limit: 0, reason: TOO_DEEP });
   } finally { parsed?.tree?.delete(); }
@@ -190,12 +196,19 @@ async function restOfRepo(ctx, touched, texts) {
   return rest;
 }
 
+// The import aliases of the repository's root tsconfig.json, or jsconfig.json when it has none, as they are after the change.
+const CONFIGS = ['tsconfig.json', 'jsconfig.json'];
+function aliasesAt(ctx) {
+  const config = CONFIGS.find((f) => ctx.repoFiles.includes(f));
+  return config ? aliasesFrom(filesAt(ctx.root, ctx.to, [config]).get(config) ?? '') : [];
+}
+
 /**
  * The gate's verdict on the change from `from` to `to`: { ok, violations, warnings, exemptions, scored, unanalyzed, skipped, uncovered }.
  * Each violation is { rule, file, line, name?, value, limit, before? }.
  */
 export async function qualityGate(root, { from, to, limits, now = new Date().toISOString(), mode = 'project', repoFiles = [], cache = null, maxRepoFiles = MAX_REPO_FILES, maxGraphFiles = MAX_GRAPH_FILES, forbid = [] }) {
-  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, maxRepoFiles, maxGraphFiles, forbid, isTest, coupling: { touched: [], deleted: [], exports: [], renames: new Map() }, violations: [], warnings: [], exemptions: [], unanalyzed: [], skipped: [], uncovered: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [], totals: [], moves: { before: [], after: [] } };
+  const ctx = { root, from, to, limits, now, mode, repoFiles, cache, maxRepoFiles, maxGraphFiles, forbid, isTest, coupling: { touched: [], deleted: [], exports: [], renames: new Map() }, violations: [], warnings: [], exemptions: [], unanalyzed: [], skipped: [], uncovered: [], scored: { files: 0, functions: 0 }, cloneAfter: [], cloneBefore: [], totals: [], moves: { before: [], after: [] }, pyExports: [] };
   const changed = addedRanges(root, from, to);
   // The changed code is read up front, a batch at a time. One git process per file was most of the gate's time on a large branch.
   const code = [...changed].filter(([file]) => languageOf(file));
@@ -203,10 +216,11 @@ export async function qualityGate(root, { from, to, limits, now = new Date().toI
   ctx.after = filesAt(root, to, code.filter(([, c]) => !c.status.startsWith('D')).map(([file]) => file));
   for (const [file, change] of changed) await scoreFile(ctx, file, change);
   scoreTotals(ctx);
+  await scoreUnusedExports(ctx, { skipped: SKIPPED, maxFiles: ctx.maxRepoFiles });
   // The rest of the repository is only read when the change holds code it is compared with.
   const touched = new Set(changed.keys());
   const texts = ctx.cloneAfter.length > 0 || ctx.coupling.touched.length > 0 ? repoTexts(ctx, touched) : new Map();
-  if (ctx.coupling.touched.length > 0) scoreCoupling(ctx, texts, renamedFiles(root, from, to));
+  if (ctx.coupling.touched.length > 0) scoreCoupling(ctx, texts, renamedFiles(root, from, to), aliasesAt(ctx));
   const rest = ctx.cloneAfter.length > 0 ? await restOfRepo(ctx, touched, texts) : [];
   for (const family of new Set(ctx.cloneAfter.map((f) => f.family))) {
     const of = (files) => files.filter((f) => f.family === family);

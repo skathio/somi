@@ -8,6 +8,7 @@ import { report } from './findings.mjs';
 import { METRICS, TOO_DEEP, familyOf, exemption, isTest, scoreComments, scoreCss, skipped, total, withTree } from './gate.mjs';
 import { codeLines, topLevelCognitive, unitsOf } from './metrics.mjs';
 import { languageOf } from './parse.mjs';
+import { pythonFindings } from './python.mjs';
 
 const TOP = 20;
 const NEAR = 0.8;
@@ -35,6 +36,7 @@ function codeFindings(ctx, { file, lines, parsed }) {
   for (const measure of parsed.errors.length === 0 ? Object.keys(sums) : []) {
     if (sums[measure] > ctx.limits.file[measure]) report(ctx, { rule: `file-${measure}`, file, line: 1, value: sums[measure], limit: ctx.limits.file[measure] });
   }
+  if (parsed.language === 'python') for (const f of pythonFindings(parsed.tree, { test }).filter((x) => x.level === 'violation')) report(ctx, { rule: f.rule, file, line: f.line, name: f.name, value: 1, limit: 0 });
   const family = familyOf(parsed.language);
   if (family && !test) ctx.cloneFiles.push({ file, family, tokens: tokensOf(parsed.tree), size: ctx.limits.clones.tokens });
 }

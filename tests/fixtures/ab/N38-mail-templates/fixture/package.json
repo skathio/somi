@@ -1,8 +1,0 @@
-{
-  "name": "n38-mail-templates",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // How often the quality gate catches what it is for. In a throwaway clone of a known-good repository it adds one known smell at a time
 // to a source file, runs the gate on that change, and records whether the expected rule fired. Each smell starts from a clean HEAD.
-//   node benchmarks/quality/inject.mjs <repo> [--files 10]
+//   node benchmarks/quality/inject.mjs <repo> [--files 10] [--lang python]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -42,7 +42,25 @@ const SMELLS = {
   } },
 };
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { files: { type: 'string' }, 'clone-tokens': { type: 'string' } } });
+// The same problems in Python, and the ones Python is checked for its own way. The rules are the ones the gate reports for Python.
+const PY_SMELLS = {
+  pyramid: { rule: 'depth', apply: append('def somi_injected_pyramid(items, a, b):\n    for x in items:\n        for y in x.children:\n            if a:\n                if b:\n                    if y.ok:\n                        return y\n    return None\n') },
+  long: { rule: 'lines', apply: append(`def somi_injected_long(source):\n    out = []\n${lines(70, (i) => `    out.append(source.get("value${i}", ${i}))`)}\n    return out\n`) },
+  params: { rule: 'params', apply: append('def somi_injected_params(a, b, c, d, e, f):\n    return [x for x in (a, b, c, d, e, f) if x]\n') },
+  suppression: { rule: 'suppression', apply: append('import os as somi_injected_os  # noqa\n') },
+  split: { rule: 'file-added-cognitive', apply: append(`${lines(5, (i) => `def somi_injected_part${i}(a, b, c):\n    if a:\n        if b:\n            if c:\n                return ${i}\n    return -1\n`)}\n`) },
+  clone: { rule: 'clone', apply: (t) => t.donor && append(t.donor)(t) },
+  breakpoint: { rule: 'debugger', apply: append('def somi_injected_debug(value):\n    breakpoint()\n    return value\n') },
+  swallowed: { rule: 'swallowed-error', apply: append('def somi_injected_swallow(value):\n    try:\n        return int(value)\n    except Exception:\n        pass\n    return None\n') },
+  print: { rule: 'console', apply: append('def somi_injected_print(value):\n    print(value)\n    return value\n') },
+  unused_export: { rule: 'unused-export', apply: append('def somi_injected_unused(value):\n    return value\n') },
+};
+// A method cut out of its class keeps the class's indent, which Python will not parse, so the copy is moved to the left margin.
+const dedent = (text) => { const rows = text.split('\n'); const cut = Math.min(...rows.filter((r) => r.trim() !== '').map((r) => r.length - r.trimStart().length)); return rows.map((r) => r.slice(cut)).join('\n'); };
+
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { files: { type: 'string' }, 'clone-tokens': { type: 'string' }, lang: { type: 'string' } } });
+const python = values.lang === 'python';
+const smells = python ? PY_SMELLS : SMELLS;
 const limits = values['clone-tokens'] ? { ...DEFAULT_LIMITS, clones: { tokens: Number(values['clone-tokens']) } } : DEFAULT_LIMITS;
 const source = path.resolve(positionals[0]);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-inject-'));
@@ -50,7 +68,7 @@ const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.emai
 try {
   execFileSync('git', ['clone', '-q', '--local', '--no-hardlinks', source, dir], { stdio: 'ignore' });
   const head = git('rev-parse', 'HEAD');
-  const all = listFiles(dir, head).filter((f) => ['javascript', 'typescript'].includes(languageOf(f)) && !isTest(f) && !SKIPPED.test(f));
+  const all = listFiles(dir, head).filter((f) => (python ? ['python'] : ['javascript', 'typescript']).includes(languageOf(f)) && !isTest(f) && !SKIPPED.test(f) && !/(^|\/)(__init__|__main__|setup|conftest)\.py$/.test(f));
   const step = Math.max(1, Math.floor(all.length / Number(values.files ?? 10)));
   const targets = all.filter((_, i) => i % step === 0).slice(0, Number(values.files ?? 10));
   // The donor for the copy is the largest function elsewhere in the repository that is valid code on its own, renamed, so it is a copy
@@ -60,11 +78,11 @@ try {
     for (const f of all.filter((x) => x !== target).slice(0, 200)) {
       const text = fs.readFileSync(path.join(dir, f), 'utf8');
       const parsed = await parseSource(f, text);
-      for (const u of parsed?.tree ? unitsOf(parsed.tree, { file: f }) : []) if (u.lines >= 12 && u.lines <= 60) candidates.push({ ...u, text: text.split('\n').slice(u.start - 1, u.end).join('\n') });
+      for (const u of parsed?.tree ? unitsOf(parsed.tree, { file: f }) : []) if (u.lines >= 12 && u.lines <= 60) candidates.push({ ...u, text: dedent(text.split('\n').slice(u.start - 1, u.end).join('\n')) });
       parsed?.tree?.delete();
     }
     for (const c of candidates.sort((a, b) => b.lines - a.lines)) {
-      const alone = await parseSource('donor.ts', c.text);
+      const alone = await parseSource(python ? 'donor.py' : 'donor.ts', c.text);
       const ok = Boolean(alone?.tree) && alone.errors.length === 0;
       alone?.tree?.delete();
       if (ok) return `\n${c.text.replace(c.name, 'somiInjectedCopy')}\n`;
@@ -84,8 +102,9 @@ try {
     }
     return rows.join('\n');
   };
+  // The import graph is read for JavaScript and TypeScript only, so the smells that need it are not injected in Python.
   const texts = new Map(all.map((f) => [f, fs.readFileSync(path.join(dir, f), 'utf8')]));
-  const graph = importGraph(texts, new Set(all));
+  const graph = python ? new Map() : importGraph(texts, new Set(all));
   const namedImporters = (file) => {
     const users = [...graph.values()].flat().filter((e) => e.to === file);
     return users.length > 0 && users.every((e) => e.names !== null);
@@ -93,8 +112,8 @@ try {
   const results = [];
   for (const file of targets) {
     const donor = await donorFor(file);
-    const target = { file, dir, donor, nearDonor: await nearCopy(donor), namedImporters: namedImporters(file), imported: (graph.get(file) ?? []).find((e) => !e.typeOnly)?.to };
-    for (const [name, smell] of Object.entries(SMELLS)) {
+    const target = { file, dir, donor, nearDonor: python ? null : await nearCopy(donor), namedImporters: namedImporters(file), imported: (graph.get(file) ?? []).find((e) => !e.typeOnly)?.to };
+    for (const [name, smell] of Object.entries(smells)) {
       git('checkout', '-q', '--', '.');
       if (!smell.apply(target)) continue;
       const r = await qualityGate(dir, { from: head, to: snapshotTree(dir), limits, repoFiles: listFiles(dir, head), mode: smell.mode ?? 'project' });

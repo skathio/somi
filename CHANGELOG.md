@@ -9,7 +9,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 ### Added
 
 - **Near-miss copies, and copies in C#.** A copy with a line changed or inserted is now found, as well as an exact or renamed one. On five projects, near copies of real functions were caught 75 times out of 89, against 12 before. Copies are looked for within each language family, so C# copies are found too.
-- **Import coupling for JavaScript and TypeScript.** A change that closes a new import loop fails. A change that adds an import inside a loop that already exists is advised as `cycle-grown`. Type-only imports do not count, and a renamed file keeps its place in a loop. `quality.forbid_imports` in the config lists folders that may not import others, such as `{ "from": "src/ui/", "to": "src/db/" }`; a project may add rules but not remove the user's. Also advised: a file that imports more than 15 modules, and an added export that no file imports.
+- **Import coupling for JavaScript and TypeScript.** A change that closes a new import loop fails. A change that adds an import inside a loop that already exists is advised as `cycle-grown`. Type-only imports do not count, and a renamed file keeps its place in a loop. `quality.forbid_imports` in the config lists folders that may not import others, such as `{ "from": "src/ui/", "to": "src/db/" }`; a project may add rules but not remove the user's, and a test file is held to them too. Imports through the path aliases of the root `tsconfig.json` or `jsconfig.json` are followed like relative ones. Also advised: a file that imports more than 15 modules, and an added export that no file imports.
 - **Advice on code an agent tends to leave behind.** These are advised:
   - a catch that is empty, only logs, or only rethrows
   - a skipped test, or a test without an assertion
@@ -20,17 +20,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
   A focused test (`it.only`) and `debugger` fail the change. Neither appeared in 212 known-good commits.
 - **Options objects are counted.** A function that destructures more than 6 fields from one parameter (12 for a component) is advised, since that is a long parameter list in another form.
 - **File size advice.** A file taken over 400 lines or 40 functions, or one that gains more than 300 lines in one change, is advised. Test files are held to the complexity limits only.
+- **The quality gate reads Python.** It uses the same rules and limits as the other languages, read its own way where Python differs, and reports what a change leaves behind under the same rule names: a debugger (`breakpoint()`, `set_trace()`) and an `except` that catches everything and does nothing fail; `print()`, passing on one named exception and a public name nothing imports are advice. A switch that hides a whole file or every rule, such as `# flake8: noqa` or `# pylint: disable=all`, is never a reasoned suppression. The tree-sitter-python 0.25.0 grammar is vendored with its SHA-256 in the manifest. On eight well-kept Python projects the gate fails 13 of 159 recent commits (8.2%) and catches 780 of 800 planted problems (97.5%) ([record](benchmarks/quality/records/calibration-2026-11-12-python.md)).
 
 ### Changed
 
+- **The usage benchmark moved to a private repository.** Its harness, task corpus and pre-registration are no longer part of this repository or of a plugin install, so the hidden tests and reference solutions stay out of training data. It measures this repository at a pinned commit. Published records are now in `benchmarks/records/`, and `docs/BENCHMARK.md` still describes the method and the results.
 - **A function already over a limit may not keep growing.** It still only warns when it gets a little worse. More than 10 cognitive points or 40 lines in one change now fails.
-- **A benchmark does not trust a skip the change declared itself.** A file the change marks as generated or vendored is scored, unless its old version had the same skip. Skipped files, and changed files in a language the gate does not cover, are listed in the result.
+- **A benchmark does not trust a skip.** Every file a change touches is scored, even one marked as generated or vendored, and even one that was skipped before the change; only what the change added counts as new. In a project the skips hold. Skipped files, and changed files in a language the gate does not cover, are listed in the result.
 - **Old callbacks are not scored as new.** An anonymous function, such as a test, is paired with its old version even when the change edited its first line. On vue core this removed all 4 false failures.
 - **Tests in .NET test projects and in `test.ts` or `spec.ts` files are treated as tests.**
+- **A C# property's `get` and `set` are functions of their own,** named for the property, so a deep getter is held to the same limits as a method.
 
 ### Fixed
 
-- **The gate no longer crashes on deeply nested code.** On prettier, a stack overflow ended the whole run. Now such a file is reported as not analyzed, which fails in a benchmark, and the gate goes on.
+- **The gate no longer crashes on deeply nested code.** On prettier, a stack overflow ended the whole run. Now such a file is reported as not analyzed, which fails in a benchmark, and the gate goes on. Its added lines are still checked for suppressions, line by line.
 
 ## [5.1.1] — 2026-11-12 — fix: a staged run's security review is recorded, not rejected as missing
 

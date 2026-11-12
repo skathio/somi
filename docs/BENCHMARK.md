@@ -1,8 +1,8 @@
 # Benchmark and release decision
 
-5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** `bench.mjs run` refuses without `--go`, and the test suite spends nothing.
+5.0 ships as the default only if this benchmark says so. **Every paid run needs the maintainer's go-ahead for that specific run, with its budget and worst case.** The harness, in the private benchmark repository, refuses a paid run without `--go`, and its test suite spends nothing.
 
-**Status:** 5.0.0 ships on this result: the candidate recorded on 5.0.0-rc.3 passes `decide`. Three changes came after the recording and were not recorded in a paid run: the security signals no longer fire on a regex's own `exec` or a comment, which can only remove a review; the router reads more ticket phrasings, which changes a route only when the agent asks for one; and the security reviewer's tier is described correctly in what `somi_review` says. On Sonnet, with the low tier on Haiku as shipped (rule 7d7837121fdb, records in `benchmarks/v2/records/`), the A/A interval contains zero, and over 16 tasks and 6 draws each SoMi solved 90 of 96 against bare's 72, a difference of 0.19 (95% 0.04 to 0.33). It passed the quality gate on 96 of 96 against bare's 84 and had 62 strict successes against 46. It cost 1.28 times bare per solved task against the baseline, and 1.44 times (90% 1.22 to 1.70) the bare draws recorded beside it, both under the registered 1.5. Two changes since the last candidate account for the cost: a change gets one reviewer, the security reviewer alone when a security signal fires, and the quality gate runs when the turn ends. The security tasks cost about twice bare's and still carry the review; the others cost about what bare's do. In this recording the main session called `somi_route` in 4 of 96 draws, against 54 of 96 before. The somi agent is told to make a small, clear change itself without routing, and to route tickets, large work and unclear requests, and every task here is a small, clear change: in this recording the model followed that, and before it often routed anyway. Why it changed is not known; the host now lists 8 SoMi commands instead of 32. In the earlier recording, routed and unrouted draws solved at the same rate (46 of 54, 36 of 42), and on these tasks the route is almost always build. The result above measures the digest, the end-of-turn checks and the review, not the routing. Earlier candidates are in the git history: before the gate ran on the default path, 84 solved, 60 strict, 1.68 times bare; with it, 82 solved, 55 strict, 1.74 times bare. The ablation found the digest worth 8 solved draws in 64 at about 5% more cost, and the review 2 at about 73% more, before the review became one reviewer per change. Recordings from before 2026-11-08 ran SoMi's code or conversation on Haiku, which is not what SoMi is built for, and were withdrawn; they are in the git history.
+**Status:** 5.0.0 ships on this result: the candidate recorded on 5.0.0-rc.3 passes `decide`. Three changes came after the recording and were not recorded in a paid run: the security signals no longer fire on a regex's own `exec` or a comment, which can only remove a review; the router reads more ticket phrasings, which changes a route only when the agent asks for one; and the security reviewer's tier is described correctly in what `somi_review` says. On Sonnet, with the low tier on Haiku as shipped (rule 7d7837121fdb, records in [`benchmarks/records/`](../benchmarks/records/)), the A/A interval contains zero, and over 16 tasks and 6 draws each SoMi solved 90 of 96 against bare's 72, a difference of 0.19 (95% 0.04 to 0.33). It passed the quality gate on 96 of 96 against bare's 84 and had 62 strict successes against 46. It cost 1.28 times bare per solved task against the baseline, and 1.44 times (90% 1.22 to 1.70) the bare draws recorded beside it, both under the registered 1.5. Two changes since the last candidate account for the cost: a change gets one reviewer, the security reviewer alone when a security signal fires, and the quality gate runs when the turn ends. The security tasks cost about twice bare's and still carry the review; the others cost about what bare's do. In this recording the main session called `somi_route` in 4 of 96 draws, against 54 of 96 before. The somi agent is told to make a small, clear change itself without routing, and to route tickets, large work and unclear requests, and every task here is a small, clear change: in this recording the model followed that, and before it often routed anyway. Why it changed is not known; the host now lists 8 SoMi commands instead of 32. In the earlier recording, routed and unrouted draws solved at the same rate (46 of 54, 36 of 42), and on these tasks the route is almost always build. The result above measures the digest, the end-of-turn checks and the review, not the routing. Earlier candidates are in the git history: before the gate ran on the default path, 84 solved, 60 strict, 1.68 times bare; with it, 82 solved, 55 strict, 1.74 times bare. The ablation found the digest worth 8 solved draws in 64 at about 5% more cost, and the review 2 at about 73% more, before the review became one reviewer per change. Recordings from before 2026-11-08 ran SoMi's code or conversation on Haiku, which is not what SoMi is built for, and were withdrawn; they are in the git history.
 
 ## How SoMi is compared
 
@@ -10,7 +10,36 @@ Bare and SoMi both hold the conversation on the medium tier and do the whole job
 
 Solving the hidden tests is not all SoMi is for, so each draw is also scored on what it delivers. The tests a draw added or changed are run on the task's reference solution and on each of its recorded mutants, the same mutants task admission uses. A test suite that passes on the reference and fails on a mutant would have caught that defect. Each test case is judged on its own: a case that fails on the reference pins something the reference does differently, often a detail the task leaves open, so it is left out, and the report gives the share of cases that agree. The tests are valid when the agreeing cases kill at least 60% of the mutants. Bare is scored the same way.
 
-`--phase smoke` runs one draw per task and arm on tasks named with `--tasks`, to check that a change works before anything is recorded for real.
+`--phase smoke` checks that a change works before anything is recorded for real. It runs one draw per task and arm, on the bare and somi5 arms, on a slice of every segment of the registered set: 2 small tasks, 1 medium and 1 large. `--tasks` still names tasks for a one-off look, and `--arms` can add `somi5-hooks` or `somi5-deliver`. `--phase full` runs every registered task at its segment's number of draws.
+
+## Segments, variants and languages
+
+Every task in the pool and in the registered set carries a `segment`. The criteria are measurable, and the tests hold the medium and large ones to them:
+
+| Segment | The reference change | The starting codebase | A bare run (estimate) | Draws per task and arm in a full recording |
+|---|---|---|---|---|
+| Small | up to about 60 lines in 1 to 3 files | 150 lines or fewer | under 2 minutes | 6 |
+| Medium | about 150 to 600 lines in 4 to 12 files, with real design choices | 1,000 to 5,000 lines | 5 to 20 minutes | 4 |
+| Large | 800 lines or more in 15 files or more, over several milestones, with decisions set early | 5,000 lines or more | 30 to 90 minutes | 3 |
+
+The older tasks are all small by these criteria. L1 and L2 start from under 100 lines, so they are small tasks with a larger change. L3 is generated, uniform and under 5,000 lines, so it is retired from the pool, and the `large` and `tight` phases still name it.
+
+**Variants.** Smoke is the stratified slice above. Full is every registered task, 6 draws for a small one, 4 for a medium one and 3 for a large one, on bare and somi5. Both print the worst case first, and both run on a stub with no spend. The report has a section per segment, and the ship rule stays on the small segment. Medium and large each get their own pre-registered guard, cost per solved task plus a quality floor, before their first recording. A pilot probes one segment at a time: `plan` and `record` take `--segment small|medium|large` with `--phase pilot`, and the default is small. `--timeout-min` takes one number, or one per segment as `small=20,medium=90,large=240`.
+
+**Languages.** Small tasks are JavaScript. Medium and large tasks each cover four runners:
+
+| Runner | Language | The draw's own tests | What the draw gets |
+|---|---|---|---|
+| `node-test` | JavaScript | `node --test` | nothing beyond Node |
+| `typescript` | TypeScript | `node --test` on `.ts` files, which Node runs as they are | `tsc` on the PATH, from the pinned `typescript` dev dependency. A hidden test runs `tsc --noEmit` under the project's strict settings |
+| `python-unittest` | Python | the standard library's `unittest` | nothing installed |
+| `dotnet-test` | C# | `dotnet test` with xunit | a NuGet cache restored once in locked mode from a lockfile in the benchmark repository, mounted read-only, so no draw fetches a package |
+
+A hidden suite is a `node:test` driver in every language. It starts the candidate in a child process, gives it a list of requests for one fresh installation, and reads single values out of the results, so it tests the documented commands and not one solution's shape. For C# the driver compiles the candidate's sources into a console harness once per run, which needs no package. The tests a draw wrote are scored per runner, on the reference and on each mutant, in the draw's sandbox with an empty home.
+
+**The high tier.** Opus is refused as `--model` and as `--worker-model`. It may serve as the high tier only, named with `--high-model`, which `prepareDraw` writes as the `high` tier of the draw's own config. A draw served by a model outside the session, low and high pins is invalid. The report counts, per segment, the draws the high tier's model served, which is how often SoMi moved up. Each draw has its own `HOME` and its own config, so the maintainer's `~/.config/somi` never reaches one. Naming a high model raises the worst case sharply where SoMi moves up, and a small-segment recording with it cannot be compared with the 5.0.0 one.
+
+**The medium and large pool (2026-11-12).** Eight tasks, one per runner and segment: `MD1` to `MD4` add an audit trail with revert to a back office of several kinds of record, and `LG1` to `LG4` add workspaces to one in three milestones: isolation, plan limits and suspension, then export and import. Each passes admission with two reference solutions that differ in design: the audit is recorded by each service in one and by the stores in the other, and workspaces filter one map in one and keep a map per workspace in the other. What they are not yet: the codebases were written from one template per language, so the kinds of record in a codebase resemble each other, and the two features repeat across the four languages. None has been probed, and none has had the independent fairness review. `MD3` and `LG1` sit in `task-set.json` marked `provisional`, so that the smoke slice covers every segment; `prereg.json` does not name that file, so a registered recording refuses until the set is calibrated, selected and bound. The target mix is about 8 small, 6 medium and 4 large tasks, and the pool has 4 medium and 4 large, with no spares.
 
 ## The questions
 
@@ -40,7 +69,7 @@ The old driver's debts went with its code. The ones that still apply are now tes
 
 ## Tasks
 
-The pool is `benchmarks/v2/candidates.json`. A task needs a reference solution that passes, a second one that passes, an empty solution that fails and mutants that fail, all checked at admission. The registered set is 16 tasks: 4 a bare agent solves 1 or 2 times in 3, 4 it always narrowly misses, and 8 it always solves, at the medium tier. A registered task is never edited, only replaced.
+The pool is in the private benchmark repository. A task needs a reference solution that passes, a second one that passes, an empty solution that fails and mutants that fail, all checked at admission. The registered set is 16 tasks: 4 a bare agent solves 1 or 2 times in 3, 4 it always narrowly misses, and 8 it always solves, at the medium tier. A registered task is never edited, only replaced.
 
 The mix follows the claim, which is cost with quality held. Band tasks show change either way, near misses leave room for a review to help, and ceiling tasks show harm with little noise. It says less about whether SoMi improves outcomes than an all-band set would, and an all-band set was not reachable: about 10% of tasks landed in the band.
 
@@ -88,7 +117,7 @@ The diff facts and signals in each row are what the review thresholds can later 
 
 ### Power
 
-`node benchmarks/v2/bench.mjs power --pilot <dir>` prints these, and they are tested against hand calculations.
+In the benchmark repository, `bench.mjs power --pilot <dir>` prints these, and they are tested against hand calculations.
 
 **Cost or tokens, draws per arm** (90% interval, 80% power). Bare's within-task log spread is 0.13 to 0.18 on both pilots, so the workflow arm's spread sets the size. 4.x had a median of 0.41 and reached 1.81 in the worst scenario. 5.0's is unmeasured.
 
@@ -114,34 +143,15 @@ The diff facts and signals in each row are what the review thresholds can later 
 
 ## Running it
 
-```bash
-# Free: every live task's admission and its mutants. Takes about a minute, so it is not in the fast gate.
-node benchmarks/v2/bench.mjs admit
-node benchmarks/v2/bench.mjs routes   # scores the router on the labelled set
+The harness, the task corpus and the pre-registration live in a private repository, `skathio/somi-bench`, so the hidden tests and reference solutions stay out of training data and out of every plugin install. It measures this repository as a submodule pinned to one commit, so a recording names the exact code it measured. Its stub pipeline tests run there and spend nothing. Each published record is copied to [`benchmarks/records/`](../benchmarks/records/) here, with the task set's hash, so a claim can be checked against a fixed corpus without the corpus being public.
 
-# Paid. Each needs the maintainer's go-ahead with a budget.
-node benchmarks/v2/bench.mjs record --phase pilot --model <id> --out .somi/bench/pilot --budget-total <usd> --go
-node benchmarks/v2/bench.mjs select --pilot .somi/bench/pilot
-node benchmarks/v2/bench.mjs prereg   # refuses while a decision is open; commit prereg.json and task-set.json after it
-node benchmarks/v2/bench.mjs plan --phase aa --pilot .somi/bench/pilot   # prints the draws and the timeout from the pilot
-node benchmarks/v2/bench.mjs record --phase aa --model <id> --timeout-min <n> --out .somi/bench/aa --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase trial --model <id> --worker-model <id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/trial --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase baseline --model <id> --worker-model <id> --timeout-min <n> --out .somi/bench/baseline --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase candidate --model <id> --worker-model <id> --timeout-min <n> --out .somi/bench/candidate --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase ablation --model <id> --worker-model <id> --timeout-min <n> --out .somi/bench/ablation --budget-total <usd> --go
-node benchmarks/v2/bench.mjs record --phase large --model <id> --worker-model <id> --plugin-41 <dir> --timeout-min <n> --out .somi/bench/large --budget-total <usd> --go
-node benchmarks/v2/bench.mjs decide --aa .somi/bench/aa --baseline .somi/bench/baseline --candidate .somi/bench/candidate
-```
-
-`record` prints the worst case first, runs chunks of at most 24 draws one at a time, and writes the record and report skeleton to `benchmarks/v2/records/` once the plan finishes. A person writes the reading after reading 10 transcripts. Run the same command again to resume after a stop.
+`record` prints the worst case first, runs chunks of at most 24 draws one at a time, and writes the record and report skeleton once the plan finishes. A person writes the reading after reading 10 transcripts. Running the same command again resumes after a stop.
 
 **Stops:** `--budget-draw` per draw, `--budget-total` per recording, `--window-tokens` at 60% of the stated window, and a quiet-machine wait, because the hidden suites have time limits and contention would score the machine. Two window exhaustions in a row abandon an arm. Run nothing heavy during a recording.
 
-**Free PR smoke:** `tests/bench.test.mjs` runs the whole pipeline with a stub agent on one small real task, using the real scorer and report. It is part of `npm test`.
-
-**Ablations** are find-and-replace edits on the arm's private plugin copy, listed in `benchmarks/v2/ablations.json`. The shipped plugin has no off switch, so no project config can lower a review. A patch that stops matching stops the recording.
-
 A recording stops when the host reports either usage window at 85% or more, because the maintainer's own work shares those limits. It prints when that window resets, and running the same command again resumes. `--window-tokens` remains as a second limit on what one run may use.
+
+**Ablations** are find-and-replace edits on the arm's private plugin copy. The shipped plugin has no off switch, so no project config can lower a review. A patch that stops matching stops the recording.
 
 ## Host smoke
 
@@ -160,7 +170,7 @@ cut -c1-200 .somi/state/journal.jsonl
 
 ## Decisions
 
-`benchmarks/v2/prereg.json` is the pre-registration, and `prereg` refuses while any of its `decisions` is empty. The maintainer accepted each recommendation below. Each is cheap to reverse until a main draw exists.
+The benchmark repository's `prereg.json` is the pre-registration, and `prereg` refuses while any of its `decisions` is empty. The maintainer accepted each recommendation below. Each is cheap to reverse until a main draw exists.
 
 **The ship rule:** dollars per solved task at most 1.5x bare, the lower 95% bound at or above -5 points on hidden tests passed and -20 points on solved rate, the A/A interval containing zero, and every task paired with no arm abandoned. A draw that did not finish scores zero on hidden tests passed. This replaces the earlier rule of -5 points on solved rate, which a lane equal to bare would pass 8% of the time.
 
@@ -169,6 +179,8 @@ cut -c1-200 .somi/state/journal.jsonl
 | **Primary claim** | Better than bare on outcome; or cheaper per solved task with quality held | Cost per solved task, with a quality guard. A 10-point outcome gain needs 385 draws per arm | Free before registration, a new recording after |
 | **Quality guard** | Keep -5 on solved rate; widen the margin; or add a finer measure | Keep -5, on the share of hidden tests passed. Add a -20 guard on solved rate. -5 on solved rate passes an equal lane 8% of the time | Same |
 | **Tier for the paired run** | Medium; low with a small medium check | Medium. Low-tier effects are not shown to transfer, and on bare it was not the cheaper tier in tokens | A recording per change |
+| **High tier** | The session model; or opus | Opus is allowed as the high tier only, through `--high-model`, and moves to it are counted (2026-11-12). It is never the session model or the low tier | A recording |
+| **Segments** | One pool; or small, medium and large with entry criteria | Three segments, reported apart, 6, 4 and 3 draws. The ship rule stays on small (2026-11-12) | Free before a segment's first recording |
 | **Review tier** | All agents at the work tier; or the security reviewer at the review tier, as shipped | As shipped, so it measures what users get | A recording |
 | **Tasks and draws** | 20 tasks by 3 draws; 16 by 6 | 16 tasks by 6 draws on bare and 5.0. 4.1 is not recorded: it wrote code on the Haiku low tier (2026-11-08) | A recording, and new tasks need authoring |
 | **Ablation set** | Full 3-factor factorial; one-at-a-time; none yet | Review, digest and planning factorial, one draw per task and cell, plus always-on review as the escalation check. Sizing no longer exists | One recording |

@@ -1,8 +1,0 @@
-{
-  "name": "n10-bundle-extract",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "name": "n27-coupon-redeem",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

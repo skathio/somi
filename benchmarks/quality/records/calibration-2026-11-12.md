@@ -134,3 +134,8 @@ Both versions catch all 89 exact copies.
 ## Cost
 
 On vite, the gate over the last 30 commits took 21 s, down from 30 s for the first version. Chaining the seeds of an 80,000-token file takes 2 s.
+
+## Re-run with Python, path aliases and C# accessors
+
+Before release the gate gained Python, imports through the path aliases of a root `tsconfig.json` or `jsconfig.json`, imports read from code only (not from comments or template strings), and C# property accessors measured as functions. The false-alarm run was repeated on the same fifteen projects at the same commits: 212 commits scored and 30 fail, the same per rule as above. The injection run was not repeated for JavaScript and C#, since none of these changes can lower what it catches. Python has [its own record](calibration-2026-11-12-python.md).
+

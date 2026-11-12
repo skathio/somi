@@ -1,8 +1,0 @@
-{
-  "name": "n28-share-links",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "name": "n34-digest-schedule",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

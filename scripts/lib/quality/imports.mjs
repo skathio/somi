@@ -1,9 +1,14 @@
 // quality/imports.mjs: which files of the repository a JavaScript or TypeScript file imports, and which of their names. It reads the
 // text, not a parse tree, so the whole repository can be read in the time a gate has: static import and export-from statements,
-// require() and import() of a literal path. Only relative paths are followed, since a package or an alias is not a file of this
-// repository. Type-only imports are kept apart, because they do not exist when the code runs and so cannot make a cycle.
+// require() and import() of a literal path. Relative paths are followed, and so are the aliases a root tsconfig.json or jsconfig.json
+// declares under compilerOptions.paths and baseUrl. A package is not a file of this repository, so it is not followed. Type-only imports are kept apart, because they do not exist when the code runs and so cannot make a cycle.
 
 import path from 'node:path';
+import { codeOnly } from './js-source.mjs';
+import { aliased } from './path-aliases.mjs';
+
+export { codeOnly } from './js-source.mjs';
+export { aliasesFrom } from './path-aliases.mjs';
 
 // A statement is found by its keyword, and its clause is the text up to the next quote, at most MAX_CLAUSE characters on. The clause
 // must have the shape of an import clause, so an `export type A = {` cannot swallow the import on the line after it. Every pattern
@@ -47,7 +52,8 @@ function fromStatement(text, m) {
 }
 
 /** [{ spec, names, typeOnly }] for every import of a file's text. names is null when the import may use any name. */
-export function importsOf(text) {
+export function importsOf(source) {
+  const text = codeOnly(source);
   const out = [];
   for (const m of text.matchAll(STATEMENT)) { const found = fromStatement(text, m); if (found) out.push(found); }
   for (const m of text.matchAll(BARE)) out.push({ spec: m[1], names: [], typeOnly: false });
@@ -55,23 +61,25 @@ export function importsOf(text) {
   return out;
 }
 
-/** The repository file a relative import names, or null for a package, an alias, or a file that is not there. */
-export function resolveImport(spec, from, files) {
-  if (!spec.startsWith('.')) return null;
-  const base = path.posix.join(path.posix.dirname(from), spec);
+/** The repository file an import names: a relative path, or an alias of the root tsconfig. Null for a package or a file not there. */
+export function resolveImport(spec, from, files, aliases = []) {
+  if (!spec.startsWith('.')) return aliased(spec, aliases).map((base) => candidatesFor(base).find((c) => files.has(c))).find(Boolean) ?? null;
+  return candidatesFor(path.posix.join(path.posix.dirname(from), spec)).find((c) => files.has(c)) ?? null;
+}
+
+function candidatesFor(base) {
   const ext = path.posix.extname(base);
   const swapped = (SOURCE_FOR[ext] ?? []).map((e) => base.slice(0, -ext.length) + e);
-  const candidates = [base, ...swapped, ...EXTENSIONS.map((e) => base + e), ...EXTENSIONS.map((e) => `${base}/index${e}`)];
-  return candidates.find((c) => files.has(c)) ?? null;
+  return [base, ...swapped, ...EXTENSIONS.map((e) => base + e), ...EXTENSIONS.map((e) => `${base}/index${e}`)];
 }
 
 /** A Map from each file to its edges [{ to, names, typeOnly }], for the files whose texts are given. */
-export function importGraph(texts, files) {
+export function importGraph(texts, files, aliases = []) {
   const graph = new Map();
   for (const [file, text] of texts) {
     const edges = [];
     for (const imp of importsOf(text)) {
-      const to = resolveImport(imp.spec, file, files);
+      const to = resolveImport(imp.spec, file, files, aliases);
       if (to && to !== file) edges.push({ to, names: imp.names, typeOnly: imp.typeOnly });
     }
     graph.set(file, edges);

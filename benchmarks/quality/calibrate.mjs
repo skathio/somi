@@ -3,7 +3,7 @@
 // LOC-weighted percentiles of each (Alves, Ypma and Visser 2010: weight each function by its lines, so a few huge ones count for what
 // they hold). Then it runs the gate on the repository's recent commits, which were reviewed and merged, to see how often a known-good
 // change fails and on which rule. Writes one JSON line per repository.
-//   node benchmarks/quality/calibrate.mjs <repo> [--commits 30]
+//   node benchmarks/quality/calibrate.mjs <repo> [--commits 30] [--lang python]
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -37,11 +37,12 @@ export function weightedPercentiles(units, metric, pcts = PCTS) {
   return out;
 }
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { commits: { type: 'string' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { commits: { type: 'string' }, lang: { type: 'string' } } });
+const languages = values.lang === 'python' ? ['python'] : ['javascript', 'typescript', 'tsx', 'c-sharp'];
 const root = path.resolve(positionals[0]);
 const git = (...a) => execFileSync('git', ['-c', 'core.quotePath=false', ...a], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).trim();
 const head = git('rev-parse', 'HEAD');
-const files = listFiles(root, head).filter((f) => ['javascript', 'typescript', 'tsx', 'c-sharp'].includes(languageOf(f)) && !SKIPPED.test(f));
+const files = listFiles(root, head).filter((f) => languages.includes(languageOf(f)) && !SKIPPED.test(f));
 const byKind = { function: [], component: [], test: [] };
 let unanalyzed = 0;
 // Per product file: its lines of code, its functions, and how many of the repository's modules it imports when it runs.

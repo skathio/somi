@@ -9,10 +9,10 @@ import crypto from 'node:crypto';
 
 const NAMES = new Set(['identifier', 'property_identifier', 'shorthand_property_identifier', 'shorthand_property_identifier_pattern', 'type_identifier', 'private_property_identifier', 'statement_identifier', 'field_identifier']);
 const LITERALS = new Set(['string', 'template_string', 'number', 'regex', 'string_fragment',
-  'string_literal', 'verbatim_string_literal', 'raw_string_literal', 'interpolated_string_expression', 'integer_literal', 'real_literal', 'character_literal']);
+  'string_literal', 'verbatim_string_literal', 'raw_string_literal', 'interpolated_string_expression', 'integer_literal', 'real_literal', 'character_literal', 'integer', 'float']);
 
 const FUNCTIONS = new Set(['function_declaration', 'function_expression', 'function', 'arrow_function', 'method_definition', 'generator_function_declaration', 'generator_function',
-  'method_declaration', 'constructor_declaration', 'operator_declaration', 'conversion_operator_declaration', 'local_function_statement', 'lambda_expression', 'anonymous_method_expression', 'accessor_declaration']);
+  'method_declaration', 'constructor_declaration', 'operator_declaration', 'conversion_operator_declaration', 'local_function_statement', 'lambda_expression', 'anonymous_method_expression', 'accessor_declaration', 'function_definition']);
 
 // A seed is this many tokens. Two seeds of one copy may be this far apart, and the copy may shift by this much against the original,
 // which is a changed or inserted line or two. A copied region must still match this share of its tokens.
