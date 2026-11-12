@@ -15,6 +15,7 @@ import { report, overlaps } from './findings.mjs';
 import { pairUnits, scoreUnit } from './functions.mjs';
 import { codeLines, unitsOf, topLevelCognitive } from './metrics.mjs';
 import { languageOf, parseSource } from './parse.mjs';
+import { scoreSlop } from './slop.mjs';
 import { scoreComments, scoreLines } from './suppressions.mjs';
 import { keyOf, scoreTotals } from './totals.mjs';
 
@@ -31,13 +32,13 @@ const UNCOVERED = /\.(py|go|rs|java|kt|kts|rb|php|swift|scala|c|cc|cpp|cxx|h|hpp
 export const JS_FAMILY = new Set(['javascript', 'typescript', 'tsx']);
 // Copies are compared within one family of languages: JavaScript with TypeScript, and C# with C#.
 export const familyOf = (language) => (JS_FAMILY.has(language) ? 'js' : language === 'c-sharp' ? 'cs' : null);
-export const MAX_REPO_FILES = 3000;
+const MAX_REPO_FILES = 3000;
 export const TOO_DEEP = 'nested too deeply to measure';
 
 const touches = (unit, ranges) => overlaps(ranges, unit.start, unit.end);
 export const isTest = (file) => TEST_FILE.test(file);
 /** Why a file is not scored: its folder, a minified name, or a generated marker in its first lines. Null when it is scored. */
-export function skipReason(file, text) {
+function skipReason(file, text) {
   if (SKIPPED.test(file)) return 'folder';
   if (MINIFIED.test(file)) return 'minified';
   return GENERATED.test(text.split('\n').slice(0, 5).join('\n')) ? 'generated' : null;
@@ -103,6 +104,7 @@ async function scoreCode(ctx, { file, status, added, hunks, lines, tree, languag
   if (errors.length === 0) ctx.totals.push({ file, now: totalsOf(tree, units), was: old.totals, units: keyed, own: new Set(old.keys) });
   // Copies are looked for in product code. Copied setup between tests is mostly benign (Kapser and Godfrey), and it was most of the
   // false alarms on known-good projects.
+  scoreSlop(ctx, { file, tree, added, language, test });
   const family = familyOf(language);
   if (family === 'js') ctx.coupling.touched.push(file);
   if (family === 'js' && !test) ctx.coupling.exports.push({ file, names: exportsAdded(tree, added) });

@@ -2,9 +2,9 @@
 // yet, or whose false alarms on that code were too many to fail on, is advice: it is reported with the warnings and fails nothing.
 // Which is which is fixed here and is not configuration, so a project cannot turn a failing rule into advice.
 
-export const ADVISORY = Object.freeze(new Set([
+const ADVISORY = Object.freeze(new Set([
   'options', 'unanalyzed',
-  'empty-catch', 'log-only-catch', 'rethrow-catch', 'skipped-test', 'test-without-assertion', 'console', 'unused-binding', 'pass-through',
+  'empty-catch', 'log-only-catch', 'rethrow-catch', 'focused-test', 'skipped-test', 'debugger', 'test-without-assertion', 'console', 'unused-binding', 'pass-through',
   'unused-export', 'import-fan-out', 'cycle-grown', 'file-lines', 'file-functions', 'file-added-lines',
 ]));
 

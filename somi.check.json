@@ -177,7 +177,8 @@
     "scripts/lib/quality/gate.mjs": [
       "tests/quality.test.mjs",
       "tests/quality-rules.test.mjs",
-      "tests/quality-coupling.test.mjs"
+      "tests/quality-coupling.test.mjs",
+      "tests/quality-slop.test.mjs"
     ],
     "tests/evals/lib/task-store.mjs": [
       "tests/task-store.test.mjs",
@@ -235,6 +236,9 @@
     ],
     "scripts/lib/quality/exports.mjs": [
       "tests/quality-coupling.test.mjs"
+    ],
+    "scripts/lib/quality/slop.mjs": [
+      "tests/quality-slop.test.mjs"
     ]
   }
 }
