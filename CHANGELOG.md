@@ -58,7 +58,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [5.0.2] — 2026-11-09 — fix: a turn that changed nothing no longer runs the quality gate, and the gate is faster on large branches
 
-**Patch.** A fix, and a change to the release workflows. No migration action for users. The maintainer keeps `HOMEPAGE_DISPATCH_TOKEN` as a secret of the `homepage` environment.
+**Patch — fixes only.** No migration action required.
 
 ### Fixed
 
