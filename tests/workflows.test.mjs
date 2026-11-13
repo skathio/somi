@@ -341,6 +341,8 @@ test('once every milestone is built, the high tier hardens the whole change agai
   const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS, rules_file: '/plugin/rules/digest.md' }, answers({ plan: THREE, hardened }));
   const harden = calls.find((c) => c.label === 'harden');
   assert.equal(harden.model, 'strong', 'the expensive path spends its high tier here');
+  // On a live run the pass found a lone surrogate and a year past 9999, and missed how a browser reads the response the feature served.
+  assert.match(harden.prompt, /every sink it writes to[\s\S]*an HTTP response and its headers[\s\S]*how the side that receives it will read what it gets[\s\S]*Prefer the risks a real deployment meets over unlikely edge cases/);
   assert.match(harden.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*in the terms of SoMi's security floor[\s\S]*write a test that fails, in one new test file, then fix the code[\s\S]*Do not change what the request states, any existing test or any milestone's rule tests/);
   assert.ok(labels(calls).indexOf('harden') > labels(calls).indexOf('check 3/3') && labels(calls).indexOf('harden') < labels(calls).indexOf('review plan'), 'after the last milestone, before the final review');
   const after = calls.find((c) => c.label === 'check after hardening').prompt;
