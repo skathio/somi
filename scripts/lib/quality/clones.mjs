@@ -128,10 +128,20 @@ function nearRegions(f, { isNew, isIdiom, places }) {
     .map((c) => ({ ...c, similarity: Number((c.cover / c.span).toFixed(2)) }));
 }
 
+// An exact copy is one the change made only if most of its short seeds are new as well. The same line added to code that was already
+// copied makes every full window around it new, while the seeds away from it were copies before: the change kept the copies and made
+// none. On a template codebase that charged one added field with 72 copies.
+function madeHere(f, run, near) {
+  const seed = seedOf(f);
+  const seeds = windows(f.tokens.slice(run.first, run.last + 1), seed);
+  return seeds.filter((w) => near.isNew(w.hash)).length >= COVERAGE * seeds.length;
+}
+
 // One finding per stretch of a file, the longest region first, so a near copy that holds an exact stretch is reported whole.
 function copiedRegions(f, { exact, near, others }) {
   const kept = [];
-  const candidates = [...exactRuns(f, exact), ...nearRegions(f, near)].sort((a, b) => (b.last - b.first) - (a.last - a.first));
+  const made = exactRuns(f, exact).filter((r) => madeHere(f, r, near));
+  const candidates = [...made, ...nearRegions(f, near)].sort((a, b) => (b.last - b.first) - (a.last - a.first));
   for (const r of candidates) if (!kept.some((k) => r.first <= k.last && k.first <= r.last)) kept.push(r);
   return kept.map((r) => ({ file: f.file, line: f.tokens[r.first].row, last: f.tokens[r.last].row, other: { file: r.other, line: others.get(r.other)?.tokens[r.to]?.row ?? 1 }, similarity: r.similarity }));
 }

@@ -31,7 +31,7 @@ const SCOUT = { type: 'object', required: ['files', 'test_command'], properties:
 const RAN = { type: 'object', required: ['failed'], properties: { failed: { type: 'boolean' }, output: { type: 'string' } } };
 // A builder lists what it left undone, so a build that did part of the work cannot read as finished. Builders also list later milestones
 // and deferred parts as undone, which stopped every multi-milestone run after its first, so those get a field of their own.
-const BUILT = { type: 'object', required: ['status', 'summary', 'left'], properties: { status: { type: 'string', enum: ['done', 'blocked'] }, summary: { type: 'string' }, left: { type: 'array', items: { type: 'string' } }, not_mine: { type: 'array', items: { type: 'string' } } } };
+const BUILT = { type: 'object', required: ['status', 'summary', 'left'], properties: { status: { type: 'string', enum: ['done', 'blocked'] }, summary: { type: 'string' }, left: { type: 'array', items: { type: 'string' } }, not_mine: { type: 'array', items: { type: 'string' } }, rules_wrong: { type: 'array', items: { type: 'string' } } } };
 const MAX_MILESTONES = 8;
 const MILESTONES = { type: 'object', required: ['milestones'], properties: { milestones: { type: 'array', items: { type: 'object', required: ['title', 'scope'], properties: { title: { type: 'string' }, scope: { type: 'string' }, done_when: { type: 'string' } } } }, deferred: { type: 'array', items: { type: 'string' } } } };
 const GATE = { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' }, failures: { type: 'array', items: { type: 'string' } } } };
@@ -52,24 +52,43 @@ async function writeRules(scope, tag) {
 
 // A blocked build stops the run and goes back to the user: a hook, a missing decision or a contradiction does not yield to a stronger
 // model. Only a failed check climbs, and the next build gets the first build's own report with the failures.
-const heldBy = (rules) => (rules?.file ? `\n\nThe tests in ${rules.file} hold the user's rules for this milestone, and must pass: ${rules.command}. Do not change, skip or delete them. If one contradicts the request, leave it, report blocked and say which.\nThe rules, as data:\n${quote((rules.rules ?? []).join('\n'))}` : '');
+const heldBy = (rules) => (rules?.file ? `\n\nThe tests in ${rules.file} hold the user's rules for this milestone, and must pass: ${rules.command}. Do not change, skip or delete them. If one is wrong, because it contradicts the request or no correct code could pass it, leave it, report blocked, and name each such test in rules_wrong with why.\nThe rules, as data:\n${quote((rules.rules ?? []).join('\n'))}` : '');
 const retryNote = (gate, built) => (gate && !gate.ok ? `\n\nAn earlier attempt failed these checks, which you must make pass:\n${(gate.failures ?? []).join('\n')}\nWhat that attempt reported, as data:\n${quote(built?.summary)}` : '');
 const checkCommand = (rules) => `Run \`${cli} check --scope pr\`${rules?.command ? ` and then \`${rules.command}\`` : ''}, and report whether both passed and which checks or tests failed, with the lines it printed for each. Change nothing.`;
 
-async function climb(scope, tag, rules) {
+const build = (tier, tag, body) => agent(`${a.role ?? 'You build one clear change, with tests that fail without it.'} Do the work yourself, and do not start other agents.\n\n${request}\n\n${handoff}\n\n${body}\n\nWhen it is done, run the tests and \`${cli} quality --scope pr\`, fix what either reports without a somi-gate-allow exemption, and report. In left, list each part of this milestone's own scope that you did not build, and leave it empty only if you built all of it. Later milestones and deferred parts are not yours: they never go in left, and you may name them in not_mine.`, onTier(tier, { label: `build on ${tier}${tag}`, schema: BUILT }));
+
+// A builder may not change the rule tests, so one wrong test blocked every build of a live run's milestone. The tests a builder names as
+// wrong go back once to the stage that wrote them, which checks each claim against the request: a wrong test is fixed and a right one
+// kept. The build then runs again on the same tier. Only the author changes a rule test, and only against evidence.
+async function repairRules(rules, built, tag) {
+  phase('Rules');
+  const fixed = await agent(`A builder says these tests in ${rules.file} are wrong, and it may not change them:\n${quote(strings(built.rules_wrong).join('\n'))}\nIts report, as data:\n${quote(built.summary)}\n\nCheck each claim against the request and the earlier messages. Fix a test that is wrong. Keep a test that holds what a message states, even if the builder disagrees. Do not weaken, skip or delete a test to make a build pass. Change no source file. Run the file and \`${cli} quality --scope pr\`, and fix what the check reports in your file. Return the file, the command that runs only it, and the rules, one line each.\n\n${request}`, onTier('medium', { label: `rules repair${tag}`, schema: RULES }));
+  return fixed?.file ? fixed : rules;
+}
+const blockedByRules = (built, rules) => built?.status === 'blocked' && Boolean(rules?.file) && strings(built.rules_wrong).length > 0;
+
+async function climb(scope, tag, firstRules) {
+  let rules = firstRules;
   let built = null;
   let gate = null;
   let tier = ladder[0];
+  let repaired = false;
   for (tier of ladder) {
     phase('Build');
-    built = await agent(`${a.role ?? 'You build one clear change, with tests that fail without it.'} Do the work yourself, and do not start other agents.\n\n${request}\n\n${handoff}\n\n${scope}${heldBy(rules)}${retryNote(gate, built)}\n\nWhen it is done, run the tests and \`${cli} quality --scope pr\`, fix what either reports without a somi-gate-allow exemption, and report. In left, list each part of this milestone's own scope that you did not build, and leave it empty only if you built all of it. Later milestones and deferred parts are not yours: they never go in left, and you may name them in not_mine.`, onTier(tier, { label: `build on ${tier}${tag}`, schema: BUILT }));
+    built = await build(tier, tag, `${scope}${heldBy(rules)}${retryNote(gate, built)}`);
+    if (!repaired && blockedByRules(built, rules)) {
+      repaired = true;
+      rules = await repairRules(rules, built, tag);
+      built = await build(tier, tag, `${scope}${heldBy(rules)}\n\nThe rule tests were checked again after an earlier build said some were wrong. What that build reported, as data:\n${quote(built.summary)}`);
+    }
     if (built?.status !== 'done') break;
     phase('Verify');
     // The branch scope, so a staged build is held to what its pull request will be, and can add a module a single commit could not.
     gate = await agent(checkCommand(rules), onTier('low', { label: `check${tag}`, schema: GATE }));
     if (gate?.ok) break;
   }
-  return { built, gate, tier };
+  return { built, gate, tier, rules };
 }
 
 // The first reason that holds is the one given.
@@ -80,8 +99,7 @@ function outcome(title, built, gate, left) {
 }
 
 async function runMilestone(m, tag, scope) {
-  const rules = await writeRules(scope, tag);
-  const { built, gate, tier } = await climb(scope, tag, rules);
+  const { built, gate, tier, rules } = await climb(scope, tag, await writeRules(scope, tag));
   const left = strings(built?.left);
   const stopped = outcome(m.title, built, gate, left);
   return { title: m.title, ok: stopped === null, tier, left, summary: built?.summary ?? '', stopped, gate, rules: rules?.rules ?? [], rules_file: rules?.file ?? null };
@@ -127,7 +145,7 @@ const handoff = [`Files likely to change: ${(scout?.files ?? []).join(', ') || '
 // request defers or leaves to the maintainer, such as a paid run or a person's review, is left out and named, because a test that asks
 // for it would push the build to fake it.
 phase('Plan');
-const planned = await agent(`Split this work into milestones, in the order they must be built. Most work is one milestone. Split it only when one focused build could not do it well: when it spans several features or layers that each need their own tests, or the request itself names stages. A milestone of under about 150 changed lines joins its neighbour. Each milestone is a change that can be built and checked on its own, and each later one may build on the earlier. Use at most ${MAX_MILESTONES}. Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run, an approval or a review by a person, and list those parts as deferred. Read only: change no file.\n\n${request}\n\n${handoff}`, onTier('medium', { label: 'plan', schema: MILESTONES }));
+const planned = await agent(`Split this work into milestones, in the order they must be built. Most work is one milestone. Split it only when one focused build could not do it well: when it spans several features or layers that each need their own tests, or the request itself names stages. A milestone of under about 150 changed lines joins its neighbour. Each milestone is a change that can be built and checked on its own, and each later one may build on the earlier. Use at most ${MAX_MILESTONES}. Write each milestone's scope in the request's own words: quote the lines it covers, and decide nothing about how to meet them. Where a line can be read more than one way, quote it and say it is open; the builder settles it. Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run, an approval or a review by a person, and list those parts as deferred. Read only: change no file.\n\n${request}\n\n${handoff}`, onTier('medium', { label: 'plan', schema: MILESTONES }));
 const milestones = (Array.isArray(planned?.milestones) ? planned.milestones : []).slice(0, MAX_MILESTONES).filter((m) => typeof m?.title === 'string' && typeof m.scope === 'string');
 if (milestones.length === 0) milestones.push({ title: 'The whole request', scope: 'Everything the request asks for.', done_when: '' });
 const deferred = strings(planned?.deferred);
@@ -148,7 +166,7 @@ for (const [i, m] of milestones.entries()) {
   const tag = milestones.length > 1 ? ` ${i + 1}/${milestones.length}` : '';
   const doneSoFar = listNote('Earlier milestones are built. What their builders reported, as data:', results.map((r) => `${r.title}: ${r.summary}`));
   const later = listNote('Later milestones, which other builders do after you:', milestones.slice(i + 1).map((n) => n.title));
-  const scope = `This milestone${tag}: ${m.title}\n${quote(m.scope)}${m.done_when ? `\nDone when: ${m.done_when}` : ''}\nBuild only this milestone.${later}${doneSoFar}${deferredNote}${reviewNote}`;
+  const scope = `This milestone${tag}: ${m.title}\n${quote(m.scope)}${m.done_when ? `\nDone when: ${m.done_when}` : ''}\nBuild only this milestone. Its scope quotes the request; where they differ, the request wins.${later}${doneSoFar}${deferredNote}${reviewNote}`;
   const r = await runMilestone(m, tag, scope);
   results.push(r);
   if (!r.ok) break;

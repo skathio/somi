@@ -29,17 +29,22 @@ export function verifiedFile(name, dir = DIR) {
   return bytes;
 }
 
+// The runtime and each grammar are loaded once, as promises, so two parses that start together share one load. Each used to start its
+// own, and the second start of the runtime broke the grammar the first had loaded: "Incompatible language version 0".
+async function startRuntime() {
+  verifiedFile('web-tree-sitter.js');
+  const wasmBinary = verifiedFile('web-tree-sitter.wasm');
+  const mod = await import(pathToFileURL(path.join(DIR, 'web-tree-sitter.js')).href);
+  await mod.Parser.init({ wasmBinary });
+  return mod;
+}
+
 async function load(language) {
-  if (!runtime) {
-    verifiedFile('web-tree-sitter.js');
-    const wasmBinary = verifiedFile('web-tree-sitter.wasm');
-    const mod = await import(pathToFileURL(path.join(DIR, 'web-tree-sitter.js')).href);
-    await mod.Parser.init({ wasmBinary });
-    runtime = mod;
-  }
-  if (!grammars.has(language)) grammars.set(language, await runtime.Language.load(verifiedFile(`tree-sitter-${language}.wasm`)));
-  const parser = new runtime.Parser();
-  parser.setLanguage(grammars.get(language));
+  runtime ??= startRuntime();
+  const mod = await runtime;
+  if (!grammars.has(language)) grammars.set(language, mod.Language.load(verifiedFile(`tree-sitter-${language}.wasm`)));
+  const parser = new mod.Parser();
+  parser.setLanguage(await grammars.get(language));
   return parser;
 }
 

@@ -292,3 +292,35 @@ test('later milestones and deferred parts named by a builder do not stop the run
   assert.match(first.prompt, /In left, list each part of this milestone's own scope[\s\S]*Later milestones and deferred parts are not yours: they never go in left/);
   assert.doesNotMatch(calls.find((c) => c.label === 'build on medium 3/3').prompt, /Later milestones, which/, 'the last has none after it');
 });
+
+test('a rule test a builder names as wrong goes back once to the rules stage, and the build runs again on the same tier', async () => {
+  // On a live run a rule test called make(app, undefined), which a default parameter turns into a valid id: no build could pass it.
+  const built = (n) => (n === 0
+    ? { status: 'blocked', summary: 'make(app, undefined) creates acme: no code can refuse it.', left: [], rules_wrong: ['create refuses a wrong id: undefined becomes the default'] }
+    : DONE);
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add workspaces', models: MODELS }, answers({ built }));
+  assert.deepEqual(labels(calls).filter((l) => /^(rules|build|check)/.test(l)), ['rules', 'build on medium', 'rules repair', 'build on medium', 'check']);
+  const repair = calls.find((c) => c.label === 'rules repair');
+  assert.equal(repair.model, 'everyday');
+  assert.match(repair.prompt, /> create refuses a wrong id: undefined becomes the default[\s\S]*Keep a test that holds what a message states, even if the builder disagrees\. Do not weaken, skip or delete a test/);
+  assert.match(calls.filter((c) => c.label === 'build on medium')[1].prompt, /checked again after an earlier build said some were wrong[\s\S]*> make\(app, undefined\)/);
+  assert.equal(value.status, 'done');
+});
+
+test('a rules repair happens once, and a build blocked for any other reason still stops at once', async () => {
+  const always = () => ({ status: 'blocked', summary: 'still wrong', left: [], rules_wrong: ['t'] });
+  const twice = await load('deliver-stages').run({ request: 'Add workspaces', models: MODELS }, answers({ built: always }));
+  assert.equal(labels(twice.calls).filter((l) => l === 'rules repair').length, 1);
+  assert.equal(twice.value.status, 'needs-attention');
+  const hook = () => ({ status: 'blocked', summary: 'The dependency hook refused the install.', left: [] });
+  const other = await load('deliver-stages').run({ request: 'Add workspaces', models: MODELS }, answers({ built: hook }));
+  assert.ok(!labels(other.calls).includes('rules repair'));
+});
+
+test('a milestone quotes the request and decides nothing, and the request wins over its summary', async () => {
+  // On three live runs a plan stage read "every cell must show what the data says" as "never neutralise a formula", and every later
+  // stage followed it: the paraphrase became the rule, where bare read the line the other way and passed.
+  const { calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE }));
+  assert.match(calls.find((c) => c.label === 'plan').prompt, /quote the lines it covers, and decide nothing about how to meet them\. Where a line can be read more than one way, quote it and say it is open/);
+  assert.match(calls.find((c) => c.label === 'build on medium 1/3').prompt, /Its scope quotes the request; where they differ, the request wins\./);
+});

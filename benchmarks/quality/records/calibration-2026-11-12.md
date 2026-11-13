@@ -139,3 +139,16 @@ On vite, the gate over the last 30 commits took 21 s, down from 30 s for the fir
 
 Before release the gate gained Python, imports through the path aliases of a root `tsconfig.json` or `jsconfig.json`, imports read from code only (not from comments or template strings), and C# property accessors measured as functions. The false-alarm run was repeated on the same fifteen projects at the same commits: 212 commits scored and 30 fail, the same per rule as above. The injection run was not repeated for JavaScript and C#, since none of these changes can lower what it catches. Python has [its own record](calibration-2026-11-12-python.md).
 
+
+## Re-run with copies kept by an edit (2026-11-13)
+
+On a benchmark task built from one template, a change that added the same field to 24 copies of one service was failed for 72 copies: every full window around the added line was new, though the copies were there before. An exact copy now counts only when most of its short seeds are new as well, which a copy the change writes always meets. Near copies were already judged by their seeds.
+
+On the same fifteen projects at the same commits:
+
+| | Before | After |
+|---|---|---|
+| Known-good commits that fail | 30 of 212 | 29 of 212 |
+| Of those, on `clone` | 10 | 6 |
+
+Planted copies were measured with today's injector for both rules, from the same files: 107 of 117 exact copies and 99 of 117 near copies were caught by each, and the missed cases are the same. Most misses are files the gate does not analyze (immer's performance scripts, a date-fns codemod) and six in express. The figures of 109 and 108 above were measured before the injector was changed to copy product code only, so they are not comparable with these.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // How often the quality gate catches what it is for. In a throwaway clone of a known-good repository it adds one known smell at a time
 // to a source file, runs the gate on that change, and records whether the expected rule fired. Each smell starts from a clean HEAD.
-//   node benchmarks/quality/inject.mjs <repo> [--files 10] [--lang python]
+//   node benchmarks/quality/inject.mjs <repo> [--files 10] [--lang python] [--only clone,near_clone]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -58,9 +58,11 @@ const PY_SMELLS = {
 // A method cut out of its class keeps the class's indent, which Python will not parse, so the copy is moved to the left margin.
 const dedent = (text) => { const rows = text.split('\n'); const cut = Math.min(...rows.filter((r) => r.trim() !== '').map((r) => r.length - r.trimStart().length)); return rows.map((r) => r.slice(cut)).join('\n'); };
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { files: { type: 'string' }, 'clone-tokens': { type: 'string' }, lang: { type: 'string' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { files: { type: 'string' }, 'clone-tokens': { type: 'string' }, lang: { type: 'string' }, only: { type: 'string' } } });
 const python = values.lang === 'python';
-const smells = python ? PY_SMELLS : SMELLS;
+// --only re-measures the smells a change to one rule can affect, without the hours the rest take.
+const only = values.only ? new Set(values.only.split(',')) : null;
+const smells = Object.fromEntries(Object.entries(python ? PY_SMELLS : SMELLS).filter(([name]) => !only || only.has(name)));
 const limits = values['clone-tokens'] ? { ...DEFAULT_LIMITS, clones: { tokens: Number(values['clone-tokens']) } } : DEFAULT_LIMITS;
 const source = path.resolve(positionals[0]);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somi-inject-'));
