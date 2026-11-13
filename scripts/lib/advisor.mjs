@@ -186,10 +186,13 @@ const DELIVER_TYPED = /^\/(?:somi:)?somi-deliver\s+\S/;
 export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: flagged } = {}) {
   if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
   const said = readPrompt(ctx.root, ctx.env);
-  const typed = DELIVER_TYPED.test(String(said ?? '').trim());
+  // Only the call that carries the typed request: a later call in the same turn, such as the fix the session makes after the workflow,
+  // is new work and must not start the paid workflow again.
+  const typedText = DELIVER_TYPED.test(String(said ?? '').trim()) ? withoutCommand(said) : '';
+  const typed = Boolean(typedText) && (!asked || String(asked).includes(typedText.slice(0, 60)) || typedText.includes(String(asked).slice(0, 60)));
   // An explicit false is the way out: a session that cannot start the workflow asks again with staged false and gets the steps.
   const staged = flagged === undefined && typed ? true : flagged;
-  const request = asked || (typed ? withoutCommand(said) : asked);
+  const request = asked || (typed ? typedText : asked);
   const { chosen, alternatives } = chooseRoute({ request, ticket, hint });
   const direct = directAnswer(ctx, chosen, staged);
   if (direct) return direct;
