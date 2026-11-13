@@ -183,16 +183,22 @@ function placedFields(ctx, at, { role, skills, ledger }) {
 // Text must follow the command: a bare /somi-deliver is not a request, and starting the paid workflow on it would build nothing useful.
 const DELIVER_TYPED = /^\/(?:somi:)?somi-deliver\s+\S/;
 
+// The text after a typed /somi-deliver, or '' when the message is not one.
+const typedRequest = (said) => (DELIVER_TYPED.test(String(said ?? '').trim()) ? withoutCommand(said) : '');
+// Only the call that carries the typed request starts the workflow: a later call in the same turn, such as the fix the session makes after
+// it, is new work and must not start the paid workflow again. An explicit false is the way out: a session that cannot start the workflow
+// asks again with staged false and gets the steps.
+function typedDeliver(said, asked, flagged) {
+  const text = typedRequest(said);
+  const same = !asked || String(asked).includes(text.slice(0, 60)) || text.includes(String(asked).slice(0, 60));
+  const typed = Boolean(text) && same;
+  return { staged: flagged === undefined && typed ? true : flagged, request: asked || (typed ? text : asked) };
+}
+
 export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: flagged } = {}) {
   if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
   const said = readPrompt(ctx.root, ctx.env);
-  // Only the call that carries the typed request: a later call in the same turn, such as the fix the session makes after the workflow,
-  // is new work and must not start the paid workflow again.
-  const typedText = DELIVER_TYPED.test(String(said ?? '').trim()) ? withoutCommand(said) : '';
-  const typed = Boolean(typedText) && (!asked || String(asked).includes(typedText.slice(0, 60)) || typedText.includes(String(asked).slice(0, 60)));
-  // An explicit false is the way out: a session that cannot start the workflow asks again with staged false and gets the steps.
-  const staged = flagged === undefined && typed ? true : flagged;
-  const request = asked || (typed ? typedText : asked);
+  const { staged, request } = typedDeliver(said, asked, flagged);
   const { chosen, alternatives } = chooseRoute({ request, ticket, hint });
   const direct = directAnswer(ctx, chosen, staged);
   if (direct) return direct;
