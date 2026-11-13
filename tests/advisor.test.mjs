@@ -163,7 +163,7 @@ test('work the user sends with /somi-deliver runs as the staged workflow on eith
   assert.ok(fs.existsSync(r.workflow.args.rules_file) && r.workflow.args.rules_file.endsWith(path.join('rules', 'digest.md')), 'a stage gets no session-start hook, so the workflow names the rules file');
   assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
   assert.equal(r.workflow.args.request, 'Add an export of all orders as CSV');
-  assert.match(r.advice, /typed \/somi-deliver[\s\S]*Workflow tool[\s\S]*without staged for the steps/);
+  assert.match(r.advice, /typed \/somi-deliver[\s\S]*Workflow tool[\s\S]*staged false for the steps/);
   assert.equal(r.steps, undefined, 'the steps would repeat the workflow\'s payload');
   assert.ok(advise(ctx, { request: 'Add an export of all orders as CSV' }).steps, 'asked again without staged, they come back');
   assert.match(r.advice, /no script and no authoring guide/);
@@ -639,7 +639,10 @@ test('a typed /somi-deliver starts the workflow even when somi_route is called w
   const bare = advise(makeCtx(dir), {});
   assert.equal(bare.workflow?.name, 'somi:deliver-stages');
   assert.match(bare.workflow.args.request, /^Add a helper that doubles a number\./, 'the typed text is the request when none was passed');
-  assert.equal(advise(makeCtx(dir), { request: BIG, staged: false }).workflow?.name, 'somi:deliver-stages', 'what the user typed wins');
+  const fallback = advise(makeCtx(dir), { request: BIG, staged: false });
+  assert.equal(fallback.workflow, undefined, 'a session that cannot start the workflow asks again with staged false');
+  assert.ok(fallback.steps?.length > 0, 'and gets the steps');
+  assert.match(bare.advice, /call somi_route again with the same request and staged false for the steps/);
   savePrompt(dir, `/somi-deliver ${BIG}`, env);
   assert.equal(advise(makeCtx(dir), { request: BIG }).workflow?.name, 'somi:deliver-stages', 'the plain command name on Copilot');
   savePrompt(dir, `Please explain /somi-deliver. ${BIG}`, env);
