@@ -631,3 +631,17 @@ test('on Copilot, staged advice names the reload that registers the workflow wit
   const r = advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG, staged: true });
   assert.match(r.advice, /reload (the )?extensions[\s\S]*\/clear/i);
 });
+
+test('a typed /somi-deliver starts the workflow even when somi_route is called without staged or a request', (t) => {
+  // On a benchmark draw the session called somi_route with nothing, got plain steps and built inline, which read as a staged result.
+  const dir = makeRepo(t);
+  savePrompt(dir, `/somi:somi-deliver ${BIG}`, env);
+  const bare = advise(makeCtx(dir), {});
+  assert.equal(bare.workflow?.name, 'somi:deliver-stages');
+  assert.match(bare.workflow.args.request, /^Add a helper that doubles a number\./, 'the typed text is the request when none was passed');
+  assert.equal(advise(makeCtx(dir), { request: BIG, staged: false }).workflow?.name, 'somi:deliver-stages', 'what the user typed wins');
+  savePrompt(dir, `/somi-deliver ${BIG}`, env);
+  assert.equal(advise(makeCtx(dir), { request: BIG }).workflow?.name, 'somi:deliver-stages', 'the plain command name on Copilot');
+  savePrompt(dir, `Please explain /somi-deliver. ${BIG}`, env);
+  assert.equal(advise(makeCtx(dir), { request: BIG }).workflow, undefined, 'only a message that starts with the command');
+});

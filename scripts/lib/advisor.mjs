@@ -118,7 +118,7 @@ const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // Everything here is done from the chat: the agent runs SoMi's own commands by their full path, because no somi command is on the PATH.
 const QUALITY_CONFIG = `Relay this briefly. To change a quality limit, write it under quality in the file named by global_config, or under quality.commit or quality.pr for one scope, never in the project's .somi/config.json, where only a tighter value counts. Before you write a value looser than the current limit, ask the user and wait for a yes. quality_timeout_seconds is how long the gate may run before it counts as failed: to change it, write quality.timeout_seconds there, a whole number from ${QUALITY_TIMEOUT.min} to ${QUALITY_TIMEOUT.max}.`;
 const SETUP = (host) => `To check SoMi's setup, run \`${somiCommand('doctor')}\` and relay what it finds. After tiers.main changes, run \`${somiCommand('setup')}\`. To connect another plugin to a step, run \`${somiCommand('slot <step> <plugin:component>')}\` with the step and component the user names, and \`${somiCommand('slot --list')}\` to show what is connected. To start sessions with SoMi's agent on its tier's model, \`${somiCommand('launch claude')}\` or \`${somiCommand('launch copilot')}\` does it, with anything after it passed to the host: give the user that command for an alias of their own.${host === 'claude' ? '' : ' SoMi registers the staged workflow, /somi-deliver, with Copilot for every project at session start, so there is nothing to run for it: a session that started before that gets it after /clear, and Copilot runs it only in experimental mode.'}`;
-const STAGED_ADVICE = (host) => `The user typed /somi-deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode. If Copilot says no workflow is registered by that name, this session started before SoMi registered it: reload extensions with the extensions reload tool, which registers it without losing the conversation, then start the workflow again; failing that, tell the user that /clear or a new session loads it. /experimental must be on'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing its review_tree as tree. If reviews_missing names a reviewer, call somi_review with no reviews, run the reviewers it names, and record those reports with the workflow's; never record a set without them. Then tell the user its summary and status in a few lines, and name what it lists as stopped, not_started, deferred or left in a milestone. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
+const STAGED_ADVICE = (host) => `The user typed /somi-deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode. If Copilot says no workflow is registered by that name, this session started before SoMi registered it: reload extensions with the extensions reload tool, which registers it without losing the conversation, then start the workflow again; failing that, tell the user that /clear or a new session loads it. /experimental must be on'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing its review_tree as tree. If reviews_missing names a reviewer, call somi_review with no reviews, run the reviewers it names, and record those reports with the workflow's; never record a set without them. Then tell the user its status and stopped in a few lines, and name what it lists as needs_decision, open_findings, not_started, deferred, uncovered_lines or left in a milestone: a needs_decision entry is the user's call, and an open finding is for you to fix before saying it is done. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
 const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi-deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
 // On a large benchmark task, bare and SoMi alike left the request's last feature unbuilt on most draws and said the work was done. Each
 // requirement is checked off against the request before the end, not against the agent's memory of it.
@@ -178,14 +178,21 @@ function placedFields(ctx, at, { role, skills, ledger }) {
   return { where: 'here', worker: null, role, skills: skills.length > 0 ? skills : undefined, ledger };
 }
 
-export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
+// The user typed /somi-deliver: a session that calls somi_route without staged, or with no request, still gets the workflow. On one
+// benchmark draw the session called somi_route with nothing, got plain steps and built inline, which read as a staged result.
+const DELIVER_TYPED = /^\/(?:somi:)?somi-deliver(?:\s|$)/;
+
+export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: flagged } = {}) {
   if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
+  const said = readPrompt(ctx.root, ctx.env);
+  const typed = DELIVER_TYPED.test(String(said ?? '').trim());
+  const staged = flagged === true || typed ? true : flagged;
+  const request = asked || (typed ? withoutCommand(said) : asked);
   const { chosen, alternatives } = chooseRoute({ request, ticket, hint });
   const direct = directAnswer(ctx, chosen, staged);
   if (direct) return direct;
   const wf = WORKFLOWS[chosen.route];
   const at = placement(ctx, wf, { request, sensitive, staged });
-  const said = readPrompt(ctx.root, ctx.env);
   const earlier = earlierPrompts(ctx.root, ctx.env);
   const skills = (wf.skills ?? []).map((s) => libraryPath('skills', s));
   const ledger = readLedger(ctx.root, ctx.env);
