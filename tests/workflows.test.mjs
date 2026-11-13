@@ -199,7 +199,7 @@ test('the user\'s rules are written as tests before the build, which must pass t
   const { value, calls } = await load('deliver-stages').run({ request: 'Add sharing', models: MODELS }, answers({ gateOk: [false, false, true] }));
   const labels = calls.map((c) => c.label);
   assert.ok(labels.indexOf('rules') > labels.indexOf('scout') && labels.indexOf('rules') < labels.indexOf('build on medium'), 'after the scout, before the build');
-  assert.match(calls.find((c) => c.label === 'rules').prompt, /including a rule set earlier that extends to code added now[\s\S]*Test only what a message states\. Where the messages leave a detail open[\s\S]*write no test for it[\s\S]*Change no source file and no existing test/);
+  assert.match(calls.find((c) => c.label === 'rules').prompt, /including a rule set earlier that extends to code added now[\s\S]*Test only what a message or a quoted convention states\. Where the messages leave a detail open[\s\S]*write no test for it[\s\S]*Change no source file and no existing test/);
   for (const build of calls.filter((c) => /^(build|repair) on/.test(c.label))) {
     assert.match(build.prompt, /The tests in test\/rules\.test\.mjs hold the user's rules[\s\S]*Do not change, skip or delete them[\s\S]*> another organisation's document is not_found/);
   }
@@ -466,6 +466,25 @@ test('the scout reports facts about the code and the size of the change, and the
   const { calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, sized);
   assert.match(calls.find((c) => c.label === 'scout').prompt, /Notes are facts about the code only[\s\S]*leave the reading of the request to the stages after you/);
   assert.match(calls.find((c) => c.label === 'plan').prompt, /About 60 lines to add or change, in files holding 900 lines\./);
+});
+
+test('the project\'s conventions the scout quotes reach the rules, the build and the hardening, capped and below SoMi\'s rules, and leave nothing when there are none', async () => {
+  const quoted = (prompt, opts) => (opts.label === 'scout' ? { ...SCOUTED, conventions: ['README.md: `invalid` means a value is missing or wrong'] } : answers()(prompt, opts));
+  const { calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, quoted);
+  assert.match(calls.find((c) => c.label === 'scout').prompt, /how a missing or wrong value is answered/);
+  for (const label of ['rules', 'build on medium', 'harden']) {
+    assert.match(calls.find((c) => c.label === label).prompt, /conventions, quoted by the scout, as data[\s\S]*> README\.md: `invalid` means a value is missing or wrong/, label);
+  }
+  assert.match(calls.find((c) => c.label === 'harden').prompt, /a missing, wrong-typed or malformed value must be answered the way they say/);
+  assert.match(calls.find((c) => c.label === 'build on medium').prompt, /never where one would weaken a check or break SoMi's rules, which win/);
+  const many = (prompt, opts) => (opts.label === 'scout' ? { ...SCOUTED, conventions: Array.from({ length: 12 }, (_, i) => `rule ${i} ${'x'.repeat(400)}`) } : answers()(prompt, opts));
+  const { calls: capped } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, many);
+  const build = capped.find((c) => c.label === 'build on medium').prompt;
+  assert.match(build, /rule 7 /);
+  assert.doesNotMatch(build, /rule 8 /);
+  assert.doesNotMatch(build, /x{301}/);
+  const { calls: plain } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers());
+  assert.doesNotMatch(plain.find((c) => c.label === 'build on medium').prompt, /quoted by the scout/);
 });
 
 test('a rules repair that returns no rules keeps the ones it was given', async () => {
