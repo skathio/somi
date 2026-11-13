@@ -47,3 +47,19 @@ LG1 counts only run 8, after its tests were fixed.
 - **Cost is inside the ship rule on small work, at 1.34x.** Most of the overhead on N22 is the security review on the high tier, which this path triggers. It found only Minors in every run.
 - **The slice is at the ceiling.** With its tests fixed, LG1 is solved by bare in about two minutes. It is not a large task by the segment's own criteria, so these runs say nothing yet about SoMi on large work. Telling the arms apart needs harder medium and large tasks, probed into the band.
 - **`/somi-deliver` costs three to four times somi5 on this slice.** It is not worth it on small work. Its value on real large work is unmeasured.
+
+## On the tasks a bare agent fails (runs 9 to 16)
+
+The smoke slice now takes the registered tasks a bare agent solved least: N17 and H4, each 0/6 for bare in the baseline. Both turn on a safety requirement the ticket does not spell out. These are the last five rounds on both, from the same day and pin, plus three rounds of somi5 without the rules digest at session start, using the existing `digest-off` patch:
+
+| Arm | H4 | N17 | Both | Dollars per solved |
+|---|---|---|---|---|
+| bare | 0/5 | 3/5 | 3/10 | about $0.40 |
+| somi5 | 4/5 | 4/5 | 8/10 | about $0.33 |
+| somi5, rules digest off | 1/3 | 1/3 | 2/6 | about $0.27 |
+| somi5-deliver, after its stages read the rules | 2/2 | 1/2 | 3/4 | about $0.83 |
+
+- **somi5 catches the traps bare misses, and costs less per solved task here.** On H4, bare missed the unprompted requirement on all five draws.
+- **The rules digest is what makes the difference.** Without it, somi5 falls to bare's rate. The catch came from the first implementation, not from a review: on N17 no review ran, and on H4 the security reviewer raised only Minors. That is the security floor at work.
+- **The staged workflow missed N17's trap on every draw until its stages read the rules.** A stage gets no session-start hook, and neither does a worker. Both now name the rules file and read it first.
+- **Not significant yet:** 8/10 against 3/10 gives p ≈ 0.07 on these draws. The rules were not tuned to these tasks: nothing in the digest names either trap, and adding the traps to it would teach to the test.
