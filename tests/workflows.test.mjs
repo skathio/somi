@@ -43,6 +43,7 @@ const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer,
     ['harden', () => hardened],
     ['build on', (prompt) => built(builds++, prompt)],
     ['repair on', (prompt) => built(builds++, prompt)],
+    ['keep rules', (prompt) => ({ ran: (prompt.match(/^\d+\. /gm) ?? []).map(() => ({ exit: 0 })) })],
     // A check reports one exit code per numbered command, and the workflow decides from them.
     ['check', (prompt) => {
       const ok = gateOk[Math.min(gates++, gateOk.length - 1)];
@@ -418,17 +419,25 @@ test('the result puts what the session acts on first and keeps the builders\' pr
 });
 
 test('a check passes only on every command\'s exit code, and a rule file that changed fails it', async () => {
-  const rules = { file: 'test/rules.test.mjs', command: 'node --test test/rules.test.mjs', rules: ['a rule'], hash: 'abc123' };
+  // A model asked to report the rule file's hash misreported it on a live run, and every build of the milestone failed; now a check copies
+  // the file aside right after it is written, and later checks compare by exit code.
   let checks = 0;
   const short = (prompt, opts) => {
     if (opts.label === 'check') { checks += 1; return { ran: [{ exit: 0 }] }; }
-    if (opts.label === 'rules') return rules;
     return answers()(prompt, opts);
   };
   const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, short);
-  assert.match(calls.find((c) => c.label === 'check').prompt, /3\. test "\$\(git hash-object -- 'test\/rules\.test\.mjs'\)" = 'abc123'/);
+  assert.match(calls.find((c) => c.label === 'keep rules').prompt, /1\. cp -- 'test\/rules\.test\.mjs' '\.git\/somi-rules-test_rules\.test\.mjs'/);
+  assert.match(calls.find((c) => c.label === 'check').prompt, /3\. cmp -s -- 'test\/rules\.test\.mjs' '\.git\/somi-rules-test_rules\.test\.mjs'/);
+  assert.ok(labels(calls).indexOf('keep rules') < labels(calls).indexOf('build on medium'), 'the copy is taken before any build');
   assert.equal(value.status, 'needs-attention', 'a check that reported one exit code for three commands did not pass');
   assert.ok(checks >= 2);
+});
+
+test('a rule file name with a quote cannot break the check command', async () => {
+  const quoted = (prompt, opts) => (opts.label === 'rules' ? { file: "test/it's.test.mjs", command: 'node --test', rules: ['r'] } : answers()(prompt, opts));
+  const { calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, quoted);
+  assert.match(calls.find((c) => c.label === 'check').prompt, /cmp -s -- 'test\/it'\\''s\.test\.mjs' '\.git\/somi-rules-test_it_s\.test\.mjs'/);
 });
 
 test('a line of the request that no milestone covers is added to the last one', async () => {
