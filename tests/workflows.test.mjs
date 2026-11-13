@@ -289,7 +289,9 @@ test('later milestones and deferred parts named by a builder do not stop the run
   assert.deepEqual(value.milestones.map((m) => m.ok), [true, true, true]);
   const first = calls.find((c) => c.label === 'build on medium 1/3');
   assert.match(first.prompt, /Later milestones, which other builders do after you:\n> API\n> UI/);
-  assert.match(first.prompt, /In left, list each part of this milestone's own scope[\s\S]*Later milestones and deferred parts are not yours: they never go in left/);
+  assert.match(first.prompt, /In left, list each part of this milestone's own scope[\s\S]*Later milestones and the parts the plan deferred are not yours: they never go in left/);
+  // On a live run a builder filed an open line of its own scope, formula handling, under not_mine as "a user decision", and failed it.
+  assert.match(first.prompt, /A line of your scope marked open is yours: settle it with the reading that best serves what the request is for, build it, and say which reading you chose\. It never goes in not_mine\./);
   assert.doesNotMatch(calls.find((c) => c.label === 'build on medium 3/3').prompt, /Later milestones, which/, 'the last has none after it');
 });
 
