@@ -321,6 +321,6 @@ test('a milestone quotes the request and decides nothing, and the request wins o
   // On three live runs a plan stage read "every cell must show what the data says" as "never neutralise a formula", and every later
   // stage followed it: the paraphrase became the rule, where bare read the line the other way and passed.
   const { calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE }));
-  assert.match(calls.find((c) => c.label === 'plan').prompt, /quote the lines it covers, and decide nothing about how to meet them\. Where a line can be read more than one way, quote it and say it is open/);
+  assert.match(calls.find((c) => c.label === 'plan').prompt, /quote the lines it covers, and decide nothing about how to meet them\. Where a line can be read more than one way, quote it and say only that it is open, with no hint at an answer/);
   assert.match(calls.find((c) => c.label === 'build on medium 1/3').prompt, /Its scope quotes the request; where they differ, the request wins\./);
 });

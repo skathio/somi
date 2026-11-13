@@ -43,6 +43,8 @@ test('large code work stays on medium in the conversation, and SoMi offers the s
   assert.equal(r.worker, undefined);
   assert.equal(r.workflow, undefined, 'only the user starts the staged workflow');
   assert.match(r.advice, /typing \/somi-deliver/, 'so SoMi tells the agent to offer it');
+  assert.match(r.advice, /go through the request line by line, check that each requirement is built and has a test, and build what is missing/, 'large work checks every requirement off against the request');
+  assert.doesNotMatch(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /line by line/, 'small work is not asked to');
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'main', 'medium'], ['review', 'subagent', null]]);
   assert.match(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /review is due or run the quality gate: when your turn ends, SoMi checks the diff and tells you what to fix/, 'on Claude Code the stop hook checks for a review and the gate');
   assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG }).advice, /when your turn ends, SoMi checks the diff and tells you what to fix/, 'Copilot CLI runs the same stop hook');
