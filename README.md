@@ -13,8 +13,9 @@ you talk to one agent, on the medium tier, the same as a bare agent
   -> a ticket, large work, or a request that fits no obvious workflow: it asks somi_route once, and gets the
        workflow's steps: each one's tier, whether it runs here or on a subagent, and its brief
   -> large work: it does it too, on medium, and tells you that /somi-deliver runs it in stages
-  -> /somi-deliver <work or ticket>: a scout, a build that steps up a tier if the checks fail, the checks, and
-       the reviews the diff needs, each on its tier, run in code through to the end
+  -> /somi-deliver <work or ticket>: a scout, a plan of milestones, and for each one rule tests, a build that
+       steps up a tier if the checks fail, and the checks; the reviews the diff needs, each on its tier, run in
+       code through to the end; a blocked or unfinished milestone stops it and comes back to you
   -> the diff touches a security sink: the security reviewer runs on high, and every fix stays here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier
   -> a turn that changed code ends: the quality gate runs, anything over a limit goes back to be fixed,

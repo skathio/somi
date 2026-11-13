@@ -31,9 +31,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 - **Tests in .NET test projects and in `test.ts` or `spec.ts` files are treated as tests.**
 - **A C# property's `get` and `set` are functions of their own,** named for the property, so a deep getter is held to the same limits as a method.
 
+- **`/somi-deliver` builds large work milestone by milestone.** It used to hand a whole request to one build agent: on this repository's benchmark spec, one agent built six workstreams in a single 94-minute context. Now a plan stage on medium cuts the work into at most 8 milestones, and each gets its own rule tests, build and check, in fresh agents, with what the earlier builders reported. Between milestones the reviewers the diff calls for read it, and their Blockers and Majors go to the next builder. Only the review of the final tree is returned to be recorded. A milestone that fails stops the run, and the result names what was not started. Small work is one milestone.
+- **Deferred work is left out of a staged run and named.** The plan lists every part the request defers or leaves to the maintainer, such as a paid run, an approval or a review by a person. The rule tests and the builds skip it, and the result lists it as `deferred`. On the benchmark spec, a rule test that asked for registered tasks pushed the build to write placeholder tasks to pass it.
+
 ### Fixed
 
 - **The gate no longer crashes on deeply nested code.** On prettier, a stack overflow ended the whole run. Now such a file is reported as not analyzed, which fails in a benchmark, and the gate goes on. Its added lines are still checked for suppressions, line by line.
+- **A blocked build in `/somi-deliver` goes back to the user instead of up a tier.** A hook, a missing decision or a contradiction does not yield to a stronger model: on the benchmark spec, the high-tier build ran 94 minutes and was still blocked on the same install. Only failed checks send a build up a tier, and that build now gets the first one's own report as well as the failures.
+- **A staged build that did only part of its work is not reported done.** A builder lists what it left undone, and a list that is not empty makes the run `needs-attention`. A run for a three-repository request had built one repository and said `done`.
+- **A staged run with no separate model for the tier above does not build twice on the same model.** Started by hand with plain text, or with the same model for both tiers, a failed check used to rerun the build on the session's model. Now the run stops after one attempt, and its result says that there was no tier to climb to.
 
 ## [5.1.1] — 2026-11-12 — fix: a staged run's security review is recorded, not rejected as missing
 

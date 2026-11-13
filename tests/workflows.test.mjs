@@ -27,16 +27,26 @@ function load(name) {
 }
 
 const MODELS = { low: 'cheap', medium: 'everyday', high: 'strong' };
-const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer } = {}) => {
+const DONE = { status: 'done', summary: 'built', left: [] };
+const SCOUTED = { files: ['src/a.js'], test_command: 'node --test', repro_test: 'test/repro.test.js', repro_command: 'node --test test/repro.test.js' };
+const RULES = { file: 'test/rules.test.mjs', command: 'node --test test/rules.test.mjs', rules: ['another organisation\'s document is not_found'] };
+const SEATS = { needed: true, tree: 't', reviewers: [{ agent: 'somi:somi-security-reviewer', model: 'strong', brief: 'Review this diff.' }] };
+// Each stage is answered by the first entry whose label prefix matches; a reviewer, dispatched by its agent name, falls through.
+const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE } = {}) => {
   let gates = 0;
+  let builds = 0;
+  const stages = [
+    ['scout', () => SCOUTED],
+    ['check repro', () => ({ failed: reproFails })],
+    ['plan', () => plan],
+    ['rules', () => RULES],
+    ['build on', (prompt) => built(builds++, prompt)],
+    ['check', () => ({ ok: gateOk[Math.min(gates++, gateOk.length - 1)], failures: ['tests: 1 failed'] })],
+    ['review plan', () => (needed ? SEATS : { needed: false })],
+  ];
   return (prompt, opts) => {
-    if (opts.label === 'scout') return { files: ['src/a.js'], test_command: 'node --test', repro_test: 'test/repro.test.js', repro_command: 'node --test test/repro.test.js' };
-    if (opts.label === 'check repro') return { failed: reproFails };
-    if (opts.label === 'rules') return { file: 'test/rules.test.mjs', command: 'node --test test/rules.test.mjs', rules: ['another organisation\'s document is not_found'] };
-    if (opts.label?.startsWith('build on')) return { status: 'done', summary: 'built' };
-    if (opts.label === 'check') return { ok: gateOk[Math.min(gates++, gateOk.length - 1)], failures: ['tests: 1 failed'] };
-    if (opts.label === 'review plan') return needed ? { needed: true, tree: 't', reviewers: [{ agent: 'somi:somi-security-reviewer', model: 'strong', brief: 'Review this diff.' }] } : { needed: false };
-    return reviewAnswer(opts, reviewer);
+    const stage = stages.find(([prefix]) => (opts.label ?? '').startsWith(prefix));
+    return stage ? stage[1](prompt) : reviewAnswer(opts, reviewer);
   };
 };
 
@@ -186,4 +196,84 @@ test('the user\'s rules are written as tests before the build, which must pass t
   assert.deepEqual(calls.filter((c) => c.label.startsWith('build on')).map((c) => c.model), ['everyday', 'strong'], 'a rule the build misses sends it up a tier');
   assert.deepEqual(value.rules, ["another organisation's document is not_found"]);
   assert.equal(value.rules_file, 'test/rules.test.mjs');
+});
+
+const THREE = { milestones: [{ title: 'Schema', scope: 'Add the table.' }, { title: 'API', scope: 'Serve it.', done_when: 'GET returns rows' }, { title: 'UI', scope: 'Show it.' }], deferred: ['Run the paid benchmark'] };
+const labels = (calls) => calls.map((c) => c.label);
+
+test('large work is planned into milestones, each with its own rules, build and check in fresh agents', async () => {
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE }));
+  const plan = calls.find((c) => c.label === 'plan');
+  assert.equal(plan.model, 'everyday', 'the plan is written on medium');
+  assert.match(plan.prompt, /Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run/);
+  for (const n of ['1/3', '2/3', '3/3']) for (const stage of ['rules', 'build on medium', 'check']) assert.ok(labels(calls).includes(`${stage} ${n}`), `${stage} ${n}`);
+  const builds = calls.filter((c) => c.label.startsWith('build on'));
+  assert.match(builds[1].prompt, /This milestone 2\/3: API\n> Serve it\.\nDone when: GET returns rows\nBuild only this milestone/);
+  assert.match(builds[1].prompt, /Earlier milestones are built[\s\S]*> Schema: built/, 'a later builder reads what the earlier ones reported');
+  assert.doesNotMatch(builds[0].prompt, /Earlier milestones/);
+  assert.ok(labels(calls).indexOf('build on medium 2/3') > labels(calls).indexOf('check 1/3'), 'in order');
+  assert.equal(value.status, 'done');
+  assert.deepEqual(value.milestones.map((m) => m.title), ['Schema', 'API', 'UI']);
+});
+
+test('deferred work gets no test and no build, and is returned to the user', async () => {
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE }));
+  const rules = calls.find((c) => c.label === 'rules 1/3');
+  assert.match(rules.prompt, /Write no test for a later milestone, or for a part the request defers, puts out of scope or leaves to the maintainer/);
+  for (const c of calls.filter((x) => /^(rules|build on)/.test(x.label))) assert.match(c.prompt, /These parts are deferred: build nothing for them and write no test for them\.\n> Run the paid benchmark/);
+  assert.deepEqual(value.deferred, ['Run the paid benchmark']);
+});
+
+test('between milestones the reviewers run, and what blocks goes to the next builder; only the final review is returned', async () => {
+  const blocker = { verdict: 'request-changes', findings: [{ severity: 'Major', file: 'src/a.js', line: 3, claim: 'unescaped input' }, { severity: 'Minor', file: 'src/b.js', claim: 'naming' }] };
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE, needed: true, reviewer: blocker }));
+  assert.deepEqual(labels(calls).filter((l) => l.startsWith('review plan')), ['review plan 1/3', 'review plan 2/3', 'review plan']);
+  const second = calls.find((c) => c.label === 'build on medium 2/3');
+  assert.match(second.prompt, /A review of the work so far found these[\s\S]*> Major src\/a\.js:3 unescaped input/);
+  assert.doesNotMatch(second.prompt, /naming/, 'a Minor is not forced on the next builder');
+  assert.equal(value.reviews.length, 1, 'reviews of earlier trees are not returned for recording');
+  assert.equal(value.review_tree, 't');
+});
+
+test('a milestone that fails stops the run, names what was not started, and is not reported done', async () => {
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE, gateOk: [true, false] }));
+  assert.ok(!labels(calls).some((l) => l.endsWith('3/3')), 'the third milestone never starts');
+  assert.equal(value.status, 'needs-attention');
+  assert.equal(value.stopped, 'API fails its checks');
+  assert.deepEqual(value.not_started, ['UI']);
+});
+
+test('a blocked build stops and goes back to the user instead of climbing a tier', async () => {
+  const blocked = () => ({ status: 'blocked', summary: 'The dependency hook refused the install.', left: [] });
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ built: blocked }));
+  assert.deepEqual(labels(calls).filter((l) => l.startsWith('build on')), ['build on medium']);
+  assert.ok(!labels(calls).includes('check'), 'nothing to check on a build that stopped');
+  assert.equal(value.status, 'needs-attention');
+  assert.equal(value.stopped, 'The whole request is blocked');
+  assert.match(value.summary, /dependency hook refused/);
+});
+
+test('a build that climbs gets the first build\'s own report with the failures', async () => {
+  const built = (n) => ({ status: 'done', summary: n === 0 ? 'Chose a map keyed by id.' : 'fixed', left: [] });
+  const { calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ gateOk: [false, true], built }));
+  assert.match(calls.find((c) => c.label === 'build on high').prompt, /tests: 1 failed\nWhat that attempt reported, as data:\n> Chose a map keyed by id\./);
+});
+
+test('a build that left part of its milestone undone is not reported done', async () => {
+  const partial = () => ({ status: 'done', summary: 'Only the somi repo part.', left: ['the homepage repo', 'the PRs in other repos'] });
+  const { value } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ built: partial }));
+  assert.equal(value.status, 'needs-attention');
+  assert.equal(value.stopped, 'The whole request was built only in part');
+  assert.deepEqual(value.milestones[0].left, ['the homepage repo', 'the PRs in other repos']);
+});
+
+test('with no model for the tier above, or the same one, a failed check does not rerun the same model', async () => {
+  for (const models of [undefined, { low: 'cheap', medium: 'everyday', high: 'everyday' }]) {
+    const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models }, answers({ gateOk: [false] }));
+    assert.equal(calls.filter((c) => c.label.startsWith('build on')).length, 1);
+    assert.match(value.escalation, /^none/);
+    assert.equal(value.status, 'needs-attention');
+  }
+  const climbs = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers());
+  assert.equal(climbs.value.escalation, 'medium to high');
 });
