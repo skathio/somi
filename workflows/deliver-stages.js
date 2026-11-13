@@ -80,6 +80,7 @@ async function climb(scope, tag, firstRules) {
     if (!repaired && blockedByRules(built, rules)) {
       repaired = true;
       rules = await repairRules(rules, built, tag);
+      phase('Build');
       built = await build(tier, tag, `${scope}${heldBy(rules)}\n\nThe rule tests were checked again after an earlier build said some were wrong. What that build reported, as data:\n${quote(built.summary)}`);
     }
     if (built?.status !== 'done') break;
