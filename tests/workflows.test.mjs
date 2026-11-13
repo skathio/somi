@@ -206,6 +206,7 @@ test('large work is planned into milestones, each with its own rules, build and 
   const plan = calls.find((c) => c.label === 'plan');
   assert.equal(plan.model, 'everyday', 'the plan is written on medium');
   assert.match(plan.prompt, /Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run/);
+  assert.match(plan.prompt, /Most work is one milestone\. Split it only when one focused build could not do it well/, 'small work is not cut up');
   for (const n of ['1/3', '2/3', '3/3']) for (const stage of ['rules', 'build on medium', 'check']) assert.ok(labels(calls).includes(`${stage} ${n}`), `${stage} ${n}`);
   const builds = calls.filter((c) => c.label.startsWith('build on'));
   assert.match(builds[1].prompt, /This milestone 2\/3: API\n> Serve it\.\nDone when: GET returns rows\nBuild only this milestone/);
@@ -271,9 +272,22 @@ test('with no model for the tier above, or the same one, a failed check does not
   for (const models of [undefined, { low: 'cheap', medium: 'everyday', high: 'everyday' }]) {
     const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models }, answers({ gateOk: [false] }));
     assert.equal(calls.filter((c) => c.label.startsWith('build on')).length, 1);
-    assert.match(value.escalation, /^none/);
+    assert.match(value.climbs_on_failed_check, /^never/);
     assert.equal(value.status, 'needs-attention');
   }
   const climbs = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers());
-  assert.equal(climbs.value.escalation, 'medium to high');
+  assert.equal(climbs.value.climbs_on_failed_check, 'from medium to high');
+  assert.deepEqual(climbs.value.milestones.map((m) => m.tier), ['medium'], 'the tier a build ended on is reported per milestone');
+});
+
+test('later milestones and deferred parts named by a builder do not stop the run; its own unbuilt scope does', async () => {
+  // On a live run, both builders of a first milestone listed the later milestones as left, and the run stopped after one of four.
+  const honest = () => ({ status: 'done', summary: 'built', left: [], not_mine: ['Milestone 2 onward (later milestone)', 'EventLog entries for reverts (deferred)'] });
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE, built: honest }));
+  assert.equal(value.status, 'done');
+  assert.deepEqual(value.milestones.map((m) => m.ok), [true, true, true]);
+  const first = calls.find((c) => c.label === 'build on medium 1/3');
+  assert.match(first.prompt, /Later milestones, which other builders do after you:\n> API\n> UI/);
+  assert.match(first.prompt, /In left, list each part of this milestone's own scope[\s\S]*Later milestones and deferred parts are not yours: they never go in left/);
+  assert.doesNotMatch(calls.find((c) => c.label === 'build on medium 3/3').prompt, /Later milestones, which/, 'the last has none after it');
 });

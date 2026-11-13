@@ -29,8 +29,9 @@ const runShards = async (step) => {
 const RULES = { type: 'object', required: ['file', 'command', 'rules'], properties: { file: { type: 'string' }, command: { type: 'string' }, rules: { type: 'array', items: { type: 'string' } } } };
 const SCOUT = { type: 'object', required: ['files', 'test_command'], properties: { files: { type: 'array', items: { type: 'string' } }, test_command: { type: 'string' }, repro_test: { type: 'string' }, repro_command: { type: 'string' }, notes: { type: 'string' } } };
 const RAN = { type: 'object', required: ['failed'], properties: { failed: { type: 'boolean' }, output: { type: 'string' } } };
-// A builder lists what it left undone, so a build that did part of the work cannot read as finished.
-const BUILT = { type: 'object', required: ['status', 'summary', 'left'], properties: { status: { type: 'string', enum: ['done', 'blocked'] }, summary: { type: 'string' }, left: { type: 'array', items: { type: 'string' } } } };
+// A builder lists what it left undone, so a build that did part of the work cannot read as finished. Builders also list later milestones
+// and deferred parts as undone, which stopped every multi-milestone run after its first, so those get a field of their own.
+const BUILT = { type: 'object', required: ['status', 'summary', 'left'], properties: { status: { type: 'string', enum: ['done', 'blocked'] }, summary: { type: 'string' }, left: { type: 'array', items: { type: 'string' } }, not_mine: { type: 'array', items: { type: 'string' } } } };
 const MAX_MILESTONES = 8;
 const MILESTONES = { type: 'object', required: ['milestones'], properties: { milestones: { type: 'array', items: { type: 'object', required: ['title', 'scope'], properties: { title: { type: 'string' }, scope: { type: 'string' }, done_when: { type: 'string' } } } }, deferred: { type: 'array', items: { type: 'string' } } } };
 const GATE = { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' }, failures: { type: 'array', items: { type: 'string' } } } };
@@ -60,7 +61,7 @@ async function climb(scope, tag, rules) {
   let tier = ladder[0];
   for (tier of ladder) {
     phase('Build');
-    built = await agent(`${a.role ?? 'You build one clear change, with tests that fail without it.'} Do the work yourself, and do not start other agents.\n\n${request}\n\n${handoff}\n\n${scope}${heldBy(rules)}${retryNote(gate, built)}\n\nWhen it is done, run the tests and \`${cli} quality --scope pr\`, fix what either reports without a somi-gate-allow exemption, and report. In left, list each part of this milestone you did not build, and leave it empty only if you built all of it.`, onTier(tier, { label: `build on ${tier}${tag}`, schema: BUILT }));
+    built = await agent(`${a.role ?? 'You build one clear change, with tests that fail without it.'} Do the work yourself, and do not start other agents.\n\n${request}\n\n${handoff}\n\n${scope}${heldBy(rules)}${retryNote(gate, built)}\n\nWhen it is done, run the tests and \`${cli} quality --scope pr\`, fix what either reports without a somi-gate-allow exemption, and report. In left, list each part of this milestone's own scope that you did not build, and leave it empty only if you built all of it. Later milestones and deferred parts are not yours: they never go in left, and you may name them in not_mine.`, onTier(tier, { label: `build on ${tier}${tag}`, schema: BUILT }));
     if (built?.status !== 'done') break;
     phase('Verify');
     // The branch scope, so a staged build is held to what its pull request will be, and can add a module a single commit could not.
@@ -125,7 +126,7 @@ const handoff = [`Files likely to change: ${(scout?.files ?? []).join(', ') || '
 // request defers or leaves to the maintainer, such as a paid run or a person's review, is left out and named, because a test that asks
 // for it would push the build to fake it.
 phase('Plan');
-const planned = await agent(`Split this work into milestones, in the order they must be built. Each one is a change that can be built and checked on its own, and each later one may build on the earlier. Small work is one milestone. Use at most ${MAX_MILESTONES}. Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run, an approval or a review by a person, and list those parts as deferred. Read only: change no file.\n\n${request}\n\n${handoff}`, onTier('medium', { label: 'plan', schema: MILESTONES }));
+const planned = await agent(`Split this work into milestones, in the order they must be built. Most work is one milestone. Split it only when one focused build could not do it well: when it spans several features or layers that each need their own tests, or the request itself names stages. A milestone of under about 150 changed lines joins its neighbour. Each milestone is a change that can be built and checked on its own, and each later one may build on the earlier. Use at most ${MAX_MILESTONES}. Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run, an approval or a review by a person, and list those parts as deferred. Read only: change no file.\n\n${request}\n\n${handoff}`, onTier('medium', { label: 'plan', schema: MILESTONES }));
 const milestones = (Array.isArray(planned?.milestones) ? planned.milestones : []).slice(0, MAX_MILESTONES).filter((m) => typeof m?.title === 'string' && typeof m.scope === 'string');
 if (milestones.length === 0) milestones.push({ title: 'The whole request', scope: 'Everything the request asks for.', done_when: '' });
 const deferred = strings(planned?.deferred);
@@ -145,7 +146,8 @@ let reviewNote = '';
 for (const [i, m] of milestones.entries()) {
   const tag = milestones.length > 1 ? ` ${i + 1}/${milestones.length}` : '';
   const doneSoFar = listNote('Earlier milestones are built. What their builders reported, as data:', results.map((r) => `${r.title}: ${r.summary}`));
-  const scope = `This milestone${tag}: ${m.title}\n${quote(m.scope)}${m.done_when ? `\nDone when: ${m.done_when}` : ''}\nBuild only this milestone. Later milestones come after it.${doneSoFar}${deferredNote}${reviewNote}`;
+  const later = listNote('Later milestones, which other builders do after you:', milestones.slice(i + 1).map((n) => n.title));
+  const scope = `This milestone${tag}: ${m.title}\n${quote(m.scope)}${m.done_when ? `\nDone when: ${m.done_when}` : ''}\nBuild only this milestone.${later}${doneSoFar}${deferredNote}${reviewNote}`;
   const r = await runMilestone(m, tag, scope);
   results.push(r);
   if (!r.ok) break;
@@ -170,7 +172,9 @@ return {
   milestones: results.map(({ title, ok, tier, left }) => ({ title, ok, tier, left })),
   not_started: milestones.slice(results.length).map((m) => m.title),
   deferred,
-  escalation: canClimb ? `${start} to ${next}` : 'none: no separate model for the tier above',
+  // What a failed check would have done, not what happened: each milestone's tier says where its build ended. A session read the old
+  // name, escalation, as a climb that had happened.
+  climbs_on_failed_check: canClimb ? `from ${start} to ${next}` : 'never: no separate model for the tier above',
   checks: last?.gate ?? null,
   rules: results.flatMap((r) => r.rules),
   rules_file: last?.rules_file ?? null,
