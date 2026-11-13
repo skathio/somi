@@ -15,7 +15,7 @@ import { earlierPrompts, readPrompt, saveEarlier } from './prompt.mjs';
 import { LONG_REQUEST, WHEN, classify } from './routes.mjs';
 import { shardsFor } from './shards.mjs';
 import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
-import { WORKFLOWS, expertiseIndex, libraryPath, roleBrief, workerAgent } from './workflows.mjs';
+import { RULES_FILE, WORKFLOWS, expertiseIndex, libraryPath, roleBrief, rulesLine, workerAgent } from './workflows.mjs';
 import { copilotName } from './copilot-workflow.mjs';
 import { globalConfigPath } from './config-files.mjs';
 import { QUALITY_TIMEOUT, SCOPES, resolveLimits, resolveTimeout } from './quality/limits.mjs';
@@ -54,7 +54,7 @@ export const earlierText = (file) => (file ? `The user's earlier messages in thi
 const withoutCommand = (said) => said.trim().replace(/^\/[\w:-]+\s+/, '');
 
 export function workerBrief({ role, request, said, earlierAt, ledger, skills = [] }) {
-  const parts = [role, 'Do the work yourself, here, and do not call SoMi\'s tools or start other agents.'];
+  const parts = [role, 'Do the work yourself, here, and do not call SoMi\'s tools or start other agents.', rulesLine()];
   if (ledger) parts.push(`Decisions and limits already set, which hold for this work:\n${ledger}`);
   if (skills.length > 0) parts.push(`Read one of these only if the work needs it:\n${skills.map((s) => `- ${s}`).join('\n')}`);
   if (earlierAt) parts.push(earlierText(earlierAt));
@@ -109,7 +109,7 @@ function deliverWorkflow(ctx, { route, request, said, earlierAt, ledger, role, t
   for (const step of ['work-item.start', 'review.done']) {
     try { const refs = shardsFor({ root: ctx.root, step, env: ctx.env }).usable.filter((b) => b.mode !== 'write').map((b) => b.ref); if (refs.length) shards[step] = refs; } catch { /* a broken config skips shards, as it does elsewhere */ }
   }
-  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, earlier_file: earlierAt ?? undefined, route, ledger, role, models, startTier: tier, cli: somiCommand('').trim(), shards: Object.keys(shards).length ? shards : undefined }) };
+  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, earlier_file: earlierAt ?? undefined, route, ledger, role, models, startTier: tier, cli: somiCommand('').trim(), rules_file: RULES_FILE, shards: Object.keys(shards).length ? shards : undefined }) };
 }
 const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // The conversation's part is small on purpose: start it, wait, relay. The workflow already read the code, built, ran the checks and asked
@@ -118,8 +118,11 @@ const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // Everything here is done from the chat: the agent runs SoMi's own commands by their full path, because no somi command is on the PATH.
 const QUALITY_CONFIG = `Relay this briefly. To change a quality limit, write it under quality in the file named by global_config, or under quality.commit or quality.pr for one scope, never in the project's .somi/config.json, where only a tighter value counts. Before you write a value looser than the current limit, ask the user and wait for a yes. quality_timeout_seconds is how long the gate may run before it counts as failed: to change it, write quality.timeout_seconds there, a whole number from ${QUALITY_TIMEOUT.min} to ${QUALITY_TIMEOUT.max}.`;
 const SETUP = (host) => `To check SoMi's setup, run \`${somiCommand('doctor')}\` and relay what it finds. After tiers.main changes, run \`${somiCommand('setup')}\`. To connect another plugin to a step, run \`${somiCommand('slot <step> <plugin:component>')}\` with the step and component the user names, and \`${somiCommand('slot --list')}\` to show what is connected. To start sessions with SoMi's agent on its tier's model, \`${somiCommand('launch claude')}\` or \`${somiCommand('launch copilot')}\` does it, with anything after it passed to the host: give the user that command for an alias of their own.${host === 'claude' ? '' : ' SoMi registers the staged workflow, /somi-deliver, with Copilot for every project at session start, so there is nothing to run for it: a session that started before that gets it after /clear, and Copilot runs it only in experimental mode.'}`;
-const STAGED_ADVICE = (host) => `The user typed /somi-deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode. If Copilot says no workflow is registered by that name, this session started before SoMi registered it: reload extensions with the extensions reload tool, which registers it without losing the conversation, then start the workflow again; failing that, tell the user that /clear or a new session loads it. /experimental must be on'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing its review_tree as tree. If reviews_missing names a reviewer, call somi_review with no reviews, run the reviewers it names, and record those reports with the workflow's; never record a set without them. Then tell the user its summary and status in a few lines. If you cannot start it, say why, and call somi_route again with the same request and without staged for the steps.`;
+const STAGED_ADVICE = (host) => `The user typed /somi-deliver to run this work in stages. Start the workflow below by its name with its args unchanged${host === 'claude' ? ', using the Workflow tool: it is a saved workflow, so no script and no authoring guide are needed' : ', as Copilot runs workflows in experimental mode. If Copilot says no workflow is registered by that name, this session started before SoMi registered it: reload extensions with the extensions reload tool, which registers it without losing the conversation, then start the workflow again; failing that, tell the user that /clear or a new session loads it. /experimental must be on'}. Tell the user it is running and end your turn. When it returns, do not read or check the work again, because the workflow ran the checks: record its reviews with somi_review, passing its review_tree as tree. If reviews_missing names a reviewer, call somi_review with no reviews, run the reviewers it names, and record those reports with the workflow's; never record a set without them. Then tell the user its status and stopped in a few lines, and name what it lists as needs_decision, open_findings, not_started, deferred, uncovered_lines or left in a milestone: a needs_decision entry is the user's call, and an open finding is for you to fix before saying it is done. If you cannot start it, say why, and call somi_route again with the same request and staged false for the steps.`;
 const SUGGEST_STAGED = 'This looks like large work. Tell the user once that typing /somi-deliver with it runs it in stages, each on its tier, and that only they can start that. Then follow steps.';
+// On a large benchmark task, bare and SoMi alike left the request's last feature unbuilt on most draws and said the work was done. Each
+// requirement is checked off against the request before the end, not against the agent's memory of it.
+const COVER_ALL = 'Before you say it is done, go through the request line by line, check that each requirement is built and has a test, and build what is missing.';
 
 // With no rule to go on and the whole table to choose from, a request is new work. Asking the model to pick costs a turn and lets it
 // pick a pricier route for small work, so the answer says what else might fit, and the agent can call again only if one clearly does.
@@ -166,7 +169,7 @@ function placement(ctx, wf, { request, sensitive, staged }) {
 function workAdvice(ctx, wf, { start, workflow, large }) {
   if (workflow) return STAGED_ADVICE(ctx.host);
   const what = wf.kind === 'plan' ? planAdvice(start) : `${start}${wf.kind === 'code' ? ` ${AFTER_CHANGE}` : ''}${wf.alwaysReview ? ' This kind of work is always reviewed: pass always true.' : ''}`;
-  return `${large ? `${SUGGEST_STAGED} ` : ''}Run steps in order. ${what}`;
+  return `${large ? `${SUGGEST_STAGED} ` : ''}Run steps in order. ${what}${large && wf.kind === 'code' ? ` ${COVER_ALL}` : ''}`;
 }
 
 // A worker is given the role, skills and ledger in its brief. Work done here gets them in the answer.
@@ -175,14 +178,32 @@ function placedFields(ctx, at, { role, skills, ledger }) {
   return { where: 'here', worker: null, role, skills: skills.length > 0 ? skills : undefined, ledger };
 }
 
-export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
+// The user typed /somi-deliver: a session that calls somi_route without staged, or with no request, still gets the workflow. On one
+// benchmark draw the session called somi_route with nothing, got plain steps and built inline, which read as a staged result.
+// Text must follow the command: a bare /somi-deliver is not a request, and starting the paid workflow on it would build nothing useful.
+const DELIVER_TYPED = /^\/(?:somi:)?somi-deliver\s+\S/;
+
+// The text after a typed /somi-deliver, or '' when the message is not one.
+const typedRequest = (said) => (DELIVER_TYPED.test(String(said ?? '').trim()) ? withoutCommand(said) : '');
+// Only the call that carries the typed request starts the workflow: a later call in the same turn, such as the fix the session makes after
+// it, is new work and must not start the paid workflow again. An explicit false is the way out: a session that cannot start the workflow
+// asks again with staged false and gets the steps.
+function typedDeliver(said, asked, flagged) {
+  const text = typedRequest(said);
+  const same = !asked || String(asked).includes(text.slice(0, 60)) || text.includes(String(asked).slice(0, 60));
+  const typed = Boolean(text) && same;
+  return { staged: flagged === undefined && typed ? true : flagged, request: asked || (typed ? text : asked) };
+}
+
+export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: flagged } = {}) {
   if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
+  const said = readPrompt(ctx.root, ctx.env);
+  const { staged, request } = typedDeliver(said, asked, flagged);
   const { chosen, alternatives } = chooseRoute({ request, ticket, hint });
   const direct = directAnswer(ctx, chosen, staged);
   if (direct) return direct;
   const wf = WORKFLOWS[chosen.route];
   const at = placement(ctx, wf, { request, sensitive, staged });
-  const said = readPrompt(ctx.root, ctx.env);
   const earlier = earlierPrompts(ctx.root, ctx.env);
   const skills = (wf.skills ?? []).map((s) => libraryPath('skills', s));
   const ledger = readLedger(ctx.root, ctx.env);
@@ -193,7 +214,7 @@ export function advise(ctx, { request, ticket, hint, sensitive, staged } = {}) {
   return clean({
     route: chosen.route,
     tier: at.tier,
-    // With a workflow to start, the steps would repeat its whole payload. If it cannot start, asking again without staged gives them.
+    // With a workflow to start, the steps would repeat its whole payload. If it cannot start, asking again with staged false gives them.
     steps: workflow ? undefined : workflowSteps({ route: chosen.route, kind: wf.kind, alwaysReview: wf.alwaysReview, work: { mainTier: at.main, tier: at.tier, worker: at.worker, brief } }),
     ...placedFields(ctx, at, { role, skills, ledger }),
     sensitive: at.isSensitive || undefined,

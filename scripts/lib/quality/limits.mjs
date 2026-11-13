@@ -1,6 +1,8 @@
 // quality/limits.mjs: the gate's thresholds, calibrated on 12 well-kept JavaScript and TypeScript projects (benchmarks/quality/). The
 // function limits are the common SonarSource and ESLint ones, which a few percent of those projects' functions exceed. Tests may run
 // longer, and a copy has to be SonarQube's 100 tokens, about ten lines, because shorter repeated patterns were most of the false alarms.
+// Python is held to the same limits: on 8 well-kept Python projects they fail about 8% of recent commits (the Python record in the
+// same folder).
 //
 // The gate runs at two scopes. A commit is a small step, checked before it is made against the last commit. A pull request is the whole
 // branch since it left the shared history. A function over a limit is over it at either scope, so every limit is shared except how much
@@ -16,10 +18,12 @@ export const CHANGE_SCOPES = Object.freeze(['commit', 'pr']);
 export const SCOPES = Object.freeze([...CHANGE_SCOPES, 'repo']);
 
 export const DEFAULT_LIMITS = Object.freeze({
-  function: Object.freeze({ cognitive: 15, depth: 4, lines: 60, params: 4 }),
-  component: Object.freeze({ cognitive: 15, depth: 4, lines: 150, params: 4 }),
-  test: Object.freeze({ cognitive: 8, depth: 3, lines: 150, params: 4 }),
-  file: Object.freeze({ cognitive: 100, added_cognitive: 25 }),
+  function: Object.freeze({ cognitive: 15, depth: 4, lines: 60, params: 4, options: 6 }),
+  component: Object.freeze({ cognitive: 15, depth: 4, lines: 150, params: 4, options: 12 }),
+  test: Object.freeze({ cognitive: 8, depth: 3, lines: 150, params: 4, options: 6 }),
+  growth: Object.freeze({ cognitive: 10, lines: 40 }),
+  file: Object.freeze({ cognitive: 100, added_cognitive: 25, lines: 400, added_lines: 300, functions: 40 }),
+  imports: Object.freeze({ fan_out: 15 }),
   clones: Object.freeze({ tokens: 100 }),
   css: Object.freeze({ nesting: 3, compound: 3, ids: 0, important: 0 }),
   suppressions: Object.freeze({ added: 0 }),
@@ -32,7 +36,7 @@ export const DEFAULT_LIMITS = Object.freeze({
 // hooks/hooks.json, is set above the maximum, so the host never cuts the gate off first.
 export const QUALITY_TIMEOUT = Object.freeze({ default: 300, min: 10, max: 1800 });
 
-const SCOPE_DEFAULTS = Object.freeze({ commit: {}, pr: { file: { added_cognitive: 100 } }, repo: {} });
+const SCOPE_DEFAULTS = Object.freeze({ commit: {}, pr: { file: { added_cognitive: 100, added_lines: 1000 } }, repo: {} });
 
 /** The default limits at one scope, as a fresh object. */
 export function limitsFor(scope = 'pr') {
@@ -59,7 +63,7 @@ function apply(limits, ignored, { where, prefix, group, key, value }) {
 
 function applyLayer(limits, ignored, { where, prefix, layer }) {
   for (const [group, values] of Object.entries(layer ?? {})) {
-    if (prefix === 'quality' && (SCOPES.includes(group) || group === 'timeout_seconds')) continue;
+    if (prefix === 'quality' && (SCOPES.includes(group) || group === 'timeout_seconds' || group === FORBID_KEY)) continue;
     if (!DEFAULT_LIMITS[group]) { ignored.push({ where, key: `${prefix}.${group}`, reason: NOT_A_LIMIT }); continue; }
     for (const [key, value] of Object.entries(values ?? {})) apply(limits, ignored, { where, prefix, group, key, value });
   }
@@ -77,6 +81,28 @@ export function resolveLimits({ global = {}, project = {}, scope = 'pr' } = {}) 
     applyLayer(limits, ignored, { where, prefix: `quality.${scope}`, layer: file?.quality?.[scope] });
   }
   return { limits, ignored: [...ignored, ...resolveTimeout({ global, project }).ignored] };
+}
+
+// Folders that must not import others, as quality.forbid_imports: [{ "from": "src/ui/", "to": "src/db/" }]. Each rule only adds a
+// restriction, so both the user's file and a project's may set them, and the gate holds a change to all of them.
+const FORBID_KEY = 'forbid_imports';
+const MAX_FORBID = 100;
+const prefix = (v) => typeof v === 'string' && v.length > 0 && v.length <= 200;
+
+/** { forbid: [{ from, to }], ignored } from both files. */
+export function resolveForbidden({ global = {}, project = {} } = {}) {
+  const forbid = [];
+  const ignored = [];
+  for (const [where, file] of [['global', global], ['project', project]]) {
+    const rules = file?.quality?.[FORBID_KEY];
+    if (rules === undefined) continue;
+    if (!Array.isArray(rules) || rules.length > MAX_FORBID) { ignored.push({ where, key: `quality.${FORBID_KEY}`, reason: `not a list of at most ${MAX_FORBID} { from, to } folder rules` }); continue; }
+    for (const r of rules) {
+      if (prefix(r?.from) && prefix(r?.to)) forbid.push({ from: r.from, to: r.to });
+      else ignored.push({ where, key: `quality.${FORBID_KEY}`, reason: 'a rule needs from and to, each a path prefix' });
+    }
+  }
+  return { forbid, ignored };
 }
 
 const TIMEOUT_KEY = 'quality.timeout_seconds';

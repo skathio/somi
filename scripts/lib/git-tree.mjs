@@ -154,21 +154,39 @@ export function readDiff(root, from, to) {
 // What a diff added, per file: { file → { status, added: [[first, last], ...] } }, with line numbers in the new version. The quality
 // gate scores only the functions these lines touch.
 function changedFiles(root, from, to) {
-  const out = new Map();
-  const status = git(root, ['diff', ...DIFF, '--name-status', '-z', from, to]).split('\0').filter(Boolean);
-  for (let i = 0; i + 1 < status.length; i += 2) out.set(status[i + 1], { status: status[i], added: [] });
-  return out;
+  return new Map(nameStatus(root, [...DIFF, from, to], 2).map(([status, file]) => [file, { status, added: [], hunks: [] }]));
 }
 
-const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+// `git diff --name-status -z` as rows of `width` fields: a status and one path, or two for a rename.
+function nameStatus(root, args, width) {
+  const parts = git(root, ['diff', '--name-status', '-z', ...args]).split('\0').filter(Boolean);
+  const rows = [];
+  for (let i = 0; i + width - 1 < parts.length; i += width) rows.push(parts.slice(i, i + width));
+  return rows;
+}
 
-// A hunk header's new side: its first line and how many lines it holds there. A hunk that only removes holds none.
+const HUNK = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
+// A hunk header's new side: its first line and how many lines it holds there. A hunk that only removes holds none. How many lines it
+// held on the old side is kept too, so a line the change did not touch can be traced back to where it was.
 function addHunk(entry, line) {
   const hunk = HUNK.exec(line);
   if (!hunk || !entry) return;
-  const first = Number(hunk[1]);
-  const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
+  const first = Number(hunk[2]);
+  const count = hunk[3] === undefined ? 1 : Number(hunk[3]);
   if (count > 0) entry.added.push([first, first + count - 1]);
+  entry.hunks.push({ first, count, removed: hunk[1] === undefined ? 1 : Number(hunk[1]) });
+}
+
+/** Where a line of the new version was in the old one, from addedRanges' hunks, or null when the change added it. */
+export function oldLine(hunks, line) {
+  let shift = 0;
+  for (const h of hunks) {
+    if (h.count > 0 && line >= h.first && line < h.first + h.count) return null;
+    const before = h.count > 0 ? h.first + h.count - 1 < line : h.first < line;
+    if (before) shift += h.count - h.removed;
+  }
+  return line - shift;
 }
 
 export function addedRanges(root, from, to) {
@@ -180,6 +198,12 @@ export function addedRanges(root, from, to) {
     else addHunk(file === null ? null : out.get(file), line);
   }
   return out;
+}
+
+/** Files a change moved, as git's rename detection pairs them at half or more alike: a Map from the old path to the new one. */
+export function renamedFiles(root, from, to) {
+  if (!OBJECT_ID.test(from) || !OBJECT_ID.test(to)) throw new Error('a recorded revision is not an object id');
+  return new Map(nameStatus(root, ['--no-ext-diff', '--no-textconv', '--no-color', '-M50%', '--diff-filter=R', from, to], 3).map(([, old, now]) => [old, now]));
 }
 
 /** Every file path in a commit or tree. */

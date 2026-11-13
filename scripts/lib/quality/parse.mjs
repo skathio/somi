@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'vendor', 'tree-sitter');
 export const MAX_FILE_BYTES = 512 * 1024;
 export const PARSE_TIMEOUT_MS = 5000;
-const LANGUAGES = { '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript', '.jsx': 'javascript', '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript', '.tsx': 'tsx', '.css': 'css', '.cs': 'c-sharp' };
+const LANGUAGES = { '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript', '.jsx': 'javascript', '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript', '.tsx': 'tsx', '.css': 'css', '.cs': 'c-sharp', '.py': 'python' };
 
 /** The grammar a file is parsed with, or null when the gate does not cover its language yet. */
 export const languageOf = (file) => LANGUAGES[path.extname(file).toLowerCase()] ?? null;
@@ -29,17 +29,22 @@ export function verifiedFile(name, dir = DIR) {
   return bytes;
 }
 
+// The runtime and each grammar are loaded once, as promises, so two parses that start together share one load. Each used to start its
+// own, and the second start of the runtime broke the grammar the first had loaded: "Incompatible language version 0".
+async function startRuntime() {
+  verifiedFile('web-tree-sitter.js');
+  const wasmBinary = verifiedFile('web-tree-sitter.wasm');
+  const mod = await import(pathToFileURL(path.join(DIR, 'web-tree-sitter.js')).href);
+  await mod.Parser.init({ wasmBinary });
+  return mod;
+}
+
 async function load(language) {
-  if (!runtime) {
-    verifiedFile('web-tree-sitter.js');
-    const wasmBinary = verifiedFile('web-tree-sitter.wasm');
-    const mod = await import(pathToFileURL(path.join(DIR, 'web-tree-sitter.js')).href);
-    await mod.Parser.init({ wasmBinary });
-    runtime = mod;
-  }
-  if (!grammars.has(language)) grammars.set(language, await runtime.Language.load(verifiedFile(`tree-sitter-${language}.wasm`)));
-  const parser = new runtime.Parser();
-  parser.setLanguage(grammars.get(language));
+  runtime ??= startRuntime();
+  const mod = await runtime;
+  if (!grammars.has(language)) grammars.set(language, mod.Language.load(verifiedFile(`tree-sitter-${language}.wasm`)));
+  const parser = new mod.Parser();
+  parser.setLanguage(await grammars.get(language));
   return parser;
 }
 

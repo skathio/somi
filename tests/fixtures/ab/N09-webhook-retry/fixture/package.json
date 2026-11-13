@@ -1,8 +1,0 @@
-{
-  "name": "n09-webhook-retry",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

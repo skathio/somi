@@ -35,7 +35,7 @@ import { migrate } from './lib/migrate.mjs';
 import { lastCheck, migratedFindings, pullRequest } from './lib/pr.mjs';
 import { closePlan, markMilestoneDone, planStatus, savePlan } from './lib/plan.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
-import { CHANGE_SCOPES, SCOPES, limitsFor, resolveLimits } from './lib/quality/limits.mjs';
+import { CHANGE_SCOPES, SCOPES, limitsFor, resolveForbidden, resolveLimits } from './lib/quality/limits.mjs';
 import { repoQuality } from './lib/quality/repo.mjs';
 import { qualityGate } from './lib/quality/gate.mjs';
 import { readReviews, recordReviews, reviewPlan } from './lib/reviews.mjs';
@@ -107,8 +107,10 @@ async function quality(ctx, args) {
     return report.ok ? 0 : 1;
   }
   const from = values.from ? resolveRef(ctx.root, values.from) : scope === 'commit' ? commitBase(ctx.root) : workBase(ctx.root);
-  const result = await qualityGate(ctx.root, { from, to, limits, now: ctx.now(), mode: values.benchmark ? 'benchmark' : 'project', repoFiles: listFiles(ctx.root, to) });
-  print({ ...result, scope, from, to, ...(ignored.length ? { ignored_config: ignored } : {}) });
+  const rules = values.benchmark ? { forbid: [], ignored: [] } : resolveForbidden({ global: ctx.configLayers[0], project: ctx.configLayers[1] });
+  const result = await qualityGate(ctx.root, { from, to, limits, forbid: rules.forbid, now: ctx.now(), mode: values.benchmark ? 'benchmark' : 'project', repoFiles: listFiles(ctx.root, to) });
+  const notApplied = [...ignored, ...rules.ignored];
+  print({ ...result, scope, from, to, ...(notApplied.length ? { ignored_config: notApplied } : {}) });
   return result.ok ? 0 : 1;
 }
 

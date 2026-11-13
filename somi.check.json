@@ -39,9 +39,10 @@
       "tests/reviews.test.mjs"
     ],
     "scripts/lib/git-tree.mjs": [
+      "tests/quality-rules.test.mjs",
+      "tests/quality.test.mjs",
       "tests/reviews.test.mjs",
-      "tests/signals.test.mjs",
-      "tests/quality.test.mjs"
+      "tests/signals.test.mjs"
     ],
     "scripts/lib/signals.mjs": [
       "tests/signals.test.mjs"
@@ -99,9 +100,6 @@
     "rules/": [
       "tests/surface.test.mjs"
     ],
-    "benchmarks/v2/": [
-      "tests/bench.test.mjs"
-    ],
     "scripts/lib/routes.mjs": [
       "tests/advisor.test.mjs"
     ],
@@ -153,52 +151,94 @@
       "tests/advisor.test.mjs"
     ],
     "scripts/lib/quality/parse.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
     "scripts/lib/quality/metrics.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
     "scripts/lib/quality/clones.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
     "scripts/lib/quality/css.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "scripts/lib/quality/limits.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs",
+      "tests/quality-coupling.test.mjs"
     ],
     "scripts/lib/quality/gate.mjs": [
-      "tests/quality.test.mjs"
-    ],
-    "tests/evals/lib/task-store.mjs": [
-      "tests/task-store.test.mjs",
-      "tests/canary.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs",
+      "tests/quality-coupling.test.mjs",
+      "tests/quality-slop.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
     "scripts/lib/quality/run.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
     "scripts/lib/quality/repo.mjs": [
-      "tests/quality.test.mjs"
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs",
+      "tests/quality-python.test.mjs"
     ],
-    "tests/evals/lib/manifest.mjs": [
-      "tests/manifest.test.mjs",
-      "tests/task-store.test.mjs"
+    "scripts/lib/quality/findings.mjs": [
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
-    "tests/evals/lib/score-hidden.mjs": [
-      "tests/score-hidden.test.mjs"
+    "scripts/lib/quality/functions.mjs": [
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
-    "tests/evals/lib/admit.mjs": [
-      "tests/admit.test.mjs"
+    "scripts/lib/quality/suppressions.mjs": [
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
-    "tests/evals/lib/ab-stream.mjs": [
-      "tests/ab-stream.test.mjs"
+    "scripts/lib/quality/totals.mjs": [
+      "tests/quality.test.mjs",
+      "tests/quality-rules.test.mjs"
     ],
-    "tests/evals/lib/ab-draw.mjs": [
-      "tests/ab-draw.test.mjs",
-      "tests/bench.test.mjs"
+    "scripts/lib/quality/coupling.mjs": [
+      "tests/quality-coupling.test.mjs"
     ],
-    "tests/evals/lib/ab-sandbox.mjs": [
-      "tests/bench.test.mjs"
+    "scripts/lib/quality/imports.mjs": [
+      "tests/quality-coupling.test.mjs"
+    ],
+    "scripts/lib/quality/exports.mjs": [
+      "tests/quality-coupling.test.mjs"
+    ],
+    "scripts/lib/quality/slop.mjs": [
+      "tests/quality-slop.test.mjs"
+    ],
+    "scripts/lib/quality/python.mjs": [
+      "tests/quality-python-gate.test.mjs",
+      "tests/quality-python.test.mjs"
+    ],
+    "scripts/lib/quality/python-findings.mjs": [
+      "tests/quality-python-gate.test.mjs",
+      "tests/quality-python.test.mjs"
+    ],
+    "scripts/lib/quality/python-exports.mjs": [
+      "tests/quality-python-gate.test.mjs",
+      "tests/quality-python.test.mjs"
+    ],
+    "scripts/lib/quality/python-imports.mjs": [
+      "tests/quality-python-gate.test.mjs",
+      "tests/quality-python.test.mjs"
+    ],
+    "scripts/lib/quality/js-source.mjs": [
+      "tests/quality-coupling.test.mjs"
+    ],
+    "scripts/lib/quality/path-aliases.mjs": [
+      "tests/quality-coupling.test.mjs"
     ]
   }
 }

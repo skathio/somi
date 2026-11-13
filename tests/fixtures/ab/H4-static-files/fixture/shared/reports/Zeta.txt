@@ -1,2 +1,0 @@
-reports/Zeta.txt
-shared file

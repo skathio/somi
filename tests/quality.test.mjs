@@ -122,6 +122,21 @@ test('copied code is found even with its names changed, and short or different c
   assert.deepEqual(findClones({ after: [{ file: 'b.js', tokens: tokensOf(b), size: 50 }], before: [{ file: 'b.js', tokens: tokensOf(b), size: 50 }], rest: [{ file: 'a.js', tokens: tokensOf(a), size: 50 }] }), [], 'a copy that was already there is not new');
 });
 
+// A template codebase holds many copies of one service. A change that adds the same line to each keeps the copies but makes none: on a
+// live benchmark run it was charged with 72 copies for one added field, and the agent spent its turn refactoring code it had not written.
+test('the same edit to code that was already copied is not a new copy, and a copy the change writes still is', async () => {
+  const body = (name, extra = '') => `export function ${name}(store, ctx, input) { const fields = readFields(input); if (!fields.ok) return fields; const row = { id: store.next(), ${extra}...fields.value, version: 1, created_at: ctx.at, created_by: ctx.actor }; store.insert(row); events.append(ctx, 'created', row.id); if (row.version !== 1) return fail('conflict'); return ok(row); }`;
+  const toks = async (file, src) => ({ file, tokens: tokensOf((await parseSource(file, src)).tree), size: 50 });
+  const kinds = ['a', 'b', 'c'];
+  const before = [];
+  const after = [];
+  for (const k of kinds) before.push(await toks(`${k}.js`, body(`create_${k}`)));
+  for (const k of kinds) after.push(await toks(`${k}.js`, body(`create_${k}`, 'tenant: ctx.tenant, ')));
+  assert.deepEqual(findClones({ after, before }), [], 'one added line in each existing copy');
+  const fresh = await toks('d.js', body('create_d', 'tenant: ctx.tenant, '));
+  assert.ok(findClones({ after: [...after, fresh], before }).some((c) => c.file === 'd.js'), 'a fourth copy the change writes is still found');
+});
+
 test('stylesheet rules: nesting, chained selectors, IDs and !important', async () => {
   const [rule] = cssRules((await parseSource('s.css', '.a .b > .c .d { color: red !important; }')).tree);
   assert.deepEqual([rule.compound, rule.important, rule.ids], [4, 1, 0]);

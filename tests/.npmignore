@@ -1,18 +1,3 @@
-# The eval corpus is scorer-facing: task specs carry the pass criteria, and
-# fixtures/README.md carries the invariant list, the trap table and the mis-billing table.
-# Publishing them would put the answer key in every consumer's node_modules.
-# Full packaging story is iteration 3.4c; this line exists so a release cut before then
-# cannot publish the corpus.
-evals/
-
-# The guard is inert without its subject: shipped alone it fails ~28 assertions against a tree
-# that is not in the package. Full packaging story is 3.4c.
-scripts/evals-fixtures.sh
-
-# Same reason, for the eval gate's decision-rule tests: their subject (tests/evals/lib) is not shipped.
-# Patterns here are relative to tests/, so this is scripts/, not tests/scripts/.
-scripts/eval-gate-*.sh
-
 # The opt-in manual cross-checks read the gitignored requirements folder; they are never run by
-# npm test and must not ship. Relative to tests/, as above.
+# npm test and must not ship. Patterns here are relative to tests/.
 scripts/manual/

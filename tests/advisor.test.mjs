@@ -43,6 +43,8 @@ test('large code work stays on medium in the conversation, and SoMi offers the s
   assert.equal(r.worker, undefined);
   assert.equal(r.workflow, undefined, 'only the user starts the staged workflow');
   assert.match(r.advice, /typing \/somi-deliver/, 'so SoMi tells the agent to offer it');
+  assert.match(r.advice, /go through the request line by line, check that each requirement is built and has a test, and build what is missing/, 'large work checks every requirement off against the request');
+  assert.doesNotMatch(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /line by line/, 'small work is not asked to');
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'main', 'medium'], ['review', 'subagent', null]]);
   assert.match(advise(makeCtx(makeRepo(t)), { request: 'Add a helper that doubles a number' }).advice, /review is due or run the quality gate: when your turn ends, SoMi checks the diff and tells you what to fix/, 'on Claude Code the stop hook checks for a review and the gate');
   assert.match(advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG }).advice, /when your turn ends, SoMi checks the diff and tells you what to fix/, 'Copilot CLI runs the same stop hook');
@@ -56,6 +58,7 @@ test('code that goes up to a worker gets a brief SoMi built, passed on unchanged
   assert.match(r.advice, /needs a stronger model/);
   assert.match(r.advice, /brief unchanged/);
   assert.match(r.advice, /no requirements or approach of your own/);
+  assert.match(briefOf(r), /SoMi's rules, which hold for this work, are in \S+digest\.md\. Read that file before anything else\./, 'a worker gets no session-start hook either');
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'subagent', 'medium'], ['review', 'subagent', null]]);
   assert.match(briefOf(r), /small, clear change/);
   assert.match(briefOf(r), /> Add a helper that doubles a number/);
@@ -157,9 +160,10 @@ test('work the user sends with /somi-deliver runs as the staged workflow on eith
   const ctx = makeCtx(makeRepo(t));
   const r = advise(ctx, { request: 'Add an export of all orders as CSV', staged: true });
   assert.equal(r.workflow.name, 'somi:deliver-stages');
+  assert.ok(fs.existsSync(r.workflow.args.rules_file) && r.workflow.args.rules_file.endsWith(path.join('rules', 'digest.md')), 'a stage gets no session-start hook, so the workflow names the rules file');
   assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
   assert.equal(r.workflow.args.request, 'Add an export of all orders as CSV');
-  assert.match(r.advice, /typed \/somi-deliver[\s\S]*Workflow tool[\s\S]*without staged for the steps/);
+  assert.match(r.advice, /typed \/somi-deliver[\s\S]*Workflow tool[\s\S]*staged false for the steps/);
   assert.equal(r.steps, undefined, 'the steps would repeat the workflow\'s payload');
   assert.ok(advise(ctx, { request: 'Add an export of all orders as CSV' }).steps, 'asked again without staged, they come back');
   assert.match(r.advice, /no script and no authoring guide/);
@@ -626,4 +630,25 @@ test('the config route shows the quality limits, which project values were ignor
 test('on Copilot, staged advice names the reload that registers the workflow without losing the conversation', (t) => {
   const r = advise(makeCtx(makeRepo(t), {}, 'copilot'), { request: BIG, staged: true });
   assert.match(r.advice, /reload (the )?extensions[\s\S]*\/clear/i);
+});
+
+test('a typed /somi-deliver starts the workflow even when somi_route is called without staged or a request', (t) => {
+  // On a benchmark draw the session called somi_route with nothing, got plain steps and built inline, which read as a staged result.
+  const dir = makeRepo(t);
+  savePrompt(dir, `/somi:somi-deliver ${BIG}`, env);
+  const bare = advise(makeCtx(dir), {});
+  assert.equal(bare.workflow?.name, 'somi:deliver-stages');
+  assert.match(bare.workflow.args.request, /^Add a helper that doubles a number\./, 'the typed text is the request when none was passed');
+  const fallback = advise(makeCtx(dir), { request: BIG, staged: false });
+  assert.equal(fallback.workflow, undefined, 'a session that cannot start the workflow asks again with staged false');
+  assert.ok(fallback.steps?.length > 0, 'and gets the steps');
+  assert.match(bare.advice, /call somi_route again with the same request and staged false for the steps/);
+  savePrompt(dir, `/somi-deliver ${BIG}`, env);
+  assert.equal(advise(makeCtx(dir), { request: BIG }).workflow?.name, 'somi:deliver-stages', 'the plain command name on Copilot');
+  savePrompt(dir, `/somi-deliver ${BIG}`, env);
+  assert.equal(advise(makeCtx(dir), { request: 'Fix the open review finding: escape the header in src/a.js' }).workflow, undefined, 'the fix after the workflow, in the same turn, does not start it again');
+  savePrompt(dir, '/somi-deliver', env);
+  assert.equal(advise(makeCtx(dir), {}).workflow, undefined, 'a bare command with no text is not a request');
+  savePrompt(dir, `Please explain /somi-deliver. ${BIG}`, env);
+  assert.equal(advise(makeCtx(dir), { request: BIG }).workflow, undefined, 'only a message that starts with the command');
 });

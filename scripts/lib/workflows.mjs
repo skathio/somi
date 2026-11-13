@@ -45,6 +45,10 @@ export const tierForReviewer = (name) => (Object.hasOwn(REVIEWERS, plainName(nam
 
 const LIBRARY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'library');
 export const libraryPath = (kind, name) => path.join(LIBRARY, kind, `${name}.md`);
+// SoMi's rules reach the conversation through a session-start hook, which an agent SoMi starts does not get. In the staged workflow on
+// two security tasks, the builder never saw the security floor and missed the trap the main session caught, so a brief names the file.
+export const RULES_FILE = path.join(LIBRARY, '..', 'rules', 'digest.md');
+export const rulesLine = (file = RULES_FILE) => `SoMi's rules, which hold for this work, are in ${file}. Read that file before anything else.`;
 export const roleBrief = (role) => fs.readFileSync(libraryPath('roles', role), 'utf8').trim();
 
 export function expertiseIndex() {
