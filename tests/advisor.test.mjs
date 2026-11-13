@@ -645,6 +645,8 @@ test('a typed /somi-deliver starts the workflow even when somi_route is called w
   assert.match(bare.advice, /call somi_route again with the same request and staged false for the steps/);
   savePrompt(dir, `/somi-deliver ${BIG}`, env);
   assert.equal(advise(makeCtx(dir), { request: BIG }).workflow?.name, 'somi:deliver-stages', 'the plain command name on Copilot');
+  savePrompt(dir, '/somi-deliver', env);
+  assert.equal(advise(makeCtx(dir), {}).workflow, undefined, 'a bare command with no text is not a request');
   savePrompt(dir, `Please explain /somi-deliver. ${BIG}`, env);
   assert.equal(advise(makeCtx(dir), { request: BIG }).workflow, undefined, 'only a message that starts with the command');
 });

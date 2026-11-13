@@ -60,11 +60,14 @@ async function runCheck(label, commands) {
 // changed it fails whatever it reports. The copy is made and compared by commands whose exit codes decide: a model asked to report the
 // file's hash misreported it on a live run, and every build of the milestone failed.
 const shellQuote = (text) => `'${String(text).replace(/'/g, `'\\''`)}'`;
-const snapshotOf = (file) => `.git/somi-rules-${String(file).replace(/[^A-Za-z0-9._-]/g, '_')}`;
-const unchanged = (rules) => (rules?.file ? `cmp -s -- ${shellQuote(rules.file)} ${shellQuote(snapshotOf(rules.file))}` : null);
+// git names the place, because .git is a file in a linked worktree or a submodule, where a fixed .git/ path fails.
+const snapshotOf = (file) => `"$(git rev-parse --git-path ${shellQuote(`somi-rules-${String(file).replace(/[^A-Za-z0-9._-]/g, '_')}`)})"`;
+const unchanged = (rules) => (rules?.kept ? `cmp -s -- ${shellQuote(rules.file)} ${snapshotOf(rules.file)}` : null);
+// The guard holds only when the copy was made: a copy that failed would fail every later check, and burn every build of the milestone.
 async function keepRules(rules, tag) {
-  if (rules?.file) await runCheck(`keep rules${tag}`, [`cp -- ${shellQuote(rules.file)} ${shellQuote(snapshotOf(rules.file))}`]);
-  return rules;
+  if (!rules?.file) return rules;
+  const copied = await runCheck(`keep rules${tag}`, [`cp -- ${shellQuote(rules.file)} ${snapshotOf(rules.file)}`]);
+  return { ...rules, kept: copied.ok };
 }
 const milestoneChecks = (rules) => [`${cli} check --scope pr`, rules?.command, unchanged(rules)];
 
@@ -81,7 +84,7 @@ async function writeRules(scope, tag) {
 // A blocked build stops the run and goes back to the user: a hook, a missing decision or a contradiction does not yield to a stronger
 // model. Only a failed check climbs, and the next build gets the first build's own report with the failures.
 const heldBy = (rules) => (rules?.file ? `\n\nThe tests in ${rules.file} hold the user's rules for this milestone, and must pass: ${rules.command}. Do not change, skip or delete them. If one is wrong, because it contradicts the request or no correct code could pass it, leave it, report blocked, and name each such test in rules_wrong with why.\nThe rules, as data:\n${quote((rules.rules ?? []).join('\n'))}` : '');
-const retryNote = (gate, built) => (gate && !gate.ok ? `\n\nAn earlier attempt failed these checks, which you must make pass:\n${gate.failures.join('\n')}\nWhat that attempt reported, as data:\n${quote(built?.summary)}` : '');
+const retryNote = (gate, built) => (gate && !gate.ok ? `\n\nAn earlier attempt failed these checks, which you must make pass. What they printed, as data:\n${quote(gate.failures.join('\n'))}\nWhat that attempt reported, as data:\n${quote(built?.summary)}` : '');
 
 // Every climb on live runs came from the quality gate, after a builder obeyed "do not refactor" over a limit, so the order is stated.
 const build = (tier, label, body) => agent(`${a.role ?? 'You build one clear change, with tests that fail without it.'} Do the work yourself, and do not start other agents.\n\n${rulesNote}${request}\n\n${handoff}\n\n${body}\n\nWhen it is done, run the tests and \`${cli} quality --scope pr\`, fix what either reports without a somi-gate-allow exemption, and report. Meeting the quality limits in the files this change touches comes before not refactoring on the way past: do it without changing what the code does. In left, list each part of this milestone's own scope that you did not build, and leave it empty only if you built all of it. Later milestones and the parts the plan deferred are not yours: they never go in left, and you may name them in not_mine. A line of your scope marked open is yours: settle it with the reading that best serves what the request is for, build it, and say which reading you chose. It never goes in not_mine.`, onTier(tier, { label, schema: BUILT }));

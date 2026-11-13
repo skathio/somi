@@ -427,8 +427,8 @@ test('a check passes only on every command\'s exit code, and a rule file that ch
     return answers()(prompt, opts);
   };
   const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, short);
-  assert.match(calls.find((c) => c.label === 'keep rules').prompt, /1\. cp -- 'test\/rules\.test\.mjs' '\.git\/somi-rules-test_rules\.test\.mjs'/);
-  assert.match(calls.find((c) => c.label === 'check').prompt, /3\. cmp -s -- 'test\/rules\.test\.mjs' '\.git\/somi-rules-test_rules\.test\.mjs'/);
+  assert.match(calls.find((c) => c.label === 'keep rules').prompt, /1\. cp -- 'test\/rules\.test\.mjs' "\$\(git rev-parse --git-path 'somi-rules-test_rules\.test\.mjs'\)"/, 'git names the place, so a linked worktree works');
+  assert.match(calls.find((c) => c.label === 'check').prompt, /3\. cmp -s -- 'test\/rules\.test\.mjs' "\$\(git rev-parse --git-path 'somi-rules-test_rules\.test\.mjs'\)"/);
   assert.ok(labels(calls).indexOf('keep rules') < labels(calls).indexOf('build on medium'), 'the copy is taken before any build');
   assert.equal(value.status, 'needs-attention', 'a check that reported one exit code for three commands did not pass');
   assert.ok(checks >= 2);
@@ -437,7 +437,20 @@ test('a check passes only on every command\'s exit code, and a rule file that ch
 test('a rule file name with a quote cannot break the check command', async () => {
   const quoted = (prompt, opts) => (opts.label === 'rules' ? { file: "test/it's.test.mjs", command: 'node --test', rules: ['r'] } : answers()(prompt, opts));
   const { calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, quoted);
-  assert.match(calls.find((c) => c.label === 'check').prompt, /cmp -s -- 'test\/it'\\''s\.test\.mjs' '\.git\/somi-rules-test_it_s\.test\.mjs'/);
+  assert.match(calls.find((c) => c.label === 'check').prompt, /cmp -s -- 'test\/it'\\''s\.test\.mjs' "\$\(git rev-parse --git-path 'somi-rules-test_it_s\.test\.mjs'\)"/);
+});
+
+test('a rule file whose copy failed is not guarded, so a failed copy cannot fail every build', async () => {
+  // In a linked worktree .git is a file: a copy into .git/ failed, and every later comparison would have failed every build.
+  const failedCopy = (prompt, opts) => (opts.label === 'keep rules' ? { ran: [{ exit: 1, output: 'Not a directory' }] } : answers()(prompt, opts));
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, failedCopy);
+  assert.doesNotMatch(calls.find((c) => c.label === 'check').prompt, /cmp -s/);
+  assert.equal(value.status, 'done');
+});
+
+test('check output handed to the next builder is quoted as data', async () => {
+  const { calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ gateOk: [false, true] }));
+  assert.match(calls.find((c) => c.label === 'repair on medium').prompt, /What they printed, as data:\n> somi check --scope pr exited 1: tests: 1 failed/);
 });
 
 test('a line of the request that no milestone covers is added to the last one', async () => {

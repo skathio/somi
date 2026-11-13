@@ -180,7 +180,8 @@ function placedFields(ctx, at, { role, skills, ledger }) {
 
 // The user typed /somi-deliver: a session that calls somi_route without staged, or with no request, still gets the workflow. On one
 // benchmark draw the session called somi_route with nothing, got plain steps and built inline, which read as a staged result.
-const DELIVER_TYPED = /^\/(?:somi:)?somi-deliver(?:\s|$)/;
+// Text must follow the command: a bare /somi-deliver is not a request, and starting the paid workflow on it would build nothing useful.
+const DELIVER_TYPED = /^\/(?:somi:)?somi-deliver\s+\S/;
 
 export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: flagged } = {}) {
   if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
