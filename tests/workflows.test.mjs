@@ -341,9 +341,10 @@ test('once every milestone is built, the high tier hardens the whole change agai
   const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS, rules_file: '/plugin/rules/digest.md' }, answers({ plan: THREE, hardened }));
   const harden = calls.find((c) => c.label === 'harden');
   assert.equal(harden.model, 'strong', 'the expensive path spends its high tier here');
-  assert.match(harden.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*in the terms of SoMi's security floor[\s\S]*write a test that fails, in one new test file, then fix the code[\s\S]*Do not change what the request states, any existing test or the rule tests/);
+  assert.match(harden.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*in the terms of SoMi's security floor[\s\S]*write a test that fails, in one new test file, then fix the code[\s\S]*Do not change what the request states, any existing test or any milestone's rule tests/);
   assert.ok(labels(calls).indexOf('harden') > labels(calls).indexOf('check 3/3') && labels(calls).indexOf('harden') < labels(calls).indexOf('review plan'), 'after the last milestone, before the final review');
-  assert.match(calls.find((c) => c.label === 'check after hardening').prompt, /node --test test\/rules\.test\.mjs/, 'the rule tests still hold after hardening');
+  const after = calls.find((c) => c.label === 'check after hardening').prompt;
+  assert.equal(after.split('node --test test/rules.test.mjs').length - 1, 3, 'every milestone\'s rule tests still hold after hardening, not only the last');
   assert.deepEqual(value.hardening, hardened);
   assert.equal(value.status, 'done');
 });
