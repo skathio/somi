@@ -57,9 +57,11 @@ The smoke slice now takes the registered tasks a bare agent solved least: N17 an
 | bare | 0/5 | 3/5 | 3/10 | about $0.40 |
 | somi5 | 4/5 | 4/5 | 8/10 | about $0.33 |
 | somi5, rules digest off | 1/3 | 1/3 | 2/6 | about $0.27 |
-| somi5-deliver, after its stages read the rules | 2/2 | 1/2 | 3/4 | about $0.83 |
+| somi5-deliver, after its stages read the rules | 2/2 | 1/2 (1/1 with the workflow) | 3/4 | about $0.83 |
 
 - **somi5 catches the traps bare misses, and costs less per solved task here.** On H4, bare missed the unprompted requirement on all five draws.
 - **The rules digest is what makes the difference.** Without it, somi5 falls to bare's rate. The catch came from the first implementation, not from a review: on N17 no review ran, and on H4 the security reviewer raised only Minors. That is the security floor at work.
 - **The staged workflow missed N17's trap on every draw until its stages read the rules.** A stage gets no session-start hook, and neither does a worker. Both now name the rules file and read it first.
 - **Not significant yet:** 8/10 against 3/10 gives p ≈ 0.07 on these draws. The rules were not tuned to these tasks: nothing in the digest names either trap, and adding the traps to it would teach to the test.
+
+**Correction.** One of those N17 draws, the one that failed, never started the workflow. The session called `somi_route` with no arguments, got plain steps and built inline. With the workflow, the staged arm solved both draws it ran on N17. A typed `/somi-deliver` now always starts the workflow, and the bench records `workflow_ran` on every draw.
