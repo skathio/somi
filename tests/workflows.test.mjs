@@ -32,7 +32,7 @@ const SCOUTED = { files: ['src/a.js'], test_command: 'node --test', repro_test: 
 const RULES = { file: 'test/rules.test.mjs', command: 'node --test test/rules.test.mjs', rules: ['another organisation\'s document is not_found'] };
 const SEATS = { needed: true, tree: 't', reviewers: [{ agent: 'somi:somi-security-reviewer', model: 'strong', brief: 'Review this diff.' }] };
 // Each stage is answered by the first entry whose label prefix matches; a reviewer, dispatched by its agent name, falls through.
-const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE } = {}) => {
+const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE, hardened = { risks: [], fixed: [] } } = {}) => {
   let gates = 0;
   let builds = 0;
   const stages = [
@@ -40,6 +40,7 @@ const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer,
     ['check repro', () => ({ failed: reproFails })],
     ['plan', () => plan],
     ['rules', () => RULES],
+    ['harden', () => hardened],
     ['build on', (prompt) => built(builds++, prompt)],
     ['check', () => ({ ok: gateOk[Math.min(gates++, gateOk.length - 1)], failures: ['tests: 1 failed'] })],
     ['review plan', () => (needed ? SEATS : { needed: false })],
@@ -301,7 +302,7 @@ test('a rule test a builder names as wrong goes back once to the rules stage, an
     ? { status: 'blocked', summary: 'make(app, undefined) creates acme: no code can refuse it.', left: [], rules_wrong: ['create refuses a wrong id: undefined becomes the default'] }
     : DONE);
   const { value, calls } = await load('deliver-stages').run({ request: 'Add workspaces', models: MODELS }, answers({ built }));
-  assert.deepEqual(labels(calls).filter((l) => /^(rules|build|check)/.test(l)), ['rules', 'build on medium', 'rules repair', 'build on medium', 'check']);
+  assert.deepEqual(labels(calls).filter((l) => /^(rules|build|check)/.test(l)), ['rules', 'build on medium', 'rules repair', 'build on medium', 'check', 'check after hardening']);
   const repair = calls.find((c) => c.label === 'rules repair');
   assert.equal(repair.model, 'everyday');
   assert.match(repair.prompt, /> create refuses a wrong id: undefined becomes the default[\s\S]*Keep a test that holds what a message states, even if the builder disagrees\. Do not weaken, skip or delete a test/);
@@ -333,4 +334,23 @@ test('the stages that write code or rule tests read SoMi\'s rules first, because
   for (const label of ['rules', 'build on medium']) assert.match(calls.find((c) => c.label === label).prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md\. Read that file before anything else\./, label);
   const none = await load('deliver-stages').run({ request: 'Add booking', models: MODELS }, answers());
   assert.doesNotMatch(none.calls.find((c) => c.label === 'build on medium').prompt, /SoMi's rules/);
+});
+
+test('once every milestone is built, the high tier hardens the whole change against what the request implies, and the check runs again', async () => {
+  const hardened = { risks: ['a name from the request reaches a file path'], fixed: ['the path is resolved inside the shared folder'], tests_file: 'test/harden.test.mjs' };
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS, rules_file: '/plugin/rules/digest.md' }, answers({ plan: THREE, hardened }));
+  const harden = calls.find((c) => c.label === 'harden');
+  assert.equal(harden.model, 'strong', 'the expensive path spends its high tier here');
+  assert.match(harden.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*in the terms of SoMi's security floor[\s\S]*write a test that fails, in one new test file, then fix the code[\s\S]*Do not change what the request states, any existing test or the rule tests/);
+  assert.ok(labels(calls).indexOf('harden') > labels(calls).indexOf('check 3/3') && labels(calls).indexOf('harden') < labels(calls).indexOf('review plan'), 'after the last milestone, before the final review');
+  assert.match(calls.find((c) => c.label === 'check after hardening').prompt, /node --test test\/rules\.test\.mjs/, 'the rule tests still hold after hardening');
+  assert.deepEqual(value.hardening, hardened);
+  assert.equal(value.status, 'done');
+});
+
+test('hardening that leaves the check failing is not done, and a run that stopped early is not hardened', async () => {
+  const broken = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ gateOk: [true, false] }));
+  assert.equal(broken.value.status, 'needs-attention');
+  const stopped = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE, gateOk: [true, false] }));
+  assert.ok(!labels(stopped.calls).includes('harden'));
 });

@@ -1,7 +1,7 @@
 export const meta = {
   name: 'deliver-stages',
   description: 'Deliver work in stages: a scout and checks on the cheap tier, a plan of milestones, and for each one the user\'s rules written as tests and the build on medium, a tier up when the checks fail, and review where the diff calls for it.',
-  phases: [{ title: 'Scout' }, { title: 'Check the handoff' }, { title: 'Plan' }, { title: 'Rules' }, { title: 'Build' }, { title: 'Verify' }, { title: 'Review' }],
+  phases: [{ title: 'Scout' }, { title: 'Check the handoff' }, { title: 'Plan' }, { title: 'Rules' }, { title: 'Build' }, { title: 'Verify' }, { title: 'Harden' }, { title: 'Review' }],
 }
 
 // The stages run in code, so each one gets its tier and none can be skipped. The models arrive in args from somi_route, which reads the
@@ -36,6 +36,7 @@ const RAN = { type: 'object', required: ['failed'], properties: { failed: { type
 const BUILT = { type: 'object', required: ['status', 'summary', 'left'], properties: { status: { type: 'string', enum: ['done', 'blocked'] }, summary: { type: 'string' }, left: { type: 'array', items: { type: 'string' } }, not_mine: { type: 'array', items: { type: 'string' } }, rules_wrong: { type: 'array', items: { type: 'string' } } } };
 const MAX_MILESTONES = 8;
 const MILESTONES = { type: 'object', required: ['milestones'], properties: { milestones: { type: 'array', items: { type: 'object', required: ['title', 'scope'], properties: { title: { type: 'string' }, scope: { type: 'string' }, done_when: { type: 'string' } } } }, deferred: { type: 'array', items: { type: 'string' } } } };
+const HARDENED = { type: 'object', required: ['risks', 'fixed'], properties: { risks: { type: 'array', items: { type: 'string' } }, fixed: { type: 'array', items: { type: 'string' } }, tests_file: { type: 'string' } } };
 const GATE = { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' }, failures: { type: 'array', items: { type: 'string' } } } };
 // somi_review takes a reviewer's report as an object. Asked without a schema, a host returns the reviewer's text instead.
 const FINDING = { type: 'object', required: ['severity', 'file', 'claim'], properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Blocker', 'Major', 'Minor', 'Nit'] }, boundary: { type: 'boolean' }, file: { type: 'string' }, line: { type: 'integer' }, claim: { type: 'string' }, evidence: { type: 'string' } } };
@@ -105,7 +106,19 @@ async function runMilestone(m, tag, scope) {
   const { built, gate, tier, rules } = await climb(scope, tag, await writeRules(scope, tag));
   const left = strings(built?.left);
   const stopped = outcome(m.title, built, gate, left);
-  return { title: m.title, ok: stopped === null, tier, left, summary: built?.summary ?? '', stopped, gate, rules: rules?.rules ?? [], rules_file: rules?.file ?? null };
+  return { title: m.title, ok: stopped === null, tier, left, summary: built?.summary ?? '', stopped, gate, rules: rules?.rules ?? [], rules_file: rules?.file ?? null, rules_command: rules?.command ?? null };
+}
+
+// The staged workflow is the expensive path, and it has to buy something plain SoMi does not. Once every milestone is built, the strongest
+// tier reads the whole change for what the request implies but never states, in the security floor's own terms, writes a failing test
+// for each real risk and fixes it. On two benchmark tasks a bare agent fails, what decided the result was exactly such an unstated
+// safety requirement. The rule tests and the check still hold the build to what the request states.
+async function harden() {
+  phase('Harden');
+  const found = await agent(`${rulesNote}You are the last check before this work ships. Read everything this work changed, with \`git status\` and \`git diff\`, new files included. Look for what a careful senior engineer would catch that the request does not spell out, in the terms of SoMi's security floor: input the new code trusts at a boundary, every sink it reaches, who may do what, secrets, and what happens when something fails half way. For each real risk in code this work added or changed, write a test that fails, in one new test file, then fix the code until it passes. Do not change what the request states, any existing test or the rule tests. Leave a risk you only suspect as a line in risks, not a change. Run the tests and \`${cli} quality --scope pr\`, and fix what either reports without a somi-gate-allow exemption. Return the risks you found, what you fixed and the test file.\n\n${request}`, onTier('high', { label: 'harden', schema: HARDENED }));
+  phase('Verify');
+  const gate = await agent(checkCommand({ command: results.at(-1)?.rules_command }), onTier('low', { label: 'check after hardening', schema: GATE }));
+  return { risks: strings(found?.risks), fixed: strings(found?.fixed), tests_file: found?.tests_file ?? null, ok: Boolean(gate?.ok), gate };
 }
 
 // Between milestones the reviewers the diff calls for read it, and what blocks it goes to the next builder, so an early mistake is not
@@ -175,6 +188,8 @@ for (const [i, m] of milestones.entries()) {
   if (!r.ok) break;
   reviewNote = i < milestones.length - 1 ? await reviewBetween(tag) : '';
 }
+const allBuilt = results.length === milestones.length && results.every((r) => r.ok);
+const hardened = allBuilt ? await harden() : null;
 phase('Review');
 const plan = await agent(`Run \`${cli} review\` and return what it prints, unchanged, as the fields asked for. Change nothing.`, onTier('low', { label: 'review plan', schema: PLAN }));
 // A reviewer that returns nothing is named, never dropped: somi_review refuses a set without it, because a missing security review must
@@ -185,8 +200,7 @@ const reviewsMissing = seats.filter((s) => !reviews.some((v) => v.agent === s.ag
 await runShards('review.done');
 
 const last = results[results.length - 1];
-const allBuilt = results.length === milestones.length && results.every((r) => r.ok);
-const done = allBuilt && reviewsMissing.length === 0;
+const done = allBuilt && hardened?.ok === true && reviewsMissing.length === 0;
 return {
   status: done ? 'done' : 'needs-attention',
   summary: results.map((r) => `${r.title}: ${r.summary}`).join('\n\n'),
@@ -197,7 +211,8 @@ return {
   // What a failed check would have done, not what happened: each milestone's tier says where its build ended. A session read the old
   // name, escalation, as a climb that had happened.
   climbs_on_failed_check: canClimb ? `from ${start} to ${next}` : 'never: no separate model for the tier above',
-  checks: last?.gate ?? null,
+  checks: hardened?.gate ?? last?.gate ?? null,
+  hardening: hardened && { risks: hardened.risks, fixed: hardened.fixed, tests_file: hardened.tests_file },
   rules: results.flatMap((r) => r.rules),
   rules_file: last?.rules_file ?? null,
   review_tree: plan?.tree ?? null,
