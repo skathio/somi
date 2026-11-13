@@ -221,6 +221,7 @@ test('deferred work gets no test and no build, and is returned to the user', asy
   const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE }));
   const rules = calls.find((c) => c.label === 'rules 1/3');
   assert.match(rules.prompt, /Write no test for a later milestone, or for a part the request defers, puts out of scope or leaves to the maintainer/);
+  assert.match(rules.prompt, /Then run `somi quality --scope pr` and fix what it reports in your file, without a somi-gate-allow exemption/, 'a rules file the builder may not change must meet the limits itself');
   for (const c of calls.filter((x) => /^(rules|build on)/.test(x.label))) assert.match(c.prompt, /These parts are deferred: build nothing for them and write no test for them\.\n> Run the paid benchmark/);
   assert.deepEqual(value.deferred, ['Run the paid benchmark']);
 });
