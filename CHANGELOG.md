@@ -37,6 +37,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ### Fixed
 
+- **Workers and staged-workflow stages read SoMi's rules.** The rules reach the conversation through a session-start hook, which an agent SoMi starts does not get. On two security benchmark tasks the staged builder never saw the security floor and missed the trap that somi5's main session caught on most draws. A worker's brief and the workflow's rules and build stages now name the rules file and read it first.
 - **The same edit to code that was already copied is not a new copy.** On a benchmark task built from one template, adding one field to 24 copies of a service failed the change with 72 copies, and the agent spent its turn refactoring code it had not written. An exact copy now counts only when most of its stretch was not copied before. On fifteen projects, known-good commits failing on copies fell from 10 to 6 of 212, and the same planted copies were caught as before.
 - **Two parses that start together share one load of the parser.** Each used to start the runtime itself, and the second start broke the grammar the first had loaded. Nothing in SoMi parses concurrently yet.
 - **The gate no longer crashes on deeply nested code.** On prettier, a stack overflow ended the whole run. Now such a file is reported as not analyzed, which fails in a benchmark, and the gate goes on. Its added lines are still checked for suppressions, line by line.

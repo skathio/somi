@@ -326,3 +326,11 @@ test('a milestone quotes the request and decides nothing, and the request wins o
   assert.match(calls.find((c) => c.label === 'plan').prompt, /quote the lines it covers, and decide nothing about how to meet them\. Where a line can be read more than one way, quote it and say only that it is open, with no hint at an answer/);
   assert.match(calls.find((c) => c.label === 'build on medium 1/3').prompt, /Its scope quotes the request; where they differ, the request wins\./);
 });
+
+test('the stages that write code or rule tests read SoMi\'s rules first, because a stage gets no session-start hook', async () => {
+  // In the staged workflow on two security tasks, the builder never saw the security floor and missed the trap the main session caught.
+  const { calls } = await load('deliver-stages').run({ request: 'Add booking', models: MODELS, rules_file: '/plugin/rules/digest.md' }, answers());
+  for (const label of ['rules', 'build on medium']) assert.match(calls.find((c) => c.label === label).prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md\. Read that file before anything else\./, label);
+  const none = await load('deliver-stages').run({ request: 'Add booking', models: MODELS }, answers());
+  assert.doesNotMatch(none.calls.find((c) => c.label === 'build on medium').prompt, /SoMi's rules/);
+});

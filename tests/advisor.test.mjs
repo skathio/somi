@@ -58,6 +58,7 @@ test('code that goes up to a worker gets a brief SoMi built, passed on unchanged
   assert.match(r.advice, /needs a stronger model/);
   assert.match(r.advice, /brief unchanged/);
   assert.match(r.advice, /no requirements or approach of your own/);
+  assert.match(briefOf(r), /SoMi's rules, which hold for this work, are in \S+digest\.md\. Read that file before anything else\./, 'a worker gets no session-start hook either');
   assert.deepEqual(r.steps.map((s) => [s.step, s.run_on, s.tier ?? null]), [['build', 'subagent', 'medium'], ['review', 'subagent', null]]);
   assert.match(briefOf(r), /small, clear change/);
   assert.match(briefOf(r), /> Add a helper that doubles a number/);
@@ -159,6 +160,7 @@ test('work the user sends with /somi-deliver runs as the staged workflow on eith
   const ctx = makeCtx(makeRepo(t));
   const r = advise(ctx, { request: 'Add an export of all orders as CSV', staged: true });
   assert.equal(r.workflow.name, 'somi:deliver-stages');
+  assert.ok(fs.existsSync(r.workflow.args.rules_file) && r.workflow.args.rules_file.endsWith(path.join('rules', 'digest.md')), 'a stage gets no session-start hook, so the workflow names the rules file');
   assert.deepEqual(r.workflow.args.models, { low: 'haiku', medium: 'sonnet', high: 'opus' });
   assert.equal(r.workflow.args.request, 'Add an export of all orders as CSV');
   assert.match(r.advice, /typed \/somi-deliver[\s\S]*Workflow tool[\s\S]*without staged for the steps/);

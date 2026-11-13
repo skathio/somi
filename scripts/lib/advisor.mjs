@@ -15,7 +15,7 @@ import { earlierPrompts, readPrompt, saveEarlier } from './prompt.mjs';
 import { LONG_REQUEST, WHEN, classify } from './routes.mjs';
 import { shardsFor } from './shards.mjs';
 import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
-import { WORKFLOWS, expertiseIndex, libraryPath, roleBrief, workerAgent } from './workflows.mjs';
+import { RULES_FILE, WORKFLOWS, expertiseIndex, libraryPath, roleBrief, rulesLine, workerAgent } from './workflows.mjs';
 import { copilotName } from './copilot-workflow.mjs';
 import { globalConfigPath } from './config-files.mjs';
 import { QUALITY_TIMEOUT, SCOPES, resolveLimits, resolveTimeout } from './quality/limits.mjs';
@@ -54,7 +54,7 @@ export const earlierText = (file) => (file ? `The user's earlier messages in thi
 const withoutCommand = (said) => said.trim().replace(/^\/[\w:-]+\s+/, '');
 
 export function workerBrief({ role, request, said, earlierAt, ledger, skills = [] }) {
-  const parts = [role, 'Do the work yourself, here, and do not call SoMi\'s tools or start other agents.'];
+  const parts = [role, 'Do the work yourself, here, and do not call SoMi\'s tools or start other agents.', rulesLine()];
   if (ledger) parts.push(`Decisions and limits already set, which hold for this work:\n${ledger}`);
   if (skills.length > 0) parts.push(`Read one of these only if the work needs it:\n${skills.map((s) => `- ${s}`).join('\n')}`);
   if (earlierAt) parts.push(earlierText(earlierAt));
@@ -109,7 +109,7 @@ function deliverWorkflow(ctx, { route, request, said, earlierAt, ledger, role, t
   for (const step of ['work-item.start', 'review.done']) {
     try { const refs = shardsFor({ root: ctx.root, step, env: ctx.env }).usable.filter((b) => b.mode !== 'write').map((b) => b.ref); if (refs.length) shards[step] = refs; } catch { /* a broken config skips shards, as it does elsewhere */ }
   }
-  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, earlier_file: earlierAt ?? undefined, route, ledger, role, models, startTier: tier, cli: somiCommand('').trim(), shards: Object.keys(shards).length ? shards : undefined }) };
+  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, earlier_file: earlierAt ?? undefined, route, ledger, role, models, startTier: tier, cli: somiCommand('').trim(), rules_file: RULES_FILE, shards: Object.keys(shards).length ? shards : undefined }) };
 }
 const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // The conversation's part is small on purpose: start it, wait, relay. The workflow already read the code, built, ran the checks and asked
