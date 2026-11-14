@@ -32,7 +32,7 @@ const SCOUTED = { files: ['src/a.js'], test_command: 'node --test', repro_test: 
 const RULES = { file: 'test/rules.test.mjs', command: 'node --test test/rules.test.mjs', rules: ['another organisation\'s document is not_found'] };
 const SEATS = { needed: true, tree: 't', reviewers: [{ agent: 'somi:somi-security-reviewer', model: 'strong', brief: 'Review this diff.' }] };
 // Each stage is answered by the first entry whose label prefix matches; a reviewer, dispatched by its agent name, falls through.
-const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE, hardened = { risks: [], fixed: [] } } = {}) => {
+const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE, hardened = { risks: [], fixed: [] }, traced = { gaps: [], fixed: [], open: [] } } = {}) => {
   let gates = 0;
   let builds = 0;
   const stages = [
@@ -41,6 +41,7 @@ const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer,
     ['plan', () => plan],
     ['rules', () => RULES],
     ['harden', () => hardened],
+    ['trace', () => traced],
     ['build on', (prompt) => built(builds++, prompt)],
     ['repair on', (prompt) => built(builds++, prompt)],
     ['keep rules', (prompt) => ({ ran: (prompt.match(/^\d+\. /gm) ?? []).map(() => ({ exit: 0 })) })],
@@ -357,9 +358,11 @@ test('once every milestone is built, the high tier hardens the whole change agai
   const harden = calls.find((c) => c.label === 'harden');
   assert.equal(harden.model, 'strong', 'the expensive path spends its high tier here');
   // On a live run the pass found a lone surrogate and a year past 9999, and missed how a browser reads the response the feature served.
+  assert.match(harden.prompt, /First list in sinks every place the new code's output or input goes, one line each: what goes there, who or what reads it and how it will read it, and what in the code keeps that safe, or that nothing does\. Then go through that list/);
   assert.match(harden.prompt, /every sink it writes to[\s\S]*an HTTP response and its headers[\s\S]*how the side that receives it will read what it gets[\s\S]*Prefer the risks a real deployment meets over unlikely edge cases/);
   assert.match(harden.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*in the terms of SoMi's security floor[\s\S]*write a test that fails, in one new test file, then fix the code[\s\S]*Do not change any existing test, or the rule tests in test\/rules\.test\.mjs/);
   assert.deepEqual(labels(calls).filter((l) => /^(check 3\/3|review plan|harden|check after hardening)/.test(l)), ['check 3/3', 'review plan', 'harden', 'check after hardening', 'review plan after hardening'], 'review, then harden what it found, then check, then review the tree that ships');
+  assert.ok(labels(calls).indexOf('trace') > labels(calls).indexOf('check 3/3') && labels(calls).indexOf('trace') < labels(calls).indexOf('review plan'), 'the trace runs on the whole build, before the review reads it');
   assert.match(calls.find((c) => c.label === 'check after hardening').prompt, /\d+\. node --test$/m, 'the project\'s own suite runs at the end');
   const after = calls.find((c) => c.label === 'check after hardening').prompt;
   assert.equal(after.split('node --test test/rules.test.mjs').length - 1, 3, 'every milestone\'s rule tests still hold after hardening, not only the last');
@@ -492,4 +495,33 @@ test('a rules repair that returns no rules keeps the ones it was given', async (
   const repair = (prompt, opts) => (opts.label === 'rules repair' ? { file: 'test/rules.test.mjs', command: 'node --test test/rules.test.mjs', rules: [] } : answers({ built })(prompt, opts));
   const { calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, repair);
   assert.match(calls.filter((c) => c.label === 'build on medium')[1].prompt, /> another organisation's document is not_found/);
+});
+
+test('once every milestone is built, a fresh high-tier agent checks the code against each numbered line of the request, at the ends of every limit', async () => {
+  const traced = { gaps: ['an empty list returned nothing, not its header'], fixed: ['the header is written for an empty list'], open: [], tests_file: 'test/trace.test.mjs' };
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add an export.\nAn export starts with a header row.', models: MODELS, rules_file: '/plugin/rules/digest.md' }, answers({ plan: THREE, traced }));
+  const trace = calls.find((c) => c.label === 'trace');
+  assert.equal(trace.model, 'strong');
+  assert.match(trace.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*take the request's lines below one at a time[\s\S]*read each clause by clause[\s\S]*try its ends as well: none, one, and at and just past each limit/);
+  assert.match(trace.prompt, /add a test that fails, in one new test file, then fix the code until it passes\. Change no behaviour the request states, no existing test, and none of the rule tests in test\/rules\.test\.mjs/);
+  assert.match(trace.prompt, /The request's lines, numbered:\n1: Add an export\.\n2: An export starts with a header row\./);
+  assert.deepEqual(value.trace, traced);
+  assert.equal(value.status, 'done');
+});
+
+test('a line of the request the trace could not meet means the work is not done, and a run that stopped is not traced', async () => {
+  const unmet = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ traced: { gaps: ['g'], fixed: [], open: ['the export ignores state'] } }));
+  assert.equal(unmet.value.status, 'needs-attention');
+  assert.equal(unmet.value.stopped, 'a line of the request is still unmet');
+  const silent = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ traced: null }));
+  assert.equal(silent.value.status, 'needs-attention', 'a trace that returned nothing is not a clean one');
+  assert.deepEqual(silent.value.trace.open, ['the trace returned nothing, so no line was checked']);
+  const stopped = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ gateOk: [false] }));
+  assert.ok(!labels(stopped.calls).includes('trace'));
+  assert.equal(stopped.value.trace, null);
+});
+
+test('the rule tests hold each rule about a list, a count, a limit or a range at its ends', async () => {
+  const { calls } = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers());
+  assert.match(calls.find((c) => c.label === 'rules').prompt, /A rule about a list, a count, a limit or a range holds at its ends as well: test it with none, with one, and at and just past each limit it names\./);
 });
