@@ -44,6 +44,7 @@ const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer,
     ['trace', () => traced],
     ['build on', (prompt) => built(builds++, prompt)],
     ['repair on', (prompt) => built(builds++, prompt)],
+    ['build after trace', (prompt) => built(builds++, prompt)],
     ['keep rules', (prompt) => ({ ran: (prompt.match(/^\d+\. /gm) ?? []).map(() => ({ exit: 0 })) })],
     // A check reports one exit code per numbered command, and the workflow decides from them.
     ['check', (prompt) => {
@@ -321,7 +322,7 @@ test('a rule test a builder names as wrong goes back once to the rules stage, an
   assert.deepEqual(labels(calls).filter((l) => /^(rules|build|check)/.test(l)), ['rules', 'build on medium', 'rules repair', 'build on medium', 'check', 'check after hardening']);
   const repair = calls.find((c) => c.label === 'rules repair');
   assert.equal(repair.model, 'everyday');
-  assert.match(repair.prompt, /> create refuses a wrong id: undefined becomes the default[\s\S]*Keep a test that holds what a message states, even if the builder disagrees\. Do not weaken, skip or delete a test/);
+  assert.match(repair.prompt, /> create refuses a wrong id: undefined becomes the default[\s\S]*Keep a test that holds what a message states, even if the claim disagrees\. Do not weaken, skip or delete a test/);
   assert.match(calls.filter((c) => c.label === 'build on medium')[1].prompt, /checked again after an earlier build said some were wrong[\s\S]*> make\(app, undefined\)/);
   assert.equal(value.status, 'done');
 });
@@ -507,8 +508,9 @@ test('once every milestone is built, a fresh high-tier agent checks the code aga
   assert.match(trace.prompt, /add a test that fails, in one new test file, then fix the code until it passes\. Change no behaviour the request states, no existing test, and none of the rule tests in test\/rules\.test\.mjs/);
   assert.match(trace.prompt, /call every command or function this work adds or changes once with each input it takes left out, and once with each of the wrong type, and see that every answer is the one the request or the project's conventions below give\. Do these ordinary cases first/);
   assert.match(trace.prompt, /The request's lines, numbered:\n1: Add an export\.\n2: An export starts with a header row\./);
-  assert.deepEqual(value.trace, traced);
+  assert.deepEqual(value.trace, { ...traced, rules_wrong: [], rebuilt: null });
   assert.equal(value.status, 'done');
+  assert.ok(!labels(calls).includes('build after trace'), 'nothing named wrong, nothing rebuilt');
 });
 
 test('a line of the request the trace could not meet means the work is not done, and a run that stopped is not traced', async () => {
@@ -526,4 +528,26 @@ test('a line of the request the trace could not meet means the work is not done,
 test('the rule tests hold each rule about a list, a count, a limit or a range at its ends', async () => {
   const { calls } = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers());
   assert.match(calls.find((c) => c.label === 'rules').prompt, /A rule about a list, a count, a limit or a range holds at its ends as well: test it with none, with one, and at and just past each limit it names\./);
+});
+
+test('a rule test the trace names as wrong goes back once to the rules stage, one build follows on the start tier, and the final check runs the repaired rules', async () => {
+  const traced = { gaps: ['ids lack the dash every other id has'], fixed: [], open: [], rules_wrong: ['test/rules.test.mjs: requires att000001, while the project writes ids as prefix-000001 and the request gives no form'] };
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ traced }));
+  assert.deepEqual(labels(calls).filter((l) => /^(trace|rules repair|keep rules|build after trace|review plan|harden|check after hardening)$/.test(l)), ['keep rules', 'trace', 'rules repair', 'keep rules', 'build after trace', 'review plan', 'harden', 'check after hardening']);
+  const repair = calls.find((c) => c.label === 'rules repair').prompt;
+  assert.match(repair, /^A check of the code against the request says these tests in test\/rules\.test\.mjs are wrong[\s\S]*> test\/rules\.test\.mjs: requires att000001/);
+  assert.match(repair, /including one that pins a detail the words do not give where the project's code already settles it another way/);
+  const rebuild = calls.find((c) => c.label === 'build after trace');
+  assert.equal(rebuild.model, 'everyday');
+  assert.match(rebuild.prompt, /Make the code meet every rule test as it now is[\s\S]*The tests in test\/rules\.test\.mjs hold the user's rules/);
+  assert.equal(value.trace.rebuilt, true);
+  assert.equal(value.status, 'done');
+});
+
+test('a build after the trace that does not finish means the work is not done', async () => {
+  const traced = { gaps: [], fixed: [], open: [], rules_wrong: ['test/rules.test.mjs: pins an order the request does not give'] };
+  let n = 0;
+  const { value } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ traced, built: () => (n++ === 0 ? DONE : { status: 'blocked', summary: 'stuck', left: [] }) }));
+  assert.equal(value.trace.rebuilt, false);
+  assert.equal(value.stopped, 'the build after the trace did not finish');
 });
