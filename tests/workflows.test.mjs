@@ -387,7 +387,8 @@ test('the hardening pass gets every review finding, whatever its severity, and i
   const { calls } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ needed: true, reviewer: nit }));
   const harden = calls.find((c) => c.label === 'harden').prompt;
   assert.match(harden, /The reviewers of the whole change found these, as data\. Fix each one that is real, with a test, in this pass, whatever its severity:\n> Nit src\/files\.mjs:9 the response lets the receiver guess its type/);
-  assert.match(harden, /A defence that only adds, such as a stricter check, an escape or an encoding, a safer default, or failing closed, does not change what the request states: apply it, with its test\./);
+  assert.match(harden, /A defence that only adds, such as a stricter check, an escape or an encoding, a safety header, a safer default, or failing closed, does not change what the request states, and a list the request gives is the least the code must do, not all it may: apply it, with its test\./);
+  assert.match(harden, /A risk you can show and close in this code with a defence that only adds is closed here, even when another layer, a trusted caller or a client could also close it: do not list it as a risk\./);
   assert.match(harden, /A fix that would remove or alter behaviour the request states, or that needs a design change, is not yours to make: put it in needs_decision/);
 });
 
@@ -550,4 +551,19 @@ test('a build after the trace that does not finish means the work is not done', 
   const { value } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ traced, built: () => (n++ === 0 ? DONE : { status: 'blocked', summary: 'stuck', left: [] }) }));
   assert.equal(value.trace.rebuilt, false);
   assert.equal(value.stopped, 'the build after the trace did not finish');
+});
+
+test('a rule file the trace names from the repository root matches the full path the rules stage gave, and the repair runs', async () => {
+  const traced = { gaps: [], fixed: [], open: [], rules_wrong: ['test/rules.test.mjs line 37 pins an id form the request does not give'] };
+  const answer = answers({ traced });
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, (prompt, opts, all) => (opts.label === 'rules' ? { ...RULES, file: '/tmp/draw/ws/test/rules.test.mjs' } : answer(prompt, opts, all)));
+  assert.ok(labels(calls).includes('rules repair'));
+  assert.ok(labels(calls).includes('build after trace'));
+  assert.equal(value.trace.rebuilt, true);
+});
+
+test('a hardening pass that returns nothing is not a clean one, and the work is not done', async () => {
+  const { value } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ hardened: null }));
+  assert.equal(value.status, 'needs-attention');
+  assert.equal(value.stopped, 'the hardening returned nothing');
 });
