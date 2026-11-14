@@ -505,6 +505,7 @@ test('once every milestone is built, a fresh high-tier agent checks the code aga
   assert.equal(trace.model, 'strong');
   assert.match(trace.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*take the request's lines below one at a time[\s\S]*read each clause by clause[\s\S]*try its ends as well: none, one, and at and just past each limit/);
   assert.match(trace.prompt, /add a test that fails, in one new test file, then fix the code until it passes\. Change no behaviour the request states, no existing test, and none of the rule tests in test\/rules\.test\.mjs/);
+  assert.match(trace.prompt, /call every command or function this work adds or changes once with each input it takes left out, and once with each of the wrong type, and see that every answer is the one the request or the project's conventions below give\. Do these ordinary cases first/);
   assert.match(trace.prompt, /The request's lines, numbered:\n1: Add an export\.\n2: An export starts with a header row\./);
   assert.deepEqual(value.trace, traced);
   assert.equal(value.status, 'done');
