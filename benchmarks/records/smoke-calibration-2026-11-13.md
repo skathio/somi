@@ -68,14 +68,17 @@ The smoke slice now takes the registered tasks a bare agent solved least: N17 an
 
 ## `/somi-deliver` on hard medium and large tasks (2026-11-14)
 
-Three new tasks, each decided by safety requirements the ticket does not state: two medium (one in JavaScript, one in strict TypeScript) and one large. They share a domain, so the two medium results are correlated. Three draws per arm, Sonnet as the session, Haiku as the low tier, Opus as the high tier only. The first round on the medium JavaScript task found a gap: the staged builders never saw the project's documented conventions, and two of three draws answered a missing field against the README. With that fixed (the scout quotes the conventions and every stage gets them), the rounds below ran on one pin:
+Four new tasks, each decided by safety requirements the ticket does not state: two medium (one in JavaScript, one in strict TypeScript) and two large (the same split). They share a domain, so the two medium results are correlated, and so are the two large ones. Three draws per arm, Sonnet as the session, Haiku as the low tier, Opus as the high tier only. The first round on the medium JavaScript task found a gap: the staged builders never saw the project's documented conventions, and two of three draws answered a missing field against the README. With that fixed (the scout quotes the conventions and every stage gets them), the rounds below ran on one pin:
 
 | Segment | bare | somi5 | somi5-deliver | Deliver dollars per draw, against somi5 |
 |---|---|---|---|---|
 | Medium (two tasks) | 0/5 | 0/6 | 6/6 | $1.76 against $0.52 (3.4x) |
-| Large (one task) | 0/3 | 0/3 | 3/3 | $4.20 against $1.28 (3.3x) |
+| Large (two tasks) | 0/6 | 0/6 | 4/6 | $4.19 against $1.31 (3.2x) |
+| of which the TypeScript task | 0/3 | 0/3 | 1/3 | $4.19 against $1.34 (3.1x) |
 | Small (two tasks, before the fix) | 2/6 | 4/6 | 6/6 | $0.99 against $0.31 (3.2x) |
 
-- **The workflow ran on every staged draw.** Every unsolved draw of bare and somi5 missed the same unstated requirements: a download must tell the browser not to guess its type, including through a share link. The staged hardening pass found and fixed them each time.
-- **The proposed rule cannot pass on this evidence as written.** It compares dollars per solved task, and somi5 solved none, so the ratio is undefined and the rule reads it as a failure. The large segment also has one task, and the rule asks for at least two. Both are gaps in the rule, not in the results, and amending a pre-registered rule is the maintainer's call.
-- **Not shown yet:** whether the gap holds on medium and large tasks where somi5 sometimes succeeds, and on more than one large task.
+- **The workflow ran on every staged draw.** Every unsolved draw of bare and somi5 missed the same unstated requirements: a download must tell the browser not to guess its type, including through a share link. On the medium tasks and the JavaScript large task, the staged hardening pass found and fixed them each time.
+- **On the large TypeScript task, two of three staged draws failed.** One fixed everything but the same two type-guessing requirements, so hardening missed them there. The other failed one functional check on share links, with 43 of 44 tests passing. The bench keeps no workspace, so which assertion it failed is not known.
+- **The rule was amended before these verdicts:** where somi5 solved none, it compares dollars per draw and requires the staged arm to solve at least one. Margin 0 and the 4x cost limit are still proposed, pending the maintainer.
+- **Verdicts at those settings:** medium **pays** (gain 1.0 on both tasks, 3.4x per draw). Large **does not pay**: the gain is 1.0 and 0.33 on its two tasks, and with two paired tasks the interval runs from -3.6 to 4.9. The cost passes at 3.2x. What fails is the evidence for a gain: two tasks cannot show one unless they agree exactly.
+- **Not shown yet:** whether the gap holds on medium and large tasks where somi5 sometimes succeeds, and on a third large task, which large needs for a bound that can clear.
