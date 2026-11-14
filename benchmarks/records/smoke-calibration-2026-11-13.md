@@ -91,3 +91,29 @@ Four new tasks, each decided by safety requirements the ticket does not state: t
   - Large **does not pay**. The gain is 1.0, 0.33 and 0.33 on its three tasks; the mean is 0.56 and the interval runs from -0.40 to 1.51. The cost passes at 3.2x. The evidence fails because, on the two harder tasks, the staged workflow solved only one draw in three.
 - **What would change the large verdict:** a higher solve rate on the staged arm. The gap is in finishing the functional work, not in the unstated requirements, so more tasks at the current rate would not be enough.
 - **Not shown yet:** whether the gap holds on medium and large tasks where somi5 sometimes succeeds.
+
+## Raising the staged solve rate on large tasks (2026-11-15)
+
+The failed staged draws above were traced to their causes, and the workflow was changed four times. Each change is stated in general terms, and none names a task. The changes were:
+- a pass that reads the finished code against every line of the request;
+- rule tests that hold limits at their ends;
+- a hardening pass that lists every sink before it works through them, and checks lookups keyed by a name the caller sends;
+- a trace that tries every input left out and wrong-typed first, takes the reading the words support best, and sends a wrong rule test back to the rules stage.
+
+The version that has all of these except the last fix was measured on the three large tasks, three draws each. Plain SoMi and bare are compared from the earlier rounds, because nothing they run changed between the pins.
+
+| Large task | bare | somi5 | somi5-deliver, before | somi5-deliver, this version |
+|---|---|---|---|---|
+| LG5 (JavaScript) | 0/3 | 0/3 | 3/3 | 2/3 |
+| LG6 (TypeScript) | 0/3 | 0/3 | 1/3 | 1/3 |
+| LG7 (Python, another domain) | 0/3 | 0/3 | 1/3 | 1/3 |
+| **All three** | **0/9** | **0/9** | **5/9** | **4/9** |
+
+- **The verdict is still that large does not pay.** The gain is 0.44, with an interval from -0.03 to 0.92, just short of the margin. Dollars per draw are $5.10 against $1.29, which is 3.96x, just inside the 4x limit. The trace pass added about $1 a draw.
+- **The solve rate did not rise, and every failure has a known cause in the workflow. None is a capability limit.**
+  - Three failures came from the hardening pass: it named the risk, then left it to another layer, a trusted caller or a browser. The risks were internal webhook addresses, a missing safety header, and spreadsheet formulas.
+  - One came from a rule test that pinned an id form the request never gave. The trace named it, but the repair never ran, because one stage gave a full path and the other a path from the repository root.
+  - One came from the trace, which left an import of unknown kinds in place as a deliberate reading.
+- **Fixed since, and not measured:** the repair now matches files by folder and name. The hardening pass now closes a risk it can show and close with a defence that only adds, even when another layer could also close it. A hardening pass that returns nothing is not a clean one. These address four of the five failures above, and their effect is unmeasured.
+- **Tooling:** an unsolved draw now keeps the source it ended with. Every cause above was found from that source. Before it, two failures could not be traced.
+
