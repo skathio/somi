@@ -73,12 +73,21 @@ Four new tasks, each decided by safety requirements the ticket does not state: t
 | Segment | bare | somi5 | somi5-deliver | Deliver dollars per draw, against somi5 |
 |---|---|---|---|---|
 | Medium (two tasks) | 0/5 | 0/6 | 6/6 | $1.76 against $0.52 (3.4x) |
-| Large (two tasks) | 0/6 | 0/6 | 4/6 | $4.19 against $1.31 (3.2x) |
+| Large (three tasks) | 0/9 | 0/9 | 5/9 | $4.09 against $1.29 (3.2x) |
 | of which the TypeScript task | 0/3 | 0/3 | 1/3 | $4.19 against $1.34 (3.1x) |
+| of which the Python task (another domain) | 0/3 | 0/3 | 1/3 | $3.89 against $1.24 (3.1x) |
 | Small (two tasks, before the fix) | 2/6 | 4/6 | 6/6 | $0.99 against $0.31 (3.2x) |
 
 - **The workflow ran on every staged draw.** Every unsolved draw of bare and somi5 missed the same unstated requirements: a download must tell the browser not to guess its type, including through a share link. On the medium tasks and the JavaScript large task, the staged hardening pass found and fixed them each time.
 - **On the large TypeScript task, two of three staged draws failed.** One fixed everything but the same two type-guessing requirements, so hardening missed them there. The other failed one functional check on share links, with 43 of 44 tests passing. The bench keeps no workspace, so which assertion it failed is not known.
 - **The rule was amended before these verdicts:** where somi5 solved none, it compares dollars per draw and requires the staged arm to solve at least one. Margin 0 and the 4x cost limit are still proposed, pending the maintainer.
-- **Verdicts at those settings:** medium **pays** (gain 1.0 on both tasks, 3.4x per draw). Large **does not pay**: the gain is 1.0 and 0.33 on its two tasks, and with two paired tasks the interval runs from -3.6 to 4.9. The cost passes at 3.2x. What fails is the evidence for a gain: two tasks cannot show one unless they agree exactly.
-- **Not shown yet:** whether the gap holds on medium and large tasks where somi5 sometimes succeeds, and on a third large task, which large needs for a bound that can clear.
+- **The third large task is deliberately different:** Python rather than JavaScript or TypeScript, and a different domain: API keys with scopes, signed webhooks with retries, a CSV export, and idempotent creates. The unstated requirements are different too: webhooks must not reach internal addresses, secrets are never shown again, exported cells must not start a spreadsheet formula, and a key matches only in full. It still uses the same back-office design as the other large tasks.
+- **On that task, every bare and somi5 draw missed both the internal-address and the formula requirements. Every staged draw met all the unstated requirements.** Two of three staged draws failed functional checks instead:
+  - one exported nothing at all for a kind with no records, where the ticket asks for a header row;
+  - the other also failed the due-deliveries check.
+- **A wording slip in that task:** two non-staged draws read the idempotency key from the payload. The ticket says it sits next to the command. Neither outcome changes, because both draws also missed the safety requirements. The wording is left as it is, because changing it would void the measurement.
+- **Verdicts at those settings:**
+  - Medium **pays**: a gain of 1.0 on both tasks, at 3.4x the cost per draw.
+  - Large **does not pay**. The gain is 1.0, 0.33 and 0.33 on its three tasks; the mean is 0.56 and the interval runs from -0.40 to 1.51. The cost passes at 3.2x. The evidence fails because, on the two harder tasks, the staged workflow solved only one draw in three.
+- **What would change the large verdict:** a higher solve rate on the staged arm. The gap is in finishing the functional work, not in the unstated requirements, so more tasks at the current rate would not be enough.
+- **Not shown yet:** whether the gap holds on medium and large tasks where somi5 sometimes succeeds.
