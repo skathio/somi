@@ -65,3 +65,17 @@ The smoke slice now takes the registered tasks a bare agent solved least: N17 an
 - **Not significant yet:** 8/10 against 3/10 gives p ≈ 0.07 on these draws. The rules were not tuned to these tasks: nothing in the digest names either trap, and adding the traps to it would teach to the test.
 
 **Correction.** One of those N17 draws, the one that failed, never started the workflow. The session called `somi_route` with no arguments, got plain steps and built inline. With the workflow, the staged arm solved both draws it ran on N17. A typed `/somi-deliver` now always starts the workflow, and the bench records `workflow_ran` on every draw.
+
+## `/somi-deliver` on hard medium and large tasks (2026-11-14)
+
+Three new tasks, each decided by safety requirements the ticket does not state: two medium (one in JavaScript, one in strict TypeScript) and one large. They share a domain, so the two medium results are correlated. Three draws per arm, Sonnet as the session, Haiku as the low tier, Opus as the high tier only. The first round on the medium JavaScript task found a gap: the staged builders never saw the project's documented conventions, and two of three draws answered a missing field against the README. With that fixed (the scout quotes the conventions and every stage gets them), the rounds below ran on one pin:
+
+| Segment | bare | somi5 | somi5-deliver | Deliver dollars per draw, against somi5 |
+|---|---|---|---|---|
+| Medium (two tasks) | 0/5 | 0/6 | 6/6 | $1.76 against $0.52 (3.4x) |
+| Large (one task) | 0/3 | 0/3 | 3/3 | $4.20 against $1.28 (3.3x) |
+| Small (two tasks, before the fix) | 2/6 | 4/6 | 6/6 | $0.99 against $0.31 (3.2x) |
+
+- **The workflow ran on every staged draw.** Every unsolved draw of bare and somi5 missed the same unstated requirements: a download must tell the browser not to guess its type, including through a share link. The staged hardening pass found and fixed them each time.
+- **The proposed rule cannot pass on this evidence as written.** It compares dollars per solved task, and somi5 solved none, so the ratio is undefined and the rule reads it as a failure. The large segment also has one task, and the rule asks for at least two. Both are gaps in the rule, not in the results, and amending a pre-registered rule is the maintainer's call.
+- **Not shown yet:** whether the gap holds on medium and large tasks where somi5 sometimes succeeds, and on more than one large task.
