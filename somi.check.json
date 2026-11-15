@@ -120,7 +120,8 @@
       "tests/surface.test.mjs"
     ],
     "scripts/lib/advisor.mjs": [
-      "tests/advisor.test.mjs"
+      "tests/advisor.test.mjs",
+      "tests/chat-commands.test.mjs"
     ],
     "scripts/lib/reviews.mjs": [
       "tests/reviews.test.mjs"
@@ -239,6 +240,9 @@
     ],
     "scripts/lib/quality/path-aliases.mjs": [
       "tests/quality-coupling.test.mjs"
+    ],
+    "scripts/lib/chat-commands.mjs": [
+      "tests/chat-commands.test.mjs"
     ]
   }
 }

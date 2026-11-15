@@ -17,6 +17,7 @@ import { shardsFor } from './shards.mjs';
 import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
 import { RULES_FILE, WORKFLOWS, expertiseIndex, libraryPath, roleBrief, rulesLine, workerAgent } from './workflows.mjs';
 import { copilotName } from './copilot-workflow.mjs';
+import { chatCommand, commandAnswer } from './chat-commands.mjs';
 import { globalConfigPath } from './config-files.mjs';
 import { QUALITY_TIMEOUT, SCOPES, resolveLimits, resolveTimeout } from './quality/limits.mjs';
 
@@ -197,6 +198,8 @@ function typedDeliver(said, asked, flagged) {
 
 export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: flagged } = {}) {
   if (hint === 'expertise') return { route: 'expertise', skills: expertiseIndex(), advice: 'Read only the one this work needs.' };
+  const command = chatCommand(asked);
+  if (command) return command.verb === 'config' ? configAnswer(ctx) : commandAnswer(command, somiCommand);
   const said = readPrompt(ctx.root, ctx.env);
   const { staged, request } = typedDeliver(said, asked, flagged);
   const { chosen, alternatives } = chooseRoute({ request, ticket, hint });

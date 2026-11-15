@@ -65,6 +65,7 @@ Everything is done from the chat. Ask for a change, a bug fix, a refactor, a pla
 | Command | What it does |
 |---|---|
 | `/somi <anything>` | Routes anything, the way the agent does with plain words. Use it from another agent. |
+| `/somi <command>` | Runs SoMi's own commands from the chat, so you never need the terminal: `/somi doctor` checks the setup, `/somi check` runs the gate and the tests, and `/somi help` lists the rest. One that changes your setup, such as `setup` or `init`, runs only after you say yes. |
 | `/somi-deliver <work or ticket>` | Runs large work as SoMi's staged workflow. Only you can start it. On Copilot, it needs `/experimental`; SoMi registers it at session start, so a session already open gets it after `/clear`. |
 | `/somi-review` | Reviews the current changes, whether or not the diff calls for it. |
 | `/somi-quality [commit \| repo]` | Checks the code against the quality limits: the branch, one commit, or the whole codebase. |
