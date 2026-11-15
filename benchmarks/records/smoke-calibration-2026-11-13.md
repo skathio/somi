@@ -142,3 +142,26 @@ A new bench tool, `replay`, measures one stage at a time. It starts from the sou
 - **The LG5 and LG6 miss is a "safe" verdict that nothing checks.** In all eight replays, the deciding step looked at a snapshot key named like a built-in object property, and called it safe because unknown keys were ignored. The request says a snapshot not shaped like an export is refused. The checking step reviews only excuses for leaving an item open. It never sees a "safe" verdict, so this one went unchallenged.
 - **Next change, unmeasured:** send "safe" verdicts that rest on ignoring or accepting input through the same check against the cited line.
 - **Spend:** $11.83 for sixteen replays. The finding on unchecked "safe" verdicts stands: the deciding step ran before any check, so the fault does not touch it.
+
+### The replay run again, with a third version (2026-11-16)
+
+The replay now runs each recorded check from the new workspace. It was run again on the same four failed draws, two runs each, with a third version: the split hardening, plus a check of "safe" verdicts (f735b20). In that check, a "safe" verdict that rests on the code ignoring, accepting or defaulting what a caller sends goes to a fresh agent. That agent reads the request's lines, and the verdict becomes a defence only where a line's words call for another answer.
+
+| Failed draw | single pass | split | split, with the safe-verdict check |
+|---|---|---|---|
+| LG7, draw 1 | 2/2 | 2/2 | 2/2 |
+| LG7, draw 3 | 0/2 | 1/2 | 0/2 |
+| LG5, draw 3 | 0/2 | 0/2 | 0/2 |
+| LG6, draw 1 | 0/2 | 0/2 | 1/2 |
+| **Solved** | **2/8** | **3/8** | **3/8** |
+| Dollars per replay | $0.70 | $0.79 | $0.82 |
+
+- **No version is shown to be better than another.** Each differs by one solve in eight, on different draws.
+- **With the checks running, the repair step ran in 2 of 16 split replays, not every one.** Its earlier rate came from the replay fault.
+- **The safe-verdict check works as built, and the open question is how the request is read.**
+  - In three of four runs, the deciding step marked the snapshot item as resting on ignored input, and the checker saw it. In the fourth, it marked the item "other", so the checker never saw it.
+  - Of the three it saw, the checker overturned one, and that draw was solved. In the other two, it held that the line saying a snapshot not shaped like an export is refused says nothing about extra keys.
+  - Pushing the checker toward refusing would add refusals that requests never ask for, so it was left as it is.
+- **The single pass broke two tests that passed before it, in one replay.**
+- **What this means for the verdict:** changes to one stage now move the result by about one solve in eight, which these replays cannot tell apart from noise. Settling whether large tasks pay needs more large tasks, not more changes to the hardening.
+- **Spend:** $18.48 for 24 replays.
