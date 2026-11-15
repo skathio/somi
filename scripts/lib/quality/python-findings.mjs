@@ -33,11 +33,44 @@ function swallowed(node, test) {
   return test ? null : { rule: 'empty-catch', level: 'warning', line: line(node), name };
 }
 
+// The names an import binds: import a.b binds a, import a.b as c binds c, from x import y binds y. A star import binds nothing we can
+// see, and from __future__ is an instruction to the compiler, not a name.
+function importedNames(node) {
+  if (node.type === 'import_from_statement' && field(node, 'module_name')?.text === '__future__') return [];
+  const module = field(node, 'module_name')?.startIndex;
+  const names = node.type === 'import_from_statement' ? node.namedChildren.filter((c) => c.startIndex !== module) : node.namedChildren;
+  return names.flatMap((c) => {
+    // import x as x and from x import y as y are PEP 484's way to say a name is re-exported on purpose.
+    if (c.type === 'aliased_import') return field(c, 'name')?.text === field(c, 'alias')?.text ? [] : [field(c, 'alias') ?? c.namedChildren.at(-1)];
+    return c.type === 'dotted_name' ? [c.namedChildren[0] ?? c] : [];
+  }).filter(Boolean);
+}
+
+// An import nothing in the file uses: no identifier outside the imports reads it, and no string names it, which covers __all__ and a
+// type written as a string. A package's __init__.py imports to re-export, so it is not read, and neither is an import marked noqa. Advice, as unused-binding is elsewhere.
+function unusedImports(root) {
+  const imports = [];
+  const used = new Set();
+  const strings = [];
+  const visit = (n, inImport) => {
+    const here = inImport || n.type === 'import_statement' || n.type === 'import_from_statement';
+    const quiet = n.nextSibling?.type === 'comment' && n.nextSibling.startPosition.row === n.endPosition.row && /noqa/.test(n.nextSibling.text);
+    if ((n.type === 'import_statement' || n.type === 'import_from_statement') && !quiet) imports.push(...importedNames(n));
+    if (!here && n.type === 'identifier') used.add(n.text);
+    if (n.type === 'string') strings.push(n.text);
+    for (const c of n.namedChildren) visit(c, here);
+  };
+  visit(root, false);
+  const named = (name) => strings.some((t) => new RegExp(`\\b${name}\\b`).test(t));
+  return imports.filter((id) => !used.has(id.text) && !named(id.text)).map((id) => ({ rule: 'unused-import', level: 'warning', line: line(id), name: id.text }));
+}
+
 /**
- * Leftover debugging and swallowed errors in one file: [{ rule, level, line, name }]. A test may print and may pass on one named error,
+ * Leftover debugging, swallowed errors and unused imports in one file: [{ rule, level, line, name }]. reexports is true for a package's
+ * __init__.py, whose imports are its interface. A test may print and may pass on one named error,
  * but a debugger stops the suite and a catch-all that does nothing hides what failed, in a test as anywhere.
  */
-export function pythonFindings(tree, { test = false } = {}) {
+export function pythonFindings(tree, { test = false, reexports = false } = {}) {
   const out = [];
   const visit = (n) => {
     const found = n.type === 'call' ? debugCall(n, test) : EXCEPT.has(n.type) ? swallowed(n, test) : null;
@@ -45,5 +78,5 @@ export function pythonFindings(tree, { test = false } = {}) {
     for (const c of n.namedChildren) visit(c);
   };
   visit(tree.rootNode);
-  return out;
+  return reexports ? out : [...out, ...unusedImports(tree.rootNode)];
 }

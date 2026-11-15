@@ -78,3 +78,27 @@ test('a function that only passes its own parameters on to another is named, and
   ].join('\n');
   assert.deepEqual(await slop(code), ['pass-through:1', 'pass-through:2']);
 });
+
+test('a TypeScript cast that switches the checker off fails in product code, once for a double cast, and a checked cast does not', async () => {
+  const code = [
+    'export const a = (x: unknown) => x as any;',
+    'export const b = (x: unknown) => x as unknown as Row;',
+    'export const c = (x: unknown) => x as never;',
+    'export const d = (x: unknown) => <any>x;',
+    'export const e = (x: unknown) => x as Row;',
+    'export const f = [1, 2] as const;',
+    'export const g = (x: unknown) => x as unknown;',
+    'export const h = (x: unknown) => x as any as Row;',
+    'export const i = (x: unknown) => (x as unknown) as Row;',
+    'export const j = (x: unknown) => <Row><unknown>x;',
+    'export const k = (x: unknown) => x as unknown as unknown as Row;',
+    'export const l = (x: unknown) => x as (any);',
+  ].join('\n');
+  assert.deepEqual(await slop(code, { file: 'src/a.ts' }), ['unsafe-cast:1', 'unsafe-cast:2', 'unsafe-cast:3', 'unsafe-cast:4', 'unsafe-cast:8', 'unsafe-cast:9', 'unsafe-cast:10', 'unsafe-cast:11', 'unsafe-cast:12']);
+  assert.deepEqual(await slop('export const a = (x: unknown) => x as any;', { file: 'test/a.test.ts', test: true }), [], 'test code is not checked');
+  assert.deepEqual(await slop('export const a = (x) => x;', { file: 'src/a.js' }), []);
+  const parsed = await parseSource('src/a.tsx', 'export const A = (p: unknown) => <div>{(p as any).x}</div>;');
+  const ctx = { mode: 'project', violations: [], warnings: [] };
+  try { scoreSlop(ctx, { file: 'src/a.tsx', tree: parsed.tree, added: EVERY_LINE, language: parsed.language, test: false }); } finally { parsed.tree.delete(); }
+  assert.deepEqual(ctx.violations.map((v) => v.rule), ['unsafe-cast'], 'it fails, in TSX too');
+});

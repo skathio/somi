@@ -5,7 +5,7 @@
 const ADVISORY = Object.freeze(new Set([
   'options', 'unanalyzed',
   'empty-catch', 'log-only-catch', 'rethrow-catch', 'skipped-test', 'test-without-assertion', 'console', 'unused-binding', 'pass-through',
-  'unused-export', 'import-fan-out', 'cycle-grown', 'file-lines', 'file-functions', 'file-added-lines',
+  'unused-export', 'unused-import', 'import-fan-out', 'cycle-grown', 'file-lines', 'file-functions', 'file-added-lines',
 ]));
 
 /** A finding as a violation or a warning, by its rule. In a benchmark, code the parser cannot follow fails. */

@@ -20,7 +20,7 @@ const NOT_A_MODULE = /(^|\/)(__init__|__main__|conftest|setup)\.py$/;
  * only remembered in ctx.pyExports: whether anything imports it is decided by scoreUnusedExports, once every file has been read.
  */
 export function scorePython(ctx, { file, tree, added, test }) {
-  for (const f of pythonFindings(tree, { test }).filter((x) => inAdded(added, x.line))) {
+  for (const f of pythonFindings(tree, { test, reexports: /(^|\/)__init__\.py$/.test(file) }).filter((x) => inAdded(added, x.line))) {
     report(ctx, { rule: f.rule, file, line: f.line, name: f.name, value: 1, limit: 0 });
   }
   if (test || NOT_A_MODULE.test(file)) return;

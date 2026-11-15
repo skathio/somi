@@ -50,6 +50,13 @@ test('debugging left behind is found however the debugger was imported, and a te
   assert.deepEqual((await read(code, (tree) => pythonFindings(tree, { test: true }))).map((f) => f.rule), ['debugger', 'debugger', 'debugger', 'debugger'], 'a debugger stops a test run, so a test may not leave one');
 });
 
+test('an import nothing in the file uses is advice, unless a string names it, it is marked noqa, or the file is a package\'s __init__', async () => {
+  const code = 'from __future__ import annotations\nimport os\nimport json\nimport a.b as c\nfrom x import y, z as w\nfrom q import *\nimport copy  # noqa: F401\nfrom . import sib\nfrom m import kept as kept\n__all__ = ["w"]\n\n\ndef f(p: "y"):\n    return os.path.join(c.k)\n';
+  const found = (await read(code, (tree) => pythonFindings(tree))).filter((f) => f.rule === 'unused-import');
+  assert.deepEqual(found.map((f) => [f.level, f.name, f.line]), [['warning', 'json', 3], ['warning', 'sib', 8]]);
+  assert.deepEqual((await read(code, (tree) => pythonFindings(tree, { reexports: true }))).filter((f) => f.rule === 'unused-import'), []);
+});
+
 test('catching everything and doing nothing fails, passing on one named exception is advice, and handling it is neither', async () => {
   const code = 'def f(x):\n    try:\n        return int(x)\n    except:\n        pass\n    try:\n        return int(x)\n    except Exception:\n        ...\n    try:\n        return int(x)\n    except KeyError:\n        pass\n    try:\n        return int(x)\n    except ValueError:\n        return 0\n    try:\n        return int(x)\n    except (ValueError, Exception):\n        pass\n    try:\n        return int(x)\n    except* Exception:\n        pass\n';
   const found = await read(code, (tree) => pythonFindings(tree));

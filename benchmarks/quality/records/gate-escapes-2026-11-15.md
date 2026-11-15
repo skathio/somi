@@ -51,7 +51,10 @@ named one.
   ran: no signal fired on the diff, and on two of them the session never asked SoMi's router either. On the other three, only the
   security reviewer ran, because a security signal fired. A change that fires no signal gets no review of its design.
 - **Two mechanical gaps are worth closing:** casts that switch off type checking in TypeScript, and unused imports in Python.
-- **The parameter limit fails changes a reviewer would accept,** and is worth calibrating again on reviewed code.
+- **The parameter limit fails changes a reviewer would accept, and stays at four.** Checked again against the calibration: four is
+  the 99th percentile of well-kept projects' functions, and the rule failed 7 of 212 of their recent commits (3.3%). A reviewer listing
+  what it would block on is weak evidence that five is fine. The standard and relaxed levels allow five and six.
+- **Closed since:** a TypeScript cast that switches the checker off now fails, and a Python import nothing uses is advised.
 
 ## Limits
 

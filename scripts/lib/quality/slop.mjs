@@ -1,5 +1,5 @@
 // quality/slop.mjs: habits of hastily written code, looked for in what a change added. Each is cheap to see in the parse tree and each
-// has an honest use now and then, so most are advice:
+// has an honest use now and then, so most are advice, while debugger, focused-test and unsafe-cast fail:
 // - empty-catch: a catch that does nothing and does not say why. A comment inside is the why.
 // - log-only-catch: a catch that only logs, so the failure carries on as if it had not happened.
 // - rethrow-catch: a catch that throws the same error unchanged, which only adds nesting.
@@ -8,6 +8,9 @@
 // - console and debugger: debugging output and breakpoints left in product code.
 // - unused-binding: a local, or a trailing parameter, that nothing reads.
 // - pass-through: a function that only calls another with the same arguments, which adds a name and no behaviour.
+// - unsafe-cast: in TypeScript product code, a cast that switches the type checker off: as any, as never, <any>, or a double cast
+//   through unknown or any. An independent review of benchmark changes blocked on these. It fails: well-kept projects hold many, but
+//   their recent commits added one in 2 of 126 (1.6%), so a change rarely needs one. Test code is not checked.
 
 import { report, inAdded, overlaps } from './findings.mjs';
 
@@ -72,6 +75,26 @@ function scoreDebugging(ctx, { file, tree, added }) {
     if (node.type === 'debugger_statement') flag(ctx, file, node, 'debugger');
     else if (CONSOLE.test(calleeText(node))) flag(ctx, file, node, 'console');
   }
+}
+
+const ESCAPES = new Set(['any', 'never']);
+const CASTS = new Set(['as_expression', 'type_assertion']);
+const unwrap = (node) => (node?.type === 'parenthesized_expression' ? unwrap(node.namedChildren[0]) : node);
+const castType = (node) => node.namedChildren.find((c) => c.type !== 'comment' && (node.type === 'type_assertion' ? c.type === 'type_arguments' : c !== node.namedChildren[0]));
+const castTarget = (node) => castType(node)?.text.replace(/[<>()\s]/g, '');
+const castInner = (node) => unwrap(node.namedChildren.find((c) => c !== castType(node) && c.type !== 'comment'));
+const enclosingCast = (node) => { let p = node.parent; while (p?.type === 'parenthesized_expression') p = p.parent; return CASTS.has(p?.type); };
+// A cast the checker cannot check: to any or never, or to anything at all by way of unknown or any, with or without parentheses and in
+// either syntax. Only the outermost cast of a chain is flagged, so x as unknown as T is one finding.
+function unsafeCast(node) {
+  if (enclosingCast(node)) return false;
+  const chain = [];
+  for (let n = node; CASTS.has(n?.type); n = castInner(n)) chain.push(castTarget(n));
+  return chain.some((t) => ESCAPES.has(t)) || (chain.length > 1 && chain.slice(1).some((t) => t === 'unknown'));
+}
+
+function scoreCasts(ctx, { file, tree, added }) {
+  for (const node of addedNodes(tree, ['as_expression', 'type_assertion'], added)) if (unsafeCast(node)) flag(ctx, file, node, 'unsafe-cast');
 }
 
 // The simple names a function takes, in order: a, b = 1, and TypeScript's a: T. A destructured parameter is null.
@@ -141,4 +164,5 @@ export function scoreSlop(ctx, { file, tree, added, language, test }) {
   if (test) return scoreTests(ctx, { file, tree, added });
   scoreDebugging(ctx, { file, tree, added });
   scoreFunctions(ctx, { file, tree, added });
+  if (language === 'typescript' || language === 'tsx') scoreCasts(ctx, { file, tree, added });
 }
