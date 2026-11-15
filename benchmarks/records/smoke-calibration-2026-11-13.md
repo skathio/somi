@@ -143,7 +143,7 @@ A new bench tool, `replay`, measures one stage at a time. It starts from the sou
 - **Next change, unmeasured:** send "safe" verdicts that rest on ignoring or accepting input through the same check against the cited line.
 - **Spend:** $11.83 for sixteen replays. The finding on unchecked "safe" verdicts stands: the deciding step ran before any check, so the fault does not touch it.
 
-### The replay run again, with a third version (2026-11-16)
+### The replay run again, with a third version (2026-11-15)
 
 The replay now runs each recorded check from the new workspace. It was run again on the same four failed draws, two runs each, with a third version: the split hardening, plus a check of "safe" verdicts (f735b20). In that check, a "safe" verdict that rests on the code ignoring, accepting or defaulting what a caller sends goes to a fresh agent. That agent reads the request's lines, and the verdict becomes a defence only where a line's words call for another answer.
 
