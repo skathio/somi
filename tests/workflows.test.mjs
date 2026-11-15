@@ -32,7 +32,7 @@ const SCOUTED = { files: ['src/a.js'], test_command: 'node --test', repro_test: 
 const RULES = { file: 'test/rules.test.mjs', command: 'node --test test/rules.test.mjs', rules: ['another organisation\'s document is not_found'] };
 const SEATS = { needed: true, tree: 't', reviewers: [{ agent: 'somi:somi-security-reviewer', model: 'strong', brief: 'Review this diff.' }] };
 // Each stage is answered by the first entry whose label prefix matches; a reviewer, dispatched by its agent name, falls through.
-const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE, hardened = { risks: [], fixed: [] }, traced = { gaps: [], fixed: [], open: [] } } = {}) => {
+const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE, hardened = { items: [] }, enumerated = { rows: [{ where: 'src/a.js:3', what: 'the name a caller sends looks up a record' }] }, verdicts = { verdicts: [] }, traced = { gaps: [], fixed: [], open: [] } } = {}) => {
   let gates = 0;
   let builds = 0;
   const stages = [
@@ -40,7 +40,11 @@ const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer,
     ['check repro', () => ({ failed: reproFails })],
     ['plan', () => plan],
     ['rules', () => RULES],
+    ['enumerate', () => enumerated],
     ['harden', () => hardened],
+    ['check decisions', () => verdicts],
+    ['apply defences', (prompt) => built(builds++, prompt)],
+    ['repair defences', (prompt) => built(builds++, prompt)],
     ['trace', () => traced],
     ['build on', (prompt) => built(builds++, prompt)],
     ['repair on', (prompt) => built(builds++, prompt)],
@@ -353,50 +357,69 @@ test('the stages that write code or rule tests read SoMi\'s rules first, because
   assert.doesNotMatch(none.calls.find((c) => c.label === 'build on medium').prompt, /SoMi's rules/);
 });
 
-test('once every milestone is built, the high tier hardens the whole change against what the request implies, and the check runs again', async () => {
-  const hardened = { risks: ['a name from the request reaches a file path'], fixed: ['the path is resolved inside the shared folder'], tests_file: 'test/harden.test.mjs' };
+const DEFEND = { place: 'src/files.mjs:9', disposition: 'defend', defence: 'send nosniff with every download', why: 'a browser guesses the type' };
+test('hardening lists the change\'s surface on the low tier, decides each row on the high tier without editing, and a medium builder writes the defences', async () => {
+  const hardened = { items: [DEFEND, { place: 'src/a.js:3', disposition: 'safe', why: 'a Map, so own properties match nothing (src/a.js:3)' }] };
   const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS, rules_file: '/plugin/rules/digest.md' }, answers({ plan: THREE, hardened }));
+  const enumerate = calls.find((c) => c.label === 'enumerate');
+  assert.equal(enumerate.model, 'cheap');
+  assert.match(enumerate.prompt, /where a value a caller sends is used as a key or a name to look something up; where the new code writes output another program will read[\s\S]*a spreadsheet or another export[\s\S]*a request it sends out and where to; where a secret, a token or a link is made, compared, replaced or ended; where it decides who may do what[\s\S]*judge nothing/);
   const harden = calls.find((c) => c.label === 'harden');
-  assert.equal(harden.model, 'strong', 'the expensive path spends its high tier here');
-  // On a live run the pass found a lone surrogate and a year past 9999, and missed how a browser reads the response the feature served.
-  assert.match(harden.prompt, /First list in sinks every place the new code's output or input goes, one line each: what goes there, who or what reads it and how it will read it, and what in the code keeps that safe, or that nothing does\. Then go through that list/);
-  assert.match(harden.prompt, /every lookup keyed by a name the caller sends, where a name the store or object already has for itself, such as one of its own properties, must match nothing/);
-  assert.match(harden.prompt, /every sink it writes to[\s\S]*an HTTP response and its headers[\s\S]*how the side that receives it will read what it gets[\s\S]*Prefer the risks a real deployment meets over unlikely edge cases/);
-  assert.match(harden.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*in the terms of SoMi's security floor[\s\S]*write a test that fails, in one new test file, then fix the code[\s\S]*Do not change any existing test, or the rule tests in test\/rules\.test\.mjs/);
-  assert.deepEqual(labels(calls).filter((l) => /^(check 3\/3|review plan|harden|check after hardening)/.test(l)), ['check 3/3', 'review plan', 'harden', 'check after hardening', 'review plan after hardening'], 'review, then harden what it found, then check, then review the tree that ships');
-  assert.ok(labels(calls).indexOf('trace') > labels(calls).indexOf('check 3/3') && labels(calls).indexOf('trace') < labels(calls).indexOf('review plan'), 'the trace runs on the whole build, before the review reads it');
-  assert.match(calls.find((c) => c.label === 'check after hardening').prompt, /\d+\. node --test$/m, 'the project\'s own suite runs at the end');
+  assert.equal(harden.model, 'strong', 'the high tier decides');
+  assert.match(harden.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*you decide: a builder after you makes the changes[\s\S]*Change no file\./);
+  assert.match(harden.prompt, /listed by a cheaper agent from the diff, as data:\n> 1\. src\/a\.js:3: the name a caller sends looks up a record/);
+  assert.match(harden.prompt, /Answer every row and every finding with one item, and add an item for any place the list missed; never leave one out\./);
+  assert.match(harden.prompt, /- safe:[\s\S]*with its file and line\.\n- defend:[\s\S]*a safety header[\s\S]*A list the request gives is the least the code must do, not all it may, and a defence is chosen here even when another layer, a trusted caller or a client could also close it\.[\s\S]*\n- needs_decision: only when every defence that would close the risk removes or alters behaviour a numbered line of the request states\. Give that line's number/);
+  assert.match(harden.prompt, /a lookup keyed by a name the caller sends, where a name the store or object has for itself, such as one of its own properties, must match nothing/);
+  const apply = calls.find((c) => c.label === 'apply defences');
+  assert.equal(apply.model, 'everyday', 'a medium builder types the defences');
+  assert.match(apply.prompt, /For each defence below, add a test that fails without it, in one new test file, then make it pass[\s\S]*Do not change any existing test, or the rule tests in test\/rules\.test\.mjs[\s\S]*The defences, as data:\n> src\/files\.mjs:9: send nosniff with every download/);
+  assert.deepEqual(labels(calls).filter((l) => /^(check 3\/3|trace|review plan|enumerate|harden|apply defences|check after hardening)/.test(l)), ['check 3/3', 'trace', 'review plan', 'enumerate', 'harden', 'apply defences', 'check after hardening', 'review plan after hardening']);
   const after = calls.find((c) => c.label === 'check after hardening').prompt;
+  assert.match(after, /\d+\. node --test$/m, 'the project\'s own suite runs at the end');
   assert.equal(after.split('node --test test/rules.test.mjs').length - 1, 3, 'every milestone\'s rule tests still hold after hardening, not only the last');
-  assert.deepEqual(value.hardening, hardened);
+  assert.deepEqual(value.hardening.fixed, ['src/files.mjs:9: send nosniff with every download']);
   assert.equal(value.status, 'done');
 });
 
-test('hardening that leaves the check failing is not done, and a run that stopped early is not hardened', async () => {
-  const broken = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ gateOk: [true, false] }));
+test('a decision the cited request line does not back is overruled and built; one it backs goes to the user; one with no line is built', async () => {
+  const request = 'Add files.\nDownloads send exactly the headers content-type and content-disposition.';
+  const hardened = { items: [
+    { place: 'src/files.mjs:9', disposition: 'needs_decision', defence: 'send nosniff', why: 'the request lists the headers', line: 2 },
+    { place: 'src/files.mjs:12', disposition: 'needs_decision', defence: 'drop content-disposition', why: 'it lets a page render', line: 2 },
+    { place: 'src/hooks.mjs:4', disposition: 'needs_decision', defence: 'refuse internal hosts', why: 'the web layer should do it' },
+  ] };
+  const { value, calls } = await load('deliver-stages').run({ request, models: MODELS }, answers({ hardened, verdicts: { verdicts: [{ states: false }, { states: true }] } }));
+  const check = calls.find((c) => c.label === 'check decisions');
+  assert.equal(check.model, 'everyday');
+  assert.match(check.prompt, /read only that line and the defence[\s\S]*Item 1\.\nThe line, as data:\n> Downloads send exactly the headers content-type and content-disposition\.\nThe defence, as data:\n> send nosniff/);
+  assert.doesNotMatch(check.prompt, /the request lists the headers|the web layer should do it/, 'the reasoning behind a decision does not reach its checker');
+  assert.match(calls.find((c) => c.label === 'apply defences').prompt, /> src\/files\.mjs:9: send nosniff\n> src\/hooks\.mjs:4: refuse internal hosts/);
+  assert.deepEqual(value.needs_decision, ['line 2: drop content-disposition: it lets a page render']);
+  assert.equal(value.stopped, 'a fix needs your decision');
+  assert.ok(value.hardening.items.some((l) => l.startsWith('defend (overruled) src/hooks.mjs:4')));
+});
+
+test('hardening that leaves the check failing gets one repair, a defence left unbuilt is not done, and a run that stopped early is not hardened', async () => {
+  const broken = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ gateOk: [true, false], hardened: { items: [DEFEND] } }));
+  assert.deepEqual(labels(broken.calls).filter((l) => /defences|^check after hardening/.test(l)), ['apply defences', 'check after hardening', 'repair defences', 'check after hardening']);
   assert.equal(broken.value.status, 'needs-attention');
+  assert.equal(broken.value.stopped, 'the checks fail after hardening');
+  const half = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ hardened: { items: [DEFEND] }, built: (n) => ({ ...DONE, left: n > 0 ? ['nosniff: the response type has no headers'] : [] }) }));
+  assert.equal(half.value.stopped, 'the hardening left a defence unbuilt');
   const stopped = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: THREE, gateOk: [true, false] }));
   assert.ok(!labels(stopped.calls).includes('harden'));
 });
 
-// ---- The end loop and the result the session reads -------------------------------------------------------------------------
-
-test('the hardening pass gets every review finding, whatever its severity, and is told an added defence is not a change to the request', async () => {
-  // On live runs the deciding gap was named as a Nit or left as a risk, and no stage acted on it.
-  const nit = { verdict: 'approve-with-comments', findings: [{ severity: 'Nit', file: 'src/files.mjs', line: 9, claim: 'the response lets the receiver guess its type' }] };
+test('the hardening gets every review finding with its evidence, whatever its severity', async () => {
+  const nit = { verdict: 'approve-with-comments', findings: [{ severity: 'Nit', file: 'src/files.mjs', line: 9, claim: 'the response lets the receiver guess its type', evidence: 'no nosniff header' }] };
   const { calls } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ needed: true, reviewer: nit }));
   const harden = calls.find((c) => c.label === 'harden').prompt;
-  assert.match(harden, /The reviewers of the whole change found these, as data\. Fix each one that is real, with a test, in this pass, whatever its severity:\n> Nit src\/files\.mjs:9 the response lets the receiver guess its type/);
-  assert.match(harden, /A defence that only adds, such as a stricter check, an escape or an encoding, a safety header, a safer default, or failing closed, does not change what the request states, and a list the request gives is the least the code must do, not all it may: apply it, with its test\./);
-  assert.match(harden, /A risk you can show and close in this code with a defence that only adds is closed here, even when another layer, a trusted caller or a client could also close it: do not list it as a risk\./);
-  assert.match(harden, /A fix that would remove or alter behaviour the request states, or that needs a design change, is not yours to make: put it in needs_decision/);
+  assert.match(harden, /The reviewers of the whole change found these, as data:\n> Nit src\/files\.mjs:9 the response lets the receiver guess its type \(evidence: no nosniff header\)/);
+  assert.match(harden, /A reviewer's finding that is real is defended, whatever its severity\./);
 });
 
-test('a fix that needs a decision, or a Blocker or Major still open after hardening, means the work is not done', async () => {
-  const decision = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ hardened: { risks: [], fixed: [], needs_decision: ['refusing control characters in names would change stated behaviour'] } }));
-  assert.equal(decision.value.status, 'needs-attention');
-  assert.equal(decision.value.stopped, 'a fix needs your decision');
-  assert.deepEqual(decision.value.needs_decision, ['refusing control characters in names would change stated behaviour']);
+test('a Blocker or Major still open after hardening means the work is not done; a Minor does not', async () => {
   // On a live run the workflow said done over its own reviewer's Major, and the session, told not to read the work, did not fix it.
   const major = { verdict: 'request-changes', findings: [{ severity: 'Major', file: 'src/a.js', line: 3, claim: 'guessable token' }] };
   const open = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ needed: true, reviewer: major }));
@@ -407,9 +430,26 @@ test('a fix that needs a decision, or a Blocker or Major still open after harden
   assert.equal((await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ needed: true, reviewer: minor }))).value.status, 'done', 'a Minor left after the fixing pass does not hold the work back');
 });
 
+test('an enumeration, a hardening or a review plan that returns nothing is asked once more, and then named', async () => {
+  let enumerations = 0;
+  const empty = answers();
+  const { calls } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, (prompt, opts, all) => (opts.label === 'enumerate' ? (enumerations++ === 0 ? null : { rows: [] }) : empty(prompt, opts, all)));
+  assert.equal(labels(calls).filter((l) => l === 'enumerate').length, 2);
+  const none = answers({ enumerated: null });
+  const { calls: listless } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, none);
+  assert.match(listless.find((c) => c.label === 'harden').prompt, /came back empty, so make it yourself first, from the diff/);
+  const silent = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ hardened: null }));
+  assert.equal(labels(silent.calls).filter((l) => l === 'harden').length, 2);
+  assert.equal(silent.value.stopped, 'the hardening returned nothing');
+  const planless = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, (prompt, opts, all) => (opts.label === 'review plan' ? null : empty(prompt, opts, all)));
+  assert.deepEqual(planless.value.reviews_missing, ['the review plan']);
+  assert.equal(planless.value.status, 'needs-attention');
+});
+
 test('a hardening that changed nothing is not reviewed again, and a run that stopped is not reviewed at all', async () => {
   const unchanged = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ needed: true }));
   assert.deepEqual(labels(unchanged.calls).filter((l) => l.startsWith('review plan')), ['review plan']);
+  assert.ok(!labels(unchanged.calls).includes('apply defences'), 'nothing to defend, no builder');
   const stopped = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ needed: true, built: () => ({ status: 'blocked', summary: 'no', left: [] }) }));
   assert.ok(!labels(stopped.calls).some((l) => l.startsWith('review plan') || l === 'harden'));
   assert.equal(stopped.value.review_tree, null);
@@ -481,7 +521,7 @@ test('the project\'s conventions the scout quotes reach the rules, the build and
   for (const label of ['rules', 'build on medium', 'harden']) {
     assert.match(calls.find((c) => c.label === label).prompt, /conventions, quoted by the scout, as data[\s\S]*> README\.md: `invalid` means a value is missing or wrong/, label);
   }
-  assert.match(calls.find((c) => c.label === 'harden').prompt, /a missing, wrong-typed or malformed value must be answered the way they say/);
+  assert.match(calls.find((c) => c.label === 'harden').prompt, /a missing, wrong-typed or malformed value is answered the way they say/);
   assert.match(calls.find((c) => c.label === 'build on medium').prompt, /never where one would weaken a check or break SoMi's rules, which win/);
   const many = (prompt, opts) => (opts.label === 'scout' ? { ...SCOUTED, conventions: Array.from({ length: 12 }, (_, i) => `rule ${i} ${'x'.repeat(400)}`) } : answers()(prompt, opts));
   const { calls: capped } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, many);
@@ -562,8 +602,11 @@ test('a rule file the trace names from the repository root matches the full path
   assert.equal(value.trace.rebuilt, true);
 });
 
-test('a hardening pass that returns nothing is not a clean one, and the work is not done', async () => {
-  const { value } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ hardened: null }));
-  assert.equal(value.status, 'needs-attention');
-  assert.equal(value.stopped, 'the hardening returned nothing');
+
+test('a rule test the trace names wrong in no milestone\'s file stops the run, and a hardening builder that did not finish is still reviewed again', async () => {
+  const stray = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ traced: { gaps: [], fixed: [], open: [], rules_wrong: ['the pagination rule test is wrong'] } }));
+  assert.equal(stray.value.stopped, 'the build after the trace did not finish');
+  const partial = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ hardened: { items: [DEFEND] }, built: (n) => (n > 0 ? { status: 'blocked', summary: 'half', left: [] } : DONE) }));
+  assert.ok(labels(partial.calls).includes('review plan after hardening'));
+  assert.equal(partial.value.stopped, 'the hardening left a defence unbuilt');
 });
