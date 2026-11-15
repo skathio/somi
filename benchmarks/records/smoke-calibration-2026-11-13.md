@@ -117,3 +117,29 @@ The version that has all of these except the last fix was measured on the three 
 - **Fixed since, and not measured:** the repair now matches files by folder and name. The hardening pass now closes a risk it can show and close with a defence that only adds, even when another layer could also close it. A hardening pass that returns nothing is not a clean one. These address four of the five failures above, and their effect is unmeasured.
 - **Tooling:** an unsolved draw now keeps the source it ended with. Every cause above was found from that source. Before it, two failures could not be traced.
 
+
+## Replaying the hardening on failed draws (2026-11-15)
+
+The hardening pass was then split into steps:
+1. a cheap step lists the surface;
+2. a high-tier step decides each item as safe, defended or needing a decision, and cites a line of the request;
+3. a medium step sees only that line and the excuse, and overrules an excuse the line does not back;
+4. a builder applies the defences.
+
+A new bench tool, `replay`, measures one stage at a time. It starts from the source a failed draw kept, answers every earlier stage from that draw's recorded transcripts, and runs the hardening live. Four failed draws were replayed twice under each version: the single hardening pass (8203c0e) and the split one (24a2bcb). The replay starts from code that was already hardened once, so it measures a second pass, not a fresh run.
+
+| Failed draw | single pass | split |
+|---|---|---|
+| LG7, draw 1 | 2/2 | 2/2 |
+| LG7, draw 3 | 0/2 | 1/2 |
+| LG5, draw 3 | 0/2 | 0/2 |
+| LG6, draw 1 | 0/2 | 0/2 |
+| **Solved** | **2/8** | **3/8** |
+| Dollars per replay | $0.66 | $0.82 |
+
+- **The split is not shown to be better.** One extra solve in eight is within noise. It costs about $0.16 more per draw, and the high-tier step costs less than the single pass did.
+- **A second pass alone fixed LG7 draw 1 under both versions.** That failure was the pass's own variance, not its design.
+- **Every split replay needed the repair step.** The first application of defences broke a check each time and was repaired. The steps after it never left a defence unbuilt.
+- **The LG5 and LG6 miss is a "safe" verdict that nothing checks.** In all eight replays, the deciding step looked at a snapshot key named like a built-in object property, and called it safe because unknown keys were ignored. The request says a snapshot not shaped like an export is refused. The checking step reviews only excuses for leaving an item open. It never sees a "safe" verdict, so this one went unchallenged.
+- **Next change, unmeasured:** send "safe" verdicts that rest on ignoring or accepting input through the same check against the cited line.
+- **Spend:** $11.83 for sixteen replays.
