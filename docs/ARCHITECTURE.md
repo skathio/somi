@@ -80,7 +80,7 @@ These are constants in `scripts/lib/policy.mjs` and `scripts/lib/reviews.mjs`. A
 
 `scripts/lib/signals.mjs` reads the actual diff, and only raises.
 
-- **Review signals:** `schema`, `tests-weakened`, `dependency`, `goldens-moved`, `unreadable-diff`. `multi-module`, `public-api` and `large-diff` are recorded but do not start a review.
+- **Review signals:** `schema`, `tests-weakened`, `dependency`, `goldens-moved`, `unreadable-diff`, and `medium-change`, which fires at 120 or more changed lines of product code, tests and docs left out, so a change of medium size or more gets a review of its design. An independent review of benchmark changes that size blocked half of them, mostly on design the gate cannot see ([record](../benchmarks/quality/records/gate-escapes-2026-11-15.md)). `multi-module`, `public-api` and `large-diff` are recorded but do not start a review.
 - **Security signals:** `sink`, `secrets`, `network`, `repo-content`, `policy-file`, `sensitive-path`, `access-control`, `unreadable-diff`. `access-control` fires on a changed line, added or removed, that checks roles, permissions, owners or tenants: a permissions refactor fired nothing before it and leaked across organisations. A regex's own `exec` is not a shell, and a whole-line comment runs nothing, so neither counts for `sink`, `network` or `access-control`; a key pasted into a comment still counts for `secrets`.
 
 These signals are patterns over file names and added lines, so they over-fire by design and they cannot prove a taint path. They route attention and do not make anything safe.
