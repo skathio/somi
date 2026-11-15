@@ -137,9 +137,8 @@ A new bench tool, `replay`, measures one stage at a time. It starts from the sou
 | **Solved** | **2/8** | **3/8** |
 | Dollars per replay | $0.66 | $0.82 |
 
-- **The split is not shown to be better.** One extra solve in eight is within noise. It costs about $0.16 more per draw, and the high-tier step costs less than the single pass did.
+- **The comparison is not valid as run.** The replay passed the draw's recorded check commands through unchanged. Those commands changed into the draw's own workspace, which no longer existed, so every check after hardening failed in all sixteen replays, for a reason that was not in the code. The single pass stops at a failed check. The split version sent each one to its repair step, so it got one more build pass than the single pass did. Its extra solve and its higher cost may both come from that pass. The replay tool now rewrites every path into the old workspace to one relative to the root, and the comparison has to be run again.
 - **A second pass alone fixed LG7 draw 1 under both versions.** That failure was the pass's own variance, not its design.
-- **Every split replay needed the repair step.** The first application of defences broke a check each time and was repaired. The steps after it never left a defence unbuilt.
 - **The LG5 and LG6 miss is a "safe" verdict that nothing checks.** In all eight replays, the deciding step looked at a snapshot key named like a built-in object property, and called it safe because unknown keys were ignored. The request says a snapshot not shaped like an export is refused. The checking step reviews only excuses for leaving an item open. It never sees a "safe" verdict, so this one went unchallenged.
 - **Next change, unmeasured:** send "safe" verdicts that rest on ignoring or accepting input through the same check against the cited line.
-- **Spend:** $11.83 for sixteen replays.
+- **Spend:** $11.83 for sixteen replays. The finding on unchecked "safe" verdicts stands: the deciding step ran before any check, so the fault does not touch it.
