@@ -50,9 +50,9 @@ export function describeAll(violations, scope) {
   return lines.length > MAX_SHOWN ? [...lines.slice(0, MAX_SHOWN), `and ${lines.length - MAX_SHOWN} more: somi_quality with scope ${scope} lists them`] : lines;
 }
 
-/** { ok, failures: [line], warnings: n } for one scope, where each failure names the rule, the place and the numbers, or { error }. */
+/** { ok, failures: [line], warnings: n, level } for one scope, where each failure names the rule, the place and the numbers, or { error }. */
 export function qualityStep(root, { scope, env = process.env }) {
   const result = runQuality(root, { scope, env });
   if (result.error) return { ok: false, failures: [result.error], warnings: 0, error: result.error };
-  return { ok: result.ok, failures: describeAll(result.violations, scope), warnings: result.warnings.length };
+  return { ok: result.ok, failures: describeAll(result.violations, scope), warnings: result.warnings.length, level: result.level ?? 'strict' };
 }

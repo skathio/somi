@@ -76,7 +76,7 @@ On Claude Code they also answer to `/somi:somi-review` and so on. On Copilot, So
 
 ## Set your tiers
 
-You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code is written on medium, in the conversation or in `/somi-deliver`'s build, and work above the conversation's tier goes up to a worker. The low tier only gathers information and runs checks. When the diff shows security signals, the security reviewer runs on high, and any fix stays on `main`. Ask `/somi-config` to change any of it: after `main` changes, it writes `somi-main` to your own agent folder so the conversation runs on that tier's model.
+You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code is written on medium, in the conversation or in `/somi-deliver`'s build, and work above the conversation's tier goes up to a worker. The low tier only gathers information and runs checks. When the diff shows security signals, the security reviewer runs on high, and any fix stays on `main`. The quality gate is strict by default; `"quality": { "level": "standard" }` or `"relaxed"` in the same file loosens it, and a project's own config can only make it stricter. Ask `/somi-config` to change any of it: after `main` changes, it writes `somi-main` to your own agent folder so the conversation runs on that tier's model.
 
 ```json
 { "tiers": { "main": "medium", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }

@@ -100,17 +100,17 @@ async function quality(ctx, args) {
   const scope = values.scope ?? 'pr';
   if (!SCOPES.includes(scope)) throw new StateError(`quality takes --scope ${SCOPES.join(', ')}`);
   const to = snapshotTree(ctx.root);
-  const { limits, ignored } = values.benchmark ? { limits: limitsFor(scope), ignored: [] } : resolveLimits({ global: ctx.configLayers[0], project: ctx.configLayers[1], scope });
+  const { limits, level, ignored } = values.benchmark ? { limits: limitsFor(scope), level: 'strict', ignored: [] } : resolveLimits({ global: ctx.configLayers[0], project: ctx.configLayers[1], scope });
   if (scope === 'repo') {
     const report = await repoQuality(ctx.root, { rev: to, limits, now: ctx.now() });
-    print({ ...report, scope, tree: to, ...(ignored.length ? { ignored_config: ignored } : {}) });
+    print({ ...report, scope, level, tree: to, ...(ignored.length ? { ignored_config: ignored } : {}) });
     return report.ok ? 0 : 1;
   }
   const from = values.from ? resolveRef(ctx.root, values.from) : scope === 'commit' ? commitBase(ctx.root) : workBase(ctx.root);
   const rules = values.benchmark ? { forbid: [], ignored: [] } : resolveForbidden({ global: ctx.configLayers[0], project: ctx.configLayers[1] });
   const result = await qualityGate(ctx.root, { from, to, limits, forbid: rules.forbid, now: ctx.now(), mode: values.benchmark ? 'benchmark' : 'project', repoFiles: listFiles(ctx.root, to) });
   const notApplied = [...ignored, ...rules.ignored];
-  print({ ...result, scope, from, to, ...(notApplied.length ? { ignored_config: notApplied } : {}) });
+  print({ ...result, scope, level, from, to, ...(notApplied.length ? { ignored_config: notApplied } : {}) });
   return result.ok ? 0 : 1;
 }
 

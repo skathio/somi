@@ -36,14 +36,72 @@ export const DEFAULT_LIMITS = Object.freeze({
 // hooks/hooks.json, is set above the maximum, so the host never cuts the gate off first.
 export const QUALITY_TIMEOUT = Object.freeze({ default: 300, min: 10, max: 1800 });
 
+// A user who wants a looser gate names a level in their own config, as quality.level, rather than tuning limits one by one. strict is
+// the default and the calibrated one. standard loosens each limit by about a third; relaxed puts the function limits near what the
+// 99th percentile of well-kept projects' functions reach. No level allows a new suppression or loosens the rules that are not limits,
+// such as a debugger left behind or a swallowed error. A level only loosens, and a value set under quality still applies after it.
+export const LEVELS = Object.freeze(['strict', 'standard', 'relaxed']);
+const LEVEL_LIMITS = Object.freeze({
+  strict: {},
+  standard: {
+    function: { cognitive: 20, depth: 5, lines: 80, params: 5, options: 8 },
+    component: { cognitive: 20, depth: 5, lines: 200, params: 5, options: 16 },
+    test: { cognitive: 12, depth: 4, lines: 200, params: 5, options: 8 },
+    growth: { cognitive: 15, lines: 60 },
+    file: { cognitive: 150, added_cognitive: 40, lines: 600, added_lines: 450, functions: 60 },
+    imports: { fan_out: 20 },
+    clones: { tokens: 150 },
+    css: { nesting: 4, compound: 4 },
+  },
+  relaxed: {
+    function: { cognitive: 30, depth: 6, lines: 120, params: 6, options: 10 },
+    component: { cognitive: 30, depth: 6, lines: 300, params: 6, options: 20 },
+    test: { cognitive: 16, depth: 5, lines: 300, params: 6, options: 10 },
+    growth: { cognitive: 25, lines: 100 },
+    file: { cognitive: 250, added_cognitive: 60, lines: 1000, added_lines: 600, functions: 100 },
+    imports: { fan_out: 30 },
+    clones: { tokens: 250 },
+    css: { nesting: 5, compound: 5 },
+  },
+});
+
 const SCOPE_DEFAULTS = Object.freeze({ commit: {}, pr: { file: { added_cognitive: 100, added_lines: 1000 } }, repo: {} });
 
-/** The default limits at one scope, as a fresh object. */
-export function limitsFor(scope = 'pr') {
+/** The limits at one scope and level, strict by default, as a fresh object. A level never tightens a scope's own default. */
+export function limitsFor(scope = 'pr', level = 'strict') {
   if (!SCOPES.includes(scope)) throw new Error(`the quality scope is ${SCOPES.join(', ')}, not ${scope}`);
   const limits = Object.fromEntries(Object.entries(DEFAULT_LIMITS).map(([group, values]) => [group, { ...values }]));
   for (const [group, values] of Object.entries(SCOPE_DEFAULTS[scope])) Object.assign(limits[group], values);
+  for (const [group, values] of Object.entries(LEVEL_LIMITS[level] ?? {})) {
+    for (const [key, value] of Object.entries(values)) limits[group][key] = Math.max(limits[group][key], value);
+  }
   return limits;
+}
+
+/**
+ * { level, ignored }: strict, then the user's own quality.level, then a project's only where it is stricter, since a project's config
+ * is cloned input.
+ */
+export function resolveLevel({ global = {}, project = {} } = {}) {
+  const r = resolveSetting({ global, project }, {
+    name: 'level', start: 'strict', valid: (v) => LEVELS.includes(v), invalid: `not one of ${LEVELS.join(', ')}`,
+    projectMay: (v, now) => LEVELS.indexOf(v) <= LEVELS.indexOf(now), refused: (v, now) => `a project may only tighten the level, and ${v} is looser than ${now}`,
+  });
+  return { level: r.value, ignored: r.ignored };
+}
+
+// One quality setting from both files: the user's own sets it either way, and a project's only in the direction projectMay allows.
+function resolveSetting({ global, project }, { name, start, valid, invalid, projectMay, refused }) {
+  let value = start;
+  const ignored = [];
+  for (const [where, file] of [['global', global], ['project', project]]) {
+    const v = file?.quality?.[name];
+    if (v === undefined) continue;
+    if (!valid(v)) ignored.push({ where, key: `quality.${name}`, reason: invalid });
+    else if (where === 'project' && !projectMay(v, value)) ignored.push({ where, key: `quality.${name}`, reason: refused(v, value) });
+    else value = v;
+  }
+  return { value, ignored };
 }
 
 const valid = (v) => Number.isInteger(v) && v >= 0 && v <= 100000;
@@ -63,24 +121,25 @@ function apply(limits, ignored, { where, prefix, group, key, value }) {
 
 function applyLayer(limits, ignored, { where, prefix, layer }) {
   for (const [group, values] of Object.entries(layer ?? {})) {
-    if (prefix === 'quality' && (SCOPES.includes(group) || group === 'timeout_seconds' || group === FORBID_KEY)) continue;
+    if (prefix === 'quality' && (SCOPES.includes(group) || ['timeout_seconds', 'level', FORBID_KEY].includes(group))) continue;
     if (!DEFAULT_LIMITS[group]) { ignored.push({ where, key: `${prefix}.${group}`, reason: NOT_A_LIMIT }); continue; }
     for (const [key, value] of Object.entries(values ?? {})) apply(limits, ignored, { where, prefix, group, key, value });
   }
 }
 
 /**
- * { limits, ignored } at one scope: the scope's defaults, then the global file's shared quality and its quality.<scope>, then the
+ * { limits, level, ignored } at one scope: the scope's defaults at the chosen level, then the global file's shared quality and its quality.<scope>, then the
  * project file's, in that order.
  */
 export function resolveLimits({ global = {}, project = {}, scope = 'pr' } = {}) {
-  const limits = limitsFor(scope);
-  const ignored = [];
+  const chosen = resolveLevel({ global, project });
+  const limits = limitsFor(scope, chosen.level);
+  const ignored = [...chosen.ignored];
   for (const [where, file] of [['global', global], ['project', project]]) {
     applyLayer(limits, ignored, { where, prefix: 'quality', layer: file?.quality });
     applyLayer(limits, ignored, { where, prefix: `quality.${scope}`, layer: file?.quality?.[scope] });
   }
-  return { limits, ignored: [...ignored, ...resolveTimeout({ global, project }).ignored] };
+  return { limits, level: chosen.level, ignored: [...ignored, ...resolveTimeout({ global, project }).ignored] };
 }
 
 // Folders that must not import others, as quality.forbid_imports: [{ "from": "src/ui/", "to": "src/db/" }]. Each rule only adds a
@@ -105,19 +164,13 @@ export function resolveForbidden({ global = {}, project = {} } = {}) {
   return { forbid, ignored };
 }
 
-const TIMEOUT_KEY = 'quality.timeout_seconds';
 const timeoutValid = (v) => Number.isInteger(v) && v >= QUALITY_TIMEOUT.min && v <= QUALITY_TIMEOUT.max;
 
 /** { seconds, ignored }: the default, then the global file's quality.timeout_seconds, then the project's if it is longer. */
 export function resolveTimeout({ global = {}, project = {} } = {}) {
-  let seconds = QUALITY_TIMEOUT.default;
-  const ignored = [];
-  for (const [where, file] of [['global', global], ['project', project]]) {
-    const value = file?.quality?.timeout_seconds;
-    if (value === undefined) continue;
-    if (!timeoutValid(value)) ignored.push({ where, key: TIMEOUT_KEY, reason: `not a whole number of seconds from ${QUALITY_TIMEOUT.min} to ${QUALITY_TIMEOUT.max}` });
-    else if (where === 'project' && value < seconds) ignored.push({ where, key: TIMEOUT_KEY, reason: `a project may only lengthen the time, and ${value} is shorter than ${seconds}` });
-    else seconds = value;
-  }
-  return { seconds, ignored };
+  const r = resolveSetting({ global, project }, {
+    name: 'timeout_seconds', start: QUALITY_TIMEOUT.default, valid: timeoutValid, invalid: `not a whole number of seconds from ${QUALITY_TIMEOUT.min} to ${QUALITY_TIMEOUT.max}`,
+    projectMay: (v, now) => v >= now, refused: (v, now) => `a project may only lengthen the time, and ${v} is shorter than ${now}`,
+  });
+  return { seconds: r.value, ignored: r.ignored };
 }

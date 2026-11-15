@@ -40,7 +40,7 @@ const NOT_REVIEWED = (gate) => (gate.reason === 'open-blocking'
 
 // Only what a PR reader can use. The commits and the review speak for the work, and local ids stay out, because they do not resolve for
 // anyone who clones the repository.
-export function renderPr({ subjects = [], gate, ledger, reviews = [], check, tree, migrated }) {
+export function renderPr({ subjects = [], gate, level = 'strict', ledger, reviews = [], check, tree, migrated }) {
   const lines = [];
   if (!gate.ok) lines.push(NOT_REVIEWED(gate), '');
   lines.push('## Summary', '');
@@ -58,5 +58,7 @@ export function renderPr({ subjects = [], gate, ledger, reviews = [], check, tre
   if (said.length > 0) lines.push('', '## Decisions', '', ...said);
   const full = check?.full && check.tree === tree;
   lines.push('', '## Checks', '', full ? `Full suite: ${check.ok ? 'passed' : 'failed'}.` : 'Full suite: not recorded for this code.');
+  // A reader judges the code by the bar it met, so a gate looser than the default says which one.
+  if (level !== 'strict') lines.push(`Quality gate: passed at the ${level} level, looser than the default strict one.`);
   return `${lines.join('\n')}\n`;
 }

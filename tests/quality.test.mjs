@@ -384,6 +384,40 @@ test('the gate\'s time comes from config: the user\'s file either way, a project
   assert.deepEqual(ignored, []);
 });
 
+test('a looser gate is a level the user names in their own config: a project may only make it stricter, and no level allows a suppression', async () => {
+  const { resolveLevel } = await import('../scripts/lib/quality/limits.mjs');
+  assert.deepEqual(resolveLevel({}), { level: 'strict', ignored: [] });
+  assert.deepEqual(limitsFor('commit', 'strict'), limitsFor('commit'), 'strict is the calibrated default');
+  const standard = resolveLimits({ global: { quality: { level: 'standard' } }, scope: 'commit' });
+  const relaxed = resolveLimits({ global: { quality: { level: 'relaxed' } }, scope: 'commit' });
+  assert.equal(standard.level, 'standard');
+  for (const [group, values] of Object.entries(DEFAULT_LIMITS)) {
+    for (const key of Object.keys(values)) {
+      assert.ok(standard.limits[group][key] >= values[key] && relaxed.limits[group][key] >= standard.limits[group][key], `${group}.${key} only loosens`);
+    }
+  }
+  assert.ok(relaxed.limits.function.cognitive > DEFAULT_LIMITS.function.cognitive);
+  assert.equal(relaxed.limits.suppressions.added, 0, 'a suppression hides a finding at every level');
+  assert.equal(resolveLimits({ global: { quality: { level: 'relaxed' } }, scope: 'pr' }).limits.file.added_lines, limitsFor('pr').file.added_lines, 'a level never tightens a scope\'s own default');
+  assert.equal(resolveLimits({ global: { quality: { level: 'relaxed', function: { cognitive: 18 } } }, scope: 'commit' }).limits.function.cognitive, 18, 'a single limit still applies after the level');
+  const cloned = resolveLimits({ global: { quality: { level: 'standard' } }, project: { quality: { level: 'relaxed' } } });
+  assert.equal(cloned.level, 'standard');
+  assert.match(cloned.ignored[0].reason, /only tighten the level/);
+  assert.equal(resolveLevel({ global: { quality: { level: 'relaxed' } }, project: { quality: { level: 'strict' } } }).level, 'strict', 'a project may hold itself to strict');
+  assert.equal(resolveLevel({ global: { quality: { level: 'off' } } }).ignored[0].key, 'quality.level');
+});
+
+test('a benchmark scores at strict whatever level the user chose, and the gate says which level it used', (t) => {
+  const r = repo(t);
+  r.write('src/a.js', 'export const a = 1;\n');
+  r.git('add', '-A'); r.git('commit', '-qm', 'base');
+  const global = path.join(r.dir, 'global.json');
+  fs.writeFileSync(global, JSON.stringify({ quality: { level: 'relaxed' } }));
+  const run = (...args) => JSON.parse(spawnSync(process.execPath, [CLI, 'quality', ...args], { cwd: r.dir, encoding: 'utf8', env: { ...process.env, SOMI_GLOBAL_CONFIG: global } }).stdout);
+  assert.equal(run('--scope', 'pr').level, 'relaxed');
+  assert.equal(run('--scope', 'pr', '--benchmark').level, 'strict');
+});
+
 test('a gate that runs out of time is a failure that says how to give it longer', async () => {
   const { gateOutcome } = await import('../scripts/lib/quality/run.mjs');
   const out = gateOutcome({ error: Object.assign(new Error('spawnSync node ETIMEDOUT'), { code: 'ETIMEDOUT' }), status: null, stdout: '' }, 300);
