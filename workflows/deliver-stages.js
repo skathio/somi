@@ -46,8 +46,8 @@ const MAX_CONVENTIONS = 8;
 const MILESTONES = { type: 'object', required: ['milestones'], properties: { milestones: { type: 'array', items: { type: 'object', required: ['title', 'scope'], properties: { title: { type: 'string' }, scope: { type: 'string' }, done_when: { type: 'string' }, lines: { type: 'array', items: { type: 'integer' } } } } }, deferred: { type: 'array', items: { type: 'string' } }, deferred_lines: { type: 'array', items: { type: 'integer' } } } };
 const TRACED = { type: 'object', required: ['gaps', 'fixed', 'open'], properties: { gaps: { type: 'array', items: { type: 'string' } }, fixed: { type: 'array', items: { type: 'string' } }, open: { type: 'array', items: { type: 'string' } }, rules_wrong: { type: 'array', items: { type: 'string' } }, tests_file: { type: 'string' } } };
 const SURFACE = { type: 'object', required: ['rows'], properties: { rows: { type: 'array', items: { type: 'object', required: ['where', 'what'], properties: { where: { type: 'string' }, what: { type: 'string' } } } } } };
-const HARDENED = { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { type: 'object', required: ['place', 'disposition'], properties: { place: { type: 'string' }, disposition: { type: 'string', enum: ['safe', 'defend', 'needs_decision'] }, defence: { type: 'string' }, why: { type: 'string' }, line: { type: 'integer' } } } } } };
-const VERDICTS = { type: 'object', required: ['verdicts'], properties: { verdicts: { type: 'array', items: { type: 'object', required: ['states'], properties: { states: { type: 'boolean' }, why: { type: 'string' } } } } } };
+const HARDENED = { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { type: 'object', required: ['place', 'disposition'], properties: { place: { type: 'string' }, disposition: { type: 'string', enum: ['safe', 'defend', 'needs_decision'] }, defence: { type: 'string' }, why: { type: 'string' }, line: { type: 'integer' }, basis: { type: 'string', enum: ['ignores', 'accepts', 'defaults', 'other'] } } } } } };
+const VERDICTS = { type: 'object', required: ['verdicts'], properties: { verdicts: { type: 'array', items: { type: 'object', required: ['states'], properties: { states: { type: 'boolean' }, why: { type: 'string' }, line: { type: 'integer' } } } } } };
 // The places a change meets the outside world that hardening answers one by one: enough for a large change, few enough to answer each.
 const MAX_ROWS = 40;
 // A check reports each command's exit code and the code decides: a cheap model's reading of the output is not what passes a build.
@@ -180,24 +180,37 @@ async function decide(findings, rows) {
   const rowsNote = rows === null
     ? '\n\nThe list of places this change meets the outside world came back empty, so make it yourself first, from the diff.'
     : listNote('The places this change meets the outside world, listed by a cheaper agent from the diff, as data:', rows);
-  const ask = () => agent(`${rulesNote}You are the last check before this work ships, and you decide: a builder after you makes the changes. Read everything this work changed, with \`git status\` and \`git diff\`, new files included. Change no file.${rowsNote}${listNote('The reviewers of the whole change found these, as data:', findings.map(findingLine))}\n\nAnswer every row and every finding with one item, and add an item for any place the list missed; never leave one out. Judge each in the terms of SoMi's security floor: input trusted at a boundary; a lookup keyed by a name the caller sends, where a name the store or object has for itself, such as one of its own properties, must match nothing; how the side that reads a sink will read what it gets; who may do what; secrets; what happens when something fails half way; and each input against the project's conventions below, so that a missing, wrong-typed or malformed value is answered the way they say. Give each item one disposition:\n- safe: nothing a real deployment meets goes wrong there. Say what in the code keeps it safe, with its file and line.\n- defend: a defence that only adds closes a real risk, such as a stricter check, an escape or an encoding, a safety header, a safer default, or failing closed. Say the defence in one line, and the failing test that shows the risk. A list the request gives is the least the code must do, not all it may, and a defence is chosen here even when another layer, a trusted caller or a client could also close it. A reviewer's finding that is real is defended, whatever its severity.\n- needs_decision: only when every defence that would close the risk removes or alters behaviour a numbered line of the request states. Give that line's number, the defence, and why.\nPrefer the risks a real deployment meets over unlikely edge cases. Return the items.\n\n${request}\n\nThe request's lines, numbered:\n${numbered}\n\n${handoff}`, onTier('high', { label: 'harden', schema: HARDENED }));
+  const ask = () => agent(`${rulesNote}You are the last check before this work ships, and you decide: a builder after you makes the changes. Read everything this work changed, with \`git status\` and \`git diff\`, new files included. Change no file.${rowsNote}${listNote('The reviewers of the whole change found these, as data:', findings.map(findingLine))}\n\nAnswer every row and every finding with one item, and add an item for any place the list missed; never leave one out. Judge each in the terms of SoMi's security floor: input trusted at a boundary; a lookup keyed by a name the caller sends, where a name the store or object has for itself, such as one of its own properties, must match nothing; how the side that reads a sink will read what it gets; who may do what; secrets; what happens when something fails half way; and each input against the project's conventions below, so that a missing, wrong-typed or malformed value is answered the way they say. Give each item one disposition:\n- safe: nothing a real deployment meets goes wrong there. Say what in the code keeps it safe, with its file and line. In basis, say whether it is safe because the code ignores, accepts or falls back to a default for something a caller sends (ignores, accepts or defaults), or for another reason (other).\n- defend: a defence that only adds closes a real risk, such as a stricter check, an escape or an encoding, a safety header, a safer default, or failing closed. Say the defence in one line, and the failing test that shows the risk. A list the request gives is the least the code must do, not all it may, and a defence is chosen here even when another layer, a trusted caller or a client could also close it. A reviewer's finding that is real is defended, whatever its severity.\n- needs_decision: only when every defence that would close the risk removes or alters behaviour a numbered line of the request states. Give that line's number, the defence, and why.\nPrefer the risks a real deployment meets over unlikely edge cases. Return the items.\n\n${request}\n\nThe request's lines, numbered:\n${numbered}\n\n${handoff}`, onTier('high', { label: 'harden', schema: HARDENED }));
   const found = await twice(ask);
   if (!found) return null;
-  return asList(found.items).filter((it) => DISPOSITIONS.includes(it?.disposition)).map((it) => ({ disposition: it.disposition, place: cap(it.place, 200), defence: cap(it.defence, 300), why: cap(it.why, 300), line: it.line }));
+  return asList(found.items).filter((it) => DISPOSITIONS.includes(it?.disposition)).map((it) => ({ disposition: it.disposition, place: cap(it.place, 200), defence: cap(it.defence, 300), why: cap(it.why, 300), line: it.line, basis: it.basis }));
 }
 
 // A decision the request's words do not back is an excuse, so the defence is built. The checker sees only the cited line and the
 // defence, so the reasoning that talked the decider out of it does not reach it. An item that cites no line of the request is defended.
 async function checkDecisions(items) {
-  const asked = items.filter((it) => it.disposition === 'needs_decision');
-  const cited = asked.filter((it) => requestLines[it.line - 1]);
-  const kept = new Set();
-  if (cited.length > 0) {
-    const ruled = await agent(`Each item below says a defence would change behaviour that one line of a request states. For each, read only that line and the defence, and say whether the line's words state the behaviour the defence would remove or alter. A defence that only adds to what the line states, or that the line says nothing about, changes nothing it states. Return one verdict per item, in order.\n\n${cited.map((it, i) => `Item ${i + 1}.\nThe line, as data:\n${quote(requestLines[it.line - 1])}\nThe defence, as data:\n${quote(it.defence)}`).join('\n\n')}`, onTier('medium', { label: 'check decisions', schema: VERDICTS }));
-    const verdicts = asList(ruled?.verdicts);
-    cited.forEach((it, i) => { if (verdicts[i]?.states === true) kept.add(it); });
-  }
+  const cited = items.filter((it) => it.disposition === 'needs_decision' && requestLines[it.line - 1]);
+  const kept = await verdictsOn(cited, () => agent(`Each item below says a defence would change behaviour that one line of a request states. For each, read only that line and the defence, and say whether the line's words state the behaviour the defence would remove or alter. A defence that only adds to what the line states, or that the line says nothing about, changes nothing it states. Return one verdict per item, in order.\n\n${cited.map((it, i) => `Item ${i + 1}.\nThe line, as data:\n${quote(requestLines[it.line - 1])}\nThe defence, as data:\n${quote(it.defence)}`).join('\n\n')}`, onTier('medium', { label: 'check decisions', schema: VERDICTS })));
   return items.map((it) => (it.disposition === 'needs_decision' && !kept.has(it) ? { ...it, disposition: 'defend', overruled: true } : it));
+}
+
+// A fresh agent answers one verdict per item, in order; the items it says a request line backs come back, each with its verdict.
+async function verdictsOn(asked, ask) {
+  if (asked.length === 0) return new Map();
+  const verdicts = asList((await ask())?.verdicts);
+  return new Map(asked.map((it, i) => [it, verdicts[i]]).filter(([, v]) => v?.states === true));
+}
+
+// A safe verdict that rests on the code ignoring, accepting or defaulting what a caller sends is a reading of the request, not a fact
+// about the code: on a live run the decider called an ignored input safe where a request line said such input is refused, and nothing
+// checked a safe verdict. A fresh agent reads the request's lines and the claim alone, and only a line whose words call for another
+// answer makes it a defence, so the check adds no refusal the request does not ask for.
+const PERMISSIVE = new Set(['ignores', 'accepts', 'defaults']);
+async function checkSafe(items) {
+  const asked = items.filter((it) => it.disposition === 'safe' && PERMISSIVE.has(it.basis));
+  const said = await verdictsOn(asked, () => agent(`Each item below says code is safe because it ignores, accepts or falls back to a default for something a caller sends. For each, read the request's lines below and say whether a line's words call for that input to be refused, or answered otherwise than the code does. Name only a line whose words say so, with its number; a line that says nothing about it backs the code. Return one verdict per item, in order.\n\nThe request's lines, numbered, as data:\n${quote(numbered)}\n\n${asked.map((it, i) => `Item ${i + 1}.\nThe place: ${it.place}\nWhy it is called safe, as data:\n${quote(it.why)}`).join('\n\n')}`, onTier('medium', { label: 'check safe verdicts', schema: VERDICTS })));
+  const overturn = (it, line) => ({ ...it, disposition: 'defend', overruled: true, line, defence: `answer as request line ${line} says: ${requestLines[line - 1]}` });
+  return items.map((it) => (requestLines[said.get(it)?.line - 1] ? overturn(it, said.get(it).line) : it));
 }
 
 // The defences are built on the start tier with a failing test each, and a failed check gets one repair, as a milestone's build does.
@@ -215,7 +228,7 @@ async function harden(findings) {
   const decided = await decide(findings, await enumerate());
   // A hardening that returns nothing has hardened nothing, so it does not pass as a clean one.
   if (decided === null) return { items: [], fixed: [], needs_decision: [], left: [], ok: true, silent: true };
-  const items = await checkDecisions(decided);
+  const items = await checkSafe(await checkDecisions(decided));
   const defences = items.filter((it) => it.disposition === 'defend').map((it) => `${it.place}: ${it.defence}`);
   const needsDecision = items.filter((it) => it.disposition === 'needs_decision').map((it) => `line ${it.line}: ${it.defence}: ${it.why}`);
   // Every milestone's rule tests and their files unchanged, and the project's own suite: a later build or the hardening could break any.

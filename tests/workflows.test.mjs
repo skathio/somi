@@ -32,7 +32,7 @@ const SCOUTED = { files: ['src/a.js'], test_command: 'node --test', repro_test: 
 const RULES = { file: 'test/rules.test.mjs', command: 'node --test test/rules.test.mjs', rules: ['another organisation\'s document is not_found'] };
 const SEATS = { needed: true, tree: 't', reviewers: [{ agent: 'somi:somi-security-reviewer', model: 'strong', brief: 'Review this diff.' }] };
 // Each stage is answered by the first entry whose label prefix matches; a reviewer, dispatched by its agent name, falls through.
-const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE, hardened = { items: [] }, enumerated = { rows: [{ where: 'src/a.js:3', what: 'the name a caller sends looks up a record' }] }, verdicts = { verdicts: [] }, traced = { gaps: [], fixed: [], open: [] } } = {}) => {
+const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer, plan, built = () => DONE, hardened = { items: [] }, enumerated = { rows: [{ where: 'src/a.js:3', what: 'the name a caller sends looks up a record' }] }, verdicts = { verdicts: [] }, safeVerdicts = { verdicts: [] }, traced = { gaps: [], fixed: [], open: [] } } = {}) => {
   let gates = 0;
   let builds = 0;
   const stages = [
@@ -43,6 +43,7 @@ const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer,
     ['enumerate', () => enumerated],
     ['harden', () => hardened],
     ['check decisions', () => verdicts],
+    ['check safe verdicts', () => safeVerdicts],
     ['apply defences', (prompt) => built(builds++, prompt)],
     ['repair defences', (prompt) => built(builds++, prompt)],
     ['trace', () => traced],
@@ -369,7 +370,7 @@ test('hardening lists the change\'s surface on the low tier, decides each row on
   assert.match(harden.prompt, /SoMi's rules, which hold for this work, are in \/plugin\/rules\/digest\.md[\s\S]*you decide: a builder after you makes the changes[\s\S]*Change no file\./);
   assert.match(harden.prompt, /listed by a cheaper agent from the diff, as data:\n> 1\. src\/a\.js:3: the name a caller sends looks up a record/);
   assert.match(harden.prompt, /Answer every row and every finding with one item, and add an item for any place the list missed; never leave one out\./);
-  assert.match(harden.prompt, /- safe:[\s\S]*with its file and line\.\n- defend:[\s\S]*a safety header[\s\S]*A list the request gives is the least the code must do, not all it may, and a defence is chosen here even when another layer, a trusted caller or a client could also close it\.[\s\S]*\n- needs_decision: only when every defence that would close the risk removes or alters behaviour a numbered line of the request states\. Give that line's number/);
+  assert.match(harden.prompt, /- safe:[\s\S]*with its file and line\. In basis, say whether it is safe because the code ignores, accepts or falls back to a default for something a caller sends[\s\S]*\n- defend:[\s\S]*a safety header[\s\S]*A list the request gives is the least the code must do, not all it may, and a defence is chosen here even when another layer, a trusted caller or a client could also close it\.[\s\S]*\n- needs_decision: only when every defence that would close the risk removes or alters behaviour a numbered line of the request states\. Give that line's number/);
   assert.match(harden.prompt, /a lookup keyed by a name the caller sends, where a name the store or object has for itself, such as one of its own properties, must match nothing/);
   const apply = calls.find((c) => c.label === 'apply defences');
   assert.equal(apply.model, 'everyday', 'a medium builder types the defences');
@@ -398,6 +399,25 @@ test('a decision the cited request line does not back is overruled and built; on
   assert.deepEqual(value.needs_decision, ['line 2: drop content-disposition: it lets a page render']);
   assert.equal(value.stopped, 'a fix needs your decision');
   assert.ok(value.hardening.items.some((l) => l.startsWith('defend (overruled) src/hooks.mjs:4')));
+});
+
+test('a safe verdict that rests on ignoring, accepting or defaulting input is checked against the request\'s lines, and one a line contradicts is built as a defence', async () => {
+  const request = 'Add imports.\nA snapshot that is not shaped like an export answers invalid.';
+  const hardened = { items: [
+    { place: 'src/import.mjs:5', disposition: 'safe', basis: 'ignores', why: 'unknown keys are skipped' },
+    { place: 'src/import.mjs:9', disposition: 'safe', basis: 'defaults', why: 'a missing name becomes untitled' },
+    { place: 'src/store.mjs:2', disposition: 'safe', basis: 'other', why: 'the store is a Map' },
+  ] };
+  const safeVerdicts = { verdicts: [{ states: true, line: 2, why: 'extra keys are not an export' }, { states: false }] };
+  const { value, calls } = await load('deliver-stages').run({ request, models: MODELS }, answers({ hardened, safeVerdicts }));
+  const check = calls.find((c) => c.label === 'check safe verdicts');
+  assert.equal(check.model, 'everyday');
+  assert.match(check.prompt, /The request's lines, numbered, as data:\n> 1: Add imports\.\n> 2: A snapshot that is not shaped like an export answers invalid\.\n\nItem 1\.\nThe place: src\/import\.mjs:5\nWhy it is called safe, as data:\n> unknown keys are skipped\n\nItem 2\.[\s\S]*untitled$/);
+  assert.doesNotMatch(check.prompt, /the store is a Map/, 'a verdict that rests on something else is not asked about');
+  assert.match(calls.find((c) => c.label === 'apply defences').prompt, /> src\/import\.mjs:5: answer as request line 2 says: A snapshot that is not shaped like an export answers invalid\.$/m);
+  assert.deepEqual(value.hardening.items.map((l) => l.split(':')[0]), ['defend (overruled) src/import.mjs', 'safe src/import.mjs', 'safe src/store.mjs']);
+  const none = await load('deliver-stages').run({ request, models: MODELS }, answers({ hardened: { items: [hardened.items[2]] } }));
+  assert.ok(!labels(none.calls).includes('check safe verdicts'), 'with nothing permissive, no checker runs');
 });
 
 test('hardening that leaves the check failing gets one repair, a defence left unbuilt is not done, and a run that stopped early is not hardened', async () => {
