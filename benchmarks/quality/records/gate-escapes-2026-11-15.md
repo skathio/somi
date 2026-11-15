@@ -56,6 +56,12 @@ named one.
   what it would block on is weak evidence that five is fine. The standard and relaxed levels allow five and six.
 - **Closed since:** a TypeScript cast that switches the checker off now fails, and a Python import nothing uses is advised.
 
+## Checked again with the design review on (2026-11-16)
+
+The same reviewer read plain SoMi's changes on the same six tasks again, after the design review was added: one draw each. The design review ran on five of the eight changes. Grades and blocking issues did not move: a mean of 3.0 against 3.0, with 7 changes blocked against 5. Every audit change was blocked again for writing a revert straight to the store. SoMi's reviewer passed that design each time.
+
+**That verdict is contestable.** The audit tasks admit both designs on purpose: one reference solution records the change in the services, the other in the stores. A reviewer that blocks on the store side is giving its own view, not finding a defect. So the 7 layering issues above say more about this reviewer than about the gate, and the study's real findings are the mechanical ones: the casts and the unused imports, both since closed.
+
 ## Limits
 
 12 changes, one reviewer each, all from one model. The reviewer is a model too, and its issues were not checked by hand. Read the
