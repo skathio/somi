@@ -6,13 +6,7 @@ import { classifyPaths } from './path-facts.mjs';
 import { denyListed, foldName, trimDots } from './path-safety.mjs';
 
 export const LARGE_DIFF_LINES = 300;
-// A change of medium size or more gets a review of its design. An independent review of benchmark changes of 140 to 290 product lines
-// blocked half of them, most often on new code that wrote past the layer that owns the data, and the gate caught none of that: no
-// signal had fired, so nothing reviewed them. Only source files count, not data, snapshots, docs or tests, and a change under 120 such
-// lines stays unreviewed unless another signal fires.
-export const DESIGN_REVIEW_LINES = 120;
-const SOURCE = /\.(m?[jt]sx?|c[jt]s|py|cs|go|rs|java|kt|rb|php|swift|c|cc|cpp|h|hpp|scala|vue|svelte)$/i;
-export const REVIEW_SIGNALS = Object.freeze(['multi-module', 'public-api', 'schema', 'tests-weakened', 'dependency', 'goldens-moved', 'large-diff', 'medium-change', 'unreadable-diff']);
+export const REVIEW_SIGNALS = Object.freeze(['multi-module', 'public-api', 'schema', 'tests-weakened', 'dependency', 'goldens-moved', 'large-diff', 'unreadable-diff']);
 // Recorded, but they do not start a review on their own: review on these cost 68% more per task and showed no gain on hidden tests.
 export const RECORDED_ONLY = Object.freeze(['multi-module', 'public-api', 'large-diff']);
 export const SECURITY_SIGNALS = Object.freeze(['sink', 'secrets', 'network', 'repo-content', 'policy-file', 'sensitive-path', 'access-control', 'unreadable-diff']);
@@ -81,7 +75,6 @@ function testsWeakened(rows, lines) {
 function reviewSignals({ rows, lines, files, all, production, changed }) {
   const review = new Set();
   if (changed > LARGE_DIFF_LINES) review.add('large-diff');
-  if (rows.filter((r) => isCode(r.file) && SOURCE.test(r.file)).reduce((n, r) => n + r.added + r.deleted, 0) >= DESIGN_REVIEW_LINES) review.add('medium-change');
   if (production.modules > 1) review.add('multi-module');
   if (all.contract.includes('schema')) review.add('schema');
   if (all.contract.includes('lockfile') || all.contract.includes('manifest')) review.add('dependency');
