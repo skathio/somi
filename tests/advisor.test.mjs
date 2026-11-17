@@ -15,7 +15,7 @@ import { setupAgent } from '../scripts/lib/setup.mjs';
 import { listShards, shardsFor, slot, confirmProjectShards, ShardError } from '../scripts/lib/shards.mjs';
 import { mainTier, resolveSpawn, resolveTier } from '../scripts/lib/tiers.mjs';
 import { isNewer, updateNotice } from '../scripts/lib/update-notice.mjs';
-import { expertiseIndex, roleBrief, tierForReviewer, tierForWorker, WORKFLOWS } from '../scripts/lib/workflows.mjs';
+import { ASKED_SECURITY_REVIEW, expertiseIndex, roleBrief, tierForReviewer, tierForWorker, WORKFLOWS } from '../scripts/lib/workflows.mjs';
 
 const briefOf = (r) => r.steps.find((s) => s.brief)?.brief;
 const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
@@ -440,13 +440,14 @@ test('the tier hook keeps a project config from lowering a reviewer, but not fro
   assert.equal(tierHook(dir, 'somi:somi-worker-low').hookSpecificOutput.updatedInput.model, 'cheap-one');
 });
 
-test('the tier hook puts the security reviewer on medium only when the user chose it, and keeps a raise to high', (t) => {
+test('the tier hook puts the security reviewer on medium only when the user chose it, and on high when the user asked for the review', (t) => {
   const dir = makeRepo(t);
   writeFiles(dir, { 'mine.json': JSON.stringify({ review: { security_tier: 'medium' } }) });
   const hookEnv = { SOMI_HOST: 'claude', SOMI_GLOBAL_CONFIG: path.join(dir, 'mine.json') };
   const run = (input) => runHook('apply-tier.mjs', { tool_name: 'Agent', tool_input: { subagent_type: 'somi:somi-security-reviewer', prompt: 'x', ...input } }, { dir, hookEnv }).out;
   assert.equal(run({}).hookSpecificOutput.updatedInput.model, 'sonnet');
-  assert.equal(run({ model: 'opus' }).hookSpecificOutput.updatedInput.model, 'opus', 'a security review the user asked for runs on high');
+  assert.equal(run({ model: 'opus' }).hookSpecificOutput.updatedInput.model, 'sonnet', 'a session picking high on its own does not change the tier');
+  assert.equal(run({ prompt: `${ASKED_SECURITY_REVIEW}\n\nFresh review.` }).hookSpecificOutput.updatedInput.model, 'opus', 'a security review the user asked for runs on high');
   assert.equal(run({ model: 'haiku' }).hookSpecificOutput.updatedInput.model, 'sonnet', 'a lower model is still replaced');
   assert.equal(tierHook(dir, 'somi:somi-worker-high', hookEnv).hookSpecificOutput.updatedInput.model, 'opus', 'the high tier stays for work');
   writeFiles(dir, { '.somi/config.json': JSON.stringify({ review: { security_tier: 'high' } }) });

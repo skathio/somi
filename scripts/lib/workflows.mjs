@@ -41,15 +41,18 @@ const WORKERS = Object.freeze({ 'somi-worker-low': 'low', 'somi-worker-medium': 
 const REVIEWERS = Object.freeze({ 'somi-reviewer': 'medium', 'somi-security-reviewer': 'high' });
 const plainName = (name) => String(name ?? '').split(':').pop();
 export const tierForWorker = (name) => (Object.hasOwn(WORKERS, plainName(name)) ? WORKERS[plainName(name)] : null);
-export const tierForReviewer = (name, layers = {}) => {
+export const tierForReviewer = (name, layers = {}, opts = {}) => {
   const agent = plainName(name);
   if (!Object.hasOwn(REVIEWERS, agent)) return null;
-  return agent === 'somi-security-reviewer' ? securityReviewTier(layers) : REVIEWERS[agent];
+  return agent === 'somi-security-reviewer' ? securityReviewTier(layers, opts) : REVIEWERS[agent];
 };
 
 // The security reviewer runs on high. The user's own config may set review.security_tier to medium, to spend less on each review while
 // the high tier stays for work that climbs to it. A project's config is cloned input, so it may set high but never lower it, and a user
 // who asks for a security review always gets high.
+// A security review the user asked for says so in its brief, and the tier hook keeps it on high only then. It only ever raises a tier,
+// so it is a marker for cost, not a trust boundary: a session that copies it pays for high and loosens nothing.
+export const ASKED_SECURITY_REVIEW = 'The user asked for this security review.';
 export const SECURITY_REVIEW_TIERS = Object.freeze(['medium', 'high']);
 export function securityReviewTier({ global, project } = {}, { asked = false } = {}) {
   if (asked || project?.review?.security_tier === 'high') return 'high';

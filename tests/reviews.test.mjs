@@ -9,6 +9,7 @@ import { commitSubjects, headSha, snapshotTree, workBase } from '../scripts/lib/
 import { decideAfterReview, isBlocking, parseReviews } from '../scripts/lib/policy.mjs';
 import { pullRequest } from '../scripts/lib/pr.mjs';
 import { prGate, readReviews, recordReviews, reviewPlan } from '../scripts/lib/reviews.mjs';
+import { ASKED_SECURITY_REVIEW } from '../scripts/lib/workflows.mjs';
 
 const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
 const makeCtx = (dir, config = {}, layers = [config]) => ({ root: dir, env, config, configLayers: layers, host: 'claude', now: () => '2026-01-02T00:00:00Z' });
@@ -102,7 +103,10 @@ test('the user may put the security reviewer alone on medium; a project may only
   assert.equal(seatOf([{}, {}]).tier, 'high', 'high is the default');
   assert.equal(seatOf([{}, { review: { security_tier: 'medium' } }]).tier, 'high', 'a project cannot lower it');
   assert.equal(seatOf([mine, { review: { security_tier: 'high' } }]).tier, 'high', 'a project can raise it');
-  assert.equal(seatOf([mine, {}], { security: true }).tier, 'high', 'a user asking for a security review gets high');
+  const asked = seatOf([mine, {}], { security: true });
+  assert.equal(asked.tier, 'high', 'a user asking for a security review gets high');
+  assert.ok(asked.brief.startsWith(ASKED_SECURITY_REVIEW), 'and its brief says so, for the tier hook');
+  assert.ok(!seatOf([mine, {}]).brief.includes(ASKED_SECURITY_REVIEW));
   assert.equal(seatOf([{ review: { security_tier: 'low' } }, {}]).tier, 'high', 'a value that is not medium or high is ignored');
 });
 

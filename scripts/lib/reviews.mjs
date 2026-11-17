@@ -10,7 +10,7 @@ import { ReviewInputError, decideAfterReview, isBlocking, parseReviews } from '.
 import { computeSignals, RECORDED_ONLY, SECURITY_SIGNALS } from './signals.mjs';
 import { StateError, appendStateFile, statePaths } from './state.mjs';
 import { resolveSpawn } from './tiers.mjs';
-import { securityReviewTier } from './workflows.mjs';
+import { ASKED_SECURITY_REVIEW, securityReviewTier } from './workflows.mjs';
 
 const REVIEWER = 'somi-reviewer';
 const SECURITY_REVIEWER = 'somi-security-reviewer';
@@ -25,7 +25,8 @@ const bare = (agent) => String(agent ?? '').split(':').pop();
 const seat = (ctx, agent, diff, asked) => {
   const wanted = agent === SECURITY_REVIEWER ? securityReviewTier({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1] }, { asked }) : TIERS[agent];
   const { tier, model } = resolveSpawn(ctx.configLayers?.[0] ?? {}, ctx.host, wanted);
-  return { agent: `somi:${agent}`, tier, ...(model ? { model } : {}), brief: `${REVIEWER_PROMPT}\n\nThe diff command:\n${diff}` };
+  const marked = agent === SECURITY_REVIEWER && asked ? `${ASKED_SECURITY_REVIEW}\n\n` : '';
+  return { agent: `somi:${agent}`, tier, ...(model ? { model } : {}), brief: `${marked}${REVIEWER_PROMPT}\n\nThe diff command:\n${diff}` };
 };
 
 const triggers = (signals) => [...signals.review.filter((s) => !RECORDED_ONLY.includes(s)), ...signals.security];
