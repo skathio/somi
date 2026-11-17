@@ -10,18 +10,21 @@ import { ReviewInputError, decideAfterReview, isBlocking, parseReviews } from '.
 import { computeSignals, RECORDED_ONLY, SECURITY_SIGNALS } from './signals.mjs';
 import { StateError, appendStateFile, statePaths } from './state.mjs';
 import { resolveSpawn } from './tiers.mjs';
+import { securityReviewTier } from './workflows.mjs';
 
 const REVIEWER = 'somi-reviewer';
 const SECURITY_REVIEWER = 'somi-security-reviewer';
 const OBJECT_ID = /^[0-9a-f]{40,64}$/;
 const REVIEWER_PROMPT = 'Fresh, read-only review. Run the diff command, read what you need, return only the JSON your instructions define.';
-// Judging a diff is judgement work, so the code reviewer runs on medium and the security reviewer on high.
 const TIERS = Object.freeze({ [REVIEWER]: 'medium', [SECURITY_REVIEWER]: 'high' });
 const bare = (agent) => String(agent ?? '').split(':').pop();
 
-// Who reviews is review policy, so only the user's own config chooses the model, and a committed project config has no say.
-const seat = (ctx, agent, diff) => {
-  const { tier, model } = resolveSpawn(ctx.configLayers?.[0] ?? {}, ctx.host, TIERS[agent]);
+// Who reviews is review policy, so only the user's own config chooses the model, and a committed project config can only raise the
+// security reviewer's tier. Judging a diff is judgement work: the code reviewer runs on medium, the security reviewer on high unless
+// the user chose medium for it, and on high whenever the user asks for a security review.
+const seat = (ctx, agent, diff, asked) => {
+  const wanted = agent === SECURITY_REVIEWER ? securityReviewTier({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1] }, { asked }) : TIERS[agent];
+  const { tier, model } = resolveSpawn(ctx.configLayers?.[0] ?? {}, ctx.host, wanted);
   return { agent: `somi:${agent}`, tier, ...(model ? { model } : {}), brief: `${REVIEWER_PROMPT}\n\nThe diff command:\n${diff}` };
 };
 
@@ -62,7 +65,7 @@ export function reviewPlan(ctx, { base, always = false, security = false } = {})
   const covered = agents.length > 0 && !always && !security && coveringReview(ctx, tree, agents);
   if (covered && (covered.findings ?? []).filter(isBlocking).length === 0) return { needed: false, covered: true, reviewers: [], required: agents, base: from, tree, signals: fired };
   const diff = reviewDiffCommand(from, tree);
-  return { needed: agents.length > 0, reviewers: agents.map((a) => seat(ctx, a, diff)), required: agents, base: from, tree, signals: fired, diff };
+  return { needed: agents.length > 0, reviewers: agents.map((a) => seat(ctx, a, diff, security)), required: agents, base: from, tree, signals: fired, diff };
 }
 
 // Hosts hand reviewers the absolute path of the working copy, and a report is not worth paying for twice over that.

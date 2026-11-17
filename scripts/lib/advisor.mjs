@@ -15,7 +15,7 @@ import { earlierPrompts, readPrompt, saveEarlier } from './prompt.mjs';
 import { LONG_REQUEST, WHEN, classify } from './routes.mjs';
 import { shardsFor } from './shards.mjs';
 import { TIERS, mainTier, resolveSpawn } from './tiers.mjs';
-import { RULES_FILE, WORKFLOWS, expertiseIndex, libraryPath, roleBrief, rulesLine, workerAgent } from './workflows.mjs';
+import { RULES_FILE, WORKFLOWS, expertiseIndex, libraryPath, roleBrief, rulesLine, securityReviewTier, workerAgent } from './workflows.mjs';
 import { copilotName } from './copilot-workflow.mjs';
 import { chatCommand, commandAnswer } from './chat-commands.mjs';
 import { globalConfigPath } from './config-files.mjs';
@@ -137,7 +137,7 @@ function chooseRoute({ request, ticket, hint }) {
 function configAnswer(ctx) {
   const scoped = SCOPES.map((scope) => [scope, resolveLimits({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1], scope })]);
   const ignored = [...new Map(scoped.flatMap(([, r]) => r.ignored).map((x) => [`${x.where}:${x.key}`, x])).values()];
-  return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: Object.fromEntries(scoped.map(([scope, r]) => [scope, r.limits])), quality_level: scoped[0][1].level, quality_timeout_seconds: resolveTimeout({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1] }).seconds, ...(ignored.length ? { quality_ignored: ignored } : {}), global_config: globalConfigPath(ctx.env), advice: `${QUALITY_CONFIG} ${SETUP(ctx.host)}` };
+  return { route: 'config', main: mainTier(ctx.config), tiers: Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t)])), host: ctx.host, quality: Object.fromEntries(scoped.map(([scope, r]) => [scope, r.limits])), quality_level: scoped[0][1].level, security_review_tier: securityReviewTier({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1] }), quality_timeout_seconds: resolveTimeout({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1] }).seconds, ...(ignored.length ? { quality_ignored: ignored } : {}), global_config: globalConfigPath(ctx.env), advice: `${QUALITY_CONFIG} ${SETUP(ctx.host)}` };
 }
 
 // Routes that answer at once, with no work to place: asking which route fits, status, config, the pull request and the reviews.

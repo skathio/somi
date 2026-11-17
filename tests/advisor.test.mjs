@@ -440,6 +440,19 @@ test('the tier hook keeps a project config from lowering a reviewer, but not fro
   assert.equal(tierHook(dir, 'somi:somi-worker-low').hookSpecificOutput.updatedInput.model, 'cheap-one');
 });
 
+test('the tier hook puts the security reviewer on medium only when the user chose it, and keeps a raise to high', (t) => {
+  const dir = makeRepo(t);
+  writeFiles(dir, { 'mine.json': JSON.stringify({ review: { security_tier: 'medium' } }) });
+  const hookEnv = { SOMI_HOST: 'claude', SOMI_GLOBAL_CONFIG: path.join(dir, 'mine.json') };
+  const run = (input) => runHook('apply-tier.mjs', { tool_name: 'Agent', tool_input: { subagent_type: 'somi:somi-security-reviewer', prompt: 'x', ...input } }, { dir, hookEnv }).out;
+  assert.equal(run({}).hookSpecificOutput.updatedInput.model, 'sonnet');
+  assert.equal(run({ model: 'opus' }).hookSpecificOutput.updatedInput.model, 'opus', 'a security review the user asked for runs on high');
+  assert.equal(run({ model: 'haiku' }).hookSpecificOutput.updatedInput.model, 'sonnet', 'a lower model is still replaced');
+  assert.equal(tierHook(dir, 'somi:somi-worker-high', hookEnv).hookSpecificOutput.updatedInput.model, 'opus', 'the high tier stays for work');
+  writeFiles(dir, { '.somi/config.json': JSON.stringify({ review: { security_tier: 'high' } }) });
+  assert.equal(run({}).hookSpecificOutput.updatedInput.model, 'opus', 'a project may raise it');
+});
+
 test('hooks find the repository from a subfolder, so state stays in one place', (t) => {
   const dir = makeRepo(t);
   const sub = path.join(dir, 'pkg');

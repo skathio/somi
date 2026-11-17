@@ -9,21 +9,28 @@ import { detectHost, resolveSpawn } from '../../scripts/lib/tiers.mjs';
 import { tierForReviewer, tierForWorker } from '../../scripts/lib/workflows.mjs';
 import { projectRoot, readPayload, runHook } from '../lib/common.mjs';
 
+// Who reviews is review policy, so a committed project config cannot lower it. Only the user's own config can. A reviewer started on the
+// high tier's model is a raise, such as a security review the user asked for, so it keeps that model.
+function modelFor(agent, loaded, host, requested) {
+  const reviewerTier = tierForReviewer(agent, { global: loaded.global.config, project: loaded.project.config });
+  if (!reviewerTier) return resolveSpawn(loaded.config, host, tierForWorker(agent)).model;
+  const config = loaded.global.config ?? {};
+  const high = resolveSpawn(config, host, 'high').model;
+  return high && requested === high ? high : resolveSpawn(config, host, reviewerTier).model;
+}
+
 runHook(() => {
   const payload = readPayload();
   let args = payload.tool_input ?? payload.toolArgs ?? {};
   if (typeof args === 'string') { try { args = JSON.parse(args); } catch { return; } }
   const agent = args.subagent_type ?? args.agent_type;
-  const reviewerTier = tierForReviewer(agent);
-  const wanted = reviewerTier ?? tierForWorker(agent);
-  if (!wanted) return;
+  if (!tierForReviewer(agent) && !tierForWorker(agent)) return;
   const root = projectRoot();
   if (root === null) return;
   let loaded;
   try { loaded = loadConfig(root); } catch { return; }
-  // Who reviews is review policy, so a committed project config cannot lower it. Only the user's own config can.
   const host = detectHost();
-  const { model } = resolveSpawn(reviewerTier ? loaded.global.config ?? {} : loaded.config, host, wanted);
+  const model = modelFor(agent, loaded, host, args.model);
   const background = host === 'claude' && args.run_in_background !== false;
   if ((!model || args.model === model) && !background) return;
   const updated = { ...args, ...(model ? { model } : {}), ...(background ? { run_in_background: false } : {}) };

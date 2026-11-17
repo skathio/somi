@@ -91,6 +91,21 @@ test('a project config cannot lower who reviews, and the user\'s own config can'
   assert.equal(reviewPlan(own).reviewers.find((r) => r.agent === 'somi:somi-security-reviewer').tier, 'medium');
 });
 
+test('the user may put the security reviewer alone on medium; a project may only raise it, and asking always gets high', (t) => {
+  const mine = { review: { security_tier: 'medium' } };
+  const seatOf = (layers, opts) => {
+    const ctx = makeCtx(makeRepo(t), {}, layers);
+    writeFiles(ctx.root, SINK);
+    return reviewPlan(ctx, opts).reviewers.find((r) => r.agent === 'somi:somi-security-reviewer');
+  };
+  assert.deepEqual((({ tier, model }) => ({ tier, model }))(seatOf([mine, {}])), { tier: 'medium', model: 'sonnet' });
+  assert.equal(seatOf([{}, {}]).tier, 'high', 'high is the default');
+  assert.equal(seatOf([{}, { review: { security_tier: 'medium' } }]).tier, 'high', 'a project cannot lower it');
+  assert.equal(seatOf([mine, { review: { security_tier: 'high' } }]).tier, 'high', 'a project can raise it');
+  assert.equal(seatOf([mine, {}], { security: true }).tier, 'high', 'a user asking for a security review gets high');
+  assert.equal(seatOf([{ review: { security_tier: 'low' } }, {}]).tier, 'high', 'a value that is not medium or high is ignored');
+});
+
 test('a missing security review is refused, not read as clean, and a report for no reviewer is refused', (t) => {
   const ctx = makeCtx(makeRepo(t));
   writeFiles(ctx.root, SINK);

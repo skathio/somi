@@ -41,7 +41,21 @@ const WORKERS = Object.freeze({ 'somi-worker-low': 'low', 'somi-worker-medium': 
 const REVIEWERS = Object.freeze({ 'somi-reviewer': 'medium', 'somi-security-reviewer': 'high' });
 const plainName = (name) => String(name ?? '').split(':').pop();
 export const tierForWorker = (name) => (Object.hasOwn(WORKERS, plainName(name)) ? WORKERS[plainName(name)] : null);
-export const tierForReviewer = (name) => (Object.hasOwn(REVIEWERS, plainName(name)) ? REVIEWERS[plainName(name)] : null);
+export const tierForReviewer = (name, layers = {}) => {
+  const agent = plainName(name);
+  if (!Object.hasOwn(REVIEWERS, agent)) return null;
+  return agent === 'somi-security-reviewer' ? securityReviewTier(layers) : REVIEWERS[agent];
+};
+
+// The security reviewer runs on high. The user's own config may set review.security_tier to medium, to spend less on each review while
+// the high tier stays for work that climbs to it. A project's config is cloned input, so it may set high but never lower it, and a user
+// who asks for a security review always gets high.
+export const SECURITY_REVIEW_TIERS = Object.freeze(['medium', 'high']);
+export function securityReviewTier({ global, project } = {}, { asked = false } = {}) {
+  if (asked || project?.review?.security_tier === 'high') return 'high';
+  const chosen = global?.review?.security_tier;
+  return SECURITY_REVIEW_TIERS.includes(chosen) ? chosen : 'high';
+}
 
 const LIBRARY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'library');
 export const libraryPath = (kind, name) => path.join(LIBRARY, kind, `${name}.md`);
