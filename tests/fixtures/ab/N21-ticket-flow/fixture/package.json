@@ -1,8 +1,0 @@
-{
-  "name": "n21-ticket-flow",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

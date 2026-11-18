@@ -1,8 +1,0 @@
-{
-  "name": "n18-price-rules",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

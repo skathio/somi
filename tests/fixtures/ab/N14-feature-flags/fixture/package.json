@@ -1,8 +1,0 @@
-{
-  "name": "n14-feature-flags",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

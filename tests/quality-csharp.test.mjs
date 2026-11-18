@@ -33,6 +33,14 @@ test('each C# method is a unit, named, with its parameters and depth measured', 
   assert.ok(['One', 'Two'].every((n) => many.some((u) => u.name === n)), 'every method is scored');
 });
 
+test('a C# property accessor is a unit of its own, named for its property, so a deep getter is held to the limits', async () => {
+  const found = await units(cs('    public int Total {\n      get { if (a) { if (b) { if (c) { if (d) { return 1; } } } } return 0; }\n      set { _t = value; }\n    }\n    public int Other { get => 1; }\n    bool a, b, c, d; int _t;'));
+  const getter = found.find((u) => u.name === 'Total.get');
+  assert.ok(getter, JSON.stringify(found.map((u) => u.name)));
+  assert.equal(getter.depth, 4);
+  assert.ok(found.some((u) => u.name === 'Total.set') && found.some((u) => u.name === 'Other.get'), 'each accessor is named for its property');
+});
+
 test('SoMi-CC v1 scores C# as the spec does: nesting, else-if and else, boolean sequences, loops and catch', async () => {
   assert.equal(await score('    void F(bool a, bool b, bool c) { if (a) { if (b) { if (c) { return; } } } }'), 6);
   assert.equal(await score('    void F(bool a, bool b) { if (a) { } else if (b) { } else { } }'), 3);

@@ -1,5 +1,5 @@
 ---
-description: "Run a piece of work as SoMi's staged workflow: scout, build, verify and review, each on its cost tier, through to the end."
+description: "Run a piece of work as SoMi's staged workflow: scout, plan milestones, then build, verify and review each, on its cost tier, through to the end."
 argument-hint: "<the work, or a ticket>"
 disable-model-invocation: true
 ---

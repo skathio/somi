@@ -181,6 +181,8 @@ function prTool(ctx, a) {
 
 const QUALITY_ADVICE = 'Tell the user what failed, worst first, in a few lines. Fix it only if they ask, or if it is code you changed in this conversation: refactor until it passes with the tests still green, and never add a somi-gate-allow exemption to get past it. To change a limit, the user sets it under quality in their own config, which somi_route with hint config explains.';
 
+const QUALITY_PASS = 'Everything is within the limits. Say so in one line. Warnings are advice: mention any in code you changed in this conversation, and fix one only if the user asks. Skipped and uncovered files were not scored.';
+
 function qualityTool(ctx, a) {
   const scope = a.scope ?? 'pr';
   if (!SCOPES.includes(scope)) return textResult(`scope is one of ${SCOPES.join(', ')}.`, true);
@@ -189,7 +191,9 @@ function qualityTool(ctx, a) {
   if (r.error) return textResult(r.error, true);
   const worst = CHANGE_SCOPES.includes(scope) ? {} : { most_complex: r.summary.most_complex.slice(0, 5), most_findings: r.summary.most_findings.slice(0, 5) };
   const ignored = r.ignored_config ? { ignored_config: r.ignored_config } : {};
-  return textResult({ ok: r.ok, scope, failures: describeAll(r.violations, scope), scored: r.scored, unanalyzed: r.unanalyzed.length, ...worst, ...ignored, advice: r.ok ? 'Everything is within the limits. Say so in one line.' : QUALITY_ADVICE });
+  const advice = r.warnings?.length ? { warnings: describeAll(r.warnings, scope) } : {};
+  const notScored = { ...(r.skipped?.length ? { skipped: r.skipped.length } : {}), ...(r.uncovered?.length ? { uncovered: r.uncovered.length } : {}) };
+  return textResult({ ok: r.ok, scope, failures: describeAll(r.violations, scope), ...advice, scored: r.scored, unanalyzed: r.unanalyzed.length, ...notScored, ...worst, ...ignored, advice: r.ok ? QUALITY_PASS : QUALITY_ADVICE });
 }
 
 function reviewAdvice(plan) {
@@ -204,7 +208,8 @@ function reviewTool(ctx, a) {
   if (typeof a.reviews === 'string') { try { a.reviews = JSON.parse(a.reviews); } catch { return textResult('reviews is not valid JSON. Send an array with every reviewer\'s JSON object.', true); } }
   if (a.reviews) return textResult({ ...recordReviews(ctx, { ...options, reviews: a.reviews, tree: a.tree }), ...shardAdvice(ctx, 'review.done') });
   const plan = reviewPlan(ctx, options);
-  const security = plan.signals.some((s) => SECURITY_SIGNALS.includes(s)) ? { security: 'Security signals fired on this diff, so the security reviewer runs on the high tier, and any fix stays in this conversation, not on a cheaper worker.' } : {};
+  const tier = plan.reviewers.find((r) => r.agent === 'somi:somi-security-reviewer')?.tier ?? 'high';
+  const security = plan.signals.some((s) => SECURITY_SIGNALS.includes(s)) ? { security: `Security signals fired on this diff, so the security reviewer runs on the ${tier} tier, on the model its seat names, and any fix stays in this conversation, not on a cheaper worker.` } : {};
   return textResult({ ...plan, ...security, advice: reviewAdvice(plan) });
 }
 

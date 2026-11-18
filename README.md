@@ -2,7 +2,7 @@
 
 Tell SoMi what you want, in plain words or as a ticket, and it picks the right workflow and keeps the cost down, on Claude Code and GitHub Copilot CLI. You keep talking to your agent the whole time: it can read, answer and change its mind, and SoMi advises instead of taking over.
 
-> **5.0, measured.** On the pre-registered [benchmark](docs/BENCHMARK.md) (Sonnet, 16 tasks, 96 draws each), SoMi solved 90 draws against a bare agent's 72, met the quality limits on all 96 against 84, and cost 1.28 times as much per solved task, under the 1.5 the benchmark allows. On those single-change tasks the agent rarely routes, so the gain comes from the rules, the quality gate and the review; routing has not been measured on larger work yet.
+> **5.2, measured.** On the registered small recording, plain SoMi with `review.security_tier: medium` solved 89 of 96 draws against a bare agent's 73, at 1.36 times bare's cost per solved task ([record](benchmarks/records/registered-small-security-medium-2026-11-18.md)). With the security reviewer on its default, high, it cost 1.85 times. On the smoke recordings against a bare agent on Sonnet ([records](benchmarks/records/deliver-vs-somi5-vs-bare-2026-11-18.md)), plain SoMi met the strict standard (hidden tests pass, its own tests catch broken code, and the quality limits hold) on 35 of 48 small draws against 23, 16 of 30 medium against 9, and 6 of 16 large against 0, at 1.5 to 1.9 times bare's cost per solved task. `/somi-deliver` met it on 26 of 30 medium and 10 of 16 large, at about three times plain SoMi's cost per success, and on small work it did no better than plain SoMi. These are 2–3 draws per task: directions, not significant results.
 
 ## How it works
 
@@ -13,8 +13,9 @@ you talk to one agent, on the medium tier, the same as a bare agent
   -> a ticket, large work, or a request that fits no obvious workflow: it asks somi_route once, and gets the
        workflow's steps: each one's tier, whether it runs here or on a subagent, and its brief
   -> large work: it does it too, on medium, and tells you that /somi-deliver runs it in stages
-  -> /somi-deliver <work or ticket>: a scout, a build that steps up a tier if the checks fail, the checks, and
-       the reviews the diff needs, each on its tier, run in code through to the end
+  -> /somi-deliver <work or ticket>: a scout, a plan of milestones, and for each one rule tests, a build that
+       steps up a tier if the checks fail, and the checks; the reviews the diff needs, each on its tier, run in
+       code through to the end; a blocked or unfinished milestone stops it and comes back to you
   -> the diff touches a security sink: the security reviewer runs on high, and every fix stays here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier
   -> a turn that changed code ends: the quality gate runs, anything over a limit goes back to be fixed,
@@ -64,6 +65,7 @@ Everything is done from the chat. Ask for a change, a bug fix, a refactor, a pla
 | Command | What it does |
 |---|---|
 | `/somi <anything>` | Routes anything, the way the agent does with plain words. Use it from another agent. |
+| `/somi <command>` | Runs SoMi's own commands from the chat, so you never need the terminal: `/somi doctor` checks the setup, `/somi check` runs the gate and the tests, and `/somi help` lists the rest. One that changes your setup, such as `setup` or `init`, runs only after you say yes. |
 | `/somi-deliver <work or ticket>` | Runs large work as SoMi's staged workflow. Only you can start it. On Copilot, it needs `/experimental`; SoMi registers it at session start, so a session already open gets it after `/clear`. |
 | `/somi-review` | Reviews the current changes, whether or not the diff calls for it. |
 | `/somi-quality [commit \| repo]` | Checks the code against the quality limits: the branch, one commit, or the whole codebase. |
@@ -74,7 +76,7 @@ On Claude Code they also answer to `/somi:somi-review` and so on. On Copilot, So
 
 ## Set your tiers
 
-You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code is written on medium, in the conversation or in `/somi-deliver`'s build, and work above the conversation's tier goes up to a worker. The low tier only gathers information and runs checks. When the diff shows security signals, the security reviewer runs on high, and any fix stays on `main`. Ask `/somi-config` to change any of it: after `main` changes, it writes `somi-main` to your own agent folder so the conversation runs on that tier's model.
+You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code is written on medium, in the conversation or in `/somi-deliver`'s build, and work above the conversation's tier goes up to a worker. The low tier only gathers information and runs checks. When the diff shows security signals, the security reviewer runs on high, and any fix stays on `main`. `"review": { "security_tier": "medium" }` puts that reviewer alone on medium, while the high tier stays for work that climbs to it. On the benchmark that cost 17–19% less per task but solved fewer small security tasks, so the default stays high. A project's config can only set it back to high, and a security review you ask for, such as `/somi review --security`, always runs on high. The quality gate is strict by default; `"quality": { "level": "standard" }` or `"relaxed"` in the same file loosens it, and a project's own config can only make it stricter. Ask `/somi-config` to change any of it: after `main` changes, it writes `somi-main` to your own agent folder so the conversation runs on that tier's model.
 
 ```json
 { "tiers": { "main": "medium", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }
@@ -88,7 +90,7 @@ Claude Code has those defaults. Copilot has none, because its models vary by pla
 
 ## Set your quality limits
 
-The quality gate checks what a change touched against limits on complexity, nesting, length, parameters, copied code and suppressions. The defaults are in [ARCHITECTURE.md](docs/ARCHITECTURE.md#quality-gate). Ask for it in the chat, or type `/somi-quality`. By default it scores the whole branch since it left the main branch, which is what goes into a pull request; `/somi-quality commit` scores what a commit adds to the last one. Both scopes share every limit except how much one change may add to a file: 25 in a commit and 100 in a pull request.
+The quality gate checks what a change touched against limits on complexity, nesting, length, parameters, copied code, import cycles and suppressions, and gives advice on file size, options objects, swallowed errors, leftover debugging, tests that assert nothing and names nothing uses. The defaults are in [ARCHITECTURE.md](docs/ARCHITECTURE.md#quality-gate). Ask for it in the chat, or type `/somi-quality`. By default it scores the whole branch since it left the main branch, which is what goes into a pull request; `/somi-quality commit` scores what a commit adds to the last one. Both scopes share every limit except how much one change may add to a file: 25 in a commit and 100 in a pull request.
 
 Ask `/somi-config` to change one, or set your own under `quality` in the same global file, and give either scope its own values under `quality.commit` or `quality.pr`:
 
@@ -97,6 +99,12 @@ Ask `/somi-config` to change one, or set your own under `quality` in the same gl
 ```
 
 A project's `.somi/config.json` can only make a limit stricter: a looser value there is ignored, and the gate says so. SoMi asks before an agent changes a limit.
+
+To keep layers apart, name the folders that must not import others. Either file may add rules, and a new import across one fails:
+
+```json
+{ "quality": { "forbid_imports": [{ "from": "src/ui/", "to": "src/db/" }] } }
+```
 
 The gate may run for 300 seconds before it counts as failed. For a large change, set `quality.timeout_seconds`, up to 1800, in your own file, or in the project's, which may only lengthen it:
 

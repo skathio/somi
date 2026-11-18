@@ -1,5 +1,5 @@
 {
-  "note": "Vendored unchanged from the npm tarballs named here, fetched with npm pack, which checks the tarball integrity. The loader refuses any file whose sha256 does not match.",
+  "note": "Vendored unchanged from the npm tarballs named here, fetched with npm pack, which checks the tarball integrity. The loader refuses any file whose sha256 does not match. The Python grammar is the tree-sitter project's own release; it was built for language ABI 15, which the web-tree-sitter runtime here loads.",
   "files": {
     "web-tree-sitter.js": {
       "package": "web-tree-sitter",
@@ -63,6 +63,16 @@
       "license": "MIT",
       "bytes": 5103332,
       "sha256": "d12d85996c25957b4c1b71e26db2d7cc8a294997b60642e9c2a3b031b2c66dd3"
+    },
+    "tree-sitter-python.wasm": {
+      "package": "tree-sitter-python",
+      "version": "0.25.0",
+      "tarball_integrity": "sha512-eCmJx6zQa35GxaCtQD+wXHOhYqBxEL+bp71W/s3fcDMu06MrtzkVXR437dRrCrbrDbyLuUDJpAgycs7ncngLXw==",
+      "repository": "https://github.com/tree-sitter/tree-sitter-python",
+      "license": "MIT",
+      "abi": 15,
+      "bytes": 457883,
+      "sha256": "16108b50df4ee9a30168794252ab55e7c93bfc5765d7fa0aa3e335752c515f47"
     }
   }
 }

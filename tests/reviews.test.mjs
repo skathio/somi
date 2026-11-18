@@ -9,6 +9,7 @@ import { commitSubjects, headSha, snapshotTree, workBase } from '../scripts/lib/
 import { decideAfterReview, isBlocking, parseReviews } from '../scripts/lib/policy.mjs';
 import { pullRequest } from '../scripts/lib/pr.mjs';
 import { prGate, readReviews, recordReviews, reviewPlan } from '../scripts/lib/reviews.mjs';
+import { ASKED_SECURITY_REVIEW } from '../scripts/lib/workflows.mjs';
 
 const env = { ...process.env, SOMI_GLOBAL_CONFIG: '' };
 const makeCtx = (dir, config = {}, layers = [config]) => ({ root: dir, env, config, configLayers: layers, host: 'claude', now: () => '2026-01-02T00:00:00Z' });
@@ -89,6 +90,24 @@ test('a project config cannot lower who reviews, and the user\'s own config can'
   const own = makeCtx(makeRepo(t), mine, [mine, {}]);
   writeFiles(own.root, SINK);
   assert.equal(reviewPlan(own).reviewers.find((r) => r.agent === 'somi:somi-security-reviewer').tier, 'medium');
+});
+
+test('the user may put the security reviewer alone on medium; a project may only raise it, and asking always gets high', (t) => {
+  const mine = { review: { security_tier: 'medium' } };
+  const seatOf = (layers, opts) => {
+    const ctx = makeCtx(makeRepo(t), {}, layers);
+    writeFiles(ctx.root, SINK);
+    return reviewPlan(ctx, opts).reviewers.find((r) => r.agent === 'somi:somi-security-reviewer');
+  };
+  assert.deepEqual((({ tier, model }) => ({ tier, model }))(seatOf([mine, {}])), { tier: 'medium', model: 'sonnet' });
+  assert.equal(seatOf([{}, {}]).tier, 'high', 'high is the default');
+  assert.equal(seatOf([{}, { review: { security_tier: 'medium' } }]).tier, 'high', 'a project cannot lower it');
+  assert.equal(seatOf([mine, { review: { security_tier: 'high' } }]).tier, 'high', 'a project can raise it');
+  const asked = seatOf([mine, {}], { security: true });
+  assert.equal(asked.tier, 'high', 'a user asking for a security review gets high');
+  assert.ok(asked.brief.startsWith(ASKED_SECURITY_REVIEW), 'and its brief says so, for the tier hook');
+  assert.ok(!seatOf([mine, {}]).brief.includes(ASKED_SECURITY_REVIEW));
+  assert.equal(seatOf([{ review: { security_tier: 'low' } }, {}]).tier, 'high', 'a value that is not medium or high is ignored');
 });
 
 test('a missing security review is refused, not read as clean, and a report for no reviewer is refused', (t) => {

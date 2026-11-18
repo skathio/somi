@@ -15,6 +15,8 @@ test('status view', () => assert.equal(renderStatus({ plan: { total: 3, done: 1,
 test('pr view', () => assert.equal(renderPr({ subjects: ['Add the ledger', 'Add invoices'], gate: { ok: true, review: reviews[0] }, ledger, reviews, check, tree: 't' }), golden('pr.md')));
 test('a check for other code is not claimed in the pull request', () => {
   assert.match(renderPr({ subjects: [], gate: { ok: true, review: null }, check, tree: 'other' }), /not recorded for this code/);
+  assert.doesNotMatch(renderPr({ subjects: [], gate: { ok: true, review: null }, check, tree: 't' }), /Quality gate/, 'the default level goes unsaid');
+  assert.match(renderPr({ subjects: [], gate: { ok: true, review: null }, level: 'relaxed', check, tree: 't' }), /Quality gate: passed at the relaxed level, looser than the default strict one\./);
 });
 test('views strip control characters from recorded text', () => {
   const hostile = [{ tree: 't', verdicts: [], findings: [{ ...minor, claim: 'x\u001b[31m‮y' }], blocking: [] }];

@@ -1,8 +1,0 @@
-[
- {
-  "name": "no-star-form",
-  "file": "src/download.mjs",
-  "find": "; filename*=UTF-8''${encoded}",
-  "replace": ""
- }
-]

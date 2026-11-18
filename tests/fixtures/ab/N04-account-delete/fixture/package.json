@@ -1,8 +1,0 @@
-{
-  "name": "n04-account-delete",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

@@ -152,6 +152,13 @@
           "covers": ["5.1.0", "5.1.1"],
           "title": "The quality gate reads C#",
           "body": "A `.cs` file is scored by the same rules and held to the same limits as JavaScript: each method, constructor, local function and lambda is a unit, for complexity, nesting, length and parameters. Copied code and `#pragma` or `[SuppressMessage]` suppressions are not checked in C# yet."
+        },
+        {
+          "version": "5.2.0",
+          "label": "5.2",
+          "covers": ["5.2.0"],
+          "title": "Measured on medium and large work",
+          "body": "The quality gate reads Python, finds near-miss copies and import loops, and has named levels. The rules add the security floor's boundary lessons, the security reviewer can run on its own tier, and SoMi's commands work from the chat. `/somi-deliver` builds milestone by milestone and ends with a hardening pass. On medium and large benchmark tasks plain SoMi passed the strict standard about twice as often as a bare agent, and `/somi-deliver` more often still, at about three times plain SoMi's cost. On the registered small recording, with the security reviewer on medium, plain SoMi solved 89 of 96 draws against bare's 73 at 1.36 times bare's cost."
         }
       ]
     }

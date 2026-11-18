@@ -17,7 +17,7 @@ Name who the attacker is and what they control. Then walk that input to each sin
 - **Cloned-repo content:** git config, hooks, submodules, filters, and agent settings the repository commits.
 - **Authorization:** decided at the sink, and failing closed.
 
-You are the only reviewer of this change, so review the rest of it too, the way a code reviewer would: wrong behaviour, missed requirements, data loss, races, missing tests for risky paths, and design that will cost real money to undo. Do not report style preferences, and do not suggest work beyond the change.
+You are the only reviewer of this change, so review the rest of it too, the way a code reviewer would: wrong behaviour, missed requirements, data loss, races, missing tests for risky paths, and design that will cost real money to undo, such as new code that writes past the layer that owns the data, so its rules and its events are skipped, or a second copy of logic the codebase already keeps in one place. Do not report style preferences, and do not suggest work beyond the change.
 
 Grade each finding Blocker, Major, Minor or Nit. A Major that re-loops must be real: set `boundary: true`, cite file and line, and put the exploit or failing input in `evidence`. Do not report a theoretical path you cannot walk. If you recommend removing a check, say why that is safe. Load the `somi-expertise` skill's security or threat-modeling checklist if it helps.
 

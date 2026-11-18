@@ -1,8 +1,0 @@
-{
-  "name": "n02-charge-retry",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}

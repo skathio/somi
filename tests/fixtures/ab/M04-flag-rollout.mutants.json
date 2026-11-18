@@ -1,8 +1,0 @@
-[
- { "name": "bucket-ignores-flag-name", "file": "src/flags.mjs", "find": "const bucket = (name, userId) => fnv1a32(`${name}:${userId}`) % 100;", "replace": "const bucket = (name, userId) => fnv1a32(`${userId}`) % 100;" },
- { "name": "percent-inclusive", "file": "src/flags.mjs", "find": "  else own = bucket(flag.name, userId) < flag.percent;", "replace": "  else own = bucket(flag.name, userId) <= flag.percent;" },
- { "name": "deny-wins", "file": "src/flags.mjs", "find": "  if (inAllow) own = true;\n  else if (inDeny) own = false;", "replace": "  if (inDeny) own = false;\n  else if (inAllow) own = true;" },
- { "name": "allow-ignores-disabled", "file": "src/flags.mjs", "find": "  if (!flag.enabled) return false;\n  if (path.has", "replace": "  if (!flag.enabled && !flag.allow.includes(userId)) return false;\n  if (path.has" },
- { "name": "cycle-not-checked", "file": "src/flags.mjs", "find": "  if (names.some((n) => reaches(store, n, name))) return fail('invalid');\n", "replace": "\n" },
- { "name": "rollout-not-audited", "file": "src/flags.mjs", "find": "  record(store, 'setRollout', name);\n", "replace": "\n" }
-]

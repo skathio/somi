@@ -122,6 +122,21 @@ test('copied code is found even with its names changed, and short or different c
   assert.deepEqual(findClones({ after: [{ file: 'b.js', tokens: tokensOf(b), size: 50 }], before: [{ file: 'b.js', tokens: tokensOf(b), size: 50 }], rest: [{ file: 'a.js', tokens: tokensOf(a), size: 50 }] }), [], 'a copy that was already there is not new');
 });
 
+// A template codebase holds many copies of one service. A change that adds the same line to each keeps the copies but makes none: on a
+// live benchmark run it was charged with 72 copies for one added field, and the agent spent its turn refactoring code it had not written.
+test('the same edit to code that was already copied is not a new copy, and a copy the change writes still is', async () => {
+  const body = (name, extra = '') => `export function ${name}(store, ctx, input) { const fields = readFields(input); if (!fields.ok) return fields; const row = { id: store.next(), ${extra}...fields.value, version: 1, created_at: ctx.at, created_by: ctx.actor }; store.insert(row); events.append(ctx, 'created', row.id); if (row.version !== 1) return fail('conflict'); return ok(row); }`;
+  const toks = async (file, src) => ({ file, tokens: tokensOf((await parseSource(file, src)).tree), size: 50 });
+  const kinds = ['a', 'b', 'c'];
+  const before = [];
+  const after = [];
+  for (const k of kinds) before.push(await toks(`${k}.js`, body(`create_${k}`)));
+  for (const k of kinds) after.push(await toks(`${k}.js`, body(`create_${k}`, 'tenant: ctx.tenant, ')));
+  assert.deepEqual(findClones({ after, before }), [], 'one added line in each existing copy');
+  const fresh = await toks('d.js', body('create_d', 'tenant: ctx.tenant, '));
+  assert.ok(findClones({ after: [...after, fresh], before }).some((c) => c.file === 'd.js'), 'a fourth copy the change writes is still found');
+});
+
 test('stylesheet rules: nesting, chained selectors, IDs and !important', async () => {
   const [rule] = cssRules((await parseSource('s.css', '.a .b > .c .d { color: red !important; }')).tree);
   assert.deepEqual([rule.compound, rule.important, rule.ids], [4, 1, 0]);
@@ -367,6 +382,40 @@ test('the gate\'s time comes from config: the user\'s file either way, a project
   // It sits beside the limits without being read as one.
   const { ignored } = resolveLimits({ global: { quality: { timeout_seconds: 600, function: { cognitive: 20 } } } });
   assert.deepEqual(ignored, []);
+});
+
+test('a looser gate is a level the user names in their own config: a project may only make it stricter, and no level allows a suppression', async () => {
+  const { resolveLevel } = await import('../scripts/lib/quality/limits.mjs');
+  assert.deepEqual(resolveLevel({}), { level: 'strict', ignored: [] });
+  assert.deepEqual(limitsFor('commit', 'strict'), limitsFor('commit'), 'strict is the calibrated default');
+  const standard = resolveLimits({ global: { quality: { level: 'standard' } }, scope: 'commit' });
+  const relaxed = resolveLimits({ global: { quality: { level: 'relaxed' } }, scope: 'commit' });
+  assert.equal(standard.level, 'standard');
+  for (const [group, values] of Object.entries(DEFAULT_LIMITS)) {
+    for (const key of Object.keys(values)) {
+      assert.ok(standard.limits[group][key] >= values[key] && relaxed.limits[group][key] >= standard.limits[group][key], `${group}.${key} only loosens`);
+    }
+  }
+  assert.ok(relaxed.limits.function.cognitive > DEFAULT_LIMITS.function.cognitive);
+  assert.equal(relaxed.limits.suppressions.added, 0, 'a suppression hides a finding at every level');
+  assert.equal(resolveLimits({ global: { quality: { level: 'relaxed' } }, scope: 'pr' }).limits.file.added_lines, limitsFor('pr').file.added_lines, 'a level never tightens a scope\'s own default');
+  assert.equal(resolveLimits({ global: { quality: { level: 'relaxed', function: { cognitive: 18 } } }, scope: 'commit' }).limits.function.cognitive, 18, 'a single limit still applies after the level');
+  const cloned = resolveLimits({ global: { quality: { level: 'standard' } }, project: { quality: { level: 'relaxed' } } });
+  assert.equal(cloned.level, 'standard');
+  assert.match(cloned.ignored[0].reason, /only tighten the level/);
+  assert.equal(resolveLevel({ global: { quality: { level: 'relaxed' } }, project: { quality: { level: 'strict' } } }).level, 'strict', 'a project may hold itself to strict');
+  assert.equal(resolveLevel({ global: { quality: { level: 'off' } } }).ignored[0].key, 'quality.level');
+});
+
+test('a benchmark scores at strict whatever level the user chose, and the gate says which level it used', (t) => {
+  const r = repo(t);
+  r.write('src/a.js', 'export const a = 1;\n');
+  r.git('add', '-A'); r.git('commit', '-qm', 'base');
+  const global = path.join(r.dir, 'global.json');
+  fs.writeFileSync(global, JSON.stringify({ quality: { level: 'relaxed' } }));
+  const run = (...args) => JSON.parse(spawnSync(process.execPath, [CLI, 'quality', ...args], { cwd: r.dir, encoding: 'utf8', env: { ...process.env, SOMI_GLOBAL_CONFIG: global } }).stdout);
+  assert.equal(run('--scope', 'pr').level, 'relaxed');
+  assert.equal(run('--scope', 'pr', '--benchmark').level, 'strict');
 });
 
 test('a gate that runs out of time is a failure that says how to give it longer', async () => {

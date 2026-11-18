@@ -6,24 +6,30 @@
 
 import { loadConfig } from '../../scripts/lib/config-files.mjs';
 import { detectHost, resolveSpawn } from '../../scripts/lib/tiers.mjs';
-import { tierForReviewer, tierForWorker } from '../../scripts/lib/workflows.mjs';
+import { ASKED_SECURITY_REVIEW, tierForReviewer, tierForWorker } from '../../scripts/lib/workflows.mjs';
 import { projectRoot, readPayload, runHook } from '../lib/common.mjs';
+
+// Who reviews is review policy, so a committed project config cannot lower it. Only the user's own config can. A security review the
+// user asked for carries SoMi's marker in its brief and runs on high; a session choosing a model on its own does not change the tier.
+function modelFor(agent, loaded, host, prompt) {
+  const asked = typeof prompt === 'string' && prompt.startsWith(ASKED_SECURITY_REVIEW);
+  const reviewerTier = tierForReviewer(agent, { global: loaded.global.config, project: loaded.project.config }, { asked });
+  if (!reviewerTier) return resolveSpawn(loaded.config, host, tierForWorker(agent)).model;
+  return resolveSpawn(loaded.global.config ?? {}, host, reviewerTier).model;
+}
 
 runHook(() => {
   const payload = readPayload();
   let args = payload.tool_input ?? payload.toolArgs ?? {};
   if (typeof args === 'string') { try { args = JSON.parse(args); } catch { return; } }
   const agent = args.subagent_type ?? args.agent_type;
-  const reviewerTier = tierForReviewer(agent);
-  const wanted = reviewerTier ?? tierForWorker(agent);
-  if (!wanted) return;
+  if (!tierForReviewer(agent) && !tierForWorker(agent)) return;
   const root = projectRoot();
   if (root === null) return;
   let loaded;
   try { loaded = loadConfig(root); } catch { return; }
-  // Who reviews is review policy, so a committed project config cannot lower it. Only the user's own config can.
   const host = detectHost();
-  const { model } = resolveSpawn(reviewerTier ? loaded.global.config ?? {} : loaded.config, host, wanted);
+  const model = modelFor(agent, loaded, host, args.prompt ?? args.description);
   const background = host === 'claude' && args.run_in_background !== false;
   if ((!model || args.model === model) && !background) return;
   const updated = { ...args, ...(model ? { model } : {}), ...(background ? { run_in_background: false } : {}) };

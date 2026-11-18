@@ -1,8 +1,0 @@
-{
-  "name": "n06-note-search",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}
