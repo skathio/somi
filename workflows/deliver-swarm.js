@@ -199,9 +199,18 @@ async function serialRepair(body, failed, commands, tag) {
   return { built, gate: last, tier: steps.at(-1), tried: steps.map((t) => `repair on ${t}: failed`) };
 }
 
+// A builder that reports done while leaving part of its own scope stopped every later milestone on live runs, so it gets one more build on
+// the same tier for just those parts. What that build still leaves stops the run as before.
+async function finishLeft(built, body, tag) {
+  const left = list(built?.left);
+  if (built?.status !== 'done' || left.length === 0) return built;
+  const rest = await build(start, `finish on ${start}${tag}`, `${body}\n\nAn earlier build of this milestone reported done, but left these parts of its own scope unbuilt. Build them now and keep what it built. In left, list only what is still unbuilt:\n${asData(left.join('\n'))}`);
+  return rest ?? built;
+}
+
 // One build, its check, and the race when the check fails. A blocked build stops: a missing decision does not yield to a stronger model.
 async function buildChecked(body, commands, tag) {
-  const built = await build(start, `build on ${start}${tag}`, body);
+  const built = await finishLeft(await build(start, `build on ${start}${tag}`, body), body, tag);
   if (built?.status !== 'done') return { built, gate: { ok: false, failures: ['the build is blocked'] }, tier: start, tried: [] };
   const gate = await check(`check${tag}`, commands);
   return gate.ok ? { built, gate, tier: start, tried: [] } : race(body, { built, gate }, commands, tag);

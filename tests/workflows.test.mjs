@@ -295,6 +295,16 @@ test('a build that left part of its milestone undone is not reported done', asyn
   assert.deepEqual(value.milestones[0].left, ['the homepage repo', 'the PRs in other repos']);
 });
 
+test('a build that passes its checks but leaves part of its own scope gets those parts in the next attempt, and a finished second attempt is done', async () => {
+  // On a live run, a milestone whose checks passed listed two of its own tests as left, and the run stopped with four milestones unbuilt.
+  const built = (n) => ({ status: 'done', summary: 'built', left: n === 0 ? ['a test for an empty tenant'] : [] });
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ built }));
+  assert.equal(value.status, 'done');
+  assert.deepEqual(calls.filter((c) => /^(build|repair) on/.test(c.label)).map((c) => c.label), ['build on medium', 'repair on medium']);
+  assert.match(calls.find((c) => c.label === 'repair on medium').prompt, /left these parts of this milestone's own scope unbuilt\. Build them and keep what it built:\n> a test for an empty tenant/);
+  assert.doesNotMatch(calls.find((c) => c.label === 'build on medium').prompt, /left these parts/, 'a first build has no earlier attempt');
+});
+
 test('with no model for the tier above, or the same one, a failed check gets one repair and no blind rerun', async () => {
   for (const models of [undefined, { low: 'cheap', medium: 'everyday', high: 'everyday' }]) {
     const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models }, answers({ gateOk: [false] }));

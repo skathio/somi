@@ -43,6 +43,7 @@ const answers = ({ checks = () => true, built = () => DONE, verdict = () => ({ m
     ['check safe verdicts', () => ({ verdicts: [] })],
     ['race', (p, o) => (/^race \d/.test(o.label) ? built(o.label, p) : exits(p, checks(o.label, p)))],
     ['build on', (p, o) => built(o.label, p)],
+    ['finish on', (p, o) => built(o.label, p)],
     ['repair on', (p, o) => built(o.label, p)],
     ['try race', (p) => exits(p, true)],
     ['check', (p, o) => exits(p, checks(o.label, p))],
@@ -226,4 +227,25 @@ test('the race base deletes old patches and names its own author, and each racer
   assert.match(base, /rm -f "\$\(git rev-parse --git-common-dir\)"\/somi-swarm-race-\*\.patch && /);
   assert.match(base, /GIT_AUTHOR_EMAIL=somi@localhost GIT_COMMITTER_NAME=somi GIT_COMMITTER_EMAIL=somi@localhost git commit-tree/);
   assert.match(calls.find((c) => c.label === 'race 1 on medium').prompt, /0\. Run `test "\$\(git rev-parse --git-dir\)" != "\$\(git rev-parse --git-common-dir\)"`\. If it fails you are not in a worktree of your own: change nothing, and report blocked\./);
+});
+
+test('a build that reports done but leaves part of its own scope gets one finishing build on the same tier, before the check', async () => {
+  // On a live run, a milestone whose checks passed listed two of its own tests as left, and the run stopped with four milestones unbuilt.
+  const built = (label) => (label === 'build on medium' ? { ...DONE, left: ['a test for an empty tenant'] } : DONE);
+  const { value, calls } = await run(ARGS, answers({ built }));
+  assert.equal(value.status, 'done');
+  const order = labels(calls).filter((l) => /^(build on|finish on|check)( |$)/.test(l));
+  assert.deepEqual(order.slice(0, 3), ['build on medium', 'finish on medium', 'check']);
+  const finish = calls.find((c) => c.label === 'finish on medium');
+  assert.equal(finish.model, 'everyday');
+  assert.match(finish.prompt, /left these parts of its own scope unbuilt\. Build them now and keep what it built\. In left, list only what is still unbuilt:\n> a test for an empty tenant/);
+});
+
+test('what the finishing build still leaves stops the run, and a build that left nothing gets no finishing build', async () => {
+  const stuck = await run(ARGS, answers({ built: () => ({ ...DONE, left: ['the export'] }) }));
+  assert.equal(stuck.value.status, 'needs-attention');
+  assert.match(stuck.value.stopped, /built only in part/);
+  assert.equal(labels(stuck.calls).filter((l) => l.startsWith('finish on')).length, 1, 'one finishing build, not a loop');
+  const clean = await run(ARGS, answers());
+  assert.ok(!labels(clean.calls).some((l) => l.startsWith('finish on')));
 });
