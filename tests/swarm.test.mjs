@@ -85,6 +85,39 @@ test('a passing build does not race, and the rules are written as tests on mediu
   assert.ok(!labels(calls).some((l) => /^race/.test(l)));
 });
 
+test('a failed check races three repairs in worktrees from a commit of the tree, and the first whose checks pass in the user\'s tree wins', async () => {
+  let checks = 0;
+  const { value, calls } = await run(ARGS, answers({ checks: (label) => !(label === 'check' && checks++ === 0) && label !== 'check race 1' }));
+  const racers = calls.filter((c) => /^race \d/.test(c.label));
+  assert.deepEqual(racers.map((c) => [c.label, c.model, c.isolation]), [['race 1 on medium', 'everyday', 'worktree'], ['race 2 on medium', 'everyday', 'worktree'], ['race 3 on high', 'strong', 'worktree']]);
+  assert.equal(new Set(racers.map((c) => c.prompt.split('\n')[0])).size, 3, 'each racer has its own angle');
+  assert.match(calls.find((c) => c.label === 'race base').prompt, /git commit-tree "\$t" -m 'somi race base' > "\$\(git rev-parse --git-common-dir\)\/somi-swarm-race-base"/);
+  assert.ok(racers[0].prompt.includes('git diff --cached --binary "$(cat "$(git rev-parse --git-common-dir)/somi-swarm-race-base")" > "$(git rev-parse --git-common-dir)/somi-swarm-race-0.patch"'));
+  assert.match(racers[0].prompt, /exited 1: tests: 1 failed/);
+  const order = labels(calls).filter((l) => /^(try|check|take back) race/.test(l));
+  assert.deepEqual(order, ['try race 1', 'check race 1', 'take back race 1', 'try race 2', 'check race 2'], 'a failing patch is taken back before the next is tried');
+  assert.deepEqual(value.milestones[0].races, ['race 1: failed', 'race 2: passed']);
+  assert.equal(value.status, 'done');
+});
+
+test('a racer that did not finish is never tried, and with no passing patch the milestone fails its checks', async () => {
+  const blockedFirst = (label) => (label.startsWith('race 1') ? { status: 'blocked', summary: 'x', left: [] } : DONE);
+  const { value, calls } = await run(ARGS, answers({ built: blockedFirst, checks: (label) => !label.startsWith('check') }));
+  assert.ok(!labels(calls).includes('try race 1'));
+  assert.equal(value.status, 'needs-attention');
+  assert.equal(value.stopped, 'All fails its checks');
+});
+
+test('on a host that cannot isolate an agent, a failed check gets one repair and one climb in turn, never parallel writers', async () => {
+  let checks = 0;
+  const { value, calls } = await run({ ...ARGS, host: 'copilot' }, answers({ checks: (label) => !(label === 'check' && checks++ < 2) }));
+  assert.ok(!calls.some((c) => c.isolation), 'no agent asks for a worktree');
+  assert.ok(!labels(calls).some((l) => /^race/.test(l)));
+  assert.deepEqual(labels(calls).filter((l) => /^repair on/.test(l)), ['repair on medium', 'repair on high']);
+  assert.equal(value.races_ran, false);
+  assert.equal(value.status, 'done');
+});
+
 test('a blocked build stops without racing, and a rule test it names wrong goes back once to its author', async () => {
   const blocked = await run(ARGS, answers({ built: () => ({ status: 'blocked', summary: 'needs a decision', left: [] }) }));
   assert.ok(!labels(blocked.calls).some((l) => /^race|^repair/.test(l)));

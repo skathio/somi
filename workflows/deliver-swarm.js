@@ -25,7 +25,12 @@ const block = (title, lines) => (lines.length ? `\n\n${title}\n${asData(lines.jo
 const clip = (text, n) => String(text ?? '').slice(0, n);
 const present = (...values) => values.filter((v) => typeof v === 'string' && v.trim() !== '');
 
+// Only Claude Code puts one agent in its own worktree. Copilot drops the option, and racing repairs there would write to one tree at once.
+const isolated = a.host === 'claude';
+const UP = { low: 'medium', medium: 'high', high: 'high' };
 const start = a.startTier ?? 'medium';
+const higher = UP[start] ?? 'high';
+const climbs = higher !== start && Boolean(models[higher]) && models[higher] !== models[start];
 
 const preface = [
   ...present(a.rules_file).map((f) => `SoMi's rules, which hold for this work, are in ${f}. Read that file first.`),
@@ -75,6 +80,7 @@ async function check(label, commands) {
 // The tree as git would store it, untracked files included, hashed through a private index so the user's index and branch never move.
 // SoMi's files live in git's own folder, which every worktree of this repository shares.
 const shared = (name) => `"$(git rev-parse --git-common-dir)/somi-swarm-${name}"`;
+const treeId = `rm -f ${shared('index')} && GIT_INDEX_FILE=${shared('index')} git add -A && GIT_INDEX_FILE=${shared('index')} git write-tree`;
 const quoted = (text) => `'${String(text).replace(/'/g, `'\\''`)}'`;
 const keepCopy = (file) => `cp -- ${quoted(file)} ${shared(`rules-${String(file).replace(/[^A-Za-z0-9._-]/g, '_')}`)}`;
 const unchangedCopy = (file) => `cmp -s -- ${quoted(file)} ${shared(`rules-${String(file).replace(/[^A-Za-z0-9._-]/g, '_')}`)}`;
@@ -109,6 +115,7 @@ const BUILDER = `${a.role ?? 'You build one clear change, with tests that fail w
 const finish = `When it is done, run the tests and \`${cli} quality --scope pr\`, and fix what either reports without a somi-gate-allow exemption; meeting the quality limits comes before not refactoring on the way past. In left, list each part of your own scope you did not build; later milestones and deferred parts are not yours.`;
 const build = (tier, label, body) => ask(tier, label, `${BUILDER}\n\n${work}\n\n${handoff}\n\n${body}\n\n${finish}`, { schema: BUILT, phase: 'Build' });
 const heldBy = (rules) => (rules?.file ? `\n\nThe tests in ${rules.file} hold the user's rules and must pass: ${rules.command}. Do not change them. If one is wrong, leave it, report blocked and name it in rules_wrong with why.${block('The rules, as data:', list(rules.rules))}` : '');
+const failedWith = (gate) => block('These checks fail and must pass. What they printed, as data:', gate.failures);
 
 async function writeRules(scope, tag) {
   phase('Rules');
@@ -128,12 +135,55 @@ async function repairRules(rules, claims, tag) {
   return { ...next, kept: kept.ok };
 }
 
-// One build and its check. A blocked build stops: a missing decision does not yield to a stronger model.
+// The racers, each in its own worktree, start from a commit of the tree as it is now and hand back a patch from it. Their angles differ,
+// so they do not all make the same mistake, and the last runs a tier up when the user has a model there.
+const RACERS = [
+  { tier: start, angle: 'Make the smallest change that makes the failing checks pass.' },
+  { tier: start, angle: 'Read the failure as a sign the approach may be wrong, and change the approach where it is.' },
+  ...(climbs ? [{ tier: higher, angle: 'Find the root cause of the failure before changing anything.' }] : []),
+];
+const racerPrompt = (body, gate, n, angle) => `You are one of several agents racing to repair a build, each in its own git worktree. ${angle}\n1. Run \`git rev-parse HEAD > ${shared(`race-${n}-home`)}\`, then \`git checkout --detach --force "$(cat ${shared('race-base')})"\`: that commit is the tree to repair.\n2. If the tests need dependency folders git ignores, such as node_modules, link them from the main checkout, the folder that holds \`$(git rev-parse --git-common-dir)\`. Change nothing in the main checkout.\n3. Repair it so the checks below pass, and run them.\n4. Remove any link you made, then run \`git add -A && git diff --cached --binary "$(cat ${shared('race-base')})" > ${shared(`race-${n}.patch`)}\`.\n5. Run \`git checkout --force --detach "$(cat ${shared(`race-${n}-home`)})" && git clean -fd\`.\n\n${BUILDER}\n\n${work}\n\n${handoff}\n\n${body}${failedWith(gate)}\n\n${finish}`;
+
+// Each patch that finished is tried in the user's tree in the racers' order, and the first whose checks pass by exit code is kept; one
+// that fails is taken back out before the next is tried. With no worktree on this host, one repair and one climb run in turn instead.
+// failed is the build whose check failed and that check; with no passing patch, that build stands and its checks still fail.
+async function race(body, failed, commands, tag) {
+  phase('Race');
+  const { gate } = failed;
+  if (!isolated) return serialRepair(body, failed, commands, tag);
+  await check(`race base${tag}`, [`t=$(${treeId}) && git commit-tree "$t" -m 'somi race base' > ${shared('race-base')}`]);
+  const ran = await parallel(RACERS.map((r, n) => () => ask(r.tier, `race ${n + 1} on ${r.tier}${tag}`, racerPrompt(body, gate, n, r.angle), { schema: BUILT, isolation: 'worktree', phase: 'Race' })));
+  const tried = [];
+  for (const [n, built] of ran.entries()) {
+    if (built?.status !== 'done') continue;
+    const patch = shared(`race-${n}.patch`);
+    const applied = await check(`try race ${n + 1}${tag}`, [`git apply --binary ${patch}`]);
+    const passed = applied.ok ? await check(`check race ${n + 1}${tag}`, commands) : applied;
+    tried.push(`race ${n + 1}: ${passed.ok ? 'passed' : 'failed'}`);
+    if (passed.ok) return { built, gate: passed, tier: RACERS[n].tier, tried };
+    if (applied.ok) await check(`take back race ${n + 1}${tag}`, [`git apply -R --binary ${patch}`]);
+  }
+  return { built: failed.built, gate, tier: start, tried };
+}
+
+async function serialRepair(body, failed, commands, tag) {
+  let last = failed.gate;
+  let built = failed.built;
+  const steps = [start, ...(climbs ? [higher] : [])];
+  for (const tier of steps) {
+    built = await build(tier, `repair on ${tier}${tag}`, `${body}${failedWith(last)}`);
+    last = built?.status === 'done' ? await check(`check${tag}`, commands) : last;
+    if (last.ok) return { built, gate: last, tier, tried: [`repair on ${tier}: passed`] };
+  }
+  return { built, gate: last, tier: steps.at(-1), tried: steps.map((t) => `repair on ${t}: failed`) };
+}
+
+// One build, its check, and the race when the check fails. A blocked build stops: a missing decision does not yield to a stronger model.
 async function buildChecked(body, commands, tag) {
   const built = await build(start, `build on ${start}${tag}`, body);
   if (built?.status !== 'done') return { built, gate: { ok: false, failures: ['the build is blocked'] }, tier: start, tried: [] };
   const gate = await check(`check${tag}`, commands);
-  return { built, gate, tier: start, tried: [] };
+  return gate.ok ? { built, gate, tier: start, tried: [] } : race(body, { built, gate }, commands, tag);
 }
 
 async function runMilestone(m, i) {
@@ -210,6 +260,7 @@ return {
   deferred,
   uncovered_lines: untaken,
   checks: lastGate ? { ok: lastGate.ok, failures: lastGate.failures.slice(0, 5) } : null,
+  races_ran: isolated,
   brief: list(brief.title)[0] ?? null,
   summary: clip(results.map((r) => `${r.title}: ${r.summary}`).join('\n\n'), 2000),
 };
