@@ -2,6 +2,7 @@
 // what a host lists.
 //   kind code      work that changes code, which ends in a look at the diff to see whether a review is due.
 //   kind plan      a plan the user approves, then milestones with fresh context.
+//   kind brief     the user and the agent settle the work into a brief, in the conversation, and no code changes.
 //   kind report    a worker or reviewer produces an answer, and no code changes.
 //   kind command   one SoMi command, and its output relayed.
 //   kind direct    answered from what is on disk, with no agent.
@@ -23,6 +24,7 @@ export const WORKFLOWS = Object.freeze({
   incident: { kind: 'code', role: 'incident', tier: 'medium', skills: [] },
   accessibility: { kind: 'code', role: 'accessibility', tier: 'medium', skills: ['accessibility'] },
   plan: { kind: 'plan', role: 'plan', tier: 'medium', skills: [] },
+  brief: { kind: 'brief', role: 'brief', tier: 'medium', skills: ['testing-checklist', 'threat-modeling'] },
   design: { kind: 'report', role: 'design', tier: 'high', skills: ['threat-modeling'] },
   discover: { kind: 'report', role: 'discover', tier: 'medium', skills: [] },
   atlas: { kind: 'report', role: 'atlas', tier: 'medium', skills: [] },

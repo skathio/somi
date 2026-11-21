@@ -13,9 +13,12 @@ you talk to one agent, on the medium tier, the same as a bare agent
   -> a ticket, large work, or a request that fits no obvious workflow: it asks somi_route once, and gets the
        workflow's steps: each one's tier, whether it runs here or on a subagent, and its brief
   -> large work: it does it too, on medium, and tells you that /somi-deliver runs it in stages
+  -> /somi-brief <feature>: it reads the code, asks you only what the code cannot settle, and saves a brief of
+       numbered requirements, decisions and scope, with whether /somi-deliver or plain SoMi should build it
   -> /somi-deliver <work or ticket>: a scout, a plan of milestones, and for each one rule tests, a build that
        steps up a tier if the checks fail, and the checks; the reviews the diff needs, each on its tier, run in
-       code through to the end; a blocked or unfinished milestone stops it and comes back to you
+       code through to the end; a line still unmet gets one build a tier up, and a Major the last review finds
+       gets one round of fixes; a blocked or unfinished milestone stops it and comes back to you
   -> the diff touches a security sink: the security reviewer runs on high, and every fix stays here, on medium
   -> work that needs more, such as design: it goes up to a worker on the high tier
   -> a turn that changed code ends: the quality gate runs, anything over a limit goes back to be fixed,
@@ -60,16 +63,17 @@ claude --agent somi:somi    # or: copilot --agent somi:somi
 
 To start that way with the model your config sets for the conversation's tier, `somi launch claude` or `somi launch copilot` starts the host with `--agent somi:somi` and that model, and Copilot in experimental mode for `/somi-deliver`. Anything after it goes to the host. Ask `/somi-config` for the full command, and wrap it in an alias or function of your own, on Linux, macOS or Windows.
 
-Everything is done from the chat. Ask for a change, a bug fix, a refactor, a plan, a design, a review, an upgrade or the pull request text in plain words, or paste a ticket, and SoMi's agent picks the workflow. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start. In a Copilot session already running, `/agent somi` switches to it. Six commands do the rest:
+Everything is done from the chat. Ask for a change, a bug fix, a refactor, a plan, a design, a review, an upgrade or the pull request text in plain words, or paste a ticket, and SoMi's agent picks the workflow. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start. In a Copilot session already running, `/agent somi` switches to it. Seven commands do the rest:
 
 | Command | What it does |
 |---|---|
 | `/somi <anything>` | Routes anything, the way the agent does with plain words. Use it from another agent. |
 | `/somi <command>` | Runs SoMi's own commands from the chat, so you never need the terminal: `/somi doctor` checks the setup, `/somi check` runs the gate and the tests, and `/somi help` lists the rest. One that changes your setup, such as `setup` or `init`, runs only after you say yes. |
-| `/somi-deliver <work or ticket>` | Runs large work as SoMi's staged workflow. Only you can start it. On Copilot, it needs `/experimental`; SoMi registers it at session start, so a session already open gets it after `/clear`. |
+| `/somi-brief <feature>` | Prepares a new feature or an improvement before anyone builds it: SoMi reads the code, asks what it cannot settle, and, once you approve, saves a brief of numbered requirements, decisions, scope and acceptance checks. It recommends `/somi-deliver` for medium and large work and plain SoMi for a small change. |
+| `/somi-deliver [work or ticket]` | Runs large work as SoMi's staged workflow. Only you can start it. On Copilot, it needs `/experimental`; SoMi registers it at session start, so a session already open gets it after `/clear`. Typed with nothing after it, it builds the open brief. |
 | `/somi-review` | Reviews the current changes, whether or not the diff calls for it. |
 | `/somi-quality [commit \| repo]` | Checks the code against the quality limits: the branch, one commit, or the whole codebase. |
-| `/somi-status` | Shows the open plan, decisions and findings. |
+| `/somi-status` | Shows the open plan or brief, decisions and findings. |
 | `/somi-config` | Shows and changes the models each tier uses and the quality limits, and checks the setup. |
 
 On Claude Code they also answer to `/somi:somi-review` and so on. On Copilot, SoMi's commands are listed as skills, by their plain names only: type `/somi-deliver`, not `/somi:somi-deliver`.

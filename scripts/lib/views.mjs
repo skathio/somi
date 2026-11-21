@@ -17,12 +17,15 @@ function loggedFindings(reviews, migrated = []) {
   return [...logged, ...migrated];
 }
 
-export function renderStatus({ plan, ledger, reviews = [], check, migrated }) {
+const briefLine = (brief) => (brief.invalid ? `Brief: does not read: ${plain(brief.invalid)}` : `Brief: ${plain(brief.title)} (${brief.requirements} requirements, hand off to ${brief.handoff})`);
+
+export function renderStatus({ plan, brief, ledger, reviews = [], check, migrated }) {
   const lines = [];
   if (plan) {
     lines.push(`Plan: ${plan.done} of ${plan.total} milestones done`);
     if (plan.next) lines.push(`Next: ${plain(plan.next)}`);
   } else lines.push('No plan open.');
+  if (brief) lines.push(briefLine(brief));
   const last = reviews.at(-1);
   if (last) lines.push('', `Last review: ${(last.verdicts ?? []).map((v) => `${plain(v.agent)}: ${plain(v.verdict)}`).join(', ')}`);
   const blocking = (last?.findings ?? []).filter(isBlocking);

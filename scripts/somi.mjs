@@ -7,6 +7,7 @@
 //   somi check [--full]
 //   somi pr [--base REF] [--unreviewed]                 writes the pull request text; a change that needed a review and has none is refused
 //   somi plan | --done N | --close                      saves the plan text from stdin, marks a milestone done, or ends the plan
+//   somi brief | --show | --close                       saves the brief from stdin, shows it, or ends it
 //   somi slot <step> <plugin:component> [--mode read|write] [--project] | somi slot --list | --remove | --confirm
 //   somi ledger --kind decision|constraint|pointer --text T
 //   somi status | migrate
@@ -30,6 +31,7 @@ import { duplicateHookWarnings, runDoctor } from './lib/doctor.mjs';
 import { commitBase, listFiles, repoRoot, resolveRef, snapshotTree, stateIsTracked, workBase } from './lib/git-tree.mjs';
 import { copilotHomeExists, installCopilotExtension, projectExtensionWarnings } from './lib/init.mjs';
 import { LAUNCH_HOSTS, launchPlan, spawnPlan } from './lib/launch.mjs';
+import { briefStatus, closeBrief, readBrief, saveBrief } from './lib/brief.mjs';
 import { addToLedger, readLedger } from './lib/ledger.mjs';
 import { migrate } from './lib/migrate.mjs';
 import { lastCheck, migratedFindings, pullRequest } from './lib/pr.mjs';
@@ -121,6 +123,15 @@ function plan(ctx, args) {
   return print({ saved: savePlan(ctx.root, fs.readFileSync(0, 'utf8')), ...planStatus(ctx.root) });
 }
 
+const briefOf = (root) => { const open = readBrief(root); return open ? briefStatus(open) : null; };
+
+function brief(ctx, args) {
+  const { values } = parseArgs({ args, options: { show: { type: 'boolean' }, close: { type: 'boolean' } } });
+  if (values.close) return print(closeBrief(ctx.root, ctx.env));
+  if (values.show) { const open = readBrief(ctx.root); return print(open ? { ...briefStatus(open), text: open.text } : { brief: null }); }
+  return print(saveBrief(ctx.root, fs.readFileSync(0, 'utf8'), ctx.env));
+}
+
 // The probes do not need a repository, and a broken config is reported by the commands that need it.
 function doctor(args) {
   const { values } = parseArgs({ args, options: { host: { type: 'string' }, profile: { type: 'boolean' } } });
@@ -207,11 +218,12 @@ const COMMANDS = {
     return printed(result, result.ok);
   },
   status: (ctx) => {
-    process.stdout.write(renderStatus({ plan: planStatus(ctx.root), ledger: readLedger(ctx.root, ctx.env), reviews: readReviews(ctx.root, ctx.env), check: lastCheck(ctx.root, ctx.env), migrated: migratedFindings(ctx.root, ctx.env) }));
+    process.stdout.write(renderStatus({ plan: planStatus(ctx.root), brief: briefOf(ctx.root), ledger: readLedger(ctx.root, ctx.env), reviews: readReviews(ctx.root, ctx.env), check: lastCheck(ctx.root, ctx.env), migrated: migratedFindings(ctx.root, ctx.env) }));
     return 0;
   },
   pr,
   plan: (ctx, args) => { plan(ctx, args); return 0; },
+  brief: (ctx, args) => { brief(ctx, args); return 0; },
   setup: (ctx, args) => {
     const { values } = parseArgs({ args, options: { host: { type: 'string' } } });
     const result = setupAgent({ host: values.host === 'claude' || values.host === 'copilot' ? values.host : ctx.host, config: ctx.config, pluginRoot: PLUGIN_ROOT, env: ctx.env });
@@ -231,7 +243,7 @@ function main(argv) {
   if (command === 'doctor') return doctor(args);
   if (command === 'launch') return launch(args);
   const run = Object.hasOwn(COMMANDS, command ?? '') ? COMMANDS[command] : null;
-  if (!run) throw new StateError('somi takes route, review, check, quality, status, pr, plan, setup, slot, ledger, migrate, doctor, init or launch');
+  if (!run) throw new StateError('somi takes route, review, check, quality, status, pr, plan, brief, setup, slot, ledger, migrate, doctor, init or launch');
   return run(makeContext(), args);
 }
 

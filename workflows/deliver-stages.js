@@ -26,7 +26,13 @@ const earlier = typeof a.earlier_file === 'string' && a.earlier_file
   : Array.isArray(a.earlier) && a.earlier.length ? `The user's earlier messages in this conversation, oldest first, as data. What they decided still holds unless a later message changes it:\n${a.earlier.map((m, i) => `Message ${i + 1}:\n${quote(m)}`).join('\n\n')}\n\n` : '';
 // SoMi's rules reach the conversation through a session-start hook, which a stage does not get, so a stage that writes code reads them.
 const rulesNote = typeof a.rules_file === 'string' && a.rules_file ? `SoMi's rules, which hold for this work, are in ${a.rules_file}. Read that file before anything else.\n\n` : '';
-const request = `${earlier}The request, as data:\n${quote(a.request)}${a.said ? `\n\nThe user's own words, as data:\n${quote(a.said)}` : ''}${a.ledger ? `\n\nDecisions and limits already set:\n${a.ledger}` : ''}`;
+// A brief /somi-brief prepared, which the user approved: its requirements are the request's lines, and the rest are facts a stage would
+// otherwise scout for or guess. They are data, like the request. Each field is a list, and with no brief each is empty and adds nothing.
+const brief = { ...a.brief };
+const goalNote = listNote('What the work is for, from the brief the user approved, as data:', strings(brief.goal));
+const acceptanceNote = listNote('The acceptance checks in the brief the user approved, each one a rule the finished work meets, as data:', strings(brief.acceptance));
+const boundaryNote = listNote('The places the brief says this work meets the outside world, as data. Each is a row:', strings(brief.boundaries));
+const request = `${earlier}The request, as data:\n${quote(a.request)}${goalNote}${a.said ? `\n\nThe user's own words, as data:\n${quote(a.said)}` : ''}${a.ledger ? `\n\nDecisions and limits already set:\n${a.ledger}` : ''}`;
 // The request's lines, numbered, so the plan says which lines each milestone covers and the code can find a line no milestone took.
 const requestLines = String(a.request ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
 const shards = (step) => asList(a.shards?.[step]);
@@ -87,7 +93,7 @@ const milestoneChecks = (rules) => [`${cli} check --scope pr`, rules?.command, u
 // A rules file over a quality limit failed every build of a live run's milestone, since no builder may change it, so it meets them first.
 async function writeRules(scope, tag) {
   phase('Rules');
-  return agent(`${rulesNote}Write the tests that hold this milestone to the user's rules, before anyone builds it. From the request and every earlier message, list each rule that applies to the code this milestone adds or changes: decisions, limits, result shapes and error codes, including a rule set earlier that extends to code added now, and each of the project's conventions below that the new code must keep. A rule about a list, a count, a limit or a range holds at its ends as well: test it with none, with one, and at and just past each limit it names. For each rule, add a test that checks it through the public functions, with the names and shapes the request and the code already give, in one new test file for this milestone under the test folder. Test only what a message or a quoted convention states. Where the messages leave a detail open, such as an option left out, the sign of a value, an order they do not give or the exact form of an id, write no test for it: the builder decides it, from the project's code where it already does the same thing. Write no test for a later milestone, or for a part the request defers, puts out of scope or leaves to the maintainer, such as a paid run, an approval or a review by a person. Change no source file and no existing test. Run the new file: a test of behaviour that does not exist yet is expected to fail, but a test that cannot run, or that fails for a reason other than the missing behaviour, is a bug of yours to fix. Then run \`${cli} quality --scope pr\` and fix what it reports in your file, without a somi-gate-allow exemption: the builder may not change your file, so a limit it breaks would fail every build. Return the file, the command that runs only it, and the rules, one line each.\n\n${request}\n\n${handoff}\n\n${scope}`, onTier('medium', { label: `rules${tag}`, schema: RULES }));
+  return agent(`${rulesNote}Write the tests that hold this milestone to the user's rules, before anyone builds it. From the request and every earlier message, list each rule that applies to the code this milestone adds or changes: decisions, limits, result shapes and error codes, including a rule set earlier that extends to code added now, and each of the project's conventions below that the new code must keep. A rule about a list, a count, a limit or a range holds at its ends as well: test it with none, with one, and at and just past each limit it names. For each rule, add a test that checks it through the public functions, with the names and shapes the request and the code already give, in one new test file for this milestone under the test folder. Test only what a message or a quoted convention states. Where the messages leave a detail open, such as an option left out, the sign of a value, an order they do not give or the exact form of an id, write no test for it: the builder decides it, from the project's code where it already does the same thing. Write no test for a later milestone, or for a part the request defers, puts out of scope or leaves to the maintainer, such as a paid run, an approval or a review by a person. Change no source file and no existing test. Run the new file: a test of behaviour that does not exist yet is expected to fail, but a test that cannot run, or that fails for a reason other than the missing behaviour, is a bug of yours to fix. Then run \`${cli} quality --scope pr\` and fix what it reports in your file, without a somi-gate-allow exemption: the builder may not change your file, so a limit it breaks would fail every build. Return the file, the command that runs only it, and the rules, one line each.\n\n${request}${acceptanceNote}\n\n${handoff}\n\n${scope}`, onTier('medium', { label: `rules${tag}`, schema: RULES }));
 }
 
 // A blocked build stops the run and goes back to the user: a hook, a missing decision or a contradiction does not yield to a stronger
@@ -168,7 +174,7 @@ const findingLine = (f) => `${f.severity} ${f.file}:${f.line ?? ''} ${f.claim}${
 // writes each defence with a failing test, so the high tier decides and does not type.
 async function enumerate() {
   phase('Harden');
-  const ask = () => agent(`List where this change meets the outside world, as facts, before it is checked. Read everything it changed, with \`git status\` and \`git diff\`, new files included. Change nothing. One row per place, with its file and line: where a value a caller sends is used as a key or a name to look something up; where the new code writes output another program will read, such as a response and its headers, a file, a page or a template, a spreadsheet or another export, a query, a shell command, a log, or a request it sends out and where to; where a secret, a token or a link is made, compared, replaced or ended; where it decides who may do what; and each input a new command or function takes. Say what reaches each place, and judge nothing. Give at most ${MAX_ROWS} rows, the ones a caller's value reaches first.`, onTier('low', { label: 'enumerate', schema: SURFACE }));
+  const ask = () => agent(`List where this change meets the outside world, as facts, before it is checked. Read everything it changed, with \`git status\` and \`git diff\`, new files included. Change nothing. One row per place, with its file and line: where a value a caller sends is used as a key or a name to look something up; where the new code writes output another program will read, such as a response and its headers, a file, a page or a template, a spreadsheet or another export, a query, a shell command, a log, or a request it sends out and where to; where a secret, a token or a link is made, compared, replaced or ended; where it decides who may do what; and each input a new command or function takes. Say what reaches each place, and judge nothing. Give at most ${MAX_ROWS} rows, the ones a caller's value reaches first.${boundaryNote}`, onTier('low', { label: 'enumerate', schema: SURFACE }));
   const listed = await twice(ask);
   return listed ? asList(listed.rows).slice(0, MAX_ROWS).map((r, i) => `${i + 1}. ${cap(r?.where, 120)}: ${cap(r?.what, 240)}`) : null;
 }
@@ -214,14 +220,17 @@ async function checkSafe(items) {
 }
 
 // The defences are built on the start tier with a failing test each, and a failed check gets one repair, as a milestone's build does.
-async function applyDefences(body, commands) {
+async function applyDefences(body, commands, what = 'defences', when = 'hardening') {
   phase('Harden');
-  const built = await build(start, 'apply defences', body);
-  const gate = await runCheck('check after hardening', commands);
+  const built = await build(start, `apply ${what}`, body);
+  const gate = await runCheck(`check after ${when}`, commands);
   if (gate.ok) return { built, gate };
-  const repaired = await build(start, 'repair defences', `${body}${retryNote(gate, built)}`);
-  return { built: repaired, gate: await runCheck('check after hardening', commands) };
+  const repaired = await build(start, `repair ${what}`, `${body}${retryNote(gate, built)}`);
+  return { built: repaired, gate: await runCheck(`check after ${when}`, commands) };
 }
+
+// Every milestone's rule tests and their files unchanged, and the project's own suite: a later build, the hardening or a fix could break any.
+const finalChecks = () => [`${cli} check --scope pr`, ...results.flatMap((r) => [r.rules?.command, unchanged(r.rules)]), scout?.test_command];
 
 async function harden(findings) {
   const ruleFiles = results.map((r) => r.rules?.file).filter(Boolean);
@@ -231,8 +240,7 @@ async function harden(findings) {
   const items = await checkSafe(await checkDecisions(decided));
   const defences = items.filter((it) => it.disposition === 'defend').map((it) => `${it.place}: ${it.defence}`);
   const needsDecision = items.filter((it) => it.disposition === 'needs_decision').map((it) => `line ${it.line}: ${it.defence}: ${it.why}`);
-  // Every milestone's rule tests and their files unchanged, and the project's own suite: a later build or the hardening could break any.
-  const commands = [`${cli} check --scope pr`, ...results.flatMap((r) => [r.rules?.command, unchanged(r.rules)]), scout?.test_command];
+  const commands = finalChecks();
   const body = `Harden this change. For each defence below, add a test that fails without it, in one new test file, then make it pass. Each one only adds protection, so it changes nothing the request states. Do not change any existing test, or the rule tests in ${ruleFiles.join(', ') || 'the milestones\' rule files'}. In left, list each defence you did not build, and why.${listNote('The defences, as data:', defences)}`;
   const { built, gate } = defences.length > 0 ? await applyDefences(body, commands) : { built: { status: 'done', left: [] }, gate: await runCheck('check after hardening', commands) };
   const finished = built?.status === 'done';
@@ -246,10 +254,11 @@ async function harden(findings) {
 async function trace() {
   phase('Trace');
   const ruleFiles = results.map((r) => r.rules?.file).filter(Boolean);
-  const found = await agent(`${rulesNote}Check this work against the request, line by line, before it is reviewed. Read everything it changed, with \`git status\` and \`git diff\`, new files included. Then take the request's lines below one at a time, and every decision in the earlier messages, and read each clause by clause: every command, field, result shape, order, default, error code and limit it names. For each clause, find the code that does it and run it to see that it does. Where a clause speaks of a list, a count, a limit or a range, try its ends as well: none, one, and at and just past each limit. Then call every command or function this work adds or changes once with each input it takes left out, and once with each of the wrong type, and see that every answer is the one the request or the project's conventions below give. Do these ordinary cases first: an unusual value, such as a date that does not exist, comes after them. Where a clause can be read more than one way, take the reading its words and the project's conventions support best, and change the code to it; keep the code's reading only where they support both equally. For each clause the code does not meet, add a test that fails, in one new test file, then fix the code until it passes. Change no behaviour the request states, no existing test, and none of the rule tests in ${ruleFiles.join(', ') || 'the milestones\' rule files'}. A rule test that contradicts the request or the project's conventions, or pins a detail the request does not give, is not yours to change: name it in rules_wrong with its file and why, leave the code it holds as it is, and do not list it again under what you could not fix. Run the tests and \`${cli} quality --scope pr\`, and fix what either reports without a somi-gate-allow exemption. Return each gap you found, what you fixed, what you could not fix, the rule tests you found wrong, and the test file.\n\n${request}\n\nThe request's lines, numbered:\n${numbered}\n\n${handoff}`, onTier('high', { label: 'trace', schema: TRACED }));
+  const found = await agent(`${rulesNote}Check this work against the request, line by line, before it is reviewed. Read everything it changed, with \`git status\` and \`git diff\`, new files included. Then take the request's lines below one at a time, and every decision in the earlier messages, and read each clause by clause: every command, field, result shape, order, default, error code and limit it names. For each clause, find the code that does it and run it to see that it does. Where a clause speaks of a list, a count, a limit or a range, try its ends as well: none, one, and at and just past each limit. Then call every command or function this work adds or changes once with each input it takes left out, and once with each of the wrong type, and see that every answer is the one the request or the project's conventions below give. Do these ordinary cases first: an unusual value, such as a date that does not exist, comes after them. Where a clause can be read more than one way, take the reading its words and the project's conventions support best, and change the code to it; keep the code's reading only where they support both equally. For each clause the code does not meet, add a test that fails, in one new test file, then fix the code until it passes. Change no behaviour the request states, no existing test, and none of the rule tests in ${ruleFiles.join(', ') || 'the milestones\' rule files'}. A rule test that contradicts the request or the project's conventions, or pins a detail the request does not give, is not yours to change: name it in rules_wrong with its file and why, leave the code it holds as it is, and do not list it again under what you could not fix. Run the tests and \`${cli} quality --scope pr\`, and fix what either reports without a somi-gate-allow exemption. Return each gap you found, what you fixed, what you could not fix, the rule tests you found wrong, and the test file.\n\n${request}${acceptanceNote}\n\nThe request's lines, numbered:\n${numbered}\n\n${handoff}`, onTier('high', { label: 'trace', schema: TRACED }));
   // A trace that returns nothing has checked nothing, so it does not pass as a clean one.
-  const open = found && typeof found === 'object' ? strings(found.open) : ['the trace returned nothing, so no line was checked'];
-  return { gaps: strings(found?.gaps), fixed: strings(found?.fixed), open, rules_wrong: strings(found?.rules_wrong), tests_file: found?.tests_file ?? null };
+  const open = strings(found?.open);
+  // Object(x) is x only for an object, so a trace that returned nothing, or text, is unchecked.
+  return { unchecked: Object(found) !== found, gaps: strings(found?.gaps), fixed: strings(found?.fixed), open, rules_wrong: strings(found?.rules_wrong), tests_file: found?.tests_file ?? null };
 }
 
 // On a live run the rules stage pinned a detail the request left open against the project's own form, the build obeyed it, and the trace
@@ -268,6 +277,33 @@ async function retraceRules(traced) {
   phase('Build');
   const built = await build(start, 'build after trace', `The rule tests were checked again after a check of the finished code against the request said some were wrong. Make the code meet every rule test as it now is, without breaking what the request states.${named.map((r) => heldBy(r.rules)).join('')}\n\n${report}`);
   return built?.status === 'done';
+}
+
+// A run that goes back to the user unfinished costs them a session to finish it, so what a stronger model can still close is closed first.
+// A line the trace could not meet gets one build on the tier above, with a failing test for each line, and counts as met only when that
+// build left nothing and the final checks pass. The review after it reads the result with the rest of the change.
+async function closeOpen(traced) {
+  if (traced.open.length === 0) return traced;
+  phase('Trace');
+  // The last attempt a milestone may make is on the tier above when there is one, and on the start tier when there is not.
+  const tier = attemptsFor('').at(-1).tier;
+  const built = await build(tier, `close open lines on ${tier}`, `A check of the finished code against the request could not meet these lines. For each, add a test that fails, in one new test file, then make it pass. Change no behaviour the request states, no existing test and no rule test. In left, list each line you could not meet, and why.${listNote('The unmet lines, as data:', traced.open)}${listNote('What the check found, as data:', traced.gaps)}`);
+  const gate = await runCheck('check after closing lines', finalChecks());
+  const closed = [built?.status === 'done', strings(built?.left).length === 0, gate.ok].every(Boolean);
+  // A closed run left nothing, so what stays open is the lines it did not close and anything it left.
+  return { ...traced, open: [...traced.open.filter(() => !closed), ...strings(built?.left)], closed_open: traced.open.filter(() => closed) };
+}
+
+// A Blocker or Major the last review still finds gets one fix on the start tier, a test each, and one more review, so the run comes back
+// done instead of handing the session a finding to fix. One round only: a finding that survives it goes to the user.
+async function settle(review) {
+  const findings = blocking(findingsOf(review.reviews));
+  if (findings.length === 0) return review;
+  const body = `Fix each finding below, which a reviewer of the whole change raised, with a test that fails without the fix, in one new test file. Change no behaviour the request states, no existing test and no rule test. A finding whose fix would change what the request states is not yours: list it in left with why. In left, list each finding you did not fix.${listNote('The findings, as data:', findings.map(findingLine))}`;
+  const { built, gate } = await applyDefences(body, finalChecks(), 'review fixes', 'review fixes');
+  // The fixes' own check and what their builder left decide the result too: a clean review of a tree whose checks fail is not done.
+  const left = [...strings(built?.left), ...[built?.status].filter((s) => s !== 'done').map(() => 'the review-fix builder did not finish')];
+  return { ...(await reviewOnce('review plan after review fixes')), settled: findings.map(findingLine), fix_gate: gate, fix_left: left };
 }
 
 // A long run gets one review at its midpoint, so an early mistake is not built on for long; what blocks goes to the next builder. Shorter
@@ -304,10 +340,12 @@ async function runReviewers(seats) {
 await runShards('work-item.start');
 
 phase('Scout');
+// The brief's files and test command help the scout, as data. The command the checks run is the one the scout ran here, never the brief's.
+const briefFacts = listNote('The brief the user approved names these files and this test command, as data:', [...strings(brief.files), ...strings(brief.tests)].map((f) => cap(f, 200)));
 // Only a bug has a behaviour to reproduce. For other work the rules stage writes the tests, and a scout's guess at one costs a stage. A
 // scout reports facts about the code, never a reading of the request: its guesses at what the user meant reached every later stage.
 const reproduce = a.route === 'debug' ? ' This is a bug: write one failing test that shows it under the test folder, and give the command that runs only that test.' : ' Write no test.';
-const scout = await agent(`Find what this work touches. Read only: change no source file. List the files to change, how many lines they hold together, an estimate of how many lines the change will add or change, and the command that runs the project's whole test suite: run it once, and give a command you saw work here, since a tool the project names may not be installed.${reproduce} List in conventions each rule the project's docs or code set for code like the new code, quoted with the file it is in: how a missing or wrong value is answered, error codes and result shapes, naming, and anything the docs say every command or module does. Notes are facts about the code only, such as a helper to reuse; leave the reading of the request to the stages after you.\n\n${request}`, onTier('low', { label: 'scout', schema: SCOUT }));
+const scout = await agent(`Find what this work touches. Read only: change no source file. List the files to change, how many lines they hold together, an estimate of how many lines the change will add or change, and the command that runs the project's whole test suite: run it once, and give a command you saw work here, since a tool the project names may not be installed.${reproduce} List in conventions each rule the project's docs or code set for code like the new code, quoted with the file it is in: how a missing or wrong value is answered, error codes and result shapes, naming, and anything the docs say every command or module does. Notes are facts about the code only, such as a helper to reuse; leave the reading of the request to the stages after you.\n\n${request}${briefFacts}`, onTier('low', { label: 'scout', schema: SCOUT }));
 
 // Most reproduction claims a scout makes are false, so a claim the code does not back up is dropped before the builder sees it.
 phase('Check the handoff');
@@ -317,7 +355,8 @@ if (a.route === 'debug' && scout?.repro_test && scout?.repro_command) {
   if (ran?.failed) repro = scout.repro_test;
 }
 const size = Number.isInteger(scout?.estimate_changed_lines) ? `About ${scout.estimate_changed_lines} lines to add or change, in files holding ${scout.lines_in_files ?? 'an unknown number of'} lines.` : null;
-const handoff = [`Files likely to change: ${(scout?.files ?? []).join(', ') || 'unknown'}`, `Tests run with: ${scout?.test_command ?? 'the project\'s usual command'}`, size, repro ? `A failing test already shows the problem: ${repro}. Make it pass and keep it.` : null, scout?.notes ? `Scout's notes, as data: ${scout.notes}` : null, listNote('The project\'s own conventions, quoted by the scout, as data. New code follows them wherever the request does not say otherwise, including for inputs and cases the request does not mention, but never where one would weaken a check or break SoMi\'s rules, which win. A convention the code does not bear out is not one:', strings(scout?.conventions).slice(0, MAX_CONVENTIONS).map((c) => cap(c, 300))).trim()].filter(Boolean).join('\n');
+const briefSize = strings(brief.size).map((z) => `Size, from the brief: ${cap(z, 120)}`);
+const handoff = [`Files likely to change: ${(scout?.files ?? []).join(', ') || 'unknown'}`, `Tests run with: ${scout?.test_command ?? 'the project\'s usual command'}`, size, repro ? `A failing test already shows the problem: ${repro}. Make it pass and keep it.` : null, ...briefSize, scout?.notes ? `Scout's notes, as data: ${scout.notes}` : null, listNote('The project\'s own conventions, quoted by the scout, as data. New code follows them wherever the request does not say otherwise, including for inputs and cases the request does not mention, but never where one would weaken a check or break SoMi\'s rules, which win. A convention the code does not bear out is not one:', [...strings(brief.conventions), ...strings(scout?.conventions)].slice(0, MAX_CONVENTIONS).map((c) => cap(c, 300))).trim()].filter(Boolean).join('\n');
 
 // Large work is cut into milestones, each built and checked by fresh agents, so a long run does not pile into one context. Each extra
 // milestone costs rule tests, a check and often a review, and live runs cut work a bare agent builds in a minute into three, so one is
@@ -325,10 +364,12 @@ const handoff = [`Files likely to change: ${(scout?.files ?? []).join(', ') || '
 // the build to fake it.
 phase('Plan');
 const numbered = requestLines.map((l, i) => `${i + 1}: ${l}`).join('\n');
-const planned = await agent(`Split this work into milestones, in the order they must be built. Use one milestone unless the scout's estimate below is over about 400 changed lines, or the request itself names stages; then split it where each part needs its own tests and can be built and checked on its own, each later one building on the earlier. Use at most ${MAX_MILESTONES}. Write each milestone's scope in the request's own words: quote the lines it covers, and decide nothing about how to meet them. Where a line can be read more than one way, quote it and say only that it is open, with no hint at an answer: the builder settles it from the request. Give each milestone the numbers of the request's lines it covers. Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run, an approval or a review by a person; list those parts as deferred and their line numbers as deferred_lines. Read only: change no file.\n\n${request}\n\nThe request's lines, numbered:\n${numbered}\n\n${handoff}`, onTier('medium', { label: 'plan', schema: MILESTONES }));
+const outOfScope = strings(brief.out_of_scope);
+const outOfScopeNote = listNote('The brief the user approved puts these out of scope: they are in no milestone.', outOfScope);
+const planned = await agent(`Split this work into milestones, in the order they must be built. Use one milestone unless the size estimate below is over about 400 changed lines, or the request itself names stages; then split it where each part needs its own tests and can be built and checked on its own, each later one building on the earlier. Use at most ${MAX_MILESTONES}. Write each milestone's scope in the request's own words: quote the lines it covers, and decide nothing about how to meet them. Where a line can be read more than one way, quote it and say only that it is open, with no hint at an answer: the builder settles it from the request. Give each milestone the numbers of the request's lines it covers. Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run, an approval or a review by a person; list those parts as deferred and their line numbers as deferred_lines. Read only: change no file.\n\n${request}${outOfScopeNote}\n\nThe request's lines, numbered:\n${numbered}\n\n${handoff}`, onTier('medium', { label: 'plan', schema: MILESTONES }));
 const milestones = asList(planned?.milestones).slice(0, MAX_MILESTONES).filter((m) => typeof m?.title === 'string' && typeof m.scope === 'string');
 if (milestones.length === 0) milestones.push({ title: 'The whole request', scope: 'Everything the request asks for.', done_when: '' });
-const deferred = strings(planned?.deferred);
+const deferred = [...outOfScope, ...strings(planned?.deferred)];
 const deferredNote = listNote('These parts are deferred: build nothing for them and write no test for them.', deferred);
 // A line of the request that no milestone took is never built and nothing would notice, so the last milestone gets it.
 const covered = new Set([...milestones.flatMap((m) => asList(m.lines)), ...asList(planned?.deferred_lines)]);
@@ -360,11 +401,11 @@ const allBuilt = results.length === milestones.length && results.every((r) => r.
 // The end loop runs only on a complete build: a run that stopped goes back to the user as it is, without paying for a review of it.
 // The end of a complete build: the trace, a review, the hardening, and a second review when the hardening changed the tree.
 async function finish() {
-  const traced = await trace();
+  const traced = await closeOpen(await trace());
   const rebuilt = await retraceRules(traced);
   const first = await reviewOnce('review plan');
   const hardened = await harden(findingsOf(first.reviews));
-  const final = hardened.attempted ? await reviewOnce('review plan after hardening') : first;
+  const final = await settle(hardened.attempted ? await reviewOnce('review plan after hardening') : first);
   return { traced, rebuilt, hardened, final };
 }
 const { traced = null, rebuilt = null, hardened = null, final = null } = allBuilt ? await finish() : {};
@@ -375,8 +416,8 @@ const last = results[results.length - 1];
 const open = final ? blocking(findingsOf(final.reviews)) : [];
 const missing = final?.missing ?? [];
 const needsDecision = hardened?.needs_decision ?? [];
-const lastGate = hardened?.gate ?? last?.gate;
-const reasons = [[!allBuilt, last?.stopped ?? null], [hardened?.silent, 'the hardening returned nothing'], [hardened?.ok === false, 'the checks fail after hardening'], [hardened?.left.length > 0, 'the hardening left a defence unbuilt'], [traced?.open.length > 0, 'a line of the request is still unmet'], [rebuilt === false, 'the build after the trace did not finish'], [needsDecision.length > 0, 'a fix needs your decision'], [open.length > 0, 'a review finding is still open'], [missing.length > 0, 'a reviewer returned nothing']];
+const lastGate = final?.fix_gate ?? hardened?.gate ?? last?.gate;
+const reasons = [[!allBuilt, last?.stopped ?? null], [hardened?.silent, 'the hardening returned nothing'], [hardened?.ok === false, 'the checks fail after hardening'], [hardened?.left.length > 0, 'the hardening left a defence unbuilt'], [traced?.unchecked, 'the trace returned nothing, so no line was checked'], [traced?.open.length > 0, 'a line of the request is still unmet'], [rebuilt === false, 'the build after the trace did not finish'], [needsDecision.length > 0, 'a fix needs your decision'], [final?.fix_gate?.ok === false, 'the checks fail after the review fixes'], [final?.fix_left?.length > 0, 'a review fix was left unbuilt'], [open.length > 0, 'a review finding is still open'], [missing.length > 0, 'a reviewer returned nothing']];
 const stopped = reasons.find(([holds]) => holds)?.[1] ?? null;
 // What the session acts on comes first and is short, because a host cuts a long result off at the end; the builders' prose comes last.
 return {
@@ -395,7 +436,10 @@ return {
   // name, escalation, as a climb that had happened.
   climbs_on_failed_check: canClimb ? `from ${start} to ${next}, after one repair on ${start}` : `never: one repair on ${start}, and no separate model for the tier above`,
   checks: lastGate ? { ok: lastGate.ok, failures: lastGate.failures.slice(0, 5) } : null,
-  trace: traced && { gaps: traced.gaps, fixed: traced.fixed, open: traced.open, rules_wrong: traced.rules_wrong, rebuilt, tests_file: traced.tests_file },
+  trace: traced && { unchecked: traced.unchecked, gaps: traced.gaps, fixed: traced.fixed, open: traced.open, closed_open: traced.closed_open ?? [], rules_wrong: traced.rules_wrong, rebuilt, tests_file: traced.tests_file },
+  review_fixes: final?.settled ?? [],
+  review_fixes_left: final?.fix_left ?? [],
+  brief: strings(brief.title)[0] ?? null,
   hardening: hardened && { fixed: hardened.fixed, needs_decision: hardened.needs_decision, left: hardened.left, items: hardened.items.map((it) => `${it.disposition}${it.overruled ? ' (overruled)' : ''} ${it.place}: ${it.defence || it.why}`).slice(0, 40) },
   rules_count: results.reduce((n, r) => n + strings(r.rules?.rules).length, 0),
   rules_file: last?.rules?.file ?? null,

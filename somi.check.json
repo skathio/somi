@@ -129,6 +129,18 @@
     "scripts/lib/plan.mjs": [
       "tests/advisor.test.mjs"
     ],
+    "scripts/lib/brief.mjs": [
+      "tests/brief.test.mjs"
+    ],
+    "scripts/lib/brief-own.mjs": [
+      "tests/brief.test.mjs"
+    ],
+    "scripts/lib/brief-parse.mjs": [
+      "tests/brief.test.mjs"
+    ],
+    "scripts/lib/brief-route.mjs": [
+      "tests/brief.test.mjs"
+    ],
     "scripts/lib/setup.mjs": [
       "tests/advisor.test.mjs"
     ],

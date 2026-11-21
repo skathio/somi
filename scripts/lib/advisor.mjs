@@ -9,6 +9,8 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readBrief } from './brief.mjs';
+import { bareDeliver, briefArgs, briefFields, stagedFromBrief } from './brief-route.mjs';
 import { readLedger } from './ledger.mjs';
 import { planStatus } from './plan.mjs';
 import { earlierPrompts, readPrompt, saveEarlier } from './prompt.mjs';
@@ -88,6 +90,7 @@ const WHAT = Object.freeze({
   fix: 'Fix the cause the failing test shows, and keep the test.',
   build: 'Make the change, with tests that fail without it.',
   plan: 'Write the milestones and save them with somi_plan. Wait for the user to approve them.',
+  brief: 'Read the code, settle with the user what it cannot answer, and save the brief with somi_brief once they approve it. Change no code.',
   milestones: 'For each milestone in order, call somi_route with it, run its steps, and mark it done with somi_plan.',
   close: 'Close the plan with somi_plan when every milestone is done.',
 });
@@ -95,6 +98,7 @@ const WHAT = Object.freeze({
 export function workflowSteps({ route, kind, alwaysReview, work }) {
   const main = { run_on: 'main', tier: work.mainTier };
   const doWork = work.worker ? { run_on: 'subagent', agent: work.worker.agent, tier: work.tier, ...(work.worker.model ? { model: work.worker.model } : {}), brief: work.brief } : { run_on: 'main', tier: work.tier };
+  if (kind === 'brief') return [{ step: 'brief', ...main, do: WHAT.brief }];
   if (kind === 'plan') return [{ step: 'plan', ...main, do: WHAT.plan }, { step: 'milestones', run_on: 'main', tier: work.mainTier, do: WHAT.milestones }, { step: 'close', ...main, do: WHAT.close }];
   if (kind === 'report') return [{ step: FIRST_STEP[route] ?? route, ...doWork }];
   if (route === 'debug') return [{ step: 'reproduce', ...main, do: WHAT.reproduce }, { step: 'fix', ...doWork, do: WHAT.fix }, REVIEW_STEP(alwaysReview)];
@@ -104,13 +108,13 @@ export function workflowSteps({ route, kind, alwaysReview, work }) {
 // Work the user sends with /somi-deliver runs as the staged workflow, so its stages and their tiers are kept by code and not by the model.
 // Only the user starts it: a host runs a workflow on the user's say-so, not on a tool's advice. The models come from the user's config
 // here, because the workflow file names none. Where the host cannot run it, the steps stand.
-function deliverWorkflow(ctx, { route, request, said, earlierAt, ledger, role, tier }) {
+function deliverWorkflow(ctx, { route, request, said, earlierAt, ledger, role, tier, brief }) {
   const models = Object.fromEntries(TIERS.map((t) => [t, resolveSpawn(ctx.config, ctx.host, t).model]).filter(([, m]) => m));
   const shards = {};
   for (const step of ['work-item.start', 'review.done']) {
     try { const refs = shardsFor({ root: ctx.root, step, env: ctx.env }).usable.filter((b) => b.mode !== 'write').map((b) => b.ref); if (refs.length) shards[step] = refs; } catch { /* a broken config skips shards, as it does elsewhere */ }
   }
-  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, earlier_file: earlierAt ?? undefined, route, ledger, role, models, startTier: tier, cli: somiCommand('').trim(), rules_file: RULES_FILE, shards: Object.keys(shards).length ? shards : undefined }) };
+  return { name: ctx.host === 'claude' ? 'somi:deliver-stages' : copilotName('deliver-stages'), args: clean({ request, said: said && !bareDeliver(said) && !String(request ?? '').includes(withoutCommand(said)) ? said : undefined, brief: brief ? briefArgs(brief) : undefined, earlier_file: earlierAt ?? undefined, route, ledger, role, models, startTier: tier, cli: somiCommand('').trim(), rules_file: RULES_FILE, shards: Object.keys(shards).length ? shards : undefined }) };
 }
 const LARGE = (request) => String(request ?? '').length > LONG_REQUEST;
 // The conversation's part is small on purpose: start it, wait, relay. The workflow already read the code, built, ran the checks and asked
@@ -162,7 +166,8 @@ function placement(ctx, wf, { request, sensitive, staged }) {
   const { tier, model, enforced } = resolveSpawn(ctx.config, ctx.host, wanted);
   const main = mainTier(ctx.config);
   const large = wf.kind === 'code' && (staged === true || LARGE(request));
-  const direction = rank(tier) > rank(main) ? 'up' : rank(tier) < rank(main) && large && !isSensitive ? 'down' : null;
+  // A brief is settled with the user, so it stays in the conversation whatever the tiers.
+  const direction = wf.kind === 'brief' ? null : rank(tier) > rank(main) ? 'up' : rank(tier) < rank(main) && large && !isSensitive ? 'down' : null;
   const worker = direction ? { agent: workerAgent(tier), ...(model ? { model } : {}) } : null;
   return { isSensitive, tier, enforced, main, large, direction, worker };
 }
@@ -201,8 +206,10 @@ export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: f
   const command = chatCommand(asked);
   if (command) return command.verb === 'config' ? configAnswer(ctx) : commandAnswer(command, somiCommand);
   const said = readPrompt(ctx.root, ctx.env);
-  const { staged, request } = typedDeliver(said, asked, flagged);
-  const { chosen, alternatives } = chooseRoute({ request, ticket, hint });
+  const open = readBrief(ctx.root);
+  const typed = typedDeliver(said, asked, flagged);
+  const { staged, request, hint: routeHint, fromBrief } = stagedFromBrief({ brief: open, said, flagged, hint, ...typed });
+  const { chosen, alternatives } = chooseRoute({ request, ticket, hint: routeHint });
   const direct = directAnswer(ctx, chosen, staged);
   if (direct) return direct;
   const wf = WORKFLOWS[chosen.route];
@@ -212,7 +219,8 @@ export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: f
   const ledger = readLedger(ctx.root, ctx.env);
   const role = roleBrief(wf.role);
   const start = at.worker ? delegate(at.worker.agent, at.worker.model, at.direction === 'up' ? UP : DOWN) : HERE;
-  const workflow = at.large && staged === true ? deliverWorkflow(ctx, { route: chosen.route, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, role, tier: at.tier }) : undefined;
+  // An empty request, such as a bare /somi-deliver with no usable brief, has nothing to build, so the paid workflow does not start on it.
+  const workflow = at.large && staged === true && String(request ?? '').trim() !== '' ? deliverWorkflow(ctx, { route: chosen.route, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, role, tier: at.tier, brief: fromBrief }) : undefined;
   const brief = at.worker ? workerBrief({ role, request, said, earlierAt: saveEarlier(ctx.root, earlier, ctx.env), ledger, skills }) : undefined;
   return clean({
     route: chosen.route,
@@ -225,6 +233,7 @@ export function advise(ctx, { request: asked, ticket, hint, sensitive, staged: f
     workflow,
     alternatives,
     plan: planStatus(ctx.root),
+    ...briefFields(open, { fromBrief, route: chosen.route, staged: Boolean(workflow) }),
     ...shardAdvice(ctx, 'work-item.start'),
     ...(wf.kind === 'plan' ? { after_approval: shardAdvice(ctx, 'plan.approved') } : {}),
   });

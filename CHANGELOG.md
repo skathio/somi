@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **`/somi-brief`, a brief before the build.** Type `/somi-brief` with a feature or an improvement, and SoMi reads the code, asks you only what the code cannot settle and what would be expensive to get wrong, and writes a brief: the goal in your words, numbered testable requirements, the decisions made, what is out of scope, the project's conventions, acceptance checks, trust boundaries, and whether `/somi-deliver` or plain SoMi should build it. Once you approve it, it is saved to `.somi/brief.md` through the new `somi_brief` tool or `somi brief`, which refuse a brief that still has open questions or no numbered requirements, and its decisions go to the ledger. A brief the repository ships, committed or behind a link or a submodule at `.somi`, is never built from, saved over or deleted. `/somi-deliver` typed with nothing after it builds the open brief, with its requirements as the request's numbered lines; plain SoMi is told a brief is open and builds against it. `somi status` names it. A host now lists seven commands and SoMi seven tools.
+
+### Changed
+
+- **`/somi-deliver` finishes more of what it starts.** A request line the trace could not meet gets one build on the tier above, with a failing test for each line, and counts as met only when that build left nothing and the checks pass. A Blocker or Major that the last review still finds gets one round of fixes, each with a test, and one more review, instead of going back to the session to fix. Each is one attempt, so a run cannot loop, and what survives goes to you as before. Started on a brief, the brief's goal, conventions, acceptance checks, boundaries and out-of-scope list reach the stages that use them, and its files and test command reach the scout as facts; the checks still run the command the scout found. The result adds `review_fixes`, `review_fixes_left`, `trace.closed_open`, `trace.unchecked` and `brief`. A staged call with an empty request no longer starts the workflow. These have not had a benchmark run yet.
+
 ## [5.2.0] — 2026-11-18 — feat: the gate reads Python, the rules learn the boundary lessons, and `/somi-deliver` builds in milestones
 
 **Minor.** Commands, agents and the MCP tools keep their names. The quality gate is stricter in four places a change could pass before: a TypeScript cast that switches the checker off, a focused test or `debugger`, a function over a limit that grows by more than 10 cognitive points or 40 lines, and a new import loop. A staged run's result names its climb `climbs_on_failed_check` instead of `escalation`. No migration action required.
