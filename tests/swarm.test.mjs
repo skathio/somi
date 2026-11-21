@@ -41,12 +41,12 @@ const answers = ({ checks = () => true, built = () => DONE, verdict = () => ({ m
     ['harden', () => hardened],
     ['check decisions', () => ({ verdicts: [] })],
     ['check safe verdicts', () => ({ verdicts: [] })],
-    ['race', (p, o) => (/^race \d/.test(o.label) ? built(o.label, p) : exits(p, true))],
+    ['race', (p, o) => (/^race \d/.test(o.label) ? built(o.label, p) : exits(p, checks(o.label, p)))],
     ['build on', (p, o) => built(o.label, p)],
     ['repair on', (p, o) => built(o.label, p)],
     ['try race', (p) => exits(p, true)],
     ['check', (p, o) => exits(p, checks(o.label, p))],
-    ['take back', (p) => exits(p, true)],
+    ['take back', (p, o) => exits(p, checks(o.label, p))],
     ['keep rules', (p) => exits(p, true)],
     ['mark tree', (p) => exits(p, true)],
   ];
@@ -204,4 +204,26 @@ test('only the user\'s own config picks the swarm workflow, and anything else fa
   assert.equal(advise(ctx({ deliver: { workflow: 'swarm' } }), { staged: true }).workflow.name, 'somi:deliver-swarm');
   assert.equal(advise(ctx({ deliver: { workflow: 'swarm' } }), { staged: true }).workflow.args.host, 'claude');
   assert.equal(advise(ctx({}, { deliver: { workflow: 'swarm' } }), { staged: true }).workflow.name, 'somi:deliver-stages', 'a project cannot choose it');
+});
+
+test('a race whose base commit fails starts no racer, and a patch that cannot be taken back out stops the race', async () => {
+  let checks = 0;
+  const failFirst = (label) => !(label === 'check' && checks++ === 0);
+  const noBase = await run(ARGS, answers({ checks: (label, p) => failFirst(label) && !label.startsWith('race base') }));
+  assert.ok(!noBase.calls.some((c) => /^race \d/.test(c.label)));
+  assert.deepEqual(noBase.value.milestones[0].races, ['race base: failed']);
+  assert.equal(noBase.value.stopped, 'All fails its checks');
+  checks = 0;
+  const stuck = await run(ARGS, answers({ checks: (label) => failFirst(label) && label !== 'check race 1' && !label.startsWith('take back') }));
+  assert.ok(!labels(stuck.calls).includes('try race 2'), 'nothing is tried on top of a patch left in');
+  assert.deepEqual(stuck.value.milestones[0].races, ['race 1: failed', 'race 1: not taken back']);
+});
+
+test('the race base deletes old patches and names its own author, and each racer first proves it is in its own worktree', async () => {
+  let checks = 0;
+  const { calls } = await run(ARGS, answers({ checks: (label) => !(label === 'check' && checks++ === 0) }));
+  const base = calls.find((c) => c.label === 'race base').prompt;
+  assert.match(base, /rm -f "\$\(git rev-parse --git-common-dir\)"\/somi-swarm-race-\*\.patch && /);
+  assert.match(base, /GIT_AUTHOR_EMAIL=somi@localhost GIT_COMMITTER_NAME=somi GIT_COMMITTER_EMAIL=somi@localhost git commit-tree/);
+  assert.match(calls.find((c) => c.label === 'race 1 on medium').prompt, /0\. Run `test "\$\(git rev-parse --git-dir\)" != "\$\(git rev-parse --git-common-dir\)"`\. If it fails you are not in a worktree of your own: change nothing, and report blocked\./);
 });

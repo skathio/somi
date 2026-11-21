@@ -150,7 +150,7 @@ const RACERS = [
   { tier: start, angle: 'Read the failure as a sign the approach may be wrong, and change the approach where it is.' },
   ...(climbs ? [{ tier: higher, angle: 'Find the root cause of the failure before changing anything.' }] : []),
 ];
-const racerPrompt = (body, gate, n, angle) => `You are one of several agents racing to repair a build, each in its own git worktree. ${angle}\n1. Run \`git rev-parse HEAD > ${shared(`race-${n}-home`)}\`, then \`git checkout --detach --force "$(cat ${shared('race-base')})"\`: that commit is the tree to repair.\n2. If the tests need dependency folders git ignores, such as node_modules, link them from the main checkout, the folder that holds \`$(git rev-parse --git-common-dir)\`. Change nothing in the main checkout.\n3. Repair it so the checks below pass, and run them.\n4. Remove any link you made, then run \`git add -A && git diff --cached --binary "$(cat ${shared('race-base')})" > ${shared(`race-${n}.patch`)}\`.\n5. Run \`git checkout --force --detach "$(cat ${shared(`race-${n}-home`)})" && git clean -fd\`.\n\n${BUILDER}\n\n${work}\n\n${handoff}\n\n${body}${failedWith(gate)}\n\n${finish}`;
+const racerPrompt = (body, gate, n, angle) => `You are one of several agents racing to repair a build, each in its own git worktree. ${angle}\n0. Run \`test "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)"\`. If it fails you are not in a worktree of your own: change nothing, and report blocked.\n1. Run \`git rev-parse HEAD > ${shared(`race-${n}-home`)}\`, then \`git checkout --detach --force "$(cat ${shared('race-base')})"\`: that commit is the tree to repair.\n2. If the tests need dependency folders git ignores, such as node_modules, link them from the main checkout, the folder that holds \`$(git rev-parse --git-common-dir)\`. Change nothing in the main checkout.\n3. Repair it so the checks below pass, and run them.\n4. Remove any link you made, then run \`git add -A && git diff --cached --binary "$(cat ${shared('race-base')})" > ${shared(`race-${n}.patch`)}\`.\n5. Run \`git checkout --force --detach "$(cat ${shared(`race-${n}-home`)})" && git clean -fd\`.\n\n${BUILDER}\n\n${work}\n\n${handoff}\n\n${body}${failedWith(gate)}\n\n${finish}`;
 
 // Each patch that finished is tried in the user's tree in the racers' order, and the first whose checks pass by exit code is kept; one
 // that fails is taken back out before the next is tried. With no worktree on this host, one repair and one climb run in turn instead.
@@ -159,19 +159,32 @@ async function race(body, failed, commands, tag) {
   phase('Race');
   const { gate } = failed;
   if (!isolated) return serialRepair(body, failed, commands, tag);
-  await check(`race base${tag}`, [`t=$(${treeId}) && git commit-tree "$t" -m 'somi race base' > ${shared('race-base')}`]);
+  // Old patches go first, so a racer that writes none cannot hand back an earlier one. The base commit names SoMi as its author, so a
+  // repository with no identity set still gets one, and a base that was not made stops the race before any racer starts.
+  const base = await check(`race base${tag}`, [`rm -f "$(git rev-parse --git-common-dir)"/somi-swarm-race-*.patch && t=$(${treeId}) && GIT_AUTHOR_NAME=somi GIT_AUTHOR_EMAIL=somi@localhost GIT_COMMITTER_NAME=somi GIT_COMMITTER_EMAIL=somi@localhost git commit-tree "$t" -m 'somi race base' > ${shared('race-base')}`]);
+  if (!base.ok) return { built: failed.built, gate, tier: start, tried: ['race base: failed'] };
   const ran = await parallel(RACERS.map((r, n) => () => ask(r.tier, `race ${n + 1} on ${r.tier}${tag}`, racerPrompt(body, gate, n, r.angle), { schema: BUILT, isolation: 'worktree', phase: 'Race' })));
   const tried = [];
   for (const [n, built] of ran.entries()) {
     if (built?.status !== 'done') continue;
-    const patch = shared(`race-${n}.patch`);
-    const applied = await check(`try race ${n + 1}${tag}`, [`git apply --binary ${patch}`]);
-    const passed = applied.ok ? await check(`check race ${n + 1}${tag}`, commands) : applied;
-    tried.push(`race ${n + 1}: ${passed.ok ? 'passed' : 'failed'}`);
-    if (passed.ok) return { built, gate: passed, tier: RACERS[n].tier, tried };
-    if (applied.ok) await check(`take back race ${n + 1}${tag}`, [`git apply -R --binary ${patch}`]);
+    const t = await tryPatch(n, commands, tag);
+    tried.push(`race ${n + 1}: ${t.outcome === 'passed' ? 'passed' : 'failed'}`);
+    if (t.outcome === 'passed') return { built, gate: t.gate, tier: RACERS[n].tier, tried };
+    if (t.outcome === 'stuck') return { built: failed.built, gate: { ok: false, failures: [`race ${n + 1}'s patch failed its checks and could not be taken back out`] }, tier: start, tried: [...tried, `race ${n + 1}: not taken back`] };
   }
   return { built: failed.built, gate, tier: start, tried };
+}
+
+// One racer's patch in the user's tree: applied, checked by exit code, and taken back out when its checks fail. A patch that cannot be
+// taken back out would have the next one tried on top of it, so it is stuck, and the race stops there.
+async function tryPatch(n, commands, tag) {
+  const patch = shared(`race-${n}.patch`);
+  const applied = await check(`try race ${n + 1}${tag}`, [`git apply --binary ${patch}`]);
+  if (!applied.ok) return { outcome: 'failed', gate: applied };
+  const passed = await check(`check race ${n + 1}${tag}`, commands);
+  if (passed.ok) return { outcome: 'passed', gate: passed };
+  const back = await check(`take back race ${n + 1}${tag}`, [`git apply -R --binary ${patch}`]);
+  return { outcome: back.ok ? 'failed' : 'stuck', gate: passed };
 }
 
 async function serialRepair(body, failed, commands, tag) {
