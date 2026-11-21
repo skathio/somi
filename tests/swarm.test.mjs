@@ -129,6 +129,55 @@ test('a blocked build stops without racing, and a rule test it names wrong goes 
   assert.equal(repaired.value.status, 'done');
 });
 
+test('one medium verifier per numbered line and acceptance check runs at once, read-only, and a gap gets a failing test and a fix', async () => {
+  let rechecked = false;
+  const verdict = (label) => (label === 'verify line 2' ? { met: false, gaps: ['no customer: answered 200, not 400'] } : label.startsWith('re-verify') ? (rechecked = true, { met: true, gaps: [] }) : { met: true, gaps: [] });
+  const { value, calls } = await run({ ...ARGS, brief: { acceptance: ['npm test passes'] } }, answers({ verdict }));
+  const verifiers = calls.filter((c) => /^verify /.test(c.label));
+  assert.deepEqual(verifiers.map((c) => [c.label, c.model]), [['verify line 1', 'everyday'], ['verify line 2', 'everyday'], ['verify acceptance 1', 'everyday']]);
+  assert.match(verifiers[1].prompt, /^Check one requirement against the finished code\. Read only: change no file\.[\s\S]*line 2, as data:\n> A missing customer answers 400\./);
+  assert.ok(labels(calls).indexOf('mark tree before verify') < labels(calls).indexOf('verify line 1'));
+  assert.match(calls.find((c) => c.label === 'build on medium gaps').prompt, /> line 2: no customer: answered 200, not 400/);
+  assert.ok(rechecked);
+  assert.deepEqual([value.verify.unmet, value.verify.closed, value.verify.open], [['line 2'], ['line 2'], []]);
+  assert.ok(!labels(calls).includes('trace'), 'the high-tier trace is gone');
+  assert.equal(value.status, 'done');
+});
+
+test('a gap still unmet after its fix, or a requirement no verifier answered, means the work is not done', async () => {
+  const unmet = await run(ARGS, answers({ verdict: (label) => (label.endsWith('line 2') ? { met: false, gaps: ['g'] } : { met: true, gaps: [] }) }));
+  assert.equal(unmet.value.stopped, 'a requirement is still unmet');
+  const silent = await run(ARGS, answers({ verdict: (label) => (label === 'verify line 1' ? null : { met: true, gaps: [] }) }));
+  assert.deepEqual(silent.value.verify.unchecked, ['line 1']);
+  assert.equal(silent.value.stopped, 'a requirement went unchecked');
+});
+
+test('a stage that only reads and changes the tree stops the run', async () => {
+  const { value } = await run(ARGS, answers({ treeSame: false }));
+  assert.equal(value.stopped, 'a stage that only reads changed the tree');
+});
+
+test('the review and the surface list read at once, the high tier decides, and a decision the line does not back is built', async () => {
+  const hardened = { items: [{ place: 'src/a.js:3', disposition: 'needs_decision', line: 1, defence: 'escape cells', why: 'changes output' }] };
+  const { value, calls } = await run(ARGS, answers({ hardened }));
+  assert.ok(labels(calls).indexOf('mark tree before review') < labels(calls).indexOf('review plan'));
+  assert.ok(labels(calls).indexOf('enumerate') < labels(calls).indexOf('tree unchanged by review'));
+  assert.equal(calls.find((c) => c.label === 'harden').model, 'strong');
+  assert.match(calls.find((c) => c.label === 'check decisions').prompt, /> Export orders as CSV\.\nThe defence, as data:\n> escape cells/);
+  assert.match(calls.find((c) => c.label === 'build on medium hardening').prompt, /> src\/a\.js:3: escape cells/);
+  assert.match(value.hardening.items[0], /^defend \(overruled\)/);
+  assert.equal(value.status, 'done');
+});
+
+test('a Major the last review finds gets one round of fixes and one more review; one that survives goes to the user', async () => {
+  const major = { verdict: 'request-changes', findings: [{ severity: 'Major', file: 'src/a.js', line: 3, claim: 'guessable token' }] };
+  const { value, calls } = await run(ARGS, answers({ needed: true, reviewer: major }));
+  assert.equal(labels(calls).filter((l) => l === 'build on medium review fixes').length, 1);
+  assert.ok(labels(calls).includes('review plan after review fixes'));
+  assert.equal(value.stopped, 'a review finding is still open');
+  assert.deepEqual(value.open_findings, ['Major src/a.js:3 guessable token']);
+});
+
 test('the result carries what the session acts on, in the shape the staged advice reads', async () => {
   const { value } = await run(ARGS, answers());
   for (const key of ['status', 'stopped', 'review_tree', 'reviews_missing', 'reviews', 'needs_decision', 'open_findings', 'milestones', 'not_started', 'deferred', 'uncovered_lines', 'checks']) assert.ok(key in value, key);

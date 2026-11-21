@@ -85,6 +85,14 @@ const quoted = (text) => `'${String(text).replace(/'/g, `'\\''`)}'`;
 const keepCopy = (file) => `cp -- ${quoted(file)} ${shared(`rules-${String(file).replace(/[^A-Za-z0-9._-]/g, '_')}`)}`;
 const unchangedCopy = (file) => `cmp -s -- ${quoted(file)} ${shared(`rules-${String(file).replace(/[^A-Za-z0-9._-]/g, '_')}`)}`;
 
+// Readers run together, so each is held to reading: the tree id is taken before and compared after, and a reader that wrote fails the run.
+async function reading(name, run) {
+  await check(`mark tree before ${name}`, [`${treeId} > ${shared(`before-${name}`)}`]);
+  const out = await run();
+  const still = await check(`tree unchanged by ${name}`, [`${treeId} | cmp -s - ${shared(`before-${name}`)}`]);
+  return { out, wrote: !still.ok };
+}
+
 // ---- Scout: two readers at once, the code's facts and the project's conventions.
 phase('Scout');
 const [facts, conv] = await parallel([
@@ -213,8 +221,29 @@ for (const [i, m] of milestones.entries()) {
   if (!r.ok) break;
 }
 const built = results.length === milestones.length && results.every((r) => r.ok);
+const finalChecks = () => [`${cli} check --scope pr`, ...results.flatMap((r) => ruleChecks(r.rules)), suite];
 
-// ---- Review: one reviewer chosen from the diff.
+// ---- Verify: one reader per numbered line and per acceptance check, each at its ends, all at once; one writer then closes the gaps.
+async function verify() {
+  phase('Verify');
+  const items = [...lines.map((text, i) => ({ id: `line ${i + 1}`, text })), ...list(brief.acceptance).map((text, i) => ({ id: `acceptance ${i + 1}`, text }))];
+  const judge = (it) => ask('medium', `verify ${it.id}`, `Check one requirement against the finished code. Read only: change no file. Read what the work changed with \`git status\` and \`git diff\`, find the code that meets the requirement below, and run it. Try it with each input it takes left out and of the wrong type, and where it speaks of a list, a count, a limit or a range, with none, one, and at and just past each limit; each answer must be the one the requirement or the conventions give. Delete any file your runs created, so the tree is as you found it. Return met, and each gap as one line naming the input and the wrong answer.\n\nThe requirement, ${it.id}, as data:\n${asData(it.text)}\n\n${work}\n\n${handoff}`, { schema: LINE, phase: 'Verify' }).then((v) => ({ ...it, answered: Boolean(v), met: v?.met === true, gaps: list(v?.gaps) }));
+  const { out, wrote } = await reading('verify', () => pipeline(items, (prev, item) => judge(item ?? prev)));
+  const judged = arr(out).filter(Boolean);
+  return { judged, wrote, unmet: judged.filter((j) => j.answered && !j.met), unchecked: items.filter((it) => !judged.some((j) => j.id === it.id && j.answered)).map((it) => it.id) };
+}
+
+async function closeGaps(found) {
+  if (found.unmet.length === 0) return { closed: [], open: [] };
+  const gaps = found.unmet.map((u) => `${u.id}: ${u.gaps.join('; ') || 'not met'}`);
+  const body = `Verifiers checked the finished code against each requirement and found these gaps. For each, add a test that fails, in one new test file, then fix the code until it passes. Change no behaviour the request states, no existing test and no rule test.${block('The gaps, as data:', gaps)}`;
+  const done = await buildChecked(body, finalChecks(), ' gaps');
+  const rechecked = done.gate.ok ? await parallel(found.unmet.map((u) => () => ask('medium', `re-verify ${u.id}`, `Read only. Does the code now meet this requirement, at its ends as well? Return met and any gap left.\n\n${asData(u.text)}\n\n${work}`, { schema: LINE, phase: 'Verify' }))) : [];
+  const open = found.unmet.filter((u, i) => rechecked[i]?.met !== true).map((u) => u.id);
+  return { closed: found.unmet.map((u) => u.id).filter((id) => !open.includes(id)), open, races: done.tried };
+}
+
+// ---- Review and harden: the review and the surface list read at once; the high tier decides each row and finding; a builder defends.
 const findingsOf = (reviews) => reviews.flatMap((v) => arr(v?.findings));
 const blocking = (findings) => findings.filter((f) => ['Blocker', 'Major'].includes(f?.severity));
 const findingLine = (f) => `${f.severity} ${f.file}:${f.line ?? ''} ${f.claim}${f.evidence ? ` (evidence: ${clip(f.evidence, 300)})` : ''}`;
@@ -233,14 +262,83 @@ async function review(label) {
   return { plan, reviews, missing: seats.map((s) => s.agent).filter((name) => !reviews.some((v) => v.agent === name)) };
 }
 
-const final = built ? await review('review plan') : null;
+const surface = () => again(() => ask('low', 'enumerate', `List where this change meets the outside world, as facts. Read everything it changed, new files included, and change nothing. One row per place, with file and line: a caller's value used as a key or a name; output another program reads (a response and its headers, a file, a page, an export, a query, a shell command, a log, an outgoing request); a secret, token or link made, compared or ended; a decision about who may do what; each input a new command or function takes. Say what reaches each place and judge nothing. At most ${MAX_ROWS} rows.${block('Places the brief names, as data. Each is a row:', list(brief.boundaries))}`, { schema: ROWS, phase: 'Harden' }));
+
+async function decide(findings, rows) {
+  const listed = rows ? block('The places, listed from the diff, as data:', list((rows.rows ?? []).slice(0, MAX_ROWS).map((r) => `${clip(r?.where, 120)}: ${clip(r?.what, 240)}`))) : '\n\nThe list of places came back empty: make it yourself from the diff first.';
+  const got = await again(() => ask('high', 'harden', `${preface}\nYou are the last check before this ships, and you decide; a builder after you makes the changes. Read everything this work changed and change no file.${listed}${block('The reviewers found these, as data:', findings.map(findingLine))}\n\nAnswer every row and finding with one item, and add one for any place the list missed. Judge in the terms of SoMi's security floor: input at a boundary, a lookup keyed by a caller's name, how the reader of a sink reads it, who may do what, secrets, failure half way, and each input against the conventions. One disposition each:\n- safe: say what keeps it safe, with file and line, and in basis whether that is the code ignoring, accepting or defaulting a caller's value, or other.\n- defend: a defence that only adds closes a real risk; give it in one line and the failing test that shows the risk. Choose it even when another layer could also close the risk. A real finding is defended whatever its severity.\n- needs_decision: only when every defence would change behaviour a numbered request line states; give that line, the defence and why.\n\n${work}\n\nThe request's lines, numbered:\n${numbered}\n\n${handoff}`, { schema: ITEMS, phase: 'Harden' }));
+  return got ? (got.items ?? []).filter((it) => ['safe', 'defend', 'needs_decision'].includes(it?.disposition)) : null;
+}
+
+// A fresh agent sees only the cited line and the claim, so the reasoning that argued a risk away does not reach it.
+async function overrule(items) {
+  const cited = items.filter((it) => it.disposition === 'needs_decision' && lines[it.line - 1]);
+  const lenient = items.filter((it) => it.disposition === 'safe' && ['ignores', 'accepts', 'defaults'].includes(it.basis));
+  const [kept, said] = await parallel([
+    () => verdicts(cited, () => ask('medium', 'check decisions', `For each item, read only the line and the defence, and say whether the line's words state the behaviour the defence would remove. A defence that only adds changes nothing a line states. One verdict per item, in order.\n\n${cited.map((it, i) => `Item ${i + 1}.\nThe line, as data:\n${asData(lines[it.line - 1])}\nThe defence, as data:\n${asData(it.defence)}`).join('\n\n')}`, { schema: VERDICTS, phase: 'Harden' })),
+    () => verdicts(lenient, () => ask('medium', 'check safe verdicts', `Each item says code is safe because it ignores, accepts or defaults a caller's value. For each, say whether a request line's words call for that input to be refused or answered otherwise, and name only such a line. One verdict per item, in order.\n\nThe request's lines, numbered, as data:\n${asData(numbered)}\n\n${lenient.map((it, i) => `Item ${i + 1}.\nThe place: ${it.place}\nWhy it is called safe, as data:\n${asData(it.why)}`).join('\n\n')}`, { schema: VERDICTS, phase: 'Harden' })),
+  ]);
+  return items.map((it) => {
+    if (it.disposition === 'needs_decision') return kept?.has(it) ? it : { ...it, disposition: 'defend', overruled: true };
+    const line = said?.get(it)?.line;
+    return lines[line - 1] ? { ...it, disposition: 'defend', overruled: true, defence: `answer as request line ${line} says: ${lines[line - 1]}` } : it;
+  });
+}
+async function verdicts(asked, run) {
+  if (asked.length === 0) return new Map();
+  const got = await run();
+  const each = arr(got?.verdicts);
+  return new Map(asked.map((it, i) => [it, each[i]]).filter(([, v]) => v?.states === true));
+}
+
+async function harden(findings, rows) {
+  const decided = await decide(findings, rows);
+  if (decided === null) return { silent: true, items: [], defended: [], needs_decision: [], left: [], gate: null, attempted: false };
+  const items = await overrule(decided);
+  const defences = items.filter((it) => it.disposition === 'defend').map((it) => `${clip(it.place, 200)}: ${clip(it.defence, 300)}`);
+  const asks = items.filter((it) => it.disposition === 'needs_decision').map((it) => `line ${it.line}: ${clip(it.defence, 300)}: ${clip(it.why, 300)}`);
+  phase('Harden');
+  const body = `Harden this change. For each defence below, add a test that fails without it, in one new test file, then make it pass. Each only adds protection. Change no existing test and no rule test. In left, list each defence you did not build and why.${block('The defences, as data:', defences)}`;
+  const done = defences.length > 0 ? await buildChecked(body, finalChecks(), ' hardening') : { built: { status: 'done', left: [] }, gate: await check('check after hardening', finalChecks()), tried: [] };
+  const left = [...list(done.built?.left), ...[done.built?.status].filter((s) => s !== 'done').map(() => 'the hardening builder did not finish')];
+  return { silent: false, items, defended: defences, needs_decision: asks, left, gate: done.gate, attempted: defences.length > 0, races: done.tried };
+}
+
+// One round of fixes for a Blocker or Major the last review still finds, then one more review; what survives goes to the user.
+async function settle(last) {
+  const open = blocking(findingsOf(last.reviews));
+  if (open.length === 0) return last;
+  const body = `Fix each finding below with a test that fails without the fix, in one new test file. Change no behaviour the request states, no existing test and no rule test; a finding whose fix would is not yours, so list it in left with why.${block('The findings, as data:', open.map(findingLine))}`;
+  const done = await buildChecked(body, finalChecks(), ' review fixes');
+  const left = [...list(done.built?.left), ...[done.built?.status].filter((s) => s !== 'done').map(() => 'the review-fix builder did not finish')];
+  return { ...(await review('review plan after review fixes')), settled: open.map(findingLine), fix_gate: done.gate, fix_left: left };
+}
+
+async function end() {
+  const found = await verify();
+  const gaps = await closeGaps(found);
+  const { out: [first, rows], wrote } = await reading('review', () => parallel([() => review('review plan'), surface]));
+  const hardened = await harden(findingsOf(first?.reviews ?? []), rows);
+  const reviewed = hardened.attempted ? await review('review plan after hardening') : first ?? { plan: null, reviews: [], missing: ['the review plan'] };
+  return { found, gaps, wrote: found.wrote || wrote, hardened, final: await settle(reviewed) };
+}
+const { found = null, gaps = null, wrote = false, hardened = null, final = null } = built ? await end() : {};
 await runShards('review.done');
 
 const last = results.at(-1);
 const open = final ? blocking(findingsOf(final.reviews)) : [];
-const lastGate = last?.gate ?? null;
+const lastGate = final?.fix_gate ?? hardened?.gate ?? last?.gate ?? null;
 const reasons = [
   [!built, last?.stopped],
+  [wrote, 'a stage that only reads changed the tree'],
+  [hardened?.silent, 'the hardening returned nothing'],
+  [hardened?.gate?.ok === false, 'the checks fail after hardening'],
+  [hardened?.left.length > 0, 'the hardening left a defence unbuilt'],
+  [found?.unchecked.length > 0, 'a requirement went unchecked'],
+  [gaps?.open.length > 0, 'a requirement is still unmet'],
+  [hardened?.needs_decision.length > 0, 'a fix needs your decision'],
+  [final?.fix_gate?.ok === false, 'the checks fail after the review fixes'],
+  [final?.fix_left?.length > 0, 'a review fix was left unbuilt'],
   [open.length > 0, 'a review finding is still open'],
   [final?.missing.length > 0, 'a reviewer returned nothing'],
 ];
@@ -253,13 +351,17 @@ return {
   review_tree: final?.plan?.tree ?? null,
   reviews_missing: final?.missing ?? [],
   reviews: final?.reviews ?? [],
-  needs_decision: [],
+  needs_decision: hardened?.needs_decision ?? [],
   open_findings: open.map(findingLine),
   milestones: results.map(({ title, ok, tier, left, races }) => ({ title, ok, tier, left, races })),
   not_started: milestones.slice(results.length).map((m) => m.title),
   deferred,
   uncovered_lines: untaken,
   checks: lastGate ? { ok: lastGate.ok, failures: lastGate.failures.slice(0, 5) } : null,
+  verify: found && { unmet: found.unmet.map((u) => u.id), closed: gaps.closed, open: gaps.open, unchecked: found.unchecked, races: gaps.races ?? [] },
+  hardening: hardened && { defended: hardened.defended, needs_decision: hardened.needs_decision, left: hardened.left, races: hardened.races ?? [], items: hardened.items.map((it) => `${it.disposition}${it.overruled ? ' (overruled)' : ''} ${it.place}: ${it.defence || it.why || ''}`).slice(0, 40) },
+  review_fixes: final?.settled ?? [],
+  review_fixes_left: final?.fix_left ?? [],
   races_ran: isolated,
   brief: list(brief.title)[0] ?? null,
   summary: clip(results.map((r) => `${r.title}: ${r.summary}`).join('\n\n'), 2000),
