@@ -76,6 +76,26 @@ test('the scout is two readers at once on the low tier, and the brief\'s facts r
   assert.equal(value.status, 'done');
 });
 
+test('a passing build does not race, and the rules are written as tests on medium first and guarded by a copy', async () => {
+  const { calls } = await run(ARGS, answers());
+  assert.equal(calls.find((c) => c.label === 'rules').model, 'everyday');
+  assert.ok(labels(calls).indexOf('rules') < labels(calls).indexOf('build on medium'));
+  assert.match(calls.find((c) => c.label === 'keep rules').prompt, /^1\. cp -- 'test\/rules\.test\.mjs' "\$\(git rev-parse --git-common-dir\)\/somi-swarm-rules-test_rules\.test\.mjs"$/m);
+  assert.match(calls.find((c) => c.label === 'check').prompt, /cmp -s -- 'test\/rules\.test\.mjs'/);
+  assert.ok(!labels(calls).some((l) => /^race/.test(l)));
+});
+
+test('a blocked build stops without racing, and a rule test it names wrong goes back once to its author', async () => {
+  const blocked = await run(ARGS, answers({ built: () => ({ status: 'blocked', summary: 'needs a decision', left: [] }) }));
+  assert.ok(!labels(blocked.calls).some((l) => /^race|^repair/.test(l)));
+  assert.equal(blocked.value.stopped, 'All is blocked');
+  let builds = 0;
+  const wrong = () => (builds++ === 0 ? { status: 'blocked', summary: 's', left: [], rules_wrong: ['test/rules.test.mjs: pins an id form the request never gives'] } : DONE);
+  const repaired = await run(ARGS, answers({ built: wrong }));
+  assert.equal(labels(repaired.calls).filter((l) => l === 'rules repair').length, 1);
+  assert.equal(repaired.value.status, 'done');
+});
+
 test('the result carries what the session acts on, in the shape the staged advice reads', async () => {
   const { value } = await run(ARGS, answers());
   for (const key of ['status', 'stopped', 'review_tree', 'reviews_missing', 'reviews', 'needs_decision', 'open_findings', 'milestones', 'not_started', 'deferred', 'uncovered_lines', 'checks']) assert.ok(key in value, key);

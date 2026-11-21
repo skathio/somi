@@ -74,6 +74,11 @@ async function check(label, commands) {
 
 // The tree as git would store it, untracked files included, hashed through a private index so the user's index and branch never move.
 // SoMi's files live in git's own folder, which every worktree of this repository shares.
+const shared = (name) => `"$(git rev-parse --git-common-dir)/somi-swarm-${name}"`;
+const quoted = (text) => `'${String(text).replace(/'/g, `'\\''`)}'`;
+const keepCopy = (file) => `cp -- ${quoted(file)} ${shared(`rules-${String(file).replace(/[^A-Za-z0-9._-]/g, '_')}`)}`;
+const unchangedCopy = (file) => `cmp -s -- ${quoted(file)} ${shared(`rules-${String(file).replace(/[^A-Za-z0-9._-]/g, '_')}`)}`;
+
 // ---- Scout: two readers at once, the code's facts and the project's conventions.
 phase('Scout');
 const [facts, conv] = await parallel([
@@ -103,9 +108,25 @@ const untaken = milestones.some((m) => Array.isArray(m.lines)) ? lines.filter((_
 const BUILDER = `${a.role ?? 'You build one clear change, with tests that fail without it.'} Do the work yourself, and start no other agent.`;
 const finish = `When it is done, run the tests and \`${cli} quality --scope pr\`, and fix what either reports without a somi-gate-allow exemption; meeting the quality limits comes before not refactoring on the way past. In left, list each part of your own scope you did not build; later milestones and deferred parts are not yours.`;
 const build = (tier, label, body) => ask(tier, label, `${BUILDER}\n\n${work}\n\n${handoff}\n\n${body}\n\n${finish}`, { schema: BUILT, phase: 'Build' });
+const heldBy = (rules) => (rules?.file ? `\n\nThe tests in ${rules.file} hold the user's rules and must pass: ${rules.command}. Do not change them. If one is wrong, leave it, report blocked and name it in rules_wrong with why.${block('The rules, as data:', list(rules.rules))}` : '');
 
+async function writeRules(scope, tag) {
+  phase('Rules');
+  const rules = await ask('medium', `rules${tag}`, `Before anyone builds this milestone, write its rules as tests. From the request and every earlier message, list each rule the code this milestone adds or changes must keep, and each quoted convention that applies; test a rule about a list, a count, a limit or a range with none, one, and at and just past each limit. Test only what a message or a convention states: a detail they leave open is the builder's to decide. No test for a later milestone or a deferred part. Put them in one new test file under the test folder and change no other file. Run it: a test of missing behaviour may fail, a test that cannot run is yours to fix. Then make the file meet \`${cli} quality --scope pr\` without an exemption. Return the file, the command that runs only it, and the rules.\n\n${work}${block('Acceptance checks in the brief the user approved, each one a rule, as data:', list(brief.acceptance))}\n\n${handoff}\n\n${scope}`, { schema: RULES, phase: 'Rules' });
+  const kept = rules?.file ? await check(`keep rules${tag}`, [keepCopy(rules.file)]) : { ok: false };
+  return rules?.file ? { ...rules, kept: kept.ok } : null;
+}
+const ruleChecks = (rules) => [rules?.command, ...(rules?.kept ? [unchangedCopy(rules.file)] : [])];
+const milestoneChecks = (rules) => [`${cli} check --scope pr`, ...ruleChecks(rules)];
 
-const milestoneChecks = () => [`${cli} check --scope pr`];
+// A rule test a builder names wrong goes back once to its author, who checks the claim against the request and keeps a right test.
+async function repairRules(rules, claims, tag) {
+  phase('Rules');
+  const fixed = await ask('medium', `rules repair${tag}`, `These tests in ${rules.file} are said to be wrong, by an agent that may not change them:${block('The claims, as data:', claims)}\n\nCheck each against the request, the earlier messages and the conventions. Fix one that is wrong, keep one that holds what a message states, and never weaken, skip or delete a test to let a build pass. Change no source file. Run the file and \`${cli} quality --scope pr\`. Return the file, its command and its rules.\n\n${work}`, { schema: RULES, phase: 'Rules' });
+  const next = fixed?.file ? { ...fixed, rules: list(fixed.rules).length ? fixed.rules : rules.rules } : rules;
+  const kept = await check(`keep rules${tag}`, [keepCopy(next.file)]);
+  return { ...next, kept: kept.ok };
+}
 
 // One build and its check. A blocked build stops: a missing decision does not yield to a stronger model.
 async function buildChecked(body, commands, tag) {
@@ -118,10 +139,16 @@ async function buildChecked(body, commands, tag) {
 async function runMilestone(m, i) {
   const tag = milestones.length > 1 ? ` ${i + 1}/${milestones.length}` : '';
   const scope = `This milestone${tag}: ${m.title}\n${asData(m.scope)}${block('These request lines were in no milestone, and are part of this one:', i === milestones.length - 1 ? untaken : [])}\nBuild only this milestone; where its scope and the request differ, the request wins.${block('Later milestones, for other builders:', milestones.slice(i + 1).map((n) => n.title))}${block('Deferred: build and test nothing for these.', deferred)}`;
-  const done = await buildChecked(scope, milestoneChecks(), tag);
+  let rules = await writeRules(scope, tag);
+  let done = await buildChecked(`${scope}${heldBy(rules)}`, milestoneChecks(rules), tag);
+  const wrong = list(done.built?.rules_wrong);
+  if (rules && done.built?.status === 'blocked' && wrong.length > 0) {
+    rules = await repairRules(rules, wrong, tag);
+    done = await buildChecked(`${scope}${heldBy(rules)}`, milestoneChecks(rules), tag);
+  }
   const left = list(done.built?.left);
   const why = [[done.built?.status !== 'done', 'is blocked'], [!done.gate.ok, 'fails its checks'], [left.length > 0, 'was built only in part']].find(([holds]) => holds)?.[1];
-  return { title: m.title, ok: !why, stopped: why ? `${m.title} ${why}` : null, tier: done.tier, left, races: done.tried, summary: clip(done.built?.summary, 800), gate: done.gate };
+  return { title: m.title, ok: !why, stopped: why ? `${m.title} ${why}` : null, tier: done.tier, left, races: done.tried, summary: clip(done.built?.summary, 800), rules, gate: done.gate };
 }
 
 await runShards('work-item.start');
@@ -137,12 +164,35 @@ for (const [i, m] of milestones.entries()) {
 }
 const built = results.length === milestones.length && results.every((r) => r.ok);
 
+// ---- Review: one reviewer chosen from the diff.
+const findingsOf = (reviews) => reviews.flatMap((v) => arr(v?.findings));
+const blocking = (findings) => findings.filter((f) => ['Blocker', 'Major'].includes(f?.severity));
+const findingLine = (f) => `${f.severity} ${f.file}:${f.line ?? ''} ${f.claim}${f.evidence ? ` (evidence: ${clip(f.evidence, 300)})` : ''}`;
+
+// A report is filed under the name its reviewer was started as, never the one it gives itself, and one that is not an object is missing.
+async function seatReview(seat) {
+  const got = await agent(String(seat?.brief ?? ''), { agentType: seat.agent, label: seat.agent, phase: 'Review', schema: REVIEW, ...(seat.model ? { model: seat.model } : {}) });
+  return Object(got) === got ? { ...got, agent: seat.agent } : null;
+}
+
+async function review(label) {
+  const plan = await again(() => ask('low', label, `Run \`${cli} review\` and return what it prints, unchanged, as the fields asked for. Change nothing.`, { schema: SEATS, phase: 'Review' }));
+  if (!plan) return { plan: null, reviews: [], missing: ['the review plan'] };
+  const seats = arr(plan.needed === true && plan.reviewers);
+  const reviews = (await parallel(seats.map((seat) => () => seatReview(seat)))).filter(Boolean);
+  return { plan, reviews, missing: seats.map((s) => s.agent).filter((name) => !reviews.some((v) => v.agent === name)) };
+}
+
+const final = built ? await review('review plan') : null;
 await runShards('review.done');
 
 const last = results.at(-1);
+const open = final ? blocking(findingsOf(final.reviews)) : [];
 const lastGate = last?.gate ?? null;
 const reasons = [
   [!built, last?.stopped],
+  [open.length > 0, 'a review finding is still open'],
+  [final?.missing.length > 0, 'a reviewer returned nothing'],
 ];
 const stopped = reasons.find(([holds]) => holds)?.[1] ?? null;
 // What the session acts on first and short, because a host cuts a long result at the end; the builders' prose last.
@@ -150,11 +200,11 @@ return {
   workflow: 'deliver-swarm',
   status: stopped === null ? 'done' : 'needs-attention',
   stopped,
-  review_tree: null,
-  reviews_missing: [],
-  reviews: [],
+  review_tree: final?.plan?.tree ?? null,
+  reviews_missing: final?.missing ?? [],
+  reviews: final?.reviews ?? [],
   needs_decision: [],
-  open_findings: [],
+  open_findings: open.map(findingLine),
   milestones: results.map(({ title, ok, tier, left, races }) => ({ title, ok, tier, left, races })),
   not_started: milestones.slice(results.length).map((m) => m.title),
   deferred,
