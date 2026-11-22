@@ -5,7 +5,7 @@ import { isBlocking } from './policy.mjs';
 
 const plain = (s) => String(s ?? '').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu, ' ').trim();
 const place = (f) => (f.line ? `${plain(f.file)}:${f.line}` : plain(f.file));
-const finding = (f) => `- ${plain(f.severity)} ${place(f)}: ${plain(f.claim)}`;
+const finding = (f) => `- ${plain(f.severity)} ${place(f)}: ${plain(f.claim)}${f.requested ? ` (the user's decision: they asked "${plain(f.required_by)}")` : ''}`;
 
 function loggedFindings(reviews, migrated = []) {
   const seen = new Set();

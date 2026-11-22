@@ -59,7 +59,7 @@ const MAX_ROWS = 40;
 // A check reports each command's exit code and the code decides: a cheap model's reading of the output is not what passes a build.
 const GATE = { type: 'object', required: ['ran'], properties: { ran: { type: 'array', items: { type: 'object', required: ['exit'], properties: { exit: { type: 'integer' }, output: { type: 'string' } } } } } };
 // somi_review takes a reviewer's report as an object. Asked without a schema, a host returns the reviewer's text instead.
-const FINDING = { type: 'object', required: ['severity', 'file', 'claim'], properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Blocker', 'Major', 'Minor', 'Nit'] }, boundary: { type: 'boolean' }, file: { type: 'string' }, line: { type: 'integer' }, claim: { type: 'string' }, evidence: { type: 'string' } } };
+const FINDING = { type: 'object', required: ['severity', 'file', 'claim'], properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Blocker', 'Major', 'Minor', 'Nit'] }, boundary: { type: 'boolean' }, file: { type: 'string' }, line: { type: 'integer' }, claim: { type: 'string' }, evidence: { type: 'string' }, required_by: { type: 'string' } } };
 const REVIEW = { type: 'object', required: ['verdict', 'findings'], properties: { verdict: { type: 'string', enum: ['approve', 'approve-with-comments', 'request-changes'] }, tests_run: { type: 'array', items: { type: 'string' } }, findings: { type: 'array', items: FINDING } } };
 const PLAN = { type: 'object', required: ['needed'], properties: { needed: { type: 'boolean' }, tree: { type: 'string' }, reviewers: { type: 'array', items: { type: 'object', properties: { agent: { type: 'string' }, model: { type: 'string' }, brief: { type: 'string' } } } } } };
 
@@ -161,7 +161,15 @@ async function runMilestone(m, tag, scope) {
 }
 
 const findingsOf = (reviews) => reviews.flatMap((v) => asList(v.findings));
-const blocking = (findings) => findings.filter((f) => f?.severity === 'Blocker' || f?.severity === 'Major');
+// A Major that quotes the user's own words, 16 characters or more, is behaviour they asked for: a fix round would undo it, so it goes to
+// them as a decision. somi_review checks the same words when the session records the review.
+const plainWords = (t) => String(t ?? '').toLowerCase().replace(/^\s*>\s?/gm, '').replace(/[`*_"']/g, '').replace(/\s+/g, ' ').trim();
+const askedWords = [a.request, a.said].map(plainWords);
+const requested = (f) => {
+  const quote = plainWords(f?.required_by);
+  return [f?.severity === 'Major', quote.length >= 16, askedWords.some((w) => w.includes(quote))].every(Boolean);
+};
+const blocking = (findings) => findings.filter((f) => ['Blocker', 'Major'].includes(f?.severity) && !requested(f));
 const findingLine = (f) => `${f.severity} ${f.file}:${f.line ?? ''} ${f.claim}${f.evidence ? ` (evidence: ${cap(f.evidence, 300)})` : ''}`;
 
 // The staged workflow is the expensive path, and it has to buy something plain SoMi does not. Its stages found the deciding gap on every
@@ -416,7 +424,8 @@ const { traced = null, rebuilt = null, hardened = null, final = null } = allBuil
 await runShards('review.done');
 
 const last = results[results.length - 1];
-const open = final ? blocking(findingsOf(final.reviews)) : [];
+const reviewed = final ? findingsOf(final.reviews) : [];
+const open = blocking(reviewed);
 const missing = final?.missing ?? [];
 const needsDecision = hardened?.needs_decision ?? [];
 const lastGate = final?.fix_gate ?? hardened?.gate ?? last?.gate;
@@ -430,6 +439,7 @@ return {
   reviews_missing: missing,
   reviews: final?.reviews ?? [],
   needs_decision: needsDecision,
+  review_decisions: reviewed.filter(requested).map((f) => `${findingLine(f)} (the user asked: ${cap(f.required_by, 300)})`),
   open_findings: open.map(findingLine),
   milestones: results.map(({ title, ok, tier, left }) => ({ title, ok, tier, left })),
   not_started: milestones.slice(results.length).map((m) => m.title),

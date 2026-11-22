@@ -465,6 +465,24 @@ test('a Blocker or Major still open after hardening means the work is not done; 
   assert.equal((await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ needed: true, reviewer: minor }))).value.status, 'done', 'a Minor left after the fixing pass does not hold the work back');
 });
 
+test('a Major that quotes the request goes back as a decision, not a fix round; a quote the request does not hold still blocks', async () => {
+  // On a benchmark run a reviewer graded "only the actor root may run tenants.*" as a hole, and the run stopped on behaviour the ticket required.
+  const request = 'Add workspaces.\nOnly the actor root may run a tenants.* command; anyone else gets forbidden.';
+  const quoting = (required_by) => ({ verdict: 'request-changes', findings: [{ severity: 'Major', boundary: true, file: 'src/a.js', line: 3, claim: 'root is trusted by name', evidence: 'actor root', required_by }] });
+  const asked = await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: quoting('only the actor `root` may run a tenants.* command') }));
+  assert.equal(asked.value.status, 'done');
+  assert.deepEqual(asked.value.open_findings, []);
+  assert.deepEqual(asked.value.review_decisions, ['Major src/a.js:3 root is trusted by name (evidence: actor root) (the user asked: only the actor `root` may run a tenants.* command)']);
+  assert.ok(!labels(asked.calls).includes('apply review fixes'), 'a fix would undo what the user asked for');
+  for (const quote of [undefined, 'any caller may be root', 'actor root may']) {
+    const held = await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: quoting(quote) }));
+    assert.equal(held.value.stopped, 'a review finding is still open', String(quote));
+    assert.deepEqual(held.value.review_decisions, [], String(quote));
+  }
+  const blocker = { verdict: 'request-changes', findings: [{ severity: 'Blocker', file: 'src/a.js', line: 3, claim: 'root is trusted by name', required_by: 'Only the actor root may run a tenants.* command' }] };
+  assert.equal((await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: blocker }))).value.stopped, 'a review finding is still open', 'a Blocker never moves');
+});
+
 test('an enumeration, a hardening or a review plan that returns nothing is asked once more, and then named', async () => {
   let enumerations = 0;
   const empty = answers();

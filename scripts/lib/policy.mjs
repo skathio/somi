@@ -52,6 +52,7 @@ function normalizeFinding(raw, agent, i) {
     claim,
     evidence: evidence ?? null,
   };
+  if (isText(raw.required_by, 400)) finding.required_by = raw.required_by;
   finding.fingerprint = isText(raw.fingerprint, 64) && /^[\w.:-]+$/.test(raw.fingerprint) ? raw.fingerprint : deriveFingerprint(finding);
   if (REMOVES_CHECK.test(`${claim} ${evidence ?? ''}`)) finding.needs_verification = true;
   return finding;
@@ -116,7 +117,21 @@ export function parseReviews(reviews, dispatched) {
 
 // A Major re-loops only when it is confirmed on a real boundary: the reviewer cites file, line and an exploit or failing input.
 export const isConfirmedBoundaryMajor = (f) => f.severity === 'Major' && f.boundary && f.line !== null && f.evidence !== null;
-export const isBlocking = (f) => f.severity === 'Blocker' || isConfirmedBoundaryMajor(f);
+export const isBlocking = (f) => f.severity === 'Blocker' || (isConfirmedBoundaryMajor(f) && f.requested !== true);
+
+// A reviewer that never saw the request graded behaviour the user asked for as a hole, and the run stopped on it. Such a Major is the
+// user's decision, not another pass, but only when the reviewer quotes the request and SoMi finds those words in what the user typed:
+// a reviewer's say-so, or text in the diff, cannot move a finding. A Blocker never moves, and a quote too short to mean anything does not
+// count. `requested` is set here and nowhere else, so a reviewer sending it is ignored.
+export const MIN_QUOTE = 16;
+const plain = (text) => String(text).toLowerCase().replace(/^\s*>\s?/gm, '').replace(/[`*_"']/g, '').replace(/\s+/g, ' ').trim();
+export function markRequested(findings, words) {
+  const said = words.map(plain);
+  return findings.map((f) => {
+    const quote = f.severity === 'Major' && typeof f.required_by === 'string' ? plain(f.required_by) : '';
+    return quote.length >= MIN_QUOTE && said.some((s) => s.includes(quote)) ? { ...f, requested: true } : f;
+  });
+}
 
 export function decideAfterReview({ findings, pass, extraPasses = 0, previousBlocking = [] }) {
   const blocking = findings.filter(isBlocking);

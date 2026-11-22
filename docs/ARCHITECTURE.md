@@ -73,6 +73,7 @@ Nothing here steers the work. These files only remember what happened, so a new 
 | Reviewers | One per change: a code reviewer on medium, or on a boundary a security reviewer on the high tier that also reviews the rest of the change. The user's own config may put the security reviewer on medium with `review.security_tier`, and a security review the user asks for runs on high regardless. A project's config cannot lower these |
 | What blocks | A Blocker, or a Major with a boundary flag, a line and evidence |
 | What never blocks | Minor, Nit, unconfirmed Major, approve-with-comments |
+| What goes to the user | A confirmed Major on behaviour the user asked for: the reviewer quotes the user's words in `required_by`, and SoMi finds that quote, 16 characters or more, in the messages a hook saved in this session. It is returned as a decision, `/somi-deliver` gives it no fix round,, does not block, and does not hold the pull request. A Blocker never moves, and a reviewer cannot mark a finding requested itself. The reviewer reads those messages from a state file its brief names |
 | Passes | Two. After that, or when the same blocking fingerprint comes back, the answer tells the agent to take it to the user |
 | Relay check | A finding that suggests removing a check, flag, validation or test is marked `needs_verification` |
 
