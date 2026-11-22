@@ -249,3 +249,26 @@ test('what the finishing build still leaves stops the run, and a build that left
   const clean = await run(ARGS, answers());
   assert.ok(!labels(clean.calls).some((l) => l.startsWith('finish on')));
 });
+
+test('applying and taking back a racer\'s patch say they change the tree on purpose, and each proves by exit code that it happened', async () => {
+  // On a live run the cheap model, told to change nothing, ran a dry run in place of `git apply`: the patch never landed, its check
+  // failed, the take-back then failed too, and the race stopped as stuck with four milestones unbuilt.
+  let checks = 0;
+  const base = answers({ checks: (label) => !(label === 'check' && checks++ === 0) && label !== 'check race 1' });
+  const dryRun = (prompt, opts) => (opts.label === 'try race 1' ? { ran: [{ exit: 0, output: 'dry run only' }, { exit: 1, output: 'patch does not apply' }] } : base(prompt, opts));
+  const { value, calls } = await run(ARGS, dryRun);
+  const patch = '"$(git rev-parse --git-common-dir)/somi-swarm-race-0.patch"';
+  const tryOne = calls.find((c) => c.label === 'try race 1').prompt;
+  assert.ok(tryOne.includes(`1. git apply --binary ${patch}\n2. git apply -R --check --binary ${patch}`));
+  assert.match(tryOne, /change the working tree on purpose[\s\S]*never a dry run/);
+  assert.doesNotMatch(tryOne, /Change nothing\./);
+  assert.match(calls.find((c) => c.label === 'check').prompt, /Change nothing\./, 'a plain check still changes nothing');
+  assert.ok(!labels(calls).includes('check race 1'), 'a patch that did not land is not checked');
+  assert.ok(!labels(calls).includes('take back race 1'), 'nor taken back');
+  assert.deepEqual(value.milestones[0].races, ['race 1: failed', 'race 2: passed'], 'the next racer is tried, and the race is not stuck');
+  checks = 0;
+  const back = await run(ARGS, answers({ checks: (label) => !(label === 'check' && checks++ === 0) && label !== 'check race 1' }));
+  const takeBack = back.calls.find((c) => c.label === 'take back race 1').prompt;
+  assert.ok(takeBack.includes(`1. git apply -R --binary ${patch}\n2. git apply --check --binary ${patch}`));
+  assert.match(takeBack, /change the working tree on purpose/);
+});

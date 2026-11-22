@@ -68,10 +68,13 @@ const MAX_MILESTONES = 8;
 const MAX_ROWS = 40;
 const MAX_CONVENTIONS = 8;
 
-// Commands decide, by exit code: a cheap model's reading of output never passes a build.
-async function check(label, commands) {
+// Commands decide, by exit code: a cheap model's reading of output never passes a build. On a live run the cheap model, told to change
+// nothing, swapped a race's \`git apply\` for a dry run, so a step that changes the tree on purpose says so.
+const NO_CHANGE = 'Change nothing.';
+const ON_PURPOSE = 'These commands change the working tree on purpose, and that is the task: run each exactly as written, never a dry run or a variant in its place, and change nothing else.';
+async function check(label, commands, writes = false) {
   const cmds = commands.filter(Boolean);
-  const got = await ask('low', label, `Run each command below from the repository root, in order, even after one fails, and report one entry per command with its exit code and its last lines of output. Change nothing.\n${cmds.map((c, i) => `${i + 1}. ${c}`).join('\n')}`, { schema: RAN, phase: 'Build' });
+  const got = await ask('low', label, `Run each command below from the repository root, in order, even after one fails, and report one entry per command with its exit code and its last lines of output. ${writes ? ON_PURPOSE : NO_CHANGE}\n${cmds.map((c, i) => `${i + 1}. ${c}`).join('\n')}`, { schema: RAN, phase: 'Build' });
   const exits = arr(got?.ran);
   const failures = cmds.flatMap((c, i) => (exits[i]?.exit === 0 ? [] : [`${c} exited ${exits[i]?.exit ?? 'without a report'}: ${clip(exits[i]?.output, 600)}`]));
   return { ok: exits.length === cmds.length && failures.length === 0, failures };
@@ -176,14 +179,15 @@ async function race(body, failed, commands, tag) {
 }
 
 // One racer's patch in the user's tree: applied, checked by exit code, and taken back out when its checks fail. A patch that cannot be
-// taken back out would have the next one tried on top of it, so it is stuck, and the race stops there.
+// taken back out would have the next one tried on top of it, so it is stuck, and the race stops there. Each step is followed by a
+// command that passes only if it really happened: the patch reverses cleanly once applied, and applies cleanly once taken back.
 async function tryPatch(n, commands, tag) {
   const patch = shared(`race-${n}.patch`);
-  const applied = await check(`try race ${n + 1}${tag}`, [`git apply --binary ${patch}`]);
+  const applied = await check(`try race ${n + 1}${tag}`, [`git apply --binary ${patch}`, `git apply -R --check --binary ${patch}`], true);
   if (!applied.ok) return { outcome: 'failed', gate: applied };
   const passed = await check(`check race ${n + 1}${tag}`, commands);
   if (passed.ok) return { outcome: 'passed', gate: passed };
-  const back = await check(`take back race ${n + 1}${tag}`, [`git apply -R --binary ${patch}`]);
+  const back = await check(`take back race ${n + 1}${tag}`, [`git apply -R --binary ${patch}`, `git apply --check --binary ${patch}`], true);
   return { outcome: back.ok ? 'failed' : 'stuck', gate: passed };
 }
 
