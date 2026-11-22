@@ -59,7 +59,7 @@ const MAX_ROWS = 40;
 // A check reports each command's exit code and the code decides: a cheap model's reading of the output is not what passes a build.
 const GATE = { type: 'object', required: ['ran'], properties: { ran: { type: 'array', items: { type: 'object', required: ['exit'], properties: { exit: { type: 'integer' }, output: { type: 'string' } } } } } };
 // somi_review takes a reviewer's report as an object. Asked without a schema, a host returns the reviewer's text instead.
-const FINDING = { type: 'object', required: ['severity', 'file', 'claim'], properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Blocker', 'Major', 'Minor', 'Nit'] }, boundary: { type: 'boolean' }, file: { type: 'string' }, line: { type: 'integer' }, claim: { type: 'string' }, evidence: { type: 'string' }, required_by: { type: 'string' } } };
+const FINDING = { type: 'object', required: ['severity', 'file', 'claim'], properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Blocker', 'Major', 'Minor', 'Nit'] }, boundary: { type: 'boolean' }, file: { type: 'string' }, line: { type: 'integer' }, claim: { type: 'string' }, evidence: { type: 'string' }, objects_to_requested: { type: 'string' } } };
 const REVIEW = { type: 'object', required: ['verdict', 'findings'], properties: { verdict: { type: 'string', enum: ['approve', 'approve-with-comments', 'request-changes'] }, tests_run: { type: 'array', items: { type: 'string' } }, findings: { type: 'array', items: FINDING } } };
 const PLAN = { type: 'object', required: ['needed'], properties: { needed: { type: 'boolean' }, tree: { type: 'string' }, reviewers: { type: 'array', items: { type: 'object', properties: { agent: { type: 'string' }, model: { type: 'string' }, brief: { type: 'string' } } } } } };
 
@@ -161,13 +161,15 @@ async function runMilestone(m, tag, scope) {
 }
 
 const findingsOf = (reviews) => reviews.flatMap((v) => asList(v.findings));
-// A Major that quotes the user's own words, 16 characters or more, is behaviour they asked for: a fix round would undo it, so it goes to
-// them as a decision. somi_review checks the same words when the session records the review.
+// A Major that quotes the user's own words, 16 characters or more, objects to behaviour they asked for: a fix round would undo it, so it
+// goes to them as a decision. One whose own words say something is missing or unchanged still blocks: reviewers also quoted the request on
+// work not built yet. somi_review applies the same rule when the session records the review.
 const plainWords = (t) => String(t ?? '').toLowerCase().replace(/^\s*>\s?/gm, '').replace(/[`*_"']/g, '').replace(/\s+/g, ' ').trim();
+const SAYS_UNMET = /\b(missing|absent|unimplemented|not (yet )?(implemented|built|added|wired|enforced|checked|validated|documented|handled|applied|done|there)|(has|have|had) no|(does|do|did) not (exist|implement|enforce|check|validate|document|handle|apply|support)|doesn't|don't|lacks?|lacking|unchanged|none of|nowhere|never)\b/i;
 const askedWords = [a.request, a.said].map(plainWords);
 const requested = (f) => {
-  const quote = plainWords(f?.required_by);
-  return [f?.severity === 'Major', quote.length >= 16, askedWords.some((w) => w.includes(quote))].every(Boolean);
+  const quote = plainWords(f?.objects_to_requested);
+  return [f?.severity === 'Major', quote.length >= 16, !SAYS_UNMET.test(`${f?.claim} ${f?.evidence ?? ''}`), askedWords.some((w) => w.includes(quote))].every(Boolean);
 };
 const blocking = (findings) => findings.filter((f) => ['Blocker', 'Major'].includes(f?.severity) && !requested(f));
 const findingLine = (f) => `${f.severity} ${f.file}:${f.line ?? ''} ${f.claim}${f.evidence ? ` (evidence: ${cap(f.evidence, 300)})` : ''}`;
@@ -439,7 +441,7 @@ return {
   reviews_missing: missing,
   reviews: final?.reviews ?? [],
   needs_decision: needsDecision,
-  review_decisions: reviewed.filter(requested).map((f) => `${findingLine(f)} (the user asked: ${cap(f.required_by, 300)})`),
+  review_decisions: reviewed.filter(requested).map((f) => `${findingLine(f)} (the user asked: ${cap(f.objects_to_requested, 300)})`),
   open_findings: open.map(findingLine),
   milestones: results.map(({ title, ok, tier, left }) => ({ title, ok, tier, left })),
   not_started: milestones.slice(results.length).map((m) => m.title),
