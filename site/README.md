@@ -19,10 +19,10 @@ per screen), `T` toggles the theme.
 
 - **Read from the repo at build time** by [`scripts/facts.mjs`](scripts/facts.mjs) into
   `src/generated/facts.json` (not committed): the release list and current version (`CHANGELOG.md`
-  headings), the command, agent and skill counts, the hook registrations (`hooks/hooks.json`), the
+  headings), the command, agent and skill counts, and the hook registrations (`hooks/hooks.json`).
   These update themselves.
 - **Written by hand** in [`src/content/`](src/content/): the roadmap, a line per command and per
-  hook, and the measured results. [`test/content.test.ts`](test/content.test.ts) fails when they
+  hook. The measured results are in [`src/components/Measured.tsx`](src/components/Measured.tsx). [`test/content.test.ts`](test/content.test.ts) fails when they
   disagree with the repo: a command, hook or agent added or removed, or a release missing from the
   roadmap.
 

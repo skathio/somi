@@ -79,7 +79,7 @@ manifest is still valid JSON after the bump.
 Update the overview page in the same change: add the release to
 [`site/src/content/roadmap.json`](../site/src/content/roadmap.json) (a new entry, or the release
 added to an existing entry's `covers`; the last entry is shown as the current release), and
-`site/src/content/measured.ts` when the release recorded a new usage baseline. `npm test` refuses a
+`site/src/components/Measured.tsx` when the release recorded a new usage baseline. `npm test` refuses a
 CHANGELOG release the roadmap does not cover. Counts, the release list and the tier table update
 themselves; see [`site/README.md`](../site/README.md).
 
