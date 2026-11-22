@@ -50,9 +50,11 @@ export function Section({ id, kicker, title, lede, children }: SectionProps) {
   );
 }
 
+// min-w-0: a card is a grid item, and a grid item is at least as wide as its widest line, so a long command in a card's code
+// block widened the page on a phone instead of scrolling inside the block.
 export function Card({ title, children, className = '' }: { title?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-line bg-surface p-5 shadow-sm ${className}`}>
+    <div className={`min-w-0 rounded-xl border border-line bg-surface p-5 shadow-sm ${className}`}>
       {title && <h3 className="mb-2 text-lg font-semibold">{title}</h3>}
       <div className="text-muted">{children}</div>
     </div>
