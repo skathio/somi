@@ -469,24 +469,27 @@ test('a Major that quotes the request goes back as a decision, not a fix round; 
   // On a benchmark run a reviewer graded "only the actor root may run tenants.*" as a hole, and the run stopped on behaviour the ticket required.
   const request = 'Add workspaces.\nOnly the actor root may run a tenants.* command; anyone else gets forbidden.';
   const quoting = (objects_to_requested) => ({ verdict: 'request-changes', findings: [{ severity: 'Major', boundary: true, file: 'src/a.js', line: 3, claim: 'root is trusted by name', evidence: 'actor root', objects_to_requested }] });
-  const asked = await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: quoting('only the actor `root` may run a tenants.* command') }));
+  const asked = await load('deliver-stages').run({ request, said: request, models: MODELS }, answers({ needed: true, reviewer: quoting('only the actor `root` may run a tenants.* command') }));
   assert.equal(asked.value.status, 'done');
   assert.deepEqual(asked.value.open_findings, []);
   assert.deepEqual(asked.value.review_decisions, ['Major src/a.js:3 root is trusted by name (evidence: actor root) (the user asked: only the actor `root` may run a tenants.* command)']);
   assert.ok(!labels(asked.calls).includes('apply review fixes'), 'a fix would undo what the user asked for');
+  // The request alone is the session's wording, or a brief: a quote from it is not the user's words, so it still blocks.
+  const paraphrased = await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: quoting('Only the actor root may run a tenants.* command') }));
+  assert.equal(paraphrased.value.stopped, 'a review finding is still open', 'only what the user typed moves a finding');
   for (const quote of [undefined, 'any caller may be root', 'actor root may']) {
-    const held = await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: quoting(quote) }));
+    const held = await load('deliver-stages').run({ request, said: request, models: MODELS }, answers({ needed: true, reviewer: quoting(quote) }));
     assert.equal(held.value.stopped, 'a review finding is still open', String(quote));
     assert.deepEqual(held.value.review_decisions, [], String(quote));
   }
   // From a benchmark run: the reviewer quoted the line the code had not built yet. That is a fix round, not the user's decision.
   const unbuilt = { verdict: 'request-changes', findings: [{ severity: 'Major', boundary: true, file: 'src/a.js', line: 3, claim: 'tenants.* commands have no root check yet.', evidence: 'tenants.export runs for any actor', objects_to_requested: 'Only the actor root may run a tenants.* command' }] };
-  const fixing = await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: unbuilt }));
+  const fixing = await load('deliver-stages').run({ request, said: request, models: MODELS }, answers({ needed: true, reviewer: unbuilt }));
   assert.equal(labels(fixing.calls).filter((l) => l === 'apply review fixes').length, 1, 'an unmet request gets its fix round');
   assert.equal(fixing.value.stopped, 'a review finding is still open');
   assert.deepEqual(fixing.value.review_decisions, []);
   const blocker = { verdict: 'request-changes', findings: [{ severity: 'Blocker', file: 'src/a.js', line: 3, claim: 'root is trusted by name', objects_to_requested: 'Only the actor root may run a tenants.* command' }] };
-  assert.equal((await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: blocker }))).value.stopped, 'a review finding is still open', 'a Blocker never moves');
+  assert.equal((await load('deliver-stages').run({ request, said: request, models: MODELS }, answers({ needed: true, reviewer: blocker }))).value.stopped, 'a review finding is still open', 'a Blocker never moves');
 });
 
 test('an enumeration, a hardening or a review plan that returns nothing is asked once more, and then named', async () => {

@@ -166,7 +166,9 @@ const findingsOf = (reviews) => reviews.flatMap((v) => asList(v.findings));
 // work not built yet. somi_review applies the same rule when the session records the review.
 const plainWords = (t) => String(t ?? '').toLowerCase().replace(/^\s*>\s?/gm, '').replace(/[`*_"']/g, '').replace(/\s+/g, ' ').trim();
 const SAYS_UNMET = /\b(missing|absent|unimplemented|not (yet )?(implemented|built|added|wired|enforced|checked|validated|documented|handled|applied|done|there)|(has|have|had) no|(does|do|did) not (exist|implement|enforce|check|validate|document|handle|apply|support)|doesn't|don't|lacks?|lacking|unchanged|none of|nowhere|never)\b/i;
-const askedWords = [a.request, a.said].map(plainWords);
+// Only what the user typed counts, as in somi_review: the request is the session's own wording, or a brief, and a quote from that is the
+// model agreeing with itself. With no typed words saved, nothing moves.
+const askedWords = [a.said].filter(Boolean).map(plainWords);
 const requested = (f) => {
   const quote = plainWords(f?.objects_to_requested);
   return [f?.severity === 'Major', quote.length >= 16, !SAYS_UNMET.test(`${f?.claim} ${f?.evidence ?? ''}`), askedWords.some((w) => w.includes(quote))].every(Boolean);

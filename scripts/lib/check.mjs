@@ -126,8 +126,9 @@ export function runCheck({ root, env = process.env, full = false, from = null, s
   const plan = loadPlan(root);
   const tree = snapshotTree(root);
   const diff = readDiff(root, from ?? baseRef(root), tree);
-  // SoMi's working plan is never committed, and it may name the ticket's own ids. A project's committed config and rules are still scanned.
-  const excluded = (f) => f === '.somi/plan.md' || plan.gate_exclude.some((e) => f === e || (e.endsWith('/') && f.startsWith(e)));
+  // SoMi's working plan and the user's brief are never committed, and they may name the ticket's own ids: a brief that did would stop every
+  // milestone gate of a staged run on a file no builder may change. A project's committed config and rules are still scanned.
+  const excluded = (f) => f === '.somi/plan.md' || f === '.somi/brief.md' || plan.gate_exclude.some((e) => f === e || (e.endsWith('/') && f.startsWith(e)));
   const files = diff.rows.filter((r) => !r.status.startsWith('D')).map((r) => r.file);
   const added = diff.lines.filter((l) => l.sign === '+' && !excluded(l.file));
 
