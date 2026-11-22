@@ -37,14 +37,6 @@ export const WORKFLOWS = Object.freeze({
   resume: { kind: 'direct' },
 });
 
-// Which staged workflow /somi-deliver starts. deliver-swarm runs beside deliver-stages until a paired benchmark picks one, so only the
-// user's own config may choose it: a project's config is cloned input, and choosing the workflow is not for a repository to decide.
-export const DELIVER_WORKFLOWS = Object.freeze({ stages: 'deliver-stages', swarm: 'deliver-swarm' });
-export const deliverWorkflowName = ({ global } = {}) => {
-  const chosen = global?.deliver?.workflow;
-  return typeof chosen === 'string' && Object.hasOwn(DELIVER_WORKFLOWS, chosen) ? DELIVER_WORKFLOWS[chosen] : DELIVER_WORKFLOWS.stages;
-};
-
 export const workerAgent = (tier) => `somi:somi-worker-${tier}`;
 const WORKERS = Object.freeze({ 'somi-worker-low': 'low', 'somi-worker-medium': 'medium', 'somi-worker-high': 'high' });
 // Judging a diff is judgement work, so the code reviewer is never on the low tier.

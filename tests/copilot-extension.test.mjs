@@ -22,9 +22,9 @@ function runExtension(dir, text) {
   return JSON.parse(r.stdout);
 }
 
-test('the extension registers both staged workflows under the names somi_route gives, and loads quietly once the plugin is gone', (t) => {
+test('the extension registers the staged workflow under the name somi_route gives, and loads quietly once the plugin is gone', (t) => {
   const dir = tmp(t);
-  assert.deepEqual(runExtension(dir, copilotExtension(REPO)), ['somi-deliver-stages', 'somi-deliver-swarm']);
+  assert.deepEqual(runExtension(dir, copilotExtension(REPO)), ['somi-deliver-stages']);
   assert.deepEqual(runExtension(dir, copilotExtension(path.join(dir, 'uninstalled'))), [], 'it joins with nothing instead of failing to load');
 });
 

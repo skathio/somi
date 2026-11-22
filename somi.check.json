@@ -157,7 +157,6 @@
     ],
     "workflows/": [
       "tests/workflows.test.mjs",
-      "tests/swarm.test.mjs",
       "tests/copilot-extension.test.mjs"
     ],
     "scripts/lib/copilot-workflow.mjs": [
