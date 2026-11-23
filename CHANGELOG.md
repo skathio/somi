@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Changed
+
+- **CI/CD moved to hashira v3.** `ci.yml`, `publish.yml` and `site.yml` pin hashira's workflows and actions at `v3` instead of `v2`, and drop `library_ref`, which v3 removed. Pull requests now also run hashira's `quality-gate` job, SoMi's own quality check at its default `strict` level, on what they change. Releasing is unchanged: run `publish.yml` with a `bump`.
+
 ## [5.3.1] — 2026-11-23 — fix: EF Core migration designer files no longer fail the quality gate
 
 **Patch — fixes only.** No migration action required.
