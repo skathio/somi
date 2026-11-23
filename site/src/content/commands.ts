@@ -3,9 +3,10 @@
 
 export const COMMANDS: Record<string, string> = {
   somi: 'Routes anything, the way the agent does with plain words. Everything else is asked for in the chat.',
+  'somi-brief': 'Turns a feature or an improvement into a brief before anyone builds it: SoMi reads the code, asks only what the code cannot settle, and saves the brief you approve.',
   'somi-deliver': 'Runs large work as the staged workflow: scout, build, verify and review, each on its tier. Only you start it.',
   'somi-review': 'Reviews the current changes, whether or not the diff calls for it.',
   'somi-quality': 'Checks the code against the quality limits: the branch, one commit, or the whole codebase.',
-  'somi-status': 'Shows the open plan, decisions and findings.',
+  'somi-status': 'Shows the open plan or brief, decisions and findings.',
   'somi-config': 'Shows and changes the models each tier uses and the quality limits, and checks the setup.',
 };

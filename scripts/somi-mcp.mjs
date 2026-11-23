@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// somi-mcp.mjs: a zero-dependency stdio MCP server with six tools. They give advice and keep a small record, and none of them holds up the
+// somi-mcp.mjs: a zero-dependency stdio MCP server with seven tools. They give advice and keep a small record, and none of them holds up the
 // conversation: a question, a follow-up or a change of mind never needs to go through here.
 //
 // MCP servers run outside the OS sandbox on Claude Code, so this path never executes project commands. It only reads git and SoMi's own files,
@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { ConfigFileError, loadConfig } from './lib/config-files.mjs';
 import { advise, shardAdvice } from './lib/advisor.mjs';
 import { repoRoot, stateIsTracked } from './lib/git-tree.mjs';
+import { briefStatus, closeBrief, readBrief, saveBrief } from './lib/brief.mjs';
 import { addToLedger } from './lib/ledger.mjs';
 import { resolveProjectRoot } from './lib/mcp-project-root.mjs';
 import { ReviewInputError } from './lib/policy.mjs';
@@ -115,6 +116,15 @@ const TOOLS = [
     },
   },
   {
+    name: 'somi_brief',
+    description: 'The brief /somi-brief prepares. text saves it once the user approves, and refuses one that is not ready; close ends it; nothing shows it.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { text: { type: 'string' }, close: { type: 'boolean' }, project_dir: PROJECT_DIR },
+    },
+  },
+  {
     name: 'somi_quality',
     description: 'Checks code against the quality limits: the branch by default, one commit, or the whole codebase for a cleanup. Use when the user asks about code quality.',
     inputSchema: {
@@ -174,6 +184,13 @@ function planTool(ctx, a) {
   return textResult(planStatus(ctx.root) ?? { plan: null, advice: 'No plan is open.' });
 }
 
+function briefTool(ctx, a) {
+  if (a.close === true) return textResult(closeBrief(ctx.root, ctx.env));
+  if (typeof a.text === 'string') return textResult(saveBrief(ctx.root, a.text, ctx.env));
+  const open = readBrief(ctx.root);
+  return textResult(open ? { ...briefStatus(open), text: open.text } : { brief: null, advice: 'No brief is open.' });
+}
+
 function prTool(ctx, a) {
   const result = pullRequest(ctx, { base: a.base, unreviewed: a.unreviewed === true });
   return textResult(result.ok ? { ...result, ...shardAdvice(ctx, 'pr.open') } : result, !result.ok);
@@ -217,6 +234,7 @@ const TOOL_HANDLERS = {
   somi_route: (ctx, a) => textResult(advise(ctx, { request: typeof a.request === 'string' ? a.request : undefined, hint: a.hint, ticket: a.ticket, sensitive: a.sensitive, staged: a.staged })),
   somi_note: (ctx, a) => textResult(addToLedger(ctx.root, { kind: a.kind, text: a.text }, ctx.env)),
   somi_plan: planTool,
+  somi_brief: briefTool,
   somi_pr: prTool,
   somi_quality: qualityTool,
   somi_review: reviewTool,

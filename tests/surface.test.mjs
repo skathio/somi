@@ -39,7 +39,7 @@ test('expertise stays behind the tools, focused and free of version templates', 
   for (const f of list('library/skills')) assert.ok(read(`library/skills/${f}`).split('\n').length < 100, f);
 });
 test('a few commands, each prefixed so no host\'s own command hides it, and the Copilot manifest lists exactly them', () => {
-  assert.deepEqual(listedCommands().sort(), ['somi-config.md', 'somi-deliver.md', 'somi-quality.md', 'somi-review.md', 'somi-status.md', 'somi.md']);
+  assert.deepEqual(listedCommands().sort(), ['somi-brief.md', 'somi-config.md', 'somi-deliver.md', 'somi-quality.md', 'somi-review.md', 'somi-status.md', 'somi.md']);
   assert.deepEqual(json('.copilot-extension/extension.json').commands.map((c) => c.name).sort(), listedCommands().map((f) => f.replace('.md', '')).sort());
 });
 test('the digest is at most 150 lines', () => {

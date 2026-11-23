@@ -5,7 +5,7 @@ import { isBlocking } from './policy.mjs';
 
 const plain = (s) => String(s ?? '').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu, ' ').trim();
 const place = (f) => (f.line ? `${plain(f.file)}:${f.line}` : plain(f.file));
-const finding = (f) => `- ${plain(f.severity)} ${place(f)}: ${plain(f.claim)}`;
+const finding = (f) => `- ${plain(f.severity)} ${place(f)}: ${plain(f.claim)}${f.requested ? ` (the user's decision: they asked "${plain(f.objects_to_requested)}")` : ''}`;
 
 function loggedFindings(reviews, migrated = []) {
   const seen = new Set();
@@ -17,12 +17,15 @@ function loggedFindings(reviews, migrated = []) {
   return [...logged, ...migrated];
 }
 
-export function renderStatus({ plan, ledger, reviews = [], check, migrated }) {
+const briefLine = (brief) => (brief.invalid ? `Brief: does not read: ${plain(brief.invalid)}` : `Brief: ${plain(brief.title)} (${brief.requirements} requirements, hand off to ${brief.handoff})`);
+
+export function renderStatus({ plan, brief, ledger, reviews = [], check, migrated }) {
   const lines = [];
   if (plan) {
     lines.push(`Plan: ${plan.done} of ${plan.total} milestones done`);
     if (plan.next) lines.push(`Next: ${plain(plan.next)}`);
   } else lines.push('No plan open.');
+  if (brief) lines.push(briefLine(brief));
   const last = reviews.at(-1);
   if (last) lines.push('', `Last review: ${(last.verdicts ?? []).map((v) => `${plain(v.agent)}: ${plain(v.verdict)}`).join(', ')}`);
   const blocking = (last?.findings ?? []).filter(isBlocking);

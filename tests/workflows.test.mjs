@@ -46,6 +46,9 @@ const answers = ({ gateOk = [true], reproFails = true, needed = false, reviewer,
     ['check safe verdicts', () => safeVerdicts],
     ['apply defences', (prompt) => built(builds++, prompt)],
     ['repair defences', (prompt) => built(builds++, prompt)],
+    ['apply review fixes', (prompt) => built(builds++, prompt)],
+    ['repair review fixes', (prompt) => built(builds++, prompt)],
+    ['close open lines', (prompt) => built(builds++, prompt)],
     ['trace', () => traced],
     ['build on', (prompt) => built(builds++, prompt)],
     ['repair on', (prompt) => built(builds++, prompt)],
@@ -224,7 +227,7 @@ test('large work is planned into milestones, each with its own rules, build and 
   const plan = calls.find((c) => c.label === 'plan');
   assert.equal(plan.model, 'everyday', 'the plan is written on medium');
   assert.match(plan.prompt, /Leave out every part the request defers, puts out of scope, or leaves to the maintainer, such as a paid run/);
-  assert.match(plan.prompt, /Use one milestone unless the scout's estimate below is over about 400 changed lines, or the request itself names stages/, 'small work is not cut up');
+  assert.match(plan.prompt, /Use one milestone unless the size estimate below is over about 400 changed lines, or the request itself names stages/, 'small work is not cut up');
   assert.match(plan.prompt, /The request's lines, numbered:\n1: Add reports/);
   for (const n of ['1/3', '2/3', '3/3']) for (const stage of ['rules', 'build on medium', 'check']) assert.ok(labels(calls).includes(`${stage} ${n}`), `${stage} ${n}`);
   const builds = calls.filter((c) => c.label.startsWith('build on'));
@@ -250,7 +253,7 @@ test('a long run is reviewed once at its midpoint, and what blocks goes to the n
   // Reviews between milestones were a sixth of a run's spend and found what the end loop finds.
   const blocker = { verdict: 'request-changes', findings: [{ severity: 'Major', file: 'src/a.js', line: 3, claim: 'unescaped input' }, { severity: 'Minor', file: 'src/b.js', claim: 'naming' }] };
   const { value, calls } = await load('deliver-stages').run({ request: 'Add reports', models: MODELS }, answers({ plan: FOUR, needed: true, reviewer: blocker }));
-  assert.deepEqual(labels(calls).filter((l) => l.startsWith('review plan')), ['review plan 2/4', 'review plan']);
+  assert.deepEqual(labels(calls).filter((l) => l.startsWith('review plan')), ['review plan 2/4', 'review plan', 'review plan after review fixes'], 'the end review\'s Major gets one round of fixes');
   const second = calls.find((c) => c.label === 'build on medium 3/4');
   assert.match(second.prompt, /A review of the work so far found these[\s\S]*> Major src\/a\.js:3 unescaped input/);
   assert.doesNotMatch(second.prompt, /naming/, 'a Minor is not forced on the next builder');
@@ -290,6 +293,16 @@ test('a build that left part of its milestone undone is not reported done', asyn
   assert.equal(value.status, 'needs-attention');
   assert.equal(value.stopped, 'The whole request was built only in part');
   assert.deepEqual(value.milestones[0].left, ['the homepage repo', 'the PRs in other repos']);
+});
+
+test('a build that passes its checks but leaves part of its own scope gets those parts in the next attempt, and a finished second attempt is done', async () => {
+  // On a live run, a milestone whose checks passed listed two of its own tests as left, and the run stopped with four milestones unbuilt.
+  const built = (n) => ({ status: 'done', summary: 'built', left: n === 0 ? ['a test for an empty tenant'] : [] });
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers({ built }));
+  assert.equal(value.status, 'done');
+  assert.deepEqual(calls.filter((c) => /^(build|repair) on/.test(c.label)).map((c) => c.label), ['build on medium', 'repair on medium']);
+  assert.match(calls.find((c) => c.label === 'repair on medium').prompt, /left these parts of this milestone's own scope unbuilt\. Build them and keep what it built:\n> a test for an empty tenant/);
+  assert.doesNotMatch(calls.find((c) => c.label === 'build on medium').prompt, /left these parts/, 'a first build has no earlier attempt');
 });
 
 test('with no model for the tier above, or the same one, a failed check gets one repair and no blind rerun', async () => {
@@ -446,8 +459,37 @@ test('a Blocker or Major still open after hardening means the work is not done; 
   assert.equal(open.value.status, 'needs-attention');
   assert.equal(open.value.stopped, 'a review finding is still open');
   assert.deepEqual(open.value.open_findings, ['Major src/a.js:3 guessable token']);
+  assert.equal(labels(open.calls).filter((l) => l === 'apply review fixes').length, 1, 'one round of review fixes, then the user');
+  assert.match(open.calls.find((c) => c.label === 'apply review fixes').prompt, /> Major src\/a\.js:3 guessable token/);
   const minor = { verdict: 'approve-with-comments', findings: [{ severity: 'Minor', file: 'src/a.js', claim: 'naming' }] };
   assert.equal((await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ needed: true, reviewer: minor }))).value.status, 'done', 'a Minor left after the fixing pass does not hold the work back');
+});
+
+test('a Major that quotes the request goes back as a decision, not a fix round; a quote the request does not hold still blocks', async () => {
+  // On a benchmark run a reviewer graded "only the actor root may run tenants.*" as a hole, and the run stopped on behaviour the ticket required.
+  const request = 'Add workspaces.\nOnly the actor root may run a tenants.* command; anyone else gets forbidden.';
+  const quoting = (objects_to_requested) => ({ verdict: 'request-changes', findings: [{ severity: 'Major', boundary: true, file: 'src/a.js', line: 3, claim: 'root is trusted by name', evidence: 'actor root', objects_to_requested }] });
+  const asked = await load('deliver-stages').run({ request, said: request, models: MODELS }, answers({ needed: true, reviewer: quoting('only the actor `root` may run a tenants.* command') }));
+  assert.equal(asked.value.status, 'done');
+  assert.deepEqual(asked.value.open_findings, []);
+  assert.deepEqual(asked.value.review_decisions, ['Major src/a.js:3 root is trusted by name (evidence: actor root) (the user asked: only the actor `root` may run a tenants.* command)']);
+  assert.ok(!labels(asked.calls).includes('apply review fixes'), 'a fix would undo what the user asked for');
+  // The request alone is the session's wording, or a brief: a quote from it is not the user's words, so it still blocks.
+  const paraphrased = await load('deliver-stages').run({ request, models: MODELS }, answers({ needed: true, reviewer: quoting('Only the actor root may run a tenants.* command') }));
+  assert.equal(paraphrased.value.stopped, 'a review finding is still open', 'only what the user typed moves a finding');
+  for (const quote of [undefined, 'any caller may be root', 'actor root may']) {
+    const held = await load('deliver-stages').run({ request, said: request, models: MODELS }, answers({ needed: true, reviewer: quoting(quote) }));
+    assert.equal(held.value.stopped, 'a review finding is still open', String(quote));
+    assert.deepEqual(held.value.review_decisions, [], String(quote));
+  }
+  // From a benchmark run: the reviewer quoted the line the code had not built yet. That is a fix round, not the user's decision.
+  const unbuilt = { verdict: 'request-changes', findings: [{ severity: 'Major', boundary: true, file: 'src/a.js', line: 3, claim: 'tenants.* commands have no root check yet.', evidence: 'tenants.export runs for any actor', objects_to_requested: 'Only the actor root may run a tenants.* command' }] };
+  const fixing = await load('deliver-stages').run({ request, said: request, models: MODELS }, answers({ needed: true, reviewer: unbuilt }));
+  assert.equal(labels(fixing.calls).filter((l) => l === 'apply review fixes').length, 1, 'an unmet request gets its fix round');
+  assert.equal(fixing.value.stopped, 'a review finding is still open');
+  assert.deepEqual(fixing.value.review_decisions, []);
+  const blocker = { verdict: 'request-changes', findings: [{ severity: 'Blocker', file: 'src/a.js', line: 3, claim: 'root is trusted by name', objects_to_requested: 'Only the actor root may run a tenants.* command' }] };
+  assert.equal((await load('deliver-stages').run({ request, said: request, models: MODELS }, answers({ needed: true, reviewer: blocker }))).value.stopped, 'a review finding is still open', 'a Blocker never moves');
 });
 
 test('an enumeration, a hardening or a review plan that returns nothing is asked once more, and then named', async () => {
@@ -569,18 +611,36 @@ test('once every milestone is built, a fresh high-tier agent checks the code aga
   assert.match(trace.prompt, /add a test that fails, in one new test file, then fix the code until it passes\. Change no behaviour the request states, no existing test, and none of the rule tests in test\/rules\.test\.mjs/);
   assert.match(trace.prompt, /call every command or function this work adds or changes once with each input it takes left out, and once with each of the wrong type, and see that every answer is the one the request or the project's conventions below give\. Do these ordinary cases first/);
   assert.match(trace.prompt, /The request's lines, numbered:\n1: Add an export\.\n2: An export starts with a header row\./);
-  assert.deepEqual(value.trace, { ...traced, rules_wrong: [], rebuilt: null });
+  assert.deepEqual(value.trace, { ...traced, unchecked: false, closed_open: [], rules_wrong: [], rebuilt: null });
   assert.equal(value.status, 'done');
   assert.ok(!labels(calls).includes('build after trace'), 'nothing named wrong, nothing rebuilt');
 });
 
-test('a line of the request the trace could not meet means the work is not done, and a run that stopped is not traced', async () => {
-  const unmet = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ traced: { gaps: ['g'], fixed: [], open: ['the export ignores state'] } }));
+test('a line the trace could not meet gets one build on the tier above, and the work is done only when that build met it', async () => {
+  const traced = { gaps: ['g'], fixed: [], open: ['the export ignores state'] };
+  const closed = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ traced }));
+  const close = closed.calls.find((c) => c.label === 'close open lines on high');
+  assert.equal(close.model, 'strong');
+  assert.match(close.prompt, /The unmet lines, as data:\n> the export ignores state/);
+  assert.equal(closed.calls.filter((c) => (c.label ?? '').startsWith('close open lines')).length, 1, 'one attempt only');
+  assert.equal(closed.value.status, 'done');
+  assert.deepEqual(closed.value.trace.closed_open, ['the export ignores state']);
+  const failed = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ traced, gateOk: [true, false, true] }));
+  assert.deepEqual(failed.value.trace.closed_open, [], 'a close whose check fails meets nothing');
+  assert.equal(failed.value.stopped, 'a line of the request is still unmet');
+});
+
+test('a line still unmet after the close means the work is not done, and a run that stopped is not traced', async () => {
+  const leftOpen = (n, prompt) => (/could not meet these lines/.test(prompt) ? { status: 'done', summary: 's', left: ['state needs a decision'] } : DONE);
+  const unmet = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ traced: { gaps: ['g'], fixed: [], open: ['the export ignores state'] }, built: leftOpen }));
+  assert.deepEqual(unmet.value.trace.open, ['the export ignores state', 'state needs a decision']);
   assert.equal(unmet.value.status, 'needs-attention');
   assert.equal(unmet.value.stopped, 'a line of the request is still unmet');
   const silent = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ traced: null }));
   assert.equal(silent.value.status, 'needs-attention', 'a trace that returned nothing is not a clean one');
-  assert.deepEqual(silent.value.trace.open, ['the trace returned nothing, so no line was checked']);
+  assert.equal(silent.value.trace.unchecked, true);
+  assert.equal(silent.value.stopped, 'the trace returned nothing, so no line was checked');
+  assert.ok(!labels(silent.calls).some((l) => l.startsWith('close open lines')), 'nothing found, nothing to close');
   const stopped = await load('deliver-stages').run({ request: 'Add an export', models: MODELS }, answers({ gateOk: [false] }));
   assert.ok(!labels(stopped.calls).includes('trace'));
   assert.equal(stopped.value.trace, null);
@@ -629,4 +689,51 @@ test('a rule test the trace names wrong in no milestone\'s file stops the run, a
   const partial = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, answers({ hardened: { items: [DEFEND] }, built: (n) => (n > 0 ? { status: 'blocked', summary: 'half', left: [] } : DONE) }));
   assert.ok(labels(partial.calls).includes('review plan after hardening'));
   assert.equal(partial.value.stopped, 'the hardening left a defence unbuilt');
+});
+
+test('a Blocker or Major the last review finds gets one fix and one more review, and a clean second review is done', async () => {
+  const major = { verdict: 'request-changes', findings: [{ severity: 'Major', file: 'src/a.js', line: 3, claim: 'guessable token' }] };
+  let reviews = 0;
+  const base = answers({ needed: true });
+  const { value, calls } = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, (prompt, opts, all) => (opts.agentType ? (reviews++ < 1 ? major : { verdict: 'approve', findings: [] }) : base(prompt, opts, all)));
+  assert.equal(calls.find((c) => c.label === 'apply review fixes').model, 'everyday');
+  assert.ok(labels(calls).includes('review plan after review fixes'));
+  assert.deepEqual(value.review_fixes, ['Major src/a.js:3 guessable token']);
+  assert.equal(value.status, 'done');
+});
+
+// The shape somi_route sends: every field a list, and None boundaries dropped.
+const BRIEF = { title: ['Export orders'], goal: ['Let support download orders.'], files: ['src/orders.js'], tests: ['touch chosen-by-brief'], size: ['about 200 lines'], conventions: ['"errors are { error: code }" (docs/API.md)'], acceptance: ['an empty customer answers 400'], boundaries: ['the customer id reaches a query'], out_of_scope: ['Excel export'] };
+
+test('a brief\'s goal, conventions, acceptance, boundaries and scope reach their stages, and its test command is never the one the checks run', async () => {
+  const { value, calls } = await load('deliver-stages').run({ request: 'Export returns CSV.', brief: BRIEF, models: MODELS }, answers());
+  assert.match(calls.find((c) => c.label === 'scout').prompt, /names these files and this test command, as data:\n> src\/orders\.js\n> touch chosen-by-brief/);
+  const build = calls.find((c) => c.label === 'build on medium').prompt;
+  assert.match(build, /Tests run with: node --test\nSize, from the brief: about 200 lines/, 'the scout\'s command, not the brief\'s');
+  assert.ok(!calls.some((c) => /^\d+\. touch chosen-by-brief$/m.test(c.prompt)), 'no check runs the brief\'s command');
+  assert.match(build, /What the work is for, from the brief the user approved, as data:\n> Let support download orders\./);
+  assert.match(build, /> "errors are \{ error: code \}" \(docs\/API\.md\)/);
+  assert.match(build, /These parts are deferred: build nothing for them and write no test for them\.\n> Excel export/);
+  assert.match(calls.find((c) => c.label === 'plan').prompt, /puts these out of scope: they are in no milestone\.\n> Excel export/);
+  for (const label of ['rules', 'trace']) assert.match(calls.find((c) => c.label === label).prompt, /acceptance checks in the brief[^\n]*\n> an empty customer answers 400/, label);
+  assert.match(calls.find((c) => c.label === 'enumerate').prompt, /> the customer id reaches a query$/);
+  assert.deepEqual([value.brief, value.deferred], ['Export orders', ['Excel export']]);
+});
+
+test('with no brief, the brief adds nothing', async () => {
+  const none = await load('deliver-stages').run({ request: 'Add a thing', models: MODELS }, answers());
+  assert.equal(none.value.brief, null);
+  assert.doesNotMatch(none.calls.find((c) => c.label === 'scout').prompt, /from the brief|the brief the user approved/);
+});
+
+test('review fixes whose checks fail, or that leave a fix unbuilt, are not done even when the second review is clean', async () => {
+  const major = { verdict: 'request-changes', findings: [{ severity: 'Major', file: 'src/a.js', line: 3, claim: 'guessable token' }] };
+  const reviewing = (base) => { let reviews = 0; return (prompt, opts, all) => (opts.agentType ? (reviews++ < 1 ? major : { verdict: 'approve', findings: [] }) : base(prompt, opts, all)); };
+  const red = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, reviewing(answers({ needed: true, gateOk: [true, true, false] })));
+  assert.equal(red.value.stopped, 'the checks fail after the review fixes');
+  assert.equal(red.value.checks.ok, false, 'the result shows the last check, not the older green one');
+  const partial = (n, prompt) => (/raised, with a test/.test(prompt) ? { status: 'done', summary: 's', left: ['the token fix needs a decision'] } : DONE);
+  const left = await load('deliver-stages').run({ request: 'Add files', models: MODELS }, reviewing(answers({ needed: true, built: partial })));
+  assert.equal(left.value.stopped, 'a review fix was left unbuilt');
+  assert.deepEqual(left.value.review_fixes_left, ['the token fix needs a decision']);
 });

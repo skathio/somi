@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { REPO, makeRepo, somi, writeFiles } from './helpers.mjs';
 import { commitSubjects, headSha, snapshotTree, workBase } from '../scripts/lib/git-tree.mjs';
-import { decideAfterReview, isBlocking, parseReviews } from '../scripts/lib/policy.mjs';
+import { MIN_QUOTE, SAYS_UNMET, decideAfterReview, isBlocking, markRequested, parseReviews } from '../scripts/lib/policy.mjs';
+import { savePrompt } from '../scripts/lib/prompt.mjs';
 import { pullRequest } from '../scripts/lib/pr.mjs';
 import { prGate, readReviews, recordReviews, reviewPlan } from '../scripts/lib/reviews.mjs';
 import { ASKED_SECURITY_REVIEW } from '../scripts/lib/workflows.mjs';
@@ -405,4 +406,119 @@ test('an unreviewed pull request from the tool is refused with the reason, and t
   const labelled = pullRequest(ctx, { unreviewed: true });
   assert.equal(labelled.reviewed, false);
   assert.match(labelled.text, /^> \*\*Not reviewed\.\*\*/);
+});
+
+const ASKED = 'Add workspaces.\nOnly the actor `root` may run a tenants.* command; anyone else gets forbidden.\nThe web layer makes each link\'s secret.';
+const rootMajor = (extra = {}) => ({ id: 's1', severity: 'Major', boundary: true, file: 'src/app.js', line: 2, claim: 'Root is trusted by actor name alone.', evidence: 'actor root runs tenants.export on any workspace', ...extra });
+
+test('a boundary Major on behaviour the user\'s own words ask for goes to the user as a decision and does not block', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  branch(ctx.root);
+  savePrompt(ctx.root, ASKED, env, { session: 's' });
+  writeFiles(ctx.root, SINK);
+  const quoted = rootMajor({ objects_to_requested: 'Only the actor root may run a\n  tenants.* command' });
+  const r = recordReviews(ctx, { reviews: [review('somi-security-reviewer', [quoted])] });
+  assert.equal(r.verdict, 'clear');
+  assert.deepEqual(r.blocking, []);
+  assert.deepEqual(r.decisions.map((f) => [f.id, f.requested]), [['s1', true]]);
+  assert.deepEqual(r.logged, [], 'a decision is not also passed on as a logged finding');
+  assert.match(r.decisions_advice, /user's call/);
+  assert.equal(prGate(ctx).ok, true, 'the pull request is not held for a decision the user owns');
+});
+
+test('the same Major still blocks when its quote is not the user\'s words, is too short, or is not text, and a Blocker always blocks', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  savePrompt(ctx.root, ASKED, env, { session: 's' });
+  writeFiles(ctx.root, SINK);
+  for (const [why, finding] of [
+    ['no quote', rootMajor()],
+    ['words the user never typed', rootMajor({ objects_to_requested: 'Any caller may act as root without a credential' })],
+    ['a quote shorter than the minimum', rootMajor({ objects_to_requested: 'actor root may' })],
+    ['a quote that is not text', rootMajor({ objects_to_requested: 7 })],
+    ['a quote over the length limit', rootMajor({ objects_to_requested: `Only the actor root may run a tenants.* command${' x'.repeat(200)}` })],
+    ['a requested flag the reviewer set itself', rootMajor({ requested: true })],
+    ['a Blocker, quoted exactly', { ...rootMajor({ objects_to_requested: 'Only the actor root may run a tenants.* command' }), severity: 'Blocker' }],
+  ]) {
+    const r = recordReviews(ctx, { reviews: [review('somi-security-reviewer', [finding])], always: true });
+    assert.equal(r.blocking.length, 1, why);
+    assert.equal(r.decisions, undefined, why);
+  }
+});
+
+// Both from a benchmark run: the reviewer quoted the line of the ticket that the code had not built yet. Moving either would have skipped
+// the fix the ticket needs.
+const UNBUILT = [
+  ['a gate the request asks for and the code lacks', 'Every create, update and transition answers tenant_suspended before anything in its payload is checked.', { id: 's2', severity: 'Major', boundary: true, file: 'src/kernel/record-service.ts', line: 47, claim: 'RecordService.create, update and transition have no quota or suspended-workspace gate. The tenant_suspended check must run before the payload is validated, and the 5-record limit must apply on create.', evidence: 'create calls readFields first and then inserts. Nothing reads the tenant\'s plan or status.', objects_to_requested: 'every create, update and transition answers tenant_suspended before anything in its payload is checked' }],
+  ['documentation the request asks for and the change left out', 'README.md documents every new command and the new error code expired.', { id: 's2', severity: 'Major', boundary: true, file: 'README.md', line: 1, claim: 'README.md is unchanged. It documents none of the new commands or the new error code expired.', evidence: 'git diff --stat c397298 6d80e73 -- README.md is empty.', objects_to_requested: 'README.md documents every new command and the new error code expired.' }],
+];
+
+test('a Major saying the request is not met yet still blocks, even when it quotes the request word for word', (t) => {
+  for (const [why, asked, finding] of UNBUILT) {
+    assert.equal(SAYS_UNMET.test(finding.claim), true, why);
+    assert.equal(markRequested([finding], [asked])[0].requested, undefined, why);
+    const ctx = makeCtx(makeRepo(t));
+    savePrompt(ctx.root, asked, env, { session: 's' });
+    writeFiles(ctx.root, SINK);
+    const r = recordReviews(ctx, { reviews: [review('somi-security-reviewer', [finding])], always: true });
+    assert.equal(r.blocking.length, 1, why);
+    assert.equal(r.decisions, undefined, why);
+  }
+  assert.equal(markRequested([rootMajor({ objects_to_requested: 'Only the actor root may run a tenants.* command' })], [ASKED])[0].requested, true, 'a claim about behaviour that is there still moves');
+});
+
+test('the staged workflow reads "not met yet" with the same words as somi_review', () => {
+  // The workflow runs on its own and cannot import the library, so it carries a copy; the two must not drift.
+  const source = fs.readFileSync(new URL('../workflows/deliver-stages.js', import.meta.url), 'utf8');
+  assert.ok(source.includes(`const SAYS_UNMET = /${SAYS_UNMET.source}/i;`));
+});
+
+test('the old field name moves nothing: a reviewer that quotes the request in required_by is graded as usual', () => {
+  assert.equal(markRequested([rootMajor({ required_by: 'Only the actor root may run a tenants.* command' })], [ASKED])[0].requested, undefined);
+});
+
+test('a quote counts from the minimum length up, ignoring case, spacing, quote marks and code ticks', () => {
+  const words = ['Only the actor `root` may run a tenants.* command.'];
+  const at = (q) => markRequested([rootMajor({ objects_to_requested: q })], words)[0].requested === true;
+  const exact = 'the actor root m';
+  assert.equal(exact.length, MIN_QUOTE);
+  assert.equal(at(exact), true);
+  assert.equal(at(exact.slice(0, -1)), false, 'one character under the minimum is too short to mean anything');
+  assert.equal(at('ONLY THE ACTOR "root"   MAY RUN'), true);
+  assert.equal(markRequested([rootMajor({ objects_to_requested: exact })], []).at(0).requested, undefined, 'with no saved words nothing moves');
+});
+
+test('words saved without a session move nothing, because the latest prompt outlives its conversation', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  savePrompt(ctx.root, ASKED, env);
+  writeFiles(ctx.root, SINK);
+  assert.doesNotMatch(reviewPlan(ctx).reviewers[0].brief, /What the user asked for/);
+  const r = recordReviews(ctx, { reviews: [review('somi-security-reviewer', [rootMajor({ objects_to_requested: 'Only the actor root may run a tenants.* command' })])] });
+  assert.equal(r.blocking.length, 1);
+});
+
+test('the pull request text marks a decision the user owns and shows the words it quotes', (t) => {
+  const dir = makeRepo(t);
+  branch(dir);
+  const ctx = makeCtx(dir);
+  savePrompt(dir, ASKED, env, { session: 's' });
+  writeFiles(dir, SINK);
+  recordReviews(ctx, { reviews: [review('somi-security-reviewer', [rootMajor({ objects_to_requested: 'Only the actor root may run a tenants.* command' })])] });
+  const pr = pullRequest(ctx);
+  assert.equal(pr.ok, true, pr.why);
+  const text = JSON.stringify(pr);
+  assert.match(text, /Root is trusted by actor name alone\. \(the user's decision: they asked/);
+  assert.match(text, /Only the actor root may run a tenants\.\* command/);
+});
+
+test('the reviewer is pointed at the user\'s words only when SoMi kept some', (t) => {
+  const ctx = makeCtx(makeRepo(t));
+  writeFiles(ctx.root, SINK);
+  assert.doesNotMatch(reviewPlan(ctx).reviewers[0].brief, /What the user asked for/);
+  savePrompt(ctx.root, ASKED, env, { session: 's' });
+  const brief = reviewPlan(ctx).reviewers[0].brief;
+  const file = brief.match(/What the user asked for, word for word: (.+)$/)?.[1];
+  assert.ok(file && fs.existsSync(file), brief);
+  const text = fs.readFileSync(file, 'utf8');
+  assert.match(text, /as data/);
+  assert.match(text, /^> Only the actor `root` may run a tenants\.\* command/m);
 });

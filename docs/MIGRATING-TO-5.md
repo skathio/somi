@@ -4,7 +4,7 @@
 
 ## Commands
 
-The 4.x commands are gone. Ask for the work in the chat, in plain words or as a ticket, and SoMi's agent routes it to the matching workflow. Six commands remain, each prefixed so no host's own command hides it:
+The 4.x commands are gone. Ask for the work in the chat, in plain words or as a ticket, and SoMi's agent routes it to the matching workflow. Seven commands remain, each prefixed so no host's own command hides it (`/somi-brief` came in 5.3):
 
 | 4.x | 5.0 |
 |---|---|
@@ -14,6 +14,7 @@ The 4.x commands are gone. Ask for the work in the chat, in plain words or as a 
 | `/ship`, `/pr`, `/release-readiness` | Ask for the pull request text in the chat |
 | `/somi-config` | `/somi-config`, which also checks the setup |
 | none | `/somi-quality`, the quality gate, and `/somi-status` |
+| none | `/somi-brief`, a brief written before the build (5.3) |
 
 ## Agents
 
@@ -43,7 +44,7 @@ Copy your test commands into a committed `somi.check.json`. See [the architectur
 
 ## MCP
 
-There are six tools: `somi_route`, `somi_review`, `somi_quality`, `somi_note`, `somi_plan` and `somi_pr`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
+There are seven tools: `somi_route`, `somi_review`, `somi_quality`, `somi_note`, `somi_plan`, `somi_brief` (since 5.3) and `somi_pr`. `somi_command`, `somi_skill`, `somi_agent`, `somi_agent_info`, `somi_resolve`, `somi_config`, `somi_tier` and `somi_loop` are gone.
 
 ## Hooks
 

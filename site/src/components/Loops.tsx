@@ -10,7 +10,7 @@ export function Loops() {
     >
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <Card title="What re-loops">
-          <Bullets items={['**A Blocker.**', '**A Major confirmed on a real boundary:** file, line and an exploit or failing input.', '**At most two passes.** A third needs you.']} />
+          <Bullets items={['**A Blocker.**', '**A Major confirmed on a real boundary:** file, line and an exploit or failing input. One that objects to what your own words ask for comes to you as a decision instead.', '**At most two passes.** A third needs you.']} />
         </Card>
         <Card title="What never re-loops">
           <Bullets items={['**Minor and Nit findings:** logged and shown in `/somi-status`.', '**Approve-with-comments:** done.', '**The same finding twice in a row:** stops and asks you.']} />

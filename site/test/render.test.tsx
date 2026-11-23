@@ -18,6 +18,15 @@ describe('the rendered page', () => {
     for (const m of html.matchAll(/\saria-labelledby="([^"]+)"/g)) expect(ids, m[1]).toContain(m[1]);
   });
 
+  it('lets a card shrink below its widest code line, so a long command scrolls in its block instead of widening the page on a phone', () => {
+    // A card is a grid item, and a grid item without min-w-0 is as wide as its longest unbroken line: the install commands made the page
+    // 613 px wide at 360. jsdom has no layout, so this checks the class that fixes it on every card that holds a code block.
+    const cards = [...html.matchAll(/<div class="([^"]*rounded-xl border border-line bg-surface[^"]*)"/g)];
+    const withCode = cards.filter((m, i) => html.slice(m.index, cards[i + 1]?.index ?? html.length).includes('<pre'));
+    expect(withCode.length).toBeGreaterThan(0);
+    for (const m of withCode) expect(m[1].split(/\s+/), m[1]).toContain('min-w-0');
+  });
+
   it('has no duplicate ids', () => {
     const all = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
     expect(all.length).toBe(new Set(all).size);

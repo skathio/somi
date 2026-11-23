@@ -129,6 +129,18 @@
     "scripts/lib/plan.mjs": [
       "tests/advisor.test.mjs"
     ],
+    "scripts/lib/brief.mjs": [
+      "tests/brief.test.mjs"
+    ],
+    "scripts/lib/brief-own.mjs": [
+      "tests/brief.test.mjs"
+    ],
+    "scripts/lib/brief-parse.mjs": [
+      "tests/brief.test.mjs"
+    ],
+    "scripts/lib/brief-route.mjs": [
+      "tests/brief.test.mjs"
+    ],
     "scripts/lib/setup.mjs": [
       "tests/advisor.test.mjs"
     ],
@@ -144,7 +156,8 @@
       "tests/quality.test.mjs"
     ],
     "workflows/": [
-      "tests/workflows.test.mjs"
+      "tests/workflows.test.mjs",
+      "tests/copilot-extension.test.mjs"
     ],
     "scripts/lib/copilot-workflow.mjs": [
       "tests/workflows.test.mjs",

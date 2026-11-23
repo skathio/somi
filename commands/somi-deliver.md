@@ -8,4 +8,6 @@ The user typed this command to run this work as SoMi's staged workflow. Call `so
 
 $ARGUMENTS
 
+With no text after the command, leave `request` empty: the work is the brief /somi-brief saved, and SoMi finds it.
+
 Then follow what it returns. When it gives you a workflow, start it as it says: that is what the user asked for here.

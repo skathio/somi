@@ -26,6 +26,11 @@ export function isClean(root) {
   return git(root, [...noFilters(root), 'status', '--porcelain', '--', '.', ':(glob,exclude)**/.somi/**']).trim() === '';
 }
 
+// A brief is the user's approval of work, so one a repository ships is not theirs: SoMi never builds from a committed one.
+// The brief file committed, or .somi itself committed as a submodule, whose files the index does not list. A project may commit its own
+// .somi/config.json, so only these two entries count. Case-blind, because on a case-insensitive disk .somi/BRIEF.md is the same file.
+const BRIEF_ENTRY = /^\.somi(\/brief\.md)?$/i;
+export const briefIsTracked = (root) => git(root, ['ls-files', '--cached', '--', ':(icase).somi']).split('\n').some((l) => BRIEF_ENTRY.test(l.trim()));
 export const stateIsTracked = (root) => git(root, ['ls-files', '--cached', '--', ':(glob)**/.somi/state/**']).trim() !== '';
 
 // The tree of a commit or tree id, for telling "nothing changed" apart from "changed and already committed".

@@ -54,7 +54,8 @@ const TICKET_KEY = /^\s*[A-Z][A-Z0-9]+-\d+\s*$/;
 const ANSWER = /\?\s*$|^\s*(what|why|how|where|when|who|which|does|do|is|are|can|explain|show me|list)\b/i;
 const TICKET_TYPES = Object.freeze({ bug: 'debug', defect: 'debug', incident: 'incident', epic: 'plan', spike: 'design', story: 'build', task: 'build', feature: 'build', improvement: 'build' });
 
-export const ROUTE_NAMES = Object.freeze([...new Set([...FIRST, ...KINDS].map(([r]) => r)), 'answer', 'build']);
+// brief is reached only by /somi-brief's hint: preparing work is something the user asks for, never a reading of their words.
+export const ROUTE_NAMES = Object.freeze([...new Set([...FIRST, ...KINDS].map(([r]) => r)), 'answer', 'build', 'brief']);
 
 // What the coordinator reads when it has to choose. Short, because it is read on the session's model.
 export const LONG_REQUEST = 600;

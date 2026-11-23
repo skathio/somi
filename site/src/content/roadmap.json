@@ -159,6 +159,13 @@
           "covers": ["5.2.0"],
           "title": "Measured on medium and large work",
           "body": "The quality gate reads Python, finds near-miss copies and import loops, and has named levels. The rules add the security floor's boundary lessons, the security reviewer can run on its own tier, and SoMi's commands work from the chat. `/somi-deliver` builds milestone by milestone and ends with a hardening pass. On medium and large benchmark tasks plain SoMi passed the strict standard about twice as often as a bare agent, and `/somi-deliver` more often still, at about three times plain SoMi's cost. On the registered small recording, with the security reviewer on medium, plain SoMi solved 89 of 96 draws against bare's 73 at 1.36 times bare's cost."
+        },
+        {
+          "version": "5.3.0",
+          "label": "5.3",
+          "covers": ["5.3.0"],
+          "title": "A brief before the build",
+          "body": "`/somi-brief` reads the code, asks only what the code cannot settle, and saves a brief with numbered, testable requirements that `/somi-deliver` or plain SoMi builds against. `/somi-deliver` gives an unmet request line one build a tier up and a finding from its last review one round of fixes. A reviewer now reads what you asked for, so a finding that objects to behaviour your own words ask for comes to you as a decision instead of stopping the run. On three large benchmark tasks `/somi-deliver` solved 10 of 11 draws, against 6 of 9 before."
         }
       ]
     }

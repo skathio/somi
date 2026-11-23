@@ -147,10 +147,13 @@ test('the mutation tool flips operators on changed code lines only', () => {
   assert.equal(GUARDED.test('scripts/lib/views.mjs'), false);
 });
 
-test("SoMi's own plan is not scanned, and the same line in shipped code still fails", (t) => {
+test("SoMi's own plan and the user's brief are not scanned, and the same line in shipped code still fails", (t) => {
   const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n' });
   writeFiles(dir, { '.somi/plan.md': 'Option A, chosen in D7 of the plan (D7).\n' });
   assert.equal(somi(dir, ['check']).status, 0);
+  // A brief is the user's approved words, and a staged run's milestone gates check the whole branch.
+  writeFiles(dir, { '.somi/brief.md': '1. The thing returns 1, as milestone M2 of iteration 3 (D12) says.\n' });
+  assert.equal(somi(dir, ['check', '--scope', 'pr']).status, 0);
   writeFiles(dir, { 'src/app.js': 'export const one = 1;\n// Chosen in D7 of the plan.\n' });
   assert.deepEqual(failedGates(somi(dir, ['check'])), ['planning-ids']);
 });

@@ -1,7 +1,7 @@
 {
   "name": "somi",
   "displayName": "SoMi",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "A workflow plugin for coding agents: say what you want or pass a ticket, and it picks the right workflow and keeps the cost down, while your agent stays in charge.",
   "keywords": [
     "workflow",
@@ -25,6 +25,10 @@
     "skills": "./skills"
   },
   "commands": [
+    {
+      "name": "somi-brief",
+      "description": "Prepare a new feature or an improvement as a brief ready to hand off: SoMi reads the code, asks what it cannot settle, and saves the brief for /somi-deliver or plain SoMi."
+    },
     {
       "name": "somi-config",
       "description": "Show and change the models each tier uses, the quality limits, and check the setup."

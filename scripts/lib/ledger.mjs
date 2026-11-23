@@ -22,6 +22,15 @@ export function clearLedger(root, env = process.env) {
   fs.rmSync(file(root, env), { force: true });
 }
 
+// Drops the entries of one kind whose text is in the list: what a replaced brief decided must not bind the brief that replaces it.
+export function removeFromLedger(root, { kind, texts }, env = process.env) {
+  const gone = new Set(texts.map((t) => `- ${kind}: ${oneLine(t)}`));
+  const current = readLedger(root, env).split('\n').filter(Boolean);
+  const kept = current.filter((l) => !gone.has(l));
+  if (kept.length === current.length) return;
+  if (kept.length === 0) clearLedger(root, env); else writeStateFile(root, file(root, env), `${kept.join('\n')}\n`, env);
+}
+
 export function addToLedger(root, { kind, text }, env = process.env) {
   if (!KINDS.includes(kind)) throw new StateError(`a ledger entry is one of: ${KINDS.join(', ')}`);
   const line = oneLine(text);

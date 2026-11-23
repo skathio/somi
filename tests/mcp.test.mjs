@@ -34,12 +34,12 @@ const call = async (rpc, name, args) => {
   return { error: r.result.isError === true, text: r.result.content[0].text };
 };
 
-test('six tools, which advise, record and never run project commands', async (t) => {
+test('seven tools, which advise, record and never run project commands', async (t) => {
   const dir = makeRepo(t, { 'src/app.js': 'export const one = 1;\n', 'somi.check.json': JSON.stringify({ fast_cmd: 'touch ran-marker' }), '.gitignore': '.somi\nran-marker\n' });
   const rpc = startServer(t, dir);
   await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
   const { result } = await rpc('tools/list', {});
-  assert.deepEqual(result.tools.map((x) => x.name), ['somi_route', 'somi_review', 'somi_note', 'somi_plan', 'somi_quality', 'somi_pr']);
+  assert.deepEqual(result.tools.map((x) => x.name), ['somi_route', 'somi_review', 'somi_note', 'somi_plan', 'somi_brief', 'somi_quality', 'somi_pr']);
 
   assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Add a helper' })).text).where, 'here', 'a small change stays in the conversation');
   assert.equal(JSON.parse((await call(rpc, 'somi_route', { request: 'Now fix the crash in the parser' })).text).route, 'debug', 'another request while work is under way is simply answered');

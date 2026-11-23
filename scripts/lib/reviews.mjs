@@ -6,7 +6,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readDiff, resolveRef, reviewDiffCommand, snapshotTree, workBase } from './git-tree.mjs';
-import { ReviewInputError, decideAfterReview, isBlocking, parseReviews } from './policy.mjs';
+import { ReviewInputError, decideAfterReview, isBlocking, markRequested, parseReviews } from './policy.mjs';
+import { saveRequest, userWords } from './prompt.mjs';
 import { computeSignals, RECORDED_ONLY, SECURITY_SIGNALS } from './signals.mjs';
 import { StateError, appendStateFile, statePaths } from './state.mjs';
 import { resolveSpawn } from './tiers.mjs';
@@ -22,11 +23,11 @@ const bare = (agent) => String(agent ?? '').split(':').pop();
 // Who reviews is review policy, so only the user's own config chooses the model, and a committed project config can only raise the
 // security reviewer's tier. Judging a diff is judgement work: the code reviewer runs on medium, the security reviewer on high unless
 // the user chose medium for it, and on high whenever the user asks for a security review.
-const seat = (ctx, agent, diff, asked) => {
+const seat = (ctx, agent, { diff, asked, request }) => {
   const wanted = agent === SECURITY_REVIEWER ? securityReviewTier({ global: ctx.configLayers?.[0], project: ctx.configLayers?.[1] }, { asked }) : TIERS[agent];
   const { tier, model } = resolveSpawn(ctx.configLayers?.[0] ?? {}, ctx.host, wanted);
   const marked = agent === SECURITY_REVIEWER && asked ? `${ASKED_SECURITY_REVIEW}\n\n` : '';
-  return { agent: `somi:${agent}`, tier, ...(model ? { model } : {}), brief: `${marked}${REVIEWER_PROMPT}\n\nThe diff command:\n${diff}` };
+  return { agent: `somi:${agent}`, tier, ...(model ? { model } : {}), brief: `${marked}${REVIEWER_PROMPT}\n\nThe diff command:\n${diff}${request ? `\n\nWhat the user asked for, word for word: ${request}` : ''}` };
 };
 
 const triggers = (signals) => [...signals.review.filter((s) => !RECORDED_ONLY.includes(s)), ...signals.security];
@@ -66,7 +67,8 @@ export function reviewPlan(ctx, { base, always = false, security = false } = {})
   const covered = agents.length > 0 && !always && !security && coveringReview(ctx, tree, agents);
   if (covered && (covered.findings ?? []).filter(isBlocking).length === 0) return { needed: false, covered: true, reviewers: [], required: agents, base: from, tree, signals: fired };
   const diff = reviewDiffCommand(from, tree);
-  return { needed: agents.length > 0, reviewers: agents.map((a) => seat(ctx, a, diff, security)), required: agents, base: from, tree, signals: fired, diff };
+  const request = agents.length > 0 ? saveRequest(ctx.root, ctx.env) : null;
+  return { needed: agents.length > 0, reviewers: agents.map((a) => seat(ctx, a, { diff, asked: security, request })), required: agents, base: from, tree, signals: fired, diff };
 }
 
 // Hosts hand reviewers the absolute path of the working copy, and a report is not worth paying for twice over that.
@@ -83,6 +85,7 @@ const ADVICE = Object.freeze({
   fix: 'These findings block this change from leaving. Fix them where the change was made: if a worker built it, start the same worker with its brief and these findings below it, and otherwise fix them here. Then call somi_review with no reviews, run the reviewers it names, and record what they return. If a finding has needs_verification, check it first: a reviewer asking to remove a check is not enough reason to remove it.',
   fixHere: 'These findings block this change from leaving, and security signals fired on its diff. Fix them here, on this conversation\'s model, and not on a low worker, even if one built the change. Then call somi_review with no reviews, run the reviewers it names, and record what they return. If a finding has needs_verification, check it first: a reviewer asking to remove a check is not enough reason to remove it.',
   ask: 'Tell the user: blocking findings remain after repeated review passes. Show them, and let the user choose between more fixing and stopping. SoMi will not write clean pull request text until a review clears them.',
+  decide: 'These findings are behaviour the user\'s own words ask for, so they do not block the change and they are the user\'s call. Show each one to the user briefly with the words it quotes, and do not change that behaviour unless the user asks.',
   close: 'Nothing here blocks the change. Pass the logged findings on to the user briefly, and do not act on them unless the user asks.',
 });
 
@@ -92,7 +95,9 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
   const list = normalized(ctx, reviews);
   const named = list.map((r) => r?.agent).filter((a) => Object.hasOwn(TIERS, a));
   const dispatched = [...new Set([...plan.required, ...named])].map((agent) => ({ agent }));
-  const { findings, verdicts } = parseReviews(list, dispatched);
+  const parsed = parseReviews(list, dispatched);
+  const findings = markRequested(parsed.findings, userWords(ctx.root, ctx.env));
+  const { verdicts } = parsed;
   const earlier = readReviews(ctx.root, ctx.env).filter((r) => r.base === plan.base);
   const pass = earlier.length + 1;
   const previousBlocking = earlier.at(-1)?.blocking ?? [];
@@ -101,7 +106,8 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
   const securityFired = plan.signals.some((s) => SECURITY_SIGNALS.includes(s));
   const record = { v: 1, at: ctx.now(), base: plan.base, tree, pass, verdicts, findings, blocking: blocking.map((f) => f.fingerprint) };
   appendStateFile(ctx.root, statePaths(ctx.root, ctx.env).reviews, `${JSON.stringify(record)}\n`, ctx.env);
-  const logged = findings.filter((f) => !isBlocking(f));
+  const decisions = findings.filter((f) => f.requested);
+  const logged = findings.filter((f) => !isBlocking(f) && !f.requested);
   const trimmed = verdicts.filter((v) => v.trimmed).map((v) => ({ agent: v.agent, dropped: v.trimmed }));
   return {
     verdict: decision.next === 'close' ? 'clear' : decision.next === 'fix' ? 'fix' : 'ask-user',
@@ -110,6 +116,7 @@ export function recordReviews(ctx, { reviews, base, tree: reviewed, always = fal
     logged,
     advice: decision.next === 'fix' && securityFired ? ADVICE.fixHere : ADVICE[decision.next],
     ...(decision.stop ? { stop: decision.stop } : {}),
+    ...(decisions.length ? { decisions, decisions_advice: ADVICE.decide } : {}),
     ...(trimmed.length ? { trimmed, trimmed_note: 'These reports were over the size cap, so their least severe findings were dropped to fit. Tell the user how many.' } : {}),
   };
 }
