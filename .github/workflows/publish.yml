@@ -1,6 +1,7 @@
 # Publish workflow — single file, one production approval.
 #
-# Adopts skathio/hashira's v2 contract (work item hashira-v2): an explicit,
+# Adopts skathio/hashira's release contract, at v3 (introduced in v2, work
+# item hashira-v2): an explicit,
 # dispatch-driven version resolver (`version-resolver`) feeding the
 # `npm-release` composite action (OIDC trusted publishing, tag + GitHub
 # Release via `gh release create --generate-notes`). This REPLACES the v1
@@ -19,7 +20,7 @@
 #               `npm-release` (see "## Same-run artifact handoff" below).
 #   - publish : needs version; runs under the SAME gate as `version` (manual
 #               dispatch + non-empty bump); gated by the `production`
-#               Environment (one approval). Calls npm-release@v2 with the
+#               Environment (one approval). Calls npm-release@v3 with the
 #               resolver's output — never recomputes a version itself.
 #   - site    : needs publish; calls .github/workflows/site.yml, which builds,
 #               tests and deploys the overview page to GitHub Pages.
@@ -190,15 +191,15 @@ jobs:
       # action; GitHub's `uses:` keyword rejects an expression in the `@ref`
       # position, so the library is checked out locally and invoked via a
       # literal `./` path instead (mirrors npm-package-ci.yml's `version`
-      # job exactly). Pinned to `v2`, hashira's rolling major-version tag
+      # job exactly). Pinned to `v3`, hashira's rolling major-version tag
       # (hashira's `docs/usage.md` "Pin policy" — "acceptable for most
-      # consumers"; auto-advances to future `v2.x.y` releases). Must match
-      # the `npm-release@v2` pin below (dual-pin invariant, D9).
+      # consumers"; auto-advances to future `v3.x.y` releases). Must match
+      # the `npm-release@v3` pin below (dual-pin invariant, D9).
       - name: Checkout hashira library (D14)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: skathio/hashira
-          ref: v2
+          ref: v3
           path: .hashira
           persist-credentials: false
 
@@ -233,7 +234,7 @@ jobs:
 
       # Stamp + pack in an ISOLATED COPY of the working tree, never the
       # checked-out tree itself (D1's stamp-only, no-commit-back invariant).
-      # npm-release@v2 does not compute or stamp a version itself — it only
+      # npm-release@v3 does not compute or stamp a version itself — it only
       # downloads and publishes the same-run artifact this step produces.
       - name: Pack tarball with stamped version (D1 — stamp-only, no commit-back)
         shell: bash
@@ -258,7 +259,7 @@ jobs:
       - name: Upload packed tarball (same-run artifact handoff for npm-release)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          # npm-release@v2 downloads this exact artifact name unconditionally
+          # npm-release@v3 downloads this exact artifact name unconditionally
           # — it has no mechanism to produce or re-pack it itself. Must match
           # exactly.
           name: npm-tarball
@@ -310,11 +311,11 @@ jobs:
         with:
           persist-credentials: true
 
-      - uses: skathio/hashira/.github/actions/npm-release@v2 # rolling major tag — see version job's checkout comment
+      - uses: skathio/hashira/.github/actions/npm-release@v3 # rolling major tag — see version job's checkout comment
         with:
           version: ${{ needs.version.outputs.resolved_version }}
-          node_version: '24'
           auth: oidc
+          # node_version defaults to '24'.
           # target defaults to https://registry.npmjs.org (official registry → OIDC).
           # No npm_token: OIDC trusted publishing handles auth; auth: oidc
           # never falls back to one even if it were set.

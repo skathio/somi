@@ -85,7 +85,7 @@ themselves; see [`site/README.md`](../site/README.md).
 
 ## Release process
 
-Releases are **explicit and dispatch-driven** (adopting hashira's v2 contract: the
+Releases are **explicit and dispatch-driven** (hashira's release contract, pinned at `v3`: the
 `version-resolver` composite action feeding the `npm-release` composite action). There is **no**
 automatic inference from commit messages anywhere in this pipeline — a maintainer always
 explicitly chooses the bump. Tagging and publishing to npm are done by the workflow, **not** by
