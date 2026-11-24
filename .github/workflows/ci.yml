@@ -41,21 +41,18 @@
 #
 # ## The hashira ref — the SAME ref as publish.yml and site.yml
 #
-# v3 dropped the `library_ref` input: the workflow checks its composite
-# actions out at its own commit. The one pin left to keep in step is the
-# `uses:` ref below, which must match publish.yml's `npm-release@<ref>` pin
-# and its `version` job's self-checkout `ref:`, and site.yml's pins. Pinned
-# to `v3`, hashira's rolling major-version tag (hashira's `docs/usage.md`
-# "Pin policy"): consumers who want byte-exact reproducibility instead should
-# use `@v3.0.0` or a SHA; `v3` auto-advances to future `v3.x.y` releases.
+# Every hashira ref in this repo tracks `@v3`, hashira's moving major tag:
+# the `uses:` below, publish.yml's `npm-release@v3` and its `version` job's
+# self-checkout `ref: v3`, and site.yml's two refs. New v3.x releases apply
+# with no PR here. Keep all of them on the same ref, and move them together
+# to `@v4` when it ships.
 #
-# Since v3.1.0 (1bd415e), which `v3` now resolves to, the reusable workflow
-# ends with an aggregate `passed` job: `if: always()`, red if any other CI job
-# failed, was cancelled or was skipped unexpectedly, and it keeps one PR
-# summary comment up to date. With the caller job named `ci` below, its check
-# is `ci / passed`, the one check the org's `ci-required` ruleset requires.
-# Renaming that job renames the check and breaks the ruleset, and the job
-# needs the `pull-requests: write` grant below for its comment.
+# The reusable workflow ends with an aggregate `passed` job (since v3.1.0):
+# `if: always()`, red if any other CI job failed, was cancelled or was
+# skipped unexpectedly, and it keeps one PR summary comment (quality gate,
+# scans, tests, coverage) up to date. With the caller job named `ci` below,
+# its check is `ci / passed`, the one check the org's `ci-required` ruleset
+# requires. Renaming that job renames the check and breaks the ruleset.
 name: ci
 
 on:
@@ -70,7 +67,7 @@ jobs:
     uses: skathio/hashira/.github/workflows/npm-package-ci.yml@v3 # rolling major tag (hashira docs/usage.md "Pin policy") — same ref as publish.yml's and site.yml's pins
     permissions:
       contents: read
-      pull-requests: write     # commitlint + coverage-report sticky comments
+      pull-requests: write     # the `passed` job's PR summary comment
       security-events: write   # CodeQL SARIF upload — granted for forward-
                                 # compat even though CodeQL is in the default
                                 # `scan_disable` skip list for this repo (no
