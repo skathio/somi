@@ -48,6 +48,14 @@
 # to `v3`, hashira's rolling major-version tag (hashira's `docs/usage.md`
 # "Pin policy"): consumers who want byte-exact reproducibility instead should
 # use `@v3.0.0` or a SHA; `v3` auto-advances to future `v3.x.y` releases.
+#
+# Since v3.1.0 (1bd415e), which `v3` now resolves to, the reusable workflow
+# ends with an aggregate `passed` job: `if: always()`, red if any other CI job
+# failed, was cancelled or was skipped unexpectedly, and it keeps one PR
+# summary comment up to date. With the caller job named `ci` below, its check
+# is `ci / passed`, the one check the org's `ci-required` ruleset requires.
+# Renaming that job renames the check and breaks the ruleset, and the job
+# needs the `pull-requests: write` grant below for its comment.
 name: ci
 
 on:
