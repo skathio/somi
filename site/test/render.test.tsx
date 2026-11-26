@@ -41,9 +41,9 @@ describe('the rendered page', () => {
     for (const m of html.matchAll(/\shref="(https?:[^"]+)"/g)) expect(m[1]).toMatch(/^https:\/\/github\.com\/skathio\/somi\b/);
   });
 
+  // The header's Docs link is <site-nav>'s docs attribute, checked in site-nav.test.tsx.
   it('links the docs site, which is built under the same Pages base', () => {
     const local = [...html.matchAll(/<a\b[^>]*\shref="(\/[^"]*)"/g)].map((m) => m[1]);
-    expect(local).toContain('/somi/docs/');
     expect(local).toContain('/somi/docs/BENCHMARK.html');
     for (const href of local) expect(href).toMatch(/^\/somi\/docs\//);
   });

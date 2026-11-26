@@ -149,28 +149,27 @@ test('homepage.yml runs only on pushes to main and by hand, never on PR or comme
 });
 
 // One release, one approval: every deploy of the page passes the production Environment's owner
-// approval exactly once, at `publish` for a release, or at site.yml's `gate` for a page-only run.
+// approval exactly once, at `publish` for a release, or at pages-site's `gate` for a page-only run.
+// pages-site skips that gate only for `released: true`, so a hand run must never be able to pass it.
 const SITE = '.github/workflows/site.yml';
-const siteJobs = () => {
-  const body = read(SITE).slice(read(SITE).search(/^jobs:\s*$/m));
-  const out = {};
-  let name = null;
-  for (const line of body.split('\n').slice(1)) {
-    const m = /^  ([A-Za-z0-9_-]+):\s*$/.exec(line);
-    if (m) { name = m[1]; out[name] = ''; } else if (name) out[name] += line + '\n';
-  }
-  return out;
+const siteOn = () => {
+  const wf = code(read(SITE));
+  return wf.slice(wf.search(/^on:\s*$/m), wf.search(/^permissions:/m));
 };
 
-test('a page-only deploy waits for the production approval before anything builds', () => {
-  const j = siteJobs();
-  assert.match(j.gate, /environment: production/);
-  assert.match(j.gate, /if: \$\{\{ !inputs\.released \}\}/);
-  assert.match(j.build, /needs: gate/);
-  assert.match(j.build, /needs\.gate\.result == 'success' \|\| \(needs\.gate\.result == 'skipped' && inputs\.released\)/);
-  assert.match(j.deploy, /needs\.build\.result == 'success'/);
-  // `!cancelled()`, not `always()`: a cancelled run must not deploy.
-  assert.doesNotMatch(code(read(SITE)), /\$\{\{ always\(\)/);
+test('a page-only deploy cannot skip the production approval', () => {
+  const dispatch = /^ {2}workflow_dispatch:[^\n]*\n((?: {4}.*\n)*)/m.exec(siteOn());
+  assert.ok(dispatch, 'site.yml runs by hand');
+  assert.equal(dispatch[1], '', 'a hand run takes no inputs, so it cannot claim released');
+  // The only `released` site.yml passes on is its caller's, and never a literal true.
+  const wf = code(read(SITE));
+  assert.deepEqual([...wf.matchAll(/^ +released:[ \t]*(\S.*)$/gm)].map((m) => m[1].trim()), ['${{ inputs.released == true }}']);
+  assert.doesNotMatch(wf, /^\s+if:/m, 'no condition skips the deploy job');
+});
+
+test('the Docs link on the homepage tile is where pages.json serves the docs', () => {
+  const { base = '/somi/docs/' } = JSON.parse(read('.github/pages.json'));
+  assert.equal(JSON.parse(read(MANIFEST)).links?.Docs, `https://skathio.github.io${base}`);
 });
 
 test('only the release skips that gate, and only after publish', () => {

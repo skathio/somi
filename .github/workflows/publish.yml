@@ -24,8 +24,9 @@
 #               dispatch + non-empty bump); gated by the `production`
 #               Environment (one approval). Calls npm-release@v3 with the
 #               resolver's output — never recomputes a version itself.
-#   - site    : needs publish; calls .github/workflows/site.yml, which builds,
-#               tests and deploys the overview page to GitHub Pages.
+#   - site    : needs publish; calls .github/workflows/site.yml, which builds
+#               the overview page and the docs and deploys them to GitHub Pages
+#               through hashira's pages-site.
 #
 # ## The overview page
 #
@@ -283,10 +284,12 @@ jobs:
           fi
           echo "publish: git status (tracked files) clean after stamp — no commit-back occurred" >> "${GITHUB_STEP_SUMMARY}"
 
-  # The docs build at the release commit, the same build site.yml deploys after `publish`. It runs
-  # before anything is published, so a broken docs build stops the release while it can still be
-  # fixed, instead of failing the site deploy after the package is on npm. It runs third-party code
-  # (the VitePress and Vite toolchains), so it holds no token beyond reading the repo.
+  # The page and docs build at the release commit, the same build site.yml deploys after
+  # `publish`: the page's own build, then hashira's docs-build from docs/ and .github/pages.json into
+  # site/dist/docs, as pages-site does. It runs before anything is published, so a broken build stops
+  # the release while it can still be fixed, instead of failing the site deploy after the package is
+  # on npm. It runs third-party code (the Vite and VitePress toolchains), so it holds no token beyond
+  # reading the repo.
   docs:
     name: docs
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
@@ -302,13 +305,30 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install site and docs-site dependencies (lockfiles only, no lifecycle scripts)
-        run: |
-          npm --prefix site ci --ignore-scripts
-          npm --prefix docs-site ci --ignore-scripts
+      - name: Install site dependencies (lockfile only, no lifecycle scripts)
+        run: npm --prefix site ci --ignore-scripts
 
-      - name: Build the overview page and the docs into site/dist
-        run: docs-site/build.sh
+      # A red page test stops the release before anything reaches npm.
+      - name: Test the page and its content against the repo
+        run: npm --prefix site test
+
+      - name: Build the overview page into site/dist
+        run: npm --prefix site run build
+
+      # The kit pages-site adds after the build, copied here too so check-dist can prove the page's
+      # kit references resolve in what is deployed.
+      - name: Add hashira's site kit to site/dist/_kit
+        uses: skathio/hashira/.github/actions/site-kit@v3 # rolling major tag — see version job's checkout comment
+        with:
+          dest: site/dist
+
+      - name: Check the page with its kit is self-contained
+        run: node site/scripts/check-dist.mjs --kit site/dist
+
+      - name: Build the docs into site/dist/docs
+        uses: skathio/hashira/.github/actions/docs-build@v3 # rolling major tag — see version job's checkout comment
+        with:
+          output_dir: site/dist/docs
 
   publish:
     name: publish
@@ -359,14 +379,12 @@ jobs:
     uses: ./.github/workflows/site.yml
     with:
       released: true
-    # site.yml's jobs need these (hashira's static-webapp-ci matrix, then deploy-pages); a called
+    # site.yml's pages-site needs these (checkout, then deploy-pages and its OIDC token); a called
     # workflow can only narrow what its caller grants.
     permissions:
       contents: read
-      id-token: write
       pages: write
-      pull-requests: write
-      security-events: write
+      id-token: write
 
   # Tells the org homepage (skathio/skathio.github.io) to rebuild so its SoMi tile shows this release.
   # npm-release creates the GitHub Release with GITHUB_TOKEN, which does not fire the `release`

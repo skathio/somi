@@ -1,0 +1,35 @@
+/* SoMi's accent pair on the docs, as on the overview page (site/src/index.css): the darker red in
+   light mode, where #ff4d4d on the light canvas is too faint for text, and #ff4d4d in dark mode.
+   pages.json's accent would use one colour in both modes; this loads after it, so these win. */
+:root {
+  --vp-c-brand-1: #b80f0f;
+  --vp-c-brand-2: #9a0c0c;
+  --vp-c-brand-3: #b80f0f;
+  --vp-c-brand-soft: #fbe3e3;
+  --vp-button-brand-text: #ffffff;
+}
+
+.dark {
+  --vp-c-brand-1: #ff4d4d;
+  --vp-c-brand-2: #ff6b6b;
+  --vp-c-brand-3: #ff4d4d;
+  --vp-c-brand-soft: #3b1214;
+  --vp-button-brand-text: #101216;
+}
+
+/* The header holds the overview page's seven section links and Docs, which fit beside the search box
+   only from about 1140px. From VitePress's own switch to the bar at 768px up to there, the section
+   links are left out, as <site-nav> leaves them out on a narrow overview page; Docs stays. */
+@media (min-width: 768px) and (max-width: 1139px) {
+  .VPNavBarMenu .VPNavBarMenuLink[href*="#"] {
+    display: none;
+  }
+}
+
+/* With the link back to the skathio homepage, the nine links need about 90px more than the bar has from
+   1140px until the page is wide enough for VitePress's own spacing: the links sit closer together there. */
+@media (min-width: 1140px) and (max-width: 1339px) {
+  .VPNavBarMenu .VPNavBarMenuLink {
+    padding: 0 7px;
+  }
+}

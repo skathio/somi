@@ -42,8 +42,10 @@
 # ## The hashira ref — the SAME ref as publish.yml and site.yml
 #
 # Every hashira ref in this repo tracks `@v3`, hashira's moving major tag:
-# the `uses:` below, publish.yml's `npm-release@v3` and its `version` job's
-# self-checkout `ref: v3`, and site.yml's two refs. New v3.x releases apply
+# the `uses:` below, the `site` job's `site-kit@v3` and the `docs` job's
+# `docs-build@v3`, publish.yml's `npm-release@v3`, its `docs` job's
+# `site-kit@v3` and `docs-build@v3` and its `version` job's
+# self-checkout `ref: v3`, and site.yml's `pages-site.yml@v3`. New v3.x releases apply
 # with no PR here. Keep all of them on the same ref, and move them together
 # to `@v4` when it ships.
 #
@@ -159,13 +161,23 @@ jobs:
       - name: Build (type check, bundle, self-contained check)
         run: npm --prefix site run build
 
-  # The docs site (docs-site/), which site.yml builds into site/dist/docs and deploys with the
-  # overview page. It is its own package with its own lockfile, and its build reads docs/, so a guide
-  # with a dead link or a page the sidebar names but docs/ lacks turns the pull request red before
-  # merge rather than at release time. build.sh builds the overview page first, so site/ is installed
-  # too. No `needs:`, for the same reason as publish-dry-run; `--ignore-scripts` as in `site`.
-  docs-site:
-    name: docs-site
+      # The kit pages-site adds after the build, copied here too so check-dist can prove the page's
+      # kit references resolve in what is deployed.
+      - name: Add hashira's site kit to site/dist/_kit
+        uses: skathio/hashira/.github/actions/site-kit@v3 # rolling major tag — same ref as the `ci` job's
+        with:
+          dest: site/dist
+
+      - name: Check the page with its kit is self-contained
+        run: node site/scripts/check-dist.mjs --kit site/dist
+
+  # The docs (docs/), which site.yml builds with hashira's docs-build into /somi/docs/ and deploys
+  # with the overview page. Building them here, from docs/ and .github/pages.json, turns the pull
+  # request red before merge rather than at release time when a guide has a dead link, a sidebar
+  # entry names a page docs/ lacks, or pages.json breaks the schema. docs-build installs VitePress
+  # from hashira's own lockfile. No `needs:`, for the same reason as publish-dry-run.
+  docs:
+    name: docs
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -178,13 +190,5 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install site and docs-site dependencies (lockfiles only, no lifecycle scripts)
-        run: |
-          npm --prefix site ci --ignore-scripts
-          npm --prefix docs-site ci --ignore-scripts
-
-      - name: Build the overview page and the docs into site/dist
-        run: docs-site/build.sh
-
-      - name: Test the docs site, its build and its links
-        run: node --test docs-site/
+      - name: Build the docs from docs/ and .github/pages.json
+        uses: skathio/hashira/.github/actions/docs-build@v3 # rolling major tag — same ref as the `ci` job's

@@ -1,4 +1,4 @@
-import icon from '../assets/somi-icon.png';
+import { home_link } from '../../../.github/pages.json';
 
 export interface NavItem {
   id: string;
@@ -7,48 +7,32 @@ export interface NavItem {
 
 interface HeaderProps {
   items: NavItem[];
-  active: string;
   onPresent: () => void;
-  onTheme: () => void;
 }
 
-const button =
-  'rounded-md border border-line bg-surface px-2.5 py-1 text-sm text-ink transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-accent';
+// <site-nav> is hashira's shared header (site-kit's site-nav.js, copied into /somi/_kit/ by the pages build):
+// it renders the brand, the section links, Docs, its children as per-site extras, and the theme toggle, in
+// the order every skathio site shares. The link back to the skathio homepage is the one in .github/pages.json,
+// which the docs header shows too. React 19 passes these string props through as attributes.
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'site-nav': { name: string; logo: string; docs: string; nav: string; home_link: string; children?: ReactNode };
+    }
+  }
+}
 
-export function Header({ items, active, onPresent, onTheme }: HeaderProps) {
+// Sized like the kit's own toggle button (site-nav.js), so Present reads as part of the same bar.
+const button =
+  'cursor-pointer whitespace-nowrap rounded-lg border border-line bg-transparent px-3 py-1 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+
+export function Header({ items, onPresent }: HeaderProps) {
+  const nav = JSON.stringify(items.map(({ id, label }) => ({ label, href: `#${id}` })));
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-canvas/85 px-4 py-2.5 backdrop-blur">
-      <a href="#top" className="flex shrink-0 items-center gap-2 font-bold tracking-wide text-ink no-underline">
-        <img src={icon} alt="" width={28} height={28} className="h-7 w-7" />
-        <span>
-          So<span className="text-accent">Mi</span>
-        </span>
-      </a>
-      <nav aria-label="Sections" className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
-        {items.map((it) => (
-          <a
-            key={it.id}
-            href={`#${it.id}`}
-            aria-current={active === it.id ? 'true' : undefined}
-            className="whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm text-muted no-underline hover:bg-surface-2 hover:text-ink aria-[current]:bg-surface-2 aria-[current]:text-ink"
-          >
-            {it.label}
-          </a>
-        ))}
-      </nav>
-      <a href="/somi/docs/" className={`${button} shrink-0 no-underline`}>
-        Docs
-      </a>
+    <site-nav name="SoMi" logo="icon-192.png" docs="docs/" nav={nav} home_link={JSON.stringify(home_link)}>
       <button type="button" onClick={onPresent} title="Present mode (P)" className={`${button} hidden sm:inline-block`}>
         Present
       </button>
-      <button type="button" onClick={onTheme} title="Toggle theme (T)" aria-label="Toggle theme" className={button}>
-        <svg aria-hidden="true" viewBox="0 0 16 16" className="inline-block h-4 w-4 align-[-3px]">
-          <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor" />
-        </svg>
-        <span className="ml-1 hidden sm:inline">Theme</span>
-      </button>
-    </header>
+    </site-nav>
   );
 }

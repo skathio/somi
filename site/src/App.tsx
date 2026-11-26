@@ -9,8 +9,9 @@ import { Loops } from './components/Loops';
 import { Measured } from './components/Measured';
 import { Install } from './components/Install';
 import { FACTS } from './lib/facts';
-import { toggleTheme, useActiveSection, useKeyboard } from './lib/navigation';
+import { toggleTheme, useKeyboard } from './lib/navigation';
 
+// The header's section links. .github/pages.json lists the same ones as `nav`, so the docs header matches.
 export const NAV: NavItem[] = [
   { id: 'roadmap', label: 'Roadmap' },
   { id: 'workflow', label: 'Workflow' },
@@ -26,12 +27,11 @@ const SECTION_IDS = ['top', ...NAV.map((n) => n.id)];
 export function App() {
   const [present, setPresent] = useState(false);
   const togglePresent = useCallback(() => setPresent((p) => !p), []);
-  const active = useActiveSection(SECTION_IDS);
   useKeyboard(SECTION_IDS, togglePresent, toggleTheme);
 
   return (
     <div className={present ? 'present' : undefined}>
-      <Header items={NAV} active={active} onPresent={togglePresent} onTheme={toggleTheme} />
+      <Header items={NAV} onPresent={togglePresent} />
       <main>
         <Hero />
         <Roadmap />
