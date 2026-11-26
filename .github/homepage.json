@@ -10,6 +10,7 @@
   "colour": "#ff4d4d",
   "image": "site/brand/somi-icon-800.png",
   "links": {
-    "npm": "https://www.npmjs.com/package/@skathio/somi"
+    "npm": "https://www.npmjs.com/package/@skathio/somi",
+    "Docs": "https://skathio.github.io/somi/docs/"
   }
 }

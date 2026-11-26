@@ -32,3 +32,5 @@ dist/
 build/
 
 .somi
+# The docs build stages its sources here; nothing generated is committed.
+/artifacts/

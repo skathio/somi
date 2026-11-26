@@ -36,6 +36,9 @@ export function Header({ items, active, onPresent, onTheme }: HeaderProps) {
           </a>
         ))}
       </nav>
+      <a href="/somi/docs/" className={`${button} shrink-0 no-underline`}>
+        Docs
+      </a>
       <button type="button" onClick={onPresent} title="Present mode (P)" className={`${button} hidden sm:inline-block`}>
         Present
       </button>

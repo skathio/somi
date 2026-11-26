@@ -34,7 +34,7 @@ SoMi keeps no workflow state, so nothing can be "still open" and nothing refuses
 | When a review runs | Sized before coding | Decided from signals in the real diff when a turn ends, with one reviewer, and checked before the pull request text |
 | Long work | Plan and progress files read by hand | One plan file, a small ledger put back after every compaction, and each milestone routed on its own |
 | Model tiers | A lookup the agent could skip | The conversation on medium, workers and reviewers set by a hook |
-| Listed entries | 91 | 14: 6 commands, 6 agents, one skill and one workflow, with a library behind them |
+| Listed entries | 91 | 15: 7 commands, 6 agents, one skill and one workflow, with a library behind them |
 | Other plugins | No way in | Shards, connected from `/somi-config` |
 
 ## Install
@@ -61,82 +61,25 @@ Start with SoMi as the session's agent and just talk to it:
 claude --agent somi:somi    # or: copilot --agent somi:somi
 ```
 
-To start that way with the model your config sets for the conversation's tier, `somi launch claude` or `somi launch copilot` starts the host with `--agent somi:somi` and that model, and Copilot in experimental mode for `/somi-deliver`. Anything after it goes to the host. Ask `/somi-config` for the full command, and wrap it in an alias or function of your own, on Linux, macOS or Windows.
+`somi launch claude` or `somi launch copilot` starts the host that way, on the model your config sets for the conversation's tier. Ask `/somi-config` for the full command, and wrap it in an alias of your own.
 
-Everything is done from the chat. Ask for a change, a bug fix, a refactor, a plan, a design, a review, an upgrade or the pull request text in plain words, or paste a ticket, and SoMi's agent picks the workflow. Outside SoMi's agent, plain prompts are not routed, and SoMi says so at session start. In a Copilot session already running, `/agent somi` switches to it. Seven commands do the rest:
-
-| Command | What it does |
-|---|---|
-| `/somi <anything>` | Routes anything, the way the agent does with plain words. Use it from another agent. |
-| `/somi <command>` | Runs SoMi's own commands from the chat, so you never need the terminal: `/somi doctor` checks the setup, `/somi check` runs the gate and the tests, and `/somi help` lists the rest. One that changes your setup, such as `setup` or `init`, runs only after you say yes. |
-| `/somi-brief <feature>` | Prepares a new feature or an improvement before anyone builds it: SoMi reads the code, asks what it cannot settle, and, once you approve, saves a brief of numbered requirements, decisions, scope and acceptance checks. It recommends `/somi-deliver` for medium and large work and plain SoMi for a small change. |
-| `/somi-deliver [work or ticket]` | Runs large work as SoMi's staged workflow. Only you can start it. On Copilot, it needs `/experimental`; SoMi registers it at session start, so a session already open gets it after `/clear`. Typed with nothing after it, it builds the open brief. |
-| `/somi-review` | Reviews the current changes, whether or not the diff calls for it. |
-| `/somi-quality [commit \| repo]` | Checks the code against the quality limits: the branch, one commit, or the whole codebase. |
-| `/somi-status` | Shows the open plan or brief, decisions and findings. |
-| `/somi-config` | Shows and changes the models each tier uses and the quality limits, and checks the setup. |
-
-On Claude Code they also answer to `/somi:somi-review` and so on. On Copilot, SoMi's commands are listed as skills, by their plain names only: type `/somi-deliver`, not `/somi:somi-deliver`.
+Ask for a change, a bug fix, a refactor, a plan, a design, a review, an upgrade or the pull request text in plain words, or paste a ticket, and SoMi's agent picks the workflow. Seven commands do the rest: `/somi`, `/somi-brief`, `/somi-deliver`, `/somi-review`, `/somi-quality`, `/somi-status` and `/somi-config`. [Getting started](https://skathio.github.io/somi/docs/) ([source](docs/getting-started.md)) walks through a first session, and [Commands](https://skathio.github.io/somi/docs/commands.html) ([source](docs/commands.md)) says what each command takes.
 
 ## Set your tiers
 
-You choose the models for each environment in `~/.config/somi/config.json`. `main` is the tier your conversation runs on, medium by default. Code is written on medium, in the conversation or in `/somi-deliver`'s build, and work above the conversation's tier goes up to a worker. The low tier only gathers information and runs checks. When the diff shows security signals, the security reviewer runs on high, and any fix stays on `main`. `"review": { "security_tier": "medium" }` puts that reviewer alone on medium, while the high tier stays for work that climbs to it. On the benchmark that cost 17–19% less per task but solved fewer small security tasks, so the default stays high. A project's config can only set it back to high, and a security review you ask for, such as `/somi review --security`, always runs on high. The quality gate is strict by default; `"quality": { "level": "standard" }` or `"relaxed"` in the same file loosens it, and a project's own config can only make it stricter. Ask `/somi-config` to change any of it: after `main` changes, it writes `somi-main` to your own agent folder so the conversation runs on that tier's model.
-
-```json
-{ "tiers": { "main": "medium", "claude": { "low": "haiku", "medium": "sonnet", "high": "opus" }, "copilot": { "low": "<model>", "medium": "<model>", "high": "<model>" }, "ceiling": "high" } }
-```
-
-Claude Code has those defaults. Copilot has none, because its models vary by plan, so a tier with no model runs on the session's. Three things to know on Copilot CLI:
-
-- **Auto:** with the session model on Auto, every subagent gets the model Auto chose, so tiers do nothing. Pick a named model for the session; `/somi-config`'s setup check warns about Auto.
-- **A model your plan cannot use:** it falls back to the session's model without an error.
-- **VS Code:** it refuses a subagent above the main model's cost tier, so there the main agent needs to run on the strongest tier you want to use.
+Choose the models for each tier, and the security reviewer's tier, as [Configuration](https://skathio.github.io/somi/docs/configuration.html#tiers) ([source](docs/configuration.md#tiers)) shows, and see [Hosts](https://skathio.github.io/somi/docs/hosts.html) ([source](docs/hosts.md)) for Auto, plans and VS Code on Copilot.
 
 ## Set your quality limits
 
-The quality gate checks what a change touched against limits on complexity, nesting, length, parameters, copied code, import cycles and suppressions, and gives advice on file size, options objects, swallowed errors, leftover debugging, tests that assert nothing and names nothing uses. The defaults are in [ARCHITECTURE.md](docs/ARCHITECTURE.md#quality-gate). Ask for it in the chat, or type `/somi-quality`. By default it scores the whole branch since it left the main branch, which is what goes into a pull request; `/somi-quality commit` scores what a commit adds to the last one. Both scopes share every limit except how much one change may add to a file: 25 in a commit and 100 in a pull request.
-
-Ask `/somi-config` to change one, or set your own under `quality` in the same global file, and give either scope its own values under `quality.commit` or `quality.pr`:
-
-```json
-{ "quality": { "function": { "cognitive": 15, "depth": 4, "lines": 60, "params": 4 }, "commit": { "file": { "added_cognitive": 25 } }, "pr": { "file": { "added_cognitive": 100 } } } }
-```
-
-A project's `.somi/config.json` can only make a limit stricter: a looser value there is ignored, and the gate says so. SoMi asks before an agent changes a limit.
-
-To keep layers apart, name the folders that must not import others. Either file may add rules, and a new import across one fails:
-
-```json
-{ "quality": { "forbid_imports": [{ "from": "src/ui/", "to": "src/db/" }] } }
-```
-
-The gate may run for 300 seconds before it counts as failed. For a large change, set `quality.timeout_seconds`, up to 1800, in your own file, or in the project's, which may only lengthen it:
-
-```json
-{ "quality": { "timeout_seconds": 900 } }
-```
-
-For a cleanup or a refactor, `/somi-quality repo` reports on the whole codebase as it stands: every function and file over a limit, every copy in product code and every suppression with no reason. It lists the most complex functions and the files with the most findings first. Give it its own limits under `quality.repo`.
-
-You do not need to run it yourself. When a turn that changed code ends, on Claude Code and Copilot CLI alike, SoMi runs the gate and sends anything over a limit back to the agent to fix, before any review. The agent never adds an exemption to get past it: that is yours to decide. No pull request text is written while the branch fails it, and `/somi-deliver` checks each build and steps the build up a tier with the findings.
+The quality gate's limits, its level, its commit, pull request and repository scopes, import rules and time limit are in [Configuration](https://skathio.github.io/somi/docs/configuration.html#quality-limits) ([source](docs/configuration.md#quality-limits)).
 
 ## Connect other plugins with shards
 
-A shard slots another plugin's skill, agent or tool into a named step: `work-item.start`, `plan.approved`, `pr.open` or `review.done`. Ask `/somi-config` in the chat, for example "connect jira:fetch-ticket to work-item.start", and the agent runs `somi slot` for you, like this:
-
-```bash
-somi slot work-item.start jira:fetch-ticket
-somi slot pr.open github:open-pr --mode write
-somi slot --list
-```
-
-A shard keeps working when its plugin updates, and tells you it changed. What it returns is treated as data, never as instructions. Anything that writes outward asks first, and a changed write shard stays held until you confirm.
+To slot another plugin's skill, agent or tool into one of SoMi's steps, see [Shards](https://skathio.github.io/somi/docs/shards.html) ([source](docs/shards.md)).
 
 ## Turn on the sandbox
 
-Hooks catch honest mistakes. They are not a security boundary. Ask `/somi-config` to check the setup: it runs `somi doctor` inside the agent's own shell, and when the sandbox is off it gives you the recommended settings from `somi doctor --profile` to merge into your host's settings. Check again from inside an agent session, because a command typed at a `!` prompt usually bypasses the sandbox.
-
-`doctor` passes only when writing to your home directory and reaching the network directly both fail inside the agent's shell. See [the trust model](docs/ARCHITECTURE.md#trust-model).
+Hooks are tripwires, not a security boundary: turn on the sandbox and check it with `somi doctor`, as [Sandbox and trust](https://skathio.github.io/somi/docs/sandbox.html) ([source](docs/sandbox.md)) shows.
 
 ## Upgrading from 4.1
 
@@ -144,6 +87,7 @@ This is a breaking release. See [the migration guide](docs/MIGRATING-TO-5.md). R
 
 ## Docs
 
+- [User guides on the docs site](https://skathio.github.io/somi/docs/): getting started, workflows, commands, configuration, hosts, shards, and sandbox and trust
 - [Architecture and trust model](docs/ARCHITECTURE.md)
 - [Benchmark and release decision](docs/BENCHMARK.md)
 - [Migrating from 4.x](docs/MIGRATING-TO-5.md)

@@ -158,3 +158,33 @@ jobs:
 
       - name: Build (type check, bundle, self-contained check)
         run: npm --prefix site run build
+
+  # The docs site (docs-site/), which site.yml builds into site/dist/docs and deploys with the
+  # overview page. It is its own package with its own lockfile, and its build reads docs/, so a guide
+  # with a dead link or a page the sidebar names but docs/ lacks turns the pull request red before
+  # merge rather than at release time. build.sh builds the overview page first, so site/ is installed
+  # too. No `needs:`, for the same reason as publish-dry-run; `--ignore-scripts` as in `site`.
+  docs-site:
+    name: docs-site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Install site and docs-site dependencies (lockfiles only, no lifecycle scripts)
+        run: |
+          npm --prefix site ci --ignore-scripts
+          npm --prefix docs-site ci --ignore-scripts
+
+      - name: Build the overview page and the docs into site/dist
+        run: docs-site/build.sh
+
+      - name: Test the docs site, its build and its links
+        run: node --test docs-site/
