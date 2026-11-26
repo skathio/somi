@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — versioning:
 
 ## [Unreleased]
 
+### Added
+
+- **A docs site.** The user guides are published at https://skathio.github.io/somi/docs/: getting started, workflows, commands, configuration, the differences between hosts, shards, and sandbox and trust, next to the architecture, benchmark and migration pages. They are built with VitePress from `docs/` as it is on GitHub, under the overview page on the same Pages site, so `site.yml` deploys both with one approval. The overview page's header and the org homepage tile link them, and the README links each guide in place of its long sections. CI builds and tests the docs on every pull request, and a release whose docs do not build stops before anything is published.
+
 ### Changed
 
 - **CI/CD moved to hashira v3.** `ci.yml`, `publish.yml` and `site.yml` pin hashira's workflows and actions at `v3` instead of `v2`, and drop `library_ref`, which v3 removed. Pull requests now also run hashira's `quality-gate` job, SoMi's own quality check at its default `strict` level, on what they change. Releasing is unchanged: run `publish.yml` with a `bump`.

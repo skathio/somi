@@ -18,7 +18,9 @@
 #               self-checkout), surfaces it to the run summary (NFR-DX-3),
 #               and packs+stamps a tarball that `publish` hands to
 #               `npm-release` (see "## Same-run artifact handoff" below).
-#   - publish : needs version; runs under the SAME gate as `version` (manual
+#   - docs    : builds the overview page and the docs at the release commit, as site.yml will;
+#               a broken docs build stops the release before anything reaches npm.
+#   - publish : needs version and docs; runs under the SAME gate as `version` (manual
 #               dispatch + non-empty bump); gated by the `production`
 #               Environment (one approval). Calls npm-release@v3 with the
 #               resolver's output — never recomputes a version itself.
@@ -281,9 +283,36 @@ jobs:
           fi
           echo "publish: git status (tracked files) clean after stamp — no commit-back occurred" >> "${GITHUB_STEP_SUMMARY}"
 
+  # The docs build at the release commit, the same build site.yml deploys after `publish`. It runs
+  # before anything is published, so a broken docs build stops the release while it can still be
+  # fixed, instead of failing the site deploy after the package is on npm. It runs third-party code
+  # (the VitePress and Vite toolchains), so it holds no token beyond reading the repo.
+  docs:
+    name: docs
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Install site and docs-site dependencies (lockfiles only, no lifecycle scripts)
+        run: |
+          npm --prefix site ci --ignore-scripts
+          npm --prefix docs-site ci --ignore-scripts
+
+      - name: Build the overview page and the docs into site/dist
+        run: docs-site/build.sh
+
   publish:
     name: publish
-    needs: version
+    needs: [version, docs]
     # Same gate as `version` (see "## Trigger model" above) — a dispatch with
     # `bump` left empty is a no-op (resolves/publishes nothing).
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != ''

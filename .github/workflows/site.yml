@@ -1,4 +1,6 @@
-# Site workflow — builds, tests and deploys the overview page (site/) to GitHub Pages.
+# Site workflow — builds, tests and deploys the overview page (site/) and the docs site (docs-site/)
+# to GitHub Pages. docs-site/build.sh builds the overview page into site/dist and the docs into
+# site/dist/docs, so site/dist is the whole Pages folder: the page at /somi/, the docs at /somi/docs/.
 #
 # Two ways in, one definition:
 #   - workflow_dispatch : deploy the page on its own, with no npm release (a content fix, a layout
@@ -11,10 +13,11 @@
 #              owner approval, the same single approval a release needs. A run from publish.yml
 #              passes `released: true` and skips it, because its `publish` job already holds that
 #              approval: one release, one approval, with the page deployed after the package.
-#   - build  : hashira's static-webapp-ci reusable workflow — installs site/ from its lockfile, runs
-#              the site's tests (which check the page's content against the repo: every CHANGELOG
-#              release on the roadmap, every command, hook and agent shown), builds it, runs the scan
-#              suite, and uploads the Pages artifact.
+#   - build  : hashira's static-webapp-ci reusable workflow — installs site/ and docs-site/ from their
+#              lockfiles, runs the site's tests (which check the page's content against the repo: every
+#              CHANGELOG release on the roadmap, every command, hook and agent shown) and the docs'
+#              tests, builds the page and the docs into site/dist, runs the scan suite, and uploads the
+#              Pages artifact.
 #   - deploy : hashira's pages-deploy, into the `github-pages` Environment.
 #
 # Who can deploy: the `github-pages` Environment's deployment-branch policy allows `main`, so a manual
@@ -66,11 +69,13 @@ jobs:
     with:
       node_version: '24' # the workflow's default is '20'
       # Literal strings only (static-webapp-ci evaluates them in the job holding id-token: write).
-      # site/ is its own package; the root `npm ci` the workflow runs first installs nothing.
-      # --ignore-scripts: no dependency lifecycle script runs, and none is needed.
-      build_command: 'npm --prefix site ci --ignore-scripts && npm --prefix site run build'
+      # site/ and docs-site/ are their own packages; the root `npm ci` the workflow runs first
+      # installs nothing. --ignore-scripts: no dependency lifecycle script runs, and none is needed.
+      # docs-site/build.sh runs the page's build itself, then copies the docs into site/dist/docs,
+      # because Vite empties site/dist first.
+      build_command: 'npm --prefix site ci --ignore-scripts && npm --prefix docs-site ci --ignore-scripts && docs-site/build.sh'
       output_dir: 'site/dist'
-      test_command: 'npm --prefix site ci --ignore-scripts && npm --prefix site test'
+      test_command: 'npm --prefix site ci --ignore-scripts && npm --prefix site test && npm --prefix docs-site ci --ignore-scripts && node --test docs-site/'
       coverage_path: 'site/coverage/lcov.info'
 
   deploy:

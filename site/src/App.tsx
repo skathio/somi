@@ -47,7 +47,7 @@ export function App() {
           Built from SoMi's CHANGELOG, docs and source at {FACTS.version}.{' '}
           <a className="text-accent" href="https://github.com/skathio/somi">github.com/skathio/somi</a> ·{' '}
           <a className="text-accent" href="https://github.com/skathio/somi/blob/main/CHANGELOG.md">CHANGELOG</a> ·{' '}
-          <a className="text-accent" href="https://github.com/skathio/somi/blob/main/docs/BENCHMARK.md">Usage benchmark</a>
+          <a className="text-accent" href="/somi/docs/BENCHMARK.html">Usage benchmark</a>
         </div>
       </footer>
       <div aria-hidden="true" className="hint fixed bottom-4 right-4 hidden rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-muted shadow-sm lg:block">
