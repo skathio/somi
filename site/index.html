@@ -18,15 +18,13 @@
     <meta property="og:image" content="https://skathio.github.io/somi/icon-512.png">
     <meta property="og:image:alt" content="The SoMi icon">
     <meta name="twitter:card" content="summary">
-    <script>
-      // Set the theme before first paint so a dark-mode viewer never sees a light flash.
-      (function () {
-        var t = null;
-        try { t = localStorage.getItem('somi-theme'); } catch (e) { /* storage blocked */ }
-        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        document.documentElement.dataset.theme = t;
-      })();
-    </script>
+    <!-- hashira's site kit, which the pages build copies into /somi/_kit/ after the Vite build (absent in vite dev):
+         the shared tokens, the theme (in <head>, plain, so a stored choice applies before first paint) and <site-nav>. -->
+    <link rel="stylesheet" href="/somi/_kit/tokens.css">
+    <script src="/somi/_kit/theme.js"></script>
+    <script src="/somi/_kit/site-nav.js" defer></script>
+    <!-- The kit's accent: somi's red pair, the same as --color-accent in src/index.css (the darker red on light, for contrast). -->
+    <style>:root { --site-accent: #b80f0f; --site-accent-dark: #ff4d4d; }</style>
   </head>
   <body>
     <div id="root"></div>

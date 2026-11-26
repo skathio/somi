@@ -119,8 +119,8 @@ hand; the one thing you **do** update by hand is the set of version files above 
      (summarized from merged-PR titles/labels — expect different-looking notes than the old
      commit-message-driven generator produced, not necessarily worse, just a different source).
 5. After `publish` succeeds, the `site` job runs [`site.yml`](../.github/workflows/site.yml), which
-   builds and tests the overview page from the same ref (hashira's `static-webapp-ci`) and deploys
-   it to <https://skathio.github.io/somi/> (hashira's `pages-deploy`). A failure there leaves the
+   builds the overview page and the docs from the same ref and deploys them to
+   <https://skathio.github.io/somi/> through hashira's `pages-site`. A failure there leaves the
    npm release in place; fix the page and run `site.yml` on its own (below).
 6. Leaving `bump` empty on a `workflow_dispatch` (or omitting it) runs only the `ci` gate — useful
    for a manual CI-only re-run that isn't cutting a release.
@@ -128,7 +128,7 @@ hand; the one thing you **do** update by hand is the set of version files above 
 **Deploying the page without a release.** Run [`site.yml`](../.github/workflows/site.yml) by hand on
 `main` (Actions → site → Run workflow, or `gh workflow run site.yml --ref main`). It first waits at its
 `gate` job for the `production` Environment's owner approval, the same single approval a release
-needs, then builds, tests and deploys the page from `main` and touches nothing on npm. A release
+needs, then builds and deploys the page and the docs from `main` and touches nothing on npm. A release
 asks for that approval once, at `publish`, and its page deploy does not ask again. The `github-pages`
 Environment only accepts deployments from `main`, so what goes out is merged, reviewed content. Don't date a CHANGELOG
 release heading on `main` before that release is published if you plan a page-only deploy in between:

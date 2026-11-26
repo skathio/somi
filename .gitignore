@@ -32,5 +32,5 @@ dist/
 build/
 
 .somi
-# The docs build stages its sources here; nothing generated is committed.
+# hashira's docs-build writes here by default when run by hand; nothing generated is committed.
 /artifacts/

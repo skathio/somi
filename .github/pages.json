@@ -1,0 +1,32 @@
+{
+  "name": "SoMi",
+  "description": "Guides for SoMi: a workflow plugin for coding agents on Claude Code and GitHub Copilot CLI.",
+  "base": "/somi/docs/",
+  "home_page": "getting-started.md",
+  "sidebar": [
+    { "file": "getting-started.md", "label": "Getting started" },
+    { "file": "workflows.md", "label": "Workflows" },
+    { "file": "commands.md", "label": "Commands" },
+    { "file": "configuration.md", "label": "Configuration" },
+    { "file": "hosts.md", "label": "Hosts" },
+    { "file": "shards.md", "label": "Shards" },
+    { "file": "sandbox.md", "label": "Sandbox and trust" },
+    { "file": "ARCHITECTURE.md", "label": "Architecture" },
+    { "file": "BENCHMARK.md", "label": "Benchmark" },
+    { "file": "MIGRATING-TO-5.md", "label": "Migrating from 4.1 to 5.0" }
+  ],
+  "unpublished": ["VERSIONING.md"],
+  "nav": [
+    { "label": "Roadmap", "href": "#roadmap" },
+    { "label": "Workflow", "href": "#workflow" },
+    { "label": "Shards", "href": "#shards" },
+    { "label": "Guardrails", "href": "#guardrails" },
+    { "label": "Review", "href": "#loops" },
+    { "label": "Measured", "href": "#measured" },
+    { "label": "Install", "href": "#install" }
+  ],
+  "home_link": { "label": "← skathio", "href": "https://skathio.github.io/" },
+  "accent": "#ff4d4d",
+  "logo": "site/brand/somi-mark.svg",
+  "theme_css": ".github/pages-theme.css"
+}

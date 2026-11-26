@@ -3,7 +3,8 @@
 // it, takes its names from the code and the commands' own files, and links only
 // to pages and headings that exist. The README keeps its intro, How it works,
 // Install and Use, sends the four long sections to the docs site, and its Docs
-// section links the docs site first. None of these tests needs the docs build.
+// section links the docs site first, with each guide link's docs/ source beside it.
+// These check the docs against the repo; hashira's docs-build checks the build itself.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -275,5 +276,39 @@ describe('the README', () => {
     const onGitHub = (file) => links.some((h) => h === file || h === `https://github.com/skathio/somi/blob/main/${file}`);
     assert.ok(onGitHub('docs/VERSIONING.md'), 'VERSIONING.md');
     assert.ok(onGitHub('CHANGELOG.md'), 'CHANGELOG.md');
+  });
+});
+
+// The docs/ source of a docs-site URL, with its anchor: /somi/docs/ is getting-started.md.
+function sourceOf(url) {
+  const [page, anchor = ''] = url.slice(DOCS_SITE.length).split('#');
+  const name = page.replace(/\.html$/, '').replace(/\/$/, '') || 'getting-started';
+  return `docs/${name}.md${anchor ? `#${anchor}` : ''}`;
+}
+
+const REPLACED = ['Use', 'Set your tiers', 'Set your quality limits', 'Connect other plugins with shards', 'Turn on the sandbox'];
+const linksIn = (line) => [...line.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]);
+
+describe("the README's guide links work before the docs site is deployed", () => {
+  test('each docs-site link in a replaced section has its docs/ source, with the anchor, beside it', () => {
+    const sections = readmeSections();
+    const lines = REPLACED.flatMap((name) => (sections.get(name) ?? []).map((line) => [name, linksIn(line)]));
+    const links = lines.flatMap(([name, all]) => all.filter((h) => h.startsWith(DOCS_SITE)).map((url) => ({ name, url, beside: all })));
+    assert.ok(links.length > 0, 'the replaced sections link no guide on the docs site');
+    const missing = links.filter((l) => !l.beside.includes(sourceOf(l.url))).map((l) => `${l.name}: ${l.url} has no ${sourceOf(l.url)}`);
+    assert.deepEqual(missing, []);
+  });
+
+  test('every docs/ source the README links exists, and its anchor is a heading there', () => {
+    const md = read(join(root, 'README.md'));
+    const resolves = ([, file, anchor]) => existsSync(join(root, file)) && (!anchor || githubSlugs(read(join(root, file))).includes(anchor));
+    const broken = [...md.matchAll(/\]\((docs\/[^)\s#]+\.md)(?:#([^)\s]+))?\)/g)].filter((m) => !resolves(m)).map((m) => m[0]);
+    assert.deepEqual(broken, []);
+  });
+
+  test('the source of a docs-site URL is its docs/ page, with the docs home as getting-started.md', () => {
+    assert.equal(sourceOf(DOCS_SITE), 'docs/getting-started.md');
+    assert.equal(sourceOf(`${DOCS_SITE}shards.html#write-mode`), 'docs/shards.md#write-mode');
+    assert.equal(sourceOf(`${DOCS_SITE}sandbox`), 'docs/sandbox.md');
   });
 });

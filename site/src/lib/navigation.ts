@@ -1,16 +1,4 @@
-import { useEffect, useState } from 'react';
-
-/** The id of the section whose top has scrolled past the header, updated on scroll. */
-export function useActiveSection(ids: string[]): string {
-  const [active, setActive] = useState(ids[0]);
-  useEffect(() => {
-    const update = () => setActive(currentSection(ids, window.scrollY + 80));
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    return () => window.removeEventListener('scroll', update);
-  }, [ids]);
-  return active;
-}
+import { useEffect } from 'react';
 
 function currentSection(ids: string[], y: number): string {
   let current = ids[0];
@@ -21,7 +9,7 @@ function currentSection(ids: string[], y: number): string {
   return current;
 }
 
-/** ←/→ (also PageUp/PageDown, j/k) step between sections; P toggles present mode; T toggles the theme. */
+/** ←/→ (also PageUp/PageDown, j/k) step between sections; P toggles present mode; T steps the theme. */
 export function useKeyboard(ids: string[], onPresent: () => void, onTheme: () => void): void {
   useEffect(() => {
     const step = (d: number) => {
@@ -46,13 +34,14 @@ export function useKeyboard(ids: string[], onPresent: () => void, onTheme: () =>
   }, [ids, onPresent, onTheme]);
 }
 
-/** Flips the theme index.html set before first paint and remembers it when storage is available. */
-export function toggleTheme(): void {
-  const root = document.documentElement;
-  root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
-  try {
-    localStorage.setItem('somi-theme', root.dataset.theme);
-  } catch {
-    // Storage blocked (private window, previews): the toggle still works for this visit.
+declare global {
+  interface Window {
+    /** Set by hashira's site-kit theme.js, loaded in <head>; absent when the kit did not load (vite dev). */
+    siteTheme?: { next: () => string };
   }
+}
+
+/** Steps the kit's theme (auto, light, dark), the same as its toggle in <site-nav>, which also stores it. */
+export function toggleTheme(): void {
+  window.siteTheme?.next();
 }

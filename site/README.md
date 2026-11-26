@@ -13,7 +13,12 @@ npm --prefix site run build             # type check, bundle to site/dist, self-
 ```
 
 Keyboard while presenting: `←` / `→` move between sections, `P` toggles present mode (one section
-per screen), `T` toggles the theme.
+per screen), `T` steps the theme (auto, light, dark), as the toggle in the header does.
+
+The header is hashira's shared `<site-nav>` (its site kit: `tokens.css`, `theme.js`, `site-nav.js`),
+which the pages build copies into `dist/_kit/` after `npm run build`, so the header bar and the theme
+toggle are missing under `npm run dev`. The theme is stored under the kit's `theme` key, shared with
+the docs. `check-dist` lets those three kit files be absent and still checks every other reference.
 
 ## Where the content comes from
 
@@ -34,15 +39,19 @@ and the last entry is shown as the current release. `npm test` checks this too, 
 
 ## Deploying
 
-[`.github/workflows/site.yml`](../.github/workflows/site.yml) builds, tests and deploys the page. It
-runs two ways:
+[`.github/workflows/site.yml`](../.github/workflows/site.yml) deploys the page at `/somi/` and the
+docs at `/somi/docs/` through hashira's `pages-site.yml`: it runs `npm run build` here into `dist/`,
+then adds hashira's site kit in `dist/_kit/` and builds the docs from `../docs/` and
+[`.github/pages.json`](../.github/pages.json) into `dist/docs/`. `public/` must therefore hold no
+`docs/` or `_kit/` folder. It runs two ways:
 
 - **On its own, with no npm release:** Actions → site → Run workflow on `main`, or
   `gh workflow run site.yml --ref main`. Use it for a page-only change between releases.
 - **With every release:** the release dispatch (`publish.yml`) calls it after the npm publish.
 
-Only `main` can deploy (the `github-pages` Environment's branch policy). Pull requests run the same
-build and tests in `ci.yml`'s `site` job, without deploying.
+Only `main` can deploy (the `github-pages` Environment's branch policy). Pull requests run the
+page's build and tests in `ci.yml`'s `site` job and the docs build in its `docs` job, without
+deploying.
 
 ## Brand
 
@@ -54,10 +63,10 @@ icon and the homepage card), `.claude-plugin/icon.png` (800, the plugin's icon) 
 | File | Size | Used for |
 |---|---|---|
 | `public/favicon-32.png` | 32 | browser tab |
-| `public/icon-192.png` | 192 | high-DPI and Android tab icon |
+| `public/icon-192.png` | 192 | high-DPI and Android tab icon, and the header logo in `<site-nav>` |
 | `public/apple-touch-icon.png` | 180 | iOS home screen (on the page's dark canvas: iOS fills transparency with black) |
 | `public/icon-512.png` | 512 | link previews (`og:image`) |
-| `src/assets/somi-icon.png` | 480 | the header and hero logo (shown at up to 240 px, so sharp at 2×) |
+| `src/assets/somi-icon.png` | 480 | the hero logo (shown at up to 240 px, so sharp at 2×) |
 
 The accent colour is the icon's red (`#cc1111`), darkened to `#b80f0f` on the light theme for text
 contrast. When the icon changes, edit the master and render each size from it with a headless
