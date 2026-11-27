@@ -12,7 +12,7 @@ const SITE = '.github/workflows/site.yml';
 const PAGES = '.github/pages.json';
 
 const pages = () => JSON.parse(read(PAGES));
-const FIELDS = ['name', 'description', 'base', 'home_page', 'sidebar', 'unpublished', 'nav', 'home_link', 'accent', 'logo', 'theme_css'];
+const FIELDS = ['name', 'description', 'base', 'home_page', 'sidebar', 'unpublished', 'nav', 'home_link', 'accent', 'accent_dark', 'logo', 'theme_css'];
 const textWithin = (v, min, max) => typeof v === 'string' && v.length >= min && v.length <= max;
 // A relative, normalized path with no way out of its root.
 const cleanPath = (p) => typeof p === 'string' && p.length > 0 && !p.startsWith('/') && !/[\\\0]/.test(p)
@@ -40,7 +40,7 @@ test('pages.json text fields are within their limits', () => {
   const p = pages();
   if ('name' in p) assert.ok(textWithin(p.name, 1, 40), 'name: 1 to 40 characters');
   if ('description' in p) assert.ok(textWithin(p.description, 0, 200), 'description: at most 200 characters');
-  if ('accent' in p) assert.match(p.accent, /^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  for (const field of ['accent', 'accent_dark']) if (field in p) assert.match(p[field], /^#([0-9a-f]{3}|[0-9a-f]{6})$/i, field);
 });
 
 test('pages.json home page is a Markdown page in docs/ with no docs/index.md beside it', () => {

@@ -47,11 +47,12 @@ then adds hashira's site kit in `dist/_kit/` and builds the docs from `../docs/`
 
 - **On its own, with no npm release:** Actions → site → Run workflow on `main`, or
   `gh workflow run site.yml --ref main`. Use it for a page-only change between releases.
-- **With every release:** the release dispatch (`publish.yml`) calls it after the npm publish.
+- **With every release:** the release dispatch (`publish.yml`) builds the page and the docs before the
+  npm publish, and calls it after the publish to deploy that build.
 
 Only `main` can deploy (the `github-pages` Environment's branch policy). Pull requests run the
-page's build and tests in `ci.yml`'s `site` job and the docs build in its `docs` job, without
-deploying.
+same build in `site-check.yml`'s `site` job, through `pages-site.yml` with `deploy: false`: the page's build
+and tests, the kit and the docs, without deploying.
 
 ## Brand
 

@@ -118,10 +118,13 @@ hand; the one thing you **do** update by hand is the set of version files above 
    - creates the matching **GitHub Release** using GitHub's server-side `--generate-notes`
      (summarized from merged-PR titles/labels — expect different-looking notes than the old
      commit-message-driven generator produced, not necessarily worse, just a different source).
-5. After `publish` succeeds, the `site` job runs [`site.yml`](../.github/workflows/site.yml), which
-   builds the overview page and the docs from the same ref and deploys them to
-   <https://skathio.github.io/somi/> through hashira's `pages-site`. A failure there leaves the
-   npm release in place; fix the page and run `site.yml` on its own (below).
+5. Before `publish`, the `site-build` job builds the overview page and the docs from the same ref
+   through hashira's `pages-site`, without deploying, and `site-kit` checks that build. After
+   `publish` succeeds, the `site` job runs [`site.yml`](../.github/workflows/site.yml), which
+   deploys that same build to <https://skathio.github.io/somi/>. The build is kept one day, so
+   approve `publish` within a day: a later approval fails `publish` before anything reaches npm,
+   and the fix is a new release run. A failure in the `site` job leaves the npm release in place;
+   fix the page if needed and run `site.yml` on its own (below).
 6. Leaving `bump` empty on a `workflow_dispatch` (or omitting it) runs only the `ci` gate — useful
    for a manual CI-only re-run that isn't cutting a release.
 

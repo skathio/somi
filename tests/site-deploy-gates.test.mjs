@@ -1,7 +1,7 @@
-// What reaches Pages has passed the page's own tests and carries the kit its header loads: the page-only
-// deploy and the release run `npm --prefix site test` before the build, and ci.yml and the release copy
-// hashira's site kit into site/dist and run check-dist in its strict mode, where the kit files must exist
-// like any other asset.
+// What reaches Pages has passed the page's own tests and carries the kit its header loads: every pages-site build
+// runs `npm --prefix site test` as its test step (see pages-adopt-v34.test.mjs), and ci.yml and the release check
+// the artifact pages-site built, kit included, with check-dist's strict mode, where the kit files must exist like
+// any other asset. pages-site's own kit check reads relative references only, and the page's are absolute.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -37,31 +37,34 @@ const PAGE = `<!doctype html><html><head><title>T</title><link rel="icon" href="
 const KIT = ['_kit/tokens.css', '_kit/theme.js', '_kit/site-nav.js'];
 const has = (...files) => (rel) => files.includes(rel);
 
-test("site.yml's deploy build runs the page's tests between the install and the build", () => {
-  const cmd = /site_build_command:\s*'([^']*)'/.exec(code(read('.github/workflows/site.yml')));
-  assert.ok(cmd, 'site_build_command is set');
-  const steps = cmd[1].split('&&').map((s) => s.trim());
-  assert.deepEqual(steps, ['npm --prefix site ci --ignore-scripts', 'npm --prefix site test', 'npm --prefix site run build']);
-});
+// The `with:` value of a key in a job body, unquoted; one line only.
+const withValue = (body, key) => {
+  const m = new RegExp(`^\\s+${key}:\\s*(.+?)\\s*$`, 'm').exec(body);
+  return m ? m[1].replace(/^(['"])(.*)\1$/, '$2') : undefined;
+};
+const needsOf = (body) => {
+  const m = /^ {4}needs:\s*(.+)$/m.exec(body);
+  return m ? m[1].replace(/[[\]]/g, '').split(',').map((s) => s.trim()).filter(Boolean) : [];
+};
 
-test("publish.yml's docs job tests the page before it builds it", () => {
-  assertInOrder(job('.github/workflows/publish.yml', 'docs'), [
-    /run: npm --prefix site ci --ignore-scripts/,
-    /run: npm --prefix site test\s*$/m,
-    /run: npm --prefix site run build/,
-  ], 'publish.yml docs');
-});
-
-for (const [rel, name] of [['.github/workflows/ci.yml', 'site'], ['.github/workflows/publish.yml', 'docs']]) {
-  test(`${rel}'s ${name} job adds the kit to site/dist after the build and checks it strictly`, () => {
-    assertInOrder(job(rel, name), [
-      /run: npm --prefix site run build/,
-      /uses: skathio\/hashira\/\.github\/actions\/site-kit@v3\s/,
-      /^\s+dest: site\/dist\s*$/m,
-      /run: node site\/scripts\/check-dist\.mjs --kit site\/dist\s*$/m,
-    ], `${rel} ${name}`);
+for (const [rel, build, check] of [['.github/workflows/site-check.yml', 'site', 'site-kit'], ['.github/workflows/publish.yml', 'site-build', 'site-kit']]) {
+  test(`${rel}'s ${check} job checks the artifact ${build} built, kit included, strictly`, () => {
+    const body = job(rel, check);
+    assert.ok(needsOf(body).includes(build), `${check} needs ${build}`);
+    // The download step's `name:`, under its `with:`, not the job's own.
+    const downloaded = /^ {10}name:\s*(\S+)\s*$/m.exec(body)?.[1];
+    assert.equal(downloaded, withValue(job(rel, build), 'artifact_name') ?? 'github-pages', 'the artifact the build uploaded');
+    assertInOrder(body, [
+      /uses: actions\/download-artifact@[0-9a-f]{40}\s/,
+      /tar -xf "\$\{RUNNER_TEMP\}\/pages\/artifact\.tar" -C "\$\{RUNNER_TEMP\}\/site"/,
+      /node site\/scripts\/check-dist\.mjs --kit "\$\{RUNNER_TEMP\}\/site"\s*$/m,
+    ], `${rel} ${check}`);
   });
 }
+
+test('the release publishes nothing before the kit check passed', () => {
+  assert.ok(needsOf(job('.github/workflows/publish.yml', 'publish')).includes('site-kit'));
+});
 
 test('check-dist leaves the kit files to the pages build by default', () => {
   assert.deepEqual(checkBuiltHtml(PAGE, has('favicon-32.png')), []);

@@ -21,6 +21,9 @@
     <!-- hashira's site kit, which the pages build copies into /somi/_kit/ after the Vite build (absent in vite dev):
          the shared tokens, the theme (in <head>, plain, so a stored choice applies before first paint) and <site-nav>. -->
     <link rel="stylesheet" href="/somi/_kit/tokens.css">
+    <!-- The landing before the kit kept the theme under a key of its own: carry a light or dark choice over to
+         the kit's `theme` key once, before theme.js reads it, unless the visitor has picked one since. -->
+    <script>try{var t=localStorage.getItem('somi-theme');if(t!==null){if((t==='light'||t==='dark')&&localStorage.getItem('theme')===null)localStorage.setItem('theme',t);localStorage.removeItem('somi-theme')}}catch(e){}</script>
     <script src="/somi/_kit/theme.js"></script>
     <script src="/somi/_kit/site-nav.js" defer></script>
     <!-- The kit's accent: somi's red pair, the same as --color-accent in src/index.css (the darker red on light, for contrast). -->

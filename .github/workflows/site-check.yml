@@ -1,0 +1,84 @@
+# Site check workflow: builds the overview page (site/) and the docs (docs/) on every pull request
+# and push to main, exactly as site.yml and the release build them, through hashira's pages-site
+# with `deploy: false`. Nothing here deploys.
+#
+# Why a workflow of its own rather than jobs in ci.yml: pages-site's caller must grant
+# `pages: write` and `id-token: write` for its deploy job even when `deploy: false` skips it, and
+# hashira's docs (docs/flows/pages.md, "Build only") warn that GitHub may refuse to start such a call
+# for a Dependabot or fork pull request, whose token is read-only. A refused start fails the whole
+# workflow before any job runs. In ci.yml that would take `ci / passed`, the one check the
+# `ci-required` ruleset requires, down with it, and stop every Dependabot pull request; here it fails
+# only this check. If it does refuse, the way out is hashira's "Your own build"
+# (templates/pages/own-build.yml: site-kit, docs-build and pages-upload in a job of this repo's).
+name: site-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Deny-all baseline; each job grants the minimum it needs.
+permissions: {}
+
+jobs:
+  # The overview page (site/) and the docs (docs/), built on every PR exactly as site.yml and the
+  # release build them, through hashira's pages-site with `deploy: false`: install, the page's own
+  # build (facts, type check, Vite, check-dist), the page's tests, hashira's site kit in
+  # site/dist/_kit, the docs from docs/ and .github/pages.json in site/dist/docs, and the upload, with
+  # OSV and gitleaks first. A change that breaks the page or the docs is red before merge rather than
+  # at release time — including a plugin change the page's content tests catch (a command, hook or
+  # agent added or removed without the page following), a dead link in a guide, a sidebar entry
+  # docs/ lacks, or a pages.json that breaks the schema. This workflow is separate from ci.yml; see
+  # the header.
+  #
+  # coverage_path feeds the page's coverage to the build's summary, as in site.yml and the release.
+  site:
+    name: site
+    # GitHub refuses to start a call unless its job grants what every job of pages-site asks for,
+    # the deploy job that `deploy: false` skips included. Only `build` runs the PR's commands, and it
+    # holds `contents: read`; no job that holds the other two runs.
+    #
+    # A Dependabot or fork pull request runs with a read-only token, which may stop this call at
+    # start (see the header): that fails this workflow only. The way out is hashira's "Your own
+    # build" (templates/pages/own-build.yml), not the old hand-built job.
+    permissions:
+      contents: read
+      pages: write     # for pages-site's skipped deploy job
+      id-token: write  # for pages-site's skipped deploy job
+    uses: skathio/hashira/.github/workflows/pages-site.yml@v3 # rolling major tag — same ref as ci.yml's, publish.yml's and site.yml's pins
+    with:
+      deploy: false
+      install_command: 'npm --prefix site ci --ignore-scripts'
+      site_build_command: 'npm --prefix site run build'
+      site_output: site/dist
+      test_command: 'npm --prefix site test'
+      coverage_path: site/coverage/lcov.info
+
+  # pages-site checks the kit references it can resolve, relative ones only; the page loads the kit
+  # by absolute /somi/_kit/ paths, so check-dist's strict mode checks the built artifact, kit
+  # included, as the page will be served.
+  site-kit:
+    name: site kit
+    needs: site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/pages
+
+      - name: Check the page with its kit is self-contained
+        run: |
+          mkdir "${RUNNER_TEMP}/site"
+          tar -xf "${RUNNER_TEMP}/pages/artifact.tar" -C "${RUNNER_TEMP}/site"
+          node site/scripts/check-dist.mjs --kit "${RUNNER_TEMP}/site"

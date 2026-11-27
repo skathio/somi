@@ -57,8 +57,8 @@ test('the site is the Vite build, written to site/dist', () => {
   const build = withValue(job, 'site_build_command');
   assert.ok(build, 'site_build_command is set');
   assert.match(build, /npm --prefix site run build|cd site && npm run build/, 'runs the site package build (Vite)');
-  // pages-site.yml installs nothing for the site, so the command installs site/ itself.
-  assert.match(build, /npm --prefix site ci|cd site && npm ci/, 'installs site/ before the build');
+  // pages-site's install_command installs site/ before the build.
+  assert.match(withValue(job, 'install_command') ?? '', /npm --prefix site ci|cd site && npm ci/, 'installs site/ before the build');
 });
 
 test('the docs are still built: the caller never turns them off', () => {
@@ -113,8 +113,8 @@ const needsOf = (body) => {
   return m ? m[1].replace(/[[\]]/g, '').split(',').map((s) => s.trim()).filter(Boolean) : [];
 };
 
-test('every job publish.yml and ci.yml wait for still exists', () => {
-  for (const wf of [PUBLISH, '.github/workflows/ci.yml']) {
+test('every job publish.yml, ci.yml and site-check.yml wait for still exists', () => {
+  for (const wf of [PUBLISH, '.github/workflows/ci.yml', '.github/workflows/site-check.yml']) {
     const jobs = jobsOf(wf);
     const missing = Object.entries(jobs).flatMap(([name, body]) => needsOf(body).filter((d) => !(d in jobs)).map((d) => `${name} needs ${d}`));
     assert.deepEqual(missing, [], wf);
