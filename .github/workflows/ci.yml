@@ -21,17 +21,13 @@
 # custom jobs alongside the shared NuGet CI call — see rogue's
 # `.github/workflows/ci.yml`).
 #
-# ## scan_disable — left at the reusable workflow's default ("codeql,actionlint")
+# ## scan_disable — left at the reusable workflow's default ("codeql")
 #
-# Deliberate, not an oversight: somi has no JS/TS application source (`find`
-# confirms zero .js/.ts files) — CodeQL's JS/TS analysis has nothing to scan,
-# pure overhead with zero signal for this repo. actionlint is more
-# marginal (somi now owns two workflow files) but isn't load-bearing for
-# this iteration and the library's own default already skips it; revisit if
-# somi's GitHub Actions surface grows. `osv`/`gitleaks`/`dependency-review`
-# (NOT in the default skip list) stay enabled — those are valuable
-# regardless of language (vulnerable/typosquatted deps, committed secrets)
-# and somi never had any equivalent of them before this adoption.
+# CodeQL stays off: somi's plugin package has no JS/TS application source for
+# its JS/TS analysis, so it would be pure overhead. actionlint runs (on by
+# default since hashira v3.4.0) over somi's workflow files, and
+# `osv`/`gitleaks`/`dependency-review` stay enabled — those are valuable
+# regardless of language (vulnerable/typosquatted deps, committed secrets).
 #
 # ## quality_gate / quality_level — left at the reusable workflow's default
 #
@@ -42,9 +38,8 @@
 # ## The hashira ref — the SAME ref as publish.yml and site.yml
 #
 # Every hashira ref in this repo tracks `@v3`, hashira's moving major tag:
-# the `uses:` below, the `site` job's `site-kit@v3` and the `docs` job's
-# `docs-build@v3`, publish.yml's `npm-release@v3`, its `docs` job's
-# `site-kit@v3` and `docs-build@v3` and its `version` job's
+# the `uses:` below, site-check.yml's `pages-site.yml@v3`, publish.yml's
+# `pages-site.yml@v3`, `npm-release@v3` and its `version` job's
 # self-checkout `ref: v3`, and site.yml's `pages-site.yml@v3`. New v3.x releases apply
 # with no PR here. Keep all of them on the same ref, and move them together
 # to `@v4` when it ships.
@@ -72,9 +67,9 @@ jobs:
       pull-requests: write     # the `passed` job's PR summary comment
       security-events: write   # CodeQL SARIF upload — granted for forward-
                                 # compat even though CodeQL is in the default
-                                # `scan_disable` skip list for this repo (no
-                                # .js/.ts source to scan); no scan currently
-                                # active under somi's config writes here
+                                # `scan_disable` skip list (no .js/.ts source
+                                # to scan); no scan currently active under
+                                # somi's config writes here
     with:
       node_version: '24' # the workflow's default is '20'
       # The shared test action needs coverage at coverage/lcov.info, so CI runs the
@@ -130,65 +125,3 @@ jobs:
         run: |
           npm pkg set version="0.0.0-dryrun.${{ github.run_id }}"
           npm publish --dry-run --tag dryrun
-
-  # The overview page (site/), which publish.yml deploys to GitHub Pages with each release. It is its
-  # own package with its own lockfile, so the `ci` job above (the zero-dependency plugin package)
-  # never installs or tests it. Building and testing it on every PR makes a change that breaks the
-  # page red before merge rather than at release time — including a plugin change the page's content
-  # tests catch: a command, hook or agent added or removed without the page following.
-  # No `needs:`, for the same reason as publish-dry-run. `--ignore-scripts`: no dependency lifecycle
-  # script runs, and none is needed (the native binaries come from platform packages).
-  site:
-    name: site
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-
-      - name: Install site dependencies (lockfile only, no lifecycle scripts)
-        run: npm --prefix site ci --ignore-scripts
-
-      - name: Test the page and its content against the repo
-        run: npm --prefix site test
-
-      - name: Build (type check, bundle, self-contained check)
-        run: npm --prefix site run build
-
-      # The kit pages-site adds after the build, copied here too so check-dist can prove the page's
-      # kit references resolve in what is deployed.
-      - name: Add hashira's site kit to site/dist/_kit
-        uses: skathio/hashira/.github/actions/site-kit@v3 # rolling major tag — same ref as the `ci` job's
-        with:
-          dest: site/dist
-
-      - name: Check the page with its kit is self-contained
-        run: node site/scripts/check-dist.mjs --kit site/dist
-
-  # The docs (docs/), which site.yml builds with hashira's docs-build into /somi/docs/ and deploys
-  # with the overview page. Building them here, from docs/ and .github/pages.json, turns the pull
-  # request red before merge rather than at release time when a guide has a dead link, a sidebar
-  # entry names a page docs/ lacks, or pages.json breaks the schema. docs-build installs VitePress
-  # from hashira's own lockfile. No `needs:`, for the same reason as publish-dry-run.
-  docs:
-    name: docs
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-
-      - name: Build the docs from docs/ and .github/pages.json
-        uses: skathio/hashira/.github/actions/docs-build@v3 # rolling major tag — same ref as the `ci` job's

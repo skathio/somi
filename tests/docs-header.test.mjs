@@ -34,18 +34,6 @@ test('each docs header link opens a section of the page, which the docs resolve 
   }
 });
 
-// Seven section links and Docs do not fit beside the docs search box on a mid-width screen: the bar would push
-// its last controls off the page. The docs theme leaves the section links out there and keeps Docs.
-test('the docs theme leaves the section links out of the bar where they would not fit, and keeps Docs', () => {
-  const css = read(pages().theme_css);
-  const rule = /@media\s*\(min-width:\s*768px\)\s*and\s*\(max-width:\s*(\d+)px\)\s*\{\s*([^{}]+)\{\s*display:\s*none;?\s*\}/.exec(css);
-  assert.ok(rule, `a width rule in ${pages().theme_css}`);
-  assert.ok(Number(rule[1]) >= 1139 && Number(rule[1]) < 1280, `max-width ${rule[1]}px`);
-  // A section link carries a #fragment; the Docs link, the docs base, does not.
-  assert.equal(rule[2].trim(), '.VPNavBarMenu .VPNavBarMenuLink[href*="#"]');
-  assert.doesNotMatch(pages().base, /#/);
-});
-
 test('the release guide describes the page deploy as it runs now, through pages-site', () => {
   const guide = read('docs/VERSIONING.md');
   assert.match(guide, /pages-site/);

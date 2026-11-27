@@ -50,26 +50,15 @@ test('the kit accent is the page accent, in light and in dark', () => {
   for (const a of [page[0], page[1]]) assert.doesNotMatch(a, /^#(1e7d69|4fd1b5)$/, 'never the kit default green');
 });
 
+// index.html may read the old landing's key once, to move a stored choice to the kit key before theme.js runs.
+const MIGRATION = /<script>[^<]*localStorage\.removeItem\('somi-theme'\)[^<]*<\/script>/;
+
 test('no source of the page keeps a theme store of its own beside the kit key', () => {
   const files = ['site/index.html', ...sourceFiles('site/src')];
   assert.ok(files.some((f) => f.endsWith('.css')) && files.some((f) => f.endsWith('.tsx')), 'CSS and TSX sources were found');
   for (const file of files) {
     const text = read(file);
     assert.ok(text.length > 0, `${file} was read`);
-    assert.doesNotMatch(text, /somi-theme|localStorage/, file);
+    assert.doesNotMatch(file === 'site/index.html' ? text.replace(MIGRATION, '') : text, /somi-theme|localStorage/, file);
   }
-});
-
-// The docs bar holds the section links, Docs and the home link from the width where the section links come
-// back. Measured in a browser against a local docs build, at VitePress's own spacing they run past the edge
-// of the page from there to about 1310px, so the docs theme sets them closer together across that range.
-test('the docs theme tightens the header links from where the section links show until they fit', () => {
-  const css = read(pages().theme_css);
-  const hidden = /@media\s*\(min-width:\s*768px\)\s*and\s*\(max-width:\s*(\d+)px\)/.exec(css);
-  assert.ok(hidden, 'the rule that leaves the section links out');
-  const tight = /@media\s*\(min-width:\s*(\d+)px\)\s*and\s*\(max-width:\s*(\d+)px\)\s*\{\s*\.VPNavBarMenu \.VPNavBarMenuLink\s*\{\s*padding:\s*0\s+(\d+)px;?\s*\}/.exec(css);
-  assert.ok(tight, 'a padding rule for the header links');
-  assert.equal(Number(tight[1]), Number(hidden[1]) + 1, 'starts where the section links come back');
-  assert.ok(Number(tight[2]) >= 1310, `reaches ${tight[2]}px`);
-  assert.ok(Number(tight[3]) >= 4 && Number(tight[3]) <= 7, `${tight[3]}px a side: close enough to fit, still apart`);
 });

@@ -4,25 +4,29 @@
 # Two ways in, one definition:
 #   - workflow_dispatch : deploy the page on its own, with no npm release (a content fix, a layout
 #                         change, a measurement update between releases). Run it on `main`.
-#   - workflow_call     : publish.yml calls this after `publish`, so every release also deploys the
-#                         page from the released ref.
+#   - workflow_call     : publish.yml calls this after `publish` with `prebuilt: true`, so every
+#                         release deploys the page and docs its `site-build` job built and checked
+#                         before anything was published.
 #
-# pages-site.yml does the rest, in four jobs:
+# pages-site.yml does the rest:
 #   - check  : refuses any ref but main, before anyone is asked to approve.
+#   - scan   : OSV and gitleaks over the commit, before the approval.
 #   - gate   : a page-only deploy waits here for the `production` Environment's owner approval,
 #              the same single approval a release needs. A run from publish.yml passes
 #              `released: true` and skips it, because its `publish` job already holds that
-#              approval: one release, one approval, with the page deployed after the package.
-#   - build  : runs `site_build_command` below, which builds the page into site/dist, then adds
-#              hashira's site kit in site/dist/_kit and builds the docs from docs/ and
-#              .github/pages.json into site/dist/docs, and uploads the Pages artifact. It holds
-#              `contents: read` only.
+#              approval (pages-site checks this run holds it): one release, one approval, with
+#              the page deployed after the package.
+#   - build  : installs site/ (install_command), builds the page into site/dist, runs the page's
+#              tests (test_command) with their coverage report, adds hashira's site kit in
+#              site/dist/_kit, builds the docs from docs/ and .github/pages.json into
+#              site/dist/docs, and uploads the Pages artifact. It holds `contents: read` only.
+#              Skipped for a prebuilt release run.
 #   - deploy : deploys into the `github-pages` Environment; a released run deploys only while its
 #              commit holds the highest vX.Y.Z tag.
 #
-# The page's own tests (its content against the repo: every CHANGELOG release on the roadmap,
-# every command, hook and agent shown) run on every pull request in ci.yml's `site` job, and the
-# docs build runs there too, in its `docs` job, so what reaches main has passed both.
+# The same build runs on every pull request in site-check.yml's `site` job, with `deploy: false`, so what
+# reaches main has passed the page's tests (its content against the repo: every CHANGELOG release
+# on the roadmap, every command, hook and agent shown) and the docs build.
 #
 # Who can deploy: the `github-pages` Environment's deployment-branch policy allows `main`, and
 # pages-site's `check` refuses any other ref, so what goes out is reviewed, merged content.
@@ -31,12 +35,17 @@
 name: site
 
 on:
-  # No inputs: a hand run can never claim `released`, so it always waits at pages-site's gate.
+  # No inputs: a hand run can never claim `released` or `prebuilt`, so it always builds and waits at
+  # pages-site's gate.
   workflow_dispatch:
   workflow_call:
     inputs:
       released:
         description: "true only from publish.yml's `site` job, whose `publish` job already passed the production approval."
+        type: boolean
+        default: false
+      prebuilt:
+        description: "true only from publish.yml's `site` job: deploy the `site` artifact its `site-build` job uploaded instead of building again."
         type: boolean
         default: false
 
@@ -52,13 +61,20 @@ jobs:
       contents: read   # pages-site build: checkout
       pages: write     # pages-site deploy: deploy-pages
       id-token: write  # pages-site deploy: deploy-pages authenticates via OIDC
-    uses: skathio/hashira/.github/workflows/pages-site.yml@v3 # rolling major tag — same ref as ci.yml's and publish.yml's hashira pins
+    uses: skathio/hashira/.github/workflows/pages-site.yml@v3 # rolling major tag — same ref as ci.yml's, site-check.yml's and publish.yml's hashira pins
     with:
-      # `== true` so a hand run, which has no `released` input, passes false rather than null.
+      # `== true` so a hand run, which has neither input, passes false rather than null.
       released: ${{ inputs.released == true }}
-      # pages-site runs this from the repo root and installs nothing for the site, so it installs
-      # site/ from its lockfile itself. --ignore-scripts: no dependency lifecycle script runs, and
-      # none is needed. The page's tests run before its build, so a red test stops a page-only
-      # deploy too. The build is the page's own: facts, type check, Vite, check-dist.
-      site_build_command: 'npm --prefix site ci --ignore-scripts && npm --prefix site test && npm --prefix site run build'
+      prebuilt: ${{ inputs.prebuilt == true }}
+      # The artifact a hand run builds and deploys, and the one publish.yml's `site-build` uploads
+      # for a prebuilt release deploy: the two must match.
+      artifact_name: site
+      # site/ from its lockfile. --ignore-scripts: no dependency lifecycle script runs, and none
+      # is needed (the native binaries come from platform packages).
+      install_command: 'npm --prefix site ci --ignore-scripts'
+      # The page's own build: facts, type check, Vite, check-dist.
+      site_build_command: 'npm --prefix site run build'
       site_output: site/dist
+      # A red page test stops a page-only deploy too.
+      test_command: 'npm --prefix site test'
+      coverage_path: site/coverage/lcov.info

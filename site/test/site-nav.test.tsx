@@ -12,7 +12,7 @@ import indexCss from '../src/index.css?raw';
 // its own items and puts Present in the extras slot (the element's children).
 
 const SITE = 'https://skathio.github.io/somi/';
-// home_link is optional in pages.json: absent in somi's today.
+// home_link is optional in pages.json; somi's sets it, the link back to the skathio homepage.
 const pages: { name?: string; base?: string; home_link?: unknown } = pagesJson;
 const sources = import.meta.glob<string>('../src/**/*.{ts,tsx,css}', { query: '?raw', import: 'default', eager: true });
 // Files the build would publish from public/ as they are.
@@ -78,6 +78,10 @@ describe('the header', () => {
     expect(config().home_link ?? null).toEqual(pages.home_link ?? null);
   });
 
+  it('turns on the kit scroll highlight for the section in view', () => {
+    expect(nav.attrs).toHaveProperty('scrollspy');
+  });
+
   it('puts Present in the extras slot', () => {
     expect(extras()).toMatch(/<button\b[^>]*>[\s\S]*?Present[\s\S]*?<\/button>/);
   });
@@ -131,7 +135,16 @@ describe('index.html', () => {
 describe('the theme', () => {
   it('has one store, the kit theme key, so landing and docs open in the same theme', () => {
     expect(Object.keys(sources).length).toBeGreaterThan(0);
-    for (const [file, text] of Object.entries({ 'index.html': indexHtml, ...sources })) expect(text.includes('somi-theme'), file).toBe(false);
+    for (const [file, text] of Object.entries(sources)) expect(text.includes('somi-theme'), file).toBe(false);
+  });
+
+  it('names the old somi-theme key in index.html only to move it to the kit key and remove it', () => {
+    const scripts = [...indexHtml.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    const old = scripts.filter((s) => s.includes('somi-theme'));
+    expect(old).toHaveLength(1);
+    expect(old[0]).toMatch(/localStorage\.setItem\('theme'/);
+    expect(old[0]).toMatch(/localStorage\.removeItem\('somi-theme'\)/);
+    expect(indexHtml.replace(old[0], '')).not.toContain('somi-theme');
   });
 });
 

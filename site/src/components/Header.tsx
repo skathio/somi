@@ -13,11 +13,12 @@ interface HeaderProps {
 // <site-nav> is hashira's shared header (site-kit's site-nav.js, copied into /somi/_kit/ by the pages build):
 // it renders the brand, the section links, Docs, its children as per-site extras, and the theme toggle, in
 // the order every skathio site shares. The link back to the skathio homepage is the one in .github/pages.json,
-// which the docs header shows too. React 19 passes these string props through as attributes.
+// which the docs header shows too. React 19 passes these string props through as attributes. `scrollspy` marks
+// the link of the section in view.
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
-      'site-nav': { name: string; logo: string; docs: string; nav: string; home_link: string; children?: ReactNode };
+      'site-nav': { scrollspy: ''; name: string; logo: string; docs: string; nav: string; home_link: string; children?: ReactNode };
     }
   }
 }
@@ -29,7 +30,7 @@ const button =
 export function Header({ items, onPresent }: HeaderProps) {
   const nav = JSON.stringify(items.map(({ id, label }) => ({ label, href: `#${id}` })));
   return (
-    <site-nav name="SoMi" logo="icon-192.png" docs="docs/" nav={nav} home_link={JSON.stringify(home_link)}>
+    <site-nav scrollspy="" name="SoMi" logo="icon-192.png" docs="docs/" nav={nav} home_link={JSON.stringify(home_link)}>
       <button type="button" onClick={onPresent} title="Present mode (P)" className={`${button} hidden sm:inline-block`}>
         Present
       </button>

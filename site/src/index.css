@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
-/* The theme is hashira's site-kit theme.js: data-theme="light" or "dark" on <html>, or none for auto, which
-   follows the system. `dark:` and the dark tokens below follow both. */
+/* The theme is hashira's site-kit theme.js, which sets the theme the page shows, auto resolved against the
+   system, as data-theme-resolved="light" or "dark" on <html>. `dark:` and the dark tokens below follow it.
+   Without the kit (vite dev, where /somi/_kit/ is absent) the attribute is missing and they follow the system. */
 @custom-variant dark {
-  &:where([data-theme="dark"], [data-theme="dark"] *) {
+  &:where([data-theme-resolved="dark"], [data-theme-resolved="dark"] *) {
     @slot;
   }
   @media (prefers-color-scheme: dark) {
-    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+    &:where(:root:not([data-theme-resolved]), :root:not([data-theme-resolved]) *) {
       @slot;
     }
   }
